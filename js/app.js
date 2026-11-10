@@ -10,7 +10,7 @@
   const { h, toast, day, span } = UI;
 
   const state = {
-    plan: null, engine: null, attic: null, bundled: null, mapImageUrl: '',
+    plan: null, engine: null, attic: null, extras: null, bundled: null, mapImageUrl: '',
     date: new Date(), view: 'map', sel: null, armed: null,
     undo: [], redo: [], ready: false
   };
@@ -49,7 +49,8 @@
     for (const op of ops) {
       const from = direction === 'undo' ? op.after : op.before, to = direction === 'undo' ? op.before : op.after;
       if (op.kind === 'assume') { if (to) next.assumptions = to; else delete next.assumptions; continue; }
-      const key = op.kind === 'bed' ? 'beds' : op.kind === 'garden' ? 'gardens' : 'plantings', list = lists[key] || (lists[key] = plan[key].slice());
+      if (op.kind === 'settings') { next.settings = to; continue; }
+      const key = { bed: 'beds', garden: 'gardens', variety: 'varieties', crop: 'crops' }[op.kind] || 'plantings', list = lists[key] || (lists[key] = (plan[key] || []).slice());
       const index = from ? list.findIndex(x => x.id === from.id) : -1;
       if (to && index >= 0) list[index] = to; else if (to) list.push(to); else if (index >= 0) list.splice(index, 1);
     }
@@ -60,7 +61,7 @@
     store.save(state.plan);
     emit('plan');
   }
-  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (op.kind === 'assume' || op.kind === 'garden') continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
+  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
   /** Why the guard rails refuse an edit, in words. */
   function refusalText(no, engine) {
     const bed = engine.bedOf(no.p.bedId), what = cropLabel(no.p, engine), unit = engine.capUnit(bed);
@@ -149,6 +150,32 @@
     return assume(`${before.name} is ${{ field: 'open field', tunnel: 'an unheated tunnel', greenhouse: 'a heated greenhouse' }[type] || type}`, [{ kind: 'garden', before, after }]);
   }
 
+  // ───────────────────────── seed library ─────────────────────────
+  // A variety or crop record is, like the list above, a statement about the world: saving one is never
+  // refused, and what it does to the plan is shown first. The long record of what a supplier's page said
+  // is kept beside the plan, not in it, and rejoins it when a backup is downloaded.
+  const emptyExtras = () => ({ v: 1, varieties: {} });
+  async function loadExtras() {
+    if (state.extras) return state.extras;
+    let text = null;
+    try { text = await store.loadBlob('attic-new'); } catch (_) { /* nothing kept yet */ }
+    let kept = null;
+    try { kept = text ? JSON.parse(text) : null; } catch (_) { kept = null; }
+    return (state.extras = kept && kept.varieties ? kept : emptyExtras());
+  }
+  /** The page record last kept for a variety: from this app, or from the v7 backup it came in with. */
+  async function varietyRecord(id) {
+    const extras = await loadExtras();
+    if (extras.varieties[id]) return extras.varieties[id];
+    try { const attic = await loadAttic(); return (attic.varieties && attic.varieties[id]) || null; } catch (_) { return null; }
+  }
+  /** Keep a variety's page record. Resolves to false when this view has nowhere durable to keep it. */
+  async function keepVarietyRecord(id, heavy) {
+    const extras = await loadExtras();
+    extras.varieties[id] = heavy;
+    try { return await store.saveBlob('attic-new', JSON.stringify(extras)); } catch (_) { return false; }
+  }
+
   function removePlantings(ids, label) {
     const ops = ids.map(id => state.engine.planting(id)).filter(Boolean).map(before => ({ before, after: null }));
     if (!ops.length) return;
@@ -235,7 +262,8 @@
   }
   async function exportBackup() {
     try {
-      const plan = IO.join(state.plan, await loadAttic()), text = JSON.stringify(plan);
+      const attic = await loadAttic(), extras = await loadExtras();
+      const plan = IO.join(state.plan, { ...attic, varieties: { ...(attic.varieties || {}), ...extras.varieties } }), text = JSON.stringify(plan);
       const filename = `little-river-plan-${planYear()}-${E.d2s(new Date())}.json`;
       const downloads = root.claude && root.claude.use ? await root.claude.use('downloads') : null;
       const planOnly = !(state.plan.lrfNext && state.plan.lrfNext.attic === 'cloud');
@@ -294,13 +322,14 @@
     }
     const cloud = store.backend !== 'memory';   // somewhere durable to keep the photo and the rest of the backup
     core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name };
-    state.plan = core; state.attic = attic; state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
+    state.plan = core; state.attic = attic; state.extras = emptyExtras(); state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
     showMapImage(parsed.image && parsed.image.bytes, parsed.image && parsed.image.mime);
     rebuild(); state.date = defaultDate(); root.LRFMap.fit(true);
     emit('plan'); emit('date'); emit('sel');
     toast(`Loaded ${info.plantings} plantings in ${info.beds} growing spaces from ${file.name}`);
     if (!cloud) { store.save(core); return; }
     const where = store.backend;
+    try { await store.clearBlob('attic-new'); } catch (_) { /* nothing was kept */ }
     // The plan itself is saved first; the bulky extras follow and may fail without harming it.
     try { await store.saveNow(core); } catch (error) { toast('The plan is open but could not be saved here yet. Use the save indicator to retry.'); return; }
     try {
@@ -359,6 +388,7 @@
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, setAssumption, setGardenType,
+    revise: assume, impact, varietyRecord, keepVarietyRecord, uid, storage: () => (store ? store.backend : 'memory'),
     exportBackup, importBackup, retrySave: () => store && store.retry(), isSample: () => !!(state.plan && state.plan.lrfNext && state.plan.lrfNext.sample)
   };
 })(window);

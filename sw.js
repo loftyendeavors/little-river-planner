@@ -1,6 +1,6 @@
-/* Little River Farm Planner — offline copy of the app. Build 8bd423931383 (site preview 0.5.2 · 2026-11-10). */
-const CACHE = 'lrf-8bd423931383';
-const FILES = ["./","js/app.js","js/assume.js","js/drag.js","js/engine.js","js/guide.js","js/library.js","js/main.js","js/map.js","js/panels.js","js/planio.js","js/rails.js","js/season.js","js/store.js","js/timeline.js","js/ui.js","js/zip.js","css/app.css","fonts/bricolage-grotesque-latin-standard-normal.woff2","fonts/instrument-sans-latin-standard-normal.woff2","fonts/jetbrains-mono-latin-wght-normal.woff2","css/fonts.css","js/pwa.js","index.html","manifest.webmanifest","icons/icon-192.png","icons/icon-512.png","icons/icon-maskable-512.png"];
+/* Little River Farm Planner — offline copy of the app. Build 558e61667c2f (site preview 0.6 · 2026-11-10). */
+const CACHE = 'lrf-558e61667c2f';
+const FILES = ["./","js/app.js","js/assume.js","js/drag.js","js/engine.js","js/guide.js","js/library.js","js/main.js","js/map.js","js/panels.js","js/planio.js","js/rails.js","js/reader.js","js/season.js","js/seedlib.js","js/seeds.js","js/store.js","js/timeline.js","js/ui.js","js/zip.js","css/app.css","fonts/bricolage-grotesque-latin-standard-normal.woff2","fonts/instrument-sans-latin-standard-normal.woff2","fonts/jetbrains-mono-latin-wght-normal.woff2","css/fonts.css","js/pwa.js","index.html","manifest.webmanifest","icons/icon-192.png","icons/icon-512.png","icons/icon-maskable-512.png"];
 self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('lrf-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', event => {

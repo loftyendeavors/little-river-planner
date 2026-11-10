@@ -1,5 +1,5 @@
 """The installable site: starts empty, takes a backup, keeps plan and photo, and opens with no connection.
-usage: python3 -I site_check.py <site-dir> <backup.zip>
+usage: python3 -I site_check.py <site-dir> <backup.zip> [screenshot.png]
 """
 import functools, http.server, json, sys, threading
 from pathlib import Path
@@ -38,7 +38,12 @@ with sync_playwright() as pw:
     page.reload(); ready(); page.wait_for_timeout(800)
     out["offline"] = js("({plantings: S.plan.plantings.length, photo: (document.getElementById('mapPhoto').getAttribute('href') || '').slice(0, 5), beds: document.querySelectorAll('#mapBeds .bed').length, fonts: [...document.fonts].filter(f => f.status === 'loaded').length})")
     out["export"] = page.evaluate("(async () => { const A = LRFApp; try { const IO = LRFPlanIO; return 'ok'; } catch (e) { return String(e); } })()")
-    page.screenshot(path="/home/claude/shots/site-offline.png")
+    page.click('[data-view-btn="seeds"]'); page.wait_for_timeout(500)
+    out["seeds_offline"] = page.evaluate("""(async () => { const A = LRFApp, S = A.state, v = S.plan.varieties.find(v => v.url && v.catalogDtm), rec = await A.varietyRecord(v.id);
+      const r = LRFReader.readPasted('Days To Maturity\\n55 days\\nDAYS TO MATURITY: From transplanting.', 'https://www.johnnyseeds.com/x-1.html', 'Offline Test');
+      return {rows: document.querySelectorAll('.sd-var').length, live: S.plan.varieties.filter(v => v.active !== false && !v.deleted).length, need: LRFSeedLib.required(S.engine).rows.length, savedPageText: !!(rec && rec.catalogSourceText), pasted: r.facts.maturity.min, basis: r.facts.maturityBasis}; })()""")
+    if len(sys.argv) > 3:
+        page.screenshot(path=sys.argv[3])
     browser.close()
 server.shutdown()
 out["errors"] = errors
