@@ -14,7 +14,7 @@
 
   /** Top-level collections the core planning screens own. */
   const CORE_KEYS = ['v', 'gardens', 'beds', 'plantings', 'crops', 'varieties', 'customers', 'containers', 'map', 'settings', 'assumptions',
-    'cropUnits', 'salesMix', 'products', 'nursery', 'planningPreferences', 'lrfNext'];
+    'cropUnits', 'salesMix', 'products', 'nursery', 'planningPreferences', 'seedInventory', 'lrfNext'];
   /** Bulky per-variety captures the planner never reads. */
   const HEAVY_VARIETY_FIELDS = ['webImport', 'webImportHistory', 'catalogSourceText'];
   const DERIVED_VARIETY_FIELDS = ['_basisFromText', '_pageTextBasis', '_catalogTextBasis'];
@@ -101,7 +101,7 @@
     });
     const out = { format: 'lrf-compact-plan-1' };
     // Left out on purpose: the farm's address and coordinates, the weather station, and the fertilizer price list.
-    for (const [key, value] of Object.entries(core)) if (!['beds', 'plantings', 'varieties', 'lrfNext', 'products', 'map', 'settings'].includes(key)) out[key] = value;
+    for (const [key, value] of Object.entries(core)) if (!['beds', 'plantings', 'varieties', 'lrfNext', 'products', 'map', 'settings', 'seedInventory'].includes(key)) out[key] = value;   // seed stock ships beside the plan, in its own file
     const map = core.map || {}, image = map.imageFile;
     out.map = { ftPerPx: map.ftPerPx, imgW: map.imgW, imgH: map.imgH, towerShape: map.towerShape, towerGap: map.towerGap, imageFile: image ? { name: image.name, mime: image.mime, sha256: image.sha256 } : undefined };
     out.settings = { ...core.settings };

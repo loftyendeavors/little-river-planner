@@ -10,7 +10,7 @@
   const { h, toast, day, span } = UI;
 
   const state = {
-    plan: null, engine: null, attic: null, extras: null, stock: null, keptThumbs: {}, bundled: null, mapImageUrl: '',
+    plan: null, engine: null, attic: null, extras: null, inventoryBase: null, inventoryAsked: null, keptThumbs: {}, bundled: null, mapImageUrl: '',
     date: new Date(), view: 'map', sel: null, armed: null,
     undo: [], redo: [], ready: false
   };
@@ -50,6 +50,7 @@
       const from = direction === 'undo' ? op.after : op.before, to = direction === 'undo' ? op.before : op.after;
       if (op.kind === 'assume') { if (to) next.assumptions = to; else delete next.assumptions; continue; }
       if (op.kind === 'settings') { next.settings = to; continue; }
+      if (op.kind === 'inventory') { if (to) next.seedInventory = to; else delete next.seedInventory; continue; }
       const key = { bed: 'beds', garden: 'gardens', variety: 'varieties', crop: 'crops' }[op.kind] || 'plantings', list = lists[key] || (lists[key] = (plan[key] || []).slice());
       const index = from ? list.findIndex(x => x.id === from.id) : -1;
       if (to && index >= 0) list[index] = to; else if (to) list.push(to); else if (index >= 0) list.splice(index, 1);
@@ -61,7 +62,7 @@
     store.save(state.plan);
     emit('plan');
   }
-  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
+  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings', 'inventory'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
   /** Why the guard rails refuse an edit, in words. */
   function refusalText(no, engine) {
     const bed = engine.bedOf(no.p.bedId), what = cropLabel(no.p, engine), unit = engine.capUnit(bed);
@@ -212,14 +213,27 @@
     if (store.backend !== 'memory') { try { await store.saveBlob('thumbs', JSON.stringify(out)); } catch (_) { /* shown for this session only */ } }
     return list.length;
   }
-  /** Seed on hand and on order, as last recorded in v7. Read-only here. */
-  async function loadStock() {
-    if (state.stock) return state.stock;
-    const plan = state.plan, next = plan.lrfNext || {};
-    if (next.source === 'bundled') return (state.stock = (state.bundled && state.bundled.stock) || {});
-    let inventory = null;
-    try { const attic = await loadAttic(); inventory = attic.rest && attic.rest.seedInventory; } catch (_) { inventory = null; }
-    return plan === state.plan ? (state.stock = root.LRFSeedLib.stock(inventory)) : root.LRFSeedLib.stock(inventory);
+  // Seed stock. A plan loaded from a v7 backup carries its lots and their change log. A plan saved before stock
+  // could be edited here does not, so its records are fetched once from where they were set aside (the page's own
+  // copy, or the stored backup records) and join the plan with the first change made to them.
+  const SL = root.LRFSeedLib;
+  function loadInventory() {
+    if (state.plan.seedInventory || state.inventoryAsked === state.plan.lrfNext) return Promise.resolve(false);
+    const asked = (state.inventoryAsked = state.plan.lrfNext || {});
+    const from = asked.source === 'bundled'
+      ? Promise.resolve((root.LRF_BUNDLED && root.LRF_BUNDLED.inventory) || (state.bundled && state.bundled.inventory ? fetch(state.bundled.inventory).then(r => (r.ok ? r.json() : null)) : null))
+      : loadAttic().then(attic => (attic.rest && attic.rest.seedInventory) || null);
+    return from.catch(() => null).then(found => { if (state.inventoryAsked !== asked) return false; state.inventoryBase = found && Array.isArray(found.lots) ? found : null; return !!state.inventoryBase; });
+  }
+  const inventoryNow = () => state.plan.seedInventory || state.inventoryBase || SL.emptyInventory();
+  const stockNow = () => SL.stock(inventoryNow());
+  /** Change seed stock: `change(inventory, ctx)` returns the changed copy, or null for no change. One undoable step. */
+  function editStock(label, change, name) {
+    const ctx = { now: new Date().toISOString(), uid, year: planYear(), name: name || '' };
+    let after = null;
+    try { after = change(inventoryNow(), ctx); } catch (error) { toast(error.message || 'That stock change could not be made.'); return false; }
+    if (!after) return false;
+    return commit(label, [{ kind: 'inventory', before: state.plan.seedInventory || null, after }], { unchecked: true });
   }
 
   function removePlantings(ids, label) {
@@ -368,7 +382,7 @@
     }
     const cloud = store.backend !== 'memory';   // somewhere durable to keep the photo and the rest of the backup
     core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name };
-    state.plan = core; state.attic = attic; state.extras = emptyExtras(); state.stock = null; state.keptThumbs = {}; Thumbs.set({}); state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
+    state.plan = core; state.attic = attic; state.extras = emptyExtras(); state.inventoryBase = null; state.inventoryAsked = null; state.keptThumbs = {}; Thumbs.set({}); state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
     showMapImage(parsed.image && parsed.image.bytes, parsed.image && parsed.image.mime);
     rebuild(); state.date = defaultDate(); root.LRFMap.fit(true);
     emit('plan'); emit('date'); emit('sel');
@@ -438,7 +452,7 @@
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, setAssumption, setGardenType,
-    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadStock, uid, storage: () => (store ? store.backend : 'memory'),
+    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadInventory, inventoryNow, stockNow, editStock, uid, storage: () => (store ? store.backend : 'memory'),
     exportBackup, importBackup, retrySave: () => store && store.retry(), isSample: () => !!(state.plan && state.plan.lrfNext && state.plan.lrfNext.sample)
   };
 })(window);

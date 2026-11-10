@@ -386,22 +386,114 @@
 
   /** Everything the three views read: each variety with what the plan needs of it and what is on hand. */
   function model() {
-    const eng = App.state.engine, plan = App.state.plan, need = SL.required(eng), stock = ui.stock || {};
+    const eng = App.state.engine, plan = App.state.plan, need = SL.required(eng), stock = App.stockNow();
     const live = plan.varieties.filter(v => v.active !== false && !v.deleted), used = new Map(), usedCrop = new Map(), byV = new Map(), byCrop = new Map();
     for (const p of plan.plantings) { usedCrop.set(p.cropId, (usedCrop.get(p.cropId) || 0) + 1); if (p.varietyId) used.set(p.varietyId, (used.get(p.varietyId) || 0) + 1); }
     for (const r of need.rows) {
-      const s = stock[r.key] || { onHand: 0, onOrder: 0 };
+      r.stockKey = r.variety ? 'v:' + r.variety.id : 'c:' + (r.crop && r.crop.id); r.stockUnit = SL.stockUnit(r.unit);
+      const s = stock[r.stockKey + '|' + r.stockUnit] || { onHand: 0, onOrder: 0 };
       r.onHand = s.onHand; r.onOrder = s.onOrder; r.short = Math.max(0, Math.ceil(r.toSow - s.onHand - s.onOrder));
       if (r.variety) { if (!byV.has(r.variety.id) || r.unit === 'seeds') byV.set(r.variety.id, r); }
       else if (r.crop) { if (!byCrop.has(r.crop.id)) byCrop.set(r.crop.id, []); byCrop.get(r.crop.id).push(r); }
     }
-    // seed held for a variety that is not in this season's plan
+    // a variety that is not in this season's plan can still have seed on the shelf
     for (const v of live) {
       if (byV.has(v.id)) continue;
-      const unit = stock['v:' + v.id + '|seeds'] ? 'seeds' : stock['v:' + v.id + '|plants'] ? 'plants' : '', s = unit && stock['v:' + v.id + '|' + unit];
-      if (s) byV.set(v.id, { key: 'v:' + v.id + '|' + unit, variety: v, crop: eng.crop(v.cropId), unit, plantings: 0, waiting: 0, toSow: 0, total: 0, first: null, onHand: s.onHand, onOrder: s.onOrder, short: 0 });
+      const crop = eng.crop(v.cropId), unit = SL.STOCK_UNITS.find(u => stock['v:' + v.id + '|' + u]) || unitFor(crop), s = stock['v:' + v.id + '|' + unit] || { onHand: 0, onOrder: 0 };
+      byV.set(v.id, { key: 'v:' + v.id + '|' + unit, stockKey: 'v:' + v.id, stockUnit: unit, variety: v, crop, unit, plantings: 0, waiting: 0, toSow: 0, total: 0, first: null, onHand: s.onHand, onOrder: s.onOrder, short: 0 });
     }
-    return { eng, plan, live, need, used, usedCrop, byV, byCrop, hasStock: Object.keys(stock).length > 0 };
+    // stock the list cannot count: a lot for a removed variety, or in a unit this variety's row does not use
+    const units = new Map([...byV.values()].map(r => [r.stockKey, r.stockUnit])), needed = new Set(need.rows.map(r => r.stockKey + '|' + r.stockUnit));
+    const unlisted = SL.unlisted(App.inventoryNow(), plan, units).filter(u => u.why !== 'unit' || !needed.has(u.lot.key + '|' + u.lot.unit));
+    for (const u of unlisted) if (u.why === 'unit') { const r = byV.get(u.variety.id); (r.odd || (r.odd = [])).push(u); }
+    return { eng, plan, live, need, stock, used, usedCrop, byV, byCrop, unlisted, hasStock: Object.keys(stock).length > 0 };
+  }
+  const unitFor = crop => (crop && crop.micro ? 'g' : crop && crop.plantingMaterial === 'plant' ? 'plants' : 'seeds');
+  // ── stock, edited where it is shown ──
+  function receive(key, unit, name) {
+    const done = App.editStock(`${name}: order arrived`, (lib, ctx) => {
+      let next = null;
+      for (const lot of SL.lotsFor(lib, key)) if (lot.unit === unit && lot.life === 'ordered') next = SL.receiveLot(next || lib, lot.id, ctx) || next;
+      return next;
+    }, name);
+    if (done) toast(`${name}: the order is now on hand`, { label: 'Undo', run: App.undo });
+  }
+  async function receiveAll() {
+    const lots = (App.inventoryNow().lots || []).filter(l => l && l.deleted !== true && SL.lifeOf(l) === 'ordered');
+    if (!lots.length || !(await UI.confirm({ title: 'Mark every order as arrived?', confirmLabel: 'All arrived', body: `${lots.length} lot${lots.length === 1 ? '' : 's'} on order become seed on hand, each at the quantity ordered. One Undo puts them back. If part of the order has not come, mark those varieties one at a time instead.` }))) return;
+    if (App.editStock(`${lots.length} orders arrived`, (lib, ctx) => { let next = lib; for (const lot of lots) next = SL.receiveLot(next, lot.id, ctx) || next; return next; })) toast(`${lots.length} orders are now on hand`, { label: 'Undo', run: App.undo });
+  }
+  const lotText = u => `${num(u.lot.quantity)} ${u.lot.unit} ${u.life === 'ordered' ? 'ordered' : 'on hand'}`;
+  /** Put a lot the list cannot count where it can: under the plan's unit, or under the live variety of the same name. */
+  function refile(u, to, label) {
+    if (App.editStock(label, (lib, ctx) => SL.moveLot(lib, u.lot.id, to, ctx), to.name || u.lot.name || '')) toast(label, { label: 'Undo', run: App.undo });
+    else { ui.panelKey = ''; schedule(); }
+  }
+  const unitWord = unit => (unit === 'g' ? 'grams' : unit);
+  /**
+   * A lot in one unit under a variety the plan counts in another. Either the lot is misfiled (canes ordered and
+   * recorded as seeds) or the crop is (seed on the shelf for a crop marked as bought-in plants). Only he knows which.
+   */
+  function unitChoice(u, name) {
+    const lot = u.lot, crop = App.state.engine.crop(u.variety.cropId), n = num(lot.quantity);
+    return [h('p.sd-odd', `Recorded as ${n} ${unitWord(lot.unit)}, but the plan counts ${name} in ${unitWord(u.unit)}, so no row counts this lot. One of the two is wrong.`),
+      h('button.link', { type: 'button', dataset: { fix: 'unit' }, onclick: () => refile(u, { unit: u.unit, reason: `Counted in ${u.unit}, as the plan counts ${name}.` }, `${name}: ${n} counted as ${unitWord(u.unit)}`) }, `The lot is wrong: count ${n} ${unitWord(u.unit)}`),
+      crop ? h('button.link', { type: 'button', dataset: { fix: 'crop' }, onclick: () => select({ type: 'crop', id: crop.id }) }, `The crop is wrong: open ${cropName(crop)}`) : null];
+  }
+  /** The On hand cell: a number typed in place, and any order beneath it with one click to mark it arrived. */
+  function stockCell(r, name) {
+    const lots = SL.lotsFor(App.inventoryNow(), r.stockKey).filter(l => l.unit === r.stockUnit), held = lots.filter(l => l.life === 'usable' && l.usable === true), ordered = lots.some(l => l.life === 'ordered'), many = held.length > 1, word = SL.UNIT_WORD[r.unit] || SL.UNIT_WORD[r.stockUnit] || r.stockUnit;
+    const input = h('input.sd-stock', { type: 'number', min: 0, step: r.stockUnit === 'g' ? 'any' : 1, value: held.length ? r.onHand : '', placeholder: '—', readOnly: many, 'aria-label': `${name}: ${word} on hand`, title: many ? `${held.length} lots on hand. Count each one in the panel.` : `What you have on hand, in ${word}`,
+      onkeydown: e => { if (e.key === 'Enter') e.target.blur(); },
+      onchange: e => {
+        const raw = e.target.value.trim();
+        if (raw === '' && !held.length) return;
+        if (!App.editStock(`${name}: ${raw === '' ? 0 : raw} on hand`, (lib, ctx) => SL.setOnHand(lib, r.stockKey, r.stockUnit, raw === '' ? 0 : raw, ctx), name)) { ui.panelKey = ''; schedule(); }
+      } });
+    return h('td.sd-num.sd-stockcell', input, ordered ? h('button.sd-recv', { type: 'button', title: 'The order has arrived: count it as on hand', 'aria-label': `${name}: ${num(r.onOrder)} ordered. Mark as arrived.`, onclick: () => receive(r.stockKey, r.stockUnit, name) }, `${num(r.onOrder)} ordered ✓`) : null,
+      r.odd ? h('button.sd-oddlot', { type: 'button', title: `${r.odd.map(lotText).join(', ')}, which this row cannot count: the plan counts ${name} in ${word}. Click to see the lot and put it right.`, 'aria-label': `${name}: ${r.odd.map(lotText).join(', ')}, not counted here`, onclick: () => select({ type: 'variety', id: r.variety.id }) }, `${r.odd.map(u => `${num(u.lot.quantity)} ${u.lot.unit}`).join(', ')} ?`) : null);
+  }
+  /** Every lot of one variety, in the panel: count, where it is, packed-for year. */
+  /** Stock the list leaves out, each lot with the one step that puts it right. */
+  function unlistedBox(m) {
+    const box = h('section.sd-stray', { id: 'sdUnlisted' }, h('b', `${m.unlisted.length} lot${m.unlisted.length === 1 ? ' is' : 's are'} not counted in the list`), h('span', 'Seed that is bought or ordered but filed where no row can see it. Until it is put right, the list asks for that seed again.'));
+    for (const u of m.unlisted) {
+      const v = u.variety, was = v ? v.name : (u.lot.name || 'a variety that is gone'), crop = v && m.eng.crop(v.cropId), row = h('div.sd-strayrow', { dataset: { lot: u.lot.id, why: u.why } }, h('strong', was), h('small', lotText(u)));
+      if (u.why === 'unit') add(row, unitChoice(u, v.name));
+      else if (u.twin) {
+        const to = u.twin, toCrop = cropName(m.eng.crop(to.cropId));
+        row.append(h('p', `Filed under a ${was} that was removed from the library. There is another ${to.name} under ${toCrop}.`),
+          h('button.link', { type: 'button', onclick: () => refile(u, { key: 'v:' + to.id, name: `${toCrop} · ${to.name}`, reason: `Moved from a removed variety record (${v.id}).` }, `${to.name}: ${lotText(u)}, moved from the removed record`) }, `Move it to ${to.name} · ${toCrop}`));
+      } else if (v && crop && crop.active !== false && !crop.deleted) {
+        row.append(h('p', `${was} was removed from the library, so it has no row.`),
+          h('button.link', { type: 'button', onclick: async () => { const after = { ...v, active: true }; delete after.deleted; if (await App.revise(`Bring ${v.name} back to the library`, [{ kind: 'variety', before: v, after }])) toast(`${v.name} is back in the library`, { label: 'Undo', run: App.undo }); } }, `Bring ${was} back under ${cropName(crop)}`));
+      } else row.append(h('p', 'The variety this was bought for is no longer in the library.'));
+      box.append(row);
+    }
+    return box;
+  }
+  function lotsBox(key, unit, name, strays) {
+    const lots = SL.lotsFor(App.inventoryNow(), key), redo = () => { ui.panelKey = ''; schedule(); };
+    const change = (lot, patch, kind, label) => { if (!App.editStock(`${name}: ${label}`, (lib, ctx) => SL.updateLot(lib, lot.id, patch, kind, ctx), name)) redo(); };
+    const box = h('section.sd-lots', h('h3.sd-h', lots.length ? `Seed lots · ${lots.length}` : 'Seed lots'));
+    for (const lot of lots) {
+      const odd = (strays || []).find(u => u.lot.id === lot.id);
+      const from = [lot.supplier, lot.packLabel, lot.orderNumber ? 'order ' + lot.orderNumber : '', lot.orderDate || (lot.receivedDate ? 'arrived ' + lot.receivedDate : '')].filter(Boolean).join(' · ');
+      box.append(h('div.sd-lot', { dataset: { lot: lot.id } },
+        h('input', { type: 'number', min: 0, step: lot.unit === 'g' ? 'any' : 1, value: lot.quantity == null ? '' : lot.quantity, 'aria-label': 'Quantity', onchange: e => change(lot, { quantity: e.target.value }, 'count', `${e.target.value || 0} counted`) }),
+        h('span.sd-unit', lot.unit),
+        sel('where', [['usable', 'On hand'], ['ordered', 'Ordered'], ['excluded', 'Set aside']], lot.life === 'review' ? 'excluded' : lot.life, { 'aria-label': 'Where it is', onchange: e => {
+          const to = e.target.value;
+          if (lot.life === 'ordered' && to === 'usable') { if (!App.editStock(`${name}: order arrived`, (lib, ctx) => SL.receiveLot(lib, lot.id, ctx), name)) redo(); }
+          else change(lot, { status: to }, 'availability', to === 'usable' ? 'on hand' : to === 'ordered' ? 'on order' : 'set aside');
+        } }),
+        h('input.sd-year', { type: 'number', min: 1900, max: 2200, step: 1, value: lot.year || '', placeholder: 'year', title: 'Packed-for year', 'aria-label': 'Packed-for year', onchange: e => change(lot, { year: e.target.value }, 'details', 'packed-for year') }),
+        h('button.icon-btn', { type: 'button', title: 'Delete this lot', 'aria-label': 'Delete this lot', onclick: () => { if (!App.editStock(`${name}: delete a lot`, (lib, ctx) => SL.deleteLot(lib, lot.id, ctx), name)) redo(); } }, '×'),
+        from ? h('small', from) : null,
+        odd ? h('div.sd-oddbox', unitChoice(odd, name)) : null));
+    }
+    box.append(h('button.link', { type: 'button', id: 'sdAddLot', onclick: () => { App.editStock(`${name}: add a lot`, (lib, ctx) => SL.addLot(lib, { key, unit, quantity: 0, status: 'usable' }, ctx), name); } }, lots.length ? '+ Add another lot' : '+ Add a lot'));
+    return box;
   }
   const passes = (m, v, id) => { const r = m.byV.get(v.id); return id === 'all' || (id === 'planted' && m.used.has(v.id)) || (id === 'tosow' && !!r && r.toSow > 0) || (id === 'short' && !!r && r.short > 0) || (id === 'open' && noStart(v)); };
   function groupsOf(m, list) {
@@ -422,16 +514,15 @@
   function render() {
     if (!App.state.ready || App.state.view !== 'seeds') { ui.dirty = true; return; }
     ui.dirty = false;
-    App.loadStock().then(s => { if (s !== ui.stock) { ui.stock = s; schedule(); } }).catch(() => {});
+    App.loadInventory().then(found => { if (found) { ui.panelKey = ''; schedule(); } }).catch(() => {});
     const m = model(), q = ui.query.trim().toLowerCase();
-    if (ui.filter === 'short' && !m.hasStock) ui.filter = 'all';
     for (const b of document.querySelectorAll('[data-sd-tab]')) b.setAttribute('aria-pressed', String(b.dataset.sdTab === ui.tab));
     $('sdSettings').textContent = serviceReady() ? 'Link reader: set' : 'Link reader…';
     const text = v => `${v.name} ${cropName(m.eng.crop(v.cropId))} ${v.supplier || v.source || ''} ${v.sku || ''}`.toLowerCase();
     const list = m.live.filter(v => passes(m, v, ui.filter) && (!q || text(v).includes(q)));
     $('sdTitle').textContent = ui.tab === 'crops' ? 'Crops' : `${list.length === m.live.length ? 'All' : list.length + ' of'} ${m.live.length} varieties`;
     add(clear($('sdFilters')),
-      ui.tab === 'crops' ? h('span.sd-note', 'Click a crop to edit it. Days to harvest are on the Assumptions list.') : FILTERS.filter(([id]) => id !== 'short' || m.hasStock).map(([id, label]) =>
+      ui.tab === 'crops' ? h('span.sd-note', 'Click a crop to edit it. Days to harvest are on the Assumptions list.') : FILTERS.map(([id, label]) =>
         h('button.chip', { type: 'button', 'aria-pressed': String(ui.filter === id), onclick: () => { ui.filter = id; schedule(); } }, label, h('small', m.live.filter(v => passes(m, v, id)).length))),
       h('span.grow'),
       ui.tab === 'list' ? sel('sort', SORTS, ui.sort, { 'aria-label': 'Order', id: 'sdSort', onchange: e => { ui.sort = e.target.value; schedule(); } }) : null,
@@ -450,15 +541,15 @@
   }
 
   function listTable(m, list, q) {
-    const { eng } = m, grouped = ui.sort === 'crop', stock = m.hasStock;
+    const { eng } = m, grouped = ui.sort === 'crop', stock = true;
     const heads = [['Variety'], ['Supplier', 0, 'sd-sup'], ['Days', 1, 'w-s'], ['Counted from', 0, 'w-l'], ['To sow', 1, 'w-m'], ...(stock ? [['On hand', 1, 'w-l'], ['Short', 1, 'w-s']] : []), ['Packets', 1, 'w-m'], ['First sow', 1, 'w-m'], ['Plantings', 1, 'w-m']];
     clear($('sdHead')).append(h('tr', heads.map(([t, n, c]) => h('th' + (n ? '.sd-num' : '') + (c ? '.' + c : ''), t))));
     const body = clear($('sdBody')), cols = heads.length;
     const row = (v, flat) => {
       const r = m.byV.get(v.id), basis = v.catalogMaturityBasis || 'unspecified', crop = eng.crop(v.cropId), site = SL.hostOf(v.url);
-      const ms = r && r.unit === 'seeds' && r.toSow > 0 ? SL.measures(r.toSow, v) : { weight: '', packets: '' };
-      return h('tr.sd-var', { tabIndex: 0, 'aria-label': `${v.name}, ${cropName(crop)}`, dataset: { variety: v.id }, onclick: e => { if (!e.target.closest('a, select')) select({ type: 'variety', id: v.id }); }, onkeydown: rowKey },
-        h('td', h('div.sd-cell', T.el({ varietyId: v.id, color: crop && eng.cropColor(crop), label: v.name, size: 36 }), h('span.sd-name', h('span.as-vname', v.name), flat ? h('small', cropName(crop)) : null))),
+      const ms = r.unit === 'seeds' && r.toSow > 0 ? SL.measures(r.toSow, v) : { weight: '', packets: '' };
+      return h('tr.sd-var', { tabIndex: 0, 'aria-label': `${v.name}, ${cropName(crop)}`, dataset: { variety: v.id }, onclick: e => { if (!e.target.closest('a, select, input, button')) select({ type: 'variety', id: v.id }); }, onkeydown: rowKey },
+        h('td', h('div.sd-cell', T.el({ varietyId: v.id, color: crop && eng.cropColor(crop), label: v.name, size: 34 }), h('span.sd-name', h('span.as-vname', v.name), flat ? h('small', cropName(crop)) : null))),
         h('td.sd-sup', supplierShort(v) || (v.source === 'Farm entry' ? 'By hand' : ''), site ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer', title: `${v.sku ? v.sku + ' · ' : ''}open the page on ${site}` }, ' ↗') : null),
         h('td.sd-num', daysText(v) || '—', v.catalogHarvestStage && v.catalogHarvestStage !== 'unspecified' ? h('small', ` ${v.catalogHarvestStage}`) : null),
         v.catalogDtm ? h('td.sd-from' + (basis === 'unspecified' ? '.sd-open' : ''), sel('from', BASIS_SHORT, basis, { 'aria-label': `${v.name}: days counted from`, onchange: async e => {
@@ -466,7 +557,7 @@
           if (!(await App.revise(`${v.name}: days counted from ${BASIS_TEXT[value]}`, [{ kind: 'variety', before: v, after: { ...v, catalogMaturityBasis: value, catalogSourceChoice: v.catalogSourceChoice || 'url' } }]))) schedule();
         } })) : h('td.sd-from', v.dtm > 0 ? h('small', 'the day it goes in') : ''),
         h('td.sd-num', r && r.toSow > 0 ? amount(r) : ''),
-        stock ? h('td.sd-num', r && (r.onHand || r.onOrder) ? [r.onHand ? num(r.onHand) : '', r.onOrder ? h('small.sd-ord', `${num(r.onOrder)} ordered`) : null] : '') : null,
+        stockCell(r, v.name),
         stock ? h('td.sd-num', r && r.short > 0 ? num(r.short) : '') : null,
         h('td.sd-num', ms.packets || ms.weight),
         h('td.sd-num', r && r.first ? day(r.first) : ''),
@@ -495,8 +586,8 @@
         for (const v of g.list) { body.append(row(v, false)); shown++; }
         for (const r of plain) {
           shown++;
-          body.append(h('tr.sd-need', { dataset: { key: r.key } }, h('td', h('div.sd-cell', T.el({ cropId: g.id, color, label: cropName(g.crop), size: 36, cls: 'faint' }), h('span.sd-name', h('small', 'No variety chosen')))), h('td.sd-sup'), h('td'), h('td'),
-            h('td.sd-num', amount(r)), stock ? h('td') : null, stock ? h('td') : null, h('td'), h('td.sd-num', r.first ? day(r.first) : ''), h('td.sd-num', r.waiting === r.plantings ? r.plantings : `${r.waiting} of ${r.plantings}`)));
+          body.append(h('tr.sd-need', { dataset: { key: r.key } }, h('td', h('div.sd-cell', T.el({ cropId: g.id, color, label: cropName(g.crop), size: 34, cls: 'faint' }), h('span.sd-name', h('small', 'No variety chosen')))), h('td.sd-sup'), h('td'), h('td'),
+            h('td.sd-num', amount(r)), stockCell(r, `${cropName(g.crop)}, no variety`), h('td.sd-num', r.short > 0 ? num(r.short) : ''), h('td'), h('td.sd-num', r.first ? day(r.first) : ''), h('td.sd-num', r.waiting === r.plantings ? r.plantings : `${r.waiting} of ${r.plantings}`)));
         }
       }
     }
@@ -509,7 +600,7 @@
       m.live.length && bare === m.live.length ? 'These varieties carry planning figures only. Supplier, product code and page come in when you load your backup here. ' : null,
       `Seed counts allow for ${m.need.settings.germ}% germination${m.need.settings.buffer ? ` and ${m.need.settings.buffer}% extra plugs on transplants` : ''}. `,
       sown ? `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted and left out. ` : null,
-      m.hasStock ? 'On hand and ordered are as last recorded in v7; stock is not edited here yet. ' : null,
+      'Type what you have under On hand; click an order when it arrives. Each variety’s lots are in its panel. ',
       h('button.link', { type: 'button', onclick: () => download(m) }, 'Download seeds required (.csv)'));
   }
   function gallery(m, list, q) {
@@ -537,7 +628,7 @@
       const vs = eng.varietiesOf(c.id), mine = root.LRFPanels.isMine(c, m.usedCrop, vs, settings);
       if (q ? !String(c.name).toLowerCase().includes(q) : !mine) continue;
       body.append(h('tr.sd-var.sd-croprow', { tabIndex: 0, dataset: { croprow: c.id }, 'aria-label': c.name, onclick: () => select({ type: 'crop', id: c.id }), onkeydown: e => { if (e.key === 'Enter') select({ type: 'crop', id: c.id }); } },
-        h('td', h('div.sd-cell', T.el({ cropId: c.id, color: eng.cropColor(c), label: c.name, size: 36, cls: 'key' }), h('span.sd-name', h('b', c.name), c.family ? h('small', c.family) : null))),
+        h('td', h('div.sd-cell', T.el({ cropId: c.id, color: eng.cropColor(c), label: c.name, size: 34, cls: 'key' }), h('span.sd-name', h('b', c.name), c.family ? h('small', c.family) : null))),
         h('td', c.micro ? 'living trays' : c.method === 'TP' ? 'transplanted' : 'direct sown'),
         h('td.sd-num', c.method === 'TP' && c.gh ? num(c.gh * 7) : ''), h('td.sd-num', c.inRow ? num(c.inRow, 2) : ''), h('td.sd-num', c.rowSp ? num(c.rowSp, 2) : ''),
         h('td.sd-num', c.rowsPerBed != null && c.rowsPerBed !== '' ? String(c.rowsPerBed) : h('small', 'by width')), h('td.sd-num', vs.length || ''), h('td.sd-num', m.usedCrop.get(c.id) || '')));
@@ -548,7 +639,7 @@
 
   // ── the detail panel: what is selected, edited in place ──
   function panel(m, force) {
-    const key = JSON.stringify(ui.sel) + '|' + ui.rev + '|' + (m.hasStock ? 1 : 0);
+    const key = JSON.stringify(ui.sel) + '|' + ui.rev;
     if (!force && key === ui.panelKey) return;
     ui.panelKey = key;
     if (host) host.closed = true;
@@ -557,9 +648,11 @@
     const { eng, plan } = m, shut = h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => select(null) }, '×');
     const stat = (label, value, small) => h('div.sd-stat', h('small', label), h('b', value), small ? h('span', small) : null);
     if (!ui.sel) {
-      const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), open = m.live.filter(noStart).length, short = [...m.byV.values()].filter(r => r.short > 0).length;
+      const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), open = m.live.filter(noStart).length, short = [...m.byV.values()].filter(r => r.short > 0).length, onOrder = Object.values(m.stock).filter(x => x.onOrder > 0).length;
       add(el, h('header.sd-ph.plain', h('div', h('p.eyebrow', `${App.planYear()} season`), h('h2', 'Seed library'))),
-        h('div.sd-stats', stat('Varieties', num(m.live.length), `${m.live.filter(v => m.used.has(v.id)).length} planted`), stat('To sow', num(seeds), 'seeds'), m.hasStock ? stat('Short of seed', num(short), 'varieties') : stat('With a photo', num(m.live.filter(v => T.get(v.id)).length))),
+        h('div.sd-stats', stat('Varieties', num(m.live.length), `${m.live.filter(v => m.used.has(v.id)).length} planted`), stat('To sow', num(seeds), 'seeds'), stat('Short of seed', num(short), 'varieties')),
+        onOrder ? h('button.sd-task.plain', { type: 'button', id: 'sdReceiveAll', onclick: receiveAll }, h('b', `Seed for ${onOrder} variet${onOrder === 1 ? 'y' : 'ies'} is on order`), h('span', 'When the box comes, click an order in the list to count it as on hand, or click here to mark every order as arrived.')) : null,
+        m.unlisted.length ? unlistedBox(m) : null,
         open ? h('button.sd-task', { type: 'button', onclick: () => { ui.filter = 'open'; ui.tab = 'list'; schedule(); } }, h('b', `${open} variet${open === 1 ? 'y has' : 'ies have'} supplier days with no starting point`), h('span', 'For a transplanted crop that can move the harvest by the whole nursery time. Set each one in the “Counted from” column.')) : null,
         h('p.dlg-hint', 'Click a variety to see and edit it here. With a row in focus, ↑ and ↓ move between varieties and Enter jumps to its first field.'),
         h('p.dlg-hint', serviceReady() ? 'Link reader is set in this browser.' : 'Reading a variety from a supplier link needs the link reader set up. Pasting a page works without it.'));
@@ -583,8 +676,8 @@
           h('button.link', { type: 'button', onclick: () => pick.click() }, T.get(v.id) ? 'Change photo' : 'Add a photo'), pick),
         shut),
       h('div.sd-stats', stat('Plantings', n || '—'), stat('To sow', r && r.toSow > 0 ? num(r.toSow, r.unit === 'g' ? 1 : 0) : '—', r && r.toSow > 0 ? (r.unit === 'seeds' ? SL.measures(r.toSow, v).packets || SL.measures(r.toSow, v).weight || 'seeds' : SL.UNIT_WORD[r.unit]) : null),
-        m.hasStock ? stat('On hand', r && r.onHand ? num(r.onHand) : '—', r && r.onOrder ? `${num(r.onOrder)} ordered` : r && r.short > 0 ? `short ${num(r.short)}` : null) : stat('First sowing', r && r.first ? day(r.first) : '—')),
-      body, status);
+        stat('On hand', r && r.onHand ? num(r.onHand) : '—', r && r.onOrder ? `${num(r.onOrder)} ordered` : r && r.short > 0 ? `short ${num(r.short)}` : null)),
+      lotsBox('v:' + v.id, r ? r.stockUnit : unitFor(crop), v.name, r && r.odd), body, status);
     openVariety(v, null, host);
     const mine = plan.plantings.filter(p => p.varietyId === v.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).sort((a, b) => a.r.field - b.r.field);
     if (mine.length) add(el, h('h3.sd-h', `In the plan · ${mine.length}`), h('div.sd-pls', mine.slice(0, 40).map(({ p, r: c }) =>
@@ -598,7 +691,7 @@
     for (const r of m.need.rows) {
       if (!(r.toSow > 0)) continue;
       const v = r.variety, ms = r.unit === 'seeds' ? SL.measures(r.toSow, v) : { weight: '', packets: '' };
-      lines.push([cropName(r.crop), v ? v.name : '', v ? v.supplier || v.source || '' : '', v ? v.sku || '' : '', Math.round(r.toSow * 10) / 10, r.unit, m.hasStock ? r.onHand : '', m.hasStock ? r.onOrder : '', m.hasStock ? r.short : '', ms.weight, ms.packets, r.first ? E.d2s(r.first) : '', r.waiting, r.plantings]);
+      lines.push([cropName(r.crop), v ? v.name : '', v ? v.supplier || v.source || '' : '', v ? v.sku || '' : '', Math.round(r.toSow * 10) / 10, r.unit, r.onHand, r.onOrder, r.short, ms.weight, ms.packets, r.first ? E.d2s(r.first) : '', r.waiting, r.plantings]);
     }
     const blob = new Blob(['﻿' + lines.map(l => l.map(cell).join(',')).join('\r\n')], { type: 'text/csv' }), filename = `seeds-required-${App.planYear()}-${E.d2s(new Date())}.csv`;
     const fallback = () => { const url = URL.createObjectURL(blob), a = h('a', { href: url, download: filename }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); };

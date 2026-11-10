@@ -44,8 +44,15 @@ with sync_playwright() as pw:
     page.click('[data-view-btn="seeds"]'); page.wait_for_timeout(500)
     out["seeds_offline"] = page.evaluate("""(async () => { const A = LRFApp, S = A.state, v = S.plan.varieties.find(v => v.url && v.catalogDtm), rec = await A.varietyRecord(v.id);
       const r = LRFReader.readPasted('Days To Maturity\\n55 days\\nDAYS TO MATURITY: From transplanting.', 'https://www.johnnyseeds.com/x-1.html', 'Offline Test');
-      await A.loadStock(); await new Promise(r => setTimeout(r, 400));
-      return {thumbs: LRFThumbs.count(), photosShown: document.querySelectorAll('#sdBody .sd-var .thumb img').length, stock: Object.keys(S.stock || {}).length, rows: document.querySelectorAll('.sd-var').length, live: S.plan.varieties.filter(v => v.active !== false && !v.deleted).length, need: LRFSeedLib.required(S.engine).rows.length, savedPageText: !!(rec && rec.catalogSourceText), pasted: r.facts.maturity.min, basis: r.facts.maturityBasis}; })()""")
+      await A.loadInventory(); await new Promise(r => setTimeout(r, 400));
+      return {thumbs: LRFThumbs.count(), photosShown: document.querySelectorAll('#sdBody .sd-var .thumb img').length, stock: Object.keys(A.stockNow()).length, stockInPlan: !!S.plan.seedInventory, rows: document.querySelectorAll('.sd-var').length, live: S.plan.varieties.filter(v => v.active !== false && !v.deleted).length, need: LRFSeedLib.required(S.engine).rows.length, savedPageText: !!(rec && rec.catalogSourceText), pasted: r.facts.maturity.min, basis: r.facts.maturityBasis}; })()""")
+    # stock typed in the list, with the network still off, is kept on this device
+    row = js("(() => { const st = LRFApp.stockNow(), r = LRFSeedLib.required(LRFApp.state.engine).rows.find(r => r.variety && r.unit === 'seeds' && r.toSow > 60 && !st[r.key]); return r.variety.id; })()")
+    cell = f'.sd-var[data-variety="{row}"] .sd-stock'
+    page.fill(cell, "40"); page.dispatch_event(cell, "change"); page.wait_for_timeout(900)
+    page.reload(); page.wait_for_function("window.LRFApp && LRFApp.state.ready"); page.wait_for_timeout(700)
+    page.click('[data-view-btn="seeds"]'); page.wait_for_timeout(500)
+    out["stock_kept_offline"] = js(f"({{onHand: (LRFApp.stockNow()['v:{row}|seeds'] || {{}}).onHand, shown: document.querySelector('.sd-var[data-variety=\"{row}\"] .sd-stock').value, save: document.getElementById('saveState').textContent}})")
     if len(sys.argv) > 3:
         page.screenshot(path=sys.argv[3])
     browser.close()
