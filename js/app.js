@@ -10,7 +10,7 @@
   const { h, toast, day, span } = UI;
 
   const state = {
-    plan: null, engine: null, attic: null, bundled: null, mapImageUrl: '',
+    plan: null, engine: null, attic: null, extras: null, stock: null, keptThumbs: {}, bundled: null, mapImageUrl: '',
     date: new Date(), view: 'map', sel: null, armed: null,
     undo: [], redo: [], ready: false
   };
@@ -49,7 +49,8 @@
     for (const op of ops) {
       const from = direction === 'undo' ? op.after : op.before, to = direction === 'undo' ? op.before : op.after;
       if (op.kind === 'assume') { if (to) next.assumptions = to; else delete next.assumptions; continue; }
-      const key = op.kind === 'bed' ? 'beds' : op.kind === 'garden' ? 'gardens' : 'plantings', list = lists[key] || (lists[key] = plan[key].slice());
+      if (op.kind === 'settings') { next.settings = to; continue; }
+      const key = { bed: 'beds', garden: 'gardens', variety: 'varieties', crop: 'crops' }[op.kind] || 'plantings', list = lists[key] || (lists[key] = (plan[key] || []).slice());
       const index = from ? list.findIndex(x => x.id === from.id) : -1;
       if (to && index >= 0) list[index] = to; else if (to) list.push(to); else if (index >= 0) list.splice(index, 1);
     }
@@ -60,7 +61,7 @@
     store.save(state.plan);
     emit('plan');
   }
-  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (op.kind === 'assume' || op.kind === 'garden') continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
+  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
   /** Why the guard rails refuse an edit, in words. */
   function refusalText(no, engine) {
     const bed = engine.bedOf(no.p.bedId), what = cropLabel(no.p, engine), unit = engine.capUnit(bed);
@@ -149,6 +150,78 @@
     return assume(`${before.name} is ${{ field: 'open field', tunnel: 'an unheated tunnel', greenhouse: 'a heated greenhouse' }[type] || type}`, [{ kind: 'garden', before, after }]);
   }
 
+  // ───────────────────────── seed library ─────────────────────────
+  // A variety or crop record is, like the list above, a statement about the world: saving one is never
+  // refused, and what it does to the plan is shown first. The long record of what a supplier's page said
+  // is kept beside the plan, not in it, and rejoins it when a backup is downloaded.
+  const emptyExtras = () => ({ v: 1, varieties: {} });
+  async function loadExtras() {
+    if (state.extras) return state.extras;
+    let text = null;
+    try { text = await store.loadBlob('attic-new'); } catch (_) { /* nothing kept yet */ }
+    let kept = null;
+    try { kept = text ? JSON.parse(text) : null; } catch (_) { kept = null; }
+    return (state.extras = kept && kept.varieties ? kept : emptyExtras());
+  }
+  /** The page record last kept for a variety: from this app, or from the v7 backup it came in with. */
+  async function varietyRecord(id) {
+    const extras = await loadExtras();
+    if (extras.varieties[id]) return extras.varieties[id];
+    try { const attic = await loadAttic(); return (attic.varieties && attic.varieties[id]) || null; } catch (_) { return null; }
+  }
+  /** Keep a variety's page record. Resolves to false when this view has nowhere durable to keep it. */
+  async function keepVarietyRecord(id, heavy) {
+    const extras = await loadExtras();
+    extras.varieties[id] = heavy;
+    try { return await store.saveBlob('attic-new', JSON.stringify(extras)); } catch (_) { return false; }
+  }
+
+  // ───────────────────────── photos and stock ─────────────────────────
+  // Thumbnails are kept beside the plan (never in it): the ones that ship with the page for the plan it
+  // was drawn from, then whatever was read from a backup's photos or added here.
+  const Thumbs = root.LRFThumbs;
+  async function loadThumbs() {
+    let base = {}, kept = null;
+    if (state.plan.lrfNext && state.plan.lrfNext.source === 'bundled') {
+      const inlined = root.LRF_BUNDLED && root.LRF_BUNDLED.thumbs, path = state.bundled && state.bundled.thumbs;
+      try { base = inlined || (path ? await fetch(path).then(r => (r.ok ? r.json() : {})) : {}); } catch (_) { base = {}; }
+    }
+    try { const text = store.backend === 'memory' ? null : await store.loadBlob('thumbs'); kept = text ? JSON.parse(text) : null; } catch (_) { kept = null; }
+    state.keptThumbs = kept && typeof kept === 'object' ? kept : {};
+    Thumbs.set({ ...base, ...state.keptThumbs });
+    Thumbs.index(state.plan); emit('plan');
+  }
+  /** Keep (or with no picture, drop) one variety's thumbnail. */
+  async function keepThumb(id, uri) {
+    const next = { ...state.keptThumbs };
+    if (uri) next[id] = uri; else delete next[id];
+    state.keptThumbs = next; Thumbs.put(id, uri);
+    Thumbs.index(state.plan); emit('plan');
+    try { return store.backend === 'memory' ? false : await store.saveBlob('thumbs', JSON.stringify(next)); } catch (_) { return false; }
+  }
+  /** Make thumbnails from the variety photos inside a v7 backup zip. */
+  async function importPhotos(parsed, where) {
+    const out = {}, zip = parsed.zip, Zip = root.LRFZip;
+    const list = zip ? (parsed.plan.varieties || []).filter(v => v && v.photo && v.photo.sha256 && zip.entries.get('files/' + v.photo.sha256)) : [];
+    for (let i = 0; i < list.length; i++) {
+      const v = list[i];
+      try { out[v.id] = await Thumbs.make(new Blob([await Zip.read(zip.bytes, zip.entries.get('files/' + v.photo.sha256))], { type: v.photo.mime || 'image/jpeg' })); } catch (_) { /* one unreadable photo does not stop the rest */ }
+      if ((i + 1) % 20 === 0) showStatus({ backend: where, state: 'saving', label: `Reading photos ${i + 1}/${list.length}` });
+    }
+    state.keptThumbs = out; Thumbs.set(out); Thumbs.index(state.plan); emit('plan');
+    if (store.backend !== 'memory') { try { await store.saveBlob('thumbs', JSON.stringify(out)); } catch (_) { /* shown for this session only */ } }
+    return list.length;
+  }
+  /** Seed on hand and on order, as last recorded in v7. Read-only here. */
+  async function loadStock() {
+    if (state.stock) return state.stock;
+    const plan = state.plan, next = plan.lrfNext || {};
+    if (next.source === 'bundled') return (state.stock = (state.bundled && state.bundled.stock) || {});
+    let inventory = null;
+    try { const attic = await loadAttic(); inventory = attic.rest && attic.rest.seedInventory; } catch (_) { inventory = null; }
+    return plan === state.plan ? (state.stock = root.LRFSeedLib.stock(inventory)) : root.LRFSeedLib.stock(inventory);
+  }
+
   function removePlantings(ids, label) {
     const ops = ids.map(id => state.engine.planting(id)).filter(Boolean).map(before => ({ before, after: null }));
     if (!ops.length) return;
@@ -235,7 +308,8 @@
   }
   async function exportBackup() {
     try {
-      const plan = IO.join(state.plan, await loadAttic()), text = JSON.stringify(plan);
+      const attic = await loadAttic(), extras = await loadExtras();
+      const plan = IO.join(state.plan, { ...attic, varieties: { ...(attic.varieties || {}), ...extras.varieties } }), text = JSON.stringify(plan);
       const filename = `little-river-plan-${planYear()}-${E.d2s(new Date())}.json`;
       const downloads = root.claude && root.claude.use ? await root.claude.use('downloads') : null;
       const planOnly = !(state.plan.lrfNext && state.plan.lrfNext.attic === 'cloud');
@@ -253,13 +327,13 @@
   /** .zip (complete backup) or .json (plan only) -> { plan, image } */
   async function readBackupFile(file) {
     const bytes = new Uint8Array(await file.arrayBuffer()), Zip = root.LRFZip;
-    if (!Zip.isZip(bytes)) return { plan: JSON.parse(new TextDecoder().decode(bytes)), image: null };
+    if (!Zip.isZip(bytes)) return { plan: JSON.parse(new TextDecoder().decode(bytes)), image: null, zip: null };
     const entries = Zip.directory(bytes), planEntry = entries.get('plan.json');
     if (!planEntry) throw new Error('This zip has no plan.json. Use a backup made by the planner.');
     const plan = JSON.parse(new TextDecoder().decode(await Zip.read(bytes, planEntry))), ref = plan.map && plan.map.imageFile;
     const imageEntry = ref && ref.sha256 ? entries.get('files/' + ref.sha256) : null;
     const image = imageEntry ? { sha256: ref.sha256, mime: /^image\/(jpeg|png|webp)$/.test(ref.mime || '') ? ref.mime : 'image/jpeg', bytes: await Zip.read(bytes, imageEntry) } : null;
-    return { plan, image };
+    return { plan, image, zip: { bytes, entries } };
   }
   const toBase64 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
   const fromBase64 = text => { const s = atob(text), out = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i); return out; };
@@ -294,13 +368,14 @@
     }
     const cloud = store.backend !== 'memory';   // somewhere durable to keep the photo and the rest of the backup
     core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name };
-    state.plan = core; state.attic = attic; state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
+    state.plan = core; state.attic = attic; state.extras = emptyExtras(); state.stock = null; state.keptThumbs = {}; Thumbs.set({}); state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
     showMapImage(parsed.image && parsed.image.bytes, parsed.image && parsed.image.mime);
     rebuild(); state.date = defaultDate(); root.LRFMap.fit(true);
     emit('plan'); emit('date'); emit('sel');
     toast(`Loaded ${info.plantings} plantings in ${info.beds} growing spaces from ${file.name}`);
-    if (!cloud) { store.save(core); return; }
+    if (!cloud) { store.save(core); await importPhotos(parsed, 'memory'); return; }
     const where = store.backend;
+    try { await store.clearBlob('attic-new'); } catch (_) { /* nothing was kept */ }
     // The plan itself is saved first; the bulky extras follow and may fail without harming it.
     try { await store.saveNow(core); } catch (error) { toast('The plan is open but could not be saved here yet. Use the save indicator to retry.'); return; }
     try {
@@ -313,6 +388,7 @@
       core.lrfNext.attic = 'session';
       toast('The plan is saved, but the extra backup records could not be stored here. Keep the backup file.');
     }
+    await importPhotos(parsed, where);
     store.save(core);
   }
 
@@ -353,12 +429,16 @@
     if (loadError) { showStatus({ backend: store.backend, state: 'error', detail: loadError.message }); toast(`The saved plan could not be opened (${loadError.message}). Showing the starting plan; nothing is overwritten.`); return; }
     if (firstRun) store.save(state.plan); else showStatus({ backend: store.backend, state: saved ? 'saved' : 'sample' });
     if (saved) restoreMapImage();
+    loadThumbs();
     store.watch(() => toast('This plan was changed on another device.', { label: 'Reload', run: () => root.location.reload() }));
   }
+
+  on('plan', () => Thumbs.index(state.plan));   // first listener: views drawn after it see the right crop pictures
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, setAssumption, setGardenType,
+    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadStock, uid, storage: () => (store ? store.backend : 'memory'),
     exportBackup, importBackup, retrySave: () => store && store.retry(), isSample: () => !!(state.plan && state.plan.lrfNext && state.plan.lrfNext.sample)
   };
 })(window);

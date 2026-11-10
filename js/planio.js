@@ -63,11 +63,13 @@
   }
 
   // ── compact plan: the copy of a farm's plan that ships with the page ──
-  // Planning fields only. Supplier pages, photos, price lists, pack sizes and
+  // Planning fields and each variety's supplier, product code and page address. Supplier page text, photos, price lists and
   // the provenance of generated plantings stay in the full backup.
   const VARIETY_PLANNING_FIELDS = ['id', 'cropId', 'name', 'stub', 'active', 'deleted', 'dtm', 'hw', 'gh', 'inRow', 'rowSp', 'rowsPerBed', 'germ', 'seedsPerFt',
     'summerOK', 'harvestMode', 'timingMode', 'timingEnvironmentReviewed', 'environmentDefaults', 'towerUsedSites', 'towerSitePreferenceEnabled',
-    'catalogSourceChoice', 'catalogDtm', 'catalogDtmMax', 'catalogMaturityBasis'];
+    'catalogSourceChoice', 'catalogDtm', 'catalogDtmMax', 'catalogMaturityBasis',
+    // shown in the seed library and used for seeds required
+    'source', 'supplier', 'sku', 'url', 'catalogDtmText', 'catalogHarvestStage', 'seedsPerPacket', 'seedsPerOz', 'seedsPerG', 'seedsPerLb'];
   const PLANTING_DROPPED_FIELDS = ['planningSource', 'flagReviews'];
   const isDeterminate = notes => /\bdeterminate\b/i.test(String(notes || '')) && !/\bindeterminate\b/i.test(String(notes || ''));
   /** Group records that differ only in a few fields: one shared template, one short row each. */

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="site preview 0.5.2 · 2026-11-10">
+<meta name="lrf-build" content="site preview 0.7 · 2026-11-10">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -24,6 +24,7 @@
     <button type="button" data-view-btn="map" aria-pressed="true">Map</button>
     <button type="button" data-view-btn="timeline" aria-pressed="false">Timeline</button>
     <button type="button" data-view-btn="assume" aria-pressed="false">Assumptions</button>
+    <button type="button" data-view-btn="seeds" aria-pressed="false">Seeds</button>
   </nav>
   <div class="top-actions">
     <button type="button" class="icon-btn" id="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶</button>
@@ -131,6 +132,40 @@
       </div>
     </div>
 
+    <div class="view view-seeds" id="seedsView">
+      <div class="sd-shell">
+        <section class="sd-main" aria-label="Seed library">
+          <header class="sd-bar">
+            <div class="sd-title"><p class="eyebrow">Seed library</p><h2 id="sdTitle">Varieties</h2></div>
+            <input type="search" id="sdSearch" placeholder="Search  ( / )" title="Search varieties, crops, suppliers and product codes" autocomplete="off">
+            <div class="sd-actions">
+              <button type="button" class="btn primary" id="sdAddLink">Add from a supplier page</button>
+              <button type="button" class="btn" id="sdAddHand" title="Add a variety that has no supplier page">+ By hand</button>
+              <button type="button" class="btn" id="sdAddCrop" title="Add a crop">+ Crop</button>
+              <button type="button" class="btn" id="sdSettings">Link reader…</button>
+            </div>
+          </header>
+          <div class="sd-row2">
+            <div class="seg" role="group" aria-label="What to show">
+              <button type="button" data-sd-tab="list" aria-pressed="true">List</button>
+              <button type="button" data-sd-tab="gallery" aria-pressed="false">Gallery</button>
+              <button type="button" data-sd-tab="crops" aria-pressed="false">Crops</button>
+            </div>
+            <div class="sd-filters" id="sdFilters" role="group" aria-label="Which varieties to list"></div>
+          </div>
+          <div class="sd-scroll" id="sdScroll">
+            <table class="as sd" id="sdTable">
+              <thead id="sdHead"></thead>
+              <tbody id="sdBody"></tbody>
+            </table>
+            <div class="sd-gallery" id="sdGallery" hidden></div>
+            <p class="sd-foot" id="sdFoot"></p>
+          </div>
+        </section>
+        <aside class="sd-panel" id="sdPanel" aria-label="Details"></aside>
+      </div>
+    </div>
+
     <footer class="season" aria-label="Planning date">
       <div class="season-date">
         <button type="button" class="icon-btn" id="datePrev" aria-label="Back one week">‹</button>
@@ -165,9 +200,12 @@
 <script src="js/engine.js"></script>
 <script src="js/planio.js"></script>
 <script src="js/zip.js"></script>
+<script src="js/reader.js"></script>
+<script src="js/seedlib.js"></script>
 <script src="js/rails.js"></script>
 <script src="js/store.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/thumbs.js"></script>
 <script src="js/app.js"></script>
 <script src="js/drag.js"></script>
 <script src="js/map.js"></script>
@@ -175,6 +213,7 @@
 <script src="js/timeline.js"></script>
 <script src="js/panels.js"></script>
 <script src="js/assume.js"></script>
+<script src="js/seeds.js"></script>
 <script src="js/main.js"></script>
 <script src="js/pwa.js"></script>
 </body>

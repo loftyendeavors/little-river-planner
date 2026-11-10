@@ -401,7 +401,7 @@
     const listed = status.crops.length > 6 && over ? status.crops.filter(r => r.planting.id === over.dataset.planting) : status.crops.slice(0, 6);
     for (const r of listed) {
       const f = eng.footprint(r.planting, r), where = f && r.partial ? ` · ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} ft${f.rows && f.rows.count < f.rows.total ? `, ${f.rows.count} of ${f.rows.total} rows` : ''}` : r.partial ? ` · ${num(r.len, 1)} ${unit}` : '';
-      nodes.push(h('div.tip-crop' + (over && over.dataset.planting === r.planting.id ? '.on' : ''), h('i', { style: { background: eng.cropColor(r.c) } }),
+      nodes.push(h('div.tip-crop' + (over && over.dataset.planting === r.planting.id ? '.on' : ''), root.LRFThumbs.el({ varietyId: r.planting.varietyId, cropId: r.planting.cropId, color: eng.cropColor(r.c), label: r.c.vname || r.c.name, size: 30, cls: 'key' }),
         h('span', `${r.c.vname ? r.c.vname + ' · ' : ''}${r.c.name}`), h('small', `in ${day(r.field)} · harvest ${span(r.first, r.last)}${where}`)));
     }
     if (status.crops.length > listed.length) nodes.push(h('div.tip-free', `${status.crops.length} plantings here`));

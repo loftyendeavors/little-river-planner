@@ -1,5 +1,5 @@
 """The installable site: starts empty, takes a backup, keeps plan and photo, and opens with no connection.
-usage: python3 -I site_check.py <site-dir> <backup.zip>
+usage: python3 -I site_check.py <site-dir> <backup.zip> [screenshot.png]
 """
 import functools, http.server, json, sys, threading
 from pathlib import Path
@@ -28,6 +28,9 @@ with sync_playwright() as pw:
     out["first"] = js("({sample: A.isSample(), plantings: S.plan.plantings.length, welcome: !!document.querySelector('.welcome'), fonts: [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family).sort().join(','), manifest: !!document.querySelector('link[rel=manifest]'), privateData: /Seapuit|Osterville/i.test(document.documentElement.innerHTML)})")
     page.set_input_files("#importFile", backup)
     page.wait_for_timeout(3500)
+    try: page.wait_for_function("LRFThumbs.count() >= 100 && /Saved/.test(document.getElementById('saveState').textContent)", timeout=90000)   # variety photos are read after the plan is shown
+    except Exception: pass
+    out["photos"] = page.evaluate("({thumbs: LRFThumbs.count(), withPhoto: LRFApp.state.plan.varieties.filter(v => v.photo && v.photo.sha256).length, bytes: JSON.stringify(LRFThumbs.all()).length})")
     out["imported"] = js("({plantings: S.plan.plantings.length, attic: S.plan.lrfNext.attic, image: !!(S.plan.lrfNext.mapImage), save: document.getElementById('saveState').textContent, toast: document.querySelector('#toast span').textContent})")
     page.evaluate("navigator.serviceWorker.ready.then(() => true)")
     page.wait_for_timeout(1500)
@@ -38,7 +41,13 @@ with sync_playwright() as pw:
     page.reload(); ready(); page.wait_for_timeout(800)
     out["offline"] = js("({plantings: S.plan.plantings.length, photo: (document.getElementById('mapPhoto').getAttribute('href') || '').slice(0, 5), beds: document.querySelectorAll('#mapBeds .bed').length, fonts: [...document.fonts].filter(f => f.status === 'loaded').length})")
     out["export"] = page.evaluate("(async () => { const A = LRFApp; try { const IO = LRFPlanIO; return 'ok'; } catch (e) { return String(e); } })()")
-    page.screenshot(path="/home/claude/shots/site-offline.png")
+    page.click('[data-view-btn="seeds"]'); page.wait_for_timeout(500)
+    out["seeds_offline"] = page.evaluate("""(async () => { const A = LRFApp, S = A.state, v = S.plan.varieties.find(v => v.url && v.catalogDtm), rec = await A.varietyRecord(v.id);
+      const r = LRFReader.readPasted('Days To Maturity\\n55 days\\nDAYS TO MATURITY: From transplanting.', 'https://www.johnnyseeds.com/x-1.html', 'Offline Test');
+      await A.loadStock(); await new Promise(r => setTimeout(r, 400));
+      return {thumbs: LRFThumbs.count(), photosShown: document.querySelectorAll('#sdBody .sd-var .thumb img').length, stock: Object.keys(S.stock || {}).length, rows: document.querySelectorAll('.sd-var').length, live: S.plan.varieties.filter(v => v.active !== false && !v.deleted).length, need: LRFSeedLib.required(S.engine).rows.length, savedPageText: !!(rec && rec.catalogSourceText), pasted: r.facts.maturity.min, basis: r.facts.maturityBasis}; })()""")
+    if len(sys.argv) > 3:
+        page.screenshot(path=sys.argv[3])
     browser.close()
 server.shutdown()
 out["errors"] = errors

@@ -23,6 +23,7 @@ html = html.replace('<link rel="stylesheet" href="css/app.css">', () => `<meta n
 
 const info = JSON.parse(read('data/plan-info.json')), image = fs.readFileSync(path.join(appDir, info.mapImage.src));
 const bundled = { info: { ...info, mapImage: { ...info.mapImage, src: `data:image/jpeg;base64,${image.toString('base64')}` } }, plan: JSON.parse(read('data/plan.json')) };
+if (info.thumbs && fs.existsSync(path.join(appDir, info.thumbs))) bundled.thumbs = JSON.parse(read(info.thumbs));   // variety photos, small
 let scripts = 0;
 html = html.replace(/<script src="(js\/[\w.-]+)"><\/script>/g, (_, src) => {
   const first = scripts++ === 0 ? `<script>window.LRF_BUNDLED = ${inScript(JSON.stringify(bundled))};</script>\n` : '';
