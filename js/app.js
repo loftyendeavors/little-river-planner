@@ -10,7 +10,7 @@
   const { h, toast, day, span } = UI;
 
   const state = {
-    plan: null, engine: null, attic: null, extras: null, inventoryBase: null, inventoryAsked: null, keptThumbs: {}, bundled: null, mapImageUrl: '',
+    plan: null, engine: null, attic: null, extras: null, inventoryBase: null, inventoryAsked: null, packsBase: {}, keptThumbs: {}, bundled: null, mapImageUrl: '',
     date: new Date(), view: 'map', sel: null, armed: null,
     undo: [], redo: [], ready: false
   };
@@ -236,6 +236,46 @@
     return commit(label, [{ kind: 'inventory', before: state.plan.seedInventory || null, after }], { unchecked: true });
   }
 
+  // Vendor size lists. A plan loaded from a v7 backup carries each variety's own list. The plan that ships with this
+  // page is the compact copy and does not, so its lists ship beside it and are read when the page opens.
+  async function loadPacks() {
+    state.packsBase = {};
+    if (!(state.plan.lrfNext && state.plan.lrfNext.source === 'bundled')) return;
+    const inlined = root.LRF_BUNDLED && root.LRF_BUNDLED.packs, path = state.bundled && state.bundled.packs;
+    let found = null;
+    try { found = inlined || (path ? await fetch(path).then(r => (r.ok ? r.json() : null)) : null); } catch (_) { found = null; }
+    if (found && typeof found === 'object') { state.packsBase = found; emit('plan'); }
+  }
+  /** The sizes a variety's vendor sells it in, and what covers an amount of it in those sizes. */
+  const packsFor = v => SL.packs(v, v && state.packsBase[v.id]);
+  const coverFor = (amount, unit, v) => SL.toCover(amount, unit, v, v && state.packsBase[v.id]);
+
+  // Sowing. A planned sowing never touches stock; recording that it happened does. The date is a fact, so the guard
+  // rails do not refuse it: if a late direct sowing now runs into the next crop, the overview lists the pair to settle.
+  const todayText = () => E.d2s(new Date());
+  const sowingOf = p => SL.sowing(state.engine, p);
+  function sowingStep(label, work) {
+    const ctx = { now: new Date().toISOString(), uid, year: planYear(), name: '', today: todayText() };
+    let result;
+    try { result = work(ctx); } catch (error) { toast(error.message || 'That could not be recorded.'); return null; }
+    const ops = [{ before: result.before, after: result.planting }];
+    if (result.inventory) ops.push({ kind: 'inventory', before: state.plan.seedInventory || null, after: result.inventory });
+    const was = state.engine;
+    if (!commit(label, ops, { unchecked: true })) return null;
+    result.overlaps = impact(was, state.engine).overlaps;
+    return result;
+  }
+  /** Record that a planting was sown (or planted): input { date, quantity?, note? }. One undoable step. */
+  function recordSowing(id, input) {
+    const p = state.engine.planting(id);
+    return p ? sowingStep(`${cropLabel(p)}: sown ${day(E.s2d(input.date))}`, ctx => ({ before: p, ...SL.recordSowing(state.engine, inventoryNow(), p, input, ctx) })) : null;
+  }
+  /** Take a recorded sowing back: the date is cleared and the seed goes back onto its lots. One undoable step. */
+  function takeBackSowing(id) {
+    const p = state.engine.planting(id);
+    return p ? sowingStep(`${cropLabel(p)}: sowing taken back`, ctx => ({ before: p, ...SL.takeBackSowing(state.engine, inventoryNow(), p, ctx) })) : null;
+  }
+
   function removePlantings(ids, label) {
     const ops = ids.map(id => state.engine.planting(id)).filter(Boolean).map(before => ({ before, after: null }));
     if (!ops.length) return;
@@ -382,7 +422,7 @@
     }
     const cloud = store.backend !== 'memory';   // somewhere durable to keep the photo and the rest of the backup
     core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name };
-    state.plan = core; state.attic = attic; state.extras = emptyExtras(); state.inventoryBase = null; state.inventoryAsked = null; state.keptThumbs = {}; Thumbs.set({}); state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
+    state.plan = core; state.attic = attic; state.extras = emptyExtras(); state.inventoryBase = null; state.inventoryAsked = null; state.packsBase = {}; state.keptThumbs = {}; Thumbs.set({}); state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
     showMapImage(parsed.image && parsed.image.bytes, parsed.image && parsed.image.mime);
     rebuild(); state.date = defaultDate(); root.LRFMap.fit(true);
     emit('plan'); emit('date'); emit('sel');
@@ -443,7 +483,9 @@
     if (loadError) { showStatus({ backend: store.backend, state: 'error', detail: loadError.message }); toast(`The saved plan could not be opened (${loadError.message}). Showing the starting plan; nothing is overwritten.`); return; }
     if (firstRun) store.save(state.plan); else showStatus({ backend: store.backend, state: saved ? 'saved' : 'sample' });
     if (saved) restoreMapImage();
-    loadThumbs();
+    loadThumbs(); loadPacks();
+    // Stock is needed wherever a sowing can be recorded, not only on the Seeds view: fetch it now, not on first visit.
+    loadInventory().then(found => { if (found) emit('plan'); }).catch(() => {});
     store.watch(() => toast('This plan was changed on another device.', { label: 'Reload', run: () => root.location.reload() }));
   }
 
@@ -452,7 +494,7 @@
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, setAssumption, setGardenType,
-    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadInventory, inventoryNow, stockNow, editStock, uid, storage: () => (store ? store.backend : 'memory'),
+    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     exportBackup, importBackup, retrySave: () => store && store.retry(), isSample: () => !!(state.plan && state.plan.lrfNext && state.plan.lrfNext.sample)
   };
 })(window);

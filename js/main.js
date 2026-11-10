@@ -18,7 +18,7 @@
     $('undoBtn').title = App.state.undo.length ? `Undo: ${App.state.undo[App.state.undo.length - 1].label} (Ctrl+Z)` : 'Nothing to undo';
     $('seasonYear').textContent = App.planYear();
     const plan = App.state.plan, info = plan.lrfNext || {};
-    $('buildNote').textContent = `Rebuild preview 0.8 · ${plan.plantings.length} plantings · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
+    $('buildNote').textContent = `Rebuild preview 0.9 · ${plan.plantings.length} plantings · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
   });
   $('undoBtn').addEventListener('click', App.undo);
   $('redoBtn').addEventListener('click', App.redo);

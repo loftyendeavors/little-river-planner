@@ -551,6 +551,7 @@ table.sd th.sd-sup { width: 104px; }
 table.sd th.w-s { width: 64px; }
 table.sd th.w-m { width: 88px; }
 table.sd th.w-l { width: 124px; }
+table.sd th.w-xl { width: 138px; }
 table.sd td { overflow: hidden; text-overflow: ellipsis; }
 .sd-sup { white-space: nowrap; }
 .sd-ord { display: block; line-height: 1.1; }
@@ -608,6 +609,44 @@ table.sd td { overflow: hidden; text-overflow: ellipsis; }
 .sd-pls { display: grid; gap: 4px; }
 .sd-pl { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; text-align: left; border: 1px solid var(--line-soft); background: var(--surface); border-radius: 7px; padding: 6px 9px; font-size: 13px; }
 .sd-pl:hover { border-color: var(--ink-2); }
+.sd-plrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: stretch; }
+.sd-sowbtn { border: 1px solid var(--line-soft); background: var(--surface); border-radius: 7px; padding: 0 9px; font: 500 12px var(--body); color: var(--ink-2); white-space: nowrap; }
+button.sd-sowbtn:hover { border-color: var(--ink-2); color: var(--ink); }
+.sd-sowbtn.done { color: var(--good, #2f7d4f); border-color: transparent; background: transparent; font-weight: 600; }
+.sd-sowbtn.none { border-color: transparent; background: transparent; color: var(--muted); display: grid; align-items: center; font-size: 11.5px; }
+.sd-pls > .sow { border: 1px solid var(--line); border-radius: 7px; background: var(--surface); padding: 9px 10px; margin: -1px 0 4px; }
+/* the sowing record: a date, the seed used, one button */
+.sow { display: grid; gap: 6px; }
+.sow-row { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.sow-row label { display: grid; gap: 3px; min-width: 0; }
+.sow-row label span { font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.sow-row input { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 5px 7px; font: 500 13.5px var(--body); }
+.sow-row input[type="number"] { text-align: right; }
+.sow .help { margin: 0; font-size: 12px; color: var(--ink-2); }
+.sow-done { margin: 0; display: grid; gap: 2px; font-size: 13px; }
+.sow-done b { font-weight: 600; color: var(--good, #2f7d4f); }
+.sow-done span { color: var(--ink-2); font-size: 12.5px; }
+.sow .link { justify-self: start; font-size: 12.5px; }
+.schedule li.done::before { background: var(--good, #2f7d4f); border-color: var(--good, #2f7d4f); }
+.schedule li.done span { color: var(--ink); font-weight: 600; }
+/* what covers a shortfall, in the vendor's own sizes */
+td.sd-size { white-space: normal; font-size: 12.5px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+td.sd-size.soft { color: var(--muted); }
+.sd-sizes { margin-bottom: 6px; }
+.sd-sizes .sd-h { margin-top: 12px; }
+.sd-sizetable { display: grid; border: 1px solid var(--line-soft); border-radius: 8px; overflow: hidden; background: var(--surface); margin-bottom: 8px; }
+.sd-sizerow { display: grid; grid-template-columns: 22px minmax(0, 1fr) 70px 70px; gap: 8px; padding: 5px 9px; font-size: 13px; font-variant-numeric: tabular-nums; border-top: 1px solid var(--line-soft); align-items: baseline; }
+.sd-sizerow:first-child { border-top: 0; }
+.sd-sizerow span:nth-child(n+3) { text-align: right; }
+.sd-sizerow.head { font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.sd-sizerow small { display: block; color: var(--muted); font-size: 11.5px; font-weight: 400; }
+.sd-unitword { display: block; line-height: 1.05; font-size: 11px; }
+button.sd-stat.jump { text-align: left; font: inherit; color: inherit; cursor: pointer; }
+button.sd-stat.jump:hover { border-color: var(--ink-2); }
+.sd-sizerow.on { background: color-mix(in srgb, var(--good) 13%, transparent); font-weight: 600; }
+.sd-sizerow.soft { color: var(--muted); }
+.sd-sizesay { margin: 0 0 6px; font-size: 12.5px; color: var(--ink-2); }
+.sd-sizesay b { color: var(--ink); }
 .sd-pl span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sd-pl small { color: var(--muted); font-size: 11.5px; }
 @media (max-width: 1240px) { .sd-shell { grid-template-columns: minmax(0, 1fr) 340px; } table.sd th.sd-sup, table.sd td.sd-sup { display: none; } }
