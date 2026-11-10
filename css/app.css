@@ -539,9 +539,9 @@ body[data-view="seeds"] .view-seeds { overflow: hidden; }
 .sd-scroll table.sd th { top: 0; white-space: nowrap; }
 table.sd th { text-align: left; }
 table.sd th.sd-num { text-align: right; }
-table.sd td { height: 46px; padding: 3px 10px; }
+table.sd td { height: 42px; padding: 2px 10px; }
 .sd-crop { cursor: pointer; }
-.sd-crop td { height: 38px; background: color-mix(in srgb, var(--paper) 62%, var(--surface)); position: sticky; top: 31px; z-index: 1; }
+.sd-crop td { height: 36px; background: color-mix(in srgb, var(--paper) 62%, var(--surface)); position: sticky; top: 31px; z-index: 1; }
 .sd-crop .as-name small { color: var(--muted); font-size: 12px; }
 .sd-crop .as-name .grow { flex: 1; }
 .sd-crop.closed td { border-bottom-color: var(--line); }
@@ -612,3 +612,38 @@ table.sd td { overflow: hidden; text-overflow: ellipsis; }
 .sd-pl small { color: var(--muted); font-size: 11.5px; }
 @media (max-width: 1240px) { .sd-shell { grid-template-columns: minmax(0, 1fr) 340px; } table.sd th.sd-sup, table.sd td.sd-sup { display: none; } }
 @media (max-width: 900px) { .sd-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; } .sd-panel { border-left: 0; border-top: 1px solid var(--line); max-height: 46vh; } }
+
+/* ── seed stock, edited in the list and in the panel ── */
+.sd-stockcell { line-height: 1.05; }
+.sd-stock { width: 76px; text-align: right; border: 1px solid transparent; background: transparent; border-radius: 6px; padding: 1px 4px; font: 500 14px var(--body); font-variant-numeric: tabular-nums; color: var(--ink); -moz-appearance: textfield; }
+.sd-stock::-webkit-outer-spin-button, .sd-stock::-webkit-inner-spin-button, .sd-lot input::-webkit-outer-spin-button, .sd-lot input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sd-stock::placeholder { color: var(--line); }
+.sd-stock:hover, .sd-stock:focus { border-color: var(--line); background: var(--raised); outline: none; }
+.sd-stock:focus { border-color: var(--ink-2); }
+.sd-stock[readonly] { cursor: default; }
+.sd-recv, .sd-oddlot { display: block; margin-left: auto; border: 0; background: none; padding: 0 4px; font: 500 10.5px var(--mono); color: var(--muted); white-space: nowrap; }
+.sd-recv:hover { color: var(--good); text-decoration: underline; }
+.sd-lots { margin-bottom: 6px; }
+.sd-lots .sd-h { margin-top: 4px; }
+.sd-lot { display: grid; grid-template-columns: 78px auto minmax(0, 1fr) 62px 26px; gap: 6px; align-items: center; margin-bottom: 6px; }
+.sd-lot input, .sd-lot select { width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 4px 6px; font: 500 13.5px var(--body); }
+.sd-lot input { text-align: right; -moz-appearance: textfield; }
+.sd-lot .sd-unit { font: 500 11px var(--mono); color: var(--muted); }
+.sd-lot .icon-btn { border: 0; background: none; color: var(--muted); font-size: 18px; width: 26px; height: 26px; }
+.sd-lot .icon-btn:hover { color: var(--bad); }
+.sd-lot small { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; margin-top: -2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sd-task.plain { background: var(--surface); }
+
+/* stock the list cannot count */
+.sd-oddlot { color: var(--warn); }
+.sd-oddlot:hover { color: var(--ink); text-decoration: underline; }
+.sd-stray { display: grid; gap: 3px; border: 1px solid var(--line); background: var(--warn-soft); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.sd-stray > span { font-size: 12.5px; color: var(--ink-2); }
+.sd-strayrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 8px; padding-top: 8px; margin-top: 6px; border-top: 1px solid var(--line); }
+.sd-strayrow strong { font-size: 13.5px; font-weight: 600; }
+.sd-strayrow small { font: 500 11px var(--mono); color: var(--muted); align-self: center; white-space: nowrap; }
+.sd-strayrow p { grid-column: 1 / -1; margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.sd-strayrow .link { grid-column: 1 / -1; justify-self: start; font-size: 12.5px; }
+.sd-odd { grid-column: 1 / -1; margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.sd-oddbox { grid-column: 1 / -1; display: grid; gap: 3px; justify-items: start; border-left: 2px solid var(--warn); padding: 2px 0 2px 8px; margin: 0 0 4px; }
+.sd-oddbox .link { font-size: 12.5px; }

@@ -18,6 +18,8 @@
   const DEVICE_KEY = 'lrf-next:plan', PART_TARGET = 100000, LOAD_TIMEOUT_MS = 10000;
   const SESSION = Math.random().toString(36).slice(2, 10);
   const BUCKETED = ['plantings', 'varieties'], WHOLE = ['gardens', 'beds', 'crops'];
+  /** One large record cut into pieces of JSON text: seed stock and its change log grow with every count. */
+  const CHUNKED = ['seedInventory'], CHUNK = 150000;
   const hash = s => { let x = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return x >>> 0; };
   const pad2 = n => String(n).padStart(2, '0');
   const timeout = (promise, ms, label) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(label + ' timed out')), ms))]);
@@ -26,7 +28,7 @@
   function toParts(core, bucketCounts) {
     const parts = {}, buckets = {};
     const base = {};
-    for (const [key, value] of Object.entries(core)) if (!BUCKETED.includes(key) && !WHOLE.includes(key)) base[key] = value;
+    for (const [key, value] of Object.entries(core)) if (!BUCKETED.includes(key) && !WHOLE.includes(key) && !CHUNKED.includes(key)) base[key] = value;
     parts.base = JSON.stringify(base);
     for (const key of WHOLE) parts[key] = JSON.stringify(core[key] || []);
     for (const key of BUCKETED) {
@@ -40,6 +42,12 @@
       // Record order separately: buckets scramble it and v7 lists are order-sensitive.
       parts[`${key}-order`] = JSON.stringify(list.map(item => item && item.id));
     }
+    for (const key of CHUNKED) {
+      if (core[key] === undefined) continue;
+      const text = JSON.stringify(core[key]), n = Math.max(1, Math.ceil(text.length / CHUNK));
+      for (let i = 0; i < n; i++) parts[`${key}-${pad2(i)}`] = text.slice(i * CHUNK, (i + 1) * CHUNK);
+      buckets[key + 'Parts'] = n;
+    }
     return { parts, buckets };
   }
   function fromParts(parts, buckets) {
@@ -50,6 +58,10 @@
       for (let i = 0; i < (buckets[key] || 0); i++) for (const item of JSON.parse(parts[`${key}-${pad2(i)}`] || '[]')) byId.set(item.id, item);
       const order = JSON.parse(parts[`${key}-order`] || '[]');
       core[key] = order.map(id => byId.get(id)).filter(Boolean);
+    }
+    for (const key of CHUNKED) {
+      const n = buckets[key + 'Parts'] || 0;
+      if (n) core[key] = JSON.parse(Array.from({ length: n }, (_, i) => parts[`${key}-${pad2(i)}`] || '').join(''));
     }
     return core;
   }

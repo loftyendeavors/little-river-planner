@@ -178,6 +178,124 @@
     }
     return out;
   }
+  // ───────────────────────────── editing stock ─────────────────────────────
+  // Lots and their change log are written exactly as v7 writes them (seed-inventory.js: normalizeLot, addLot,
+  // updateLot, deleteLot; seed-buying-model.js: receive), so a backup made here restores there.
+  // Every function takes an inventory and returns a changed copy. ctx: { now: ISO time, uid(), year, name }.
+  const STOCK_UNITS = ['seeds', 'g', 'plants'];
+  const emptyInventory = () => ({ v: 1, lots: [], adjustments: [], legacyImported: {}, performanceNotes: {}, importReceipts: [] });
+  /** v7 keeps bulbs, cloves and seed pieces under "seeds"; only plants and grams have their own unit. */
+  const stockUnit = unit => (unit === 'g' || unit === 'plants' ? unit : 'seeds');
+  const lifeOf = lot => (typeof lot.status === 'string' ? lot.status : lot.usable === true ? 'usable' : 'excluded');
+  function readable(inventory) {
+    const lib = inventory && typeof inventory === 'object' ? copy(inventory) : emptyInventory();
+    for (const key of ['lots', 'adjustments']) if (!Array.isArray(lib[key])) throw new Error('The saved seed stock cannot be read. It is kept as it is; nothing was changed.');
+    for (const key of ['legacyImported', 'performanceNotes']) if (!lib[key] || typeof lib[key] !== 'object' || Array.isArray(lib[key])) lib[key] = {};
+    return lib;
+  }
+  /** The live lots for one variety or crop key ("v:<id>" or "c:<id>"), each with how it counts. */
+  function lotsFor(inventory, key) {
+    const lots = inventory && Array.isArray(inventory.lots) ? inventory.lots : [];
+    return lots.filter(l => l && typeof l === 'object' && l.deleted !== true && l.key === key).map(l => ({ ...l, life: lifeOf(l) }));
+  }
+  function amountOf(raw, unit, what) {
+    if (raw == null || String(raw).trim() === '') throw new Error(`${what}: enter a number. Use 0 for an empty packet.`);
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0 || n > Number.MAX_SAFE_INTEGER || (unit !== 'g' && !Number.isInteger(n))) throw new Error(`${what}: enter ${unit === 'g' ? 'a number' : 'a whole number'} of ${unit === 'g' ? 'grams' : unit}, 0 or more.`);
+    return n;
+  }
+  function yearOf(raw) {
+    if (raw == null || String(raw).trim() === '') return null;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 1900 || n > 2200) throw new Error('Packed-for year: enter a year such as 2026, or leave it empty.');
+    return n;
+  }
+  const logged = (lib, kind, before, after, reason, ctx) => { lib.adjustments.push({ id: 'seed_adjustment_' + ctx.uid(), lotId: after.id, at: after.updatedAt, kind, reason: reason || '', before: before ? copy(before) : null, after: copy(after) }); };
+  function findLot(lib, id) {
+    const found = lib.lots.filter(l => l && l.id === id && l.deleted !== true);
+    if (found.length !== 1) throw new Error('That lot is no longer there.');
+    return found[0];
+  }
+  /** A new lot. input: { key, unit, quantity, status: 'usable' | 'ordered' | 'excluded', year?, supplier?, note? } */
+  function addLot(inventory, input, ctx) {
+    const lib = readable(inventory), unit = STOCK_UNITS.includes(input.unit) ? input.unit : 'seeds', status = ['usable', 'ordered', 'excluded'].includes(input.status) ? input.status : 'usable';
+    if (!/^[vc]:.+/.test(String(input.key || ''))) throw new Error('Choose the variety this seed belongs to.');
+    const lot = { quantity: amountOf(input.quantity, unit, 'Quantity'), year: yearOf(input.year === undefined ? ctx.year : input.year), supplier: String(input.supplier || '').trim(), lotNumber: String(input.lotNumber || '').trim(), usable: status === 'usable',
+      storageNote: '', note: String(input.note || '').trim(), key: input.key, unit, status, id: 'seed_lot_' + ctx.uid(), createdAt: ctx.now, updatedAt: ctx.now, name: ctx.name || '' };
+    if (status !== 'ordered') lot.reviewedForYear = ctx.year;
+    lib.lots.push(lot); logged(lib, 'add', null, lot, '', ctx);
+    return lib;
+  }
+  /** Change a lot. patch may hold quantity, status, year, lotNumber, note, supplier. `kind` is v7's word for the change. */
+  function updateLot(inventory, id, patch, kind, ctx) {
+    const lib = readable(inventory), before = findLot(lib, id), after = { ...before };
+    if ('quantity' in patch) after.quantity = amountOf(patch.quantity, before.unit, 'Quantity');
+    if ('year' in patch) after.year = yearOf(patch.year);
+    for (const key of ['lotNumber', 'note', 'supplier']) if (key in patch) after[key] = String(patch[key] || '').trim();
+    if ('status' in patch) {
+      if (!['usable', 'ordered', 'excluded'].includes(patch.status)) throw new Error('Choose on hand, ordered or set aside.');
+      after.status = patch.status; after.usable = patch.status === 'usable';
+      if (patch.status !== 'ordered') after.reviewedForYear = ctx.year;
+    }
+    for (const key of ['receivedDate', 'reviewedForYear']) if (key in patch) after[key] = patch[key];
+    if (JSON.stringify(after) === JSON.stringify(before)) return null;
+    after.updatedAt = ctx.now; lib.lots[lib.lots.indexOf(before)] = after; logged(lib, kind || 'details', before, after, '', ctx);
+    return lib;
+  }
+  /** An ordered lot arrives: it becomes seed on hand, as v7's Received does. */
+  function receiveLot(inventory, id, ctx, details = {}) {
+    const lot = findLot(readable(inventory), id);
+    if (lifeOf(lot) !== 'ordered') throw new Error('That lot is not on order.');
+    return updateLot(inventory, id, { status: 'usable', year: details.year === undefined ? lot.year || ctx.year : details.year, lotNumber: details.lotNumber === undefined ? lot.lotNumber : details.lotNumber, receivedDate: String(ctx.now).slice(0, 10), reviewedForYear: ctx.year }, 'received', ctx);
+  }
+  function deleteLot(inventory, id, ctx) {
+    const lib = readable(inventory), before = findLot(lib, id), after = { ...before, deleted: true, deletedAt: ctx.now, usable: false, updatedAt: ctx.now };
+    lib.lots[lib.lots.indexOf(before)] = after; logged(lib, 'delete', before, after, 'Deleted from available stock; previous count and import receipt retained.', ctx);
+    return lib;
+  }
+  /** A lot filed under the wrong variety or the wrong unit is refiled. v7 logs that as a details change. to: { key?, unit?, name?, reason? } */
+  function moveLot(inventory, id, to, ctx) {
+    const lib = readable(inventory), before = findLot(lib, id), after = { ...before };
+    if (to.key !== undefined) { if (!/^[vc]:.+/.test(String(to.key || ''))) throw new Error('Choose the variety this seed belongs to.'); after.key = to.key; }
+    if (to.unit !== undefined) {
+      if (!STOCK_UNITS.includes(to.unit)) throw new Error('Choose seeds, grams or plants.');
+      after.unit = to.unit;
+      if (after.quantity != null && after.quantity !== '') after.quantity = amountOf(after.quantity, to.unit, 'Quantity');
+    }
+    if (to.name) after.name = to.name;
+    if (JSON.stringify(after) === JSON.stringify(before)) return null;
+    after.updatedAt = ctx.now; lib.lots[lib.lots.indexOf(before)] = after; logged(lib, 'details', before, after, to.reason || '', ctx);
+    return lib;
+  }
+  /**
+   * Lots that no row of the list counts: the variety was removed from the library, or the lot is recorded in a unit
+   * the list does not use for that variety. Hidden stock makes seed already bought look like seed still to buy.
+   * units: Map of 'v:<id>' → the unit that variety's row counts in.
+   */
+  function unlisted(inventory, plan, units) {
+    const all = (plan && plan.varieties) || [], byId = new Map(all.map(v => [v.id, v])), isLive = v => !!v && v.active !== false && !v.deleted, out = [];
+    for (const lot of inventory && Array.isArray(inventory.lots) ? inventory.lots : []) {
+      if (!lot || typeof lot !== 'object' || lot.deleted === true || !/^v:/.test(String(lot.key || '')) || !STOCK_UNITS.includes(lot.unit)) continue;
+      const life = lifeOf(lot);
+      if ((life !== 'ordered' && !(life === 'usable' && lot.usable === true)) || !(Number(lot.quantity) > 0)) continue;
+      const v = byId.get(lot.key.slice(2)), unit = units.get(lot.key);
+      if (isLive(v)) { if (unit && unit !== lot.unit) out.push({ lot, life, why: 'unit', variety: v, unit }); continue; }
+      const same = v ? all.filter(x => isLive(x) && varietyKey(x.name) === varietyKey(v.name)) : [];
+      out.push({ lot, life, why: 'removed', variety: v || null, twin: same.find(x => x.cropId === v.cropId) || (same.length === 1 ? same[0] : null) });
+    }
+    return out;
+  }
+  /**
+   * Set what is on hand for a variety in one step, from the list. With no lot on hand it makes one; with one it
+   * recounts it; with several it cannot know which was meant, and says so.
+   */
+  function setOnHand(inventory, key, unit, quantity, ctx) {
+    const held = lotsFor(inventory, key).filter(l => l.unit === unit && l.life === 'usable' && l.usable === true);
+    if (held.length > 1) throw new Error('This variety has several lots on hand. Count each one in the panel beside the list.');
+    if (!held.length) return addLot(inventory, { key, unit, quantity, status: 'usable' }, ctx);
+    return updateLot(inventory, held[0].id, { quantity, reviewedForYear: ctx.year }, 'count', ctx);
+  }
+
   /** A seed count as a weight and as packets, where the variety's page gave the figures. */
   function measures(seeds, v) {
     const out = { weight: '', packets: '' };
@@ -190,5 +308,5 @@
     return out;
   }
 
-  return { norm, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, stock, measures, UNIT_WORD, BASES, STAGES };
+  return { norm, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
 });
