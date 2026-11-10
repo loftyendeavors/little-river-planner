@@ -73,14 +73,14 @@
       body.append(h('tr.as-crop' + (open ? '.open' : ''),
         h('td', h('div.as-name',
           varieties.length ? h('button.as-more', { type: 'button', 'aria-expanded': String(!!open), 'aria-label': `${open ? 'Hide' : 'Show'} ${varieties.length} varieties of ${c.name}`, title: `${varieties.length} variet${varieties.length === 1 ? 'y' : 'ies'}`, onclick: () => { ui.open.has(c.id) ? ui.open.delete(c.id) : ui.open.add(c.id); render(); } }, open ? '▾' : '▸') : h('span.as-more'),
-          h('i.swatch', { style: { background: eng.cropColor(c) } }), h('b', c.name),
+          root.LRFThumbs.el({ cropId: c.id, color: eng.cropColor(c), label: c.name, size: 24, cls: 'key' }), h('b', c.name),
           h('small', c.method === 'TP' ? 'from transplant' : 'from sowing'))),
         eng.ENVS.map(env => cell('crops', c.id, env, eng.timingFor(c.id, null, env), c.name)),
         useCell(used.get(c.id) || 0, pins.get(c.id) || 0)));
       if (!open) continue;
       for (const v of (nameHit ? varieties : hits)) {
         body.append(h('tr.as-var',
-          h('td', h('div.as-name', h('span.as-vname', v.name), v.catalogDtm ? h('small', `prints ${v.catalogDtm} d${v.catalogMaturityBasis && v.catalogMaturityBasis !== 'unspecified' ? ' from ' + v.catalogMaturityBasis : ''}`) : null)),
+          h('td', h('div.as-name', root.LRFThumbs.el({ varietyId: v.id, color: eng.cropColor(c), label: v.name, size: 22 }), h('span.as-vname', v.name), v.catalogDtm ? h('small', `prints ${v.catalogDtm} d${v.catalogMaturityBasis && v.catalogMaturityBasis !== 'unspecified' ? ' from ' + v.catalogMaturityBasis : ''}`) : null)),
           eng.ENVS.map(env => cell('varieties', v.id, env, eng.timingFor(c.id, v.id, env), v.name)),
           useCell(usedV.get(v.id) || 0, pinsV.get(v.id) || 0)));
       }

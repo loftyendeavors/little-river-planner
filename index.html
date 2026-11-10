@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="site preview 0.6 · 2026-11-10">
+<meta name="lrf-build" content="site preview 0.7 · 2026-11-10">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -133,31 +133,36 @@
     </div>
 
     <div class="view view-seeds" id="seedsView">
-      <div class="as-wrap">
-        <header class="as-head">
-          <p class="eyebrow">Seed library</p>
-          <h2>Varieties and seed</h2>
-          <p id="sdLead"></p>
-        </header>
-        <div class="as-tools sd-tools">
-          <div class="seg" role="group" aria-label="Which list to show">
-            <button type="button" data-sd-tab="varieties" aria-pressed="true">Varieties <small></small></button>
-            <button type="button" data-sd-tab="required" aria-pressed="false">Seeds required <small></small></button>
+      <div class="sd-shell">
+        <section class="sd-main" aria-label="Seed library">
+          <header class="sd-bar">
+            <div class="sd-title"><p class="eyebrow">Seed library</p><h2 id="sdTitle">Varieties</h2></div>
+            <input type="search" id="sdSearch" placeholder="Search  ( / )" title="Search varieties, crops, suppliers and product codes" autocomplete="off">
+            <div class="sd-actions">
+              <button type="button" class="btn primary" id="sdAddLink">Add from a supplier page</button>
+              <button type="button" class="btn" id="sdAddHand" title="Add a variety that has no supplier page">+ By hand</button>
+              <button type="button" class="btn" id="sdAddCrop" title="Add a crop">+ Crop</button>
+              <button type="button" class="btn" id="sdSettings">Link reader…</button>
+            </div>
+          </header>
+          <div class="sd-row2">
+            <div class="seg" role="group" aria-label="What to show">
+              <button type="button" data-sd-tab="list" aria-pressed="true">List</button>
+              <button type="button" data-sd-tab="gallery" aria-pressed="false">Gallery</button>
+              <button type="button" data-sd-tab="crops" aria-pressed="false">Crops</button>
+            </div>
+            <div class="sd-filters" id="sdFilters" role="group" aria-label="Which varieties to list"></div>
           </div>
-          <input type="search" id="sdSearch" placeholder="Search varieties, crops and suppliers" autocomplete="off">
-          <div class="sd-actions">
-            <button type="button" class="btn primary" id="sdAddLink">Add from a supplier page</button>
-            <button type="button" class="btn" id="sdAddHand">Add by hand</button>
-            <button type="button" class="btn" id="sdAddCrop">Add a crop</button>
-            <button type="button" class="btn" id="sdSettings">Link reader…</button>
+          <div class="sd-scroll" id="sdScroll">
+            <table class="as sd" id="sdTable">
+              <thead id="sdHead"></thead>
+              <tbody id="sdBody"></tbody>
+            </table>
+            <div class="sd-gallery" id="sdGallery" hidden></div>
+            <p class="sd-foot" id="sdFoot"></p>
           </div>
-        </div>
-        <div class="sd-filters" id="sdFilters" role="group" aria-label="Which varieties to list"></div>
-        <table class="as sd">
-          <thead id="sdHead"></thead>
-          <tbody id="sdBody"></tbody>
-        </table>
-        <p class="sd-foot" id="sdFoot"></p>
+        </section>
+        <aside class="sd-panel" id="sdPanel" aria-label="Details"></aside>
       </div>
     </div>
 
@@ -200,6 +205,7 @@
 <script src="js/rails.js"></script>
 <script src="js/store.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/thumbs.js"></script>
 <script src="js/app.js"></script>
 <script src="js/drag.js"></script>
 <script src="js/map.js"></script>

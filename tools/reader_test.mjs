@@ -40,6 +40,8 @@ r = await Reader.readLink('https://johnnyseeds.com/old-dragon', service, options
 check('a link that redirects is saved under the address it ended at', r.url === 'https://www.johnnyseeds.com/vegetables/fennel/dragon-f1-fennel-seed-2345.html' && r.facts.maturity.min === 60, r.url);
 let photo = await Reader.readImage(r.images[0].url, service, options);
 check('the product photo comes through the service', photo.mime === 'image/jpeg' && photo.bytes.length === jpeg.length, { mime: photo.mime, n: photo.bytes && photo.bytes.length });
+const blob = await Reader.fetchImage('https://www.johnnyseeds.com/img/fennel.jpg', service, options);
+check('a photo is also handed over as a file the browser can decode', blob.type === 'image/jpeg' && blob.size === jpeg.length, { type: blob.type, size: blob.size });
 r = await Reader.readLink('https://berbeeus.com/joella', service, options);
 check('a Berbee link is read from its public product data', r.name === 'Joella' && r.sku === 'TU1234' && r.extraction === 'Berbee public product data' && r.prices.length === 0, { name: r.name, sku: r.sku, extraction: r.extraction });
 

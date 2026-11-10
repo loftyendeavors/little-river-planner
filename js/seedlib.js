@@ -160,6 +160,24 @@
     const list = [...rows.values()].sort((a, b) => String(a.crop && a.crop.name).localeCompare(String(b.crop && b.crop.name)) || String((a.variety && a.variety.name) || '').localeCompare(String((b.variety && b.variety.name) || '')));
     return { rows: list, settings: { germ: +(plan.settings && plan.settings.germ) || 85, buffer: +(plan.settings && plan.settings.buffer) || 0 } };
   }
+  /**
+   * Seed on hand and on order from v7's lot records, by the same rule v7 uses: a lot counts when it has a whole,
+   * non-negative quantity, a yes-or-no "usable", and an identifier no other lot shares. "ordered" lots are on order;
+   * usable lots are on hand; anything else is left out. Keys match required(): "v:<variety>|seeds".
+   */
+  function stock(inventory) {
+    const out = {}, lots = inventory && Array.isArray(inventory.lots) ? inventory.lots.filter(l => l && typeof l === 'object') : [], seen = new Map();
+    for (const lot of lots) seen.set(lot.id, (seen.get(lot.id) || 0) + 1);
+    for (const lot of lots) {
+      if (lot.deleted === true || !lot.key || !lot.id || seen.get(lot.id) !== 1 || typeof lot.usable !== 'boolean' || lot.quantity == null || lot.quantity === '') continue;
+      const q = Number(lot.quantity);
+      if (!Number.isFinite(q) || q < 0 || (['seeds', 'plants'].includes(lot.unit) && !Number.isSafeInteger(q)) || !['seeds', 'g', 'plants'].includes(lot.unit)) continue;
+      const life = typeof lot.status === 'string' ? lot.status : lot.usable === true ? 'usable' : 'excluded';
+      const row = out[lot.key + '|' + lot.unit] || (out[lot.key + '|' + lot.unit] = { onHand: 0, onOrder: 0, lots: 0 });
+      if (life === 'ordered') { row.onOrder += q; row.lots++; } else if (life === 'usable' && lot.usable === true) { row.onHand += q; row.lots++; }
+    }
+    return out;
+  }
   /** A seed count as a weight and as packets, where the variety's page gave the figures. */
   function measures(seeds, v) {
     const out = { weight: '', packets: '' };
@@ -172,5 +190,5 @@
     return out;
   }
 
-  return { norm, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, measures, UNIT_WORD, BASES, STAGES };
+  return { norm, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, stock, measures, UNIT_WORD, BASES, STAGES };
 });

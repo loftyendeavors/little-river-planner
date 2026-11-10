@@ -7,13 +7,14 @@
  */
 (function (root) {
   'use strict';
-  const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, Lib = root.LRFLibrary, SL = root.LRFSeedLib, Reader = root.LRFReader;
+  const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, Lib = root.LRFLibrary, SL = root.LRFSeedLib, Reader = root.LRFReader, T = root.LRFThumbs;
   const { h, clear, add, num, toast, day } = UI;
   const $ = id => document.getElementById(id);
-  const ui = { tab: 'varieties', query: '', filter: 'all', dirty: true };
+  const ui = { tab: 'list', query: '', filter: 'all', sort: 'crop', closed: new Set(), sel: null, rev: 0, panelKey: '', stock: null, dirty: true };
   const ENV_LABEL = { field: 'Field', tunnel: 'Unheated tunnel', heated: 'Heated greenhouse', tower: 'Towers' };
   const BASIS_TEXT = { seed: 'seeding', transplant: 'transplanting', unspecified: 'not stated' };
   const BASIS_OPTIONS = [['unspecified', 'Not stated'], ['seed', 'Seeding'], ['transplant', 'Transplanting into the bed']];
+  const BASIS_SHORT = [['unspecified', 'not stated'], ['seed', 'seeding'], ['transplant', 'transplanting']];
   const STAGE_OPTIONS = [['unspecified', 'Not stated'], ['mature', 'Mature'], ['baby', 'Baby'], ['flower', 'First flower or cut']];
   const NEW_CROP = '__new_crop__', NEW_VARIETY = '__new__';
 
@@ -209,7 +210,9 @@
         const kept = await App.keepVarietyRecord(after.id, SL.record(data, o, previous));
         d.close();
         if (!kept) toast(`${after.name} is saved. This view has nowhere to keep the page text itself, so a backup made here will carry the variety without it.`);
-        ui.query = ''; $('sdSearch').value = ''; ui.tab = 'varieties'; schedule();
+        ui.query = ''; $('sdSearch').value = ''; ui.filter = 'all'; if (ui.tab === 'crops') ui.tab = 'list'; ui.closed.delete(after.cropId); ui.sel = { type: 'variety', id: after.id }; schedule();
+        const picture = data.images && data.images[0] && data.images[0].url;
+        if (picture && serviceReady() && !T.get(after.id)) Reader.fetchImage(picture, service()).then(blob => T.make(blob)).then(uri => App.keepThumb(after.id, uri)).catch(() => { /* the variety is saved; it just has no photo */ });
       } catch (error) { d.say(error.message || 'That could not be saved.', 'bad'); }
     }
   }
@@ -220,9 +223,9 @@
   }
 
   // ───────────────────────── a variety, by hand ─────────────────────────
-  function openVariety(variety, startCropId) {
+  function openVariety(variety, startCropId, inPanel) {
     const eng = App.state.engine, crops = sortedCrops(), v = variety || { cropId: startCropId || '' }, n = variety ? usedBy(variety.id) : 0;
-    const d = openDialog(variety ? variety.name : 'Add a variety by hand', variety ? `${cropName(eng.crop(v.cropId))}${n ? ` · in ${n} planting${n === 1 ? '' : 's'}` : ' · not planted this season'}` : 'For a variety with no supplier page. One with a page is better added from it.');
+    const d = inPanel || openDialog(variety ? variety.name : 'Add a variety by hand', variety ? `${cropName(eng.crop(v.cropId))}${n ? ` · in ${n} planting${n === 1 ? '' : 's'}` : ' · not planted this season'}` : 'For a variety with no supplier page. One with a page is better added from it.');
     const hasSupplierDays = !!v.catalogDtm, evidence = h('p.sd-evidence'), planLine = h('p.sd-plan');
     const form = h('form.sd-review', { novalidate: true, onsubmit: e => { e.preventDefault(); save(); } },
       h('h3', 'Variety and source'),
@@ -244,7 +247,7 @@
       actions(
         variety && !n ? button('Remove from the library', remove, 'danger') : null,
         variety && v.url ? button('Read its page again', () => { d.close(); openImporter(v.url, v.cropId); }) : null,
-        h('span.grow'), button('Cancel', () => d.close()), h('button.btn.primary', { type: 'submit' }, variety ? 'Save' : 'Add to the library')));
+        h('span.grow'), button(inPanel ? 'Revert' : 'Cancel', () => d.close()), h('button.btn.primary', { type: 'submit' }, variety ? 'Save' : 'Add to the library')));
     d.body.append(form);
 
     // what the supplier's page said, when its text was kept
@@ -289,7 +292,7 @@
         // a placeholder variety stays one until something about it is really changed
         const flat = x => JSON.stringify(Object.keys(x).filter(k => k !== 'stub').sort().map(k => [k, x[k]]));
         if (variety && flat(after) === flat(variety)) { d.close(); return; }
-        if (await App.revise(variety ? `Edit ${after.name}` : `Add ${after.name} to the library`, [{ kind: 'variety', before: variety || null, after }])) { d.close(); schedule(); }
+        if (await App.revise(variety ? `Edit ${after.name}` : `Add ${after.name} to the library`, [{ kind: 'variety', before: variety || null, after }])) { if (!variety) { ui.sel = { type: 'variety', id: after.id }; ui.tab = ui.tab === 'crops' ? 'list' : ui.tab; ui.closed.delete(after.cropId); } d.close(); schedule(); }
       } catch (error) { d.say(error.message || 'That could not be saved.', 'bad'); }
     }
     async function remove() {
@@ -299,16 +302,16 @@
 
   // ───────────────────────── a crop ─────────────────────────
   const CROP_NUMBERS = [['inRow', 'In-row spacing (in)', 0.01, 2400], ['rowSp', 'Row spacing (in)', 0.01, 2400], ['rowsPerBed', 'Rows per bed', 1, 1000, true], ['gh', 'Weeks in nursery', 0, 104], ['tray', 'Cells per tray', 1, 1000, true], ['spc', 'Seeds per cell', 0.1, 50], ['germ', 'Germination (%)', 0.1, 100], ['seedsFt', 'Seeds per foot of row (direct sown)', 0, 1000]];
-  function openCrop(crop) {
+  function openCrop(crop, inPanel) {
     const eng = App.state.engine, plan = App.state.plan, c = crop || {}, own = crop ? (plan.crops || []).find(x => x.id === crop.id) || null : null;
     const n = crop ? plan.plantings.filter(p => p.cropId === crop.id).length : 0;
-    const d = openDialog(crop ? crop.name : 'Add a crop', crop ? `${n ? `In ${n} planting${n === 1 ? '' : 's'}. ` : ''}Days to harvest are set on the Assumptions list, per growing condition.` : 'Give it its real numbers here, and its days to harvest on the Assumptions list.');
+    const d = inPanel || openDialog(crop ? crop.name : 'Add a crop', crop ? `${n ? `In ${n} planting${n === 1 ? '' : 's'}. ` : ''}Days to harvest are set on the Assumptions list, per growing condition.` : 'Give it its real numbers here, and its days to harvest on the Assumptions list.');
     const form = h('form.sd-review', { novalidate: true, onsubmit: e => { e.preventDefault(); save(); } },
       h('div.sd-grid', fld('Crop name', inp('name', c.name, { maxLength: 160, required: true })), fld('Plant family', inp('family', c.family, { maxLength: 160 })),
         fld('How it is planted', sel('method', [['TP', 'Transplanted'], ['DS', 'Direct sown']], c.method || 'TP')),
         fld('Planted from', sel('plantingMaterial', [['seed', 'Seed'], ['plant', 'Bought-in plants'], ['bulb', 'Bulbs'], ['clove', 'Cloves'], ['piece', 'Seed pieces']], c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed'))),
         CROP_NUMBERS.map(([key, label, lo, hi, whole]) => fld(label, numIn(key, c[key] == null ? '' : c[key], { min: lo, max: hi, step: whole ? 1 : 'any' }), key === 'rowsPerBed' ? 'Empty: as many as the bed width takes' : key === 'germ' ? 'Empty uses the plan’s' : null))),
-      actions(h('span.grow'), button('Cancel', () => d.close()), h('button.btn.primary', { type: 'submit' }, crop ? 'Save' : 'Add the crop')));
+      actions(h('span.grow'), button(inPanel ? 'Revert' : 'Cancel', () => d.close()), h('button.btn.primary', { type: 'submit' }, crop ? 'Save' : 'Add the crop')));
     d.body.append(form);
     async function save() {
       try {
@@ -326,7 +329,7 @@
         if (!crop) {
           const fresh = SL.newCrop({ name, family: typed.family, method: typed.method, material: typed.plantingMaterial }, 'c_' + App.uid());
           for (const [key] of CROP_NUMBERS) if (typed[key] != null) fresh[key] = typed[key];
-          if (await App.revise(`Add the crop ${name}`, [{ kind: 'crop', before: null, after: fresh }, cropListOp(fresh.id)])) { d.close(); schedule(); }
+          if (await App.revise(`Add the crop ${name}`, [{ kind: 'crop', before: null, after: fresh }, cropListOp(fresh.id)])) { ui.sel = { type: 'crop', id: fresh.id }; ui.tab = 'crops'; d.close(); schedule(); }
           return;
         }
         // only what was changed is written over the built-in crop, as v7 does
@@ -370,92 +373,232 @@
         }, 'primary'))));
   }
 
-  // ───────────────────────── the two lists ─────────────────────────
-  let frame = 0;
+  // ───────────────────────── one list, a gallery, the crops, and a detail panel ─────────────────────────
+  let frame = 0, host = null;
   const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(render); };
+  const SUPPLIER_SHORT = [[/johnny/i, 'Johnny’s'], [/harris/i, 'Harris'], [/fedco/i, 'Fedco'], [/high\s*mowing/i, 'High Mowing'], [/berbee/i, 'Berbee'], [/stark/i, 'Stark Bro’s'], [/true\s*leaf/i, 'True Leaf'], [/territorial/i, 'Territorial'],
+    [/paramount/i, 'Paramount'], [/osborne/i, 'Osborne'], [/whaley/i, 'A.P. Whaley'], [/trade\s*winds/i, 'Trade Winds'], [/pepper\s*joe/i, 'Pepper Joe’s'], [/rupp/i, 'Rupp'], [/sandia/i, 'Sandia']];
+  const supplierShort = v => { const s = v.supplier || (v.source === 'Farm entry' ? '' : v.source) || ''; const hit = SUPPLIER_SHORT.find(([re]) => re.test(s)); return hit ? hit[1] : s; };
+  const noStart = v => !!v.catalogDtm && (v.catalogMaturityBasis || 'unspecified') === 'unspecified';
+  const FILTERS = [['all', 'All'], ['planted', 'Planted'], ['tosow', 'To sow'], ['short', 'Short of seed'], ['open', 'No starting point']];
+  const SORTS = [['crop', 'By crop'], ['name', 'Name'], ['days', 'Days'], ['tosow', 'Most to sow'], ['first', 'First sowing'], ['supplier', 'Supplier']];
+  const amount = r => [h('b', num(r.toSow, r.unit === 'g' ? 1 : 0)), r.unit === 'seeds' ? null : h('small', ' ' + SL.UNIT_WORD[r.unit])];
+
+  /** Everything the three views read: each variety with what the plan needs of it and what is on hand. */
+  function model() {
+    const eng = App.state.engine, plan = App.state.plan, need = SL.required(eng), stock = ui.stock || {};
+    const live = plan.varieties.filter(v => v.active !== false && !v.deleted), used = new Map(), usedCrop = new Map(), byV = new Map(), byCrop = new Map();
+    for (const p of plan.plantings) { usedCrop.set(p.cropId, (usedCrop.get(p.cropId) || 0) + 1); if (p.varietyId) used.set(p.varietyId, (used.get(p.varietyId) || 0) + 1); }
+    for (const r of need.rows) {
+      const s = stock[r.key] || { onHand: 0, onOrder: 0 };
+      r.onHand = s.onHand; r.onOrder = s.onOrder; r.short = Math.max(0, Math.ceil(r.toSow - s.onHand - s.onOrder));
+      if (r.variety) { if (!byV.has(r.variety.id) || r.unit === 'seeds') byV.set(r.variety.id, r); }
+      else if (r.crop) { if (!byCrop.has(r.crop.id)) byCrop.set(r.crop.id, []); byCrop.get(r.crop.id).push(r); }
+    }
+    // seed held for a variety that is not in this season's plan
+    for (const v of live) {
+      if (byV.has(v.id)) continue;
+      const unit = stock['v:' + v.id + '|seeds'] ? 'seeds' : stock['v:' + v.id + '|plants'] ? 'plants' : '', s = unit && stock['v:' + v.id + '|' + unit];
+      if (s) byV.set(v.id, { key: 'v:' + v.id + '|' + unit, variety: v, crop: eng.crop(v.cropId), unit, plantings: 0, waiting: 0, toSow: 0, total: 0, first: null, onHand: s.onHand, onOrder: s.onOrder, short: 0 });
+    }
+    return { eng, plan, live, need, used, usedCrop, byV, byCrop, hasStock: Object.keys(stock).length > 0 };
+  }
+  const passes = (m, v, id) => { const r = m.byV.get(v.id); return id === 'all' || (id === 'planted' && m.used.has(v.id)) || (id === 'tosow' && !!r && r.toSow > 0) || (id === 'short' && !!r && r.short > 0) || (id === 'open' && noStart(v)); };
+  function groupsOf(m, list) {
+    const by = new Map();
+    for (const v of list) { if (!by.has(v.cropId)) by.set(v.cropId, []); by.get(v.cropId).push(v); }
+    return [...by.entries()].map(([id, vs]) => ({ id, crop: m.eng.crop(id), list: vs.sort((a, b) => String(a.name).localeCompare(String(b.name))) })).sort((a, b) => cropName(a.crop).localeCompare(cropName(b.crop)));
+  }
+  function select(sel, keepFocus) { ui.sel = sel; ui.keepFocus = !!keepFocus; schedule(); }
+  function rowKey(e) {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter') { const first = $('sdPanel').querySelector('input, select, textarea'); if (first) first.focus(); return; }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const rows = [...document.querySelectorAll('#sdBody .sd-var')], next = rows[rows.indexOf(e.currentTarget) + (e.key === 'ArrowDown' ? 1 : -1)];
+    if (next) select({ type: 'variety', id: next.dataset.variety }, true);
+  }
+
   function render() {
     if (!App.state.ready || App.state.view !== 'seeds') { ui.dirty = true; return; }
     ui.dirty = false;
+    App.loadStock().then(s => { if (s !== ui.stock) { ui.stock = s; schedule(); } }).catch(() => {});
+    const m = model(), q = ui.query.trim().toLowerCase();
+    if (ui.filter === 'short' && !m.hasStock) ui.filter = 'all';
     for (const b of document.querySelectorAll('[data-sd-tab]')) b.setAttribute('aria-pressed', String(b.dataset.sdTab === ui.tab));
     $('sdSettings').textContent = serviceReady() ? 'Link reader: set' : 'Link reader…';
-    const eng = App.state.engine, plan = App.state.plan, q = ui.query.trim().toLowerCase();
-    const live = plan.varieties.filter(v => v.active !== false && !v.deleted), need = SL.required(eng);
-    document.querySelector('[data-sd-tab="varieties"] small').textContent = live.length;
-    document.querySelector('[data-sd-tab="required"] small').textContent = need.rows.filter(r => r.toSow > 0).length;
-    $('sdFilters').hidden = ui.tab !== 'varieties';
-    if (ui.tab === 'varieties') varieties(eng, plan, live, q); else required(eng, need, q);
-  }
-  function varieties(eng, plan, live, q) {
-    const used = new Map();
-    for (const p of plan.plantings) if (p.varietyId) used.set(p.varietyId, (used.get(p.varietyId) || 0) + 1);
-    const open = v => !!v.catalogDtm && (v.catalogMaturityBasis || 'unspecified') === 'unspecified';
-    const counts = { all: live.length, planted: live.filter(v => used.has(v.id)).length, open: live.filter(open).length };
-    add(clear($('sdFilters')), [['all', 'All'], ['planted', 'Planted this season'], ['open', 'Days with no starting point']].map(([id, label]) =>
-      h('button.chip', { type: 'button', 'aria-pressed': String(ui.filter === id), onclick: () => { ui.filter = id; schedule(); } }, label, h('small', counts[id]))));
-    $('sdLead').textContent = 'Every variety on file, by crop. Click one to edit it. A variety’s own days beat its crop’s; a planting with no variety uses the crop’s.';
-    clear($('sdHead')).append(h('tr', ['Variety', 'Supplier', 'Days', 'Counted from', 'Packet', 'Plantings'].map(t => h('th', t))));
-    const body = clear($('sdBody')), byCrop = new Map();
-    for (const v of live) {
-      if (ui.filter === 'planted' && !used.has(v.id)) continue;
-      if (ui.filter === 'open' && !open(v)) continue;
-      const crop = eng.crop(v.cropId), text = `${v.name} ${cropName(crop)} ${v.supplier || v.source || ''} ${v.sku || ''}`.toLowerCase();
-      if (q && !text.includes(q)) continue;
-      if (!byCrop.has(v.cropId)) byCrop.set(v.cropId, []);
-      byCrop.get(v.cropId).push(v);
+    const text = v => `${v.name} ${cropName(m.eng.crop(v.cropId))} ${v.supplier || v.source || ''} ${v.sku || ''}`.toLowerCase();
+    const list = m.live.filter(v => passes(m, v, ui.filter) && (!q || text(v).includes(q)));
+    $('sdTitle').textContent = ui.tab === 'crops' ? 'Crops' : `${list.length === m.live.length ? 'All' : list.length + ' of'} ${m.live.length} varieties`;
+    add(clear($('sdFilters')),
+      ui.tab === 'crops' ? h('span.sd-note', 'Click a crop to edit it. Days to harvest are on the Assumptions list.') : FILTERS.filter(([id]) => id !== 'short' || m.hasStock).map(([id, label]) =>
+        h('button.chip', { type: 'button', 'aria-pressed': String(ui.filter === id), onclick: () => { ui.filter = id; schedule(); } }, label, h('small', m.live.filter(v => passes(m, v, id)).length))),
+      h('span.grow'),
+      ui.tab === 'list' ? sel('sort', SORTS, ui.sort, { 'aria-label': 'Order', id: 'sdSort', onchange: e => { ui.sort = e.target.value; schedule(); } }) : null,
+      ui.tab === 'list' && ui.sort === 'crop' ? h('button.link', { type: 'button', id: 'sdFold', onclick: () => { const ids = groupsOf(m, list).map(g => g.id); if (ids.every(id => ui.closed.has(id))) ui.closed.clear(); else ids.forEach(id => ui.closed.add(id)); schedule(); } }, groupsOf(m, list).every(g => ui.closed.has(g.id)) && list.length ? 'Expand all' : 'Collapse all') : null);
+    $('sdTable').hidden = ui.tab === 'gallery'; $('sdGallery').hidden = ui.tab !== 'gallery';
+    if (ui.tab === 'crops') cropsTable(m, q); else if (ui.tab === 'gallery') gallery(m, list, q); else listTable(m, list, q);
+    if (ui.sel && ui.sel.type === 'variety' && !m.live.some(v => v.id === ui.sel.id)) ui.sel = null;
+    if (ui.sel && ui.sel.type === 'crop' && !m.eng.crop(ui.sel.id)) ui.sel = null;
+    panel(m);
+    for (const el of document.querySelectorAll('#seedsView [data-variety], #seedsView [data-croprow]')) {
+      const on = !!ui.sel && ((ui.sel.type === 'variety' && el.dataset.variety === ui.sel.id) || (ui.sel.type === 'crop' && el.dataset.croprow === ui.sel.id));
+      el.classList.toggle('sel', on);
+      if (on && ui.keepFocus) { el.focus(); el.scrollIntoView({ block: 'nearest' }); }
     }
-    const groups = [...byCrop.entries()].map(([id, list]) => ({ crop: eng.crop(id), id, list: list.sort((a, b) => String(a.name).localeCompare(String(b.name))) })).sort((a, b) => cropName(a.crop).localeCompare(cropName(b.crop)));
+    ui.keepFocus = false;
+  }
+
+  function listTable(m, list, q) {
+    const { eng } = m, grouped = ui.sort === 'crop', stock = m.hasStock;
+    const heads = [['Variety'], ['Supplier', 0, 'sd-sup'], ['Days', 1, 'w-s'], ['Counted from', 0, 'w-l'], ['To sow', 1, 'w-m'], ...(stock ? [['On hand', 1, 'w-l'], ['Short', 1, 'w-s']] : []), ['Packets', 1, 'w-m'], ['First sow', 1, 'w-m'], ['Plantings', 1, 'w-m']];
+    clear($('sdHead')).append(h('tr', heads.map(([t, n, c]) => h('th' + (n ? '.sd-num' : '') + (c ? '.' + c : ''), t))));
+    const body = clear($('sdBody')), cols = heads.length;
+    const row = (v, flat) => {
+      const r = m.byV.get(v.id), basis = v.catalogMaturityBasis || 'unspecified', crop = eng.crop(v.cropId), site = SL.hostOf(v.url);
+      const ms = r && r.unit === 'seeds' && r.toSow > 0 ? SL.measures(r.toSow, v) : { weight: '', packets: '' };
+      return h('tr.sd-var', { tabIndex: 0, 'aria-label': `${v.name}, ${cropName(crop)}`, dataset: { variety: v.id }, onclick: e => { if (!e.target.closest('a, select')) select({ type: 'variety', id: v.id }); }, onkeydown: rowKey },
+        h('td', h('div.sd-cell', T.el({ varietyId: v.id, color: crop && eng.cropColor(crop), label: v.name, size: 36 }), h('span.sd-name', h('span.as-vname', v.name), flat ? h('small', cropName(crop)) : null))),
+        h('td.sd-sup', supplierShort(v) || (v.source === 'Farm entry' ? 'By hand' : ''), site ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer', title: `${v.sku ? v.sku + ' · ' : ''}open the page on ${site}` }, ' ↗') : null),
+        h('td.sd-num', daysText(v) || '—', v.catalogHarvestStage && v.catalogHarvestStage !== 'unspecified' ? h('small', ` ${v.catalogHarvestStage}`) : null),
+        v.catalogDtm ? h('td.sd-from' + (basis === 'unspecified' ? '.sd-open' : ''), sel('from', BASIS_SHORT, basis, { 'aria-label': `${v.name}: days counted from`, onchange: async e => {
+          const value = e.target.value;
+          if (!(await App.revise(`${v.name}: days counted from ${BASIS_TEXT[value]}`, [{ kind: 'variety', before: v, after: { ...v, catalogMaturityBasis: value, catalogSourceChoice: v.catalogSourceChoice || 'url' } }]))) schedule();
+        } })) : h('td.sd-from', v.dtm > 0 ? h('small', 'the day it goes in') : ''),
+        h('td.sd-num', r && r.toSow > 0 ? amount(r) : ''),
+        stock ? h('td.sd-num', r && (r.onHand || r.onOrder) ? [r.onHand ? num(r.onHand) : '', r.onOrder ? h('small.sd-ord', `${num(r.onOrder)} ordered`) : null] : '') : null,
+        stock ? h('td.sd-num', r && r.short > 0 ? num(r.short) : '') : null,
+        h('td.sd-num', ms.packets || ms.weight),
+        h('td.sd-num', r && r.first ? day(r.first) : ''),
+        h('td.sd-num', m.used.get(v.id) || ''));
+    };
     let shown = 0;
-    for (const g of groups) {
-      body.append(h('tr.sd-crop', h('td', { colSpan: 6 }, h('div.as-name',
-        h('i.swatch', { style: { background: g.crop ? eng.cropColor(g.crop) : 'var(--line)' } }), h('b', g.crop ? g.crop.name : 'A crop that is no longer in the library'),
-        g.crop ? h('small', g.crop.method === 'TP' ? 'transplanted' : 'direct sown') : null,
-        g.crop ? h('button.link', { type: 'button', onclick: () => openCrop(g.crop) }, 'Edit crop') : null,
-        g.crop ? h('button.link', { type: 'button', onclick: () => openVariety(null, g.id) }, 'Add a variety') : null))));
-      for (const v of g.list) {
-        shown++;
-        const basis = v.catalogMaturityBasis || 'unspecified', days = daysText(v), host = SL.hostOf(v.url);
-        body.append(h('tr.sd-var', { tabIndex: 0, role: 'button', 'aria-label': `Edit ${v.name}`, dataset: { variety: v.id }, onclick: e => { if (!e.target.closest('a')) openVariety(v); }, onkeydown: e => { if (e.key === 'Enter') openVariety(v); } },
-          h('td', h('span.as-vname', v.name)),
-          h('td.sd-sup', v.supplier || (v.source === 'Farm entry' ? 'Entered by hand' : v.source) || '', v.sku ? h('small', ` ${v.sku}`) : null, host ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer', title: `Open the page on ${host}` }, ' ↗') : null),
-          h('td.sd-num', days || '—', v.catalogHarvestStage && v.catalogHarvestStage !== 'unspecified' ? h('small', ` ${v.catalogHarvestStage}`) : null),
-          h('td' + (v.catalogDtm && basis === 'unspecified' ? '.sd-open' : ''), v.catalogDtm ? BASIS_TEXT[basis] : v.dtm > 0 ? 'the day it goes in the bed' : ''),
-          h('td.sd-num', v.seedsPerPacket ? num(v.seedsPerPacket) : ''),
-          h('td.sd-num', used.get(v.id) || '')));
+    if (!grouped) {
+      const key = { name: v => v.name, days: v => v.catalogDtm || v.dtm || 9999, tosow: v => -((m.byV.get(v.id) || {}).toSow || 0), first: v => { const r = m.byV.get(v.id); return r && r.first ? +r.first : Infinity; }, supplier: v => supplierShort(v) || '~' }[ui.sort];
+      for (const v of list.slice().sort((a, b) => { const x = key(a), y = key(b); return (typeof x === 'string' ? x.localeCompare(y) : x - y) || String(a.name).localeCompare(String(b.name)); })) { body.append(row(v, true)); shown++; }
+    } else {
+      const groups = groupsOf(m, list);
+      // crops planted with no variety chosen still need seed
+      if (['all', 'planted', 'tosow'].includes(ui.filter)) for (const [id, rows] of m.byCrop) if (!groups.some(g => g.id === id) && rows.some(r => r.toSow > 0) && (!q || cropName(eng.crop(id)).toLowerCase().includes(q))) groups.push({ id, crop: eng.crop(id), list: [] });
+      groups.sort((a, b) => cropName(a.crop).localeCompare(cropName(b.crop)));
+      for (const g of groups) {
+        const closed = ui.closed.has(g.id), color = g.crop ? eng.cropColor(g.crop) : 'var(--line)', plain = (m.byCrop.get(g.id) || []).filter(r => r.toSow > 0 && ui.filter !== 'short' && ui.filter !== 'open');
+        const seeds = g.list.reduce((n, v) => { const r = m.byV.get(v.id); return n + (r && r.unit === 'seeds' ? r.toSow : 0); }, 0) + plain.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0);
+        body.append(h('tr.sd-crop' + (closed ? '.closed' : ''), { dataset: { crop: g.id }, onclick: e => { if (e.target.closest('.link')) return; closed ? ui.closed.delete(g.id) : ui.closed.add(g.id); schedule(); } }, h('td', { colSpan: cols }, h('div.as-name',
+          h('button.as-more', { type: 'button', 'aria-expanded': String(!closed), 'aria-label': `${closed ? 'Show' : 'Hide'} ${cropName(g.crop)}` }, closed ? '▸' : '▾'),
+          T.el({ cropId: g.id, color, label: cropName(g.crop), size: 26, cls: 'key' }), h('b', g.crop ? g.crop.name : 'A crop that is no longer in the library'),
+          h('small', `${g.list.length} variet${g.list.length === 1 ? 'y' : 'ies'}${g.crop ? ' · ' + (g.crop.method === 'TP' ? 'transplanted' : 'direct sown') : ''}${seeds ? ` · ${num(seeds)} seeds to sow` : ''}`),
+          h('span.grow'),
+          g.crop ? h('button.link', { type: 'button', onclick: () => select({ type: 'crop', id: g.id }) }, 'Edit crop') : null,
+          g.crop ? h('button.link', { type: 'button', onclick: () => openVariety(null, g.id) }, 'Add a variety') : null))));
+        if (closed) continue;
+        for (const v of g.list) { body.append(row(v, false)); shown++; }
+        for (const r of plain) {
+          shown++;
+          body.append(h('tr.sd-need', { dataset: { key: r.key } }, h('td', h('div.sd-cell', T.el({ cropId: g.id, color, label: cropName(g.crop), size: 36, cls: 'faint' }), h('span.sd-name', h('small', 'No variety chosen')))), h('td.sd-sup'), h('td'), h('td'),
+            h('td.sd-num', amount(r)), stock ? h('td') : null, stock ? h('td') : null, h('td'), h('td.sd-num', r.first ? day(r.first) : ''), h('td.sd-num', r.waiting === r.plantings ? r.plantings : `${r.waiting} of ${r.plantings}`)));
+        }
       }
     }
-    if (!shown) body.append(h('tr', h('td.empty', { colSpan: 6 }, q ? `No variety matches “${ui.query}”.` : ui.filter === 'open' ? 'Every variety with supplier days has a starting point.' : App.isSample() ? 'The sample plan has no varieties. Load your backup, or add one.' : 'No varieties yet. Add one from a supplier page.')));
-    const bare = live.filter(v => !v.supplier && !v.url && !v.catalogDtm).length;
-    $('sdFoot').textContent = live.length && bare === live.length ? 'These varieties carry planning figures only. Supplier, product code and page come in when you load your backup here.' : counts.open ? `${counts.open} variet${counts.open === 1 ? 'y has' : 'ies have'} supplier days with no starting point. For a transplanted crop that can move the harvest by the whole nursery time.` : '';
+    if (!shown && !body.children.length) body.append(h('tr', h('td.empty', { colSpan: cols }, q ? `No variety matches “${ui.query}”.` : ui.filter === 'open' ? 'Every variety with supplier days has a starting point.' : ui.filter !== 'all' ? 'No variety fits this filter.' : App.isSample() ? 'The sample plan has no varieties. Load your backup, or add one.' : 'No varieties yet. Add one from a supplier page.')));
+    foot(m);
   }
-  function required(eng, need, q) {
-    const rows = need.rows.filter(r => !q || `${cropName(r.crop)} ${r.variety ? r.variety.name : ''} ${r.variety ? r.variety.supplier || r.variety.source || '' : ''}`.toLowerCase().includes(q));
-    const sown = need.rows.reduce((n, r) => n + (r.plantings - r.waiting - r.established), 0), plain = need.rows.filter(r => !r.variety && r.toSow > 0).reduce((n, r) => n + r.waiting, 0);
-    $('sdLead').textContent = `What the ${App.planYear()} plan still needs, by variety. Counts allow for ${need.settings.germ}% germination${need.settings.buffer ? ` and ${need.settings.buffer}% extra plugs on transplants` : ''}, or the variety’s own germination where it has one.`;
-    clear($('sdHead')).append(h('tr', ['Crop and variety', 'Supplier', 'To sow', 'By weight', 'Packets', 'First sowing', 'Plantings'].map(t => h('th', t))));
-    const body = clear($('sdBody'));
-    for (const r of rows) {
-      if (!(r.toSow > 0) && !q) continue;
-      const m = r.unit === 'seeds' ? SL.measures(r.toSow, r.variety) : { weight: '', packets: '' }, v = r.variety;
-      body.append(h('tr.sd-need', { dataset: { key: r.key } },
-        h('td', h('div.as-name', h('i.swatch', { style: { background: r.crop ? eng.cropColor(r.crop) : 'var(--line)' } }), h('b', cropName(r.crop)), v ? h('span.as-vname', v.name) : h('small', 'no variety chosen'))),
-        h('td.sd-sup', v ? v.supplier || (v.source === 'Farm entry' ? '' : v.source) || '' : '', v && v.sku ? h('small', ` ${v.sku}`) : null),
-        h('td.sd-num', h('b', num(r.toSow, r.unit === 'g' ? 1 : 0)), h('small', ` ${r.unit === 'seeds' ? '' : SL.UNIT_WORD[r.unit]}`)),
-        h('td.sd-num', m.weight), h('td.sd-num', m.packets),
-        h('td.sd-num', r.first ? day(r.first) : ''),
-        h('td.sd-num', r.waiting === r.plantings ? r.plantings : `${r.waiting} of ${r.plantings}`)));
+  function foot(m) {
+    const bare = m.live.filter(v => !v.supplier && !v.url && !v.catalogDtm).length, sown = m.need.rows.reduce((n, r) => n + (r.plantings - r.waiting - r.established), 0);
+    add(clear($('sdFoot')),
+      m.live.length && bare === m.live.length ? 'These varieties carry planning figures only. Supplier, product code and page come in when you load your backup here. ' : null,
+      `Seed counts allow for ${m.need.settings.germ}% germination${m.need.settings.buffer ? ` and ${m.need.settings.buffer}% extra plugs on transplants` : ''}. `,
+      sown ? `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted and left out. ` : null,
+      m.hasStock ? 'On hand and ordered are as last recorded in v7; stock is not edited here yet. ' : null,
+      h('button.link', { type: 'button', onclick: () => download(m) }, 'Download seeds required (.csv)'));
+  }
+  function gallery(m, list, q) {
+    const host2 = clear($('sdGallery')), { eng } = m, cards = h('div.sd-cards');
+    // one continuous wall of photos, in crop order: single-variety crops would otherwise leave most of each row empty
+    for (const g of groupsOf(m, list)) {
+      const color = g.crop ? eng.cropColor(g.crop) : 'var(--line)';
+      for (const v of g.list) {
+        const r = m.byV.get(v.id), basis = v.catalogMaturityBasis || 'unspecified', days = daysText(v);
+        cards.append(h('button.sd-card', { type: 'button', dataset: { variety: v.id }, 'aria-label': `${v.name}, ${cropName(g.crop)}`, onclick: () => select({ type: 'variety', id: v.id }) },
+          T.el({ varietyId: v.id, color, label: v.name, cls: 'fill' }),
+          h('span.sd-card-crop', h('i', { style: { background: color } }), cropName(g.crop)), h('b', v.name),
+          h('small', days ? `${days} d${v.catalogDtm ? ' · ' + (basis === 'unspecified' ? 'start not stated' : 'from ' + BASIS_TEXT[basis]) : ''}` : supplierShort(v) || '—'),
+          r && r.toSow > 0 ? h('span.sd-badge', `${num(r.toSow, r.unit === 'g' ? 1 : 0)} ${r.unit === 'seeds' ? 'to sow' : SL.UNIT_WORD[r.unit]}`) : null));
+      }
     }
-    if (!body.children.length) body.append(h('tr', h('td.empty', { colSpan: 7 }, q ? `Nothing matches “${ui.query}”.` : 'Nothing left to sow in this plan.')));
-    clear($('sdFoot')).append(
-      `${sown ? `${sown} planting${sown === 1 ? ' is' : 's are'} already marked sown or planted and left out. ` : ''}${plain ? `${plain} planting${plain === 1 ? ' has' : 's have'} no variety chosen and ${plain === 1 ? 'is' : 'are'} counted under the crop. ` : ''}`,
-      h('button.link', { type: 'button', onclick: () => download(need) }, 'Download as a spreadsheet file (.csv)'));
+    host2.append(list.length ? cards : h('p.empty', q ? `No variety matches “${ui.query}”.` : 'No variety fits this filter.'));
+    foot(m);
   }
-  function download(need) {
+  function cropsTable(m, q) {
+    const { eng, plan } = m, settings = plan.settings.cropTypeList || {};
+    clear($('sdHead')).append(h('tr', [['Crop'], ['Planted'], ['Nursery days', 1], ['In row (in)', 1], ['Rows apart (in)', 1], ['Rows per bed', 1], ['Varieties', 1], ['Plantings', 1]].map(([t, n]) => h('th' + (n ? '.sd-num' : ''), t))));
+    const body = clear($('sdBody'));
+    for (const c of sortedCrops()) {
+      const vs = eng.varietiesOf(c.id), mine = root.LRFPanels.isMine(c, m.usedCrop, vs, settings);
+      if (q ? !String(c.name).toLowerCase().includes(q) : !mine) continue;
+      body.append(h('tr.sd-var.sd-croprow', { tabIndex: 0, dataset: { croprow: c.id }, 'aria-label': c.name, onclick: () => select({ type: 'crop', id: c.id }), onkeydown: e => { if (e.key === 'Enter') select({ type: 'crop', id: c.id }); } },
+        h('td', h('div.sd-cell', T.el({ cropId: c.id, color: eng.cropColor(c), label: c.name, size: 36, cls: 'key' }), h('span.sd-name', h('b', c.name), c.family ? h('small', c.family) : null))),
+        h('td', c.micro ? 'living trays' : c.method === 'TP' ? 'transplanted' : 'direct sown'),
+        h('td.sd-num', c.method === 'TP' && c.gh ? num(c.gh * 7) : ''), h('td.sd-num', c.inRow ? num(c.inRow, 2) : ''), h('td.sd-num', c.rowSp ? num(c.rowSp, 2) : ''),
+        h('td.sd-num', c.rowsPerBed != null && c.rowsPerBed !== '' ? String(c.rowsPerBed) : h('small', 'by width')), h('td.sd-num', vs.length || ''), h('td.sd-num', m.usedCrop.get(c.id) || '')));
+    }
+    if (!body.children.length) body.append(h('tr', h('td.empty', { colSpan: 8 }, q ? `No crop matches “${ui.query}”.` : 'No crops yet.')));
+    add(clear($('sdFoot')), q ? null : 'Your crops: planted this season, or kept with varieties. Search to reach any other crop the planner knows.');
+  }
+
+  // ── the detail panel: what is selected, edited in place ──
+  function panel(m, force) {
+    const key = JSON.stringify(ui.sel) + '|' + ui.rev + '|' + (m.hasStock ? 1 : 0);
+    if (!force && key === ui.panelKey) return;
+    ui.panelKey = key;
+    if (host) host.closed = true;
+    const el = clear($('sdPanel')), body = h('div.dlg-body'), status = h('p.dlg-status', { role: 'status', 'aria-live': 'polite' });
+    host = { el, body, closed: false, close() { ui.panelKey = ''; schedule(); }, say(text, kind) { status.textContent = text || ''; status.dataset.kind = kind || ''; } };
+    const { eng, plan } = m, shut = h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => select(null) }, '×');
+    const stat = (label, value, small) => h('div.sd-stat', h('small', label), h('b', value), small ? h('span', small) : null);
+    if (!ui.sel) {
+      const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), open = m.live.filter(noStart).length, short = [...m.byV.values()].filter(r => r.short > 0).length;
+      add(el, h('header.sd-ph.plain', h('div', h('p.eyebrow', `${App.planYear()} season`), h('h2', 'Seed library'))),
+        h('div.sd-stats', stat('Varieties', num(m.live.length), `${m.live.filter(v => m.used.has(v.id)).length} planted`), stat('To sow', num(seeds), 'seeds'), m.hasStock ? stat('Short of seed', num(short), 'varieties') : stat('With a photo', num(m.live.filter(v => T.get(v.id)).length))),
+        open ? h('button.sd-task', { type: 'button', onclick: () => { ui.filter = 'open'; ui.tab = 'list'; schedule(); } }, h('b', `${open} variet${open === 1 ? 'y has' : 'ies have'} supplier days with no starting point`), h('span', 'For a transplanted crop that can move the harvest by the whole nursery time. Set each one in the “Counted from” column.')) : null,
+        h('p.dlg-hint', 'Click a variety to see and edit it here. With a row in focus, ↑ and ↓ move between varieties and Enter jumps to its first field.'),
+        h('p.dlg-hint', serviceReady() ? 'Link reader is set in this browser.' : 'Reading a variety from a supplier link needs the link reader set up. Pasting a page works without it.'));
+      return;
+    }
+    if (ui.sel.type === 'crop') {
+      const c = eng.crop(ui.sel.id), n = m.usedCrop.get(c.id) || 0, vs = eng.varietiesOf(c.id);
+      add(el, h('header.sd-ph', T.el({ cropId: c.id, color: eng.cropColor(c), label: c.name, size: 96, cls: 'key' }), h('div', h('p.eyebrow', 'Crop'), h('h2', c.name), h('p.sd-sub', `${vs.length} variet${vs.length === 1 ? 'y' : 'ies'} · ${n} planting${n === 1 ? '' : 's'}`)), shut), body, status);
+      openCrop(c, host);
+      return;
+    }
+    const v = eng.variety(ui.sel.id), crop = eng.crop(v.cropId), r = m.byV.get(v.id), n = m.used.get(v.id) || 0, site = SL.hostOf(v.url), color = crop && eng.cropColor(crop);
+    const pick = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: async e => {
+      const file = e.target.files[0]; e.target.value = '';
+      if (!file) return;
+      try { const kept = await App.keepThumb(v.id, await T.make(file)); toast(kept === false ? 'Photo set for this session. This view has nowhere to keep it.' : `Photo set for ${v.name}.`); } catch (_) { toast('That file is not a picture this browser can read.'); }
+    } });
+    add(el, h('header.sd-ph', T.el({ varietyId: v.id, color, label: v.name, size: 120 }),
+        h('div', h('p.eyebrow', cropName(crop)), h('h2', v.name),
+          h('p.sd-sub', supplierShort(v) || 'Entered by hand', v.sku ? ` · ${v.sku}` : '', site ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer' }, ' ↗') : null),
+          h('button.link', { type: 'button', onclick: () => pick.click() }, T.get(v.id) ? 'Change photo' : 'Add a photo'), pick),
+        shut),
+      h('div.sd-stats', stat('Plantings', n || '—'), stat('To sow', r && r.toSow > 0 ? num(r.toSow, r.unit === 'g' ? 1 : 0) : '—', r && r.toSow > 0 ? (r.unit === 'seeds' ? SL.measures(r.toSow, v).packets || SL.measures(r.toSow, v).weight || 'seeds' : SL.UNIT_WORD[r.unit]) : null),
+        m.hasStock ? stat('On hand', r && r.onHand ? num(r.onHand) : '—', r && r.onOrder ? `${num(r.onOrder)} ordered` : r && r.short > 0 ? `short ${num(r.short)}` : null) : stat('First sowing', r && r.first ? day(r.first) : '—')),
+      body, status);
+    openVariety(v, null, host);
+    const mine = plan.plantings.filter(p => p.varietyId === v.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).sort((a, b) => a.r.field - b.r.field);
+    if (mine.length) add(el, h('h3.sd-h', `In the plan · ${mine.length}`), h('div.sd-pls', mine.slice(0, 40).map(({ p, r: c }) =>
+      h('button.sd-pl', { type: 'button', title: 'Show on the map', onclick: () => { App.setView('map'); App.setDate(c.field); App.select({ type: 'planting', id: p.id }); } },
+        h('b', day(c.field)), h('span', App.bedLabel(c.b)), h('small', `harvest ${day(c.first)}${eng.pinned(p) ? ' · own days' : ''}`)))), mine.length > 40 ? h('p.dlg-hint', `and ${mine.length - 40} more`) : null);
+  }
+
+  function download(m) {
     const cell = x => { const s = x == null ? '' : String(x); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const lines = [['Crop', 'Variety', 'Supplier', 'Product code', 'To sow', 'Unit', 'By weight', 'Packets', 'First sowing', 'Plantings to sow', 'Plantings']];
-    for (const r of need.rows) {
+    const lines = [['Crop', 'Variety', 'Supplier', 'Product code', 'To sow', 'Unit', 'On hand', 'Ordered', 'Short', 'By weight', 'Packets', 'First sowing', 'Plantings to sow', 'Plantings']];
+    for (const r of m.need.rows) {
       if (!(r.toSow > 0)) continue;
-      const v = r.variety, m = r.unit === 'seeds' ? SL.measures(r.toSow, v) : { weight: '', packets: '' };
-      lines.push([cropName(r.crop), v ? v.name : '', v ? v.supplier || v.source || '' : '', v ? v.sku || '' : '', Math.round(r.toSow * 10) / 10, r.unit, m.weight, m.packets, r.first ? E.d2s(r.first) : '', r.waiting, r.plantings]);
+      const v = r.variety, ms = r.unit === 'seeds' ? SL.measures(r.toSow, v) : { weight: '', packets: '' };
+      lines.push([cropName(r.crop), v ? v.name : '', v ? v.supplier || v.source || '' : '', v ? v.sku || '' : '', Math.round(r.toSow * 10) / 10, r.unit, m.hasStock ? r.onHand : '', m.hasStock ? r.onOrder : '', m.hasStock ? r.short : '', ms.weight, ms.packets, r.first ? E.d2s(r.first) : '', r.waiting, r.plantings]);
     }
     const blob = new Blob(['﻿' + lines.map(l => l.map(cell).join(',')).join('\r\n')], { type: 'text/csv' }), filename = `seeds-required-${App.planYear()}-${E.d2s(new Date())}.csv`;
     const fallback = () => { const url = URL.createObjectURL(blob), a = h('a', { href: url, download: filename }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); };
@@ -464,13 +607,14 @@
   }
 
   function init() {
-    for (const b of document.querySelectorAll('[data-sd-tab]')) b.addEventListener('click', () => { ui.tab = b.dataset.sdTab; schedule(); });
+    for (const b of document.querySelectorAll('[data-sd-tab]')) b.addEventListener('click', () => { ui.tab = b.dataset.sdTab; if (ui.tab === 'crops' && ui.sel && ui.sel.type === 'variety') ui.sel = null; schedule(); });
     $('sdSearch').addEventListener('input', e => { ui.query = e.target.value; schedule(); });
     $('sdAddLink').addEventListener('click', () => openImporter());
     $('sdAddHand').addEventListener('click', () => openVariety(null));
     $('sdAddCrop').addEventListener('click', () => openCrop(null));
     $('sdSettings').addEventListener('click', openSettings);
-    App.on('plan', schedule); App.on('view', schedule);
+    App.on('plan', () => { ui.rev++; schedule(); }); App.on('view', schedule);
+    document.addEventListener('keydown', e => { if (e.key === '/' && App.state.view === 'seeds' && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') && !document.querySelector('dialog[open]')) { e.preventDefault(); $('sdSearch').focus(); } });
   }
-  root.LRFSeeds = { init, openImporter, openVariety, openCrop, openSettings, service, planningLine };
+  root.LRFSeeds = { init, openImporter, openVariety, openCrop, openSettings, service, planningLine, select };
 })(window);

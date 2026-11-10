@@ -37,7 +37,7 @@
       // One line per crop. How it is grown shows on hover and when the crop is opened.
       const row = h('div.lib-crop' + (open ? '.open' : ''),
         h('div.lib-row' + (cropArmed ? '.armed' : ''), { dataset: { crop: c.id }, role: 'button', tabindex: 0, title: `${c.name} · ${cropMeta(c)}${c.inRow && c.rowSp ? ` · ${num(c.inRow, 1)} in apart in rows ${num(c.rowSp, 1)} in apart` : ''}\nDrag onto a bed, or click and then click beds.` },
-          h('i.swatch', { style: { background: color } }),
+          root.LRFThumbs.el({ cropId: c.id, color, label: c.name, size: 24, cls: 'key' }),
           h('b.lib-name', c.name),
           n ? h('span.lib-count', { title: `${n} planting${n === 1 ? '' : 's'} in this plan` }, n) : null,
           varieties.length ? h('button.lib-more', { type: 'button', 'aria-expanded': String(!!open), title: `${varieties.length} variet${varieties.length === 1 ? 'y' : 'ies'}`, 'aria-label': `${open ? 'Hide' : 'Show'} ${varieties.length} varieties of ${c.name}`, dataset: { toggle: c.id } }, open ? '▾' : '▸') : h('span.lib-more')));
@@ -46,7 +46,7 @@
         for (const v of (nameHit ? varieties : varietyHits)) {
           const on = armed && armed.varietyId === v.id;
           box.append(h('div.lib-row.lib-var' + (on ? '.armed' : ''), { dataset: { crop: c.id, variety: v.id }, role: 'button', tabindex: 0, title: `${v.name}${v.catalogDtm ? ` · ${v.catalogDtm} days printed${v.catalogMaturityBasis && v.catalogMaturityBasis !== 'unspecified' ? ' from ' + v.catalogMaturityBasis : ''}` : ''}` },
-            h('span.lib-name', v.name), v.catalogDtm ? h('span.lib-count', `${v.catalogDtm} d`) : null));
+            root.LRFThumbs.el({ varietyId: v.id, color, label: v.name, size: 22 }), h('span.lib-name', v.name), v.catalogDtm ? h('span.lib-count', `${v.catalogDtm} d`) : null));
         }
         row.append(box);
       }
@@ -100,7 +100,7 @@
     const eng = App.state.engine, f = eng.footprint(p, r);
     const where = f && r.partial ? ` · ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} ft${f.rows && f.rows.count < f.rows.total ? `, ${f.rows.count} of ${f.rows.total} rows` : ''}` : r.partial ? ` · ${num(r.len, 1)} ${eng.capUnit(r.b)}` : '';
     return h('li.p-row', { dataset: { planting: p.id }, role: 'button', tabindex: 0, title: 'Click to edit. Drag onto another bed to move.' },
-      h('i.swatch', { style: { background: eng.cropColor(r.c) } }),
+      root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color: eng.cropColor(r.c), label: r.c.vname || r.c.name, size: 30, cls: 'key' }),
       h('span.p-text', h('b', r.c.vname ? `${r.c.vname} · ${r.c.name}` : r.c.name), h('small', `In ${day(r.field)} · harvest ${span(r.first, r.last)}${where}`)));
   }
 
@@ -241,6 +241,7 @@
 
     add(host,
       h('header.insp-head.planting', { style: { '--crop': color } },
+        root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color, label: c.vname || c.name, size: 64, cls: 'head' }),
         h('p.eyebrow', c.name), h('h2', c.vname || c.name),
         h('button.link', { type: 'button', onclick: () => App.select({ type: 'bed', id: bed.id }) }, App.bedLabel(bed)),
         h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select({ type: 'bed', id: bed.id }) }, '×')),

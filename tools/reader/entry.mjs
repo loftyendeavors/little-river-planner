@@ -184,6 +184,18 @@ const readPasted = (value, url, name, now) => refine(readPastedProduct(value, ur
 const readImage = (url, service, options = {}) => fetchPublic(url, { image: true, fetcher: viaService(service, options.fetch), resolver: noLookup });
 
 /**
+ * Fetch one product photo through the fetch service as a Blob, in whatever picture format the supplier sends.
+ * The planner only makes a small thumbnail from it, so the browser's own decoder decides what is readable.
+ */
+async function fetchImage(url, service, options = {}) {
+  const u = publicURL(url), response = await ask(service, u.href, { image: true, fetchImpl: options.fetch });
+  if (!response.ok) throw new LinkError(`The photo could not be fetched (HTTP ${response.status}).`);
+  const blob = await response.blob();
+  if (!/^image\//.test(blob.type) || blob.size > LINK_LIMITS.image) throw new LinkError('That address did not return a picture the planner can use.');
+  return blob;
+}
+
+/**
  * Find out whether the service is there, takes the key, and can reach a supplier.
  * Never throws: { ok, stage: 'address'|'reach'|'key'|'origin'|'supplier'|'done', message }.
  */
@@ -209,4 +221,4 @@ async function testService(service, options = {}) {
   }
 }
 
-export default { LinkError, LINK_LIMITS, SITES, onList, serviceBase, parseProductHTML, readPastedProduct, readProductLink, fetchPublic, canonical, publicURL, maturityStatement, refine, readLink, readPasted, readImage, testService, viaService };
+export default { LinkError, LINK_LIMITS, SITES, onList, serviceBase, parseProductHTML, readPastedProduct, readProductLink, fetchPublic, canonical, publicURL, maturityStatement, refine, readLink, readPasted, readImage, fetchImage, testService, viaService };
