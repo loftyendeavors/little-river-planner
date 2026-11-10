@@ -246,6 +246,28 @@
     try { found = inlined || (path ? await fetch(path).then(r => (r.ok ? r.json() : null)) : null); } catch (_) { found = null; }
     if (found && typeof found === 'object') { state.packsBase = found; emit('plan'); }
   }
+  // A plan first saved by an early preview holds each variety's planning figures only. Supplier, product code, page
+  // address and seed counts were added to the page's copy later; where a saved record lacks them, they are filled in
+  // from that copy. Nothing the grower has set is touched: only fields the saved record does not have at all.
+  const REFERENCE_FIELDS = ['source', 'supplier', 'sku', 'url', 'catalogDtmText', 'catalogHarvestStage', 'seedsPerPacket', 'seedsPerOz', 'seedsPerG', 'seedsPerLb'];
+  async function topUpVarieties() {
+    if (!(state.plan.lrfNext && state.plan.lrfNext.source === 'bundled') || !state.plan.varieties.some(v => v && v.source === undefined)) return false;
+    const started = state.plan.lrfNext;
+    let compact = null;
+    try { compact = (root.LRF_BUNDLED && root.LRF_BUNDLED.plan) || (state.bundled ? await fetch('data/plan.json').then(r => (r.ok ? r.json() : null)) : null); } catch (_) { compact = null; }
+    if (state.plan.lrfNext !== started) return false;   // another plan was loaded meanwhile
+    const shipped = new Map(((compact && compact.varieties) || []).map(v => [v.id, v]));
+    let filled = 0;
+    const varieties = state.plan.varieties.map(v => {
+      const from = shipped.get(v.id);
+      let next = v;
+      if (from) for (const key of REFERENCE_FIELDS) if (v[key] === undefined && from[key] !== undefined) { if (next === v) next = { ...v }; next[key] = from[key]; }
+      if (next !== v) filled++;
+      return next;
+    });
+    if (filled) adopt({ ...state.plan, varieties });
+    return filled > 0;
+  }
   /** The sizes a variety's vendor sells it in, and what covers an amount of it in those sizes. */
   const packsFor = v => SL.packs(v, v && state.packsBase[v.id]);
   const coverFor = (amount, unit, v) => SL.toCover(amount, unit, v, v && state.packsBase[v.id]);
@@ -483,7 +505,7 @@
     if (loadError) { showStatus({ backend: store.backend, state: 'error', detail: loadError.message }); toast(`The saved plan could not be opened (${loadError.message}). Showing the starting plan; nothing is overwritten.`); return; }
     if (firstRun) store.save(state.plan); else showStatus({ backend: store.backend, state: saved ? 'saved' : 'sample' });
     if (saved) restoreMapImage();
-    loadThumbs(); loadPacks();
+    loadThumbs(); loadPacks(); topUpVarieties().catch(() => {});
     // Stock is needed wherever a sowing can be recorded, not only on the Seeds view: fetch it now, not on first visit.
     loadInventory().then(found => { if (found) emit('plan'); }).catch(() => {});
     store.watch(() => toast('This plan was changed on another device.', { label: 'Reload', run: () => root.location.reload() }));
