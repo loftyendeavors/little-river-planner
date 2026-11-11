@@ -275,6 +275,17 @@
       note);
   }
 
+  /** How a transplanted planting is sown: whole rows of its tray, alone or as its share of a batch sown with others. */
+  function sowingNote(r) {
+    const w = r && r.sowing, Sow = root.LRFSowing;
+    if (!w || !Sow) return null;
+    const batch = w.batch || w, others = (w.memberIds || []).length - 1, tray = batch.tray && batch.medium !== 'pots' ? `${batch.tray.name}: ` : '';
+    return h('p.note.sow-how', w.shared
+      ? `Sown as one batch with ${num(others)} other planting${others === 1 ? '' : 's'} of this variety. ${tray}${Sow.description(batch)}. This planting’s share is ${num(w.cells)} cells and ${num(w.seeds)} seeds.`
+      : `${tray}${Sow.description(batch)}.`,
+      batch.mode === 'row' || batch.mode === 'half' || batch.mode === 'tray' ? h('small', ` ${num(batch.buffer)}% extra, ${num(batch.germination * 100)}% germination, rounded up to ${batch.mode === 'row' ? 'whole rows' : batch.mode === 'half' ? 'half trays' : 'whole trays'}.`) : null);
+  }
+
   /**
    * A batch of live trays. Its trays, days and dates belong to the weekly demand it was made from, so it is shown, not edited:
    * what can be said here is what was sown (the variety, and the day it happened).
@@ -379,7 +390,8 @@
           stat(r.tw ? 'Sites' : 'Plants', num(r.plants)),
           r.tw || r.rack || r.ct ? null : stat('Rows', num(r.rows)),
           r.tw || r.rack || r.ct ? null : stat('In-row spacing', `${num(r.inRow, 1)} in`),
-          r.cells ? stat('Plugs to raise', `${num(r.cells)} · ${num(r.trays)} tray${r.trays === 1 ? '' : 's'}`) : r.seeds ? stat('Seeds', num(r.seeds)) : null)),
+          r.cells ? stat(r.sowing && r.sowing.medium === 'pots' ? 'Pots to sow' : 'Cells to sow', num(r.cells)) : r.seeds ? stat('Seeds', num(r.seeds)) : null),
+        sowingNote(r)),
       h('section.insp-section',
         h('h3', 'Repeat as successions'),
         h('div.repeat',

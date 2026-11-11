@@ -185,6 +185,7 @@
     }
     const step = n => () => App.setDate(E.addDays(d(now), n));
     return h('section.tr-weeks', h('div.tr-weeks-head', h('h3', 'Week by week'),
+      h('button.linkish.tr-tosow', { type: 'button', onclick: () => App.setView('sow') }, 'Record what was sown on the Sowing view'), h('span.grow'),
       h('span.tr-stepper', h('button.icon-btn', { type: 'button', 'aria-label': 'Back one week', onclick: step(-7) }, '‹'), h('b', `Week of ${day(d(now))}`), h('button.icon-btn', { type: 'button', 'aria-label': 'Forward one week', onclick: step(7) }, '›'))),
       body.children.length ? h('div.tr-scroll', h('table.as.tr-week', h('thead', h('tr', h('th', 'Week of'), h('th', 'Sow'), h('th', { title: 'Sown on the Monday unless a day is shown' }, 'What to sow'), h('th', 'Ready'), h('th', 'Expected'), h('th', { title: 'Most live trays standing on the benches on any day of the week' }, 'On the benches'))), body)) : h('p.tr-note', 'No trays are planned this season.'));
   }
