@@ -1123,6 +1123,7 @@ table.ah-waves { margin-top: 16px; }
 
 /* a space's measurements, to read at a glance */
 .stats.dims { grid-template-columns: repeat(3, 1fr); }
-.stats.dims .stat b { font: 600 17px var(--mono); letter-spacing: -0.01em; }
+.stats.dims .stat b { font: 600 17px var(--mono); letter-spacing: -0.01em; white-space: nowrap; }
+.stats.dims .stat span { white-space: nowrap; }
 .stats.dims .stat:only-child { grid-column: 1 / -1; }
 .insp-aside { padding: 8px 12px 0; }

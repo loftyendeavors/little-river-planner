@@ -224,7 +224,8 @@
     // What the space measures is there to be read at a glance. It is a fact about the farm, so it is changed only on purpose:
     // the fields appear when asked for, and go again when the bed is left.
     const editing = soil && sizing === bed.id, fig = (label, value, id) => { const el = stat(label, value); if (id) el.id = id; return el; };
-    const dims = soil ? [fig('Width', `${num(bed.w, 2)} ft`, 'bedWidth'), fig('Length', `${num(bed.l, 2)} ft`, 'bedLength'), fig('Area', `${num(bed.w * bed.l)} sq ft`, 'bedArea')]
+    // the unit rides in the label, so a figure never wraps in a narrow panel
+    const dims = soil ? [fig('Width (ft)', num(bed.w, 2), 'bedWidth'), fig('Length (ft)', num(bed.l, 2), 'bedLength'), fig('Area (sq ft)', num(bed.w * bed.l), 'bedArea')]
       : [fig({ tower: 'Sites', bench: 'Tray spaces', containers: 'Containers' }[eng.spaceKind(bed)] || 'Holds', num(status.cap), 'bedHolds')];
     host.append(h('header.insp-head',
       h('p.eyebrow', `${g.name || 'Garden'} · ${eng.lib.gardenTypeLabels[g.type] || g.type || ''}`),
