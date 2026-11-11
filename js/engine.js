@@ -585,6 +585,10 @@
      * Varieties of one crop sown the same day into the same kind of tray stand in the same trays. (v7 gives every variety
      * whole trays of its own.) Each variety still fills whole rows; the trays are counted once for the lot and shared out
      * by cells, so four varieties taking 24 rows of a 16-row tray hold two trays, not four. Seeds and cells do not change.
+     *
+     * Rockwool for the towers is freer still. A sheet is perforated, so any crops sown the same day share it (basil beside
+     * lettuce), and they need not leave for the towers on the same day. Every sheet, whole or part, rides in one open
+     * 10 × 20 tray, which is the room it takes on the bench.
      */
     const shareTrays = sowingOn && !legacy && !(S.lrfNext && S.lrfNext.trays === 'variety');
     function shareOut(batches, plans) {
@@ -595,16 +599,18 @@
         let outer;
         try { outer = JSON.parse(b.id); } catch (_) { continue; }
         if (!Array.isArray(outer) || typeof outer[0] !== 'string' || outer[0][0] !== '[') continue;   // a planting that stands alone has no dates to match on
-        const inner = JSON.parse(outer[0]);
-        inner.splice(1, 1);                                                                           // everything that makes a batch, except the variety
-        const key = JSON.stringify([inner, outer[1]]);
+        const inner = JSON.parse(outer[0]), wool = plan.medium === 'rockwool';
+        // rockwool: the sowing day and the sheet, nothing else has to match. Plug trays: everything that makes a batch, except the variety.
+        const key = JSON.stringify([wool ? ['rockwool', inner[2], ...inner.slice(8, 14)] : inner.filter((_, i) => i !== 1), outer[1]]);
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(b);
       }
       for (const [id, list] of groups) {
         if (list.length < 2) continue;
         const tray = list[0].plan.tray, cells = list.reduce((n, b) => n + b.plan.cells, 0), trays = Math.ceil(cells / tray.cells), area = tray.widthIn * tray.lengthIn;
+        const wool = list[0].plan.medium === 'rockwool';
         const group = { id, tray, cells, trays, eq: trays * area / Sow.STANDARD_AREA_IN2, ft2: trays * area / 144, apart: list.reduce((n, b) => n + b.plan.trays, 0),
+          medium: list[0].plan.medium, crops: new Set(list.map(b => b.members[0].r.c.id)).size, carriers: wool ? trays : 0,
           parts: list.map(b => ({ batchId: b.id, first: b.memberIds[0], cells: b.plan.cells, rows: b.plan.rowsSown })) };
         for (const b of list) {
           const own = b.plan, share = own.cells / cells;
@@ -968,6 +974,54 @@
       row.over = Math.max(0, row.total - row.cap);
       return row;
     }
+    /**
+     * The trays themselves, on one day: plug trays by kind, the open 10 × 20 trays that carry rockwool sheets, and live trays.
+     * A lot counts whole trays for as long as any of it is still in the nursery; once seedlings are potted up they are in pots.
+     */
+    function traysOn(date) {
+      const plug = new Map(), lots = new Map();
+      let carriers = 0, live = 0;
+      for (const it of benchItems()) {
+        if (date < it.from || date >= it.to) continue;
+        if (it.kind === 'live') { live += it.n; continue; }
+        if (it.kind !== 'prop') continue;
+        const u = propOf(it.r, date), plan = it.r.sowing;
+        if (!u || u.kind === 'pot') continue;
+        const tray = plan && plan.tray, key = plan && plan.trayGroup ? plan.trayGroup : plan && plan.batchId ? plan.batchId : it.p.id;
+        const lot = lots.get(key) || { n: 0, wool: u.kind === 'rockwool', name: tray ? tray.name : `${positive(it.r.c.tray, 72)}-cell plug tray`, id: tray ? tray.id : 'tray-' + positive(it.r.c.tray, 72) };
+        lot.n += u.n; lots.set(key, lot);
+      }
+      for (const lot of lots.values()) {
+        const n = Math.ceil(lot.n - 1e-9);
+        if (lot.wool) carriers += n; else { const row = plug.get(lot.id) || { id: lot.id, name: lot.name, n: 0 }; row.n += n; plug.set(lot.id, row); }
+      }
+      return { date: new Date(date), plug: [...plug.values()].sort((a, b) => b.n - a.n), carriers, live, flats: carriers + live };
+    }
+
+    // ── what a planting is expected to yield (v7's own arithmetic) ──
+    const cropUnits = () => (S.cropUnits && typeof S.cropUnits === 'object' ? S.cropUnits : {});
+    /** The unit a crop is counted and sold in: trays for microgreens, else the farm's own unit for it, else the crop's. */
+    const unitOf = c => !c ? 'each' : c.micro ? 'tray' : String((cropUnits()[c.id] && cropUnits()[c.id].base) || c.baseUnit || 'each');
+    /**
+     * Marketable yield of one planting over its whole harvest: how many of what it is counted by (plants, bed-feet, trays,
+     * containers) × yield each × the marketable share × the part of the expected harvest period that is really there.
+     * Live trays are sown to order, so a tray sown is a tray to sell: no share is taken off.
+     */
+    function yieldOf(p, r) {
+      r = r || calc(p);
+      if (!r || isCoverCrop(r.c)) return null;
+      const c = r.c, own = p.yield != null && p.yield !== '', per = nonNegative(own ? p.yield : c.yield), liveTray = r.rack && !!c.micro;
+      const basis = r.rack ? 'tray' : r.ct ? (p.yieldBasis === 'container' ? 'container' : 'plant') : c.yBasis === 'ft' && !r.tw ? 'ft' : 'plant';
+      const count = basis === 'tray' || basis === 'container' || basis === 'ft' ? r.len : r.plants;
+      // v7 took nothing from a harvest day inside a crop's "summer gap". The planner no longer second-guesses the plan that way:
+      // what is planted to be picked in July counts in July. The v7 parity mode keeps the gap.
+      const mk = liveTray ? 1 : clamp(finite(c.mk, 0.9), 0, 1), part = clamp((r.harvestDays - (legacy ? r.blackoutDays : 0)) / Math.max(1, r.expectedHarvestDays), 0, 1);
+      const each = liveTray ? 1 : per, set = liveTray || (c.yield != null && c.yield !== '' && Number.isFinite(+c.yield)) || own;
+      return { basis, count, per: each, mk, part, units: count * each * mk * part, unit: unitOf(c), set, own, price: p.price != null && p.price !== '' ? nonNegative(p.price) : nonNegative(c.price) };
+    }
+    /** Is this a day the crop is picked? Any day of its harvest period (in the v7 parity mode, not the days in its summer gap). */
+    const pickedOn = (r, date) => date >= r.first && date <= r.last && (!legacy || blackoutOverlapDays(r.c, date, date, { summerOK: r.c.summerOK }, r.g) === 0);
+
     const benchList = () => benches().map(sp => ({ id: sp.id, name: sp.name || 'Bench', area: (((S.nursery || {}).benchAreas || []).find(a => a.id === (sp.benchLayout || {}).areaId) || {}).name || '', w: nonNegative(sp.w), l: nonNegative(sp.l), heated: sp.kind !== 'outside', active: sp.active !== false, cap: benchCap(sp) }));
 
     function nextPlanting(bedId, date) {
@@ -979,7 +1033,8 @@
       crops: () => cropList, crop, variety, cropColor, isCoverCrop, isPerennial,
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
-      heatedTraySpaces, benchList, benchItems, benchDay, cratesOnBenches, propOf, potUpDate, hardenStart,
+      heatedTraySpaces, benchList, benchItems, benchDay, traysOn, cratesOnBenches, propOf, potUpDate, hardenStart,
+      yieldOf, unitOf, pickedOn, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,

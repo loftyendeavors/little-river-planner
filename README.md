@@ -9,6 +9,7 @@ This repository holds the app only. It contains no plan, no farm photo and no fa
 1. Open the site (the address is shown under Settings, Pages in this repository).
 2. The first time, it opens on a small sample. Choose **Backup**, then **Load a v7 backup**, and pick your backup file. Your plan and map photo are then kept in that browser on that computer.
 3. In Chrome or Edge, use the install button in the address bar to add it as an app. After the first visit it opens with no connection.
+4. When the site has been updated, the planner says so and offers **Reload**. Until it is reloaded it goes on running the version it opened with.
 
 ## Reading a variety from a supplier's page
 
@@ -28,11 +29,27 @@ In **Seeds**, choose **Add from a supplier page**. Pasting the page works anywhe
 - A day after today is a plan, not a record: choosing one moves the ticked sowings to that day. Nothing is marked sown and no seed leaves stock.
 - Tick the lines that were sown and record them in one step. Each planting is dated and its seed comes off the lots on hand, exactly as recording one planting does. One Undo takes the whole step back.
 
+## Successions and openings
+
+- **Successions**, **Openings** lists ground that stands free before, after or between the crops planned in a bed (three weeks or longer), with the crops whose whole cycle goes into it: growing, the full harvest and turnover, in season. Radishes before the eggplant; cabbage after the potatoes. Pick a crop to check its dates, change the day, the variety or the length, and add it. The same openings are drawn on the Timeline as dashed boxes, and listed in a bed's panel.
+- Field and tunnel ground is not offered before the first day the plan itself puts anything into unheated ground; that day can be changed. Heated houses are offered from January.
+- **Successions**, **Plan a series** plans a run of plantings of one crop a set number of days apart: whole beds or feet of bed each time, dated by the day they go in or the day they are first ready, in the gardens ticked. Each goes into the first ground that is free for it. The preview shows where every one lands, what could not be placed and why, and the weeks of harvest it gives beside the weeks the plan has now. Nothing is added until the button is pressed, and the whole series is one step to undo.
+- A series can copy an existing planting (from its panel: **Plan a longer series**), which is how tower cycles keep their days.
+
+## Harvest forecast
+
+- **Harvest** shows what the plan is expected to give by day, week or month: vegetables, microgreen trays and flower stems, a row to a crop, each counted in the unit it is sold in. A planting's yield is what it is counted by (plants, bed-feet, trays) × the crop's yield each × its marketable share, spread evenly over the days it is picked. A live tray is counted whole on the Monday it is due.
+- The tiles give the week at a glance: crops ready, what they are worth at each crop's own price, trays and stems.
+- Click a figure to see which plantings it comes from. A crop sorted under the wrong heading can be moved between vegetables and flowers.
+- **A list to send** makes a plain-text availability list for a week, four weeks or the season, to copy into an email, print, or download as a spreadsheet. Quantities are rounded down, never up. Prices appear only if asked for.
+- Days to harvest are the same in every month, and no "summer gap" is taken out of a crop's yield: what is planted to be picked in July counts in July.
+
 ## Live trays and heated bench room
 
 - **Trays** holds the weekly demand for whole trays sold live: trays a week for spring, summer and fall, days to grow and price for each crop. Every batch is sown that many days before the Monday it is due. The records are v7's own, so v7 reads a plan edited here.
 - A batch that has been sown stays as it was recorded. Changes to the demand reach the batches not yet sown.
 - **Heated bench room** shows, week by week, the tray spaces wanted by live trays, seedling trays, tower seedlings and potted seedlings against what the heated benches hold. It is shown, never enforced. Crates sheltered under heat are counted as standing on the floor unless you say otherwise.
+- Tower crops sown the same day share rockwool sheets, whatever the crop, and every sheet rides in one open 10 × 20 tray. Under the chart, **Trays in use** gives the most plug trays of each kind in use on one day, the open trays under rockwool, and the live trays that leave with the sale.
 
 ## Saving to a file
 
@@ -58,6 +75,8 @@ In **Seeds**, choose **Add from a supplier page**. Pasting the page works anywhe
 | `js/guide.js` | Crop defaults checked against Johnny's Selected Seeds and the New England Vegetable Management Guide. |
 | `js/seeds.js`, `js/seedlib.js` | The seed library: one list of varieties with what the plan needs of each, seed stock, vendor sizes, sowing records, a photo gallery, the crops, a detail panel, and the importer. |
 | `js/sowing.js`, `js/sowview.js` | Practical sowing (plug trays, whole rows, batches shared by plantings), carried over from v7's own model, and the weekly sowing list. |
+| `js/succession.js`, `js/aheadview.js` | Planning ahead: a series of successions, openings in the ground and the crops that fit them. Both obey the guard rails and the season. |
+| `js/forecast.js`, `js/harvestview.js` | The harvest forecast: yield by crop and day, the three kinds it is sold as, and the lists that go to a chef. |
 | `js/trays.js`, `js/traysview.js` | Weekly live-tray demand and the batches it produces, in v7's own record format. |
 | `js/bench.js` | Heated bench room week by week. |
 | `js/folder.js` | The plan kept as a file in a folder the user chose: written as it changes, daily history, and the rule that it never writes over a plan it did not put there. |

@@ -11,7 +11,7 @@
 
   const state = {
     plan: null, engine: null, attic: null, extras: null, inventoryBase: null, inventoryAsked: null, packsBase: {}, keptThumbs: {}, bundled: null, mapImageUrl: '',
-    date: new Date(), view: 'map', sel: null, armed: null,
+    date: new Date(), view: 'map', sel: null, armed: null, ahead: null,
     undo: [], redo: [], ready: false
   };
   const listeners = {};
@@ -515,6 +515,14 @@
       ops.length ? { label: 'Undo', run: undo } : null);
   }
 
+  /** Add plantings worked out elsewhere (a series of successions, a crop for an opening) as one step. The guard rails still have the last word. */
+  function addPlantings(list, label) {
+    const ops = (list || []).map(p => ({ before: null, after: p }));
+    return ops.length ? commit(label || `Add ${ops.length} planting${ops.length === 1 ? '' : 's'}`, ops) : false;
+  }
+  /** Go to the planning-ahead view with something in mind: { mode: 'openings' | 'series', bedId?, openingId?, sourceId?, cropId? }. */
+  function openAhead(focus) { state.ahead = focus || null; setView('ahead'); emit('ahead'); }
+
   // ─────────────────────────── backup in / out ───────────────────────────
   const emptyAttic = () => ({ v: 1, rest: {}, varieties: {} });
   async function loadAttic() {
@@ -579,7 +587,7 @@
     const own = parsed.plan.lrfNextKeep && typeof parsed.plan.lrfNextKeep === 'object' ? parsed.plan.lrfNextKeep : null;
     delete parsed.plan.lrfNextKeep;
     const ownKeep = {};
-    for (const key of ['crates', 'trayStart', 'trays', 'facts']) if (own && own.keep && own.keep[key] != null) ownKeep[key] = own.keep[key];
+    for (const key of ['crates', 'trayStart', 'trays', 'groups', 'facts']) if (own && own.keep && own.keep[key] != null) ownKeep[key] = own.keep[key];
     if (extra.image && !parsed.image) parsed.image = extra.image;
     const split = IO.split(parsed.plan), attic = split.attic, info = IO.summary(split.core), replacing = !isSample();
     // The plan comes from the backup. What was established here about the farm is put back on it.
@@ -637,7 +645,7 @@
   /** The app's own record, added to a plan file so that opening the file here again loses nothing v7 does not know. */
   function withOwn(plan, savedAt) {
     const mine = state.plan.lrfNext || {}, keep = {};
-    for (const key of ['crates', 'trayStart', 'trays', 'facts']) if (mine[key] != null) keep[key] = mine[key];
+    for (const key of ['crates', 'trayStart', 'trays', 'groups', 'facts']) if (mine[key] != null) keep[key] = mine[key];
     plan.lrfNextKeep = { v: 1, savedAt, device: Folder ? Folder.device() : null, keep };
     return plan;
   }
@@ -794,7 +802,7 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, setAssumption, setGardenType,
+    commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
     saveNow, chooseFolder, reconnectFolder, openFolderPlan, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, traysToMonday: () => applyTrayStart()

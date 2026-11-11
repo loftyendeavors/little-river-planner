@@ -20,11 +20,17 @@
     if (cache.has(eng)) return cache.get(eng);
     const year = App.planYear(), weeks = new Map();
     let floorMost = 0, floorUntil = null;
+    // the trays themselves: the most of each kind in use on one day
+    const plugMost = new Map(), flats = { carriers: 0, carriersOn: null, live: 0, liveOn: null };
     for (let date = new Date(year, 0, 1), i = 0; i < 366 && date.getFullYear() === year; i++, date = E.addDays(date, 1)) {
       const row = eng.benchDay(date);
       if (row.floorCrates > floorMost) floorMost = row.floorCrates;
       if (row.floorCrates) floorUntil = E.addDays(date, 1);
       if (!row.total) continue;
+      const use = eng.traysOn(date);
+      for (const t of use.plug) { const was = plugMost.get(t.id); if (!was || t.n > was.n) plugMost.set(t.id, { ...t, on: new Date(date) }); }
+      if (use.carriers > flats.carriers) { flats.carriers = use.carriers; flats.carriersOn = new Date(date); }
+      if (use.live > flats.live) { flats.live = use.live; flats.liveOn = new Date(date); }
       const key = T.monday(E.d2s(date)), week = weeks.get(key) || { row: null, livePeak: 0 };
       if (!week.row || row.total > week.row.total) week.row = row;
       week.livePeak = Math.max(week.livePeak, row.live);
@@ -36,7 +42,10 @@
     const tightest = list.reduce((a, b) => b.row && (!a || b.row.total - b.row.cap > a.row.total - a.row.cap) ? b : a, null);
     // a plan that lists no heated benches has no room to be over: the load is shown on its own
     const cap = eng.heatedTraySpaces();
+    // live trays leave with the sale, so each one is an open tray that does not come back
+    flats.sold = eng.benchItems().filter(it => it.kind === 'live' && it.r.first.getFullYear() === year).reduce((n, it) => n + it.n, 0);
     const out = { year, weeks: list, tightest: tightest && tightest.row, over: cap ? list.filter(w => w.row && w.row.over > 0.05) : [], cap, benches: eng.benchList(),
+      plugMost: [...plugMost.values()].sort((a, b) => b.n - a.n), flats,
       onBenches: eng.cratesOnBenches, floorMost, floorUntil, kinds: KINDS.filter(([k]) => list.some(w => w.row && w.row[k] > 0)) };
     cache.set(eng, out);
     return out;
@@ -109,12 +118,16 @@
       ? h('p.bn-crates', 'Sheltered crates are counted as standing on the benches, the way v7 counts them. ', h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', null, 'Sheltered crates stand on the floor') }, 'They stand on the floor'))
       : fig.floorMost ? h('p.bn-crates', `Up to ${num(fig.floorMost)} crates are sheltered under heat${fig.floorUntil ? ` until ${day(fig.floorUntil)}` : ''}. They stand on the floor and take no bench room. `, h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', 'bench', 'Count sheltered crates on the benches') }, 'Count them on the benches instead')) : null;
     const eng = App.state.engine, apart = eng.shareTrays === false;
-    const sharing = eng.sowingBatches().length ? h('p.bn-share', apart ? 'Every variety is counted in trays of its own, the way v7 counts them. ' : 'Varieties of one crop sown the same day share trays, each in whole rows. ',
+    const sharing = eng.sowingBatches().length ? h('p.bn-share', apart ? 'Every variety is counted in trays of its own, the way v7 counts them. ' : 'Varieties of one crop sown the same day share trays, each in whole rows. Tower crops sown the same day share rockwool sheets, whatever the crop. ',
       h('button.linkish', { type: 'button', onclick: () => App.setOwn('trays', apart ? null : 'variety', apart ? 'Varieties of one crop share trays' : 'Every variety in trays of its own') }, apart ? 'Let varieties of one crop share trays' : 'Count every variety in trays of its own')) : null;
+    // The trays themselves. A rockwool sheet rides in an open 10 × 20 tray; a live tray is one, and leaves with the sale.
+    const plugText = fig.plugMost.map(t => `${num(t.n)} × ${t.name.replace(/ plug tray$/, '')}`).join(', '), fl = fig.flats;
+    const openText = [fl.carriers ? `up to ${num(fl.carriers)} at once under rockwool sheets` : '', fl.sold ? `${num(fl.sold)} go out with live trays over the season (${num(fl.live)} on the benches at the most)` : ''].filter(Boolean).join('; ');
+    const traysLine = plugText || openText ? h('p.bn-trays', { id: 'bnTrays' }, h('b', 'Trays in use. '), plugText ? `Plug trays at the most on one day: ${plugText}. ` : '', openText ? `Open 10 × 20 trays: ${openText}.` : '') : null;
     return h('section.bn', h('h3', title), h('p.bn-note', reading),
       fig.weeks.length ? h('div.bn-legend', { 'aria-label': 'What the colours stand for' }, fig.kinds.map(([k, label]) => h('span', h('i', { 'data-kind': k }), label))) : null,
       fig.weeks.length ? h('div.bn-chart-wrap', chart(fig, tip), tip) : null,
-      crates, sharing,
+      traysLine, crates, sharing,
       h('p.bn-note.small', `${areas.size ? [...areas].map(([name, a]) => `${name}: ${num(a.benches)} benches, ${num(a.cap)} tray spaces`).join(' · ') + '. Room' : 'Benches come in with a v7 backup. Their room'} is bench area × ${num((App.state.plan.nursery || {}).packing || 85)}% packing ÷ one 10 × 20 tray, as v7 counts it.`));
   }
 
