@@ -15,6 +15,10 @@ This repository holds the app only. It contains no plan, no farm photo and no fa
 
 In **Seeds**, choose **Add from a supplier page**. Pasting the page works anywhere, with no connection. Reading from a link needs the fetch service in `worker/`: put its address and key under **Link reader…** and use **Test connection**. Both are kept in that browser only, never in the plan or a backup.
 
+## A bed's size
+
+Click a bed on the map and its panel shows width, length and area (a tower its sites, a bench its tray spaces). They are for reading: to change them, choose **Change this bed's size…** in that panel. Hovering a bed shows the same figures.
+
 ## Photos
 
 - A plan file (`.json`) holds the plan only. A complete backup (`.zip`) also brings the farm photo and the variety photos.

@@ -214,21 +214,29 @@
         h('li', h('b', 'Colours'), 'Pale while a crop is growing, full colour while it is being picked, hatched while the bed turns over. Click a crop in the bar under the map to show only that crop.'))));
   }
 
+  let sizing = null;   // the bed whose size is being changed, if any
   function renderBed(host, bed) {
     const eng = App.state.engine, date = App.state.date, status = eng.bedStatus(bed, date), g = eng.gardenOf(bed) || {}, unit = eng.capUnit(bed), soil = eng.isSoilBed(bed);
     const all = eng.plantingsIn(bed.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).sort((a, b) => a.r.field - b.r.field);
     const kind = { bed: 'Bed', tower: 'Tower', bench: 'Bench', containers: 'Containers' }[eng.spaceKind(bed)];
     const size = key => h('input', { type: 'number', min: key === 'w' ? 0.5 : 1, max: key === 'w' ? 30 : 2000, step: 0.5, value: bed[key], id: key === 'w' ? 'fBedW' : 'fBedL',
       onchange: e => { const n = +e.target.value; if (!(n > 0) || !App.updateBeds([bed.id], { [key]: n }, `Change ${App.bedLabel(bed)} ${key === 'w' ? 'width' : 'length'}`)) render(); } });
+    // What the space measures is there to be read at a glance. It is a fact about the farm, so it is changed only on purpose:
+    // the fields appear when asked for, and go again when the bed is left.
+    const editing = soil && sizing === bed.id, fig = (label, value, id) => { const el = stat(label, value); if (id) el.id = id; return el; };
+    const dims = soil ? [fig('Width', `${num(bed.w, 2)} ft`, 'bedWidth'), fig('Length', `${num(bed.l, 2)} ft`, 'bedLength'), fig('Area', `${num(bed.w * bed.l)} sq ft`, 'bedArea')]
+      : [fig({ tower: 'Sites', bench: 'Tray spaces', containers: 'Containers' }[eng.spaceKind(bed)] || 'Holds', num(status.cap), 'bedHolds')];
     host.append(h('header.insp-head',
       h('p.eyebrow', `${g.name || 'Garden'} · ${eng.lib.gardenTypeLabels[g.type] || g.type || ''}`),
       h('h2', `${kind} ${bed.bed}`),
-      h('p.spec', soil ? `${num(bed.w * bed.l)} sq ft` : `${num(status.cap)} ${unit}`),
       h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select(null) }, '×')),
+      h('div.stats.dims', { id: 'bedDims', 'aria-label': 'Size of this space' }, dims),
       h('div.stats', stat(`On ${day(date)}`, status.crops.length ? `${num(status.used, 1)} of ${num(status.cap, 1)} ${unit} planted` : status.resting ? 'Turning over' : 'Free'),
         stat('This season', `${all.length} planting${all.length === 1 ? '' : 's'}`)));
-    if (soil) host.append(h('section.insp-section.form', h('div.field-pair', field('Width (ft)', size('w')), field('Length (ft)', size('l'))),
-      h('p.help', 'Whole-bed plantings follow the bed. Rows and plant counts are worked out from these.')));
+    if (editing) host.append(h('section.insp-section.form', { id: 'bedSizeForm' }, h('div.field-pair', field('Width (ft)', size('w')), field('Length (ft)', size('l'))),
+      h('p.help', `${all.length ? `${num(all.length)} planting${all.length === 1 ? '' : 's'} here follow${all.length === 1 ? 's' : ''} the bed: ` : ''}rows and plant counts are worked out again from the new size. One Undo puts it back.`),
+      h('button.btn', { type: 'button', id: 'bedSizeDone', onclick: () => { sizing = null; render(); } }, 'Done')));
+    else if (soil) host.append(h('p.insp-aside', h('button.link', { type: 'button', id: 'bedSizeEdit', onclick: () => { sizing = bed.id; render(); const el = $('fBedL'); if (el) { el.focus(); el.select(); } } }, 'Change this bed’s size…')));
     const list = h('ul.p-list');
     for (const { p, r } of all) list.append(plantingRow(p, r));
     host.append(h('section.insp-section', h('h3', 'Plantings'), all.length ? list : h('p.note', 'Nothing planned here yet. Drag a crop onto this bed.')));
@@ -453,6 +461,7 @@
       const host = $('inspectorBody'), keep = host.scrollTop, sel = App.state.sel, eng = App.state.engine;
       clear(host);
       const p = sel && sel.type === 'planting' ? eng.planting(sel.id) : null, bed = sel && sel.type === 'bed' ? eng.bedOf(sel.id) : null;
+      if (!bed || bed.id !== sizing) sizing = null;   // leaving a bed ends any change to its size
       if (p) renderPlanting(host, p); else if (bed) renderBed(host, bed); else renderOverview(host);
       host.scrollTop = keep;
     } finally {
