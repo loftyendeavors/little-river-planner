@@ -11,6 +11,11 @@
  * crate space is one row per crop until a crop is opened to its plantings, and
  * live trays are one strip of trays standing each week.
  *
+ * Two kinds of bar are not plantings in a bed. While the series tool is open, what it would add is drawn
+ * as ghost bars in the rows it would go to: nothing is in the plan until its button is pressed. And
+ * plantings that have no bed yet wait on a row of their own at the top, each on its own date, to be
+ * dragged down onto a row.
+ *
  * The scale is continuous, set by the buttons above the chart (or Ctrl and the
  * wheel); the plain wheel scrolls the rows. Every position is a day count multiplied by one
  * number (--ppd, pixels per day) in the style sheet, so zooming changes that
@@ -151,6 +156,9 @@
   function plantingBar(item, lane, tray) {
     const { p, r } = item, eng = App.state.engine, through = eng.occupancyThrough(p, r);
     const sel = App.state.sel && App.state.sel.type === 'planting' && App.state.sel.id === p.id;
+    // what a series would add: drawn where it would go, and not yet a planting (it cannot be picked up or selected)
+    if (item.ghost) return barEl({ from: eng.occupancyFrom(p, r), to: through === Infinity ? yearEnd() : through, through, field: r.field, first: r.first, last: r.last, sow: r.sow, lane, color: eng.cropColor(r.c),
+      cls: '.tl-ghost-bar', dataset: { ghost: p.id }, tries: namesOf(r.c), pictured: pictureOf(p), alt: r.c.name, title: `Not added yet: ${App.cropLabel(p)} would go in ${day(r.field)} · harvest ${span(r.first, r.last)}` });
     // a tray batch is named by its row and shows its trays; every other bar names its crop, then its variety
     return barEl({ from: eng.occupancyFrom(p, r), to: through === Infinity ? yearEnd() : through, through, field: r.field, first: r.first, last: r.last, sow: r.sow, lane, color: eng.cropColor(r.c),
       cls: sel ? '.sel' : '', dataset: { planting: p.id }, kind: tray ? 'tray' : 'bar', fixed: tray ? num(r.len) : null, tries: tray ? null : namesOf(r.c), pictured: tray ? null : pictureOf(p), alt: r.c.name,
@@ -160,10 +168,10 @@
   function summaryBar(g, lane, words) {
     const eng = App.state.engine, items = g.list, first = items[0], min = f => new Date(Math.min(...items.map(f))), max = f => new Date(Math.max(...items.map(f)));
     const endless = items.some(x => x.to === Infinity), through = endless ? Infinity : max(x => x.to), sows = items.filter(x => x.r.sow).map(x => +x.r.sow);
-    const holdsSel = App.state.sel && App.state.sel.type === 'planting' && items.some(x => x.p.id === App.state.sel.id);
+    const holdsSel = App.state.sel && App.state.sel.type === 'planting' && items.some(x => x.p.id === App.state.sel.id), ghost = !!first.ghost;
     const el = barEl({ from: new Date(g.from), to: endless ? yearEnd() : through, through, field: min(x => +x.r.field), first: min(x => +x.r.first), last: max(x => +x.r.last), sow: sows.length ? new Date(Math.min(...sows)) : null,
-      lane, color: eng.cropColor(first.r.c), cls: '.tl-sum' + (holdsSel ? '.sel' : ''), dataset: { sum: g.key, first: first.p.id }, tries: words.tries, pictured: words.pictured, alt: first.r.c.name, title: words.title });
-    if (el) for (const x of items) sums.set(x.p.id, el);
+      lane, color: eng.cropColor(first.r.c), cls: ghost ? '.tl-ghost-bar' : '.tl-sum' + (holdsSel ? '.sel' : ''), dataset: ghost ? { ghost: first.p.id } : { sum: g.key, first: first.p.id }, tries: words.tries, pictured: words.pictured, alt: first.r.c.name, title: ghost ? 'Not added yet. ' + words.title.replace(/\. Click to open[^.]*\.$/, '.') : words.title });
+    if (el && !ghost) for (const x of items) sums.set(x.p.id, el);
     return el;
   }
 
@@ -177,7 +185,9 @@
     }
     return Math.max(1, ends.length);
   }
-  const itemsOf = (eng, bed) => eng.plantingsIn(bed.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).map(x => {
+  // what the series tool would add, by the space it would go to; filled at the start of each drawing
+  let ghostBy = new Map();
+  const itemsOf = (eng, bed) => eng.plantingsIn(bed.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).concat(ghostBy.get(bed.id) || []).map(x => {
     const through = eng.occupancyThrough(x.p, x.r);
     return { ...x, bed, from: +eng.occupancyFrom(x.p, x.r), to: through === Infinity ? Infinity : +through };
   });
@@ -266,7 +276,7 @@
     if (opened) { for (const bed of spaces) bedRow(body, eng, bed, itemsOf(eng, bed), null, h('b', 'Tower ' + bed.bed), `${num(eng.capOf(bed))} ${eng.capUnit(bed)}`); return; }
     const merged = new Map();
     for (const bed of spaces) for (const item of itemsOf(eng, bed)) {
-      const k = [item.p.cropId, item.p.varietyId || '', item.from, item.to].join('|');
+      const k = [item.p.cropId, item.p.varietyId || '', item.from, item.to, item.ghost ? 'ghost' : ''].join('|');
       if (!merged.has(k)) merged.set(k, { key: key + '|' + k, from: item.from, to: item.to, list: [] });
       merged.get(k).list.push(item);
     }
@@ -291,7 +301,7 @@
       const label = h('button.tl-fold', { type: 'button', 'aria-expanded': String(opened), title: opened ? 'Show each month’s planting as one bar' : 'Show every planting', onclick: flip(prefs.open, key) }, h('span.caret', opened ? '▾' : '▸'), h('b', name));
       if (opened) { bedRow(body, eng, bed, list, null, label, plural(list.length, 'planting'), { cls: '.tl-crop', dataset: { crop: cropId } }); continue; }
       const merged = new Map();
-      for (const item of list) { const k = String(item.from); if (!merged.has(k)) merged.set(k, { key: key + '|' + k, from: item.from, to: 0, list: [] }); const g = merged.get(k); g.list.push(item); g.to = Math.max(g.to, item.to); }
+      for (const item of list) { const k = String(item.from) + (item.ghost ? '|ghost' : ''); if (!merged.has(k)) merged.set(k, { key: key + '|' + k, from: item.from, to: 0, list: [] }); const g = merged.get(k); g.list.push(item); g.to = Math.max(g.to, item.to); }
       const groups = [...merged.values()], lanes = lanesFor(groups), lane = laneEl(lanes);
       for (const g of groups) {
         const n = g.list.length, holds = g.list.reduce((s, x) => s + (x.r.len || 0), 0), unit = eng.capUnit(bed) === 'containers' ? 'crate' : eng.capUnit(bed), varieties = new Set(g.list.map(x => x.r.c.vname).filter(Boolean));
@@ -339,11 +349,43 @@
     }
   }
 
+  /**
+   * Plantings with no bed yet, on a row of their own at the top: each on its own date, to be dragged down onto a row. Their days are
+   * read off a space like the ones they are headed for. What the series tool would send here is drawn with them, as ghosts.
+   */
+  function waitRows(body, eng, ghosts) {
+    const Ahead = root.LRFSuccession, list = App.waiting(), soon = (ghosts && ghosts.held) || [];
+    if (!Ahead || (!list.length && !soon.length)) return;
+    const sel = App.state.sel, items = [];
+    for (const [w, ghost] of [...list.map(w => [w, false]), ...soon.map(w => [w, true])]) {
+      const a = Ahead.about(eng, w), date = E.s2d(w.date), c = eng.crop(w.cropId) || { name: 'Crop' };
+      // one that cannot be worked out anywhere still shows, as a week from its date
+      const x = a ? { r: a.r, from: +a.from, to: a.through === Infinity ? Infinity : +a.through } : { r: { c, field: date, first: E.addDays(date, 7), last: E.addDays(date, 6), sow: null }, from: +date, to: +E.addDays(date, 6) };
+      items.push({ w, ghost, ...x });
+    }
+    const lanes = lanesFor(items), lane = laneEl(lanes);
+    for (const x of items) {
+      const { w, r } = x, color = eng.cropColor(r.c), through = x.to === Infinity ? Infinity : new Date(x.to), label = App.cropLabel(w), nth = w.wait && w.wait.of > 1 ? ` · ${num(w.wait.k)} of ${num(w.wait.of)}` : '';
+      const el = barEl({ from: new Date(x.from), to: through === Infinity ? yearEnd() : through, through, field: r.field, first: r.first, last: r.last, sow: r.sow, lane: x.lane, color,
+        cls: x.ghost ? '.tl-ghost-bar' : sel && sel.type === 'waiting' && sel.id === w.id ? '.sel' : '', dataset: x.ghost ? { ghost: w.id } : { waiting: w.id }, tries: namesOf(r.c), pictured: pictureOf(w), alt: r.c.name,
+        title: x.ghost ? `Not added yet: ${label} would wait to be placed, for ${day(r.field)}` : `${label}${nth} · goes in ${day(r.field)} · no bed yet. Drag it onto a row; it keeps its date.` });
+      if (el) lane.append(el);
+    }
+    const n = list.length;
+    body.append(h('div.tl-section.tl-waithead', { dataset: { section: 'waiting' }, title: 'Plantings a series made that have no bed yet. They are not counted in seeds required, the sowing lists, bench load or the forecast until placed.' },
+      h('span', 'To place', h('small', n ? `${plural(n, 'planting')} with no bed yet · counted nowhere until placed` : 'what the series would leave to place'))));
+    body.append(rowEl('div.tl-row.tl-wait', { dataset: { wait: '' } }, h('div.tl-label', { title: 'Plantings a series made that have no bed yet. Drag one onto a row to place it.' }, h('b', 'No bed yet'), h('small', 'drag onto a row')), lane, true));
+  }
+
   function render() {
     if (!App.state.ready || App.state.view !== 'timeline') { dirty = true; return; }
     dirty = false; fitList = []; sums.clear();
     const eng = App.state.engine, plan = App.state.plan, body = clear($('tlBody')), open = prefs.openings ? openingsBy(eng) : new Map();
+    const ghosts = root.LRFSeries ? root.LRFSeries.ghosts() : null;
+    ghostBy = new Map();
+    for (const x of (ghosts && ghosts.placed) || []) { if (!ghostBy.has(x.bed.id)) ghostBy.set(x.bed.id, []); ghostBy.get(x.bed.id).push({ p: x.p, r: x.r, ghost: true }); }
     drawHead();
+    waitRows(body, eng, ghosts);
     const gardens = [...plan.gardens].filter(g => g.active !== false).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.name).localeCompare(String(b.name)));
     const sections = new Map(SECTIONS.map(s => [s, []])), counts = { all: 0 };
     for (const garden of gardens) {
@@ -375,7 +417,7 @@
         }
       }
     }
-    if (!body.firstChild) body.append(h('p.tl-none', all ? 'No growing space is set up yet.' : `This plan has no ${SECTION_NAME[prefs.filter].toLowerCase()}.`));
+    if (!body.querySelector('.tl-group, .tl-row[data-bed]')) body.append(h('p.tl-none', all ? 'No growing space is set up yet.' : `This plan has no ${SECTION_NAME[prefs.filter].toLowerCase()}.`));
     refit(); cursor();
   }
   /** Show what is selected without drawing the chart again: the bar (or the summary that holds it), the bed's rows, the opening. */
@@ -385,6 +427,8 @@
     if (!sel) return;
     const each = (query, fn) => { for (const el of document.querySelectorAll(query)) fn(el); }, on = el => el.classList.add('sel');
     if (sel.type === 'planting') { const bar = document.querySelector(`.tl-bar[data-planting="${CSS.escape(sel.id)}"]`) || sums.get(sel.id); if (bar && bar.isConnected) on(bar); return; }
+    if (sel.type === 'waiting') { each(`.tl-bar[data-waiting="${CSS.escape(sel.id)}"]`, on); return; }
+    if (sel.type !== 'bed' && sel.type !== 'opening') return;
     const bedId = sel.type === 'opening' ? sel.bedId : sel.id;
     if (sel.type === 'opening') each(`.tl-open[data-opening="${CSS.escape(sel.id)}"]`, on);
     each(`.tl-row[data-bed="${CSS.escape(bedId)}"]:not(.tl-pool)`, on);
@@ -441,8 +485,15 @@
     if (changed) { savePrefs(); render(); }
     return changed;
   }
-  function bringIntoView(plantingId) {
-    const el = document.querySelector(`.tl-bar[data-planting="${CSS.escape(plantingId)}"]`), scroll = $('tlScroll');
+  /** Bring what the series tool would add into sight: the first of its ghost bars. False when none is on the page. */
+  function showGhosts() {
+    const el = document.querySelector('#tlBody .tl-row[data-bed] .tl-ghost-bar') || document.querySelector('#tlBody .tl-ghost-bar');
+    if (!el) return false;
+    bringIntoView(null, el);
+    return true;
+  }
+  function bringIntoView(plantingId, bar) {
+    const el = bar || document.querySelector(`.tl-bar[data-planting="${CSS.escape(plantingId)}"]`), scroll = $('tlScroll');
     if (!el) return;
     const box = el.getBoundingClientRect(), view = scroll.getBoundingClientRect();
     if (box.top < view.top + 44 || box.bottom > view.bottom - 4) scroll.scrollTop += box.top - view.top - view.height / 2;
@@ -498,6 +549,9 @@
         if (!r) return;
         const lane = barEl.parentElement.getBoundingClientRect(), grabDays = Math.floor((e.clientX - lane.left) / ppd) - idx(r.field);
         root.LRFDrag.watch(e, { payload: { plantingId: p.id }, label: App.cropLabel(p), color: App.state.engine.cropColor(r.c), grabDays });
+      } else if (barEl && barEl.dataset.waiting) {
+        const w = App.waitingOne(barEl.dataset.waiting), c = w && App.state.engine.crop(w.cropId);
+        if (c) root.LRFDrag.watch(e, { payload: { waitingId: w.id }, label: App.cropLabel(w), color: App.state.engine.cropColor(c) });
       } else if (!barEl && inLanes(e) && !App.state.armed) {
         // empty chart under the pointer: holding and moving slides the whole chart, both ways
         pan = { x: e.clientX, y: e.clientY, left: scroll.scrollLeft, top: scroll.scrollTop, moved: false, id: e.pointerId };
@@ -528,12 +582,17 @@
       if (e.target.closest('button')) return;
       const barEl = e.target.closest('.tl-bar'), row = e.target.closest('.tl-row');
       if (barEl && barEl.dataset.planting) { App.select({ type: 'planting', id: barEl.dataset.planting }); return; }
+      if (barEl && barEl.dataset.waiting) { App.select({ type: 'waiting', id: barEl.dataset.waiting }); return; }
+      if (barEl && barEl.dataset.ghost !== undefined) return;
+      if (row && row.dataset.wait !== undefined) return;
       if (barEl && barEl.dataset.first) { const id = barEl.dataset.first; reveal(id); App.select({ type: 'planting', id }); requestAnimationFrame(() => bringIntoView(id)); return; }
       if (!row) return;
       if (row.dataset.pool !== undefined) { App.setView('trays'); return; }
       if (!row.dataset.bed) { const fold = row.dataset.fold; if (fold && e.target.closest('.tl-label')) flip(prefs.open, fold)(); return; }
       const spot = targetAt(e.clientX, e.clientY);
       if (App.state.armed && spot) { App.place(App.state.armed, spot.bedId, spot.date); return; }
+      // while the series tool is asking for beds, a click on a row names that bed
+      if (root.LRFSeries && root.LRFSeries.picking() && root.LRFSeries.toggleBed(row.dataset.bed)) return;
       const openEl = e.target.closest('.tl-open');
       if (openEl) { App.select({ type: 'opening', id: openEl.dataset.opening, bedId: row.dataset.bed }); return; }
       App.select({ type: 'bed', id: row.dataset.bed });
@@ -550,6 +609,7 @@
     toggle.setAttribute('aria-pressed', String(prefs.openings));
     toggle.addEventListener('click', () => { prefs.openings = !prefs.openings; savePrefs(); toggle.setAttribute('aria-pressed', String(prefs.openings)); render(); });
     App.on('plan', render);
+    App.on('ghost', render);
     App.on('sel', () => {
       if (App.state.view !== 'timeline') { dirty = true; return; }
       // a planting chosen somewhere else (the panel, a list) is brought out of whatever summary holds it
@@ -572,5 +632,5 @@
     });
   }
 
-  root.LRFTimeline = { init, targetAt, showDrop, setScale, setFilter, reveal, scale: () => ppd, fit: fitPpd, prefs: () => prefs, levels: { weeks: WEEKS_AT, days: DAYS_AT, max: MAX_PPD } };
+  root.LRFTimeline = { init, targetAt, showDrop, setScale, setFilter, reveal, showGhosts, scale: () => ppd, fit: fitPpd, prefs: () => prefs, levels: { weeks: WEEKS_AT, days: DAYS_AT, max: MAX_PPD } };
 })(window);

@@ -104,12 +104,14 @@
     if (!step) return;
     state.redo.push(step); adopt(withOps(state.plan, step.ops, 'undo'));
     if (state.sel && state.sel.type === 'planting' && !state.engine.planting(state.sel.id)) select(null);
+    if (state.sel && state.sel.type === 'waiting' && !waitingOne(state.sel.id)) select(null);
     toast(`Undid: ${step.label}`);
   }
   function redo() {
     const step = state.redo.pop();
     if (!step) return;
     state.undo.push(step); adopt(withOps(state.plan, step.ops, 'do'));
+    if (state.sel && state.sel.type === 'waiting' && !waitingOne(state.sel.id)) select(null);
     toast(`Redid: ${step.label}`);
   }
   const changed = (record, change) => { const after = { ...record }; for (const [key, value] of Object.entries(change)) { if (value === undefined || value === null || value === '') delete after[key]; else after[key] = value; } return after; };
@@ -618,6 +620,7 @@
    */
   function preview(payload, target) {
     const eng = state.engine, bed = eng.bedOf(target.bedId);
+    if (payload.waitingId) return previewWaiting(payload.waitingId, target);
     let res = Rails.propose(eng, payload, target);
     // A trade is only offered where the grower can see it coming: while dragging.
     if (res.state === 'blocked' && res.why === 'held' && payload.plantingId && !target.noSwap) res = Rails.swap(eng, payload, target) || res;
@@ -630,8 +633,83 @@
     } else res.text = { space: 'Not a growing space', crop: 'This crop cannot be planned here', 'micro-needs-bench': 'Microgreens go on a living-tray bench', 'bench-needs-micro': 'This bench takes living trays only', 'no-count': 'This bench has no tray count yet', 'too-long': 'Does not fit this space', pool: 'Live trays follow weekly demand: change it on the Trays view' }[res.why] || heldText(res);
     return res;
   }
+  // ─────────────────── plantings with no bed yet ───────────────────
+  // A series can make plantings that wait to be placed. They live in a list of their own beside the plan (lrfNext.waiting), so nothing
+  // counts them: not seeds required, sowing lists, bench load nor the forecast. Putting one on a bed makes it a planting like any other,
+  // on its own date, through the same guard rails. Every change to the list is one step that can be undone.
+  const Ahead = root.LRFSuccession;
+  const waiting = () => Ahead.waiting(state.plan);
+  const waitingOne = id => waiting().find(w => w.id === id) || null;
+  const waitingOp = after => ({ kind: 'own', key: 'waiting', before: (state.plan.lrfNext || {}).waiting || null, after: after.length ? after : null });
+  /** What a drop of a waiting planting would do in a space. It keeps its own date; `target.survey` is the quick pass over every space. */
+  function previewWaiting(id, target) {
+    const eng = state.engine, w = waitingOne(id), bed = eng.bedOf(target.bedId);
+    if (!w) return { state: 'blocked', why: 'gone', text: 'That planting is no longer waiting' };
+    const res = Ahead.landing(eng, w, target, { quick: !!target.survey }), unit = bed ? eng.capUnit(bed) : 'ft', r = res.r, harvest = r ? `harvest ${span(r.first, r.last)}` : '';
+    if (res.state === 'ok') res.text = `${day(r.field)} · ${harvest}`;
+    else if (res.state === 'split') res.text = `Held by ${cropLabel(res.holder.p)} then · drop to share the bed`;
+    else if (res.state === 'partial') {
+      const rows = res.rect && res.rect.rows && res.rect.rows.count < res.rect.rows.total ? `${res.rect.rows.count} of ${res.rect.rows.total} rows · ` : '';
+      res.text = `${rows}${UI.num(r.physicalLength, 1)} ${unit} free${res.wants ? ` (it asks for ${UI.num(res.wants, 1)})` : ''} · ${eng.isSoilBed(bed) ? 'drop to choose' : harvest}`;
+    } else res.text = { space: 'Not a growing space', crop: 'This crop cannot be planned here', 'micro-needs-bench': 'Microgreens go on a living-tray bench', 'bench-needs-micro': 'This bench takes living trays only', 'no-count': 'This bench has no tray count yet', 'too-long': 'Does not fit this space', pool: 'Live trays follow weekly demand: change it on the Trays view' }[res.why] || heldText(res);
+    return res;
+  }
+  /**
+   * Put a waiting planting on a bed. A free bed takes it whole. A soil bed that is held then by one crop, or only partly free, asks how
+   * the bed is to be shared (`pick` answers without asking: 'free', or { id: 'length' | 'rows', n }). Resolves to the planting, or null.
+   */
+  async function placeWaiting(id, bedId, aim = {}, pick) {
+    const eng = state.engine, w = waitingOne(id), bed = eng.bedOf(bedId);
+    if (!w || !bed) return null;
+    const result = previewWaiting(id, { bedId, ...aim });
+    if (result.state === 'blocked') { toast(result.why === 'held' ? `${bedLabel(bed)}: ${result.text.charAt(0).toLowerCase()}${result.text.slice(1)}` : result.text); return null; }
+    let ops, p;
+    if (result.state === 'ok' || !eng.isSoilBed(bed) || pick === 'free') { if (!result.p || result.state === 'split') return null; p = result.p; ops = [{ before: null, after: p }]; }
+    else {
+      let made = null;
+      if (pick && pick.id) { const way = (result.ways || []).find(x => x.id === pick.id); made = way ? way.make(pick.n == null ? way.def : pick.n) : null; }
+      else { const answer = root.LRFSeries ? await root.LRFSeries.share(w, bed, result) : null; made = answer === 'free' ? { ops: [{ before: null, after: result.p }], p: result.p } : answer; }
+      if (!made) { if (pick) toast('That way of sharing the bed does not fit.'); return null; }
+      if (state.engine !== eng) { toast('The plan changed meanwhile. Nothing was placed.'); return null; }
+      ops = made.ops.slice(); p = made.p;
+    }
+    ops.push(waitingOp(waiting().filter(x => x.id !== id)));
+    const what = cropLabel(p), shared = ops.length > 2;
+    if (!commit(shared ? `Place ${what}, sharing ${bedLabel(bed)}` : `Place ${what}`, ops)) return null;
+    select({ type: 'planting', id: p.id });
+    const r = state.engine.calc(p), unit = state.engine.capUnit(bed), f = state.engine.footprint(p, r);
+    const size = f && f.rows && f.rows.count < f.rows.total ? ` · ${f.rows.count} of ${f.rows.total} rows` : r.partial ? ` · ${UI.num(r.physicalLength, 1)} ${unit}` : '';
+    toast(`${what} → ${bedLabel(bed)} · ${day(r.field)}${size}`, { label: 'Undo', run: undo });
+    return p;
+  }
+  /** Add a series as one step: what found ground goes onto it, what did not (or was asked to wait) joins the list to place. */
+  function addSeries(result, label) {
+    const ops = (result.plantings || []).map(p => ({ before: null, after: p })), held = result.held || [];
+    if (held.length) ops.push(waitingOp([...waiting(), ...held]));
+    return ops.length ? commit(label || 'Add a series', ops) : false;
+  }
+  function removeWaiting(ids, label) {
+    const gone = new Set(ids), list = waiting(), left = list.filter(w => !gone.has(w.id)), n = list.length - left.length;
+    if (!n) return false;
+    if (state.sel && state.sel.type === 'waiting' && gone.has(state.sel.id)) select(null);
+    const said = label || (n === 1 ? `Remove ${cropLabel(list.find(w => gone.has(w.id)))}, not yet placed` : `Remove ${n} plantings not yet placed`);
+    if (!commit(said, [waitingOp(left)])) return false;
+    toast(n === 1 ? `Removed ${cropLabel(list.find(w => gone.has(w.id)))}. It had no bed yet.` : `Removed ${n} plantings that had no bed yet`, { label: 'Undo', run: undo });
+    return true;
+  }
+  /** Change a waiting planting: its date, its variety, the feet it asks for. Still no bed, still counted nowhere. */
+  function updateWaiting(id, change, label) {
+    const list = waiting(), before = list.find(w => w.id === id);
+    if (!before) return false;
+    const after = changed(before, change);
+    delete after.bedId;
+    if (!Ahead.isWaiting(after)) { toast('Choose a real calendar date.'); return false; }
+    return commit(label || 'Change a planting not yet placed', [waitingOp(list.map(w => w.id === id ? after : w))]);
+  }
+
   const sameSpot = (a, b) => a.bedId === b.bedId && a.date === b.date && (a.ft || 0) === (b.ft || 0) && (a.trays || 0) === (b.trays || 0) && (a.startFt || 0) === (b.startFt || 0) && JSON.stringify(a.bedLayout || null) === JSON.stringify(b.bedLayout || null);
   function place(payload, bedId, date, aim = {}) {
+    if (payload.waitingId) { placeWaiting(payload.waitingId, bedId, aim); return null; }   // it may ask how to share the bed first
     const result = preview(payload, { bedId, date, ...aim }), bed = state.engine.bedOf(bedId);
     if (result.state === 'blocked') { toast(bed && result.why === 'held' ? `${bedLabel(bed)}: ${result.text.charAt(0).toLowerCase()}${result.text.slice(1)}` : result.text); return null; }
     const p = result.p, before = payload.plantingId && !payload.copy ? state.engine.planting(payload.plantingId) : null;
@@ -677,12 +755,12 @@
     return ops.length ? commit(label || `Add ${ops.length} planting${ops.length === 1 ? '' : 's'}`, ops) : false;
   }
   /**
-   * Plan ahead with something in mind, in place: { mode: 'series', sourceId?, cropId? } opens the series sheet;
-   * { bedId, openingId } shows that opening in the details panel, as a click on it does.
+   * Plan ahead with something in mind, in place: { mode: 'series', sourceId?, cropId?, varietyId?, bedId?, gardenId?, from? } opens the
+   * series tool in the details panel; { bedId, openingId } shows that opening there, as a click on it does.
    */
   function openAhead(focus) {
     focus = focus || {};
-    if (focus.mode === 'series') { if (root.LRFAhead) root.LRFAhead.series(focus); return; }
+    if (focus.mode === 'series') { if (root.LRFSeries) root.LRFSeries.open(focus); return; }
     if (focus.openingId && focus.bedId) select({ type: 'opening', id: focus.openingId, bedId: focus.bedId });
     else if (focus.bedId) select({ type: 'bed', id: focus.bedId });
   }
@@ -762,11 +840,14 @@
     const own = parsed.plan.lrfNextKeep && typeof parsed.plan.lrfNextKeep === 'object' ? parsed.plan.lrfNextKeep : null;
     delete parsed.plan.lrfNextKeep;
     const ownKeep = {};
-    for (const key of ['crates', 'trayStart', 'trays', 'groups', 'facts']) if (own && own.keep && own.keep[key] != null) ownKeep[key] = own.keep[key];
+    for (const key of ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting']) if (own && own.keep && own.keep[key] != null) ownKeep[key] = own.keep[key];
     if (extra.image && !parsed.image) parsed.image = extra.image;
     const split = IO.split(parsed.plan), attic = split.attic, info = IO.summary(split.core), replacing = !isSample();
     // The plan comes from the backup. What was established here about the farm is put back on it.
     const carried = IO.carry(state.plan, split.core);
+    // A file this app saved says for itself what was waiting to be placed, even when that is nothing: the list open here does not ride over it.
+    const leftBehind = own && carried.keep.waiting && !ownKeep.waiting ? carried.keep.waiting.length : 0;
+    if (own && carried.keep.waiting) { delete carried.keep.waiting; carried.notes = carried.notes.filter(n => !/waiting to be placed$/.test(n)); }
     let core = carried.plan;
     const records = { harvests: attic.rest.harvests, fieldRecords: attic.rest.fieldRecords };
     const monday = carried.keep.trayStart === 'monday' ? traysToMonday(core, records) : { plan: core, moved: [] };
@@ -775,7 +856,7 @@
     if (replacing) {
       const ok = await UI.confirm({
         title: 'Replace the plan in this app?',
-        body: `The backup holds ${info.plantings} plantings in ${info.beds} growing spaces across ${info.gardens} gardens for ${info.year || 'an unknown year'}. Plantings, tray demand and seed stock are replaced by the backup’s, including what was changed here. ${kept.length ? `Kept from this copy: ${kept.join('; ')}. ` : ''}${carried.gone.length ? `${carried.gone.length} variet${carried.gone.length === 1 ? 'y' : 'ies'} here ${carried.gone.length === 1 ? 'is' : 'are'} not in the backup and will be gone (${carried.gone.slice(0, 3).join(', ')}${carried.gone.length > 3 ? '…' : ''}). ` : ''}Your v7 planner and its data are not touched.`,
+        body: `The backup holds ${info.plantings} plantings in ${info.beds} growing spaces across ${info.gardens} gardens for ${info.year || 'an unknown year'}. Plantings, tray demand and seed stock are replaced by the backup’s, including what was changed here. ${kept.length ? `Kept from this copy: ${kept.join('; ')}. ` : ''}${leftBehind ? `The ${leftBehind} planting${leftBehind === 1 ? '' : 's'} still to place here ${leftBehind === 1 ? 'is' : 'are'} not in that file and will be gone. ` : ''}${carried.gone.length ? `${carried.gone.length} variet${carried.gone.length === 1 ? 'y' : 'ies'} here ${carried.gone.length === 1 ? 'is' : 'are'} not in the backup and will be gone (${carried.gone.slice(0, 3).join(', ')}${carried.gone.length > 3 ? '…' : ''}). ` : ''}Your v7 planner and its data are not touched.`,
         confirmLabel: 'Replace plan', danger: true
       });
       if (!ok) return false;
@@ -843,7 +924,7 @@
   /** The app's own record, added to a plan file so that opening the file here again loses nothing v7 does not know. */
   function withOwn(plan, savedAt) {
     const mine = state.plan.lrfNext || {}, keep = {};
-    for (const key of ['crates', 'trayStart', 'trays', 'groups', 'facts']) if (mine[key] != null) keep[key] = mine[key];
+    for (const key of ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting']) if (mine[key] != null) keep[key] = mine[key];
     plan.lrfNextKeep = { v: 1, savedAt, device: Folder ? Folder.device() : null, keep };
     return plan;
   }
@@ -1004,6 +1085,7 @@
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType,
+    waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
     saveNow, chooseFolder, reconnectFolder, openFolderPlan, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, traysToMonday: () => applyTrayStart()

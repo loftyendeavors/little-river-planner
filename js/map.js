@@ -213,6 +213,8 @@
     if (!App.state.ready) return;
     if (wholeSeason) { paintSeason(); return; }
     const eng = App.state.engine, date = App.state.date, counts = new Map(), sel = App.state.sel, selPlanting = sel && sel.type === 'planting' ? sel.id : null;
+    // while the series tool is open: the spaces it would plant, and the beds named for it
+    const Series = root.LRFSeries, ghosts = Series ? Series.ghosts() : null, willPlant = new Set(((ghosts && ghosts.placed) || []).map(x => x.bed.id)), named = new Set((ghosts && ghosts.named) || []);
     for (const item of beds.values()) {
       const { bed, geo, g, fills } = item, status = eng.bedStatus(bed, date), cap = status.cap || 1;
       clear(fills); item.parts = []; item.status = status;
@@ -256,7 +258,8 @@
       const planted = here.length > 0;
       item.planted = planted;
       g.setAttribute('class', ['bed', geo.shape === 'circle' ? 'tower' : geo.shape === 'cells' ? 'pots' : '', planted ? 'is-planted' : status.resting ? 'is-resting' : 'is-empty', picking ? 'is-picking' : '',
-        highlightCrop && !here.some(r => r.c.id === highlightCrop) ? 'dim' : '', sel && ((sel.type === 'bed' && sel.id === bed.id) || (sel.type === 'opening' && sel.bedId === bed.id)) ? 'sel' : '', holdsSel ? 'has-sel' : '', item.drop || ''].filter(Boolean).join(' '));
+        highlightCrop && !here.some(r => r.c.id === highlightCrop) ? 'dim' : '', sel && ((sel.type === 'bed' && sel.id === bed.id) || (sel.type === 'opening' && sel.bedId === bed.id)) ? 'sel' : '', holdsSel ? 'has-sel' : '',
+        willPlant.has(bed.id) ? 'will-plant' : '', named.has(bed.id) ? 'named' : '', item.drop || ''].filter(Boolean).join(' '));
     }
     paintLegend(counts);
     paintHandles();
@@ -455,9 +458,11 @@
     const fill = at.closest('#mapBeds [data-planting]'), bedEl = at.closest('[data-bed]');
     const bedId = bedEl ? bedEl.dataset.bed : nearest(e.clientX, e.clientY, 10);
     if (App.state.armed) { if (bedId) App.place(App.state.armed, bedId, App.state.date, aimAt(bedId, e.clientX, e.clientY)); return; }
+    // while the series tool is asking for beds, a click on a bed names it
+    if (bedId && root.LRFSeries && root.LRFSeries.picking() && root.LRFSeries.toggleBed(bedId)) return;
     if (fill) App.select({ type: 'planting', id: fill.dataset.planting });
     else if (bedId) App.select({ type: 'bed', id: bedId });
-    else if (App.state.sel) App.select(null);
+    else if (App.state.sel && App.state.sel.type !== 'series') App.select(null);   // a stray click on the photo does not throw a half-filled series away
   }
   function onWheel(e) { e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0016))); }
 
@@ -568,6 +573,10 @@
     App.on('plan', () => { $('mapSample').hidden = !App.isSample(); });
     App.on('plan', build);
     App.on('date', () => { if (!wholeSeason) paint(); });   // the whole season does not depend on the day
+    // what the series tool would plant is marked while it is open; drawn when the map is next looked at, if it is not on the page now
+    let ghostsStale = false;
+    App.on('ghost', () => { if (App.state.view !== 'map') { ghostsStale = true; return; } if (!wholeSeason) paint(); });
+    App.on('view', () => { if (App.state.view === 'map' && ghostsStale) { ghostsStale = false; if (!wholeSeason) paint(); } });
     App.on('sel', () => { paint(); const sel = App.state.sel; if (sel && App.state.view === 'map') { const p = sel.type === 'planting' ? App.state.engine.planting(sel.id) : null; focusBed(p ? p.bedId : sel.type === 'opening' ? sel.bedId : sel.id); } });
     App.on('view', () => { if (App.state.view === 'map' && !view.fitted) requestAnimationFrame(() => fit()); });
   }

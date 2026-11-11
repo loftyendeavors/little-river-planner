@@ -14,6 +14,7 @@
   root.LRFSowView.init();
   root.LRFHarvestView.init();
   root.LRFAhead.init();
+  root.LRFSeries.init();
 
   for (const button of document.querySelectorAll('[data-view-btn]')) button.addEventListener('click', () => App.setView(button.dataset.viewBtn));
   App.on('view', () => { for (const button of document.querySelectorAll('[data-view-btn]')) button.setAttribute('aria-pressed', String(button.dataset.viewBtn === App.state.view)); });
@@ -22,7 +23,8 @@
     $('undoBtn').title = App.state.undo.length ? `Undo: ${App.state.undo[App.state.undo.length - 1].label} (Ctrl+Z)` : 'Nothing to undo';
     $('seasonYear').textContent = App.planYear();
     const plan = App.state.plan, info = plan.lrfNext || {};
-    $('buildNote').textContent = `Rebuild preview 0.18 · ${plan.plantings.length} plantings · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
+    const waits = App.waiting().length;
+    $('buildNote').textContent = `Rebuild preview 0.19 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
   });
   $('undoBtn').addEventListener('click', App.undo);
   $('redoBtn').addEventListener('click', App.redo);
@@ -81,9 +83,11 @@
     if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); App.redo(); return; }
     // Escape with a sheet or dialog open closes that, and nothing behind it
     if (e.key === 'Escape' && document.querySelector('dialog[open]')) return;
-    if (e.key === 'Escape') { if (!menu.hidden) closeMenu(); else if (App.state.armed) App.arm(null); else if (App.state.sel && !typing) App.select(null); return; }
+    // (the series tool is a form: Escape leaves it from inside its fields too, and nothing is added)
+    if (e.key === 'Escape') { if (!menu.hidden) closeMenu(); else if (App.state.armed) App.arm(null); else if (App.state.sel && (!typing || (App.state.sel.type === 'series' && e.target.closest && e.target.closest('#srForm')))) App.select(null); return; }
     if (typing || !App.state.ready) return;
     if ((e.key === 'Delete' || e.key === 'Backspace') && App.state.sel && App.state.sel.type === 'planting') { e.preventDefault(); App.removePlantings([App.state.sel.id]); return; }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && App.state.sel && App.state.sel.type === 'waiting') { e.preventDefault(); App.removeWaiting([App.state.sel.id]); return; }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); App.setDate(E.addDays(App.state.date, (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 7 : 1))); }
   });
 

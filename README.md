@@ -56,13 +56,18 @@ Click a bed on the map and its panel shows width, length and area (a tower its s
 - A day after today is a plan, not a record: choosing one moves the ticked sowings to that day. Nothing is marked sown and no seed leaves stock.
 - Tick the lines that were sown and record them in one step. Each planting is dated and its seed comes off the lots on hand, exactly as recording one planting does. One Undo takes the whole step back.
 
-## Openings and successions
+## Openings, series and plantings to place
 
-There is no page for these: both open where you are.
+There is no page for these: they open where you are.
 
 - **An opening** is ground that stands free before, after or between the crops planned in a bed (three weeks or longer). Openings are drawn on the Timeline as dashed boxes and listed in a bed's panel. Click one and the details panel shows it: how long it is open, what comes before and after, and the crops whose whole cycle goes into it: growing, the full harvest and turnover, in season. Radishes before the eggplant; cabbage after the potatoes. Pick a crop to check its dates, change the day, the variety or the length, and add it.
 - Field and tunnel ground is not offered before the first day the plan itself puts anything into unheated ground. Heated houses are offered from January.
-- **A series** is a run of plantings of one crop a set number of days apart: whole beds or feet of bed each time, dated by the day they go in or the day they are first ready, in the gardens ticked. From a planting's panel, **Plan a longer series, with a preview** opens it as a sheet over the page, copying that planting (which is how tower cycles keep their days). Each goes into the first ground that is free for it. The preview shows where every one lands, what could not be placed and why, and the weeks of harvest it gives beside the weeks the plan has now. Nothing is added until the button is pressed, and the whole series is one step to undo.
+- **A series** is one crop every so many days, counted between the days the plantings go in the ground: so many of them or until a date, whole beds or feet of bed each time. The series tool opens in the details panel, from a crop in the library (the small **series** button on its row), a planting's panel (**Plan a longer series**, which copies that planting: this is how tower cycles keep their days), a bed's panel, or an opening. What it would add is drawn on the Timeline as dashed **ghost bars**, and marked on the map, before anything is added. One button adds the whole series, and one Undo takes it out.
+- The plantings go to the **gardens** ticked (each into the first free space, in that order), to the **beds** named (click beds on the map or rows on the timeline while the tool asks for them), or nowhere yet: **To place**.
+- **To place** holds plantings that have no bed. A series asked to wait puts all of its plantings there; one sent to gardens or beds leaves there whatever found no ground. **A date is never moved to make a planting fit.** A planting with no bed counts toward nothing: not seeds required, the sowing lists, bench load or the forecast. So the number waiting is shown in the header on every view, above the crop library, and on a row of its own at the top of the Timeline.
+- Drag a waiting planting onto a bed, on the map or the timeline: it keeps its own date. A free bed takes it whole. A bed that one other crop holds then asks how to share: split the length (the crop there gives up its last feet) or split the rows. Or click one to see the spaces free for all of its days, and place it with a click.
+- **Where could this crop go this season?**, at the foot of the series tool, lists every opening the crop's whole cycle fits, soonest first, and the beds with nothing planned all year.
+- The quick **N more, every N days** in a planting's panel is unchanged.
 
 ## Harvest forecast
 
@@ -103,7 +108,8 @@ There is no page for these: both open where you are.
 | `js/guide.js` | Crop defaults checked against Johnny's Selected Seeds and the New England Vegetable Management Guide. |
 | `js/seeds.js`, `js/seedlib.js` | The seed library: one list of varieties with what the plan needs of each, seed stock, vendor sizes, sowing records, a photo gallery, the crops, a detail panel, and the importer. |
 | `js/sowing.js`, `js/sowview.js` | Practical sowing (plug trays, whole rows, batches shared by plantings), carried over from v7's own model, and the weekly sowing list. |
-| `js/succession.js`, `js/ahead.js` | Planning ahead, opened in place: an opening in the details panel with the crops that fit it, a series of successions in a sheet. Both obey the guard rails and the season. |
+| `js/succession.js` | Planning ahead, as pure functions: a series of plantings, openings and what fits them, and plantings that have no bed yet (where one would land, how a bed could be shared). All obey the guard rails and the season. |
+| `js/ahead.js`, `js/series.js` | The same, opened in place: an opening in the details panel; the series tool with its ghost bars; the "To place" list, its count in the header, and the question a held bed asks. |
 | `js/timeline.js` | The season timeline: filters, summaries that open, one continuous scale. |
 | `js/forecast.js`, `js/harvestview.js` | The harvest forecast: yield by crop and day, the three kinds it is sold as, and the lists that go to a chef. |
 | `js/trays.js`, `js/traysview.js` | Weekly live-tray demand and the batches it produces, in v7's own record format. |

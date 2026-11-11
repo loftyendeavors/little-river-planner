@@ -40,6 +40,7 @@
           root.LRFThumbs.el({ cropId: c.id, color, label: c.name, size: 24, cls: 'key' }),
           h('b.lib-name', c.name),
           n ? h('span.lib-count', { title: `${n} planting${n === 1 ? '' : 's'} in this plan` }, n) : null,
+          canSeries(eng, c) ? h('button.lib-series', { type: 'button', title: `Plan a series of ${String(c.name).toLowerCase()}: one every so many days`, 'aria-label': `Plan a series of ${c.name}`, dataset: { series: c.id } }, 'series') : null,
           varieties.length ? h('button.lib-more', { type: 'button', 'aria-expanded': String(!!open), title: `${varieties.length} variet${varieties.length === 1 ? 'y' : 'ies'}`, 'aria-label': `${open ? 'Hide' : 'Show'} ${varieties.length} varieties of ${c.name}`, dataset: { toggle: c.id } }, open ? '▾' : '▸') : h('span.lib-more')));
       if (open) {
         const box = h('div.lib-vars', h('p.lib-meta', cropMeta(c)));
@@ -56,6 +57,7 @@
     $('libHint').textContent = App.state.armed ? 'Click beds to plant. Press Esc when done.' : 'Drag a crop onto a bed. Or click it, then click beds.';
     for (const [scope, count] of [['mine', mineCount], ['all', crops.length]]) { const el = document.querySelector(`[data-lib-scope="${scope}"] small`); if (el) el.textContent = count; }
   }
+  const canSeries = (eng, c) => !c.micro && !eng.isCoverCrop(c) && +c.dtm > 0;
   function libraryPayload(row) {
     const c = App.state.engine.crop(row.dataset.crop), v = row.dataset.variety ? App.state.engine.variety(row.dataset.variety) : null;
     return c ? { payload: v ? { cropId: c.id, varietyId: v.id } : { cropId: c.id }, label: v ? `${v.name} · ${c.name}` : c.name, color: App.state.engine.cropColor(c) } : null;
@@ -66,11 +68,13 @@
     host.addEventListener('pointerdown', e => {
       const row = e.target.closest('.lib-row');
       press = { x: e.clientX, y: e.clientY };
-      if (!row || e.target.closest('.lib-more')) return;
+      if (!row || e.target.closest('.lib-more, .lib-series')) return;
       const spec = libraryPayload(row);
       if (spec) root.LRFDrag.watch(e, spec);
     });
     const activate = e => {
+      const series = e.target.closest('[data-series]');
+      if (series) { App.openAhead({ mode: 'series', cropId: series.dataset.series }); return; }
       const toggle = e.target.closest('[data-toggle]');
       if (toggle) { const id = toggle.dataset.toggle; lib.open.has(id) ? lib.open.delete(id) : lib.open.add(id); renderLibrary(); return; }
       const row = e.target.closest('.lib-row');
@@ -81,7 +85,7 @@
       App.arm(same ? null : spec.payload);
     };
     host.addEventListener('click', e => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) return; activate(e); });
-    host.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.lib-row') && !e.target.closest('.lib-more')) { e.preventDefault(); activate(e); } });
+    host.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.lib-row') && !e.target.closest('.lib-more, .lib-series')) { e.preventDefault(); activate(e); } });
     $('libSearch').addEventListener('input', e => { lib.query = e.target.value; renderLibrary(); });
     for (const button of document.querySelectorAll('[data-lib-scope]')) {
       button.addEventListener('click', () => { lib.scope = button.dataset.libScope; for (const b of document.querySelectorAll('[data-lib-scope]')) b.setAttribute('aria-pressed', String(b === button)); renderLibrary(); });
@@ -201,12 +205,15 @@
     ground.id = 'statGround';
     add(host, h('header.insp-head', h('p.eyebrow', `${plan.settings.farm || 'Farm'} · ${App.planYear()} season`), h('h2', 'Plan overview')),
       h('div.stats', stat('Plantings', num(plan.plantings.length)), stat('Growing spaces', num(plan.beds.filter(b => b.active !== false && !App.state.engine.isPool(b)).length)), ground));
+    const waits = App.waiting().length;
+    if (waits) add(host, h('p.wt-note', { id: 'ovWaiting' }, `${num(waits)} more planting${waits === 1 ? ' has' : 's have'} no bed yet and ${waits === 1 ? 'is' : 'are'} counted nowhere: see “To place”, above the crop library.`));
     renderNewer(host);
     renderPhotos(host);
     renderCleanup(host);
     add(host, h('section.insp-section.howto', h('h3', 'On the map'),
       h('ul.how',
         h('li', h('b', 'Plant'), 'Drag a crop from the library onto a bed. It goes in on the date under the map.'),
+        h('li', h('b', 'Series'), 'One crop every so many days: ', h('button.linkish', { type: 'button', id: 'ovSeries', onclick: () => App.openAhead({ mode: 'series' }) }, 'plan a series'), ', or use “series” beside a crop in the library.'),
         h('li', h('b', 'Move'), 'Drag a planting to other ground. It keeps its date. Hold Alt to leave a copy.'),
         h('li', h('b', 'Trade'), 'Drop a planting on ground that is held and the two trade places, when both fit.'),
         h('li', h('b', 'Share a bed'), 'Select a planting and drag its ends. The feet it gives up take the next crop.'),
@@ -240,7 +247,8 @@
     else if (soil) host.append(h('p.insp-aside', h('button.link', { type: 'button', id: 'bedSizeEdit', onclick: () => { sizing = bed.id; render(); const el = $('fBedL'); if (el) { el.focus(); el.select(); } } }, 'Change this bed’s size…')));
     const list = h('ul.p-list');
     for (const { p, r } of all) list.append(plantingRow(p, r));
-    host.append(h('section.insp-section', h('h3', 'Plantings'), all.length ? list : h('p.note', 'Nothing planned here yet. Drag a crop onto this bed.')));
+    host.append(h('section.insp-section', h('h3', 'Plantings'), all.length ? list : h('p.note', 'Nothing planned here yet. Drag a crop onto this bed.'),
+      eng.isRack(bed) ? null : h('button.linkish', { type: 'button', id: 'bedSeries', title: 'One crop every so many days, starting in this space', onclick: () => App.openAhead({ mode: 'series', bedId: bed.id }) }, `Plan a series in this ${{ tower: 'tower', containers: 'space' }[eng.spaceKind(bed)] || 'bed'}…`)));
     // room before, after and between what is planned here, and what would go in it
     const Ahead = root.LRFSuccession;
     if (soil && Ahead && all.length) {
@@ -457,7 +465,7 @@
           h('input', { type: 'number', id: 'fRepeatEvery', min: 1, max: 120, value: Math.max(7, Math.min(28, r.c.hw || 14)), 'aria-label': 'Days apart' }), h('span', 'days'),
           h('button.btn', { type: 'button', onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+$('fRepeatCount').value) || 1)), Math.max(1, Math.round(+$('fRepeatEvery').value) || 14)) }, 'Add')),
         h('p.help', `Each one takes this ${unit === 'sites' ? 'tower' : 'bed'} if it is free by then, otherwise the next free one in ${eng.gardenOf(bed).name}. `,
-          h('button.linkish', { type: 'button', id: 'fSeriesLink', onclick: () => App.openAhead({ mode: 'series', sourceId: p.id }) }, 'Plan a longer series, with a preview'))),
+          h('button.linkish', { type: 'button', id: 'fSeriesLink', onclick: () => App.openAhead({ mode: 'series', sourceId: p.id }) }, 'Plan a longer series: see it first, name gardens or beds, or leave them to place'))),
       h('div.insp-actions', h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')));
   }
 
@@ -477,7 +485,11 @@
       // an opening that has gone (something was planted in it) gives way to its bed
       const p = sel && sel.type === 'planting' ? eng.planting(sel.id) : null, opening = sel && sel.type === 'opening', bed = sel && sel.type === 'bed' ? eng.bedOf(sel.id) : opening ? eng.bedOf(sel.bedId) : null;
       if (!bed || bed.id !== sizing || opening) sizing = null;   // leaving a bed ends any change to its size
-      if (p) renderPlanting(host, p); else if (opening && root.LRFAhead && root.LRFAhead.opening(host, sel, render)) { /* drawn */ } else if (bed) renderBed(host, bed); else renderOverview(host);
+      const Series = root.LRFSeries;
+      if (p) renderPlanting(host, p); else if (opening && root.LRFAhead && root.LRFAhead.opening(host, sel, render)) { /* drawn */ } else if (bed) renderBed(host, bed);
+      else if (sel && sel.type === 'series' && Series && Series.panel(host, render)) { /* the series tool */ }
+      else if (sel && sel.type === 'waiting' && Series && Series.waitingPanel(host, sel, render)) { /* a planting with no bed yet */ }
+      else renderOverview(host);
       host.scrollTop = keep;
     } finally {
       rendering = false;
