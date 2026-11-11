@@ -60,11 +60,16 @@ files.push(put('manifest.webmanifest', JSON.stringify({
 for (const icon of ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png']) { if (!fs.existsSync(path.join(outDir, icon))) throw new Error(`missing ${icon}: make the icons first`); files.push(icon); }
 put('.nojekyll', '');
 
-const version = crypto.createHash('sha256').update(files.map(f => f + ':' + crypto.createHash('sha256').update(fs.readFileSync(path.join(outDir, f))).digest('hex')).join('\n')).digest('hex').slice(0, 12);
+// 'fresh-2' is the revision of the worker below: changing how it fetches must also give every browser a new copy.
+const version = crypto.createHash('sha256').update('fresh-2\n' + files.map(f => f + ':' + crypto.createHash('sha256').update(fs.readFileSync(path.join(outDir, f))).digest('hex')).join('\n')).digest('hex').slice(0, 12);
 put('sw.js', `/* Little River Farm Planner — offline copy of the app. Build ${version} (${label}). */
 const CACHE = 'lrf-${version}';
 const FILES = ${JSON.stringify(['./', ...files])};
-self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)).then(() => self.skipWaiting())); });
+// Each file is asked for under this build's own address (?v=…) and past every cache. The host's network keeps a file for ten minutes
+// after a deploy: asked for by its plain address in that time, a new worker could store the old page beside new scripts and keep that
+// mixture until the next build. It is stored under its plain address, so the page finds it as before.
+const fresh = file => fetch(new Request(file + '?v=${version}', { cache: 'no-store' })).then(response => { if (!response.ok) throw new Error(file + ': ' + response.status); return response; });
+self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE).then(cache => Promise.all(FILES.map(file => fresh(file).then(response => cache.put(new Request(file), response))))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('lrf-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', event => {
   const request = event.request, url = new URL(request.url);
