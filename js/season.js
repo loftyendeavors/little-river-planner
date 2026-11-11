@@ -17,7 +17,7 @@
 
   /** Share of growing spaces holding a crop, sampled weekly. */
   function occupancy() {
-    const eng = App.state.engine, spaces = App.state.plan.beds.filter(b => b.active !== false), out = [];
+    const eng = App.state.engine, spaces = App.state.plan.beds.filter(b => b.active !== false && !eng.isPool(b)), out = [];
     for (let d = yearStart(), i = 0; i < 53; i++, d = E.addDays(d, 7)) {
       if (d.getFullYear() !== App.planYear()) break;
       let used = 0;

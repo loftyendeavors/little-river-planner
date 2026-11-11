@@ -60,7 +60,7 @@
 
     const slots = unplacedSlots(plan, eng);
     for (const bed of plan.beds) {
-      if (bed.active === false || (eng.gardenOf(bed) || {}).active === false) continue;
+      if (bed.active === false || (eng.gardenOf(bed) || {}).active === false || eng.isPool(bed)) continue;
       const geo = geometry(bed, slots.get(bed.id) || { x: 0, y: 0, rot: 0 });
       const g = s('g.bed', { transform: bedTransform(geo), 'data-bed': bed.id });
       const shape = cls => geo.shape === 'circle' ? s('circle.' + cls, { r: geo.W / 2 }) : s('rect.' + cls, { x: -geo.W / 2, y: -geo.L / 2, width: geo.W, height: geo.L, rx: Math.min(geo.W, geo.L) * (geo.shape === 'cells' ? 0.04 : 0.1) });
@@ -105,7 +105,7 @@
     let x = 0, y = top, rowHeight = 0;
     const gardens = [...plan.gardens].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     for (const garden of gardens) {
-      const todo = plan.beds.filter(b => b.gardenId === garden.id && b.active !== false && !placed.includes(b));
+      const todo = plan.beds.filter(b => b.gardenId === garden.id && b.active !== false && !placed.includes(b) && !eng.isPool(b));
       if (!todo.length) continue;
       const sized = todo.map(b => eng.isTower(b) ? { b, w: 3, l: 3 } : eng.isSoilBed(b) ? { b, w: +b.w || 3, l: +b.l || 20 } : { b, w: 4, l: 8 });
       const across = sized.every(z => z.b.orient === 'EW'), towers = sized.every(z => eng.isTower(z.b)), perRow = towers ? 11 : sized.length;

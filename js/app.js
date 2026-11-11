@@ -51,6 +51,7 @@
       if (op.kind === 'assume') { if (to) next.assumptions = to; else delete next.assumptions; continue; }
       if (op.kind === 'settings') { next.settings = to; continue; }
       if (op.kind === 'inventory') { if (to) next.seedInventory = to; else delete next.seedInventory; continue; }
+      if (op.kind === 'trays') { if (to) next.liveTrayPlans = to; else delete next.liveTrayPlans; continue; }
       const key = { bed: 'beds', garden: 'gardens', variety: 'varieties', crop: 'crops' }[op.kind] || 'plantings', list = lists[key] || (lists[key] = (plan[key] || []).slice());
       const index = from ? list.findIndex(x => x.id === from.id) : -1;
       if (to && index >= 0) list[index] = to; else if (to) list.push(to); else if (index >= 0) list.splice(index, 1);
@@ -62,7 +63,7 @@
     store.save(state.plan);
     emit('plan');
   }
-  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings', 'inventory'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
+  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings', 'inventory', 'trays'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
   /** Why the guard rails refuse an edit, in words. */
   function refusalText(no, engine) {
     const bed = engine.bedOf(no.p.bedId), what = cropLabel(no.p, engine), unit = engine.capUnit(bed);
@@ -298,6 +299,37 @@
     return p ? sowingStep(`${cropLabel(p)}: sowing taken back`, ctx => ({ before: p, ...SL.takeBackSowing(state.engine, inventoryNow(), p, ctx) })) : null;
   }
 
+  // ───────────────────────── live trays ─────────────────────────
+  const Trays = root.LRFTrays;
+  /** Harvest and pick records live in the part of a v7 backup this app does not edit; a batch with any is history and stays as it is. */
+  async function trayRecords() {
+    try { const attic = await loadAttic(); return { harvests: attic.rest.harvests, fieldRecords: attic.rest.fieldRecords }; } catch (_) { return {}; }
+  }
+  /** Save a weekly demand plan: its record, its crops and its batches change together, as one step that can be undone. */
+  async function saveTrays(label, input) {
+    const records = await trayRecords(), farm = state.plan;
+    let result;
+    try { result = Trays.apply(farm, input, { uid, now: new Date().toISOString(), crop: id => state.engine.crop(id), records }); } catch (error) { toast(error.message); return null; }
+    const ops = Trays.ops(farm, result.plan);
+    // Saving the same demand again would only restamp the record: that is not a change, and not a step to undo.
+    const bare = list => JSON.stringify((list || []).map(({ updatedAt, ...rest }) => rest));
+    if (!ops.length || (ops.length === 1 && ops[0].kind === 'trays' && bare(ops[0].before) === bare(ops[0].after))) return { unchanged: true };
+    if (!commit(label, ops, { unchecked: true })) return null;   // the shared benches have no guard rails: room there is shown, not refused
+    return result;
+  }
+  async function removeTrays(id) {
+    const records = await trayRecords(), farm = state.plan, plan = (farm.liveTrayPlans || []).find(p => p.id === id);
+    if (!plan) return false;
+    let next;
+    try { next = Trays.remove(farm, id, records); } catch (error) { toast(error.message); return false; }
+    return commit(`Delete ${plan.name}`, Trays.ops(farm, next), { unchecked: true });
+  }
+  /** A plan saved by an earlier preview kept v7's demand plans with the records it does not edit. Bring them into the plan. */
+  async function adoptTrayPlans() {
+    if (Array.isArray(state.plan.liveTrayPlans) || !state.plan.plantings.some(p => p.liveTray)) return;
+    try { const attic = await loadAttic(), kept = attic.rest.liveTrayPlans; if (Array.isArray(kept) && kept.length) { adopt({ ...state.plan, liveTrayPlans: kept }); } } catch (_) { /* the batches are still shown; the demand table says the plan record is missing */ }
+  }
+
   function removePlantings(ids, label) {
     const ops = ids.map(id => state.engine.planting(id)).filter(Boolean).map(before => ({ before, after: null }));
     if (!ops.length) return;
@@ -329,7 +361,7 @@
     else if (res.state === 'partial') {
       const rows = res.rect && res.rect.rows && res.rect.rows.count < res.rect.rows.total ? `${res.rect.rows.count} of ${res.rect.rows.total} rows · ` : '';
       res.text = `${rows}${UI.num(r.physicalLength, 1)} ${unit} free${res.was && res.shrunk ? ` (it has ${UI.num(res.was.len, 1)})` : ''} · ${harvest}`;
-    } else res.text = { space: 'Not a growing space', crop: 'This crop cannot be planned here', 'micro-needs-bench': 'Microgreens go on a living-tray bench', 'bench-needs-micro': 'This bench takes living trays only', 'too-long': 'Does not fit this space' }[res.why] || heldText(res);
+    } else res.text = { space: 'Not a growing space', crop: 'This crop cannot be planned here', 'micro-needs-bench': 'Microgreens go on a living-tray bench', 'bench-needs-micro': 'This bench takes living trays only', 'too-long': 'Does not fit this space', pool: 'Live trays follow weekly demand: change it on the Trays view' }[res.why] || heldText(res);
     return res;
   }
   const sameSpot = (a, b) => a.bedId === b.bedId && a.date === b.date && (a.ft || 0) === (b.ft || 0) && (a.trays || 0) === (b.trays || 0) && (a.startFt || 0) === (b.startFt || 0) && JSON.stringify(a.bedLayout || null) === JSON.stringify(b.bedLayout || null);
@@ -443,7 +475,7 @@
       if (!ok) return;
     }
     const cloud = store.backend !== 'memory';   // somewhere durable to keep the photo and the rest of the backup
-    core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name };
+    core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name, backup: (parsed.plan.backup && parsed.plan.backup.exportedAt) || parsed.plan._localUpdatedAt || null };
     state.plan = core; state.attic = attic; state.extras = emptyExtras(); state.inventoryBase = null; state.inventoryAsked = null; state.packsBase = {}; state.keptThumbs = {}; Thumbs.set({}); state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
     showMapImage(parsed.image && parsed.image.bytes, parsed.image && parsed.image.mime);
     rebuild(); state.date = defaultDate(); root.LRFMap.fit(true);
@@ -490,8 +522,12 @@
     await store.connect();
     try { saved = await store.load(); } catch (error) { loadError = error; }
     state.bundled = await bundledInfo;
-    if (saved) state.plan = saved;
-    else {
+    if (saved) {
+      state.plan = saved;
+      // The plan saved here wins. When this copy of the page was built from a later v7 backup, say so instead of opening the older plan silently.
+      const mine = saved.lrfNext || {}, held = String(mine.backup || mine.importedAt || mine.startedAt || '');
+      if (state.bundled && state.bundled.backup && !mine.sample && String(state.bundled.backup) > held && mine.passedOver !== state.bundled.backup) state.newer = { backup: state.bundled.backup, held: mine.backup || null, counts: state.bundled.counts || null };
+    } else {
       // Nothing saved yet: start from the farm's plan that ships with the page.
       const compact = inlined ? inlined.plan : state.bundled ? await getJSON('data/plan.json') : null;
       if (compact) { state.plan = IO.unpack(compact); state.plan.lrfNext = { source: 'bundled', attic: 'none', backup: state.bundled.backup, startedAt: new Date().toISOString() }; firstRun = !loadError; }
@@ -505,10 +541,27 @@
     if (loadError) { showStatus({ backend: store.backend, state: 'error', detail: loadError.message }); toast(`The saved plan could not be opened (${loadError.message}). Showing the starting plan; nothing is overwritten.`); return; }
     if (firstRun) store.save(state.plan); else showStatus({ backend: store.backend, state: saved ? 'saved' : 'sample' });
     if (saved) restoreMapImage();
-    loadThumbs(); loadPacks(); topUpVarieties().catch(() => {});
+    loadThumbs(); loadPacks(); topUpVarieties().catch(() => {}); adoptTrayPlans();
     // Stock is needed wherever a sowing can be recorded, not only on the Seeds view: fetch it now, not on first visit.
     loadInventory().then(found => { if (found) emit('plan'); }).catch(() => {});
     store.watch(() => toast('This plan was changed on another device.', { label: 'Reload', run: () => root.location.reload() }));
+  }
+
+  /** Replace the plan saved here with the one this copy of the page carries. */
+  async function useBundled() {
+    const inlined = root.LRF_BUNDLED || null, compact = inlined ? inlined.plan : await fetch('data/plan.json').then(r => r.ok ? r.json() : null).catch(() => null);
+    if (!compact || !state.bundled) { toast('The newer plan could not be read.'); return; }
+    const plan = IO.unpack(compact);
+    plan.lrfNext = { source: 'bundled', attic: 'none', backup: state.bundled.backup, startedAt: new Date().toISOString() };
+    try { await store.saveNow(plan); } catch (error) { toast(`The newer plan could not be saved here (${error.message}). Nothing was changed.`); return; }
+    root.location.reload();
+  }
+
+  /** Keep the plan saved here and stop offering the one this copy carries. */
+  function keepMine() {
+    if (!state.newer) return;
+    const passedOver = state.newer.backup; state.newer = null;
+    adopt({ ...state.plan, lrfNext: { ...(state.plan.lrfNext || {}), passedOver } }, state.engine);
   }
 
   on('plan', () => Thumbs.index(state.plan));   // first listener: views drawn after it see the right crop pictures
@@ -517,6 +570,6 @@
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, setAssumption, setGardenType,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
-    exportBackup, importBackup, retrySave: () => store && store.retry(), isSample: () => !!(state.plan && state.plan.lrfNext && state.plan.lrfNext.sample)
+    saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => store && store.retry(), isSample: () => !!(state.plan && state.plan.lrfNext && state.plan.lrfNext.sample)
   };
 })(window);

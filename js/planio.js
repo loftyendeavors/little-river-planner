@@ -14,7 +14,7 @@
 
   /** Top-level collections the core planning screens own. */
   const CORE_KEYS = ['v', 'gardens', 'beds', 'plantings', 'crops', 'varieties', 'customers', 'containers', 'map', 'settings', 'assumptions',
-    'cropUnits', 'salesMix', 'products', 'nursery', 'planningPreferences', 'seedInventory', 'lrfNext'];
+    'cropUnits', 'salesMix', 'products', 'nursery', 'planningPreferences', 'seedInventory', 'liveTrayPlans', 'lrfNext'];
   /** Bulky per-variety captures the planner never reads. */
   const HEAVY_VARIETY_FIELDS = ['webImport', 'webImportHistory', 'catalogSourceText'];
   const DERIVED_VARIETY_FIELDS = ['_basisFromText', '_pageTextBasis', '_catalogTextBasis'];

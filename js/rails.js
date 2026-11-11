@@ -82,6 +82,8 @@
   function propose(eng, payload, target, options = {}) {
     const bed = eng.bedOf(target.bedId), source = options.source || (payload.plantingId ? eng.planting(payload.plantingId) : null);
     if (!bed || bed.active === false || (payload.plantingId && !source)) return { state: 'blocked', why: 'space' };
+    // Live trays are planned from weekly demand. Their batches are regenerated from it, so a batch moved by hand would be put back.
+    if (eng.isPool(bed) || (source && eng.isPool(eng.bedOf(source.bedId)))) return { state: 'blocked', why: 'pool' };
     const base = baseDraft(eng, payload, source, bed.id, target.date), crop = eng.crop(base.cropId);
     if (!crop) return { state: 'blocked', why: 'crop' };
     if (crop.micro && !eng.isRack(bed)) return { state: 'blocked', why: 'micro-needs-bench', p: base };

@@ -77,5 +77,5 @@
     });
   }
 
-  root.LRFUI = { h, s, clear, add, day, dayLong, span, num, feet, isoWeek, inkOn, toast, confirm, MONTHS };
+  root.LRFUI = { h, s, clear, add, day, dayLong, span, num, feet, isoWeek, inkOn, toast, confirm, MONTHS, DAYS };
 })(window);

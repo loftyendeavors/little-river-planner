@@ -107,6 +107,19 @@
   // ── cleanup: overlaps that came in with the plan, each with ways to settle it ──
   const cleanups = new WeakMap();
   const cleanupOf = eng => cleanups.get(eng) || cleanups.set(eng, Rails.cleanup(eng)).get(eng);
+  /** This copy of the page was built from a later v7 backup than the plan saved in this browser. */
+  function renderNewer(host) {
+    const n = App.state.newer;
+    if (!n) return;
+    const when = t => { const d = new Date(t); return Number.isFinite(+d) ? `${UI.MONTHS[d.getMonth()]} ${d.getDate()}` : 'an earlier date'; };
+    const switchPlan = async () => {
+      const ok = await UI.confirm({ title: 'Switch to the newer plan?', body: `The plan open here is replaced by your v7 backup of ${when(n.backup)}. Anything changed here since the older plan was loaded (stock counts, recorded sowings, plantings moved) is lost; use Backup first if you want a copy. Your v7 planner is not touched.`, confirmLabel: 'Switch plan', danger: true });
+      if (ok) App.useBundled();
+    };
+    add(host, h('section.insp-section.newer', h('h3', 'A newer plan came with this copy'),
+      h('p.help', `This copy of the planner was built from your v7 backup of ${when(n.backup)}${n.counts && n.counts.plantings ? `, ${num(n.counts.plantings)} plantings` : ''}. The plan open now is the one this browser already held${n.held ? `, from ${when(n.held)}` : ''}.`),
+      h('div.newer-actions', h('button.btn.primary', { type: 'button', onclick: switchPlan }, `Use the ${when(n.backup)} plan`), h('button.btn', { type: 'button', onclick: () => App.keepMine() }, 'Keep this one'))));
+  }
   function renderCleanup(host) {
     const eng = App.state.engine, todo = cleanupOf(eng);
     if (!todo.count) return;
@@ -145,7 +158,7 @@
     host.append(section);
   }
 
-  const inGround = () => { const eng = App.state.engine, spaces = App.state.plan.beds.filter(b => b.active !== false); return `${spaces.filter(b => eng.cropsAt(b.id, App.state.date).length).length} of ${spaces.length}`; };
+  const inGround = () => { const eng = App.state.engine, spaces = App.state.plan.beds.filter(b => b.active !== false && !eng.isPool(b)); return `${spaces.filter(b => eng.cropsAt(b.id, App.state.date).length).length} of ${spaces.length}`; };
   function renderOverview(host) {
     const plan = App.state.plan, date = App.state.date;
     if (App.isSample()) {
@@ -158,7 +171,8 @@
     const ground = stat(`In the ground ${day(date)}`, inGround());
     ground.id = 'statGround';
     add(host, h('header.insp-head', h('p.eyebrow', `${plan.settings.farm || 'Farm'} · ${App.planYear()} season`), h('h2', 'Plan overview')),
-      h('div.stats', stat('Plantings', num(plan.plantings.length)), stat('Growing spaces', num(plan.beds.filter(b => b.active !== false).length)), ground));
+      h('div.stats', stat('Plantings', num(plan.plantings.length)), stat('Growing spaces', num(plan.beds.filter(b => b.active !== false && !App.state.engine.isPool(b)).length)), ground));
+    renderNewer(host);
     renderCleanup(host);
     add(host, h('section.insp-section.howto', h('h3', 'On the map'),
       h('ul.how',
