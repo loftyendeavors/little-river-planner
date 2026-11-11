@@ -1006,7 +1006,6 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 .ah-more { border: 0; background: none; color: var(--muted); font: 600 12px var(--body); text-decoration: underline; text-underline-offset: 2px; padding: 3px 4px; }
 .ah-none { color: var(--muted); font-size: 12.5px; }
 .ah-why { color: var(--bad); font-size: 13px; font-weight: 600; }
-.ah-cols { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 26px; margin-top: 18px; align-items: start; }
 .ah-form { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); }
 .ah-form select, .ah-form input { height: 31px; border: 1px solid var(--line); border-radius: 7px; background: var(--raised); padding: 0 8px; font-size: 13px; color: var(--ink); min-width: 0; }
 .ah-form .tr-field { min-width: 0; }
@@ -1019,7 +1018,6 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 .ah-gardens label { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 2px 0; }
 .ah-gardens label small { margin-left: auto; font: 500 10.5px var(--mono); color: var(--muted); }
 .ah-check { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--ink-2); }
-.ah-out h3 { font: 800 19px/1.1 var(--display); font-stretch: 80%; }
 .ah-sum { margin-top: 6px; color: var(--ink-2); font-size: 14px; max-width: 80ch; }
 .ah-sum.bad { color: var(--bad); font-weight: 600; }
 .ah-strip { margin-top: 14px; display: grid; gap: 3px; }
@@ -1036,16 +1034,8 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 .ah-legend i { width: 14px; height: 10px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .ah-legend i.on { background: var(--hv-seq); }
 .ah-legend i.new { background: color-mix(in srgb, var(--hv-seq) 45%, var(--raised)); box-shadow: inset 0 0 0 2px var(--hv-seq); }
-table.ah-waves { margin-top: 16px; }
-.ah-waves td { height: 34px; padding: 4px 10px; vertical-align: middle; font-size: 13px; }
-.ah-waves td.n { text-align: right; font: 500 12.5px var(--mono); }
-.ah-waves th.n { text-align: right; }
-.ah-waves tr.short td { color: var(--ink-2); }
-.ah-waves .ah-miss { color: var(--bad); font-weight: 600; }
-.ah-waves tr.skip td { color: var(--muted); }
 .ah-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
 .ah-actions small { color: var(--muted); font-size: 12.5px; }
-@media (max-width: 1100px) { .ah-cols { grid-template-columns: minmax(0, 1fr); } }
 
 /* the timeline shows where the ground is open */
 .tl-open { position: absolute; top: 3px; bottom: 3px; border: 1.5px dashed color-mix(in srgb, var(--good) 70%, var(--line)); border-radius: 5px; background: color-mix(in srgb, var(--good) 7%, transparent); color: var(--good); font: 600 10.5px/1 var(--mono); display: flex; align-items: center; padding: 0 6px; overflow: hidden; white-space: nowrap; cursor: pointer; z-index: 0; }
@@ -1200,11 +1190,6 @@ table.ah-waves { margin-top: 16px; }
 .ah-review h3 { color: var(--ink); }
 .ah-review .ah-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .ah-review .ah-why { margin: 0; }
-.dialog.ah-sheet { width: min(1140px, calc(100vw - 32px)); }
-.ah-sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.ah-sheet-head .close { position: static; flex: none; }
-.ah-sheet .ah-cols { margin-top: 14px; }
-@media (max-width: 900px) { .ah-sheet .ah-cols { grid-template-columns: minmax(0, 1fr); } }
 
 /* a seed lot added under the variety's own row (0.18) */
 #sdBody tr.sd-lotrow > td { padding: 0 12px 10px 78px; height: auto; background: color-mix(in srgb, var(--good) 6%, var(--surface)); border-bottom: 1px solid var(--line); }
@@ -1224,3 +1209,82 @@ table.ah-waves { margin-top: 16px; }
 .bed-fill.season { cursor: pointer; }
 .whole-season .map-key { display: none !important; }
 .whole-season .bed.is-planted .bed-base { fill: var(--surface); }
+
+/* ── step 2b: the series tool, ghost bars, and plantings with no bed yet ("To place") ── */
+.wait-badge { border: 1px solid color-mix(in srgb, var(--flag) 60%, var(--line)); background: var(--flag-soft); color: var(--ink); border-radius: 999px; padding: 4px 11px; font: 600 12.5px var(--body); white-space: nowrap; }
+.wait-badge[hidden], .wait-box[hidden] { display: none; }
+.wait-badge:hover { border-color: var(--flag); }
+.wait-badge b { font: 700 12.5px var(--mono); }
+.wait-badge .wb-more { display: none; font-weight: 500; color: var(--ink-2); }
+body[data-view="sow"] .wait-badge .wb-more, body[data-view="harvest"] .wait-badge .wb-more, body[data-view="seeds"] .wait-badge .wb-more, body[data-view="trays"] .wait-badge .wb-more { display: inline; }
+.wait-box { flex: none; max-height: 38%; min-height: 0; margin: 0 6px 6px; display: flex; flex-direction: column; border: 1px solid color-mix(in srgb, var(--flag) 55%, var(--line)); border-radius: 8px; background: var(--flag-soft); }
+.wait-head { flex: none; display: flex; align-items: baseline; gap: 6px; width: 100%; border: 0; background: none; padding: 6px 8px 5px; text-align: left; color: var(--ink); }
+.wait-head .caret { width: 10px; color: var(--ink-2); font-size: 11px; }
+.wait-head b { font: 700 12.5px var(--display); font-stretch: 80%; text-transform: uppercase; letter-spacing: 0.05em; }
+.wait-head small { font: 600 11.5px var(--mono); }
+.wait-head em { margin-left: auto; font: 500 11px var(--body); font-style: normal; color: var(--ink-2); white-space: nowrap; }
+.wait-list { overflow-y: auto; min-height: 0; padding: 0 3px 4px; }
+.wait-row .lib-name { font-size: 13px; }
+.wait-row .lib-count { color: var(--ink-2); }
+.wait-row:hover { background: var(--surface); border-color: var(--line); }
+.wait-box.flash { animation: wait-flash 0.9s ease-out; }
+@keyframes wait-flash { 0%, 40% { box-shadow: 0 0 0 4px var(--flag); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.lib-series { display: none; flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 1px 7px 2px; font: 600 10.5px var(--mono); color: var(--ink-2); }
+.lib-row:hover .lib-series, .lib-series:focus-visible { display: inline-block; }
+.lib-series:hover { border-color: var(--flag); color: var(--ink); background: var(--flag-soft); }
+/* what a series would add, before it is added */
+.tl-bar.tl-ghost-bar { cursor: default; outline: 1.5px dashed var(--flag); outline-offset: 0; z-index: 3; }
+.tl-bar.tl-ghost-bar i { opacity: 0.42; }
+.tl-section.tl-waithead { background: color-mix(in srgb, var(--flag) 20%, var(--surface)); border-top-color: var(--flag); }
+.tl-row.tl-wait { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--flag) 8%, transparent) 0 6px, transparent 6px 12px); }
+.tl-row.tl-wait .tl-label { cursor: default; min-height: 36px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; }
+.tl-row.tl-wait .tl-label small { white-space: nowrap; }
+.bed.will-plant .bed-edge { stroke: var(--flag); stroke-width: 2.5px; stroke-dasharray: 5 4; }
+.bed.will-plant .bed-base { fill: color-mix(in srgb, var(--flag) 16%, transparent); }
+.bed.named .bed-edge { stroke: var(--flag); stroke-width: 3px; }
+.bed.drop-split .bed-edge { stroke: var(--flag); stroke-width: 2px; stroke-dasharray: 2 3; }
+.drop-ghost[data-state="split"] { fill: color-mix(in srgb, var(--flag) 26%, transparent); stroke-dasharray: 3 4; }
+.drag-ghost[data-state="split"] { border-left-color: var(--flag); }
+/* the tool itself, in the details panel */
+.sr-place button { font-size: 12.5px; padding: 6px 4px; }
+.inspector .ah-gardens { max-height: 168px; }
+.inspector .ah-gardens label span { min-width: 0; overflow-wrap: anywhere; }
+.inspector .ah-gardens label small { white-space: nowrap; }
+.sr-beds { display: grid; gap: 6px; }
+.sr-beds select { width: 100%; height: 34px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--raised); padding: 0 8px; }
+.sr-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.sr-chip { display: inline-flex; align-items: center; gap: 3px; padding: 2px 3px 2px 9px; border: 1px solid color-mix(in srgb, var(--flag) 60%, var(--line)); background: var(--flag-soft); border-radius: 999px; font-size: 12.5px; font-weight: 600; }
+.sr-chip button { width: 18px; height: 18px; border: 0; border-radius: 50%; background: none; padding: 0; font-size: 14px; line-height: 1; color: var(--ink-2); }
+.sr-chip button:hover { background: var(--surface); color: var(--bad); }
+.sr-holdnote { padding: 8px 10px; border-radius: var(--radius); background: var(--flag-soft); color: var(--ink); }
+.sr-moretoggle, .sr-roomtoggle { justify-self: start; text-align: left; font-size: 12.5px; }
+.sr-roomtoggle { font-size: 13px; font-weight: 600; text-decoration: none; color: var(--ink); }
+.sr-roomtoggle .caret { color: var(--muted); }
+.sr-more { display: grid; gap: 9px; padding: 9px 10px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--raised); }
+.sr-sum { font-size: 13.5px; color: var(--ink); }
+.sr-sum.bad { color: var(--bad); font-weight: 600; }
+.sr-waves { display: grid; }
+.sr-waves li { display: grid; grid-template-columns: 50px minmax(0, 1fr); column-gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; color: var(--ink-2); }
+.sr-waves li > b { font: 600 12px var(--mono); color: var(--ink); white-space: nowrap; }
+.sr-waves li em { font-style: normal; font-weight: 600; color: var(--ink); box-shadow: inset 0 -2px 0 var(--flag); }
+.sr-waves li small { display: block; color: var(--muted); font-size: 11.5px; }
+.sr-waves li .sr-when { grid-column: 2; font: 500 11px var(--mono); }
+.sr-waves li.skip { color: var(--muted); }
+.sr-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sr-actions small { color: var(--muted); font-size: 12px; }
+.sr-strip { margin-top: 0; }
+.sr-strip .ah-strip-row { grid-template-columns: 46px minmax(0, 1fr); }
+.sr-strip .ah-cells { gap: 1px; }
+.sr-strip .ah-cells i { height: 13px; border-radius: 2px; }
+.sr-none { padding: 0; }
+.wt-note { margin: 0; padding: 8px 14px; background: var(--flag-soft); border-bottom: 1px solid var(--line-soft); font-size: 12.5px; color: var(--ink); }
+.wt-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* how a bed is shared */
+.dialog.share { width: min(470px, calc(100vw - 32px)); max-width: none; }
+.dialog.share h2 { padding-right: 30px; }
+.share-ways { display: grid; gap: 8px; margin-top: 14px; }
+.share-way { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; background: var(--surface); }
+.share-way b { display: block; font-weight: 600; }
+.share-way small { display: block; color: var(--muted); font-size: 12px; }
+.share-n { display: flex; align-items: center; gap: 7px; margin: 5px 0 3px; font-size: 13px; color: var(--ink-2); }
+.share-n input { width: 64px; height: 30px; border: 1px solid var(--line); border-radius: 7px; background: var(--raised); padding: 0 8px; text-align: right; font: 600 13px var(--mono); color: var(--ink); }

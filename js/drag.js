@@ -7,6 +7,8 @@
  * A crop from the library is planted on the planning date. A planting picked
  * up on the map keeps its own date and only changes ground; on the timeline it
  * takes the date it is dropped on. Hold Alt to leave the original and place a copy.
+ * A planting that has no bed yet (one of a series, waiting to be placed) keeps its
+ * own date wherever it is dropped: the series set its dates, the drop chooses its ground.
  *
  * While something is in the air every space on the map shows what a drop
  * there would do: take it, take part of it, trade places, or nothing.
@@ -27,6 +29,7 @@
   const payloadNow = () => drag.base.plantingId ? { ...drag.base, copy: drag.copy || undefined } : drag.base;
   /** A moved planting keeps its date on the map; a library crop goes in on the planning date. */
   function dateFor(target) {
+    if (drag.base.waitingId) { const w = App.waitingOne(drag.base.waitingId); return w ? E.s2d(w.date) : App.state.date; }
     if (target.date) return target.date;
     const p = drag.base.plantingId ? App.state.engine.planting(drag.base.plantingId) : null;
     return p ? E.s2d(p.date) : App.state.date;
@@ -35,7 +38,7 @@
     // One pass over the farm: what would a drop do in each space?
     drag.states = new Map();
     const payload = payloadNow();
-    for (const bed of App.state.plan.beds) if (bed.active !== false) drag.states.set(bed.id, App.preview(payload, { bedId: bed.id, date: dateFor({}) }).state);
+    for (const bed of App.state.plan.beds) if (bed.active !== false) drag.states.set(bed.id, App.preview(payload, { bedId: bed.id, date: dateFor({}), survey: true }).state);
   }
   function begin(spec, alt) {
     const ghost = h('div.drag-ghost', h('i', { style: { background: spec.color } }), h('b', spec.label), h('span.drag-hint', ''));
@@ -56,7 +59,7 @@
     const hint = drag.ghost.querySelector('.drag-hint');
     if (!spot) {
       drag.target = null; drag.ghost.dataset.state = '';
-      hint.textContent = onMap ? (drag.base.plantingId ? 'Drop on a bed · Alt copies' : 'Drop on a bed') : 'Drop on a row at a date';
+      hint.textContent = drag.base.waitingId ? `Drop on a ${onMap ? 'bed' : 'row'} · it keeps its date, ${UI.day(dateFor({}))}` : onMap ? (drag.base.plantingId ? 'Drop on a bed · Alt copies' : 'Drop on a bed') : 'Drop on a row at a date';
     } else {
       const target = { ...spot, date: dateFor(spot) }, preview = App.preview(payloadNow(), target), bed = App.state.engine.bedOf(target.bedId);
       drag.target = { ...target, preview };

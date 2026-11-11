@@ -162,6 +162,8 @@
     if (!prev || mine.sample) return { plan, keep, notes, gone: [] };
     if (figures(prev.assumptions) && !figures(next.assumptions)) { plan.assumptions = prev.assumptions; const n = figures(prev.assumptions); notes.push(`your assumptions list (${n} figure${n === 1 ? '' : 's'})`); }
     for (const key of ['crates', 'trayStart', 'trays', 'groups']) if (mine[key]) keep[key] = mine[key];
+    // Plantings waiting to be placed were made here and are in no v7 backup: they stay, still waiting.
+    if (Array.isArray(mine.waiting) && mine.waiting.length) { keep.waiting = mine.waiting; notes.push(`${mine.waiting.length} planting${mine.waiting.length === 1 ? '' : 's'} waiting to be placed`); }
     const facts = {}, changed = [];
     for (const list of FACT_LISTS) {
       const entries = Object.entries((mine.facts || {})[list] || {});

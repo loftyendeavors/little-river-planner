@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.18">
+<meta name="lrf-build" content="0.19">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -30,6 +30,7 @@
     <button type="button" data-view-btn="seeds" aria-pressed="false">Seeds</button>
   </nav>
   <div class="top-actions">
+    <button type="button" class="wait-badge" id="waitBadge" hidden></button>
     <button type="button" class="icon-btn" id="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶</button>
     <button type="button" class="icon-btn" id="redoBtn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>↷</button>
     <button type="button" class="save-state" id="saveState" data-state="loading">Opening plan…</button>
@@ -59,6 +60,7 @@
         <button type="button" data-lib-scope="all" aria-pressed="false" title="Every crop the planner knows, including ones you have never grown">All crops <small></small></button>
       </div>
     </header>
+    <div class="wait-box" id="waitBox" aria-label="Plantings with no bed yet" hidden></div>
     <div class="lib-list" id="libList"></div>
     <p class="lib-hint" id="libHint">Drag a crop onto a bed. Or click it, then click beds.</p>
   </aside>
@@ -242,6 +244,7 @@
 <script src="js/sowview.js"></script>
 <script src="js/harvestview.js"></script>
 <script src="js/ahead.js"></script>
+<script src="js/series.js"></script>
 <script src="js/main.js"></script>
 <script src="js/pwa.js"></script>
 </body>
