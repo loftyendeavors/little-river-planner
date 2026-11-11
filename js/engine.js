@@ -145,8 +145,20 @@
       const m = /(\d+)\s*site/i.exec((b && b.type) || '');
       return m ? Math.max(1, +m[1]) : positive(b && b.sites, 42);
     };
+    // Heated nursery benches. Plug trays, sheltered crates and live trays all stand on them, so their room is one pool,
+    // counted in 10 × 20-inch tray spaces the way v7 counts it: bench area × packing ÷ one tray's footprint.
+    const TRAY_FT2 = 200 / 144;
+    // Crates sheltered under heat until they move outdoors stand on the floor here, so they take no bench room.
+    // v7 counts each by its footprint as bench room; `crates: 'bench'` in this app's own settings, or the v7 parity mode, does the same.
+    const cratesOnBenches = legacy || !!(S.lrfNext && S.lrfNext.crates === 'bench');
+    const benches = () => Array.isArray(S.nursery && S.nursery.spaces) ? S.nursery.spaces.filter(x => x && typeof x === 'object') : [];
+    const benchPacking = () => clamp(positive(S.nursery && S.nursery.packing, 85) / 100, 0.3, 1);
+    const benchCap = sp => Math.floor(nonNegative(sp.w) * nonNegative(sp.l) * benchPacking() / TRAY_FT2);
+    const heatedTraySpaces = () => benches().filter(sp => sp.active !== false && sp.kind !== 'outside').reduce((n, sp) => n + benchCap(sp), 0);
+    /** The stand-in space v7 files live trays under: it is every heated bench at once, and has no place of its own. */
+    const isPool = b => !!b && b.liveTrayPool === true && isRack(b);
     /** Capacity in the space's own unit: tower sites, trays, containers or bed-feet. */
-    const capOf = b => !b ? 0 : isTower(b) ? sites(b) : isRack(b) ? nonNegative(b.trays) : isCt(b) ? nonNegative(b.count) : nonNegative(b.l);
+    const capOf = b => !b ? 0 : isTower(b) ? sites(b) : isRack(b) ? (b.liveTrayPool ? heatedTraySpaces() : nonNegative(b.trays)) : isCt(b) ? nonNegative(b.count) : nonNegative(b.l);
     const capUnit = b => isTower(b) ? 'sites' : isRack(b) ? 'trays' : isCt(b) ? 'containers' : 'ft';
     const lenOf = (p, b) => { if (isTower(b)) return 0; const cap = capOf(b), want = isRack(b) ? finite(p.trays) : finite(p.ft); return want > 0 ? want : cap; };
     const usedSites = (p, b, c) => {
@@ -623,13 +635,25 @@
         return true;
       }).map(x => x.r).sort((a, b) => b.len - a.len || b.field - a.field);
     }
+    // When each planting holds its space, worked out once per space: a crate group or a bench can hold a hundred plantings,
+    // and every one of them is asked about every other.
+    const heldCache = new Map();
+    function heldIn(b) {
+      let list = heldCache.get(b.id);
+      if (list) return list;
+      list = [];
+      for (const q of plantingsIn(b.id)) {
+        const r = calc(q);
+        if (r) list.push({ p: q, r, field: occupancyFrom(q, r), last: occupancyThrough(q, r), len: r.tw ? capOf(b) : r.len, key: standKey(q) });
+      }
+      heldCache.set(b.id, list);
+      return list;
+    }
     function occupants(b, ignoreId, extra) {
       const ignore = plantingById.get(ignoreId), ignoreStand = ignore ? standKey(ignore) : null, byStand = new Map(), out = [];
-      for (const q of plantingsIn(b.id)) {
-        if (q.id === ignoreId || (ignoreStand && standKey(q) === ignoreStand)) continue;
-        const r = calc(q);
-        if (!r) continue;
-        const x = { p: q, r, field: occupancyFrom(q, r), last: occupancyThrough(q, r), len: r.tw ? capOf(b) : r.len }, key = standKey(q);
+      for (const held of heldIn(b)) {
+        if (held.p.id === ignoreId || (ignoreStand && held.key === ignoreStand)) continue;
+        const x = { p: held.p, r: held.r, field: held.field, last: held.last, len: held.len }, key = held.key;
         if (key) {
           const prev = byStand.get(key);
           if (prev) { prev.field = new Date(Math.min(prev.field, x.field)); prev.last = Math.max(prev.last, x.last); prev.len = Math.max(prev.len, x.len); }
@@ -653,9 +677,13 @@
       const L = capOf(b);
       if (!oc.length) return L;
       if (!(ignore && ignore.bedLayout) && plantingsIn(b.id).some(q => { if (q.id === ignoreId || !q.bedLayout) return false; const r = calc(q); return r && r.field <= through && occupancyThrough(q, r) >= from; })) return 0;
-      const points = [from, ...oc.map(x => x.field).filter(d => d > from && d <= through)];
-      let min = L;
-      for (const t of points) min = Math.min(min, L - oc.filter(x => x.field <= t && x.last >= t).reduce((a, x) => a + x.len, 0));
+      // The fullest moment is at the start or on a day something else arrives. Dates are compared as numbers: with a hundred
+      // plantings in one group of crates this runs a million times.
+      const n = oc.length, a = new Array(n), z = new Array(n), F = +from, T = +through;
+      for (let i = 0; i < n; i++) { a[i] = +oc[i].field; z[i] = +oc[i].last; }
+      const heldAt = t => { let sum = 0; for (let i = 0; i < n; i++) if (a[i] <= t && z[i] >= t) sum += oc[i].len; return sum; };
+      let min = Math.min(L, L - heldAt(F));
+      for (let i = 0; i < n; i++) if (a[i] > F && a[i] <= T) min = Math.min(min, L - heldAt(a[i]));
       return min;
     }
     function overlap(p, q) {
@@ -740,19 +768,16 @@
     const rectsCross = (f, g) => f.a0 < g.a1 - 1e-6 && g.a0 < f.a1 - 1e-6 && f.x0 < g.x1 - 1e-6 && g.x0 < f.x1 - 1e-6;
     /** Does a planting ask for more than its space holds? */
     function overflow(p, r) {
-      if (!r || r.tw) return false;
+      if (!r || r.tw || isPool(r.b)) return false;   // shared bench room is shown as a load, never refused
       const f = footprint(p, r);
       return f ? f.a1 > r.cap + 1e-6 : r.len > r.cap + 1e-6;
     }
     /** Everything that holds part of a space at some point in [from, through], and the part it holds. */
     function holders(b, from, through, ignoreId) {
       const ignore = plantingById.get(ignoreId), ignoreStand = ignore ? standKey(ignore) : null, out = [], cap = capOf(b);
-      for (const q of plantingsIn(b.id)) {
-        if (q.id === ignoreId || (ignoreStand && standKey(q) === ignoreStand)) continue;
-        const x = calc(q);
-        if (!x) continue;
-        const qf = occupancyFrom(q, x), qt = occupancyThrough(q, x);
-        if (qf <= through && qt >= from) out.push({ p: q, r: x, from: qf, through: qt, rect: footprint(q, x), len: x.tw ? cap : x.len });
+      for (const held of heldIn(b)) {
+        if (held.p.id === ignoreId || (ignoreStand && held.key === ignoreStand)) continue;
+        if (held.field <= through && held.last >= from) out.push({ p: held.p, r: held.r, from: held.field, through: held.last, rect: footprint(held.p, held.r), len: held.len });
       }
       for (const rest of b.restPeriods || []) {
         const a = s2d(rest.from), z = s2d(rest.to);
@@ -763,7 +788,7 @@
     /** What a planting, saved or proposed, collides with. */
     function conflicts(p, r) {
       r = r || calc(p);
-      if (!r) return [];
+      if (!r || isPool(r.b)) return [];
       const from = occupancyFrom(p, r), through = occupancyThrough(p, r), others = holders(r.b, from, through, p.id);
       if (!others.length || r.tw) return others;
       const mine = footprint(p, r);
@@ -787,6 +812,54 @@
       const resting = !here.length && plantingsIn(b.id).some(p => { const r = calc(p); return r && occupancyFrom(p, r) <= date && date <= occupancyThrough(p, r); });
       return { crops: here, cap, used, free: Math.max(0, cap - used), resting };
     }
+    // ── heated bench room in use: v7's nursery load, without its shared-sowing-batch rounding ──
+    const ctFt2 = ct => { const [w, l] = ctDims(ct); return w * l; };
+    function potUpDate(r) {
+      if (!r || !r.sow || r.c.prop !== 'potup' || r.tw || r.established) return null;
+      const actual = doneOf(r.planting, 'potup');
+      return actual ? s2d(actual) : addDays(r.sow, Math.round(Math.max(0, finite(r.c.potUpWk, 2)) * 7));
+    }
+    /** What one planting's seedlings take up on a date: trays, or carriers of pots once potted up. */
+    function propOf(r, date) {
+      if (!r || !r.sow || !r.cells) return null;
+      const c = r.c, pd = potUpDate(r), pot = !r.tw && (c.prop === 'pot' || (c.prop === 'potup' && (!date || (pd && date >= pd))));
+      if (pot) { const per = Math.max(1, Math.round(positive(c.perCarrier, 10))), size = positive(c.potSize, 4.5), n = Math.ceil(r.cells / per); return { kind: 'pot', n, eq: n * size * size * per / 144 / TRAY_FT2 }; }
+      const n = r.trays || Math.ceil(r.cells / positive(c.tray, 72));
+      return { kind: r.tw ? 'rockwool' : 'tray', n, eq: n };
+    }
+    let benchItemsCache = null;
+    /** Everything that stands on a heated bench at some time: live trays, seedlings, and crates sheltered until they move out. */
+    function benchItems() {
+      if (benchItemsCache) return benchItemsCache;
+      const items = [];
+      for (const p of S.plantings) {
+        const r = calc(p);
+        if (!r || r.b.active === false || r.g.active === false) continue;
+        const failure = p.workflow && p.workflow.outcome === 'failed' ? s2d(p.workflow.failureDate) : null, propEnd = validDate(failure) && failure < r.field ? failure : r.field;
+        if (r.rack && r.c.micro && r.b.liveTrayPool) { const to = addDays(occupancyThrough(p, r), 1); if (to > r.field) items.push({ p, r, kind: 'live', from: r.field, to, n: r.len, eq: r.len }); }
+        if (r.sow && r.cells && r.sow < propEnd) items.push({ p, r, kind: 'prop', from: r.sow, to: propEnd });
+        if (r.ct && r.b.shelter && r.b.shelter.gardenId === 'nursery' && r.out && r.out > r.field) {
+          const to = r.actualClear && r.actualClear < r.out ? addDays(r.actualClear, 1) : r.out;
+          if (to > r.field) items.push({ p, r, kind: 'crate', from: r.field, to, n: r.len, eq: r.len * ctFt2(ctOf(r.b)) / TRAY_FT2, floor: !cratesOnBenches });
+        }
+      }
+      return (benchItemsCache = items);
+    }
+    /** Heated bench room on one day, in tray spaces: what is there by kind, the total, and what the benches hold. */
+    function benchDay(date) {
+      const row = { date: new Date(date), cap: heatedTraySpaces(), live: 0, crate: 0, tray: 0, pot: 0, rockwool: 0, total: 0, floorCrates: 0, items: [] };
+      for (const it of benchItems()) {
+        if (date < it.from || date >= it.to) continue;
+        if (it.floor) { row.floorCrates += it.n; continue; }   // under cover, but standing on the floor: no bench room
+        const u = it.kind === 'prop' ? propOf(it.r, date) : { kind: it.kind, n: it.n, eq: it.eq };
+        if (!u) continue;
+        row[u.kind] += u.eq; row.total += u.eq; row.items.push({ p: it.p, r: it.r, kind: u.kind, n: u.n, eq: u.eq });
+      }
+      row.over = Math.max(0, row.total - row.cap);
+      return row;
+    }
+    const benchList = () => benches().map(sp => ({ id: sp.id, name: sp.name || 'Bench', area: (((S.nursery || {}).benchAreas || []).find(a => a.id === (sp.benchLayout || {}).areaId) || {}).name || '', w: nonNegative(sp.w), l: nonNegative(sp.l), heated: sp.kind !== 'outside', active: sp.active !== false, cap: benchCap(sp) }));
+
     function nextPlanting(bedId, date) {
       return plantingsIn(bedId).map(calc).filter(r => r && r.field > date).sort((a, b) => a.field - b.field)[0] || null;
     }
@@ -795,7 +868,8 @@
       plan: S, settings, lib,
       crops: () => cropList, crop, variety, cropColor, isCoverCrop, isPerennial,
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
-      bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
+      bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
+      heatedTraySpaces, benchList, benchItems, benchDay, cratesOnBenches,
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,
       footprint, overflow, holders, conflicts,

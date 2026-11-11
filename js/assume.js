@@ -74,7 +74,7 @@
         h('td', h('div.as-name',
           varieties.length ? h('button.as-more', { type: 'button', 'aria-expanded': String(!!open), 'aria-label': `${open ? 'Hide' : 'Show'} ${varieties.length} varieties of ${c.name}`, title: `${varieties.length} variet${varieties.length === 1 ? 'y' : 'ies'}`, onclick: () => { ui.open.has(c.id) ? ui.open.delete(c.id) : ui.open.add(c.id); render(); } }, open ? '▾' : '▸') : h('span.as-more'),
           root.LRFThumbs.el({ cropId: c.id, color: eng.cropColor(c), label: c.name, size: 24, cls: 'key' }), h('b', c.name),
-          h('small', c.method === 'TP' ? 'from transplant' : 'from sowing'))),
+          h('small', c.micro ? 'from sowing the tray' : (c.plantingMaterial || c.material) === 'bulb' || c.plantingMaterial === 'plant' ? 'from planting' : c.method === 'TP' ? 'from transplant' : 'from sowing'))),
         eng.ENVS.map(env => cell('crops', c.id, env, eng.timingFor(c.id, null, env), c.name)),
         useCell(used.get(c.id) || 0, pins.get(c.id) || 0)));
       if (!open) continue;

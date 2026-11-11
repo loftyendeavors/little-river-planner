@@ -17,7 +17,7 @@
 
   /** Share of growing spaces holding a crop, sampled weekly. */
   function occupancy() {
-    const eng = App.state.engine, spaces = App.state.plan.beds.filter(b => b.active !== false), out = [];
+    const eng = App.state.engine, spaces = App.state.plan.beds.filter(b => b.active !== false && !eng.isPool(b)), out = [];
     for (let d = yearStart(), i = 0; i < 53; i++, d = E.addDays(d, 7)) {
       if (d.getFullYear() !== App.planYear()) break;
       let used = 0;
@@ -42,10 +42,26 @@
     }
     const frost = App.state.engine.frostDates(year);
     for (const [d, label] of [[frost.last, 'last frost'], [frost.first, 'first frost']]) {
-      if (E.validDate(d)) marks.append(h('span.season-frost', { style: { left: pct(d) + '%' }, title: `${label}: ${UI.day(d)}` }, h('i'), label));
+      if (E.validDate(d)) marks.append(h('span.season-frost' + (label === 'last frost' ? '.before' : ''), { dataset: { side: label === 'last frost' ? 'before' : 'after' }, style: { left: pct(d) + '%' }, title: `${label}: ${UI.day(d)}` }, h('i'), label));
     }
     const peak = series.reduce((a, p) => p.share > a.share ? p : a, { share: 0 });
-    $('seasonPeak').textContent = peak.share ? `Peak ${Math.round(peak.share * 100)}% of spaces planted, week of ${UI.day(peak.d)}` : 'No plantings yet';
+    // in three parts, so a narrow strip can drop the middle and keep "Peak 94%" over "week of Jun 18"
+    const say = clear($('seasonPeak'));
+    if (peak.share) say.append(h('span', `Peak ${Math.round(peak.share * 100)}%`), h('span.mid', ' of spaces planted,'), h('span', ` week of ${UI.day(peak.d)}`)); else say.textContent = 'No plantings yet';
+    fit();
+  }
+
+  /**
+   * The strip follows the room it has. In a narrow column the track drops under the date and takes the full
+   * width, where its months stay readable; a frost label that would run off the end reads from the other side.
+   */
+  function fit() {
+    const foot = document.querySelector('.season'), w = foot ? foot.clientWidth : 0;
+    if (!w) return;
+    foot.classList.toggle('stacked', w < 900 && w >= 600);
+    foot.classList.toggle('slim', w < 600);
+    const track = $('seasonMarks').clientWidth;
+    for (const el of document.querySelectorAll('.season-frost')) el.classList.toggle('before', el.dataset.side === 'before' || track * (1 - parseFloat(el.style.left) / 100) < el.offsetWidth + 6);
   }
 
   function drawDate() {
@@ -82,6 +98,7 @@
     let pending = 0;
     App.on('plan', () => { cancelAnimationFrame(pending); pending = requestAnimationFrame(() => { drawChart(); drawDate(); }); });
     App.on('date', drawDate);
+    if (root.ResizeObserver) new ResizeObserver(fit).observe(document.querySelector('.season'));
   }
 
   root.LRFSeason = { init };

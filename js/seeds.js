@@ -535,8 +535,7 @@
       ui.tab === 'crops' ? h('span.sd-note', 'Click a crop to edit it. Days to harvest are on the Assumptions list.') : FILTERS.map(([id, label]) =>
         h('button.chip', { type: 'button', 'aria-pressed': String(ui.filter === id), onclick: () => { ui.filter = id; schedule(); } }, label, h('small', m.live.filter(v => passes(m, v, id)).length))),
       h('span.grow'),
-      ui.tab === 'list' ? sel('sort', SORTS, ui.sort, { 'aria-label': 'Order', id: 'sdSort', onchange: e => { ui.sort = e.target.value; schedule(); } }) : null,
-      ui.tab === 'list' && ui.sort === 'crop' ? h('button.link', { type: 'button', id: 'sdFold', onclick: () => { const ids = groupsOf(m, list).map(g => g.id); if (ids.every(id => ui.closed.has(id))) ui.closed.clear(); else ids.forEach(id => ui.closed.add(id)); schedule(); } }, groupsOf(m, list).every(g => ui.closed.has(g.id)) && list.length ? 'Expand all' : 'Collapse all') : null);
+      ui.tab === 'list' ? sel('sort', SORTS, ui.sort, { 'aria-label': 'Order', id: 'sdSort', onchange: e => { ui.sort = e.target.value; schedule(); } }) : null);
     $('sdTable').hidden = ui.tab === 'gallery'; $('sdGallery').hidden = ui.tab !== 'gallery';
     if (ui.tab === 'crops') cropsTable(m, q); else if (ui.tab === 'gallery') gallery(m, list, q); else listTable(m, list, q);
     if (ui.sel && ui.sel.type === 'variety' && !m.live.some(v => v.id === ui.sel.id)) ui.sel = null;
@@ -550,27 +549,48 @@
     ui.keepFocus = false;
   }
 
+  /**
+   * The list's columns: id, heading, right-aligned, width in px, and the order in which a column gives way.
+   * The variety column takes what is left and never less than NAME_MIN, so a narrow window loses the columns
+   * that say least (supplier, then the count of plantings, the first sowing date, the vendor size) before it loses names.
+   */
+  const LIST_COLS = [['name', 'Variety'], ['sup', 'Supplier', 0, 122, 1], ['days', 'Days', 1, 84], ['from', 'Counted from', 0, 124], ['tosow', 'To sow', 1, 88],
+    ['hand', 'On hand', 1, 130], ['short', 'Short', 1, 62], ['size', 'Vendor size', 1, 134, 4], ['first', 'First sow', 1, 84, 3], ['uses', 'Plantings', 1, 84, 2]];
+  const NAME_MIN = 190;
+  function listCols() {
+    const room = ($('sdScroll').clientWidth || 1240) - 40;
+    let cols = LIST_COLS;
+    const fixed = () => cols.reduce((n, c) => n + (c[3] || 0), 0);
+    for (const rank of [1, 2, 3, 4]) { if (fixed() + NAME_MIN <= room) break; cols = cols.filter(c => c[4] !== rank); }
+    return { cols, fixed: fixed(), key: cols.map(c => c[0]).join(' ') };
+  }
   function listTable(m, list, q) {
-    const { eng } = m, grouped = ui.sort === 'crop', stock = true;
-    const heads = [['Variety'], ['Supplier', 0, 'sd-sup'], ['Days', 1, 'w-s'], ['Counted from', 0, 'w-l'], ['To sow', 1, 'w-m'], ...(stock ? [['On hand', 1, 'w-l'], ['Short', 1, 'w-s']] : []), ['Vendor size', 1, 'w-xl'], ['First sow', 1, 'w-m'], ['Plantings', 1, 'w-m']];
-    clear($('sdHead')).append(h('tr', heads.map(([t, n, c]) => h('th' + (n ? '.sd-num' : '') + (c ? '.' + c : ''), t))));
-    const body = clear($('sdBody')), cols = heads.length;
+    const { eng } = m, grouped = ui.sort === 'crop', plan = listCols(), ids = plan.cols.map(c => c[0]);
+    ui.colsKey = plan.key;
+    $('sdTable').style.minWidth = `${plan.fixed + NAME_MIN}px`;
+    const folds = grouped ? groupsOf(m, list).map(g => g.id) : [], allShut = folds.length > 0 && folds.every(id => ui.closed.has(id));
+    const fold = folds.length > 1 ? h('button.link.sd-fold', { type: 'button', id: 'sdFold', onclick: () => { if (allShut) ui.closed.clear(); else folds.forEach(id => ui.closed.add(id)); schedule(); } }, allShut ? 'Expand all' : 'Collapse all') : null;
+    clear($('sdHead')).append(h('tr', plan.cols.map(([id, t, n, w]) => h('th' + (n ? '.sd-num' : ''), w ? { style: { width: w + 'px' } } : {}, t, id === 'name' ? fold : null))));
+    const body = clear($('sdBody')), cols = ids.length;
     const row = (v, flat) => {
       const r = m.byV.get(v.id), basis = v.catalogMaturityBasis || 'unspecified', crop = eng.crop(v.cropId), site = SL.hostOf(v.url);
-      return h('tr.sd-var', { tabIndex: 0, 'aria-label': `${v.name}, ${cropName(crop)}`, dataset: { variety: v.id }, onclick: e => { if (!e.target.closest('a, select, input, button')) select({ type: 'variety', id: v.id }); }, onkeydown: rowKey },
-        h('td', h('div.sd-cell', T.el({ varietyId: v.id, color: crop && eng.cropColor(crop), label: v.name, size: 34 }), h('span.sd-name', h('span.as-vname', v.name), flat ? h('small', cropName(crop)) : null))),
-        h('td.sd-sup', supplierShort(v) || (v.source === 'Farm entry' ? 'By hand' : ''), site ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer', title: `${v.sku ? v.sku + ' · ' : ''}open the page on ${site}` }, ' ↗') : null),
-        h('td.sd-num', daysText(v) || '—', v.catalogHarvestStage && v.catalogHarvestStage !== 'unspecified' ? h('small', ` ${v.catalogHarvestStage}`) : null),
-        v.catalogDtm ? h('td.sd-from' + (basis === 'unspecified' ? '.sd-open' : ''), sel('from', BASIS_SHORT, basis, { 'aria-label': `${v.name}: days counted from`, onchange: async e => {
+      const stage = v.catalogHarvestStage && v.catalogHarvestStage !== 'unspecified' ? v.catalogHarvestStage : '';
+      const cell = {
+        name: () => h('td', h('div.sd-cell', T.el({ varietyId: v.id, color: crop && eng.cropColor(crop), label: v.name, size: 34 }), h('span.sd-name', h('span.as-vname', v.name), flat ? h('small', cropName(crop)) : null))),
+        sup: () => h('td.sd-sup', supplierShort(v) || (v.source === 'Farm entry' ? 'By hand' : ''), site ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer', title: `${v.sku ? v.sku + ' · ' : ''}open the page on ${site}` }, ' ↗') : null),
+        days: () => h('td.sd-num.sd-days', daysText(v) || '—', stage ? h('small', stage) : null),
+        from: () => v.catalogDtm ? h('td.sd-from' + (basis === 'unspecified' ? '.sd-open' : ''), sel('from', BASIS_SHORT, basis, { 'aria-label': `${v.name}: days counted from`, onchange: async e => {
           const value = e.target.value;
           if (!(await App.revise(`${v.name}: days counted from ${BASIS_TEXT[value]}`, [{ kind: 'variety', before: v, after: { ...v, catalogMaturityBasis: value, catalogSourceChoice: v.catalogSourceChoice || 'url' } }]))) schedule();
         } })) : h('td.sd-from', v.dtm > 0 ? h('small', 'the day it goes in') : ''),
-        h('td.sd-num', r && r.toSow > 0 ? amount(r) : ''),
-        stockCell(r, v.name),
-        stock ? h('td.sd-num', r && r.short > 0 ? num(r.short, r.unit === 'g' ? 1 : 0) : '') : null,
-        sizeCell(r, v),
-        h('td.sd-num', r && r.first ? day(r.first) : ''),
-        h('td.sd-num', m.used.get(v.id) || ''));
+        tosow: () => h('td.sd-num', r && r.toSow > 0 ? amount(r) : ''),
+        hand: () => stockCell(r, v.name),
+        short: () => h('td.sd-num', r && r.short > 0 ? num(r.short, r.unit === 'g' ? 1 : 0) : ''),
+        size: () => sizeCell(r, v),
+        first: () => h('td.sd-num', r && r.first ? day(r.first) : ''),
+        uses: () => h('td.sd-num', m.used.get(v.id) || '')
+      };
+      return h('tr.sd-var', { tabIndex: 0, 'aria-label': `${v.name}, ${cropName(crop)}`, dataset: { variety: v.id }, onclick: e => { if (!e.target.closest('a, select, input, button')) select({ type: 'variety', id: v.id }); }, onkeydown: rowKey }, ids.map(id => cell[id]()));
     };
     let shown = 0;
     if (!grouped) {
@@ -587,7 +607,7 @@
         body.append(h('tr.sd-crop' + (closed ? '.closed' : ''), { dataset: { crop: g.id }, onclick: e => { if (e.target.closest('.link')) return; closed ? ui.closed.delete(g.id) : ui.closed.add(g.id); schedule(); } }, h('td', { colSpan: cols }, h('div.as-name',
           h('button.as-more', { type: 'button', 'aria-expanded': String(!closed), 'aria-label': `${closed ? 'Show' : 'Hide'} ${cropName(g.crop)}` }, closed ? '▸' : '▾'),
           T.el({ cropId: g.id, color, label: cropName(g.crop), size: 26, cls: 'key' }), h('b', g.crop ? g.crop.name : 'A crop that is no longer in the library'),
-          h('small', `${g.list.length} variet${g.list.length === 1 ? 'y' : 'ies'}${g.crop ? ' · ' + (g.crop.method === 'TP' ? 'transplanted' : 'direct sown') : ''}${seeds ? ` · ${num(seeds)} seeds to sow` : ''}`),
+          h('small', `${g.list.length} variet${g.list.length === 1 ? 'y' : 'ies'}${g.crop ? ' · ' + howPlanted(g.crop) : ''}${seeds ? ` · ${num(seeds)} seeds to sow` : ''}`),
           h('span.grow'),
           g.crop ? h('button.link', { type: 'button', onclick: () => select({ type: 'crop', id: g.id }) }, 'Edit crop') : null,
           g.crop ? h('button.link', { type: 'button', onclick: () => openVariety(null, g.id) }, 'Add a variety') : null))));
@@ -595,8 +615,13 @@
         for (const v of g.list) { body.append(row(v, false)); shown++; }
         for (const r of plain) {
           shown++;
-          body.append(h('tr.sd-need', { dataset: { key: r.key } }, h('td', h('div.sd-cell', T.el({ cropId: g.id, color, label: cropName(g.crop), size: 34, cls: 'faint' }), h('span.sd-name', h('small', 'No variety chosen')))), h('td.sd-sup'), h('td'), h('td'),
-            h('td.sd-num', amount(r)), stockCell(r, `${cropName(g.crop)}, no variety`), h('td.sd-num', r.short > 0 ? num(r.short) : ''), h('td'), h('td.sd-num', r.first ? day(r.first) : ''), h('td.sd-num', r.waiting === r.plantings ? r.plantings : `${r.waiting} of ${r.plantings}`)));
+          const cell = {
+            name: () => h('td', h('div.sd-cell', T.el({ cropId: g.id, color, label: cropName(g.crop), size: 34, cls: 'faint' }), h('span.sd-name', h('small', 'No variety chosen')))),
+            sup: () => h('td.sd-sup'), days: () => h('td'), from: () => h('td'), size: () => h('td'),
+            tosow: () => h('td.sd-num', amount(r)), hand: () => stockCell(r, `${cropName(g.crop)}, no variety`), short: () => h('td.sd-num', r.short > 0 ? num(r.short) : ''),
+            first: () => h('td.sd-num', r.first ? day(r.first) : ''), uses: () => h('td.sd-num', r.waiting === r.plantings ? r.plantings : `${r.waiting} of ${r.plantings}`)
+          };
+          body.append(h('tr.sd-need', { dataset: { key: r.key } }, ids.map(id => cell[id]())));
         }
       }
     }
@@ -639,16 +664,20 @@
     host2.append(list.length ? cards : h('p.empty', q ? `No variety matches “${ui.query}”.` : 'No variety fits this filter.'));
     foot(m);
   }
+  /** How a crop gets into the ground, as the grower would say it. */
+  const howPlanted = c => c.micro ? 'live trays' : (c.plantingMaterial || c.material) === 'bulb' ? 'from bulbs' : c.plantingMaterial === 'plant' ? 'bought-in plants' : c.method === 'TP' ? 'transplanted' : 'direct sown';
   function cropsTable(m, q) {
     const { eng, plan } = m, settings = plan.settings.cropTypeList || {};
-    clear($('sdHead')).append(h('tr', [['Crop'], ['Planted'], ['Nursery days', 1], ['In row (in)', 1], ['Rows apart (in)', 1], ['Rows per bed', 1], ['Varieties', 1], ['Plantings', 1]].map(([t, n]) => h('th' + (n ? '.sd-num' : ''), t))));
+    const heads = [['Crop'], ['Planted', 0, 124], ['Nursery days', 1, 104], ['In row (in)', 1, 96], ['Rows apart (in)', 1, 114], ['Rows per bed', 1, 104], ['Varieties', 1, 84], ['Plantings', 1, 84]];
+    $('sdTable').style.minWidth = `${heads.reduce((n, c) => n + (c[2] || 0), 0) + NAME_MIN}px`; ui.colsKey = '';
+    clear($('sdHead')).append(h('tr', heads.map(([t, n, w]) => h('th' + (n ? '.sd-num' : ''), w ? { style: { width: w + 'px' } } : {}, t))));
     const body = clear($('sdBody'));
     for (const c of sortedCrops()) {
       const vs = eng.varietiesOf(c.id), mine = root.LRFPanels.isMine(c, m.usedCrop, vs, settings);
       if (q ? !String(c.name).toLowerCase().includes(q) : !mine) continue;
       body.append(h('tr.sd-var.sd-croprow', { tabIndex: 0, dataset: { croprow: c.id }, 'aria-label': c.name, onclick: () => select({ type: 'crop', id: c.id }), onkeydown: e => { if (e.key === 'Enter') select({ type: 'crop', id: c.id }); } },
         h('td', h('div.sd-cell', T.el({ cropId: c.id, color: eng.cropColor(c), label: c.name, size: 34, cls: 'key' }), h('span.sd-name', h('b', c.name), c.family ? h('small', c.family) : null))),
-        h('td', c.micro ? 'living trays' : c.method === 'TP' ? 'transplanted' : 'direct sown'),
+        h('td', howPlanted(c)),
         h('td.sd-num', c.method === 'TP' && c.gh ? num(c.gh * 7) : ''), h('td.sd-num', c.inRow ? num(c.inRow, 2) : ''), h('td.sd-num', c.rowSp ? num(c.rowSp, 2) : ''),
         h('td.sd-num', c.rowsPerBed != null && c.rowsPerBed !== '' ? String(c.rowsPerBed) : h('small', 'by width')), h('td.sd-num', vs.length || ''), h('td.sd-num', m.usedCrop.get(c.id) || '')));
     }
@@ -669,7 +698,7 @@
     if (!ui.sel) {
       const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), open = m.live.filter(noStart).length, short = [...m.byV.values()].filter(r => r.short > 0).length, onOrder = Object.values(m.stock).filter(x => x.onOrder > 0).length;
       add(el, h('header.sd-ph.plain', h('div', h('p.eyebrow', `${App.planYear()} season`), h('h2', 'Seed library'))),
-        h('div.sd-stats', stat('Varieties', num(m.live.length), `${m.live.filter(v => m.used.has(v.id)).length} planted`), stat('To sow', num(seeds), 'seeds'), stat('Short of seed', num(short), 'varieties')),
+        h('div.sd-stats', stat('Varieties', num(m.live.length), `${m.live.filter(v => m.used.has(v.id)).length} planted`), stat('To sow', num(seeds), 'seeds'), stat('Short', num(short), 'varieties')),
         onOrder ? h('button.sd-task.plain', { type: 'button', id: 'sdReceiveAll', onclick: receiveAll }, h('b', `Seed for ${onOrder} variet${onOrder === 1 ? 'y' : 'ies'} is on order`), h('span', 'When the box comes, click an order in the list to count it as on hand, or click here to mark every order as arrived.')) : null,
         m.unlisted.length ? unlistedBox(m) : null,
         open ? h('button.sd-task', { type: 'button', onclick: () => { ui.filter = 'open'; ui.tab = 'list'; schedule(); } }, h('b', `${open} variet${open === 1 ? 'y has' : 'ies have'} supplier days with no starting point`), h('span', 'For a transplanted crop that can move the harvest by the whole nursery time. Set each one in the “Counted from” column.')) : null,
@@ -758,6 +787,8 @@
   function init() {
     for (const b of document.querySelectorAll('[data-sd-tab]')) b.addEventListener('click', () => { ui.tab = b.dataset.sdTab; if (ui.tab === 'crops' && ui.sel && ui.sel.type === 'variety') ui.sel = null; schedule(); });
     $('sdSearch').addEventListener('input', e => { ui.query = e.target.value; schedule(); });
+    // the list drops and regains columns as its room changes
+    if (root.ResizeObserver) new ResizeObserver(() => { if (App.state.view === 'seeds' && ui.tab === 'list' && $('sdScroll').clientWidth && listCols().key !== ui.colsKey) schedule(); }).observe($('sdScroll'));
     $('sdAddLink').addEventListener('click', () => openImporter());
     $('sdAddHand').addEventListener('click', () => openVariety(null));
     $('sdAddCrop').addEventListener('click', () => openCrop(null));

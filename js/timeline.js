@@ -19,7 +19,7 @@
   const xOf = d => E.dayDiff(d, yearStart()) * pxPerDay;
   const clampDay = d => d < yearStart() ? yearStart() : d > yearEnd() ? yearEnd() : d;
 
-  function bar(p, r, lane) {
+  function bar(p, r, lane, tray) {
     const eng = App.state.engine, color = eng.cropColor(r.c);
     const through = eng.occupancyThrough(p, r), end = clampDay(through === Infinity ? yearEnd() : through), from = clampDay(eng.occupancyFrom(p, r));
     if (end < yearStart() || from > yearEnd()) return null;
@@ -28,12 +28,12 @@
     const sel = App.state.sel && App.state.sel.type === 'planting' && App.state.sel.id === p.id;
     const el = h('div.tl-bar' + (sel ? '.sel' : ''), {
       style: { left: left + 'px', width: width + 'px', top: (lane * LANE_H + 3) + 'px', '--crop': color, color: UI.inkOn(color) },
-      dataset: { planting: p.id }, title: `${App.cropLabel(p)} · in ${day(r.field)} · harvest ${span(r.first, r.last)}`
+      dataset: { planting: p.id }, title: tray ? `${root.LRFTrays.short(r.c.name)} · ${UI.num(r.len)} tray${r.len === 1 ? '' : 's'} · sow ${day(r.field)} · ready ${day(r.first)}` : `${App.cropLabel(p)} · in ${day(r.field)} · harvest ${span(r.first, r.last)}`
     },
       seg('ph-grow', r.field, E.addDays(r.first, -1)),
       r.last >= r.first ? seg('ph-pick', r.first, r.last) : null,
       through !== Infinity && through > r.last ? seg('ph-turn', E.addDays(r.last < r.field ? r.field : r.last, 1), through) : null,
-      h('span.tl-name', r.c.vname || r.c.name));
+      h('span.tl-name', tray ? UI.num(r.len) : r.c.vname || r.c.name));
     // Nursery time happens off the bed, so it is a lead-in line rather than part of the bar.
     if (r.sow && r.sow < r.field) {
       const a = clampDay(r.sow);
@@ -73,13 +73,28 @@
       const closed = collapsed.has(garden.id), count = spaces.reduce((n, b) => n + eng.plantingsIn(b.id).length, 0);
       body.append(h('div.tl-group', { style: { width: (LABEL_W + width) + 'px' } },
         h('button.tl-group-name', { type: 'button', 'aria-expanded': String(!closed), onclick: () => { closed ? collapsed.delete(garden.id) : collapsed.add(garden.id); render(); } },
-          h('span.caret', closed ? '▸' : '▾'), garden.name, h('small', `${spaces.length} space${spaces.length === 1 ? '' : 's'} · ${count} planting${count === 1 ? '' : 's'}`))));
+          h('span.caret', closed ? '▸' : '▾'), garden.name, h('small', spaces.every(b => eng.isPool(b)) ? `live trays on the heated benches · ${count} batch${count === 1 ? '' : 'es'}` : `${spaces.length} space${spaces.length === 1 ? '' : 's'} · ${count} planting${count === 1 ? '' : 's'}`))));
       if (closed) continue;
       for (const bed of spaces) {
         const items = eng.plantingsIn(bed.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).map(x => {
           const through = eng.occupancyThrough(x.p, x.r);
           return { ...x, from: +eng.occupancyFrom(x.p, x.r), to: through === Infinity ? Infinity : +through };
         });
+        if (eng.isPool(bed)) {
+          // The shared benches are not one place, so weekly tray batches get a row per crop: each bar is a batch from sowing to ready, labelled with its trays.
+          const byCrop = new Map();
+          for (const item of items) { const list = byCrop.get(item.p.cropId) || []; list.push(item); byCrop.set(item.p.cropId, list); }
+          const names = [...byCrop.keys()].sort((a, b) => root.LRFTrays.short((eng.crop(a) || {}).name).localeCompare(root.LRFTrays.short((eng.crop(b) || {}).name)));
+          for (const cropId of names) {
+            const list = byCrop.get(cropId), lanes = lanesFor(list), lane = h('div.tl-lane', { style: { width: width + 'px', height: (lanes * LANE_H + 6) + 'px' } });
+            for (const item of list) { const el = bar(item.p, item.r, item.lane, true); if (el) lane.append(el); }
+            const trays = list.reduce((n, x) => n + x.r.len, 0);
+            body.append(h('div.tl-row.tl-pool', { dataset: { bed: bed.id, pool: cropId }, title: 'Planned from weekly demand on the Trays view' },
+              h('div.tl-label', { style: { width: LABEL_W + 'px' } }, h('b', root.LRFTrays.short((eng.crop(cropId) || {}).name) || 'Trays'), h('small', `${UI.num(trays)} trays`)), lane));
+          }
+          if (!names.length) body.append(h('div.tl-row.tl-pool', { dataset: { bed: bed.id, pool: '' } }, h('div.tl-label', { style: { width: LABEL_W + 'px' } }, h('b', 'Live trays'), h('small', 'no weekly demand yet')), h('div.tl-lane', { style: { width: width + 'px', height: (LANE_H + 6) + 'px' } })));
+          continue;
+        }
         const lanes = lanesFor(items), lane = h('div.tl-lane', { style: { width: width + 'px', height: (lanes * LANE_H + 6) + 'px' } });
         for (const item of items) { const el = bar(item.p, item.r, item.lane); if (el) lane.append(el); }
         const selBed = App.state.sel && App.state.sel.type === 'bed' && App.state.sel.id === bed.id;
@@ -140,6 +155,7 @@
       const barEl = e.target.closest('.tl-bar'), row = e.target.closest('.tl-row');
       if (barEl) { App.select({ type: 'planting', id: barEl.dataset.planting }); return; }
       if (!row) return;
+      if (row.dataset.pool !== undefined) { App.setView('trays'); return; }
       const at = targetAt(e.clientX, e.clientY);
       if (App.state.armed && at) { App.place(App.state.armed, at.bedId, at.date); return; }
       App.select({ type: 'bed', id: row.dataset.bed });

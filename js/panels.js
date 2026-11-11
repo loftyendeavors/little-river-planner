@@ -107,45 +107,65 @@
   // ── cleanup: overlaps that came in with the plan, each with ways to settle it ──
   const cleanups = new WeakMap();
   const cleanupOf = eng => cleanups.get(eng) || cleanups.set(eng, Rails.cleanup(eng)).get(eng);
+  /** This copy of the page was built from a later v7 backup than the plan saved in this browser. */
+  function renderNewer(host) {
+    const n = App.state.newer;
+    if (!n) return;
+    const when = t => { const d = new Date(t); return Number.isFinite(+d) ? `${UI.MONTHS[d.getMonth()]} ${d.getDate()}` : 'an earlier date'; };
+    const switchPlan = async () => {
+      const ok = await UI.confirm({ title: 'Switch to the newer plan?', body: `The plan open here is replaced by your v7 backup of ${when(n.backup)}. Anything changed here since the older plan was loaded (stock counts, recorded sowings, plantings moved) is lost; use Backup first if you want a copy. Your v7 planner is not touched.`, confirmLabel: 'Switch plan', danger: true });
+      if (ok) App.useBundled();
+    };
+    add(host, h('section.insp-section.newer', h('h3', 'A newer plan came with this copy'),
+      h('p.help', `This copy of the planner was built from your v7 backup of ${when(n.backup)}${n.counts && n.counts.plantings ? `, ${num(n.counts.plantings)} plantings` : ''}. The plan open now is the one this browser already held${n.held ? `, from ${when(n.held)}` : ''}.`),
+      h('div.newer-actions', h('button.btn.primary', { type: 'button', onclick: switchPlan }, `Use the ${when(n.backup)} plan`), h('button.btn', { type: 'button', onclick: () => App.keepMine() }, 'Keep this one'))));
+  }
   function renderCleanup(host) {
     const eng = App.state.engine, todo = cleanupOf(eng);
     if (!todo.count) return;
     const sets = new Map();
     for (const x of todo.long) { const key = `${x.r.b.gardenId}|${x.want}|${x.cap}`; (sets.get(key) || sets.set(key, []).get(key)).push(x); }
-    const section = h('section.insp-section.cleanup', h('h3', `To settle · ${sets.size + todo.groups.length}`),
+    const total = sets.size + todo.groups.length;
+    const section = h('section.insp-section.cleanup', h('h3', `To settle · ${total}`),
       h('p.help', 'Ground booked twice, or plantings longer than their bed. They came in with the v7 plan or from a change to the assumptions. The map will not let you add to them.'));
     const run = (label, ops) => { if (App.commit(label, ops)) UI.toast(label, { label: 'Undo', run: App.undo }); };
     const action = (label, detail, onclick) => h('button.fix-btn', { type: 'button', onclick }, h('b', label), detail ? h('small', detail) : null);
 
     // Plantings longer than their bed, a garden at a time.
-    for (const list of sets.values()) {
+    const makers = [];
+    for (const list of sets.values()) makers.push(() => {
       const { r, want, cap } = list[0], garden = eng.gardenOf(r.b) || {}, unit = eng.capUnit(r.b), n = list.length;
       const mates = App.state.plan.beds.filter(b => b.gardenId === r.b.gardenId && b.active !== false && eng.isSoilBed(b)), uniform = eng.isSoilBed(r.b) && mates.every(b => eng.capOf(b) === cap);
-      section.append(h('div.fix',
+      return h('div.fix',
         h('button.fix-title', { type: 'button', onclick: () => { App.setDate(list[0].r.field); App.select({ type: 'planting', id: list[0].p.id }); } }, garden.name || 'Garden'),
         h('p', `${n} planting${n === 1 ? ' is' : 's are'} ${num(want, 1)} ${unit} long in ${num(cap, 1)}-${unit} ${n === 1 ? 'space' : 'beds'}.`),
         h('div.fix-actions',
           action(`Make ${n === 1 ? 'it' : 'them'} ${num(cap, 1)} ${unit}`, 'Plant counts follow the shorter length', () => run(`Fit ${n} planting${n === 1 ? '' : 's'} to ${n === 1 ? 'its bed' : 'their beds'}`, Rails.trimOps(eng, list))),
-          uniform ? action(`The beds are ${num(want, 1)} ft`, `Lengthens all ${mates.length} beds in ${garden.name}`, () => { if (App.updateBeds(mates.map(b => b.id), { l: want }, `Set ${garden.name} beds to ${num(want, 1)} ft`)) UI.toast(`${garden.name} beds are now ${num(want, 1)} ft`, { label: 'Undo', run: App.undo }); }) : null)));
-    }
+          uniform ? action(`The beds are ${num(want, 1)} ft`, `Lengthens all ${mates.length} beds in ${garden.name}`, () => { if (App.updateBeds(mates.map(b => b.id), { l: want }, `Set ${garden.name} beds to ${num(want, 1)} ft`)) UI.toast(`${garden.name} beds are now ${num(want, 1)} ft`, { label: 'Undo', run: App.undo }); }) : null));
+    });
     // Two crops booked into the same ground.
-    for (const g of todo.groups) {
+    for (const g of todo.groups) makers.push(() => {
       const late = App.cropLabel(g.late), early = names(g.early.map(o => App.cropLabel(o.p))), until = Math.max(...g.early.map(o => +o.through));
       const actions = g.options.map(o => {
         if (o.id === 'later') return action(`Plant ${late} ${day(o.date)}`, `${o.days} day${o.days === 1 ? '' : 's'} later${o.also.length ? ` · also moves ${names(o.also.map(x => App.cropLabel(x.p)))} to ${day(o.also[0].date)}` : ''}`, () => run(`Plant ${late} ${day(o.date)}`, o.ops));
         if (o.id === 'sooner') return action(`Last ${early} harvest ${day(o.date)}`, `${o.days} fewer harvest day${o.days === 1 ? '' : 's'} · turnover days kept`, () => run(`End ${early} harvest ${day(o.date)}`, o.ops));
         return action(`No gap before ${late}`, `${o.days ? `${early} ends ${day(o.date)}, ${o.days} harvest day${o.days === 1 ? '' : 's'} less` : `${early} harvest unchanged`} · skips the ${o.gap}-day turnover`, () => run(`No turnover gap before ${late}`, o.ops));
       });
-      section.append(h('div.fix',
+      return h('div.fix',
         h('button.fix-title', { type: 'button', title: 'Show on the map', onclick: () => { App.setDate(g.from); App.select({ type: 'planting', id: g.late.id }); } }, App.bedLabel(g.bed)),
         h('p', Number.isFinite(until) ? `${late} goes in ${day(g.r.field)}, ${g.days} day${g.days === 1 ? '' : 's'} before the ground is clear of ${early} (${day(E.addDays(new Date(until), 1))}).` : `${late} goes in ${day(g.r.field)} on ground that ${early} never leaves.`),
         h('div.fix-actions', actions),
-        h('p.help', 'Or drag either one to other ground on the map.')));
-    }
+        h('p.help', 'Or drag either one to other ground on the map.'));
+    });
+    // A long list is folded after its first three, so the overview stays an overview.
+    const FIRST = 3, folds = makers.length > FIRST + 1;
+    for (const make of folds && !cleanupOpen ? makers.slice(0, FIRST) : makers) section.append(make());
+    if (folds) section.append(h('button.fix-more', { type: 'button', 'aria-expanded': String(cleanupOpen), onclick: () => { cleanupOpen = !cleanupOpen; render(); } }, cleanupOpen ? 'Show the first three only' : `Show the other ${makers.length - FIRST}`));
     host.append(section);
   }
+  let cleanupOpen = false;
 
-  const inGround = () => { const eng = App.state.engine, spaces = App.state.plan.beds.filter(b => b.active !== false); return `${spaces.filter(b => eng.cropsAt(b.id, App.state.date).length).length} of ${spaces.length}`; };
+  const inGround = () => { const eng = App.state.engine, spaces = App.state.plan.beds.filter(b => b.active !== false && !eng.isPool(b)); return `${spaces.filter(b => eng.cropsAt(b.id, App.state.date).length).length} of ${spaces.length}`; };
   function renderOverview(host) {
     const plan = App.state.plan, date = App.state.date;
     if (App.isSample()) {
@@ -158,7 +178,8 @@
     const ground = stat(`In the ground ${day(date)}`, inGround());
     ground.id = 'statGround';
     add(host, h('header.insp-head', h('p.eyebrow', `${plan.settings.farm || 'Farm'} · ${App.planYear()} season`), h('h2', 'Plan overview')),
-      h('div.stats', stat('Plantings', num(plan.plantings.length)), stat('Growing spaces', num(plan.beds.filter(b => b.active !== false).length)), ground));
+      h('div.stats', stat('Plantings', num(plan.plantings.length)), stat('Growing spaces', num(plan.beds.filter(b => b.active !== false && !App.state.engine.isPool(b)).length)), ground));
+    renderNewer(host);
     renderCleanup(host);
     add(host, h('section.insp-section.howto', h('h3', 'On the map'),
       h('ul.how',
@@ -238,7 +259,7 @@
     const note = h('p.help', { dataset: { sow: 'note' } });
     function says() {
       const n = Math.max(0, +used.value || 0);
-      note.textContent = `Planned for ${day(s.planned)}. ` + (!onHand ? `No ${word} on hand ${s.variety ? 'for ' + name : 'with no variety chosen'}, so nothing comes off stock.`
+      note.textContent = `Planned for ${day(s.planned)}. ` + (!onHand ? `No ${s.unit === 'g' ? 'seed' : word} on hand ${s.variety ? 'for ' + name : 'with no variety chosen'}, so nothing comes off stock.`
         : n <= onHand ? `${qty(onHand, s.stockUnit)} on hand${lots.length > 1 ? ` in ${lots.length} lots, oldest used first` : ''}: ${qty(Math.round((onHand - n) * 1e6) / 1e6, s.stockUnit)} left after this.`
           : `Only ${qty(onHand, s.stockUnit)} on hand: the other ${qty(Math.round((n - onHand) * 1e6) / 1e6, s.stockUnit)} is recorded as used without a counted lot.`);
     }
@@ -254,9 +275,44 @@
       note);
   }
 
+  /**
+   * A batch of live trays. Its trays, days and dates belong to the weekly demand it was made from, so it is shown, not edited:
+   * what can be said here is what was sown (the variety, and the day it happened).
+   */
+  function renderTrayBatch(host, p, r) {
+    const eng = App.state.engine, T = root.LRFTrays, c = r.c, color = eng.cropColor(c), name = T.short(c.name);
+    const plan = p.liveTray ? (App.state.plan.liveTrayPlans || []).find(x => x.id === p.liveTray.planId) : null, row = plan ? plan.rows.find(x => x.id === p.liveTray.rowId) : null;
+    const price = p.price != null && p.price !== '' ? +p.price : +c.price || 0, sown = !!(p.done && p.done.sow), v = eng.variety(p.varietyId);
+    const mates = plan && row ? App.state.plan.plantings.filter(q => q.liveTray && q.liveTray.planId === plan.id && q.liveTray.rowId === row.id).length : 1;
+    const varieties = eng.varietiesOf(p.cropId), variety = h('select', { id: 'fVariety', onchange: async e => {
+      const id = e.target.value || null, label = id ? eng.variety(id).name : 'No variety';
+      if (plan && row) { const done = await App.saveTrays(`${label} for ${name}`, { ...plan, rows: plan.rows.map(x => x.id === row.id ? { ...x, varietyId: id } : x) }); if (done && !done.unchanged) toast(`${label} for every ${name} batch not yet sown`, { label: 'Undo', run: App.undo }); else render(); }
+      else if (!App.updatePlanting(p.id, { varietyId: id, variety: null }, 'Change variety')) render();
+    } }, h('option', { value: '' }, 'No variety chosen'));
+    if (v && !varieties.includes(v)) variety.append(h('option', { value: v.id, selected: true }, `${v.name} (retired)`));
+    for (const x of varieties) variety.append(h('option', { value: x.id, selected: x.id === p.varietyId }, x.name));
+    const money = n => Number(n || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: Number.isInteger(+n) ? 0 : 2 });
+    add(host,
+      h('header.insp-head.planting', { style: { '--crop': color } },
+        root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color, label: name, size: 64, cls: 'head' }),
+        h('p.eyebrow', 'Live tray batch'), h('h2', name),
+        h('button.link', { type: 'button', onclick: () => App.setView('trays') }, plan ? plan.name : 'Trays'),
+        h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select(null) }, '×')),
+      h('section.insp-section',
+        h('div.stats', stat('Trays', num(r.len)), stat('Days', num(c.dtm)), stat('Expected', money(r.len * price))),
+        h('ol.schedule',
+          h('li' + (sown ? '.done' : ''), h('span', sown ? 'Sown' : 'Sow'), h('b', UI.dayLong(r.field).replace(/, \d{4}$/, ''))),
+          h('li', h('span', 'Ready'), h('b', UI.dayLong(r.first).replace(/, \d{4}$/, '')))),
+        h('p.help', plan ? `From the weekly demand in ${plan.name}${sown ? '. It is sown, so it stays as recorded whatever the demand becomes.' : ': trays, days and dates are set there, and this batch follows them.'}` : 'This batch is not tied to a demand plan.'),
+        h('button.btn', { type: 'button', onclick: () => App.setView('trays') }, 'Open the Trays view')),
+      varieties.length || v ? h('section.insp-section.form', field('Variety sown', variety, plan && row && mates > 1 ? `Applies to all ${num(mates)} ${name} batches not yet sown, so their seed comes off that variety’s stock.` : null)) : null,
+      App.sowingOf(p) ? h('section.insp-section', h('h3', 'Sowing'), sowingBox(p)) : null,
+      plan ? null : h('div.insp-actions', h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove batch')));
+  }
   function renderPlanting(host, p) {
     const eng = App.state.engine, r = eng.calc(p);
     if (!r) { host.append(h('p.note', 'This planting cannot be calculated. Its saved data is kept.'), h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')); return; }
+    if (eng.isPool(r.b)) { renderTrayBatch(host, p, r); return; }
     const bed = r.b, c = r.c, color = eng.cropColor(c), unit = eng.capUnit(bed), through = eng.occupancyThrough(p, r), f = eng.footprint(p, r);
     const timing = c.catalogTiming || {}, v = eng.variety(p.varietyId), sow = App.sowingOf(p);
     const set = (change, label) => { if (!App.updatePlanting(p.id, change, label)) render(); };
@@ -336,8 +392,12 @@
 
   // Removing a focused field can fire its change handler, which asks for another render: finish this one first.
   let rendering = false, renderAgain = false;
+  let stale = false;
+  const HIDDEN_IN = ['assume', 'seeds', 'trays'];
   function render() {
     if (!App.state.ready) return;
+    if (HIDDEN_IN.includes(App.state.view)) { stale = true; return; }   // nothing to see: draw it when its view comes back
+    stale = false;
     if (rendering) { renderAgain = true; return; }
     rendering = true;
     try {
@@ -371,6 +431,7 @@
     host.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.closest('.p-row')) open(e); });
     App.on('plan', render);
     App.on('sel', render);
+    App.on('view', () => { if (stale) render(); });
     App.on('date', () => {
       const sel = App.state.sel, ground = $('statGround');
       if (sel && sel.type === 'bed') render();
