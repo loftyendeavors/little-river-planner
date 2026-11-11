@@ -31,6 +31,29 @@
     ruler.font = ruled;
     return ruler.measureText(text).width;
   }
+  // A bar says what crop it is before it says which variety: "Carrot · Early Orange". Where that will not fit, the
+  // variety gives way first, then anything in brackets after the crop's name; the crop's name itself is the last thing to go.
+  // A small photo leads the bar where there is one and room for it. Nothing is ever cut off: the hover has it all.
+  let barFont = '';
+  function barWidth(text) {
+    if (!ruler) ruler = document.createElement('canvas').getContext('2d');
+    if (!barFont) { const probe = h('div.tl-bar', { style: { visibility: 'hidden' } }, h('span.tl-name', 'x')); $('tlBody').append(probe); const cs = getComputedStyle(probe.firstChild); barFont = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`; probe.remove(); }
+    ruler.font = barFont;
+    return ruler.measureText(text).width;
+  }
+  const BAR_PAD = 11, ICON = 14, ICON_ROOM = ICON + 4;
+  const plainCrop = name => String(name || '').replace(/\s*\([^)]*\)\s*$/, '').trim() || String(name || '');
+  function barLabel(r, width, icon) {
+    const crop = r.c.name || '', variety = r.c.vname || '', short = plainCrop(crop);
+    const tries = [...new Set(variety ? [`${crop} · ${variety}`, `${short} · ${variety}`, crop, short] : [crop, short])];
+    for (const withIcon of icon ? [true, false] : [false]) {
+      const room = width - BAR_PAD - (withIcon ? ICON_ROOM : 0);
+      const text = tries.find(t => barWidth(t) <= room);
+      if (text) return { text, icon: withIcon };
+    }
+    return { text: '', icon: icon && width >= ICON + 2 };
+  }
+
   const OPEN_PAD = 17;   // the box's own padding and border, and a little air
   function openLabel(days, width) {
     const full = `${UI.num(days)} days open`, short = `${UI.num(days)} d`;
@@ -50,6 +73,10 @@
     const left = xOf(from), width = Math.max(4, xOf(E.addDays(end, 1)) - left);
     const seg = (cls, a, b) => { a = clampDay(a); b = clampDay(b); return b < a ? null : h('i.' + cls, { style: { left: (xOf(a) - left) + 'px', width: Math.max(1, xOf(E.addDays(b, 1)) - xOf(a)) + 'px' } }); };
     const sel = App.state.sel && App.state.sel.type === 'planting' && App.state.sel.id === p.id;
+    // a tray batch is named by its row and shows its trays; every other bar names its crop, then its variety
+    const T = root.LRFThumbs, pictured = !tray && (p.varietyId && T.has(p.varietyId) ? { varietyId: p.varietyId } : T.cropHas(p.cropId) ? { cropId: p.cropId } : null);
+    const label = tray ? { text: UI.num(r.len), icon: false } : barLabel(r, width, !!pictured);
+    const name = h('span.tl-name' + (label.icon ? '.pic' : ''), label.icon ? T.el({ ...pictured, color, label: r.c.name, size: ICON }) : null, label.text);
     const el = h('div.tl-bar' + (sel ? '.sel' : ''), {
       style: { left: left + 'px', width: width + 'px', top: (lane * LANE_H + 3) + 'px', '--crop': color, color: UI.inkOn(color) },
       dataset: { planting: p.id }, title: tray ? `${root.LRFTrays.short(r.c.name)} · ${UI.num(r.len)} tray${r.len === 1 ? '' : 's'} · sow ${day(r.field)} · ready ${day(r.first)}` : `${App.cropLabel(p)} · in ${day(r.field)} · harvest ${span(r.first, r.last)}`
@@ -57,7 +84,7 @@
       seg('ph-grow', r.field, E.addDays(r.first, -1)),
       r.last >= r.first ? seg('ph-pick', r.first, r.last) : null,
       through !== Infinity && through > r.last ? seg('ph-turn', E.addDays(r.last < r.field ? r.field : r.last, 1), through) : null,
-      h('span.tl-name', tray ? UI.num(r.len) : r.c.vname || r.c.name));
+      name);
     // Nursery time happens off the bed, so it is a lead-in line rather than part of the bar.
     if (r.sow && r.sow < r.field) {
       const a = clampDay(r.sow);
@@ -210,7 +237,7 @@
     App.on('sel', render);
     App.on('date', cursor);
     // the typefaces arrive after the first draw: measure again in the real one
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { ruled = ''; if (App.state.view === 'timeline') render(); else dirty = true; }).catch(() => {});
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { ruled = ''; barFont = ''; if (App.state.view === 'timeline') render(); else dirty = true; }).catch(() => {});
     App.on('view', () => { if (App.state.view === 'timeline' && dirty) render(); if (App.state.view === 'timeline') requestAnimationFrame(() => { const x = LABEL_W + xOf(App.state.date) - scroll.clientWidth / 2; if (scroll.scrollLeft === 0 && x > 0) scroll.scrollLeft = Math.max(0, x - 80); }); });
   }
 
