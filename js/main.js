@@ -13,7 +13,7 @@
   root.LRFTraysView.init();
   root.LRFSowView.init();
   root.LRFHarvestView.init();
-  root.LRFAheadView.init();
+  root.LRFAhead.init();
 
   for (const button of document.querySelectorAll('[data-view-btn]')) button.addEventListener('click', () => App.setView(button.dataset.viewBtn));
   App.on('view', () => { for (const button of document.querySelectorAll('[data-view-btn]')) button.setAttribute('aria-pressed', String(button.dataset.viewBtn === App.state.view)); });
@@ -22,7 +22,7 @@
     $('undoBtn').title = App.state.undo.length ? `Undo: ${App.state.undo[App.state.undo.length - 1].label} (Ctrl+Z)` : 'Nothing to undo';
     $('seasonYear').textContent = App.planYear();
     const plan = App.state.plan, info = plan.lrfNext || {};
-    $('buildNote').textContent = `Rebuild preview 0.16 · ${plan.plantings.length} plantings · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
+    $('buildNote').textContent = `Rebuild preview 0.17 · ${plan.plantings.length} plantings · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
   });
   $('undoBtn').addEventListener('click', App.undo);
   $('redoBtn').addEventListener('click', App.redo);
@@ -79,6 +79,8 @@
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? App.redo() : App.undo(); return; }
     if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); App.redo(); return; }
+    // Escape with a sheet or dialog open closes that, and nothing behind it
+    if (e.key === 'Escape' && document.querySelector('dialog[open]')) return;
     if (e.key === 'Escape') { if (!menu.hidden) closeMenu(); else if (App.state.armed) App.arm(null); else if (App.state.sel && !typing) App.select(null); return; }
     if (typing || !App.state.ready) return;
     if ((e.key === 'Delete' || e.key === 'Backspace') && App.state.sel && App.state.sel.type === 'planting') { e.preventDefault(); App.removePlantings([App.state.sel.id]); return; }

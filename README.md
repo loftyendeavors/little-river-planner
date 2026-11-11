@@ -19,6 +19,11 @@ In **Seeds**, choose **Add from a supplier page**. Pasting the page works anywhe
 
 A bar names its crop first, then its variety ("Carrot · Early Orange"), with a small photo where there is one. Where the bar is too short for both, the variety gives way first, and the crop's name is the last thing to go. Nothing is cut off; hovering a bar gives all of it.
 
+- **What is shown.** The buttons above the chart choose All, Field, Greenhouses and tunnels, Towers or Crates, each with its count of plantings. With All, the kinds of space sit under headings of their own. The choice is remembered in that browser.
+- **Summaries that open.** A bank of towers is one row: towers planted alike are one bar ("Lettuce × 7"). Click the bank's heading, or one of its bars, for a row per tower. A crate space with many plantings has a row per crop, and plantings that go in on the same day are one bar; the arrow by the crop's name opens it to every planting. Live trays are one strip, each cell the most trays standing on the benches that week; its heading opens a row per tray crop, and a click on the strip goes to the Trays view.
+- **Zoom.** The mouse wheel over the bars zooms in and out about the day under the pointer, from the whole year down to single days. Over the names, the wheel scrolls the rows. Shift and the wheel slide the chart sideways. Hold and drag empty chart to move it both ways. **Months**, **Weeks** and **Days** jump to those scales, and **−** and **+** step for anyone without a wheel. The scale is remembered in that browser. The plan is one year, so the widest view is that year, edge to edge.
+- A summary bar is not dragged: open it and drag the planting's own bar. A bank shown as one row takes no drop.
+
 ## A bed's size
 
 Click a bed on the map and its panel shows width, length and area (a tower its sites, a bench its tray spaces). They are for reading: to change them, choose **Change this bed's size…** in that panel. Hovering a bed shows the same figures.
@@ -47,12 +52,13 @@ Click a bed on the map and its panel shows width, length and area (a tower its s
 - A day after today is a plan, not a record: choosing one moves the ticked sowings to that day. Nothing is marked sown and no seed leaves stock.
 - Tick the lines that were sown and record them in one step. Each planting is dated and its seed comes off the lots on hand, exactly as recording one planting does. One Undo takes the whole step back.
 
-## Successions and openings
+## Openings and successions
 
-- **Successions**, **Openings** lists ground that stands free before, after or between the crops planned in a bed (three weeks or longer), with the crops whose whole cycle goes into it: growing, the full harvest and turnover, in season. Radishes before the eggplant; cabbage after the potatoes. Pick a crop to check its dates, change the day, the variety or the length, and add it. The same openings are drawn on the Timeline as dashed boxes, and listed in a bed's panel.
-- Field and tunnel ground is not offered before the first day the plan itself puts anything into unheated ground; that day can be changed. Heated houses are offered from January.
-- **Successions**, **Plan a series** plans a run of plantings of one crop a set number of days apart: whole beds or feet of bed each time, dated by the day they go in or the day they are first ready, in the gardens ticked. Each goes into the first ground that is free for it. The preview shows where every one lands, what could not be placed and why, and the weeks of harvest it gives beside the weeks the plan has now. Nothing is added until the button is pressed, and the whole series is one step to undo.
-- A series can copy an existing planting (from its panel: **Plan a longer series**), which is how tower cycles keep their days.
+There is no page for these: both open where you are.
+
+- **An opening** is ground that stands free before, after or between the crops planned in a bed (three weeks or longer). Openings are drawn on the Timeline as dashed boxes and listed in a bed's panel. Click one and the details panel shows it: how long it is open, what comes before and after, and the crops whose whole cycle goes into it: growing, the full harvest and turnover, in season. Radishes before the eggplant; cabbage after the potatoes. Pick a crop to check its dates, change the day, the variety or the length, and add it.
+- Field and tunnel ground is not offered before the first day the plan itself puts anything into unheated ground. Heated houses are offered from January.
+- **A series** is a run of plantings of one crop a set number of days apart: whole beds or feet of bed each time, dated by the day they go in or the day they are first ready, in the gardens ticked. From a planting's panel, **Plan a longer series, with a preview** opens it as a sheet over the page, copying that planting (which is how tower cycles keep their days). Each goes into the first ground that is free for it. The preview shows where every one lands, what could not be placed and why, and the weeks of harvest it gives beside the weeks the plan has now. Nothing is added until the button is pressed, and the whole series is one step to undo.
 
 ## Harvest forecast
 
@@ -93,7 +99,8 @@ Click a bed on the map and its panel shows width, length and area (a tower its s
 | `js/guide.js` | Crop defaults checked against Johnny's Selected Seeds and the New England Vegetable Management Guide. |
 | `js/seeds.js`, `js/seedlib.js` | The seed library: one list of varieties with what the plan needs of each, seed stock, vendor sizes, sowing records, a photo gallery, the crops, a detail panel, and the importer. |
 | `js/sowing.js`, `js/sowview.js` | Practical sowing (plug trays, whole rows, batches shared by plantings), carried over from v7's own model, and the weekly sowing list. |
-| `js/succession.js`, `js/aheadview.js` | Planning ahead: a series of successions, openings in the ground and the crops that fit them. Both obey the guard rails and the season. |
+| `js/succession.js`, `js/ahead.js` | Planning ahead, opened in place: an opening in the details panel with the crops that fit it, a series of successions in a sheet. Both obey the guard rails and the season. |
+| `js/timeline.js` | The season timeline: filters, summaries that open, one continuous scale. |
 | `js/forecast.js`, `js/harvestview.js` | The harvest forecast: yield by crop and day, the three kinds it is sold as, and the lists that go to a chef. |
 | `js/trays.js`, `js/traysview.js` | Weekly live-tray demand and the batches it produces, in v7's own record format. |
 | `js/bench.js` | Heated bench room week by week. |

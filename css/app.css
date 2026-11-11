@@ -237,8 +237,8 @@ body.armed #map, body.armed #map * { cursor: crosshair; }
 .view-timeline { background: var(--surface); }
 body[data-view="timeline"] .view-timeline { display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .tl-tools { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; color: var(--ink-2); }
-.tl-tools button { border: 1px solid var(--line); background: var(--raised); border-radius: 6px; padding: 3px 10px; font-weight: 600; font-size: 12.5px; }
-.tl-tools button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.tl-tools > button, .tl-zoom button { border: 1px solid var(--line); background: var(--raised); border-radius: 6px; padding: 3px 10px; font-weight: 600; font-size: 12.5px; }
+.tl-tools > button[aria-pressed="true"], .tl-zoom button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .tl-key { margin-left: auto; display: flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
 .tl-key i { width: 16px; height: 9px; border-radius: 2px; margin-left: 8px; background: var(--ink-2); }
 .tl-key .k-nursery { height: 3px; }
@@ -921,11 +921,11 @@ table.sw td small.sw-set { color: var(--flag); font: 500 10px var(--mono); text-
 #folderMenu:empty { display: none; }
 
 /* ── harvest forecast, and planning ahead (0.15) ── */
-body[data-view="harvest"] .view-harvest, body[data-view="ahead"] .view-ahead { display: block; }
-body[data-view="harvest"] .library, body[data-view="harvest"] .inspector, body[data-view="harvest"] .season, body[data-view="ahead"] .library, body[data-view="ahead"] .inspector, body[data-view="ahead"] .season { display: none; }
-body[data-view="harvest"] .work, body[data-view="ahead"] .work { grid-template-columns: minmax(0, 1fr); }
-body[data-view="harvest"] .stage, body[data-view="ahead"] .stage { grid-template-rows: minmax(0, 1fr); }
-.view-harvest, .view-ahead { background: var(--surface); overflow: auto; }
+body[data-view="harvest"] .view-harvest { display: block; }
+body[data-view="harvest"] .library, body[data-view="harvest"] .inspector, body[data-view="harvest"] .season { display: none; }
+body[data-view="harvest"] .work { grid-template-columns: minmax(0, 1fr); }
+body[data-view="harvest"] .stage { grid-template-rows: minmax(0, 1fr); }
+.view-harvest { background: var(--surface); overflow: auto; }
 .views button { padding-inline: 13px; white-space: nowrap; }
 .bn-trays { color: var(--ink-2); font-size: 13px; max-width: 110ch; margin-top: 10px; }
 .bn-trays b { color: var(--ink); font-weight: 650; }
@@ -994,23 +994,6 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 }
 
 /* planning ahead: openings and a series */
-.ah-wrap { max-width: 1240px; }
-.ah-modes { margin-top: 20px; width: 360px; max-width: 100%; }
-.ah-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 18px 0 8px; font-size: 13px; color: var(--ink-2); }
-.ah-bar .grow { flex: 1; }
-.ah-bar select, .ah-bar input[type="number"], .ah-form select, .ah-form input { height: 31px; border: 1px solid var(--line); border-radius: 7px; background: var(--raised); padding: 0 8px; font-size: 13px; color: var(--ink); min-width: 0; }
-.ah-bar input[type="number"] { width: 62px; text-align: right; font: 600 13px var(--mono); }
-.ah-bar label { display: inline-flex; align-items: center; gap: 7px; }
-table.ah { margin-top: 4px; }
-.ah th { text-align: left; }
-.ah td { height: auto; padding: 9px 10px; vertical-align: top; }
-.ah tbody tr.ah-row.open td { border-bottom-color: transparent; }
-.ah-where b { display: block; font-weight: 650; }
-.ah-where small, .ah-when small, .ah-next small { display: block; color: var(--muted); font-size: 12px; }
-.ah-when { white-space: nowrap; }
-.ah-when b { font: 600 13px var(--mono); }
-.ah-next { color: var(--ink-2); font-size: 13px; }
-.ah-next i { font-style: normal; color: var(--muted); }
 .ah-fits { display: flex; flex-wrap: wrap; gap: 5px; }
 .ah-fit { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border: 1px solid var(--line); border-radius: 999px; background: var(--raised); font-size: 12.5px; font-weight: 600; color: var(--ink); }
 .ah-fit i { width: 9px; height: 9px; border-radius: 50%; background: var(--crop, var(--muted)); }
@@ -1022,23 +1005,10 @@ table.ah { margin-top: 4px; }
 .ah-fit.rot { color: var(--ink-2); font-weight: 500; border-style: dashed; }
 .ah-more { border: 0; background: none; color: var(--muted); font: 600 12px var(--body); text-decoration: underline; text-underline-offset: 2px; padding: 3px 4px; }
 .ah-none { color: var(--muted); font-size: 12.5px; }
-.ah-review td { padding: 0 10px 14px; }
-.ah-review-in { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); }
-.ah-review-in h4 { margin: 0; font: 800 16px/1.1 var(--display); font-stretch: 80%; }
-.ah-fields { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
-.ah-fields .tr-field input, .ah-fields .tr-field select { height: 31px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); padding: 0 8px; font-size: 13px; color: var(--ink); }
-.ah-fields .tr-field input[type="number"] { width: 84px; }
-.ah-fields .btn { height: 31px; }
-.ah-sched { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--ink-2); }
-.ah-sched b { font: 600 13px var(--mono); color: var(--ink); margin-left: 5px; }
 .ah-why { color: var(--bad); font-size: 13px; font-weight: 600; }
-.ah-key { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; color: var(--muted); font-size: 12px; margin-top: 10px; }
-.ah-key span { display: inline-flex; align-items: center; gap: 6px; }
-.ah-key i { width: 22px; height: 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--raised); }
-.ah-key i.gap { border-color: color-mix(in srgb, var(--good) 55%, var(--line)); }
-.ah-key i.rot { border-style: dashed; }
 .ah-cols { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 26px; margin-top: 18px; align-items: start; }
 .ah-form { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); }
+.ah-form select, .ah-form input { height: 31px; border: 1px solid var(--line); border-radius: 7px; background: var(--raised); padding: 0 8px; font-size: 13px; color: var(--ink); min-width: 0; }
 .ah-form .tr-field { min-width: 0; }
 .ah-form .tr-field > select, .ah-form .tr-field > input { width: 100%; }
 .ah-form .ah-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -1095,7 +1065,6 @@ table.ah-waves { margin-top: 16px; }
 .tl-key .k-open { background: color-mix(in srgb, var(--good) 10%, transparent); border: 1.5px dashed color-mix(in srgb, var(--good) 70%, var(--line)); }
 .ah-form input[type="checkbox"], .ah-bar input[type="checkbox"] { height: auto; padding: 0; }
 .ah-form .ah-inline, .ah-form .ah-inline span { font: 13px var(--body); text-transform: none; letter-spacing: 0; color: var(--ink-2); }
-.ah-bar input[type="date"] { height: 31px; border: 1px solid var(--line); border-radius: 7px; background: var(--raised); padding: 0 8px; font-size: 13px; color: var(--ink); }
 .hv .hv-name { width: 210px; max-width: 210px; overflow: hidden; }
 /* eight views: below 1400 px the brand keeps its name and the year, and drops the words between */
 @media (max-width: 1400px) { .top { gap: 14px; } .brand-sub { font-size: 0; letter-spacing: 0; } .brand-sub b { font-size: 12px; letter-spacing: 0.08em; } .views button { padding-inline: 11px; } }
@@ -1154,3 +1123,85 @@ table.ah-waves { margin-top: 16px; }
 
 /* a row of figures that does not fill its last line: the last figure takes the rest, so no grey block shows */
 .stats > .stat:last-child { grid-column-end: -1; }
+
+/* ── the timeline, 0.17: filters, one continuous scale, summaries that open ──
+   Every position is a count of days times --ppd (pixels per day), so a change of scale moves nothing but that number. */
+.tl-tools { flex-wrap: wrap; gap: 6px 8px; }
+.tl-filters { flex: none; }
+.tl-filters button { flex: none; padding: 4px 10px; font-size: 12.5px; white-space: nowrap; }
+.tl-zoom { display: flex; align-items: center; gap: 4px; }
+.tl-zoom .tl-step { width: 26px; padding: 3px 0; font: 600 13px var(--mono); }
+.tl-zoom button:disabled { opacity: 0.4; }
+.tl-inner { --ppd: 3.2; --days: 365; width: calc(148px + var(--ppd) * var(--days) * 1px); }
+.tl-head { height: 40px; }
+.tl-scale { position: relative; flex: none; width: calc(var(--ppd) * var(--days) * 1px); cursor: pointer; }
+.tl-months { position: absolute; left: 0; right: 0; top: 0; height: 22px; }
+.tl-month { left: calc(var(--a) * var(--ppd) * 1px); width: calc(var(--n) * var(--ppd) * 1px); padding: 0; white-space: nowrap; }
+.tl-month span { position: sticky; left: 148px; display: inline-block; padding: 5px 6px 0; }
+.tl-month b { font: inherit; }
+.tl-month .full, .tl-inner:not([data-tier="months"]) .tl-month .short { display: none; }
+.tl-inner:not([data-tier="months"]) .tl-month .full { display: inline; }
+.tl-ticks { position: absolute; left: 0; right: 0; top: 22px; height: 18px; border-top: 1px solid var(--line-soft); overflow: hidden; }
+.tk { position: absolute; top: 0; bottom: 0; left: calc(var(--a) * var(--ppd) * 1px); padding-left: 3px; border-left: 1px solid var(--line-soft); font: 500 10px/17px var(--mono); font-style: normal; color: var(--muted); white-space: nowrap; }
+.tl-inner[data-tier="days"] .tk { width: calc(var(--ppd) * 1px); padding: 0; text-align: center; }
+.tl-inner[data-tier="days"] .tk.mon { color: var(--ink); font-weight: 700; }
+.tl-grid { top: 40px; left: 148px; width: calc(var(--ppd) * var(--days) * 1px); }
+.tl-grid i { left: calc(var(--a) * var(--ppd) * 1px); }
+.tl-inner:not([data-tier="months"]) .g-month { border-left-color: var(--line); }
+.tk-m, .g-m { position: absolute; top: 0; bottom: 0; left: calc(var(--a) * var(--ppd) * 1px); width: calc(var(--n) * var(--ppd) * 1px); content-visibility: auto; }
+.tl-grid .g-day { border-left-color: color-mix(in srgb, var(--line-soft) 55%, transparent); }
+.tl-group, .tl-section { width: calc(148px + var(--ppd) * var(--days) * 1px); min-width: 100%; }
+.tl-section { position: relative; z-index: 2; background: color-mix(in srgb, var(--ink) 13%, var(--surface)); color: var(--ink); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+.tl-section:first-child { border-top: 0; }
+.tl-section span { position: sticky; left: 0; display: inline-flex; align-items: baseline; gap: 10px; padding: 6px 10px 5px; font: 800 13px var(--display); font-stretch: 80%; text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
+.tl-section small { font: 500 11px var(--mono); text-transform: none; letter-spacing: 0; color: var(--ink-2); }
+.tl-group-name { white-space: nowrap; }
+/* a row off the page is not drawn until it is scrolled to: the wheel changes the scale of what can be seen, not of the whole season */
+.tl-row { content-visibility: auto; position: relative; z-index: 2; }   /* a row is its own layer now: keep it over the rules, as its bars and name were */
+.tl-label { width: 148px; min-height: 28px; }
+.tl-label b { min-width: 0; overflow-wrap: anywhere; }
+.tl-lane { width: calc(var(--ppd) * var(--days) * 1px); }
+.tl-bar { left: calc(var(--a) * var(--ppd) * 1px); width: max(4px, calc(var(--n) * var(--ppd) * 1px)); }
+.tl-bar i { left: calc(var(--a) * var(--ppd) * 1px); width: max(1px, calc(var(--n) * var(--ppd) * 1px)); }
+.tl-name .thumb[hidden] { display: none; }
+/* zoomed in, a bar is wider than the page: its name rides at the left edge of what can be seen, and leaves with the bar */
+.tl-name { position: sticky; left: 148px; display: inline-block; max-width: 100%; vertical-align: top; }
+.tl-name.pic { display: inline-flex; }
+/* the words keep a halo of the bar's own pale colour, so they read over the harvest stretch and the hatched turnover as well */
+.tl-bar .tl-name { --halo: color-mix(in srgb, var(--crop) 30%, var(--surface)); text-shadow: 0 0 1px var(--halo), 0 0 1.5px var(--halo), 0 0 2.5px var(--halo); }
+.tl-open span { position: sticky; left: 154px; }
+.tl-open { left: calc(var(--a) * var(--ppd) * 1px); width: max(6px, calc(var(--n) * var(--ppd) * 1px - 1px)); }
+.tl-open.sel { border-style: solid; border-color: var(--flag); background: color-mix(in srgb, var(--flag) 14%, transparent); color: var(--ink); }
+.tl-cursor { left: calc(148px + (var(--a) + 0.5) * var(--ppd) * 1px); }
+.tl-cursor::before { top: 42px; }
+.tl-scroll.panning, .tl-scroll.panning .tl-open, .tl-scroll.panning .tl-label { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+.tl-none { padding: 28px 16px; color: var(--muted); }
+/* a summary: several plantings as one bar, a click opens it */
+.tl-bar.tl-sum { cursor: pointer; }
+.tl-row.tl-bank .tl-label, .tl-row.tl-crop .tl-label, .tl-row.tl-ct .tl-label, .tl-row.tl-pool .tl-label { min-height: 36px; }
+.tl-row.tl-bank .tl-label, .tl-row.tl-crop .tl-label, .tl-row.tl-ct .tl-label { flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; }
+.tl-row.tl-bank .tl-label small, .tl-row.tl-crop .tl-label small, .tl-row.tl-ct .tl-label small { white-space: nowrap; }
+.tl-fold { border: 0; background: none; padding: 0; display: inline-flex; align-items: baseline; gap: 5px; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.tl-fold .caret { color: var(--muted); font-size: 11px; width: 9px; flex: none; }
+.tl-row.tl-crop .tl-label small { padding-left: 14px; }
+.tl-row.tl-space { background: var(--paper); }
+.tl-row.tl-space .tl-label { background: var(--paper); }
+.tl-row.tl-space .tl-lane { height: 0; }
+/* live trays as one strip: the most trays standing in each week */
+.tl-row.tl-strip { cursor: pointer; }
+.tl-cell { position: absolute; top: 4px; bottom: 4px; left: calc(var(--a) * var(--ppd) * 1px + 1px); width: max(1px, calc(var(--n) * var(--ppd) * 1px - 1px)); border-radius: 3px; background: color-mix(in srgb, var(--hv-seq) var(--p, 20%), transparent); display: grid; place-items: center; overflow: hidden; font: 600 10px/1 var(--mono); color: var(--ink); white-space: nowrap; }
+
+/* ── planning ahead, in place (0.17): an opening in the details panel, a series in a sheet ── */
+.ah-around { display: grid; gap: 8px; }
+.ah-around li { display: grid; gap: 1px; font-size: 13px; color: var(--ink-2); }
+.ah-around b { font: 600 12.5px var(--mono); color: var(--ink); }
+.inspector .ah-fits { gap: 5px; }
+.inspector .ah-check { font-size: 12.5px; align-items: center; }
+.ah-review h3 { color: var(--ink); }
+.ah-review .ah-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ah-review .ah-why { margin: 0; }
+.dialog.ah-sheet { width: min(1140px, calc(100vw - 32px)); }
+.ah-sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ah-sheet-head .close { position: static; flex: none; }
+.ah-sheet .ah-cols { margin-top: 14px; }
+@media (max-width: 900px) { .ah-sheet .ah-cols { grid-template-columns: minmax(0, 1fr); } }
