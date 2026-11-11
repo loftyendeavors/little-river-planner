@@ -22,6 +22,21 @@
     return map;
   }
 
+  // An opening's label is never cut off: the words in full where the box is wide enough for them, "26 d" where it is not,
+  // nothing where even that will not fit. The detail is always on hover. Widths are measured in the label's own typeface.
+  let ruler = null, ruled = '';
+  function textWidth(text) {
+    if (!ruler) ruler = document.createElement('canvas').getContext('2d');
+    if (!ruled) { const probe = h('div.tl-open', { style: { visibility: 'hidden' } }); $('tlBody').append(probe); const cs = getComputedStyle(probe); ruled = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`; probe.remove(); }
+    ruler.font = ruled;
+    return ruler.measureText(text).width;
+  }
+  const OPEN_PAD = 17;   // the box's own padding and border, and a little air
+  function openLabel(days, width) {
+    const full = `${UI.num(days)} days open`, short = `${UI.num(days)} d`;
+    return textWidth(full) + OPEN_PAD <= width ? full : textWidth(short) + OPEN_PAD <= width ? short : '';
+  }
+
   const yearStart = () => new Date(App.planYear(), 0, 1);
   const yearEnd = () => new Date(App.planYear(), 11, 31);
   const yearDays = () => E.dayDiff(yearEnd(), yearStart()) + 1;
@@ -82,7 +97,7 @@
       const closed = collapsed.has(garden.id), count = spaces.reduce((n, b) => n + eng.plantingsIn(b.id).length, 0);
       body.append(h('div.tl-group', { style: { width: (LABEL_W + width) + 'px' } },
         h('button.tl-group-name', { type: 'button', 'aria-expanded': String(!closed), onclick: () => { closed ? collapsed.delete(garden.id) : collapsed.add(garden.id); render(); } },
-          h('span.caret', closed ? '▸' : '▾'), garden.name, h('small', spaces.every(b => eng.isPool(b)) ? `live trays on the heated benches · ${count} batch${count === 1 ? '' : 'es'}` : `${spaces.length} space${spaces.length === 1 ? '' : 's'} · ${count} planting${count === 1 ? '' : 's'}`))));
+          h('span.caret', closed ? '▸' : '▾'), garden.name, h('small', spaces.every(b => eng.isPool(b)) ? `live trays · ${count} batch${count === 1 ? '' : 'es'}` : `${spaces.length} space${spaces.length === 1 ? '' : 's'} · ${count} planting${count === 1 ? '' : 's'}`))));
       if (closed) continue;
       for (const bed of spaces) {
         const items = eng.plantingsIn(bed.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).map(x => {
@@ -108,7 +123,8 @@
         // an opening is drawn under the bars: ground free before, after or between what is planned
         for (const o of open.get(bed.id) || []) {
           const left = xOf(o.from), w = xOf(E.addDays(o.to, 1)) - left, next = o.before ? `before the ${o.before.r.c.name.toLowerCase()}` : o.after ? `after the ${o.after.r.c.name.toLowerCase()}` : 'open';
-          lane.append(h('div.tl-open', { style: { left: left + 'px', width: Math.max(6, w - 1) + 'px' }, dataset: { opening: o.id }, title: `Open ${span(o.from, o.to)}: ${UI.num(o.days)} days ${next}. Click to see what fits.` }, w > 74 ? `${UI.num(o.days)} days open` : ''));
+          const box = Math.max(6, w - 1), label = openLabel(o.days, box);
+          lane.append(h('div.tl-open' + (label ? '' : '.bare'), { style: { left: left + 'px', width: box + 'px' }, dataset: { opening: o.id }, title: `Open ${span(o.from, o.to)}: ${UI.num(o.days)} days ${next}. Click to see what fits.`, 'aria-label': `${UI.num(o.days)} days open, ${span(o.from, o.to)}` }, label));
         }
         for (const item of items) { const el = bar(item.p, item.r, item.lane); if (el) lane.append(el); }
         const selBed = App.state.sel && App.state.sel.type === 'bed' && App.state.sel.id === bed.id;
@@ -193,6 +209,8 @@
     App.on('plan', render);
     App.on('sel', render);
     App.on('date', cursor);
+    // the typefaces arrive after the first draw: measure again in the real one
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { ruled = ''; if (App.state.view === 'timeline') render(); else dirty = true; }).catch(() => {});
     App.on('view', () => { if (App.state.view === 'timeline' && dirty) render(); if (App.state.view === 'timeline') requestAnimationFrame(() => { const x = LABEL_W + xOf(App.state.date) - scroll.clientWidth / 2; if (scroll.scrollLeft === 0 && x > 0) scroll.scrollLeft = Math.max(0, x - 80); }); });
   }
 

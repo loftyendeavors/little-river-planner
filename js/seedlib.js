@@ -296,6 +296,33 @@
     return updateLot(inventory, held[0].id, { quantity, reviewedForYear: ctx.year }, 'count', ctx);
   }
 
+  /**
+   * A seed lot from one line: vendor, variety, year, amount.
+   * input: { varietyId } for a variety in the library, or { name, cropId } for one that is not yet; vendor, year, quantity,
+   * unit ('seeds' | 'g' | 'plants'), status ('usable' | 'ordered'). A new name that is already in the library under that crop
+   * is that variety, not a second one. Returns { inventory, variety, added, lot, unit }: `added` is the new variety record, or null.
+   * Throws in words when a field is wrong; nothing is changed then.
+   */
+  function quickLot(plan, inventory, input, ctx) {
+    const all = (plan && plan.varieties) || [], isLive = v => !!v && v.active !== false && !v.deleted, vendor = String(input.vendor || '').trim();
+    let variety = input.varietyId ? all.find(v => v.id === input.varietyId && isLive(v)) : null, added = null;
+    if (input.varietyId && !variety) throw new Error('That variety is no longer in the library. Choose it again.');
+    if (!variety) {
+      const name = String(input.name || '').trim(), cropId = String(input.cropId || '');
+      if (!name) throw new Error('Variety: type its name, and choose it from the list if it is there.');
+      if (!cropId) throw new Error(`${name} is not in the library yet. Choose its crop and it is added with the lot.`);
+      variety = all.find(v => isLive(v) && v.cropId === cropId && varietyKey(v.name) === varietyKey(name)) || null;
+      if (!variety) { added = apply({ id: 'v_named_' + ctx.uid(), cropId }, fields(null, { name, cropId, supplier: vendor }, {})); variety = added; }
+    }
+    const unit = STOCK_UNITS.includes(input.unit) ? input.unit : 'seeds', word = unit === 'g' ? 'grams' : unit;
+    if (input.quantity == null || String(input.quantity).trim() === '') throw new Error(`How many ${word}? Enter the amount.`);
+    const quantity = amountOf(input.quantity, unit, 'Amount');
+    if (!(quantity > 0)) throw new Error(`How many ${word}? Enter an amount above 0.`);
+    const status = input.status === 'ordered' ? 'ordered' : 'usable';
+    const next = addLot(inventory, { key: 'v:' + variety.id, unit, quantity, status, year: input.year == null ? '' : input.year, supplier: vendor || variety.supplier || '' }, { ...ctx, name: variety.name });
+    return { inventory: next, variety, added, lot: next.lots[next.lots.length - 1], unit };
+  }
+
   // ───────────────────────────── the sizes a vendor sells ─────────────────────────────
   // A packet is whatever its vendor says it is: 15 tomato seeds from one, 500 arugula seeds from another, and most seed
   // is not bought by the packet at all. Each variety carries the size list read from its vendor's page (supplierPacks,
@@ -552,6 +579,6 @@
     return out;
   }
 
-  return { norm, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
+  return { norm, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
     sizeOf, packs, cover, toCover, money, sowing, lotsToUse, recordSowing, takeBackSowing, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
 });

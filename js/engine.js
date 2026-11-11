@@ -548,7 +548,9 @@
       const actual = doneOf(r.planting, 'harden');
       return actual ? s2d(actual) : new Date(Math.max(r.sow, addDays(r.field, -nsHarden())));
     }
-    const sowOptions = (p, r) => ({ id: p.id, plants: r.plants, crop: r.c, planting: p, settings, nursery: S.nursery, tower: r.tw, rack: r.rack,
+    // Tower seedlings are sown in the grower's rockwool sheets (98 cubes, 14 rows of 7). v7 counted them in the crop's plug tray; its mode still does.
+    const sheet = legacy ? null : Sow && Sow.ROCKWOOL_SHEET;
+    const sowOptions = (p, r) => ({ id: p.id, plants: r.plants, crop: r.c, planting: p, settings, nursery: S.nursery, tower: r.tw, rack: r.rack, sheet: r.tw ? sheet : null,
       sowDate: dayText(r.sow), plannedSowDate: dayText(r.plannedSow), fieldDate: dayText(r.field), potUpDate: dayText(potUpDate(r)), hardenDate: dayText(hardenStart(r)) });
     function sowSingle(p, r) {
       const plan = Sow.sowingPlan(sowOptions(p, r));
@@ -874,9 +876,15 @@
       return { a0, a1: a0 + len, x0: 0, x1: 1, rows: null };
     }
     const rectsCross = (f, g) => f.a0 < g.a1 - 1e-6 && g.a0 < f.a1 - 1e-6 && f.x0 < g.x1 - 1e-6 && g.x0 < f.x1 - 1e-6;
+    /**
+     * Bench room is shown as a load and never enforced. So nothing is ever "too long" or "booked twice" on the stand-in space
+     * live trays are filed under, on a bench that has no tray count of its own (a stand-in by another name), or for a tray
+     * batch made from weekly demand wherever it stands.
+     */
+    const unbounded = (p, b) => isPool(b) || (isRack(b) && (!(capOf(b) > 0) || !!(p && p.liveTray)));
     /** Does a planting ask for more than its space holds? */
     function overflow(p, r) {
-      if (!r || r.tw || isPool(r.b)) return false;   // shared bench room is shown as a load, never refused
+      if (!r || r.tw || unbounded(p, r.b)) return false;
       const f = footprint(p, r);
       return f ? f.a1 > r.cap + 1e-6 : r.len > r.cap + 1e-6;
     }
@@ -896,7 +904,7 @@
     /** What a planting, saved or proposed, collides with. */
     function conflicts(p, r) {
       r = r || calc(p);
-      if (!r || isPool(r.b)) return [];
+      if (!r || unbounded(p, r.b)) return [];
       const from = occupancyFrom(p, r), through = occupancyThrough(p, r), others = holders(r.b, from, through, p.id);
       if (!others.length || r.tw) return others;
       const mine = footprint(p, r);
@@ -1038,7 +1046,7 @@
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,
-      footprint, overflow, holders, conflicts,
+      footprint, overflow, unbounded, holders, conflicts,
       occupancyFrom, occupancyThrough, turnoverFor, frostDates, firstFieldDate, lastFieldDate, standKey
     };
   }

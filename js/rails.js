@@ -90,6 +90,7 @@
     if (!crop) return { state: 'blocked', why: 'crop' };
     if (crop.micro && !eng.isRack(bed)) return { state: 'blocked', why: 'micro-needs-bench', p: base };
     if (!crop.micro && eng.isRack(bed)) return { state: 'blocked', why: 'bench-needs-micro', p: base };
+    if (eng.isRack(bed) && !(eng.capOf(bed) > 0)) return { state: 'blocked', why: 'no-count', p: base };   // a bench with no tray count holds nothing by hand
     const sameBed = !!source && !payload.copy && source.bedId === bed.id;
     const sourceR = source ? eng.calc(source) || eng.evaluate(source) : null, was = sourceR ? { len: sourceR.physicalLength, cap: sourceR.cap } : null;
     const done = (state, p, extra = {}) => {

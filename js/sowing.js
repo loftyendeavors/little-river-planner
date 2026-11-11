@@ -36,6 +36,9 @@
   // Planning templates. The 10 × 20 inch outside footprint is an assumption until the grower enters his own trays.
   const DEFAULTS = Object.freeze([preset(32, 8, 4), preset(50, 10, 5), preset(72, 12, 6), preset(98, 14, 7), preset(128, 16, 8), preset(200, 20, 10), preset(288, 24, 12),
     Object.freeze({ id: 'tray-flat-1020', name: '10 × 20 flat', cells: 1, rows: 1, columns: 1, widthIn: 10, lengthIn: 20, active: true, template: true })]);
+  // Rockwool for the towers comes as a sheet of 98 cubes, 14 rows of 7, that sits in one open 10 × 20 tray with drainage holes.
+  // v7 counted a tower sowing in the crop's plug tray (128 cells for lettuce and basil); the grower's sheets are 98.
+  const ROCKWOOL_SHEET = Object.freeze({ id: 'rockwool-98', name: '98-cell rockwool sheet', cells: 98, rows: 14, columns: 7, widthIn: 10, lengthIn: 20, active: true, template: true, sheet: true });
 
   function validateTray(tray) {
     const errors = [];
@@ -83,8 +86,11 @@
     return out;
   }
 
-  /** The tray a planting is sown in: its own choice, else its crop's, else the crop's saved cell count matched to a template. */
-  function resolve({ crop = {}, planting = {}, nursery = {}, tower = false } = {}) {
+  /**
+   * The tray a planting is sown in: its own choice, else its crop's, else the crop's saved cell count matched to a template.
+   * A tower sowing with no tray named for it goes into `sheet`, the rockwool sheet, when one is given.
+   */
+  function resolve({ crop = {}, planting = {}, nursery = {}, tower = false, sheet = null } = {}) {
     const warnings = [], candidates = everyTray(nursery), selected = text(planting.trayId) || text(crop.trayId);
     const source = text(planting.trayId) ? 'planting' : text(crop.trayId) ? 'crop' : 'legacy';
     if (selected) {
@@ -95,6 +101,7 @@
       }
       warnings.push(tray ? 'The selected tray definition needs review. The crop’s saved cell count is retained.' : 'The selected tray was not found. The crop’s saved cell count is retained.');
     }
+    if (tower && sheet) return { tray: clone(sheet), source: 'sheet', requestedId: selected, warnings, synthetic: false, medium: 'rockwool' };
     const legacy = integer(crop.tray), cells = legacy || 72;
     if (!blank(crop.tray) && legacy == null) warnings.push('The saved tray cell count is invalid; the existing 72-cell fallback is shown until corrected.');
     // An unassigned cell count is matched to the unmodified template, never to a custom tray that happens to share the count.
@@ -127,7 +134,7 @@
     if (options.rack === true || planting.established === true || crop.micro || (crop.material === 'bulb' && !tower) || (crop.method !== 'TP' && !tower)) return null;
     const plants = nonnegative(options.plants);
     if (plants == null) return { error: 'Planting quantity must be a finite, nonnegative number.', warnings: [] };
-    const resolved = resolve({ crop, planting, nursery, tower }), tray = resolved.tray, warnings = resolved.warnings.slice();
+    const resolved = resolve({ crop, planting, nursery, tower, sheet: options.sheet }), tray = resolved.tray, warnings = resolved.warnings.slice();
     const germValue = positive(crop.germ) || positive(settings.germ) || 85, germination = Math.min(100, Math.max(0.1, germValue)) / 100;
     const buffer = nonnegative(settings.buffer) ?? 10, seedsPerCell = positive(crop.spc) || 1;
     const requestedMode = roundingFor({ planting, crop, nursery }), pots = crop.prop === 'pot' && !tower;
@@ -215,5 +222,5 @@
     return { error: null, key: keys[0], members: allocate(plan, rows), plan };
   }
 
-  return { MODES, DEFAULTS, STANDARD_AREA_IN2, list, validateTray, resolve, roundingFor, roundCells, sowingPlan, sowingBatch, batchKey, allocate, description, trayLabel };
+  return { MODES, DEFAULTS, ROCKWOOL_SHEET, STANDARD_AREA_IN2, list, validateTray, resolve, roundingFor, roundCells, sowingPlan, sowingBatch, batchKey, allocate, description, trayLabel };
 });

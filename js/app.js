@@ -207,15 +207,89 @@
     try { const text = store.backend === 'memory' ? null : await store.loadBlob('thumbs'); kept = text ? JSON.parse(text) : null; } catch (_) { kept = null; }
     state.keptThumbs = kept && typeof kept === 'object' ? kept : {};
     Thumbs.set({ ...base, ...state.keptThumbs });
+    refreshRemote();
     Thumbs.index(state.plan); emit('plan');
+    rebuildThumbs();
+  }
+  const saveThumbs = async () => { try { return store.backend === 'memory' ? false : await store.saveBlob('thumbs', JSON.stringify(state.keptThumbs)); } catch (_) { return false; } };
+
+  // A variety's photo record says where its picture came from (v7 writes one; so does the importer here). Where the small photo
+  // itself is not kept in this browser, the app goes and gets it: through the grower's fetch service when that is set up, else
+  // straight from the supplier when the supplier allows it. Until then the picture is shown from the supplier's site while online.
+  const liveVariety = v => !!v && v.active !== false && !v.deleted;
+  const photoSource = v => { const ph = v && v.photo && typeof v.photo === 'object' ? v.photo : null; for (const u of ph ? [ph.sourceUrl, ph.url] : []) if (typeof u === 'string' && /^https:\/\/[^\s]+$/i.test(u)) return u; return ''; };
+  function refreshRemote() {
+    const far = {};
+    if (state.plan && !isSample()) for (const v of state.plan.varieties || []) if (liveVariety(v) && !Thumbs.get(v.id)) { const u = photoSource(v); if (u) far[v.id] = u; }
+    Thumbs.setRemote(far);
+  }
+  const MISS_KEY = 'lrf-next:thumb-miss', MISS_DAYS = 7;
+  const misses = value => { try { if (value === undefined) return JSON.parse(root.localStorage.getItem(MISS_KEY) || '{}') || {}; root.localStorage.setItem(MISS_KEY, JSON.stringify(value)); } catch (_) { /* then each visit simply tries again */ } return value || {}; };
+  const fetchService = () => { const S = root.LRFSeeds; return S && S.serviceReady && S.serviceReady() ? S.service() : null; };
+  async function fetchPhoto(url, service) {
+    if (service) return root.LRFReader.fetchImage(url, service);
+    const res = await fetch(url, { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'force-cache' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    if (!/^image\//.test(blob.type || '')) throw new Error('not a picture');
+    return blob;
+  }
+  const photoWork = { running: false, again: false, fetched: 0, failed: 0, left: 0 };
+  let planLoads = 0;   // counts whole plans loaded over the one that was open
+  /**
+   * Fetch and keep the thumbnails that are missing. With ids, only those varieties, and a miss noted earlier is tried again.
+   * A picture that cannot be had is not asked for again for a week, unless the fetch service has been set up since.
+   */
+  async function rebuildThumbs(ids) {
+    if (!state.ready || isSample() || (root.navigator && root.navigator.onLine === false)) return photoWork;
+    if (photoWork.running) { photoWork.again = true; return photoWork; }
+    const service = fetchService(), today = Math.floor(Date.now() / 86400000), missed = misses(), started = planLoads;   // another plan loaded meanwhile ends this run
+    const want = (state.plan.varieties || []).filter(v => liveVariety(v) && !Thumbs.get(v.id) && photoSource(v) && (!ids || ids.includes(v.id)))
+      .filter(v => { const m = missed[v.id]; return ids || !m || m.u !== photoSource(v) || today - m.t >= MISS_DAYS || (service && !m.s); });
+    if (!want.length) return photoWork;
+    Object.assign(photoWork, { running: true, again: false, left: want.length }); emit('photos');
+    const got = {}, fresh = {};
+    let next = 0, since = 0;
+    const flush = async last => {
+      const ready = Object.keys(fresh);
+      if (!ready.length || planLoads !== started) return;
+      state.keptThumbs = { ...state.keptThumbs, ...fresh }; Thumbs.putAll(fresh); thumbsRev++;
+      for (const id of ready) delete fresh[id];
+      refreshRemote(); Thumbs.index(state.plan); emit('plan');
+      if (last || (since += ready.length) >= 24) { since = 0; await saveThumbs(); }
+    };
+    const worker = async () => {
+      while (next < want.length && planLoads === started) {
+        const v = want[next++], url = photoSource(v);
+        try { const uri = await Thumbs.make(await fetchPhoto(url, service)); got[v.id] = uri; fresh[v.id] = uri; delete missed[v.id]; photoWork.fetched++; }
+        catch (_) { missed[v.id] = { u: url, t: today, s: service ? 1 : 0 }; photoWork.failed++; }
+        photoWork.left--;
+        if (Object.keys(fresh).length >= 8) await flush(false);
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    await flush(true);
+    misses(missed);
+    photoWork.running = false; emit('photos');
+    if (Object.keys(got).length) folderSoon();
+    if (photoWork.again) return rebuildThumbs();
+    return photoWork;
+  }
+  /** What the plan should have pictures of and has not: the farm photo, and varieties whose photo record has no thumbnail kept here. */
+  function photoGaps() {
+    const plan = state.plan, ref = plan && plan.map && plan.map.imageFile;
+    const waiting = plan && !isSample() ? plan.varieties.filter(v => liveVariety(v) && v.photo && !Thumbs.get(v.id)) : [];
+    return { map: !!plan && !isSample() && !state.mapImageUrl && !!(ref && (ref.sha256 || ref.name)), varieties: waiting.length, shown: waiting.filter(v => photoSource(v)).length, working: photoWork.running, left: photoWork.left, service: !!fetchService() };
   }
   /** Keep (or with no picture, drop) one variety's thumbnail. */
   async function keepThumb(id, uri) {
     const next = { ...state.keptThumbs };
     if (uri) next[id] = uri; else delete next[id];
     state.keptThumbs = next; Thumbs.put(id, uri); thumbsRev++;
-    Thumbs.index(state.plan); emit('plan');
-    try { return store.backend === 'memory' ? false : await store.saveBlob('thumbs', JSON.stringify(next)); } catch (_) { return false; }
+    refreshRemote(); Thumbs.index(state.plan); emit('plan');
+    const kept = await saveThumbs();
+    folderSoon();
+    return kept;
   }
   /** Make thumbnails from the variety photos inside a v7 backup zip. */
   async function importPhotos(parsed, where) {
@@ -226,9 +300,91 @@
       try { out[v.id] = await Thumbs.make(new Blob([await Zip.read(zip.bytes, zip.entries.get('files/' + v.photo.sha256))], { type: v.photo.mime || 'image/jpeg' })); } catch (_) { /* one unreadable photo does not stop the rest */ }
       if ((i + 1) % 20 === 0) showStatus({ backend: where, state: 'saving', label: `Reading photos ${i + 1}/${list.length}` });
     }
-    state.keptThumbs = out; Thumbs.set(out); Thumbs.index(state.plan); emit('plan');
-    if (store.backend !== 'memory') { try { await store.saveBlob('thumbs', JSON.stringify(out)); } catch (_) { /* shown for this session only */ } }
+    // pictures carried over from the plan this one replaces stay, under the backup's own
+    state.keptThumbs = { ...state.keptThumbs, ...out }; Thumbs.set(state.keptThumbs); refreshRemote(); Thumbs.index(state.plan); emit('plan');
+    await saveThumbs();
     return list.length;
+  }
+
+  // ───────────────────────── photos added to the plan that is open ─────────────────────────
+  const digest = async bytes => { try { const d = await root.crypto.subtle.digest('SHA-256', bytes); return [...new Uint8Array(d)].map(x => x.toString(16).padStart(2, '0')).join(''); } catch (_) { return null; } };
+  const pictureType = b => b[0] === 0xFF && b[1] === 0xD8 ? 'image/jpeg' : b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E ? 'image/png' : b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45 ? 'image/webp' : '';
+  const isThumb = uri => typeof uri === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(uri);
+  /** Make a picture the farm photo of the plan that is open. The plan keeps its own scale and bed positions. */
+  async function setMapPhoto(bytes, mime) {
+    let size;
+    try { const bitmap = await createImageBitmap(new Blob([bytes], { type: mime })); size = { w: bitmap.width, h: bitmap.height }; if (bitmap.close) bitmap.close(); } catch (_) { throw new Error('is not a picture this browser can read'); }
+    const hash = await digest(bytes), map = { ...(state.plan.map || {}) }, ref = map.imageFile, drawn = map.imgW > 0 && map.imgH > 0;
+    const shape = drawn && Math.abs(size.w / size.h - map.imgW / map.imgH) > 0.02 * (map.imgW / map.imgH) ? { w: size.w, h: size.h, planW: map.imgW, planH: map.imgH } : null;
+    if (!drawn) { map.imgW = size.w; map.imgH = size.h; }   // a plan with no photo yet takes the picture's own size
+    showMapImage(bytes, mime);
+    let kept = false;
+    if (store.backend !== 'memory') { try { kept = await store.saveBlob('mapimage', toBase64(bytes)); } catch (_) { kept = false; } }
+    adopt({ ...state.plan, map, lrfNext: { ...(state.plan.lrfNext || {}), mapImage: { mime, sha256: hash } } }, state.engine);
+    return { kept, same: !!(ref && ref.sha256 && hash && ref.sha256 === hash), known: !!(ref && ref.sha256), shape };
+  }
+  /** Add small photos for varieties of the open plan. One already kept here stays as it is unless `replace`. */
+  async function addThumbs(found, options = {}) {
+    const ids = new Set(state.plan.varieties.map(v => v.id)), fresh = {};
+    let had = 0, strange = 0;
+    for (const [id, uri] of Object.entries(found || {})) {
+      if (!isThumb(uri)) continue;
+      if (!ids.has(id)) strange++; else if (Thumbs.get(id) && !options.replace) had++; else fresh[id] = uri;
+    }
+    const added = Object.keys(fresh).length;
+    if (added) { state.keptThumbs = { ...state.keptThumbs, ...fresh }; Thumbs.putAll(fresh); thumbsRev++; refreshRemote(); Thumbs.index(state.plan); emit('plan'); await saveThumbs(); }
+    return { added, had, strange };
+  }
+  /** The pictures inside a complete backup .zip, matched to the open plan's varieties: by record, else by crop and name. */
+  async function zipPictures(bytes) {
+    const Zip = root.LRFZip, entries = Zip.directory(bytes), planEntry = entries.get('plan.json');
+    if (!planEntry) throw new Error('has no plan.json inside, so its pictures cannot be matched to varieties');
+    const theirs = JSON.parse(new TextDecoder().decode(await Zip.read(bytes, planEntry))), mine = state.plan.varieties.filter(liveVariety);
+    const byId = new Map(mine.map(v => [v.id, v])), byName = new Map(mine.map(v => [v.cropId + '|' + SL.varietyKey(v.name), v])), thumbs = {};
+    const list = (theirs.varieties || []).filter(v => v && v.photo && v.photo.sha256 && entries.get('files/' + v.photo.sha256));
+    for (let i = 0; i < list.length; i++) {
+      const v = list[i], here = byId.get(v.id) || byName.get(v.cropId + '|' + SL.varietyKey(v.name));
+      if (here && !Thumbs.get(here.id)) { try { thumbs[here.id] = await Thumbs.make(new Blob([await Zip.read(bytes, entries.get('files/' + v.photo.sha256))], { type: v.photo.mime || 'image/jpeg' })); } catch (_) { /* one unreadable photo does not stop the rest */ } }
+      if ((i + 1) % 20 === 0) showStatus({ backend: store.backend, state: 'saving', label: `Reading photos ${i + 1}/${list.length}` });
+    }
+    const ref = theirs.map && theirs.map.imageFile, mapEntry = ref && ref.sha256 ? entries.get('files/' + ref.sha256) : null;
+    return { thumbs, map: mapEntry ? await Zip.read(bytes, mapEntry) : null };
+  }
+  /**
+   * Pictures for the plan that is open, from files. A picture is the farm photo. A thumbnails file (as the plan folder keeps
+   * one), a photo file made for this plan, or a complete backup .zip gives variety photos, and the farm photo when it holds
+   * one and none is shown yet. The plan itself is never replaced, and a variety photo already here is never written over.
+   */
+  async function addPhotos(files) {
+    const list = [...(files || [])].filter(Boolean);
+    if (!list.length) return null;
+    if (isSample()) { toast('Load your plan first. Its photos can be added after that.'); return null; }
+    const out = { map: null, added: 0, had: 0, strange: 0, problems: [] }, tally = r => { out.added += r.added; out.had += r.had; out.strange += r.strange; };
+    const mapFrom = async (bytes, mime, force) => { if (force || !state.mapImageUrl) out.map = await setMapPhoto(bytes, mime); };
+    for (const file of list) {
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer()), mime = pictureType(bytes);
+        if (mime) { await mapFrom(bytes, mime, true); continue; }
+        if (root.LRFZip.isZip(bytes)) { const found = await zipPictures(bytes); if (found.map) await mapFrom(found.map, pictureType(found.map) || 'image/jpeg', false); tally(await addThumbs(found.thumbs)); continue; }
+        let data;
+        try { data = JSON.parse(new TextDecoder().decode(bytes)); } catch (_) { throw new Error('is not a picture, a photo file or a backup'); }
+        if (data && Array.isArray(data.plantings)) throw new Error('is a plan, not photos. To open it, use Backup, Load a v7 backup');
+        if (data && data.format === 'lrf-photos-1') { if (data.map && data.map.data) { const b = fromBase64(data.map.data); await mapFrom(b, pictureType(b) || data.map.mime || 'image/jpeg', false); } tally(await addThumbs(data.thumbs)); continue; }
+        if (!data || typeof data !== 'object' || !Object.values(data).some(isThumb)) throw new Error('holds no photos');
+        tally(await addThumbs(data));
+      } catch (error) { out.problems.push(`${file.name} ${(error && error.message) || 'could not be read'}`); }
+    }
+    showStatus({ backend: store.backend, state: 'saved' });
+    const said = [];
+    if (out.map) said.push(out.map.shape ? `The farm photo is set, but it is ${out.map.shape.w} × ${out.map.shape.h} and the plan was drawn on one ${out.map.shape.planW} × ${out.map.shape.planH}: beds may not sit where they should`
+      : `The farm photo is set${out.map.known && !out.map.same ? ' (it is not the same file the plan was drawn on)' : ''}`);
+    if (out.added) said.push(`${out.added} variety photo${out.added === 1 ? '' : 's'} added`);
+    if (out.had && !out.added) said.push(`all ${out.had} variety photo${out.had === 1 ? ' was' : 's were'} here already`);
+    if (out.strange) said.push(`${out.strange} belong${out.strange === 1 ? 's' : ''} to varieties that are not in this plan`);
+    if (!out.map && !out.added && !out.had && !out.strange && !out.problems.length) said.push('No photos were found in that');
+    toast([...said, ...out.problems].join('. ') + '.');
+    if (out.map || out.added) folderSoon();
+    return out;
   }
   // Seed stock. A plan loaded from a v7 backup carries its lots and their change log. A plan saved before stock
   // could be edited here does not, so its records are fetched once from where they were set aside (the page's own
@@ -471,7 +627,7 @@
     else if (res.state === 'partial') {
       const rows = res.rect && res.rect.rows && res.rect.rows.count < res.rect.rows.total ? `${res.rect.rows.count} of ${res.rect.rows.total} rows · ` : '';
       res.text = `${rows}${UI.num(r.physicalLength, 1)} ${unit} free${res.was && res.shrunk ? ` (it has ${UI.num(res.was.len, 1)})` : ''} · ${harvest}`;
-    } else res.text = { space: 'Not a growing space', crop: 'This crop cannot be planned here', 'micro-needs-bench': 'Microgreens go on a living-tray bench', 'bench-needs-micro': 'This bench takes living trays only', 'too-long': 'Does not fit this space', pool: 'Live trays follow weekly demand: change it on the Trays view' }[res.why] || heldText(res);
+    } else res.text = { space: 'Not a growing space', crop: 'This crop cannot be planned here', 'micro-needs-bench': 'Microgreens go on a living-tray bench', 'bench-needs-micro': 'This bench takes living trays only', 'no-count': 'This bench has no tray count yet', 'too-long': 'Does not fit this space', pool: 'Live trays follow weekly demand: change it on the Trays view' }[res.why] || heldText(res);
     return res;
   }
   const sameSpot = (a, b) => a.bedId === b.bedId && a.date === b.date && (a.ft || 0) === (b.ft || 0) && (a.trays || 0) === (b.trays || 0) && (a.startFt || 0) === (b.startFt || 0) && JSON.stringify(a.bedLayout || null) === JSON.stringify(b.bedLayout || null);
@@ -522,6 +678,17 @@
   }
   /** Go to the planning-ahead view with something in mind: { mode: 'openings' | 'series', bedId?, openingId?, sourceId?, cropId? }. */
   function openAhead(focus) { state.ahead = focus || null; setView('ahead'); emit('ahead'); }
+
+  /**
+   * Names this app has since changed, put right on a plan as it is opened. v7 called the stand-in space live trays are filed
+   * under "Shared heated space"; here it is the heated greenhouse benches. Every plan opened or loaded passes through here, so
+   * a v7 backup loaded later is renamed too, with nothing to remember.
+   */
+  function tidy(plan) {
+    let changed = false;
+    const gardens = (plan.gardens || []).map(g => { const after = Trays.poolRenamed(g); if (after) changed = true; return after || g; });
+    return changed ? { ...plan, gardens } : plan;
+  }
 
   // ─────────────────────────── backup in / out ───────────────────────────
   const emptyAttic = () => ({ v: 1, rest: {}, varieties: {} });
@@ -606,17 +773,26 @@
       if (!ok) return false;
     }
     const cloud = store.backend !== 'memory';   // somewhere durable to keep the photo and the rest of the backup
-    core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name, backup: (parsed.plan.backup && parsed.plan.backup.exportedAt) || parsed.plan._localUpdatedAt || null, ...carried.keep, ...ownKeep };
-    state.plan = core; state.attic = attic; state.extras = emptyExtras(); state.inventoryBase = null; state.inventoryAsked = null; state.packsBase = {}; state.keptThumbs = {}; Thumbs.set({}); state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
-    showMapImage(parsed.image && parsed.image.bytes, parsed.image && parsed.image.mime);
+    // A file that holds the plan only brings no pictures. The ones already here stay with the varieties they belong to, and the
+    // farm photo stays while the new plan was drawn on the same one, so loading a newer plan file does not strip the app bare.
+    const planOnly = !parsed.zip && !extra.thumbs, was = replacing ? state.plan : null, wasInfo = (was && was.lrfNext) || {}, sameRef = (a, b) => !!(a && b && a.sha256 && a.sha256 === b.sha256);
+    const keptIds = new Set(core.varieties.map(v => v.id)), carriedThumbs = {};
+    if (planOnly && was) for (const [id, uri] of Object.entries(Thumbs.all())) if (keptIds.has(id)) carriedThumbs[id] = uri;
+    const keepMap = planOnly && !parsed.image && !!wasInfo.mapImage && !!state.mapImageUrl && sameRef(core.map && core.map.imageFile, was && was.map && was.map.imageFile);
+    core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name, backup: (parsed.plan.backup && parsed.plan.backup.exportedAt) || parsed.plan._localUpdatedAt || null, ...carried.keep, ...ownKeep, ...(keepMap ? { mapImage: wasInfo.mapImage } : {}) };
+    core = tidy(core);
+    planLoads++;
+    state.plan = core; state.attic = attic; state.extras = emptyExtras(); state.inventoryBase = null; state.inventoryAsked = null; state.packsBase = {}; state.keptThumbs = carriedThumbs; Thumbs.set(carriedThumbs); refreshRemote(); thumbsRev++; state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
+    if (!keepMap) showMapImage(parsed.image && parsed.image.bytes, parsed.image && parsed.image.mime);
     rebuild(); state.date = defaultDate(); root.LRFMap.fit(true);
     emit('plan'); emit('date'); emit('sel');
-    toast(`Loaded ${core.plantings.length} plantings in ${info.beds} growing spaces from ${file.name}${kept.length ? `. Kept from this copy: ${kept.join('; ')}` : ''}`);
+    const gaps = photoGaps(), lacking = planOnly ? [gaps.map ? 'no farm photo' : '', gaps.varieties ? `${gaps.varieties} variety photo${gaps.varieties === 1 ? '' : 's'} missing` : ''].filter(Boolean) : [];
+    toast(`Loaded ${core.plantings.length} plantings in ${info.beds} growing spaces from ${file.name}${kept.length ? `. Kept from this copy: ${kept.join('; ')}` : ''}${lacking.length ? `. This file holds the plan only: ${lacking.join(', ')}. See the overview` : ''}`);
     const ownThumbs = async () => {
       if (!extra.thumbs) return;
       try { const kept = JSON.parse(extra.thumbs); state.keptThumbs = kept; Thumbs.set(kept); Thumbs.index(state.plan); emit('plan'); if (store.backend !== 'memory') await store.saveBlob('thumbs', extra.thumbs); } catch (_) { /* the plan is open without its small photos */ }
     };
-    if (!cloud) { store.save(core); await importPhotos(parsed, 'memory'); await ownThumbs(); return true; }
+    if (!cloud) { store.save(core); await importPhotos(parsed, 'memory'); await ownThumbs(); rebuildThumbs(); return true; }
     const where = store.backend;
     try { await store.clearBlob('attic-new'); } catch (_) { /* nothing was kept */ }
     // The plan itself is saved first; the bulky extras follow and may fail without harming it.
@@ -635,7 +811,21 @@
     await ownThumbs();
     store.save(core);
     folderSoon();
+    rebuildThumbs();
     return true;
+  }
+
+  /** Files dropped on the page, sorted by what they are: pictures and photo files join the open plan; a plan or a backup replaces it, after asking. */
+  async function openFiles(files) {
+    const photos = [], plans = [];
+    for (const file of [...(files || [])].filter(Boolean)) {
+      let head = new Uint8Array(0);
+      try { head = new Uint8Array(await file.slice(0, 400).arrayBuffer()); } catch (_) { /* importBackup says what is wrong with it */ }
+      const text = pictureType(head) || root.LRFZip.isZip(head) ? '' : new TextDecoder().decode(head);
+      if (pictureType(head) || /^\s*\{\s*"format"\s*:\s*"lrf-photos-1"/.test(text) || /^\s*\{\s*"[^"]+"\s*:\s*"data:image\//.test(text)) photos.push(file); else plans.push(file);
+    }
+    if (photos.length) await addPhotos(photos);
+    if (plans.length) await importBackup(plans[0]);
   }
 
   // ───────────────────────────── the plan folder ─────────────────────────────
@@ -761,13 +951,16 @@
       if (compact) { state.plan = IO.unpack(compact); state.plan.lrfNext = { source: 'bundled', attic: 'none', backup: state.bundled.backup, startedAt: new Date().toISOString(), ...(state.bundled.keep || {}) }; firstRun = !loadError; }
       else state.plan = IO.sample(Lib);
     }
+    const opened = state.plan;
+    state.plan = tidy(state.plan);
+    const tidied = state.plan !== opened;
     state.mapImageUrl = bundledImage();
     rebuild();
     state.date = defaultDate(); state.ready = true;
     document.body.dataset.view = state.view;
     emit('plan'); emit('date'); emit('sel'); emit('view');
     if (loadError) { showStatus({ backend: store.backend, state: 'error', detail: loadError.message }); toast(`The saved plan could not be opened (${loadError.message}). Showing the starting plan; nothing is overwritten.`); return; }
-    if (firstRun) store.save(state.plan); else showStatus({ backend: store.backend, state: saved ? 'saved' : 'sample' });
+    if (firstRun || (tidied && saved)) store.save(state.plan); else showStatus({ backend: store.backend, state: saved ? 'saved' : 'sample' });
     if (saved) restoreMapImage();
     loadThumbs(); loadPacks(); topUpVarieties().catch(() => {}); adoptTrayPlans();
     // Stock is needed wherever a sowing can be recorded, not only on the Seeds view: fetch it now, not on first visit.
@@ -775,7 +968,7 @@
     store.watch(() => toast('This plan was changed on another device.', { label: 'Reload', run: () => root.location.reload() }));
     if (Folder) {
       Folder.on(() => { if (statusNow) showStatus(statusNow); emit('folder'); });
-      Folder.restore().then(f => { if (f.connected && !f.conflict && !isSample() && !f.savedAt) saveToFolder(); }).catch(() => {});
+      Folder.restore().then(f => { if (f.connected && !f.conflict && !isSample() && (!f.savedAt || tidied)) saveToFolder(); }).catch(() => {});
     }
   }
 
@@ -803,7 +996,7 @@
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType,
-    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
+    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
     saveNow, chooseFolder, reconnectFolder, openFolderPlan, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, traysToMonday: () => applyTrayStart()
   };

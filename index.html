@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.15">
+<meta name="lrf-build" content="0.16">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -42,6 +42,8 @@
         <button type="button" id="exportBtn"><b>Download a backup</b><small>A plan file the v7 planner can restore</small></button>
         <button type="button" id="importBtn"><b>Load a v7 backup…</b><small>Replace this plan with a .zip or .json backup</small></button>
         <input type="file" id="importFile" accept=".zip,.json,application/zip,application/json" hidden>
+        <button type="button" id="photosBtn"><b>Add photos…</b><small>The farm photo or variety photos for this plan. The plan is not replaced.</small></button>
+        <input type="file" id="photosFile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.json,.zip,application/json,application/zip" multiple hidden>
         <p id="buildNote"></p>
       </div>
     </div>
@@ -126,7 +128,7 @@
         <header class="as-head">
           <p class="eyebrow">One list the whole plan rests on</p>
           <h2>Days to first harvest</h2>
-          <p>Counted from the day the crop goes into its bed or tower. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; where a tunnel, greenhouse or tower has no number of its own it shows the field figure, so set the ones that differ. A variety with its own figure keeps it; a planting with no variety uses the crop row.</p>
+          <p>Days here start the day the crop goes into its bed or tower. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; where a tunnel, greenhouse or tower has no number of its own it shows the field figure, so set the ones that differ. A variety with its own figure keeps it; a planting with no variety uses the crop row.</p>
         </header>
         <details class="as-places" id="asPlaces"><summary id="asPlacesSum">Where things grow</summary><div class="as-places-body" id="asPlacesBody"></div></details>
         <div class="as-tools">
@@ -157,6 +159,7 @@
               <button type="button" class="btn" id="sdSettings">Link reader…</button>
             </div>
           </header>
+          <div class="sd-quick" id="sdQuick"></div>
           <div class="sd-row2">
             <div class="seg" role="group" aria-label="What to show">
               <button type="button" data-sd-tab="list" aria-pressed="true">List</button>
