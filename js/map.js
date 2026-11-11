@@ -177,7 +177,7 @@
       const planted = here.length > 0;
       item.planted = planted;
       g.setAttribute('class', ['bed', geo.shape === 'circle' ? 'tower' : geo.shape === 'cells' ? 'pots' : '', planted ? 'is-planted' : status.resting ? 'is-resting' : 'is-empty', picking ? 'is-picking' : '',
-        highlightCrop && !here.some(r => r.c.id === highlightCrop) ? 'dim' : '', sel && sel.type === 'bed' && sel.id === bed.id ? 'sel' : '', holdsSel ? 'has-sel' : '', item.drop || ''].filter(Boolean).join(' '));
+        highlightCrop && !here.some(r => r.c.id === highlightCrop) ? 'dim' : '', sel && ((sel.type === 'bed' && sel.id === bed.id) || (sel.type === 'opening' && sel.bedId === bed.id)) ? 'sel' : '', holdsSel ? 'has-sel' : '', item.drop || ''].filter(Boolean).join(' '));
     }
     paintLegend(counts);
     paintHandles();
@@ -474,7 +474,7 @@
     App.on('plan', () => { $('mapSample').hidden = !App.isSample(); });
     App.on('plan', build);
     App.on('date', paint);
-    App.on('sel', () => { paint(); const sel = App.state.sel; if (sel && App.state.view === 'map') { const p = sel.type === 'planting' ? App.state.engine.planting(sel.id) : null; focusBed(p ? p.bedId : sel.id); } });
+    App.on('sel', () => { paint(); const sel = App.state.sel; if (sel && App.state.view === 'map') { const p = sel.type === 'planting' ? App.state.engine.planting(sel.id) : null; focusBed(p ? p.bedId : sel.type === 'opening' ? sel.bedId : sel.id); } });
     App.on('view', () => { if (App.state.view === 'map' && !view.fitted) requestAnimationFrame(() => fit()); });
   }
 

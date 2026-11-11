@@ -11,7 +11,7 @@
 
   const state = {
     plan: null, engine: null, attic: null, extras: null, inventoryBase: null, inventoryAsked: null, packsBase: {}, keptThumbs: {}, bundled: null, mapImageUrl: '',
-    date: new Date(), view: 'map', sel: null, armed: null, ahead: null,
+    date: new Date(), view: 'map', sel: null, armed: null,
     undo: [], redo: [], ready: false
   };
   const listeners = {};
@@ -676,8 +676,16 @@
     const ops = (list || []).map(p => ({ before: null, after: p }));
     return ops.length ? commit(label || `Add ${ops.length} planting${ops.length === 1 ? '' : 's'}`, ops) : false;
   }
-  /** Go to the planning-ahead view with something in mind: { mode: 'openings' | 'series', bedId?, openingId?, sourceId?, cropId? }. */
-  function openAhead(focus) { state.ahead = focus || null; setView('ahead'); emit('ahead'); }
+  /**
+   * Plan ahead with something in mind, in place: { mode: 'series', sourceId?, cropId? } opens the series sheet;
+   * { bedId, openingId } shows that opening in the details panel, as a click on it does.
+   */
+  function openAhead(focus) {
+    focus = focus || {};
+    if (focus.mode === 'series') { if (root.LRFAhead) root.LRFAhead.series(focus); return; }
+    if (focus.openingId && focus.bedId) select({ type: 'opening', id: focus.openingId, bedId: focus.bedId });
+    else if (focus.bedId) select({ type: 'bed', id: focus.bedId });
+  }
 
   /**
    * Names this app has since changed, put right on a plan as it is opened. v7 called the stand-in space live trays are filed

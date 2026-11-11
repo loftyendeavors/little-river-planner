@@ -247,7 +247,7 @@
       const open = Ahead.openings(eng, { bedId: bed.id });
       if (open.length) host.append(h('section.insp-section', { id: 'bedOpenings' }, h('h3', 'Openings'),
         open.map(o => { const n = Ahead.fits(eng, o).length, next = o.before ? `before the ${o.before.r.c.name.toLowerCase()}` : o.after ? `after the ${o.after.r.c.name.toLowerCase()}` : 'open';
-          return h('button.p-open', { type: 'button', title: 'See what fits', onclick: () => App.openAhead({ mode: 'openings', bedId: bed.id, openingId: o.id }) },
+          return h('button.p-open', { type: 'button', title: 'See what fits', dataset: { opening: o.id }, onclick: () => App.select({ type: 'opening', id: o.id, bedId: bed.id }) },
             h('b', span(o.from, o.to)), h('span', `${num(o.days)} days ${next}${o.whole ? '' : ` · ${num(o.length, 1)} ft`}`), h('small', n ? `${num(n)} crop${n === 1 ? '' : 's'} fit` : '')); })));
     }
   }
@@ -464,7 +464,7 @@
   // Removing a focused field can fire its change handler, which asks for another render: finish this one first.
   let rendering = false, renderAgain = false;
   let stale = false;
-  const HIDDEN_IN = ['assume', 'seeds', 'trays', 'harvest', 'ahead'];
+  const HIDDEN_IN = ['assume', 'seeds', 'trays', 'harvest'];
   function render() {
     if (!App.state.ready) return;
     if (HIDDEN_IN.includes(App.state.view)) { stale = true; return; }   // nothing to see: draw it when its view comes back
@@ -474,9 +474,10 @@
     try {
       const host = $('inspectorBody'), keep = host.scrollTop, sel = App.state.sel, eng = App.state.engine;
       clear(host);
-      const p = sel && sel.type === 'planting' ? eng.planting(sel.id) : null, bed = sel && sel.type === 'bed' ? eng.bedOf(sel.id) : null;
-      if (!bed || bed.id !== sizing) sizing = null;   // leaving a bed ends any change to its size
-      if (p) renderPlanting(host, p); else if (bed) renderBed(host, bed); else renderOverview(host);
+      // an opening that has gone (something was planted in it) gives way to its bed
+      const p = sel && sel.type === 'planting' ? eng.planting(sel.id) : null, opening = sel && sel.type === 'opening', bed = sel && sel.type === 'bed' ? eng.bedOf(sel.id) : opening ? eng.bedOf(sel.bedId) : null;
+      if (!bed || bed.id !== sizing || opening) sizing = null;   // leaving a bed ends any change to its size
+      if (p) renderPlanting(host, p); else if (opening && root.LRFAhead && root.LRFAhead.opening(host, sel, render)) { /* drawn */ } else if (bed) renderBed(host, bed); else renderOverview(host);
       host.scrollTop = keep;
     } finally {
       rendering = false;

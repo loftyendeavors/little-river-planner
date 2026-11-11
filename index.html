@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.16">
+<meta name="lrf-build" content="0.17">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -23,7 +23,6 @@
   <nav class="views" aria-label="Views">
     <button type="button" data-view-btn="map" aria-pressed="true">Map</button>
     <button type="button" data-view-btn="timeline" aria-pressed="false">Timeline</button>
-    <button type="button" data-view-btn="ahead" aria-pressed="false">Successions</button>
     <button type="button" data-view-btn="sow" aria-pressed="false">Sowing</button>
     <button type="button" data-view-btn="trays" aria-pressed="false">Trays</button>
     <button type="button" data-view-btn="harvest" aria-pressed="false">Harvest</button>
@@ -99,17 +98,21 @@
     </div>
 
     <div class="view view-timeline" id="timelineView">
-      <div class="tl-tools" role="group" aria-label="Timeline zoom">
-        <span>Zoom</span>
-        <button type="button" data-tl-zoom="2" aria-pressed="false">Year</button>
-        <button type="button" data-tl-zoom="3.2" aria-pressed="true">Season</button>
-        <button type="button" data-tl-zoom="7" aria-pressed="false">Weeks</button>
+      <div class="tl-tools">
+        <div class="seg tl-filters" id="tlFilters" role="group" aria-label="Which growing spaces to show"></div>
         <button type="button" id="tlOpenToggle" aria-pressed="true" title="Show where whole beds stand open before, after or between crops">Openings</button>
+        <div class="tl-zoom" role="group" aria-label="Timeline zoom" title="The mouse wheel over the bars zooms. Over the names it scrolls the rows. Hold and drag empty chart to move.">
+          <button type="button" class="tl-step" id="tlZoomOut" aria-label="Zoom out">−</button>
+          <button type="button" data-tl-zoom="months" aria-pressed="true" title="The whole year">Months</button>
+          <button type="button" data-tl-zoom="weeks" aria-pressed="false">Weeks</button>
+          <button type="button" data-tl-zoom="days" aria-pressed="false">Days</button>
+          <button type="button" class="tl-step" id="tlZoomIn" aria-label="Zoom in">+</button>
+        </div>
         <span class="tl-key"><i class="k-nursery"></i>nursery <i class="k-grow"></i>growing <i class="k-pick"></i>harvest <i class="k-turn"></i>turnover <i class="k-open"></i>open</span>
       </div>
       <div class="tl-scroll" id="tlScroll">
         <div class="tl-inner" id="tlInner">
-          <div class="tl-head"><div class="tl-corner">Growing space</div><div class="tl-months" id="tlMonths"></div></div>
+          <div class="tl-head"><div class="tl-corner">Growing space</div><div class="tl-scale" id="tlScale"><div class="tl-months" id="tlMonths"></div><div class="tl-ticks" id="tlTicks"></div></div></div>
           <div class="tl-grid" id="tlGrid" aria-hidden="true"></div>
           <div class="tl-body" id="tlBody"></div>
           <div class="tl-cursor" id="tlCursor"></div>
@@ -118,7 +121,6 @@
       </div>
     </div>
 
-    <div class="view view-ahead" id="aheadView"><div class="as-wrap tr-wrap ah-wrap" id="ahWrap"></div></div>
     <div class="view view-harvest" id="harvestView"><div class="as-wrap tr-wrap hv-wrap" id="hvWrap"></div></div>
     <div class="view view-sow" id="sowView"><div class="as-wrap tr-wrap sw-wrap" id="swWrap"></div></div>
     <div class="view view-trays" id="traysView"><div class="as-wrap tr-wrap" id="trWrap"></div></div>
@@ -238,7 +240,7 @@
 <script src="js/traysview.js"></script>
 <script src="js/sowview.js"></script>
 <script src="js/harvestview.js"></script>
-<script src="js/aheadview.js"></script>
+<script src="js/ahead.js"></script>
 <script src="js/main.js"></script>
 <script src="js/pwa.js"></script>
 </body>
