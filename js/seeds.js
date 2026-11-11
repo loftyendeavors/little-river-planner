@@ -557,6 +557,58 @@
    * The variety column takes what is left and never less than NAME_MIN, so a narrow window loses the columns
    * that say least (supplier, then the count of plantings, the first sowing date, the vendor size) before it loses names.
    */
+  // ── a seed lot added where the variety is: a line that opens in the list under its row ──
+  // The line at the top of the view is for a packet named by typing. From a variety's own row, "+ lot" opens this one
+  // under that row, so the eye does not leave it; × or Escape closes it and nothing is added.
+  const lotRow = { varietyId: '', vendor: '', year: String(new Date().getFullYear()), amount: '', status: 'usable', focus: '', node: null };
+  const stockUnitOf = v => { const stock = App.stockNow(); return SL.STOCK_UNITS.find(u => stock['v:' + v.id + '|' + u]) || unitFor(App.state.engine.crop(v.cropId)); };
+  function knownVendors() {
+    const seen = new Map(), live = App.state.plan.varieties.filter(v => v.active !== false && !v.deleted);
+    for (const s of [...live.map(v => v.supplier || (v.source === 'Farm entry' ? '' : v.source) || ''), ...((App.inventoryNow().lots || []).map(l => (l && l.supplier) || ''))]) { const key = SL.supplierKey(s); if (key && !/\.[a-z]{2,}$/i.test(s.trim()) && !seen.has(key)) seen.set(key, s.trim()); }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  }
+  function openLotRow(v) {
+    if (lotRow.varietyId === v.id) { closeLotRow(); return; }
+    Object.assign(lotRow, { varietyId: v.id, vendor: v.supplier || (v.source === 'Farm entry' ? '' : v.source) || '', amount: '', focus: 'lrAmount', node: null });
+    schedule();
+  }
+  function closeLotRow(backTo) {
+    const id = lotRow.varietyId;
+    Object.assign(lotRow, { varietyId: '', amount: '', focus: '', node: null });
+    schedule();
+    if (backTo !== false && id) requestAnimationFrame(() => requestAnimationFrame(() => { const row = document.querySelector(`#sdBody .sd-var[data-variety="${CSS.escape(id)}"]`); if (row) row.focus({ preventScroll: true }); }));
+  }
+  function saveLotRow(v, say) {
+    const fail = (text, id) => { say.textContent = text; const el = $(id || 'lrAmount'); if (el) el.focus(); };
+    if (App.isSample()) { fail('This is the sample plan. Load your own first.'); return; }
+    const ctx = { now: new Date().toISOString(), uid: App.uid, year: App.planYear(), name: '' }, before = App.state.plan.seedInventory || null, unit = stockUnitOf(v);
+    let done;
+    try { done = SL.quickLot(App.state.plan, App.inventoryNow(), { varietyId: v.id, name: v.name, cropId: '', vendor: lotRow.vendor, year: lotRow.year, quantity: lotRow.amount, unit, status: lotRow.status }, ctx); }
+    catch (error) { const text = error.message || 'That lot could not be added.'; fail(text, /year/i.test(text) ? 'lrYear' : 'lrAmount'); return; }
+    const what = `${num(done.lot.quantity, unit === 'g' ? 1 : 0)} ${unit === 'g' ? 'g' : unit} of ${v.name}`, state = lotRow.status === 'ordered' ? 'on order' : 'on hand';
+    if (!App.commit(`${what} ${state}`, [{ kind: 'inventory', before, after: done.inventory }], { unchecked: true })) { fail('That lot could not be added.'); return; }
+    toast(`${what} ${state}`, { label: 'Undo', run: App.undo });
+    Object.assign(lotRow, { varietyId: '', amount: '', focus: '', node: null });
+    ui.sel = { type: 'variety', id: v.id }; ui.panelKey = ''; schedule();
+  }
+  /** The line itself: vendor, year, amount, on hand or ordered, Add, and × to leave without adding. */
+  function lotLine(v, cols, flat) {
+    const unit = stockUnitOf(v), keep = key => e => { lotRow[key] = e.target.value; say.textContent = ''; };
+    const say = h('p.ql-say', { id: 'lrSay', role: 'status', 'aria-live': 'polite' });
+    const vendors = h('datalist', { id: 'lrVendors' });
+    const vendor = h('input', { id: 'lrVendor', type: 'text', placeholder: 'Vendor', autocomplete: 'off', spellcheck: false, 'aria-label': 'Vendor', list: 'lrVendors', value: lotRow.vendor, oninput: keep('vendor'), onfocus: () => { if (!vendors.children.length) add(vendors, knownVendors().map(name => h('option', { value: name }))); } });
+    const year = h('input', { id: 'lrYear', type: 'number', min: 1900, max: 2200, step: 1, placeholder: 'Year', title: 'The year the seed was packed for, or bought', 'aria-label': 'Year', value: lotRow.year, oninput: keep('year') });
+    const amount = h('input', { id: 'lrAmount', type: 'number', min: 0, step: unit === 'g' ? 'any' : 1, placeholder: unit === 'g' ? 'Grams' : unit === 'plants' ? 'Plants' : 'Seeds', 'aria-label': 'Amount', value: lotRow.amount, oninput: keep('amount') });
+    const where = h('div.seg.ql-where', { role: 'group', 'aria-label': 'Where the seed is' }, [['usable', 'On hand'], ['ordered', 'Ordered']].map(([id, label]) =>
+      h('button', { type: 'button', 'aria-pressed': String(lotRow.status === id), dataset: { where: id }, onclick: () => { lotRow.status = id; for (const b of where.children) b.setAttribute('aria-pressed', String(b.dataset.where === id)); } }, label)));
+    const form = h('form.sd-quick-form.sd-lot-form', { id: 'lrForm', novalidate: true, autocomplete: 'off', 'aria-label': `Add a seed lot of ${v.name}`, onsubmit: e => { e.preventDefault(); saveLotRow(v, say); },
+      onkeydown: e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeLotRow(); } } },
+      h('span.ql-label', 'New lot'), vendor, vendors, year, h('label.ql-amount', amount, h('span.ql-unit', unit === 'g' ? 'grams' : unit)), where,
+      h('button.btn', { type: 'submit', id: 'lrAdd' }, 'Add'),
+      h('button.icon-btn.lr-close', { type: 'button', id: 'lrClose', title: 'Close without adding a lot (Esc)', 'aria-label': `Cancel adding a lot of ${v.name}`, onclick: () => closeLotRow() }, '×'));
+    return h('tr.sd-lotrow' + (flat ? '' : '.in-group'), { dataset: { lotFor: v.id } }, h('td', { colSpan: cols }, form, say));
+  }
+
   const LIST_COLS = [['name', 'Variety'], ['sup', 'Supplier', 0, 122, 1], ['days', 'Days', 1, 84], ['from', 'Days start at', 0, 124], ['tosow', 'To sow', 1, 88],
     ['hand', 'On hand', 1, 130], ['short', 'Short', 1, 62], ['size', 'Vendor size', 1, 134, 4], ['first', 'First sow', 1, 84, 3], ['uses', 'Plantings', 1, 84, 2]];
   const NAME_MIN = 190;
@@ -574,13 +626,16 @@
     const folds = grouped ? groupsOf(m, list).map(g => g.id) : [], allShut = folds.length > 0 && folds.every(id => ui.closed.has(id));
     const fold = folds.length > 1 ? h('button.link.sd-fold', { type: 'button', id: 'sdFold', onclick: () => { if (allShut) ui.closed.clear(); else folds.forEach(id => ui.closed.add(id)); schedule(); } }, allShut ? 'Expand all' : 'Collapse all') : null;
     clear($('sdHead')).append(h('tr', plan.cols.map(([id, t, n, w]) => h('th' + (n ? '.sd-num' : ''), w ? { style: { width: w + 'px' } } : {}, t, id === 'name' ? fold : null))));
+    // a redraw while a lot is being typed (a photo arriving, say) must not take the cursor out of it
+    const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('.sd-lotrow') ? document.activeElement.id : '';
+    if (typing && !lotRow.focus) lotRow.focus = typing;
     const body = clear($('sdBody')), cols = ids.length;
     const row = (v, flat) => {
       const r = m.byV.get(v.id), basis = v.catalogMaturityBasis || 'unspecified', crop = eng.crop(v.cropId), site = SL.hostOf(v.url);
       const stage = v.catalogHarvestStage && v.catalogHarvestStage !== 'unspecified' ? v.catalogHarvestStage : '';
       const cell = {
         name: () => h('td', h('div.sd-cell', T.el({ varietyId: v.id, color: crop && eng.cropColor(crop), label: v.name, size: 34 }), h('span.sd-name', h('span.as-vname', v.name), flat ? h('small', cropName(crop)) : null),
-          h('button.sd-addlot', { type: 'button', title: `Add a seed lot of ${v.name}: fills the line at the top, ready for the amount`, 'aria-label': `Add a seed lot of ${v.name}`, onclick: () => { if (quickPick) quickPick(v); } }, '+ lot'))),
+          h('button.sd-addlot', { type: 'button', title: lotRow.varietyId === v.id ? 'Close without adding a lot' : `Add a seed lot of ${v.name}: a line opens under this row`, 'aria-label': `Add a seed lot of ${v.name}`, 'aria-expanded': String(lotRow.varietyId === v.id), onclick: () => openLotRow(v) }, '+ lot'))),
         sup: () => h('td.sd-sup', supplierShort(v) || (v.source === 'Farm entry' ? 'By hand' : ''), site ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer', title: `${v.sku ? v.sku + ' · ' : ''}open the page on ${site}` }, ' ↗') : null),
         days: () => h('td.sd-num.sd-days', daysText(v) || '—', stage ? h('small', stage) : null),
         from: () => v.catalogDtm ? h('td.sd-from' + (basis === 'unspecified' ? '.sd-open' : ''), sel('from', BASIS_SHORT, basis, { 'aria-label': `${v.name}: days start at`, onchange: async e => {
@@ -594,12 +649,17 @@
         first: () => h('td.sd-num', r && r.first ? day(r.first) : ''),
         uses: () => h('td.sd-num', m.used.get(v.id) || '')
       };
-      return h('tr.sd-var' + (flat ? '' : '.in-group'), { tabIndex: 0, 'aria-label': `${v.name}, ${cropName(crop)}`, dataset: { variety: v.id }, onclick: e => { if (!e.target.closest('a, select, input, button')) select({ type: 'variety', id: v.id }); }, onkeydown: rowKey }, ids.map(id => cell[id]()));
+      const tr = h('tr.sd-var' + (flat ? '' : '.in-group') + (lotRow.varietyId === v.id ? '.adding' : ''), { tabIndex: 0, 'aria-label': `${v.name}, ${cropName(crop)}`, dataset: { variety: v.id }, onclick: e => { if (!e.target.closest('a, select, input, button')) select({ type: 'variety', id: v.id }); }, onkeydown: rowKey }, ids.map(id => cell[id]()));
+      if (lotRow.varietyId !== v.id) return [tr];
+      // the same line is put back under the row on a redraw, so what is typed in it, and where the cursor is, are kept
+      const line = lotRow.node && lotRow.node.dataset.lotFor === v.id ? lotRow.node : (lotRow.node = lotLine(v, cols, flat));
+      line.firstChild.colSpan = cols; line.classList.toggle('in-group', !flat);
+      return [tr, line];
     };
     let shown = 0;
     if (!grouped) {
       const key = { name: v => v.name, days: v => v.catalogDtm || v.dtm || 9999, tosow: v => -((m.byV.get(v.id) || {}).toSow || 0), first: v => { const r = m.byV.get(v.id); return r && r.first ? +r.first : Infinity; }, supplier: v => supplierShort(v) || '~' }[ui.sort];
-      for (const v of list.slice().sort((a, b) => { const x = key(a), y = key(b); return (typeof x === 'string' ? x.localeCompare(y) : x - y) || String(a.name).localeCompare(String(b.name)); })) { body.append(row(v, true)); shown++; }
+      for (const v of list.slice().sort((a, b) => { const x = key(a), y = key(b); return (typeof x === 'string' ? x.localeCompare(y) : x - y) || String(a.name).localeCompare(String(b.name)); })) { body.append(...row(v, true)); shown++; }
     } else {
       const groups = groupsOf(m, list);
       // crops planted with no variety chosen still need seed
@@ -616,7 +676,7 @@
           g.crop ? h('button.link', { type: 'button', onclick: () => select({ type: 'crop', id: g.id }) }, 'Edit crop') : null,
           g.crop ? h('button.link', { type: 'button', onclick: () => openVariety(null, g.id) }, 'Add a variety') : null))));
         if (closed) continue;
-        for (const v of g.list) { body.append(row(v, false)); shown++; }
+        for (const v of g.list) { body.append(...row(v, false)); shown++; }
         for (const r of plain) {
           shown++;
           const cell = {
@@ -631,6 +691,11 @@
     }
     if (!shown && !body.children.length) body.append(h('tr', h('td.empty', { colSpan: cols }, q ? `No variety matches “${ui.query}”.` : ui.filter === 'open' ? 'Every variety with supplier days has a starting point.' : ui.filter !== 'all' ? 'No variety fits this filter.' : App.isSample() ? 'The sample plan has no varieties. Load your backup, or add one.' : 'No varieties yet. Add one from a supplier page.')));
     foot(m);
+    if (lotRow.focus) {
+      const el = $(lotRow.focus), fresh = !typing;
+      lotRow.focus = '';
+      if (el) { el.focus({ preventScroll: true }); if (fresh) { if (el.select) el.select(); el.closest('tr').scrollIntoView({ block: 'nearest' }); } }
+    }
   }
   /** What covers a row's shortfall, in the sizes its vendor sells. Nothing when nothing is short. */
   function sizeCell(r, v) {
@@ -792,7 +857,6 @@
   // Vendor, variety, year, amount: Enter saves. The variety is found as it is typed; one that is not in the library yet asks
   // for its crop and is added with the lot, in the same step. The line is built once and reads the plan as it is used.
   const quick = { varietyId: '', hits: [], at: 0, open: false, status: 'usable' };
-  let quickPick = null;   // set a variety into the line from anywhere in the view (a row's "+ lot")
   function initQuick() {
     const host = $('sdQuick');
     if (!host) return;
@@ -861,15 +925,6 @@
         sync(); say.textContent = ''; (year.value ? amount : year).focus();
       } else { quick.varietyId = ''; sync(); cropPick.focus(); }   // a new variety: its crop is asked for next
     }
-    // a variety handed in from its row: the line is filled with it and its vendor, and waits for the amount
-    quickPick = v => {
-      shut();
-      quick.varietyId = v.id; name.value = v.name; cropPick.value = '';
-      vendor.value = v.supplier || (v.source === 'Farm entry' ? '' : v.source) || vendor.value;
-      sync(); say.textContent = '';
-      host.scrollIntoView({ block: 'nearest' });
-      amount.focus(); amount.select();
-    };
     name.addEventListener('input', () => { quick.varietyId = ''; quick.at = 0; say.textContent = ''; show(); sync(); });
     name.addEventListener('focus', () => { if (!quick.varietyId && name.value.trim()) { show(); sync(); } });
     name.addEventListener('keydown', e => {

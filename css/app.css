@@ -1205,3 +1205,22 @@ table.ah-waves { margin-top: 16px; }
 .ah-sheet-head .close { position: static; flex: none; }
 .ah-sheet .ah-cols { margin-top: 14px; }
 @media (max-width: 900px) { .ah-sheet .ah-cols { grid-template-columns: minmax(0, 1fr); } }
+
+/* a seed lot added under the variety's own row (0.18) */
+#sdBody tr.sd-lotrow > td { padding: 0 12px 10px 78px; height: auto; background: color-mix(in srgb, var(--good) 6%, var(--surface)); border-bottom: 1px solid var(--line); }
+#sdBody tr.sd-lotrow:not(.in-group) > td { padding-left: 50px; }
+#sdBody tr.sd-var.adding > td { background: color-mix(in srgb, var(--good) 6%, var(--surface)); border-bottom-color: transparent; }
+.sd-var.adding .sd-addlot { opacity: 1; pointer-events: auto; background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.sd-lot-form { flex-wrap: wrap; row-gap: 6px; max-width: 760px; border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+.sd-lot-form #lrVendor { flex: 1 1 150px; width: 150px; }
+.sd-lot-form #lrYear { width: 68px; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
+.sd-lot-form #lrAmount { width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
+.sd-lot-form #lrYear::-webkit-outer-spin-button, .sd-lot-form #lrYear::-webkit-inner-spin-button, .sd-lot-form #lrAmount::-webkit-outer-spin-button, .sd-lot-form #lrAmount::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sd-lot-form .lr-close { margin-left: auto; flex: none; width: 30px; height: 30px; padding: 0; border: 0; background: none; font-size: 21px; line-height: 1; color: var(--muted); border-radius: 6px; }
+.sd-lot-form .lr-close:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.sd-lotrow .ql-say { margin: 6px 2px 0; }
+
+/* the map's whole-season view (0.18): every space shows all it grows this year */
+.bed-fill.season { cursor: pointer; }
+.whole-season .map-key { display: none !important; }
+.whole-season .bed.is-planted .bed-base { fill: var(--surface); }

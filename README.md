@@ -21,8 +21,12 @@ A bar names its crop first, then its variety ("Carrot · Early Orange"), with a 
 
 - **What is shown.** The buttons above the chart choose All, Field, Greenhouses and tunnels, Towers or Crates, each with its count of plantings. With All, the kinds of space sit under headings of their own. The choice is remembered in that browser.
 - **Summaries that open.** A bank of towers is one row: towers planted alike are one bar ("Lettuce × 7"). Click the bank's heading, or one of its bars, for a row per tower. A crate space with many plantings has a row per crop, and plantings that go in on the same day are one bar; the arrow by the crop's name opens it to every planting. Live trays are one strip, each cell the most trays standing on the benches that week; its heading opens a row per tray crop, and a click on the strip goes to the Trays view.
-- **Zoom.** The mouse wheel over the bars zooms in and out about the day under the pointer, from the whole year down to single days. Over the names, the wheel scrolls the rows. Shift and the wheel slide the chart sideways. Hold and drag empty chart to move it both ways. **Months**, **Weeks** and **Days** jump to those scales, and **−** and **+** step for anyone without a wheel. The scale is remembered in that browser. The plan is one year, so the widest view is that year, edge to edge.
+- **Scrolling and zoom.** The mouse wheel scrolls the rows, and with Shift it scrolls sideways. **Months**, **Weeks** and **Days** set the scale, from the whole year down to single days, and **−** and **+** step it; Ctrl and the wheel zoom about the day under the pointer. Hold and drag empty chart to move it both ways. The scale is remembered in that browser. The plan is one year, so the widest view is that year, edge to edge.
 - A summary bar is not dragged: open it and drag the planting's own bar. A bank shown as one row takes no drop.
+
+## The whole season on the map
+
+**Whole season**, beside the other map tools, shows in every space everything it grows this year at once, instead of what stands on the planning date: a band for each crop in the order they go in, the first at the end nearer the top or left of the page, each as large as its share of the ground and the days it holds it. A tower with several crops is a pie; pots and crates are counted out by crop. Hover a bed for the dates; click it for its panel. The line under the map lists every crop of the season; click one to see only where it grows. Crops can still be dragged onto beds from here.
 
 ## A bed's size
 
@@ -39,7 +43,7 @@ Click a bed on the map and its panel shows width, length and area (a tower its s
 ## Seed stock, vendor sizes and sowing
 
 - **Add a seed lot**, the line at the top of Seeds, takes a vendor, a variety, a year and an amount, and saves on Enter. The variety is found as you type. A name that is not in the library asks for its crop and is added with the lot, in one step to undo.
-- In the Seeds list a variety sits indented under its crop. Hover a variety (or select it) and **+ lot** fills the line at the top with it and its vendor, ready for the amount.
+- In the Seeds list a variety sits indented under its crop. Hover a variety (or select it) and **+ lot** opens a line directly under its row, with its vendor filled in and the cursor on the amount: Enter or **Add** records the lot; **×** or Escape closes the line and adds nothing.
 - **On hand** is typed in the Seeds list; an order is marked arrived with one click.
 - **Vendor size** shows what covers a shortfall at least cost, in the sizes that variety's own vendor sells. The size list comes from the variety's supplier page, so a packet is whatever that vendor says it is.
 - Recording a sowing (in a planting's panel on the map, or beside a variety's plantings in Seeds) dates the planting and takes the seed it used off the lots on hand. A planned sowing never touches stock. A recorded one can be taken back, which returns the seed.
