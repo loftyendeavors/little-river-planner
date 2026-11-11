@@ -11,7 +11,16 @@
   const { h, clear, day, span } = UI;
   const $ = id => document.getElementById(id);
   const LABEL_W = 148, LANE_H = 22;
-  let pxPerDay = 3.2, collapsed = new Set(), dirty = true;
+  let pxPerDay = 3.2, collapsed = new Set(), dirty = true, showOpen = true;
+  // where whole beds stand open, worked out once per plan state
+  const openCache = new WeakMap();
+  function openingsBy(eng) {
+    if (openCache.has(eng)) return openCache.get(eng);
+    const map = new Map();
+    if (root.LRFSuccession) for (const o of root.LRFSuccession.openings(eng)) { if (!o.whole) continue; if (!map.has(o.bed.id)) map.set(o.bed.id, []); map.get(o.bed.id).push(o); }
+    openCache.set(eng, map);
+    return map;
+  }
 
   const yearStart = () => new Date(App.planYear(), 0, 1);
   const yearEnd = () => new Date(App.planYear(), 11, 31);
@@ -57,7 +66,7 @@
     if (!App.state.ready || App.state.view !== 'timeline') { dirty = true; return; }
     dirty = false;
     const eng = App.state.engine, plan = App.state.plan, year = App.planYear(), width = yearDays() * pxPerDay;
-    const head = clear($('tlMonths')), body = clear($('tlBody'));
+    const head = clear($('tlMonths')), body = clear($('tlBody')), open = showOpen ? openingsBy(eng) : new Map();
     head.style.width = width + 'px';
     for (let m = 0; m < 12; m++) {
       const a = new Date(year, m, 1), b = new Date(year, m + 1, 0);
@@ -96,6 +105,11 @@
           continue;
         }
         const lanes = lanesFor(items), lane = h('div.tl-lane', { style: { width: width + 'px', height: (lanes * LANE_H + 6) + 'px' } });
+        // an opening is drawn under the bars: ground free before, after or between what is planned
+        for (const o of open.get(bed.id) || []) {
+          const left = xOf(o.from), w = xOf(E.addDays(o.to, 1)) - left, next = o.before ? `before the ${o.before.r.c.name.toLowerCase()}` : o.after ? `after the ${o.after.r.c.name.toLowerCase()}` : 'open';
+          lane.append(h('div.tl-open', { style: { left: left + 'px', width: Math.max(6, w - 1) + 'px' }, dataset: { opening: o.id }, title: `Open ${span(o.from, o.to)}: ${UI.num(o.days)} days ${next}. Click to see what fits.` }, w > 74 ? `${UI.num(o.days)} days open` : ''));
+        }
         for (const item of items) { const el = bar(item.p, item.r, item.lane); if (el) lane.append(el); }
         const selBed = App.state.sel && App.state.sel.type === 'bed' && App.state.sel.id === bed.id;
         body.append(h('div.tl-row' + (selBed ? '.sel' : ''), { dataset: { bed: bed.id } },
@@ -158,6 +172,8 @@
       if (row.dataset.pool !== undefined) { App.setView('trays'); return; }
       const at = targetAt(e.clientX, e.clientY);
       if (App.state.armed && at) { App.place(App.state.armed, at.bedId, at.date); return; }
+      const openEl = e.target.closest('.tl-open');
+      if (openEl) { App.openAhead({ mode: 'openings', bedId: row.dataset.bed, openingId: openEl.dataset.opening }); return; }
       App.select({ type: 'bed', id: row.dataset.bed });
       if (at && e.target.closest('.tl-lane')) App.setDate(at.date);
     });
@@ -172,6 +188,8 @@
         render();
       });
     }
+    const toggle = $('tlOpenToggle');
+    if (toggle) toggle.addEventListener('click', () => { showOpen = !showOpen; toggle.setAttribute('aria-pressed', String(showOpen)); render(); });
     App.on('plan', render);
     App.on('sel', render);
     App.on('date', cursor);

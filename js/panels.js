@@ -209,6 +209,15 @@
     const list = h('ul.p-list');
     for (const { p, r } of all) list.append(plantingRow(p, r));
     host.append(h('section.insp-section', h('h3', 'Plantings'), all.length ? list : h('p.note', 'Nothing planned here yet. Drag a crop onto this bed.')));
+    // room before, after and between what is planned here, and what would go in it
+    const Ahead = root.LRFSuccession;
+    if (soil && Ahead && all.length) {
+      const open = Ahead.openings(eng, { bedId: bed.id });
+      if (open.length) host.append(h('section.insp-section', { id: 'bedOpenings' }, h('h3', 'Openings'),
+        open.map(o => { const n = Ahead.fits(eng, o).length, next = o.before ? `before the ${o.before.r.c.name.toLowerCase()}` : o.after ? `after the ${o.after.r.c.name.toLowerCase()}` : 'open';
+          return h('button.p-open', { type: 'button', title: 'See what fits', onclick: () => App.openAhead({ mode: 'openings', bedId: bed.id, openingId: o.id }) },
+            h('b', span(o.from, o.to)), h('span', `${num(o.days)} days ${next}${o.whole ? '' : ` · ${num(o.length, 1)} ft`}`), h('small', n ? `${num(n)} crop${n === 1 ? '' : 's'} fit` : '')); })));
+    }
   }
 
   /** Buttons for the rows across a bed; the pressed ones are this planting's. */
@@ -402,14 +411,15 @@
           h('input', { type: 'number', id: 'fRepeatCount', min: 1, max: 30, value: 3, 'aria-label': 'How many more' }), h('span', 'more, every'),
           h('input', { type: 'number', id: 'fRepeatEvery', min: 1, max: 120, value: Math.max(7, Math.min(28, r.c.hw || 14)), 'aria-label': 'Days apart' }), h('span', 'days'),
           h('button.btn', { type: 'button', onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+$('fRepeatCount').value) || 1)), Math.max(1, Math.round(+$('fRepeatEvery').value) || 14)) }, 'Add')),
-        h('p.help', `Each one takes this ${unit === 'sites' ? 'tower' : 'bed'} if it is free by then, otherwise the next free one in ${eng.gardenOf(bed).name}.`)),
+        h('p.help', `Each one takes this ${unit === 'sites' ? 'tower' : 'bed'} if it is free by then, otherwise the next free one in ${eng.gardenOf(bed).name}. `,
+          h('button.linkish', { type: 'button', id: 'fSeriesLink', onclick: () => App.openAhead({ mode: 'series', sourceId: p.id }) }, 'Plan a longer series, with a preview'))),
       h('div.insp-actions', h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')));
   }
 
   // Removing a focused field can fire its change handler, which asks for another render: finish this one first.
   let rendering = false, renderAgain = false;
   let stale = false;
-  const HIDDEN_IN = ['assume', 'seeds', 'trays'];
+  const HIDDEN_IN = ['assume', 'seeds', 'trays', 'harvest', 'ahead'];
   function render() {
     if (!App.state.ready) return;
     if (HIDDEN_IN.includes(App.state.view)) { stale = true; return; }   // nothing to see: draw it when its view comes back

@@ -68,7 +68,9 @@
       line.trays = line.kind === 'live' ? line.members.reduce((n, m) => n + m.r.len, 0) : line.batch && line.batch.medium !== 'pots' ? line.batch.trays : 0;
     }
     const kindAt = l => KINDS.findIndex(k => k[0] === l.kind), groupOf = l => (l.batch && l.batch.trayGroup) || null;
-    list.sort((a, b) => a.date.localeCompare(b.date) || kindAt(a) - kindAt(b) || String(a.crop.name).localeCompare(String(b.crop.name)) || String(groupOf(a) ? groupOf(a).id : '').localeCompare(String(groupOf(b) ? groupOf(b).id : '')) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
+    // Rockwool sheets are shared by different crops, so those lines keep together by their sheets first; everything else by crop.
+    const lead = l => { const g = groupOf(l); return g && g.medium === 'rockwool' ? '\u0000' + g.id : String(l.crop.name); };
+    list.sort((a, b) => a.date.localeCompare(b.date) || kindAt(a) - kindAt(b) || lead(a).localeCompare(lead(b)) || String(a.crop.name).localeCompare(String(b.crop.name)) || String(groupOf(a) ? groupOf(a).id : '').localeCompare(String(groupOf(b) ? groupOf(b).id : '')) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
     // Varieties that share trays are filled in the order listed, so each line can be told its tray and rows.
     const fills = new Map();
     for (const line of list) {
@@ -97,28 +99,32 @@
     if (!b) return `${num(line.members.reduce((n, m) => n + m.r.cells, 0))} cells`;
     if (b.medium === 'pots') return `${plural(b.cells, 'pot')}`;
     const rows = b.mode === 'row' && Number.isInteger(b.rowsSown) ? `${plural(b.rowsSown, 'row')} of ${num(b.tray.columns)}` : `${num(b.cells)} cells`;
-    return line.group ? rows : `${rows} · ${plural(b.trays, 'tray')}`;   // shared trays are counted on the group's own row
+    if (line.group) return rows;                                        // shared trays are counted on the group's own row
+    // a rockwool sheet, whole or part, rides in one open 10 × 20 tray
+    return line.kind === 'rockwool' ? `${rows} · ${plural(b.trays, 'sheet')} on ${plural(b.trays, 'open 1020 tray')}` : `${rows} · ${plural(b.trays, 'tray')}`;
   }
   /** Where a line sits in the trays it shares: "tray 1, rows 13–16". */
   function slotText(line) {
-    const per = line.group.tray.rows, a = line.rowsFrom, b = line.rowsTo - 1, t1 = Math.floor(a / per) + 1, t2 = Math.floor(b / per) + 1, r1 = a % per + 1, r2 = b % per + 1;
-    return t1 === t2 ? `tray ${t1}, ${r1 === r2 ? 'row ' + r1 : `rows ${r1}–${r2}`}` : `tray ${t1} from row ${r1}, into tray ${t2} to row ${r2}`;
+    const per = line.group.tray.rows, a = line.rowsFrom, b = line.rowsTo - 1, t1 = Math.floor(a / per) + 1, t2 = Math.floor(b / per) + 1, r1 = a % per + 1, r2 = b % per + 1, word = line.group.medium === 'rockwool' ? 'sheet' : 'tray';
+    return t1 === t2 ? `${word} ${t1}, ${r1 === r2 ? 'row ' + r1 : `rows ${r1}–${r2}`}` : `${word} ${t1} from row ${r1}, into ${word} ${t2} to row ${r2}`;
   }
   const howNote = line => line.group ? slotText(line) : line.kind === 'plugs' && line.batch && line.batch.medium !== 'pots' ? `${num(line.batch.tray.cells)}-cell tray` : line.kind === 'rockwool' && line.batch ? `${num(line.batch.tray.cells)}-cell sheet` : '';
   const SLOTS = 5;   // colours that tell varieties apart in a shared tray; beyond them one neutral
   /** The row above varieties that share trays: how many trays, and each tray drawn row by row. */
   function groupRow(line) {
-    const g = line.group, list = line.groupLines, per = g.tray.rows, owner = new Array(g.trays * per).fill(null), shown = Math.min(g.trays, 8);
+    const g = line.group, list = line.groupLines, per = g.tray.rows, owner = new Array(g.trays * per).fill(null), shown = Math.min(g.trays, 8), wool = g.medium === 'rockwool', Word = wool ? 'Sheet' : 'Tray';
+    const crops = [...new Set(list.map(l => T.short(l.crop.name)))];
     for (const l of list) for (let k = l.rowsFrom; k < l.rowsTo && k < owner.length; k++) owner[k] = l;
     const trays = [];
     for (let t = 0; t < shown; t++) {
       const mine = owner.slice(t * per, (t + 1) * per), names = [...new Set(mine.filter(Boolean).map(l => l.name))], empty = mine.filter(l => !l).length;
-      trays.push(h('span.sw-tray', { role: 'img', 'aria-label': `Tray ${t + 1}: ${names.join(', ')}${empty ? `, ${empty} rows empty` : ''}`, title: `Tray ${t + 1}: ${names.join(', ')}${empty ? ` · ${empty} rows empty` : ''}` },
+      trays.push(h('span.sw-tray', { role: 'img', 'aria-label': `${Word} ${t + 1}: ${names.join(', ')}${empty ? `, ${empty} rows empty` : ''}`, title: `${Word} ${t + 1}: ${names.join(', ')}${empty ? ` · ${empty} rows empty` : ''}` },
         mine.map(l => h('i', l ? { dataset: { k: Math.min(l.slot, SLOTS) } } : {}))));
     }
     return h('tr.sw-group', { dataset: { group: line.key } }, h('td'), h('td', { colSpan: 6 }, h('div.sw-group-in',
-      h('b', `${T.short(line.crop.name)}: ${plural(list.length, 'variety', 'varieties')} share ${plural(g.trays, 'tray')}`),
-      h('span', `${num(g.cells / g.tray.columns)} rows of ${num(g.tray.columns)} in ${num(g.tray.cells)}-cell ${line.kind === 'rockwool' ? 'sheets' : 'trays'}, filled in the order listed`),
+      h('b', wool ? `${crops.length > 1 ? crops.join(' and ') : crops[0]}: ${plural(list.length, 'sowing')} share ${plural(g.trays, 'sheet')}, on ${plural(g.carriers || g.trays, 'open 1020 tray')}`
+        : `${T.short(line.crop.name)}: ${plural(list.length, 'variety', 'varieties')} share ${plural(g.trays, 'tray')}`),
+      h('span', `${num(g.cells / g.tray.columns)} rows of ${num(g.tray.columns)} in ${num(g.tray.cells)}-cell ${wool ? 'sheets' : 'trays'}, filled in the order listed`),
       h('span.sw-trays', trays, g.trays > shown ? h('small', `+${num(g.trays - shown)} more`) : null))));
   }
   /** Where it is going: the beds a transplant is raised for and the day it goes out, or the beds a direct sowing is in. */

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.14">
+<meta name="lrf-build" content="0.15">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -23,8 +23,10 @@
   <nav class="views" aria-label="Views">
     <button type="button" data-view-btn="map" aria-pressed="true">Map</button>
     <button type="button" data-view-btn="timeline" aria-pressed="false">Timeline</button>
+    <button type="button" data-view-btn="ahead" aria-pressed="false">Successions</button>
     <button type="button" data-view-btn="sow" aria-pressed="false">Sowing</button>
     <button type="button" data-view-btn="trays" aria-pressed="false">Trays</button>
+    <button type="button" data-view-btn="harvest" aria-pressed="false">Harvest</button>
     <button type="button" data-view-btn="assume" aria-pressed="false">Assumptions</button>
     <button type="button" data-view-btn="seeds" aria-pressed="false">Seeds</button>
   </nav>
@@ -100,7 +102,8 @@
         <button type="button" data-tl-zoom="2" aria-pressed="false">Year</button>
         <button type="button" data-tl-zoom="3.2" aria-pressed="true">Season</button>
         <button type="button" data-tl-zoom="7" aria-pressed="false">Weeks</button>
-        <span class="tl-key"><i class="k-nursery"></i>nursery <i class="k-grow"></i>growing <i class="k-pick"></i>harvest <i class="k-turn"></i>turnover</span>
+        <button type="button" id="tlOpenToggle" aria-pressed="true" title="Show where whole beds stand open before, after or between crops">Openings</button>
+        <span class="tl-key"><i class="k-nursery"></i>nursery <i class="k-grow"></i>growing <i class="k-pick"></i>harvest <i class="k-turn"></i>turnover <i class="k-open"></i>open</span>
       </div>
       <div class="tl-scroll" id="tlScroll">
         <div class="tl-inner" id="tlInner">
@@ -113,6 +116,8 @@
       </div>
     </div>
 
+    <div class="view view-ahead" id="aheadView"><div class="as-wrap tr-wrap ah-wrap" id="ahWrap"></div></div>
+    <div class="view view-harvest" id="harvestView"><div class="as-wrap tr-wrap hv-wrap" id="hvWrap"></div></div>
     <div class="view view-sow" id="sowView"><div class="as-wrap tr-wrap sw-wrap" id="swWrap"></div></div>
     <div class="view view-trays" id="traysView"><div class="as-wrap tr-wrap" id="trWrap"></div></div>
 
@@ -212,6 +217,8 @@
 <script src="js/seedlib.js"></script>
 <script src="js/trays.js"></script>
 <script src="js/rails.js"></script>
+<script src="js/forecast.js"></script>
+<script src="js/succession.js"></script>
 <script src="js/store.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/thumbs.js"></script>
@@ -227,6 +234,8 @@
 <script src="js/bench.js"></script>
 <script src="js/traysview.js"></script>
 <script src="js/sowview.js"></script>
+<script src="js/harvestview.js"></script>
+<script src="js/aheadview.js"></script>
 <script src="js/main.js"></script>
 <script src="js/pwa.js"></script>
 </body>
