@@ -63,6 +63,7 @@
   function adopt(plan, engine) {
     state.plan = plan; state.engine = engine || E.create(plan, Lib);
     store.save(state.plan);
+    folderSoon();
     emit('plan');
   }
   const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings', 'inventory', 'trays', 'own'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
@@ -212,7 +213,7 @@
   async function keepThumb(id, uri) {
     const next = { ...state.keptThumbs };
     if (uri) next[id] = uri; else delete next[id];
-    state.keptThumbs = next; Thumbs.put(id, uri);
+    state.keptThumbs = next; Thumbs.put(id, uri); thumbsRev++;
     Thumbs.index(state.plan); emit('plan');
     try { return store.backend === 'memory' ? false : await store.saveBlob('thumbs', JSON.stringify(next)); } catch (_) { return false; }
   }
@@ -526,7 +527,7 @@
   async function exportBackup() {
     try {
       const attic = await loadAttic(), extras = await loadExtras();
-      const plan = IO.join(state.plan, { ...attic, varieties: { ...(attic.varieties || {}), ...extras.varieties } }), text = JSON.stringify(plan);
+      const plan = withOwn(IO.join(state.plan, { ...attic, varieties: { ...(attic.varieties || {}), ...extras.varieties } }), new Date().toISOString()), text = JSON.stringify(plan);
       const filename = `little-river-plan-${planYear()}-${E.d2s(new Date())}.json`;
       const downloads = root.claude && root.claude.use ? await root.claude.use('downloads') : null;
       const planOnly = !(state.plan.lrfNext && state.plan.lrfNext.attic === 'cloud');
@@ -571,9 +572,15 @@
       if (text) { showMapImage(fromBase64(text), info.mime); emit('plan'); }
     } catch (_) { /* the plan is still usable without its photo */ }
   }
-  async function importBackup(file) {
+  async function importBackup(file, extra = {}) {
     let parsed;
-    try { parsed = await readBackupFile(file); IO.assertPlan(parsed.plan); } catch (error) { toast(`That file could not be read: ${error.message}`); return; }
+    try { parsed = await readBackupFile(file); IO.assertPlan(parsed.plan); } catch (error) { toast(`That file could not be read: ${error.message}`); return false; }
+    // A file this app saved says what was settled here (v7 knows none of it); a v7 backup has no such note.
+    const own = parsed.plan.lrfNextKeep && typeof parsed.plan.lrfNextKeep === 'object' ? parsed.plan.lrfNextKeep : null;
+    delete parsed.plan.lrfNextKeep;
+    const ownKeep = {};
+    for (const key of ['crates', 'trayStart', 'trays', 'facts']) if (own && own.keep && own.keep[key] != null) ownKeep[key] = own.keep[key];
+    if (extra.image && !parsed.image) parsed.image = extra.image;
     const split = IO.split(parsed.plan), attic = split.attic, info = IO.summary(split.core), replacing = !isSample();
     // The plan comes from the backup. What was established here about the farm is put back on it.
     const carried = IO.carry(state.plan, split.core);
@@ -588,20 +595,24 @@
         body: `The backup holds ${info.plantings} plantings in ${info.beds} growing spaces across ${info.gardens} gardens for ${info.year || 'an unknown year'}. Plantings, tray demand and seed stock are replaced by the backup’s, including what was changed here. ${kept.length ? `Kept from this copy: ${kept.join('; ')}. ` : ''}${carried.gone.length ? `${carried.gone.length} variet${carried.gone.length === 1 ? 'y' : 'ies'} here ${carried.gone.length === 1 ? 'is' : 'are'} not in the backup and will be gone (${carried.gone.slice(0, 3).join(', ')}${carried.gone.length > 3 ? '…' : ''}). ` : ''}Your v7 planner and its data are not touched.`,
         confirmLabel: 'Replace plan', danger: true
       });
-      if (!ok) return;
+      if (!ok) return false;
     }
     const cloud = store.backend !== 'memory';   // somewhere durable to keep the photo and the rest of the backup
-    core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name, backup: (parsed.plan.backup && parsed.plan.backup.exportedAt) || parsed.plan._localUpdatedAt || null, ...carried.keep };
+    core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name, backup: (parsed.plan.backup && parsed.plan.backup.exportedAt) || parsed.plan._localUpdatedAt || null, ...carried.keep, ...ownKeep };
     state.plan = core; state.attic = attic; state.extras = emptyExtras(); state.inventoryBase = null; state.inventoryAsked = null; state.packsBase = {}; state.keptThumbs = {}; Thumbs.set({}); state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
     showMapImage(parsed.image && parsed.image.bytes, parsed.image && parsed.image.mime);
     rebuild(); state.date = defaultDate(); root.LRFMap.fit(true);
     emit('plan'); emit('date'); emit('sel');
     toast(`Loaded ${core.plantings.length} plantings in ${info.beds} growing spaces from ${file.name}${kept.length ? `. Kept from this copy: ${kept.join('; ')}` : ''}`);
-    if (!cloud) { store.save(core); await importPhotos(parsed, 'memory'); return; }
+    const ownThumbs = async () => {
+      if (!extra.thumbs) return;
+      try { const kept = JSON.parse(extra.thumbs); state.keptThumbs = kept; Thumbs.set(kept); Thumbs.index(state.plan); emit('plan'); if (store.backend !== 'memory') await store.saveBlob('thumbs', extra.thumbs); } catch (_) { /* the plan is open without its small photos */ }
+    };
+    if (!cloud) { store.save(core); await importPhotos(parsed, 'memory'); await ownThumbs(); return true; }
     const where = store.backend;
     try { await store.clearBlob('attic-new'); } catch (_) { /* nothing was kept */ }
     // The plan itself is saved first; the bulky extras follow and may fail without harming it.
-    try { await store.saveNow(core); } catch (error) { toast('The plan is open but could not be saved here yet. Use the save indicator to retry.'); return; }
+    try { await store.saveNow(core); } catch (error) { toast('The plan is open but could not be saved here yet. Use the save indicator to retry.'); return true; }
     try {
       await store.saveBlob('attic', JSON.stringify(attic), (i, n) => showStatus({ backend: where, state: 'saving', label: `Storing records ${i}/${n}` }));
       if (parsed.image) {
@@ -613,8 +624,91 @@
       toast('The plan is saved, but the extra backup records could not be stored here. Keep the backup file.');
     }
     await importPhotos(parsed, where);
+    await ownThumbs();
     store.save(core);
+    folderSoon();
+    return true;
   }
+
+  // ───────────────────────────── the plan folder ─────────────────────────────
+  // Where the browser allows it, the plan is also kept as a file in a folder the user chose, written a moment after every change.
+  const Folder = root.LRFFolder;
+  let folderTimer = 0, statusNow = null, thumbsRev = 0;
+  /** The app's own record, added to a plan file so that opening the file here again loses nothing v7 does not know. */
+  function withOwn(plan, savedAt) {
+    const mine = state.plan.lrfNext || {}, keep = {};
+    for (const key of ['crates', 'trayStart', 'trays', 'facts']) if (mine[key] != null) keep[key] = mine[key];
+    plan.lrfNextKeep = { v: 1, savedAt, device: Folder ? Folder.device() : null, keep };
+    return plan;
+  }
+  /** What goes in the folder: the complete plan (what Backup downloads), and the photos when they have changed. */
+  async function folderPayload() {
+    let attic = null;
+    try { attic = await loadAttic(); } catch (_) { attic = emptyAttic(); }   // the plan is saved even when the records v7 keeps beside it are out of reach
+    const extras = await loadExtras(), savedAt = new Date().toISOString(), mine = state.plan.lrfNext || {};
+    const plan = withOwn(IO.join(state.plan, { ...attic, varieties: { ...(attic.varieties || {}), ...extras.varieties } }), savedAt);
+    return { text: JSON.stringify(plan), savedAt, extrasKey: `${(mine.mapImage && mine.mapImage.sha256) || 'no-photo'}|${thumbsRev}|${Thumbs.count ? Thumbs.count() : 0}`,
+      extras: async () => {
+        let map = null, thumbs = null;
+        try { const b64 = mine.mapImage && store.backend !== 'memory' ? await store.loadBlob('mapimage') : null; if (b64) map = { bytes: fromBase64(b64), mime: mine.mapImage.mime || 'image/jpeg' }; } catch (_) { /* the plan is saved without its photo */ }
+        try { const all = Thumbs.all(), list = all instanceof Map ? Object.fromEntries(all) : all; if (list && Object.keys(list).length) thumbs = JSON.stringify(list); } catch (_) { /* nor its thumbnails */ }
+        return { map, thumbs };
+      } };
+  }
+  const folderInfo = () => (Folder ? Folder.info() : { supported: false, connected: false });
+  async function saveToFolder(options = {}) {
+    clearTimeout(folderTimer);
+    if (!Folder || isSample()) return { skipped: 'sample' };
+    const done = await Folder.save(folderPayload, options);
+    if (done.error) toast(`The plan folder could not be written: ${done.error}`);
+    return done;
+  }
+  function folderSoon() {
+    if (!Folder || !state.ready || isSample() || !folderInfo().connected) return;
+    clearTimeout(folderTimer);
+    folderTimer = setTimeout(() => { saveToFolder(); }, 1500);
+  }
+  const clock = iso => { const d = new Date(iso); return Number.isFinite(+d) ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''; };
+  /** The manual save: into the folder at once where there is one, a downloaded backup file where there is not. */
+  async function saveNow() {
+    const f = folderInfo();
+    if (isSample()) { toast('This is the sample plan. Load your backup first.'); return null; }
+    if (f.needsPermission) { await reconnectFolder(); return null; }
+    if (f.conflict) { toast('The folder holds a different plan. Choose which to keep under Backup.'); return null; }
+    if (!f.connected) { await exportBackup(); return { downloaded: true }; }
+    try { await store.saveNow(state.plan); } catch (_) { /* the folder is still written; the indicator shows the browser's own trouble */ }
+    const done = await saveToFolder();
+    if (done.saved) toast(`Saved to the folder “${f.name}” at ${clock(done.savedAt)}`);
+    return done;
+  }
+  /** Choose the folder the plan is kept in. Called from a click: the browser shows its own folder window. */
+  async function chooseFolder() {
+    if (!Folder || !Folder.supported()) { toast('This browser cannot write to a folder. Chrome and Edge on a computer can.'); return null; }
+    let f;
+    try { f = await Folder.choose(); } catch (error) { if (!error || error.name !== 'AbortError') toast(`That folder could not be used: ${(error && error.message) || 'the browser refused'}`); return null; }
+    if (f.conflict) toast(`“${f.name}” already holds a plan. Choose which to keep under Backup.`);
+    else if (!isSample()) { const done = await saveToFolder(); if (done.saved) toast(`The plan is now kept in “${f.name}” and saved there as you work.`); }
+    else toast(`“${f.name}” is set. Your plan is saved there once it is loaded.`);
+    return f;
+  }
+  async function reconnectFolder() {
+    const f = await Folder.reconnect();
+    if (f.needsPermission) toast('The browser did not allow the folder. Nothing is written there until it does.');
+    else if (!f.conflict && !isSample()) { const done = await saveToFolder(); if (done.saved) toast(`Saving to “${f.name}” again.`); }
+    return f;
+  }
+  /** Open the plan the folder holds, in place of the one open here. */
+  async function openFolderPlan() {
+    let data = null;
+    try { data = await Folder.read(); } catch (error) { toast(`The folder could not be read: ${error.message}`); return false; }
+    if (!data) { toast('The plan file in the folder cannot be read. It was left as it is.'); return false; }
+    const ok = await importBackup(new File([data.text], Folder.PLAN, { type: 'application/json' }), { image: data.map ? { bytes: data.map.bytes, mime: data.map.mime, sha256: null } : null, thumbs: data.thumbs });
+    if (ok) { clearTimeout(folderTimer); await Folder.accept(); }
+    return ok;
+  }
+  /** Keep the plan open here, and write it over the one in the folder. */
+  const overwriteFolder = async () => { const done = await saveToFolder({ force: true }); if (done.saved) toast(`The folder “${folderInfo().name}” now holds this plan.`); return done; };
+  const leaveFolder = async () => { clearTimeout(folderTimer); const name = folderInfo().name; await Folder.forget(); toast(`No longer saving to “${name}”. The files there are left as they are.`); };
 
   // ───────────────────────────── start-up ─────────────────────────────
   function defaultDate() {
@@ -624,9 +718,19 @@
   function showStatus(info) {
     const el = document.getElementById('saveState');
     if (!el) return;
-    const where = info.backend === 'cloud' ? 'Saved' : info.backend === 'device' ? 'Saved on this device' : 'Not saved';
-    const text = info.label || { saving: 'Saving…', pending: 'Saving…', saved: where, error: 'Save failed · click to retry', unsaved: 'Not saved in this view', loading: 'Opening plan…', sample: 'Sample plan' }[info.state] || where;
-    el.textContent = text; el.dataset.state = info.state; el.title = info.detail || (info.backend === 'cloud' ? 'Synced to this page’s database' : info.backend === 'device' ? 'Kept in this browser only' : 'Storage is not available here');
+    statusNow = info;
+    const f = folderInfo(), where = info.backend === 'cloud' ? 'Saved' : info.backend === 'device' ? 'Saved on this device' : 'Not saved';
+    let text = info.label || { saving: 'Saving…', pending: 'Saving…', saved: where, error: 'Save failed · click to retry', unsaved: 'Not saved in this view', loading: 'Opening plan…', sample: 'Sample plan' }[info.state] || where;
+    let state2 = info.state, title = info.detail || (info.backend === 'cloud' ? 'Synced to this page’s database' : info.backend === 'device' ? 'Kept in this browser only. Backup, Keep the plan in a folder, puts a file on the computer too.' : 'Storage is not available here');
+    // With a plan folder, the indicator answers for the file as well as for the browser's own copy.
+    if (info.state === 'saved' || info.state === 'sample') {
+      if (f.needsPermission) { text = 'Folder needs reconnecting · click'; state2 = 'error'; title = `The browser has to be asked again before it writes to “${f.name}”.`; }
+      else if (f.conflict) { text = 'Folder holds another plan'; state2 = 'error'; title = 'Saving to the folder is paused. Choose which plan to keep under Backup.'; }
+      else if (f.error) { text = 'Folder save failed · click to retry'; state2 = 'error'; title = f.error; }
+      else if (f.connected && f.busy) { text = 'Saving to folder…'; state2 = 'saving'; }
+      else if (f.connected && f.savedAt && info.state === 'saved') { text = `Saved · ${f.name} ${clock(f.savedAt)}`; title = `Kept in this browser, and written to the folder “${f.name}” at ${clock(f.savedAt)}.`; }
+    }
+    el.textContent = text; el.dataset.state = state2; el.title = title;
   }
   async function start() {
     showStatus({ backend: 'cloud', state: 'loading' });
@@ -661,6 +765,10 @@
     // Stock is needed wherever a sowing can be recorded, not only on the Seeds view: fetch it now, not on first visit.
     loadInventory().then(found => { if (found) emit('plan'); }).catch(() => {});
     store.watch(() => toast('This plan was changed on another device.', { label: 'Reload', run: () => root.location.reload() }));
+    if (Folder) {
+      Folder.on(() => { if (statusNow) showStatus(statusNow); emit('folder'); });
+      Folder.restore().then(f => { if (f.connected && !f.conflict && !isSample() && !f.savedAt) saveToFolder(); }).catch(() => {});
+    }
   }
 
   /** Replace the plan saved here with the one this copy of the page carries. */
@@ -688,6 +796,7 @@
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, setAssumption, setGardenType,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
-    saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => store && store.retry(), isSample, setOwn, traysToMonday: () => applyTrayStart()
+    saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
+    saveNow, chooseFolder, reconnectFolder, openFolderPlan, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, traysToMonday: () => applyTrayStart()
   };
 })(window);
