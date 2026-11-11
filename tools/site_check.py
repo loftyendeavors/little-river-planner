@@ -53,6 +53,14 @@ with sync_playwright() as pw:
     page.reload(); page.wait_for_function("window.LRFApp && LRFApp.state.ready"); page.wait_for_timeout(700)
     page.click('[data-view-btn="seeds"]'); page.wait_for_timeout(500)
     out["stock_kept_offline"] = js(f"({{onHand: (LRFApp.stockNow()['v:{row}|seeds'] || {{}}).onHand, shown: document.querySelector('.sd-var[data-variety=\"{row}\"] .sd-stock').value, save: document.getElementById('saveState').textContent}})")
+    # vendor sizes come from the backup's own lists; a sowing recorded with the network still off draws that lot down
+    out["sizes_offline"] = js("({sized: [...document.querySelectorAll('#sdBody td.sd-size')].filter(td => / × /.test(td.textContent)).length, shippedLists: Object.keys(S.packsBase).length})")
+    page.locator(f'.sd-var[data-variety="{row}"] td').first.click(); page.wait_for_selector("#sdPanel .sd-sowbtn")
+    page.locator("#sdPanel .sd-sowbtn").first.click(); page.wait_for_selector("#sdPanel .sow")
+    used = page.evaluate("+document.querySelector('#sdPanel [data-sow=\"quantity\"]').value")
+    page.click('#sdPanel [data-sow="record"]'); page.wait_for_timeout(1200)
+    page.reload(); page.wait_for_function("window.LRFApp && LRFApp.state.ready"); page.wait_for_timeout(700)
+    out["sowing_kept_offline"] = js(f"(() => {{ const p = S.plan.plantings.find(p => p.done && p.workflow && p.workflow.seedUse), lot = S.plan.seedInventory.lots.find(l => l.key === 'v:{row}' && !l.deleted); return {{used: {used}, offStock: p ? p.workflow.seedUse.filter(u => u.lotId).reduce((n, u) => n + u.quantity, 0) : null, lotNow: lot.quantity, useLines: S.plan.seedInventory.adjustments.filter(a => a.kind === 'use').length}}; }})()")
     if len(sys.argv) > 3:
         page.screenshot(path=sys.argv[3])
     browser.close()

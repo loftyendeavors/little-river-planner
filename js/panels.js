@@ -1,8 +1,8 @@
 /* Little River Farm Planner — the crop library (left) and the inspector (right). */
 (function (root) {
   'use strict';
-  const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine;
-  const { h, clear, add, day, span, num } = UI;
+  const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, SL = root.LRFSeedLib;
+  const { h, clear, add, day, span, num, toast } = UI;
   const $ = id => document.getElementById(id);
 
   // ════════════════════════════ crop library ════════════════════════════
@@ -205,11 +205,60 @@
     return box;
   }
 
+  // ── sowing: the one record that moves seed off the shelf ──
+  const qty = (n, unit) => `${num(n, unit === 'g' ? 1 : 0)} ${unit === 'g' ? 'g' : unit}`;
+  const dayY = d => day(d) + (E.validDate(d) && d.getFullYear() !== App.planYear() ? `, ${d.getFullYear()}` : '');   // a sowing recorded outside the plan's year says so
+  /** What a recorded sowing took, in words, from the planting's own record. */
+  function sownText(s) {
+    const mine = s.uses.filter(u => u && u.source === 'sowing' && u.unit === s.stockUnit), total = mine.reduce((n, u) => n + (+u.quantity || 0), 0), loose = mine.filter(u => !u.lotId).reduce((n, u) => n + (+u.quantity || 0), 0);
+    if (!total) return 'No seed use was recorded with it.';
+    const word = s.unit === 'g' ? 'g of seed' : s.unit;
+    return loose >= total ? `${num(total, s.unit === 'g' ? 1 : 0)} ${word} used, none of it from a counted lot.` : `${num(total, s.unit === 'g' ? 1 : 0)} ${word} used${loose ? `, ${num(loose, s.unit === 'g' ? 1 : 0)} of them not from a counted lot` : ', all off stock'}.`;
+  }
+  /**
+   * The sowing of one planting: a date and the seed used, recorded in one step, or what was recorded and a way to
+   * take it back. Used in the inspector and beside a variety's plantings in the seed library.
+   */
+  function sowingBox(p) {
+    const s = App.sowingOf(p);
+    if (!s) return null;
+    const seed = s.unit === 'seeds' || s.unit === 'g', act = s.kind === 'sow' || seed ? 'Sown' : 'Planted', name = s.variety ? s.variety.name : s.crop.name, word = s.unit === 'g' ? 'g of seed' : s.unit;
+    const box = h('div.sow', { dataset: { sowing: p.id, state: s.done ? 'done' : s.sown ? 'later' : 'open' } });
+    if (s.done) {
+      return add(box, h('p.sow-done', h('b', `✓ ${act} ${dayY(E.s2d(s.done))}`), h('span', sownText(s))),
+        h('button.link', { type: 'button', dataset: { sow: 'back' }, onclick: () => {
+          const done = App.takeBackSowing(p.id);
+          if (done) toast(`${App.cropLabel(p)}: sowing taken back${done.returned ? ` · ${qty(done.returned, done.stockUnit)} returned to stock` : ''}${done.lost ? ` · ${qty(done.lost, done.stockUnit)} could not go back: that lot is gone` : ''}`, { label: 'Undo', run: App.undo });
+        } }, 'Take it back'));
+    }
+    if (s.sown) return add(box, h('p.sow-done', h('span', 'Later work is already recorded for this planting, so its seed is no longer counted as still to sow.')));
+    const lots = SL.lotsToUse(App.inventoryNow(), s.key, s.stockUnit), onHand = lots.reduce((n, l) => n + Number(l.quantity), 0), today = App.today();
+    const date = h('input', { type: 'date', value: today, max: today, 'aria-label': `${act} on`, dataset: { sow: 'date' } });
+    const used = h('input', { type: 'number', min: 0, step: s.stockUnit === 'g' ? 'any' : 1, value: s.estimate, 'aria-label': `${word} used`, dataset: { sow: 'quantity' }, oninput: () => says() });
+    const note = h('p.help', { dataset: { sow: 'note' } });
+    function says() {
+      const n = Math.max(0, +used.value || 0);
+      note.textContent = `Planned for ${day(s.planned)}. ` + (!onHand ? `No ${word} on hand ${s.variety ? 'for ' + name : 'with no variety chosen'}, so nothing comes off stock.`
+        : n <= onHand ? `${qty(onHand, s.stockUnit)} on hand${lots.length > 1 ? ` in ${lots.length} lots, oldest used first` : ''}: ${qty(Math.round((onHand - n) * 1e6) / 1e6, s.stockUnit)} left after this.`
+          : `Only ${qty(onHand, s.stockUnit)} on hand: the other ${qty(Math.round((n - onHand) * 1e6) / 1e6, s.stockUnit)} is recorded as used without a counted lot.`);
+    }
+    says();
+    return add(box,
+      h('div.sow-row', h('label', h('span', `${act} on`), date), h('label', h('span', `${s.unit === 'g' ? 'Seed' : s.unit.charAt(0).toUpperCase() + s.unit.slice(1)} used${s.unit === 'g' ? ' (g)' : ''}`), used),
+        h('button.btn', { type: 'button', dataset: { sow: 'record' }, onclick: () => {
+          const done = App.recordSowing(p.id, { date: date.value, quantity: used.value });
+          if (!done) return;
+          const off = done.used.reduce((n, u) => n + u.quantity, 0);
+          toast(`${App.cropLabel(p)} ${act.toLowerCase()} ${dayY(E.s2d(date.value))} · ${off ? `${qty(off, done.stockUnit)} off stock` : 'nothing off stock'}${done.untracked ? ` · ${qty(done.untracked, done.stockUnit)} not from a counted lot` : ''}${done.overlaps ? ` · it now overlaps ${done.overlaps === 1 ? 'another planting' : done.overlaps + ' plantings'}: see To settle` : ''}`, { label: 'Undo', run: App.undo });
+        } }, 'Record')),
+      note);
+  }
+
   function renderPlanting(host, p) {
     const eng = App.state.engine, r = eng.calc(p);
     if (!r) { host.append(h('p.note', 'This planting cannot be calculated. Its saved data is kept.'), h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')); return; }
     const bed = r.b, c = r.c, color = eng.cropColor(c), unit = eng.capUnit(bed), through = eng.occupancyThrough(p, r), f = eng.footprint(p, r);
-    const timing = c.catalogTiming || {}, v = eng.variety(p.varietyId);
+    const timing = c.catalogTiming || {}, v = eng.variety(p.varietyId), sow = App.sowingOf(p);
     const set = (change, label) => { if (!App.updatePlanting(p.id, change, label)) render(); };
 
     // Variety
@@ -246,7 +295,7 @@
         h('button.link', { type: 'button', onclick: () => App.select({ type: 'bed', id: bed.id }) }, App.bedLabel(bed)),
         h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select({ type: 'bed', id: bed.id }) }, '×')),
       h('section.insp-section.form',
-        field(c.method === 'TP' ? 'Transplant date' : 'Sowing date', h('input', { type: 'date', id: 'fDate', value: p.date, onchange: e => { if (E.validDate(E.s2d(e.target.value))) set({ date: e.target.value }, 'Change date'); else render(); } })),
+        field(c.method === 'TP' ? 'Transplant date' : sow && sow.kind === 'field' && sow.done ? 'Planned sowing date' : 'Sowing date', h('input', { type: 'date', id: 'fDate', value: p.date, onchange: e => { if (E.validDate(E.s2d(e.target.value))) set({ date: e.target.value }, 'Change date'); else render(); } })),
         field('Variety', variety),
         field('Growing space', space),
         r.tw ? null : field(r.ct ? 'Containers' : r.rack ? 'Trays' : 'Length (ft)',
@@ -262,11 +311,12 @@
       h('section.insp-section',
         h('h3', 'Schedule'),
         h('ol.schedule',
-          r.sow ? h('li', h('span', 'Sow in nursery'), h('b', day(r.sow))) : null,
-          h('li', h('span', c.method === 'TP' ? 'Transplant' : 'Direct sow'), h('b', day(r.field))),
+          r.sow ? h('li' + (sow && sow.kind === 'sow' && sow.done ? '.done' : ''), h('span', sow && sow.kind === 'sow' && sow.done ? 'Sown in nursery' : 'Sow in nursery'), h('b', day(r.sow))) : null,
+          h('li' + (sow && sow.kind === 'field' && sow.done ? '.done' : ''), h('span', c.method === 'TP' ? 'Transplant' : sow && sow.kind === 'field' && sow.done ? 'Direct sown' : 'Direct sow'), h('b', day(r.field))),
           h('li', h('span', 'First harvest'), h('b', day(r.first))),
           h('li', h('span', 'Last harvest'), h('b', r.harvestDays ? day(r.last) : 'None before the season ends')),
           h('li', h('span', 'Ground free again'), h('b', through === Infinity ? 'Stays planted' : day(E.addDays(through, 1)))))),
+      sow ? h('section.insp-section', h('h3', sow.kind === 'sow' || sow.unit === 'seeds' ? 'Sowing' : 'Planting'), sowingBox(p)) : null,
       h('section.insp-section',
         h('h3', 'Quantities'),
         h('div.stats',
@@ -328,5 +378,5 @@
     });
   }
 
-  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine };
+  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, sowingBox };
 })(window);

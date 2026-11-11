@@ -25,6 +25,7 @@ const info = JSON.parse(read('data/plan-info.json')), image = fs.readFileSync(pa
 const bundled = { info: { ...info, mapImage: { ...info.mapImage, src: `data:image/jpeg;base64,${image.toString('base64')}` } }, plan: JSON.parse(read('data/plan.json')) };
 if (info.thumbs && fs.existsSync(path.join(appDir, info.thumbs))) bundled.thumbs = JSON.parse(read(info.thumbs));   // variety photos, small
 if (info.inventory && fs.existsSync(path.join(appDir, info.inventory))) bundled.inventory = JSON.parse(read(info.inventory));   // seed lots
+if (info.packs && fs.existsSync(path.join(appDir, info.packs))) bundled.packs = JSON.parse(read(info.packs));   // the sizes each variety's vendor sells
 let scripts = 0;
 html = html.replace(/<script src="(js\/[\w.-]+)"><\/script>/g, (_, src) => {
   const first = scripts++ === 0 ? `<script>window.LRF_BUNDLED = ${inScript(JSON.stringify(bundled))};</script>\n` : '';

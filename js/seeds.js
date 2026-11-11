@@ -10,7 +10,7 @@
   const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, Lib = root.LRFLibrary, SL = root.LRFSeedLib, Reader = root.LRFReader, T = root.LRFThumbs;
   const { h, clear, add, num, toast, day } = UI;
   const $ = id => document.getElementById(id);
-  const ui = { tab: 'list', query: '', filter: 'all', sort: 'crop', closed: new Set(), sel: null, rev: 0, panelKey: '', stock: null, dirty: true };
+  const ui = { tab: 'list', query: '', filter: 'all', sort: 'crop', closed: new Set(), sel: null, rev: 0, panelKey: '', stock: null, sowOpen: null, dirty: true };
   const ENV_LABEL = { field: 'Field', tunnel: 'Unheated tunnel', heated: 'Heated greenhouse', tower: 'Towers' };
   const BASIS_TEXT = { seed: 'seeding', transplant: 'transplanting', unspecified: 'not stated' };
   const BASIS_OPTIONS = [['unspecified', 'Not stated'], ['seed', 'Seeding'], ['transplant', 'Transplanting into the bed']];
@@ -382,7 +382,7 @@
   const noStart = v => !!v.catalogDtm && (v.catalogMaturityBasis || 'unspecified') === 'unspecified';
   const FILTERS = [['all', 'All'], ['planted', 'Planted'], ['tosow', 'To sow'], ['short', 'Short of seed'], ['open', 'No starting point']];
   const SORTS = [['crop', 'By crop'], ['name', 'Name'], ['days', 'Days'], ['tosow', 'Most to sow'], ['first', 'First sowing'], ['supplier', 'Supplier']];
-  const amount = r => [h('b', num(r.toSow, r.unit === 'g' ? 1 : 0)), r.unit === 'seeds' ? null : h('small', ' ' + SL.UNIT_WORD[r.unit])];
+  const amount = r => [h('b', num(r.toSow, r.unit === 'g' ? 1 : 0)), r.unit === 'seeds' ? null : h('small.sd-unitword', SL.UNIT_WORD[r.unit])];
 
   /** Everything the three views read: each variety with what the plan needs of it and what is on hand. */
   function model() {
@@ -392,7 +392,8 @@
     for (const r of need.rows) {
       r.stockKey = r.variety ? 'v:' + r.variety.id : 'c:' + (r.crop && r.crop.id); r.stockUnit = SL.stockUnit(r.unit);
       const s = stock[r.stockKey + '|' + r.stockUnit] || { onHand: 0, onOrder: 0 };
-      r.onHand = s.onHand; r.onOrder = s.onOrder; r.short = Math.max(0, Math.ceil(r.toSow - s.onHand - s.onOrder));
+      r.onHand = s.onHand; r.onOrder = s.onOrder; r.short = Math.max(0, r.unit === 'g' ? Math.round((r.toSow - s.onHand - s.onOrder) * 10) / 10 : Math.ceil(r.toSow - s.onHand - s.onOrder));
+      r.cover = r.variety && r.short > 0 ? App.coverFor(r.short, r.unit, r.variety) : null;   // what covers the shortfall, in the vendor's own sizes
       if (r.variety) { if (!byV.has(r.variety.id) || r.unit === 'seeds') byV.set(r.variety.id, r); }
       else if (r.crop) { if (!byCrop.has(r.crop.id)) byCrop.set(r.crop.id, []); byCrop.get(r.crop.id).push(r); }
     }
@@ -430,6 +431,14 @@
     else { ui.panelKey = ''; schedule(); }
   }
   const unitWord = unit => (unit === 'g' ? 'grams' : unit);
+  /** A crop marked as bought-in plants that is in fact raised from seed: its rows then count seeds, and seed on the shelf counts. */
+  function sowFromSeed(crop) {
+    const own = (App.state.plan.crops || []).find(x => x.id === crop.id) || null;
+    return App.revise(`${crop.name} is sown from seed`, [{ kind: 'crop', before: own, after: { ...(own || { id: crop.id }), plantingMaterial: 'seed' } }]);
+  }
+  const boughtIn = crop => !!crop && crop.plantingMaterial === 'plant';
+  /** Does this variety's vendor list it in seed counts or weights? Canes and plugs come with neither. */
+  const soldAsSeed = v => !!v && (App.packsFor(v).list.length > 0 || v.seedsPerPacket > 0 || v.seedsPerOz > 0 || v.seedsPerLb > 0);
   /**
    * A lot in one unit under a variety the plan counts in another. Either the lot is misfiled (canes ordered and
    * recorded as seeds) or the crop is (seed on the shelf for a crop marked as bought-in plants). Only he knows which.
@@ -438,7 +447,8 @@
     const lot = u.lot, crop = App.state.engine.crop(u.variety.cropId), n = num(lot.quantity);
     return [h('p.sd-odd', `Recorded as ${n} ${unitWord(lot.unit)}, but the plan counts ${name} in ${unitWord(u.unit)}, so no row counts this lot. One of the two is wrong.`),
       h('button.link', { type: 'button', dataset: { fix: 'unit' }, onclick: () => refile(u, { unit: u.unit, reason: `Counted in ${u.unit}, as the plan counts ${name}.` }, `${name}: ${n} counted as ${unitWord(u.unit)}`) }, `The lot is wrong: count ${n} ${unitWord(u.unit)}`),
-      crop ? h('button.link', { type: 'button', dataset: { fix: 'crop' }, onclick: () => select({ type: 'crop', id: crop.id }) }, `The crop is wrong: open ${cropName(crop)}`) : null];
+      crop && lot.unit === 'seeds' && u.unit === 'plants' && boughtIn(crop) && soldAsSeed(u.variety) ? h('button.link', { type: 'button', dataset: { fix: 'seed' }, onclick: () => sowFromSeed(crop) }, `The crop is wrong: ${cropName(crop)} is sown from seed`)
+        : crop ? h('button.link', { type: 'button', dataset: { fix: 'crop' }, onclick: () => select({ type: 'crop', id: crop.id }) }, `The crop is wrong: open ${cropName(crop)}`) : null];
   }
   /** The On hand cell: a number typed in place, and any order beneath it with one click to mark it arrived. */
   function stockCell(r, name) {
@@ -501,7 +511,7 @@
     for (const v of list) { if (!by.has(v.cropId)) by.set(v.cropId, []); by.get(v.cropId).push(v); }
     return [...by.entries()].map(([id, vs]) => ({ id, crop: m.eng.crop(id), list: vs.sort((a, b) => String(a.name).localeCompare(String(b.name))) })).sort((a, b) => cropName(a.crop).localeCompare(cropName(b.crop)));
   }
-  function select(sel, keepFocus) { ui.sel = sel; ui.keepFocus = !!keepFocus; schedule(); }
+  function select(sel, keepFocus) { ui.sel = sel; ui.keepFocus = !!keepFocus; ui.sowOpen = null; schedule(); }
   function rowKey(e) {
     if (e.target !== e.currentTarget) return;
     if (e.key === 'Enter') { const first = $('sdPanel').querySelector('input, select, textarea'); if (first) first.focus(); return; }
@@ -542,12 +552,11 @@
 
   function listTable(m, list, q) {
     const { eng } = m, grouped = ui.sort === 'crop', stock = true;
-    const heads = [['Variety'], ['Supplier', 0, 'sd-sup'], ['Days', 1, 'w-s'], ['Counted from', 0, 'w-l'], ['To sow', 1, 'w-m'], ...(stock ? [['On hand', 1, 'w-l'], ['Short', 1, 'w-s']] : []), ['Packets', 1, 'w-m'], ['First sow', 1, 'w-m'], ['Plantings', 1, 'w-m']];
+    const heads = [['Variety'], ['Supplier', 0, 'sd-sup'], ['Days', 1, 'w-s'], ['Counted from', 0, 'w-l'], ['To sow', 1, 'w-m'], ...(stock ? [['On hand', 1, 'w-l'], ['Short', 1, 'w-s']] : []), ['Vendor size', 1, 'w-xl'], ['First sow', 1, 'w-m'], ['Plantings', 1, 'w-m']];
     clear($('sdHead')).append(h('tr', heads.map(([t, n, c]) => h('th' + (n ? '.sd-num' : '') + (c ? '.' + c : ''), t))));
     const body = clear($('sdBody')), cols = heads.length;
     const row = (v, flat) => {
       const r = m.byV.get(v.id), basis = v.catalogMaturityBasis || 'unspecified', crop = eng.crop(v.cropId), site = SL.hostOf(v.url);
-      const ms = r.unit === 'seeds' && r.toSow > 0 ? SL.measures(r.toSow, v) : { weight: '', packets: '' };
       return h('tr.sd-var', { tabIndex: 0, 'aria-label': `${v.name}, ${cropName(crop)}`, dataset: { variety: v.id }, onclick: e => { if (!e.target.closest('a, select, input, button')) select({ type: 'variety', id: v.id }); }, onkeydown: rowKey },
         h('td', h('div.sd-cell', T.el({ varietyId: v.id, color: crop && eng.cropColor(crop), label: v.name, size: 34 }), h('span.sd-name', h('span.as-vname', v.name), flat ? h('small', cropName(crop)) : null))),
         h('td.sd-sup', supplierShort(v) || (v.source === 'Farm entry' ? 'By hand' : ''), site ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer', title: `${v.sku ? v.sku + ' · ' : ''}open the page on ${site}` }, ' ↗') : null),
@@ -558,8 +567,8 @@
         } })) : h('td.sd-from', v.dtm > 0 ? h('small', 'the day it goes in') : ''),
         h('td.sd-num', r && r.toSow > 0 ? amount(r) : ''),
         stockCell(r, v.name),
-        stock ? h('td.sd-num', r && r.short > 0 ? num(r.short) : '') : null,
-        h('td.sd-num', ms.packets || ms.weight),
+        stock ? h('td.sd-num', r && r.short > 0 ? num(r.short, r.unit === 'g' ? 1 : 0) : '') : null,
+        sizeCell(r, v),
         h('td.sd-num', r && r.first ? day(r.first) : ''),
         h('td.sd-num', m.used.get(v.id) || ''));
     };
@@ -594,13 +603,23 @@
     if (!shown && !body.children.length) body.append(h('tr', h('td.empty', { colSpan: cols }, q ? `No variety matches “${ui.query}”.` : ui.filter === 'open' ? 'Every variety with supplier days has a starting point.' : ui.filter !== 'all' ? 'No variety fits this filter.' : App.isSample() ? 'The sample plan has no varieties. Load your backup, or add one.' : 'No varieties yet. Add one from a supplier page.')));
     foot(m);
   }
+  /** What covers a row's shortfall, in the sizes its vendor sells. Nothing when nothing is short. */
+  function sizeCell(r, v) {
+    const c = r && r.cover;
+    if (!c) return h('td.sd-num.sd-size');
+    const vendor = supplierShort(v) || 'the vendor', short = `${num(r.short, r.unit === 'g' ? 1 : 0)} ${r.unit === 'g' ? 'g' : r.unit}`;
+    const title = c.how === 'sizes' ? `Covers the ${short} short: ${num(c.total, r.unit === 'g' ? 1 : 0)} ${r.unit === 'g' ? 'g' : 'seeds'}${c.cost != null ? ` for ${SL.money(c.cost)}` : ''}, the least cost among the sizes ${vendor} lists.`
+      : c.how === 'unsized' ? `${vendor} sells a packet for ${SL.money(c.packet.price)} but its page gives no seed count. Type it under “Seeds per packet” in the panel.`
+        : c.how === 'packet' ? `${vendor}’s size list is not on file; this is the packet size its page gives.` : `${vendor}’s size list is not on file; this is the weight of the ${short} short.`;
+    return h('td.sd-num.sd-size' + (c.how === 'sizes' ? '' : '.soft'), { title }, c.text);
+  }
   function foot(m) {
     const bare = m.live.filter(v => !v.supplier && !v.url && !v.catalogDtm).length, sown = m.need.rows.reduce((n, r) => n + (r.plantings - r.waiting - r.established), 0);
     add(clear($('sdFoot')),
       m.live.length && bare === m.live.length ? 'These varieties carry planning figures only. Supplier, product code and page come in when you load your backup here. ' : null,
       `Seed counts allow for ${m.need.settings.germ}% germination${m.need.settings.buffer ? ` and ${m.need.settings.buffer}% extra plugs on transplants` : ''}. `,
       sown ? `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted and left out. ` : null,
-      'Type what you have under On hand; click an order when it arrives. Each variety’s lots are in its panel. ',
+      'Type what you have under On hand; click an order when it arrives. “Vendor size” is what covers a shortfall at least cost, in the sizes that variety’s vendor sells. Each variety’s lots and sizes are in its panel. ',
       h('button.link', { type: 'button', onclick: () => download(m) }, 'Download seeds required (.csv)'));
   }
   function gallery(m, list, q) {
@@ -675,23 +694,60 @@
           h('p.sd-sub', supplierShort(v) || 'Entered by hand', v.sku ? ` · ${v.sku}` : '', site ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer' }, ' ↗') : null),
           h('button.link', { type: 'button', onclick: () => pick.click() }, T.get(v.id) ? 'Change photo' : 'Add a photo'), pick),
         shut),
-      h('div.sd-stats', stat('Plantings', n || '—'), stat('To sow', r && r.toSow > 0 ? num(r.toSow, r.unit === 'g' ? 1 : 0) : '—', r && r.toSow > 0 ? (r.unit === 'seeds' ? SL.measures(r.toSow, v).packets || SL.measures(r.toSow, v).weight || 'seeds' : SL.UNIT_WORD[r.unit]) : null),
+      h('div.sd-stats', n ? h('button.sd-stat.jump', { type: 'button', title: 'Go to its plantings, where a sowing is recorded', onclick: () => { const to = $('sdPlan'); if (to) to.scrollIntoView({ block: 'start' }); } }, h('small', 'Plantings'), h('b', String(n)), h('span', 'sowing ↓')) : stat('Plantings', '—'),
+        stat('To sow', r && r.toSow > 0 ? num(r.toSow, r.unit === 'g' ? 1 : 0) : '—', r && r.toSow > 0 ? (r.unit === 'seeds' ? SL.measures(r.toSow, v).weight || 'seeds' : SL.UNIT_WORD[r.unit]) : null),
         stat('On hand', r && r.onHand ? num(r.onHand) : '—', r && r.onOrder ? `${num(r.onOrder)} ordered` : r && r.short > 0 ? `short ${num(r.short)}` : null)),
-      lotsBox('v:' + v.id, r ? r.stockUnit : unitFor(crop), v.name, r && r.odd), body, status);
+      lotsBox('v:' + v.id, r ? r.stockUnit : unitFor(crop), v.name, r && r.odd), sizesBox(v, crop, r), body, status);
     openVariety(v, null, host);
     const mine = plan.plantings.filter(p => p.varietyId === v.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).sort((a, b) => a.r.field - b.r.field);
-    if (mine.length) add(el, h('h3.sd-h', `In the plan · ${mine.length}`), h('div.sd-pls', mine.slice(0, 40).map(({ p, r: c }) =>
-      h('button.sd-pl', { type: 'button', title: 'Show on the map', onclick: () => { App.setView('map'); App.setDate(c.field); App.select({ type: 'planting', id: p.id }); } },
-        h('b', day(c.field)), h('span', App.bedLabel(c.b)), h('small', `harvest ${day(c.first)}${eng.pinned(p) ? ' · own days' : ''}`)))), mine.length > 40 ? h('p.dlg-hint', `and ${mine.length - 40} more`) : null);
+    const sownCount = mine.filter(({ p }) => { const s = App.sowingOf(p); return s && s.sown; }).length;
+    if (mine.length) add(el, h('h3.sd-h', { id: 'sdPlan' }, `In the plan · ${mine.length}${sownCount ? ` · ${sownCount} sown` : ''}`), h('div.sd-pls', mine.slice(0, 40).map(({ p, r: c }) => {
+      const s = App.sowingOf(p), open = ui.sowOpen === p.id;
+      return [h('div.sd-plrow',
+        h('button.sd-pl', { type: 'button', title: 'Show on the map', onclick: () => { App.setView('map'); App.setDate(c.field); App.select({ type: 'planting', id: p.id }); } },
+          h('b', day(c.field)), h('span', App.bedLabel(c.b)), h('small', `harvest ${day(c.first)}${eng.pinned(p) ? ' · own days' : ''}`)),
+        s ? h('button.sd-sowbtn' + (s.sown ? '.done' : ''), { type: 'button', 'aria-expanded': String(open), dataset: { sowfor: p.id }, title: s.sown ? 'See what was recorded, or take it back' : 'Record that this was sown: the seed comes off stock', onclick: () => { ui.sowOpen = open ? null : p.id; ui.panelKey = ''; schedule(); } }, s.sown ? '✓ sown' : 'Sown…') : h('span.sd-sowbtn.none', 'in place')),
+        open ? root.LRFPanels.sowingBox(p) : null];
+    })), mine.length > 40 ? h('p.dlg-hint', `and ${mine.length - 40} more`) : null);
+  }
+
+  /** The sizes this variety's vendor sells, and which of them covers what is short. */
+  function sizesBox(v, crop, r) {
+    // the list the row's answer was worked out from, so the sizes it chose can be marked
+    const c = r && r.cover, sizes = (c && c.sizes) || App.packsFor(v), vendor = supplierShort(v) || 'the vendor', picked = new Map(((c && c.items) || []).map(i => [i.pack, i.n]));
+    const all = sizes.list.length + sizes.unsized.length, perK = p => (p.price != null && p.seeds ? SL.money(p.price / p.seeds * 1000) : '');
+    const box = h('section.sd-sizes', { id: 'sdSizes' }, h('h3.sd-h', all ? `Sizes ${vendor} sells · ${all}` : 'Vendor sizes'));
+    if (!all) {
+      box.append(h('p.dlg-hint', v.seedsPerPacket > 0 ? `No size list is on file for ${v.name}; its page gives a packet of ${num(v.seedsPerPacket)}. Reading the page again brings the list in.` : v.url ? `No size list is on file for ${v.name}. Reading its page again brings one in.` : 'Entered by hand, so there is no vendor list. Put the vendor’s packet under “Seeds per packet”.'));
+      return box;
+    }
+    const table = h('div.sd-sizetable', h('div.sd-sizerow.head', h('span', ''), h('span', 'Size'), h('span', 'Price'), h('span', 'per 1,000')));
+    for (const p of sizes.list) table.append(h('div.sd-sizerow' + (picked.has(p) ? '.on' : ''), { dataset: { size: p.text } },
+      h('span', picked.has(p) ? `${picked.get(p)} ×` : ''),
+      h('span', p.text, p.repaired ? ' †' : null, p.worked === 'seeds' ? h('small', `≈ ${num(p.seeds)} seeds`) : null),
+      h('span', p.price != null ? SL.money(p.price) : '—'), h('span', perK(p))));
+    for (const p of sizes.unsized) table.append(h('div.sd-sizerow.soft', h('span', ''), h('span', 'packet', h('small', 'count not given')), h('span', SL.money(p.price)), h('span', '')));
+    box.append(table);
+    const unit = r && r.unit === 'g' ? 'g' : 'seeds', short = r && r.short > 0 ? `${num(r.short, unit === 'g' ? 1 : 0)} ${unit}` : '';
+    if (c && c.how === 'sizes') box.append(h('p.sd-sizesay', h('b', c.text), ` covers the ${short} short${c.cost != null ? ` for ${SL.money(c.cost)}` : ''}, with ${num(c.total - r.short, unit === 'g' ? 1 : 0)} over. It is the least cost among these sizes.`));
+    else if (c && c.how === 'unsized') box.append(h('p.sd-odd', `${vendor}’s page gives no seed count for its packet, so it cannot be weighed against the other sizes. Type the count under “Seeds per packet” below.`));
+    else if (short && r.unit === 'seeds' && sizes.list.length && sizes.list.every(p => !p.seeds)) box.append(h('p.sd-odd', `These are weights, and the page gives no seeds per ounce, so the plan cannot tell which covers ${short}. Type “Seeds per ounce” below.`));
+    else if (r && r.toSow > 0 && !short) box.append(h('p.dlg-hint', 'Seed on hand or on order covers what is still to sow.'));
+    for (const text of sizes.notes) box.append(h('p.sd-odd', '† ' + text));
+    if (sizes.list.some(p => p.worked === 'seeds')) box.append(h('p.dlg-hint', 'Seed counts marked ≈ come from the page’s seeds per ounce or pound, which is an average.'));
+    if (r && r.unit === 'plants' && boughtIn(crop) && soldAsSeed(v)) box.append(h('div.sd-oddbox', h('p.sd-odd', `${vendor} sells ${v.name} as seed, but ${cropName(crop)} is set to bought-in plants, so the plan counts plants and asks for no seed.`),
+      h('button.link', { type: 'button', dataset: { fix: 'seed' }, onclick: () => sowFromSeed(crop) }, `${cropName(crop)} is sown from seed`)));
+    box.append(h('p.dlg-hint', 'Prices are as the page gave them when it was last read.'));
+    return box;
   }
 
   function download(m) {
     const cell = x => { const s = x == null ? '' : String(x); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const lines = [['Crop', 'Variety', 'Supplier', 'Product code', 'To sow', 'Unit', 'On hand', 'Ordered', 'Short', 'By weight', 'Packets', 'First sowing', 'Plantings to sow', 'Plantings']];
+    const lines = [['Crop', 'Variety', 'Supplier', 'Product code', 'To sow', 'Unit', 'On hand', 'Ordered', 'Short', 'By weight', 'Vendor size to cover short', 'Cost', 'First sowing', 'Plantings to sow', 'Plantings']];
     for (const r of m.need.rows) {
       if (!(r.toSow > 0)) continue;
-      const v = r.variety, ms = r.unit === 'seeds' ? SL.measures(r.toSow, v) : { weight: '', packets: '' };
-      lines.push([cropName(r.crop), v ? v.name : '', v ? v.supplier || v.source || '' : '', v ? v.sku || '' : '', Math.round(r.toSow * 10) / 10, r.unit, r.onHand, r.onOrder, r.short, ms.weight, ms.packets, r.first ? E.d2s(r.first) : '', r.waiting, r.plantings]);
+      const v = r.variety, ms = r.unit === 'seeds' ? SL.measures(r.toSow, v) : { weight: '', packets: '' }, c = r.cover;
+      lines.push([cropName(r.crop), v ? v.name : '', v ? v.supplier || v.source || '' : '', v ? v.sku || '' : '', Math.round(r.toSow * 10) / 10, r.unit, r.onHand, r.onOrder, r.short, ms.weight, c ? c.text : '', c && c.cost != null ? c.cost.toFixed(2) : '', r.first ? E.d2s(r.first) : '', r.waiting, r.plantings]);
     }
     const blob = new Blob(['﻿' + lines.map(l => l.map(cell).join(',')).join('\r\n')], { type: 'text/csv' }), filename = `seeds-required-${App.planYear()}-${E.d2s(new Date())}.csv`;
     const fallback = () => { const url = URL.createObjectURL(blob), a = h('a', { href: url, download: filename }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); };
