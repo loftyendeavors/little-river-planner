@@ -34,6 +34,7 @@ Click a bed on the map and its panel shows width, length and area (a tower its s
 ## Seed stock, vendor sizes and sowing
 
 - **Add a seed lot**, the line at the top of Seeds, takes a vendor, a variety, a year and an amount, and saves on Enter. The variety is found as you type. A name that is not in the library asks for its crop and is added with the lot, in one step to undo.
+- In the Seeds list a variety sits indented under its crop. Hover a variety (or select it) and **+ lot** fills the line at the top with it and its vendor, ready for the amount.
 - **On hand** is typed in the Seeds list; an order is marked arrived with one click.
 - **Vendor size** shows what covers a shortfall at least cost, in the sizes that variety's own vendor sells. The size list comes from the variety's supplier page, so a packet is whatever that vendor says it is.
 - Recording a sowing (in a planting's panel on the map, or beside a variety's plantings in Seeds) dates the planting and takes the seed it used off the lots on hand. A planned sowing never touches stock. A recorded one can be taken back, which returns the seed.

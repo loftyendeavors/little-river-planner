@@ -316,18 +316,31 @@
       note);
   }
 
-  /** How a transplanted planting is sown: whole rows of its tray, alone or as its share of a batch sown with others. */
+  /**
+   * How a transplanted planting is sown: whole rows of its tray, alone or as its share of a batch sown with others.
+   * Set out to be read at a glance: what it is sown in, the batch's figures, this planting's share, then the allowances.
+   */
   function sowingNote(r) {
     const w = r && r.sowing, Sow = root.LRFSowing;
-    if (!w || !Sow) return null;
-    const batch = w.batch || w, others = (w.memberIds || []).length - 1, tray = batch.tray && batch.medium !== 'pots' ? `${batch.tray.name}: ` : '', g = batch.trayGroup;
-    // Where trays are shared, the batch's own tray count is a fraction of the lot's: say the rows, then the trays the lot stands in.
-    const what = g ? `${Number.isInteger(batch.rowsSown) ? `${num(batch.rowsSown)} row${batch.rowsSown === 1 ? '' : 's'} of ${num(batch.tray.columns)}` : `${num(batch.cells)} cells`} · ${num(batch.seeds)} seed${batch.seeds === 1 ? '' : 's'}` : Sow.description(batch);
-    const sharing = g ? ` It stands in ${num(g.trays)} tray${g.trays === 1 ? '' : 's'} shared with ${num(g.parts.length - 1)} other ${g.parts.length === 2 ? 'variety' : 'varieties'} of this crop sown that day.` : '';
-    return h('p.note.sow-how', w.shared
-      ? `Sown as one batch with ${num(others)} other planting${others === 1 ? '' : 's'} of this variety. ${tray}${what}. This planting’s share is ${num(w.cells)} cells and ${num(w.seeds)} seeds.${sharing}`
-      : `${tray}${what}.${sharing}`,
-      batch.mode === 'row' || batch.mode === 'half' || batch.mode === 'tray' ? h('small', ` ${num(batch.buffer)}% extra, ${num(batch.germination * 100)}% germination, rounded up to ${batch.mode === 'row' ? 'whole rows' : batch.mode === 'half' ? 'half trays' : 'whole trays'}.`) : null);
+    if (!w || !Sow || w.error) return null;
+    const batch = w.batch || w, members = (w.memberIds || []).length, g = batch.trayGroup, pots = batch.medium === 'pots', wool = batch.medium === 'rockwool';
+    const fig = (label, value) => h('div.sow-fig', h('span', label), h('b', value));
+    const figs = [fig('Seeds', num(batch.seeds))];
+    if (pots) figs.push(fig('Pots', num(batch.cells)));
+    else {
+      figs.push(Number.isInteger(batch.rowsSown) && (g || batch.mode === 'row') ? fig(`Rows of ${num(batch.tray.columns)}`, num(batch.rowsSown)) : fig('Cells', num(batch.cells)));
+      // where trays are shared, the batch's own count is a fraction of the lot's: show the trays the lot stands in
+      figs.push(fig(`${wool ? 'Sheets' : 'Trays'}${g ? ' (shared)' : ''}`, num(g ? g.trays : batch.trays)));
+    }
+    const others = g ? g.parts.length - 1 : 0;
+    const rounding = batch.mode === 'row' ? 'whole rows' : batch.mode === 'half' ? 'half trays' : batch.mode === 'tray' ? 'whole trays' : '';
+    return h('div.sow-how', { id: 'sowHow' },
+      h('p.sow-head', h('b', pots ? 'Sown in pots' : batch.tray.name), w.shared ? h('span.sow-tag', `one batch · ${num(members)} plantings of this variety`) : null),
+      h('div.sow-figs', figs),
+      w.shared ? h('p.sow-share', h('span', 'This planting’s share'), h('b', `${num(w.cells)} ${pots ? 'pots' : 'cells'}`), h('b', `${num(w.seeds)} seeds`)) : null,
+      g ? h('p.sow-with', wool ? `The ${g.trays === 1 ? 'sheet is' : 'sheets are'} shared with ${num(others)} other tower sowing${others === 1 ? '' : 's'} made that day.`
+        : `The ${g.trays === 1 ? 'tray is' : 'trays are'} shared with ${num(others)} other ${others === 1 ? 'variety' : 'varieties'} of this crop sown that day.`) : null,
+      rounding ? h('p.sow-foot', `${num(batch.buffer)}% extra · ${num(batch.germination * 100)}% germination · rounded up to ${rounding}`) : null);
   }
 
   /**
