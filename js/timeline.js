@@ -73,7 +73,7 @@
       const closed = collapsed.has(garden.id), count = spaces.reduce((n, b) => n + eng.plantingsIn(b.id).length, 0);
       body.append(h('div.tl-group', { style: { width: (LABEL_W + width) + 'px' } },
         h('button.tl-group-name', { type: 'button', 'aria-expanded': String(!closed), onclick: () => { closed ? collapsed.delete(garden.id) : collapsed.add(garden.id); render(); } },
-          h('span.caret', closed ? '▸' : '▾'), garden.name, h('small', `${spaces.length} space${spaces.length === 1 ? '' : 's'} · ${count} planting${count === 1 ? '' : 's'}`))));
+          h('span.caret', closed ? '▸' : '▾'), garden.name, h('small', spaces.every(b => eng.isPool(b)) ? `live trays on the heated benches · ${count} batch${count === 1 ? '' : 'es'}` : `${spaces.length} space${spaces.length === 1 ? '' : 's'} · ${count} planting${count === 1 ? '' : 's'}`))));
       if (closed) continue;
       for (const bed of spaces) {
         const items = eng.plantingsIn(bed.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).map(x => {
@@ -90,7 +90,7 @@
             for (const item of list) { const el = bar(item.p, item.r, item.lane, true); if (el) lane.append(el); }
             const trays = list.reduce((n, x) => n + x.r.len, 0);
             body.append(h('div.tl-row.tl-pool', { dataset: { bed: bed.id, pool: cropId }, title: 'Planned from weekly demand on the Trays view' },
-              h('div.tl-label', { style: { width: LABEL_W + 'px' } }, h('b', root.LRFTrays.short((eng.crop(cropId) || {}).name) || 'Trays'), h('small', `${UI.num(trays)} trays · ${list.length} batches`)), lane));
+              h('div.tl-label', { style: { width: LABEL_W + 'px' } }, h('b', root.LRFTrays.short((eng.crop(cropId) || {}).name) || 'Trays'), h('small', `${UI.num(trays)} trays`)), lane));
           }
           if (!names.length) body.append(h('div.tl-row.tl-pool', { dataset: { bed: bed.id, pool: '' } }, h('div.tl-label', { style: { width: LABEL_W + 'px' } }, h('b', 'Live trays'), h('small', 'no weekly demand yet')), h('div.tl-lane', { style: { width: width + 'px', height: (LANE_H + 6) + 'px' } })));
           continue;

@@ -6,6 +6,9 @@
  * the way a saved plan is turned into plantings follow v7.16.172's live-trays module line for line;
  * tests/trays_test.cjs runs the two side by side.
  *
+ * One rule of v7's is not kept by the app: v7 refuses to change a plan once any batch has work recorded.
+ * With `keepRecorded`, such batches stay exactly as they are and the rest follow the demand.
+ *
  * Nothing here touches the page. Functions take a plan and return a new one.
  */
 (function (root, factory) {
@@ -23,6 +26,8 @@
   const iso = d => [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
   const add = (s, n) => { const d = date(s); d.setDate(d.getDate() + n); return iso(d); };
   const monday = s => { const d = date(s); return add(s, -((d.getDay() + 6) % 7)); };
+  /** The Monday on or after a date: where a demand window opens when trays are wanted on Mondays only. */
+  const mondayOnOrAfter = s => { const m = monday(s); return m === s ? s : add(m, 7); };
   const sum = (xs, f) => xs.reduce((n, x) => n + f(x), 0);
   const norm = s => String(s || '').toLowerCase().replace(/^micro\s*[·-]?\s*/, '').replace(/[^a-z0-9]/g, '');
   /** "Micro · Arugula" and "Micro -  Thai Basil" are shown as the crop alone. */
@@ -82,7 +87,8 @@
   /**
    * Save a demand plan into a farm plan: the plan record, its crops, and its batches as plantings.
    * A batch that already exists (same crop row, same week) keeps its id and anything else recorded on it.
-   * options: uid() for new ids, now (ISO time), crop(id) to find a crop the plan does not list itself, records { harvests, fieldRecords }.
+   * options: uid() for new ids, now (ISO time), crop(id) to find a crop the plan does not list itself, records { harvests, fieldRecords },
+   * keepRecorded: batches with work recorded are history: left untouched, whatever the demand now says, while the others follow it.
    */
   function apply(farm, input, options) {
     const { uid, crop } = options, state = { ...farm, gardens: farm.gardens.slice(), beds: farm.beds.slice(), crops: (farm.crops || []).slice(), plantings: farm.plantings.slice() };
@@ -90,7 +96,8 @@
     if (plan.customerId && !(state.customers || []).some(c => c.id === plan.customerId)) throw Error('Choose an existing customer.');
     if (prior && prior.year !== plan.year) throw Error('Keep an existing demand plan in its saved season.');
     const old = state.plantings.filter(p => plan.id && p.liveTray && p.liveTray.planId === plan.id);
-    if (old.some(p => locked(state, p, options.records))) throw Error('This plan contains recorded work. Keep those batches intact; create a separate demand plan for new weeks.');
+    const done = old.filter(p => locked(state, p, options.records));
+    if (done.length && !options.keepRecorded) throw Error('This plan contains recorded work. Keep those batches intact; create a separate demand plan for new weeks.');
     plan.id = (prior && prior.id) || uid();
     let garden = state.gardens.find(g => g.liveTrayPool === true), bed = state.beds.find(b => b.liveTrayPool === true);
     if (bed && (!garden || bed.gardenId !== garden.id)) throw Error('Review the shared heated-space destination before continuing.');
@@ -107,24 +114,33 @@
     }
     const records = model.batches.map(b => {
       const original = old.find(p => p.liveTray && p.liveTray.key === b.key);
+      if (original && done.includes(original)) return original;
       const p = { ...(original || {}), id: (original && original.id) || uid(), bedId: bed.id, cropId: crops.get(b.rowId), date: b.sow, trays: b.trays, dtm: b.days, timingMode: 'manual', price: b.price, yield: 1,
         liveTray: { ...((original && original.liveTray) || {}), planId: plan.id, key: b.key, ready: b.ready, week: b.week, rowId: b.rowId } };
       p.growingDefaults = { v: 1, cropId: p.cropId, crop: { mk: { present: true, value: 1 }, baseUnit: { present: true, value: 'tray' }, yBasis: { present: true, value: 'tray' }, gh: { present: true, value: 0 } } };
       if (plan.customerId) p.customerId = plan.customerId; else delete p.customerId;
+      // Not in v7: a crop row may name the variety its trays are sown with, so that sowing them draws that variety's seed.
+      const row = plan.rows.find(r => r.id === b.rowId);
+      if (row && 'varietyId' in row) { if (row.varietyId) p.varietyId = row.varietyId; else delete p.varietyId; }
       return p;
     });
     const wanted = new Map(records.map(p => [p.id, p]));
+    for (const p of done) if (!wanted.has(p.id)) wanted.set(p.id, p);   // sown for a week or a crop the demand no longer lists: still history
     state.plantings = state.plantings.filter(p => !(p.liveTray && p.liveTray.planId === plan.id) || wanted.has(p.id)).map(p => wanted.get(p.id) || p);
     const have = new Set(state.plantings.map(p => p.id));
     state.plantings.push(...records.filter(p => !have.has(p.id)));
     state.liveTrayPlans = (state.liveTrayPlans || []).filter(p => p.id !== plan.id).concat({ ...prior, ...plan, updatedAt: options.now || new Date().toISOString() });
-    return { plan: state, saved: plan, records, model };
+    return { plan: state, saved: plan, records, model, kept: done.length };
   }
-  /** Take a demand plan and its batches out of a farm plan. */
-  function remove(farm, id, records) {
-    const old = farm.plantings.filter(p => p.liveTray && p.liveTray.planId === id);
-    if (old.some(p => locked(farm, p, records))) throw Error('Recorded work is attached to this plan. Keep its production history intact.');
-    return { ...farm, plantings: farm.plantings.filter(p => !(p.liveTray && p.liveTray.planId === id)), liveTrayPlans: (farm.liveTrayPlans || []).filter(p => p.id !== id) };
+  /**
+   * Take a demand plan and its batches out of a farm plan. With keepRecorded, batches with work recorded
+   * stay as plain plantings on the benches, no longer tied to a demand plan.
+   */
+  function remove(farm, id, records, options = {}) {
+    const old = farm.plantings.filter(p => p.liveTray && p.liveTray.planId === id), done = new Set(old.filter(p => locked(farm, p, records)).map(p => p.id));
+    if (done.size && !options.keepRecorded) throw Error('Recorded work is attached to this plan. Keep its production history intact.');
+    const plantings = farm.plantings.filter(p => !(p.liveTray && p.liveTray.planId === id) || done.has(p.id)).map(p => { if (!done.has(p.id)) return p; const { liveTray, ...rest } = p; return rest; });
+    return { ...farm, plantings, liveTrayPlans: (farm.liveTrayPlans || []).filter(p => p.id !== id) };
   }
   /** The difference between two farm plans as undoable steps, in the form the app commits. */
   function ops(before, after) {
@@ -174,5 +190,5 @@
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  return { draft, validate, schedule, locked, apply, remove, ops, batches, weeks, byCrop, monday, add, short, norm, SEASONS };
+  return { draft, validate, schedule, locked, apply, remove, ops, batches, weeks, byCrop, monday, mondayOnOrAfter, add, short, norm, SEASONS };
 });

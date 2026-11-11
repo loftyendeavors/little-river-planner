@@ -122,6 +122,76 @@
     return core;
   }
 
+  // ── what was established here, carried onto a newer v7 backup ──
+  // The plan itself (plantings, tray demand, seed stock) comes from the backup. What was said here about the farm does not have
+  // to be said again: the assumptions list, this app's own settings, and changes made here to a crop, variety, garden or bed.
+  // A change is put back only while the backup still holds the value it was changed from; where v7 has moved on, v7's value stands.
+  const FACT_LISTS = ['crops', 'varieties', 'gardens', 'beds'];
+  const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+  const figures = a => a ? ['crops', 'varieties'].reduce((n, k) => n + Object.values(a[k] || {}).reduce((m, envs) => m + Object.keys(envs || {}).length, 0), 0) : 0;
+  /**
+   * Record the difference one edit makes to a crop, variety, garden or bed. facts: { crops: { id: { name, set, was } }, … }.
+   * `was` is what the record held before it was first changed here; a field put back to that is forgotten.
+   * A record made here over one of the planner's built-in crops is kept whole (`create`).
+   */
+  function note(facts, list, before, after, builtIn) {
+    const out = { ...(facts || {}) }, group = { ...(out[list] || {}) };
+    if (!after || !FACT_LISTS.includes(list)) return facts || null;
+    const id = after.id, name = after.name || after.bed || '';
+    if (!before) { if (!builtIn) return facts || null; group[id] = { name, create: after }; }
+    else if (group[id] && group[id].create) group[id] = { name, create: after };
+    else {
+      const entry = { name, set: { ...((group[id] || {}).set || {}) }, was: { ...((group[id] || {}).was || {}) } };
+      for (const field of new Set([...Object.keys(before), ...Object.keys(after)])) {
+        if (field === 'id' || field.startsWith('_') || same(before[field], after[field])) continue;
+        if (!(field in entry.was)) entry.was[field] = before[field] === undefined ? null : before[field];
+        if (same(entry.was[field], after[field])) { delete entry.set[field]; delete entry.was[field]; } else entry.set[field] = after[field] === undefined ? null : after[field];
+      }
+      if (Object.keys(entry.set).length) group[id] = entry; else delete group[id];
+    }
+    out[list] = group;
+    return FACT_LISTS.some(k => Object.keys(out[k] || {}).length) ? out : null;
+  }
+  /**
+   * prev: the plan being replaced. next: the core plan read from a backup. Returns { plan, keep, notes, gone }:
+   * plan is next with what carries applied, keep goes into its lrfNext, notes say in words what was kept,
+   * gone lists varieties that exist here and not in the backup.
+   */
+  function carry(prev, next) {
+    const mine = (prev && prev.lrfNext) || {}, plan = { ...next }, keep = {}, notes = [];
+    if (!prev || mine.sample) return { plan, keep, notes, gone: [] };
+    if (figures(prev.assumptions) && !figures(next.assumptions)) { plan.assumptions = prev.assumptions; const n = figures(prev.assumptions); notes.push(`your assumptions list (${n} figure${n === 1 ? '' : 's'})`); }
+    for (const key of ['crates', 'trayStart']) if (mine[key]) keep[key] = mine[key];
+    const facts = {}, changed = [];
+    for (const list of FACT_LISTS) {
+      const entries = Object.entries((mine.facts || {})[list] || {});
+      if (!entries.length) continue;
+      const records = (plan[list] || []).slice(), index = new Map(records.map((x, i) => [x.id, i]));
+      for (const [id, fact] of entries) {
+        if (fact.create) {
+          if (!index.has(id)) { records.push(fact.create); changed.push(fact.name || id); (facts[list] = facts[list] || {})[id] = fact; }
+          continue;   // the backup has its own record of that crop now: it stands
+        }
+        if (!index.has(id)) { (facts[list] = facts[list] || {})[id] = fact; continue; }   // not in this backup; perhaps in a later one
+        const record = { ...records[index.get(id)] }, set = {}, was = {};
+        let applied = false;
+        for (const [field, value] of Object.entries(fact.set || {})) {
+          if (same(record[field], value)) continue;                                // the backup already says so
+          if (!same(record[field], (fact.was || {})[field])) continue;             // v7 has changed it since: v7's value stands
+          if (value === null) delete record[field]; else record[field] = value;
+          set[field] = value; was[field] = fact.was[field]; applied = true;
+        }
+        if (applied) { records[index.get(id)] = record; changed.push(fact.name || id); (facts[list] = facts[list] || {})[id] = { name: fact.name, set, was }; }
+      }
+      plan[list] = records;
+    }
+    if (changed.length) notes.push(`what was changed here on ${changed.length} record${changed.length === 1 ? '' : 's'} (${changed.slice(0, 4).join(', ')}${changed.length > 4 ? '…' : ''})`);
+    if (Object.keys(facts).length) keep.facts = facts;
+    const have = new Set((next.varieties || []).map(v => v.id));
+    const gone = (prev.varieties || []).filter(v => v && !v.deleted && v.active !== false && !have.has(v.id)).map(v => v.name || v.id);
+    return { plan, keep, notes, gone };
+  }
+
   /** What the page shows before a real plan is loaded: the stock layout with a few example plantings. */
   function sample(lib) {
     const year = new Date().getFullYear() + 1, at = (m, d) => `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -144,5 +214,5 @@
     return { gardens: core.gardens.length, beds: core.beds.length, plantings: core.plantings.length, varieties: core.varieties.length, year: core.settings && core.settings.year };
   }
 
-  return { split, join, pack, unpack, sample, summary, assertPlan, CORE_KEYS, HEAVY_VARIETY_FIELDS };
+  return { split, join, pack, unpack, sample, summary, assertPlan, note, carry, CORE_KEYS, HEAVY_VARIETY_FIELDS };
 });

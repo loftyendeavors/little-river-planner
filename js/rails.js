@@ -267,7 +267,8 @@
       }
     }
     const groups = [...byLate.values()].sort((a, b) => a.from - b.from);
-    for (const g of groups) g.options = settle(eng, g);
+    // Ways to settle a collision are worked out when first asked for: each means trying the plan several ways.
+    for (const g of groups) { let options = null; Object.defineProperty(g, 'options', { enumerable: true, get: () => options || (options = settle(eng, g)) }); }
     return { long, groups, count: long.length + groups.length };
   }
   /** Set a planting's last harvest day, in whichever way its harvest is modelled. */

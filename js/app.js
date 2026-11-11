@@ -30,6 +30,7 @@
     state.date = d < lo ? lo : d > hi ? hi : new Date(d.getFullYear(), d.getMonth(), d.getDate());
     emit('date');
   }
+  const isSample = () => !!(state.plan && state.plan.lrfNext && state.plan.lrfNext.sample);
   const planYear = () => +(state.plan && state.plan.settings && state.plan.settings.year) || new Date().getFullYear();
   function select(sel) { state.sel = sel; if (sel) document.body.dataset.sel = sel.type; else delete document.body.dataset.sel; emit('sel'); }
   function setView(view) { state.view = view; document.body.dataset.view = view; emit('view'); }
@@ -52,6 +53,7 @@
       if (op.kind === 'settings') { next.settings = to; continue; }
       if (op.kind === 'inventory') { if (to) next.seedInventory = to; else delete next.seedInventory; continue; }
       if (op.kind === 'trays') { if (to) next.liveTrayPlans = to; else delete next.liveTrayPlans; continue; }
+      if (op.kind === 'own') { next.lrfNext = { ...(next.lrfNext || {}) }; if (to == null) delete next.lrfNext[op.key]; else next.lrfNext[op.key] = to; continue; }
       const key = { bed: 'beds', garden: 'gardens', variety: 'varieties', crop: 'crops' }[op.kind] || 'plantings', list = lists[key] || (lists[key] = (plan[key] || []).slice());
       const index = from ? list.findIndex(x => x.id === from.id) : -1;
       if (to && index >= 0) list[index] = to; else if (to) list.push(to); else if (index >= 0) list.splice(index, 1);
@@ -63,7 +65,7 @@
     store.save(state.plan);
     emit('plan');
   }
-  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings', 'inventory', 'trays'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
+  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings', 'inventory', 'trays', 'own'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
   /** Why the guard rails refuse an edit, in words. */
   function refusalText(no, engine) {
     const bed = engine.bedOf(no.p.bedId), what = cropLabel(no.p, engine), unit = engine.capUnit(bed);
@@ -72,8 +74,19 @@
     const r = engine.calc(no.other), until = engine.occupancyThrough(no.other, r), starts = engine.occupancyFrom(no.other, r) > engine.occupancyFrom(no.p, no.r);
     return `${what} would overlap ${cropLabel(no.other, engine)} in ${bedLabel(bed, engine)} (${starts ? 'goes in ' + day(r.field) : until === Infinity ? 'stays all season' : 'holds the ground until ' + day(until)})`;
   }
+  /**
+   * A change made here to a crop, variety, garden or bed is a statement about the farm. It is noted beside the plan,
+   * in the same step, so that loading a newer v7 backup does not quietly take it back (see IO.carry).
+   */
+  function noted(ops) {
+    const lists = { crop: 'crops', variety: 'varieties', garden: 'gardens', bed: 'beds' }, was = (state.plan.lrfNext || {}).facts || null;
+    let facts = was;
+    for (const op of ops) if (lists[op.kind] && op.after) facts = IO.note(facts, lists[op.kind], op.before, op.after, op.kind === 'crop' && Lib.crops.some(c => c.id === op.after.id));
+    return JSON.stringify(facts) === JSON.stringify(was) ? ops : [...ops, { kind: 'own', key: 'facts', before: was, after: facts }];
+  }
   function commit(label, ops, options = {}) {
     if (!ops.length) return false;
+    if (!isSample()) ops = noted(ops);
     const plan = withOps(state.plan, ops, 'do'), engine = E.create(plan, Lib);
     const no = options.unchecked ? null : Rails.refusal(state.engine, engine, touched(ops, engine));
     if (no) { toast(refusalText(no, engine)); return false; }
@@ -309,7 +322,7 @@
   async function saveTrays(label, input) {
     const records = await trayRecords(), farm = state.plan;
     let result;
-    try { result = Trays.apply(farm, input, { uid, now: new Date().toISOString(), crop: id => state.engine.crop(id), records }); } catch (error) { toast(error.message); return null; }
+    try { result = Trays.apply(farm, input, { uid, now: new Date().toISOString(), crop: id => state.engine.crop(id), records, keepRecorded: true }); } catch (error) { toast(error.message); return null; }
     const ops = Trays.ops(farm, result.plan);
     // Saving the same demand again would only restamp the record: that is not a change, and not a step to undo.
     const bare = list => JSON.stringify((list || []).map(({ updatedAt, ...rest }) => rest));
@@ -321,13 +334,42 @@
     const records = await trayRecords(), farm = state.plan, plan = (farm.liveTrayPlans || []).find(p => p.id === id);
     if (!plan) return false;
     let next;
-    try { next = Trays.remove(farm, id, records); } catch (error) { toast(error.message); return false; }
+    try { next = Trays.remove(farm, id, records, { keepRecorded: true }); } catch (error) { toast(error.message); return false; }
     return commit(`Delete ${plan.name}`, Trays.ops(farm, next), { unchecked: true });
   }
   /** A plan saved by an earlier preview kept v7's demand plans with the records it does not edit. Bring them into the plan. */
   async function adoptTrayPlans() {
     if (Array.isArray(state.plan.liveTrayPlans) || !state.plan.plantings.some(p => p.liveTray)) return;
     try { const attic = await loadAttic(), kept = attic.rest.liveTrayPlans; if (Array.isArray(kept) && kept.length) { adopt({ ...state.plan, liveTrayPlans: kept }); } } catch (_) { /* the batches are still shown; the demand table says the plan record is missing */ }
+  }
+
+  /** One of this app's own settings (kept beside the plan, never written into a v7 backup), as a step that can be undone. */
+  function setOwn(key, value, label) {
+    const before = (state.plan.lrfNext || {})[key];
+    if ((before == null ? null : before) === (value == null ? null : value)) return false;
+    return commit(label, [{ kind: 'own', key, before: before == null ? null : before, after: value == null ? null : value }], { unchecked: true });
+  }
+  /** Trays are wanted on Mondays: a demand window that opens mid-week is moved to the Monday on or after it. Returns the plan and what moved. */
+  function traysToMonday(farm, records) {
+    const moved = [];
+    let plan = farm;
+    for (const tray of farm.liveTrayPlans || []) {
+      let monday;
+      try { monday = Trays.mondayOnOrAfter(tray.from); } catch (_) { continue; }
+      if (monday === tray.from || monday > tray.through) continue;
+      try { const eng = E.create(plan, Lib); plan = Trays.apply(plan, { ...tray, from: monday }, { uid, now: new Date().toISOString(), crop: id => eng.crop(id), records, keepRecorded: true }).plan; moved.push({ name: tray.name, from: tray.from, to: monday }); } catch (_) { /* that plan stays as the backup has it */ }
+    }
+    return { plan, moved };
+  }
+
+  /** Turn on "trays open on a Monday" for this farm and move any demand window that opens mid-week, as one step. */
+  async function applyTrayStart() {
+    const records = await trayRecords(), farm = state.plan, result = traysToMonday(farm, records);
+    const ops = Trays.ops(farm, result.plan);
+    if ((farm.lrfNext || {}).trayStart !== 'monday') ops.push({ kind: 'own', key: 'trayStart', before: (farm.lrfNext || {}).trayStart || null, after: 'monday' });
+    if (!ops.length) return [];
+    commit('Trays open on a Monday', ops, { unchecked: true });
+    return result.moved;
   }
 
   function removePlantings(ids, label) {
@@ -465,22 +507,29 @@
   async function importBackup(file) {
     let parsed;
     try { parsed = await readBackupFile(file); IO.assertPlan(parsed.plan); } catch (error) { toast(`That file could not be read: ${error.message}`); return; }
-    const { core, attic } = IO.split(parsed.plan), info = IO.summary(core), replacing = !(state.plan.lrfNext && state.plan.lrfNext.sample);
+    const split = IO.split(parsed.plan), attic = split.attic, info = IO.summary(split.core), replacing = !isSample();
+    // The plan comes from the backup. What was established here about the farm is put back on it.
+    const carried = IO.carry(state.plan, split.core);
+    let core = carried.plan;
+    const records = { harvests: attic.rest.harvests, fieldRecords: attic.rest.fieldRecords };
+    const monday = carried.keep.trayStart === 'monday' ? traysToMonday(core, records) : { plan: core, moved: [] };
+    core = monday.plan;
+    const kept = [...carried.notes, ...monday.moved.map(m => `${m.name} opening on a Monday (${day(E.s2d(m.to))}, not ${day(E.s2d(m.from))})`)];
     if (replacing) {
       const ok = await UI.confirm({
         title: 'Replace the plan in this app?',
-        body: `The backup holds ${info.plantings} plantings in ${info.beds} growing spaces across ${info.gardens} gardens for ${info.year || 'an unknown year'}. It replaces what is here now, including edits made here. Your v7 planner and its data are not touched.`,
+        body: `The backup holds ${info.plantings} plantings in ${info.beds} growing spaces across ${info.gardens} gardens for ${info.year || 'an unknown year'}. Plantings, tray demand and seed stock are replaced by the backup’s, including what was changed here. ${kept.length ? `Kept from this copy: ${kept.join('; ')}. ` : ''}${carried.gone.length ? `${carried.gone.length} variet${carried.gone.length === 1 ? 'y' : 'ies'} here ${carried.gone.length === 1 ? 'is' : 'are'} not in the backup and will be gone (${carried.gone.slice(0, 3).join(', ')}${carried.gone.length > 3 ? '…' : ''}). ` : ''}Your v7 planner and its data are not touched.`,
         confirmLabel: 'Replace plan', danger: true
       });
       if (!ok) return;
     }
     const cloud = store.backend !== 'memory';   // somewhere durable to keep the photo and the rest of the backup
-    core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name, backup: (parsed.plan.backup && parsed.plan.backup.exportedAt) || parsed.plan._localUpdatedAt || null };
+    core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name, backup: (parsed.plan.backup && parsed.plan.backup.exportedAt) || parsed.plan._localUpdatedAt || null, ...carried.keep };
     state.plan = core; state.attic = attic; state.extras = emptyExtras(); state.inventoryBase = null; state.inventoryAsked = null; state.packsBase = {}; state.keptThumbs = {}; Thumbs.set({}); state.undo.length = 0; state.redo.length = 0; state.sel = null; delete document.body.dataset.sel;
     showMapImage(parsed.image && parsed.image.bytes, parsed.image && parsed.image.mime);
     rebuild(); state.date = defaultDate(); root.LRFMap.fit(true);
     emit('plan'); emit('date'); emit('sel');
-    toast(`Loaded ${info.plantings} plantings in ${info.beds} growing spaces from ${file.name}`);
+    toast(`Loaded ${core.plantings.length} plantings in ${info.beds} growing spaces from ${file.name}${kept.length ? `. Kept from this copy: ${kept.join('; ')}` : ''}`);
     if (!cloud) { store.save(core); await importPhotos(parsed, 'memory'); return; }
     const where = store.backend;
     try { await store.clearBlob('attic-new'); } catch (_) { /* nothing was kept */ }
@@ -530,7 +579,7 @@
     } else {
       // Nothing saved yet: start from the farm's plan that ships with the page.
       const compact = inlined ? inlined.plan : state.bundled ? await getJSON('data/plan.json') : null;
-      if (compact) { state.plan = IO.unpack(compact); state.plan.lrfNext = { source: 'bundled', attic: 'none', backup: state.bundled.backup, startedAt: new Date().toISOString() }; firstRun = !loadError; }
+      if (compact) { state.plan = IO.unpack(compact); state.plan.lrfNext = { source: 'bundled', attic: 'none', backup: state.bundled.backup, startedAt: new Date().toISOString(), ...(state.bundled.keep || {}) }; firstRun = !loadError; }
       else state.plan = IO.sample(Lib);
     }
     state.mapImageUrl = bundledImage();
@@ -551,8 +600,10 @@
   async function useBundled() {
     const inlined = root.LRF_BUNDLED || null, compact = inlined ? inlined.plan : await fetch('data/plan.json').then(r => r.ok ? r.json() : null).catch(() => null);
     if (!compact || !state.bundled) { toast('The newer plan could not be read.'); return; }
-    const plan = IO.unpack(compact);
-    plan.lrfNext = { source: 'bundled', attic: 'none', backup: state.bundled.backup, startedAt: new Date().toISOString() };
+    const carried = IO.carry(state.plan, IO.unpack(compact)), plan = carried.plan, shipped = state.bundled.keep || {};
+    const facts = {};
+    for (const list of ['crops', 'varieties', 'gardens', 'beds']) { const both = { ...((shipped.facts || {})[list] || {}), ...((carried.keep.facts || {})[list] || {}) }; if (Object.keys(both).length) facts[list] = both; }
+    plan.lrfNext = { source: 'bundled', attic: 'none', backup: state.bundled.backup, startedAt: new Date().toISOString(), ...shipped, ...carried.keep, ...(Object.keys(facts).length ? { facts } : {}) };
     try { await store.saveNow(plan); } catch (error) { toast(`The newer plan could not be saved here (${error.message}). Nothing was changed.`); return; }
     root.location.reload();
   }
@@ -570,6 +621,6 @@
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, setAssumption, setGardenType,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
-    saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => store && store.retry(), isSample: () => !!(state.plan && state.plan.lrfNext && state.plan.lrfNext.sample)
+    saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => store && store.retry(), isSample, setOwn, traysToMonday: () => applyTrayStart()
   };
 })(window);
