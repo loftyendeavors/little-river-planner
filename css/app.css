@@ -92,7 +92,7 @@ ul, ol { list-style: none; }
 .inspector { border-left: 1px solid var(--line); }
 .stage { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
 .view { position: relative; min-height: 0; min-width: 0; display: none; }
-body[data-view="map"] .view-map, body[data-view="timeline"] .view-timeline, body[data-view="assume"] .view-assume, body[data-view="seeds"] .view-seeds, body[data-view="trays"] .view-trays { display: block; }
+body[data-view="map"] .view-map, body[data-view="timeline"] .view-timeline, body[data-view="assume"] .view-assume, body[data-view="seeds"] .view-seeds, body[data-view="trays"] .view-trays, body[data-view="sow"] .view-sow { display: block; }
 
 /* ── crop library ── */
 .library header { padding: 12px 12px 8px; display: grid; gap: 8px; }
@@ -277,10 +277,10 @@ body[data-view="timeline"] .view-timeline { display: grid; grid-template-rows: a
 .tl-ghost[data-state="blocked"] { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 18%, transparent); }
 
 /* ── assumptions list ── */
-body[data-view="assume"] .library, body[data-view="assume"] .inspector, body[data-view="assume"] .season, body[data-view="seeds"] .library, body[data-view="seeds"] .inspector, body[data-view="seeds"] .season, body[data-view="trays"] .library, body[data-view="trays"] .inspector, body[data-view="trays"] .season { display: none; }
-body[data-view="assume"] .work, body[data-view="seeds"] .work, body[data-view="trays"] .work { grid-template-columns: minmax(0, 1fr); }
-body[data-view="assume"] .stage, body[data-view="seeds"] .stage, body[data-view="trays"] .stage { grid-template-rows: minmax(0, 1fr); }
-.view-assume, .view-seeds, .view-trays { background: var(--surface); overflow: auto; }
+body[data-view="assume"] .library, body[data-view="assume"] .inspector, body[data-view="assume"] .season, body[data-view="seeds"] .library, body[data-view="seeds"] .inspector, body[data-view="seeds"] .season, body[data-view="trays"] .library, body[data-view="trays"] .inspector, body[data-view="trays"] .season, body[data-view="sow"] .library, body[data-view="sow"] .inspector, body[data-view="sow"] .season { display: none; }
+body[data-view="assume"] .work, body[data-view="seeds"] .work, body[data-view="trays"] .work, body[data-view="sow"] .work { grid-template-columns: minmax(0, 1fr); }
+body[data-view="assume"] .stage, body[data-view="seeds"] .stage, body[data-view="trays"] .stage, body[data-view="sow"] .stage { grid-template-rows: minmax(0, 1fr); }
+.view-assume, .view-seeds, .view-trays, .view-sow { background: var(--surface); overflow: auto; }
 .as-wrap { max-width: 1040px; margin: 0 auto; padding: 26px 28px 60px; }
 .as-head { display: grid; gap: 5px; max-width: 70ch; }
 .as-head h2 { font: 800 30px/1.05 var(--display); font-stretch: 78%; }
@@ -824,3 +824,62 @@ td.sd-days { line-height: 1.15; }
 .tr-week th:first-child, .tr-week td:first-child { padding-right: 18px; }
 .tr-week th:nth-child(n+4), .tr-week td:nth-child(n+4) { padding-left: 16px; }
 .tr-chip { margin-right: 5px; }
+
+/* how a planting is sown, under its quantities */
+.sow-how { margin: 8px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
+.sow-how small { color: var(--muted); }
+
+/* ── the Sowing view: a week's sowings as the acts they are, ticked and recorded together ── */
+.sw-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 22px 0 4px; }
+.sw-bar .grow { flex: 1; }
+.sw-bar .sd-filters { margin: 0; }
+.sw-kind { margin-top: 18px; }
+.sw-kind-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 2px; }
+.sw-kind-head h4 { font: 800 17px/1.1 var(--display); font-stretch: 80%; }
+.sw-kind-head span { font: 500 11.5px var(--mono); color: var(--ink-2); }
+.sw-kind-head small { color: var(--muted); font-size: 12.5px; margin-left: auto; text-align: right; }
+table.sw { table-layout: fixed; min-width: 860px; }
+table.sw th, table.sw td { text-align: left; vertical-align: middle; }
+table.sw td { height: 46px; padding: 3px 10px; overflow: hidden; text-overflow: ellipsis; }
+table.sw th { position: static; background: var(--surface); }
+table.sw .sw-pick { width: 38px; padding-right: 0; text-align: center; }
+table.sw .sw-when { width: 74px; }
+table.sw .sw-how { width: 184px; }
+table.sw .sw-seed { width: 148px; text-align: right; }
+table.sw .sw-what { width: 27%; }
+table.sw .sw-where { width: auto; }
+table.sw .sw-act { width: 86px; text-align: right; }
+table.sw td b { font-weight: 650; }
+table.sw td small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.25; }
+table.sw td.sw-where small { display: inline; }
+table.sw td.sw-where .linkish { text-decoration: none; text-align: left; color: var(--ink-2); }
+table.sw td.sw-where .linkish:hover { text-decoration: underline; color: var(--ink); }
+table.sw td.sw-seed b { font: 600 13.5px var(--mono); font-variant-numeric: tabular-nums; }
+table.sw tbody tr { cursor: pointer; }
+table.sw tbody tr:hover td { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+table.sw tbody tr.on td { background: color-mix(in srgb, var(--flag) 9%, transparent); }
+table.sw tbody tr.done { cursor: default; }
+table.sw tbody tr.done td { color: var(--muted); }
+table.sw tbody tr.done:hover td { background: none; }
+table.sw tbody tr.done .thumb { opacity: 0.6; }
+table.sw input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--ink); cursor: pointer; }
+.sw-tick { color: var(--good); font-weight: 700; }
+.sw-short { color: var(--warn) !important; }
+.sw-qty { width: 96px; }
+.sw-earlier { margin-top: 16px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--raised); padding: 0 14px; }
+.sw-earlier summary { padding: 11px 0; cursor: pointer; font-size: 13.5px; }
+.sw-earlier summary span { color: var(--ink-2); }
+.sw-earlier[open] { padding-bottom: 12px; }
+.sw-earlier .sw-kind:first-of-type { margin-top: 4px; }
+.sw-earlier table.sw th { background: var(--raised); }
+.sw-none { margin-top: 26px; }
+/* what is ticked, and the one button that records it: it stays in reach while the list scrolls */
+.sw-record { position: sticky; bottom: 14px; z-index: 5; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; padding: 10px 12px 10px 16px; border: 1px solid var(--ink); border-radius: 12px; background: var(--raised); box-shadow: var(--shadow); }
+.sw-record > span { color: var(--ink-2); font: 500 12px var(--mono); }
+.sw-record .grow { flex: 1; }
+.sw-record label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.sw-record input[type="date"] { height: 31px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); padding: 0 8px; font-size: 13px; color: var(--ink); }
+.sw-wrap .bn { margin-top: 34px; }
+.tr-weeks-head .grow { flex: 1; }
+.tr-weeks-head .tr-tosow { font-size: 12.5px; }
+.tr-weeks-head { justify-content: flex-start; }

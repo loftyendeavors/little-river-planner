@@ -14,9 +14,9 @@
  * An engine is a snapshot: build a new one after the plan changes.
  */
 (function (root, factory) {
-  const api = factory();
-  if (typeof module === 'object' && module.exports) module.exports = api; else root.LRFEngine = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+  const node = typeof module === 'object' && module.exports, api = factory(node ? require('./sowing.js') : root.LRFSowing);
+  if (node) module.exports = api; else root.LRFEngine = api;
+})(typeof self !== 'undefined' ? self : this, function (Sow) {
   'use strict';
 
   // ───────────────────────── calendar-day helpers ─────────────────────────
@@ -520,10 +520,74 @@
     function calc(p) {
       if (!p || typeof p !== 'object') return null;
       if (cache.has(p)) return cache.get(p);
-      const r = calcRaw(p);
+      let r = sowingOn ? baseOf(p) : calcRaw(p);
+      if (r && sowingOn) {
+        // as v7's calc does: what is sown replaces the bare plant count. The base record is left as it was.
+        const sowing = sowingFor(p, r);
+        if (sowing && !sowing.error) r = { ...r, cells: sowing.cells, seeds: sowing.seeds, trays: sowing.trays, sowing };
+      }
       cache.set(p, r);
       return r;
     }
+
+    // ── practical sowing: whole rows of a plug tray, and plantings of one variety sown as one batch (v7's nursery-sowing) ──
+    const sowingOn = options.sowing !== false && !!Sow;
+    const dayText = value => value && validDate(value) ? d2s(value) : '';
+    const baseCache = new Map();
+    /** The planting before sowing practice is applied: one seed-cell per buffered plant. */
+    function baseOf(p) {
+      if (baseCache.has(p)) return baseCache.get(p);
+      const r = calcRaw(p);
+      baseCache.set(p, r);
+      return r;
+    }
+    const nsHarden = () => Math.round(clamp(nonNegative(S.nursery && S.nursery.harden, 7), 0, 21));
+    /** When seedlings move out to harden off: so many days before planting, or the day recorded. */
+    function hardenStart(r) {
+      if (!r || !r.sow || r.tw || r.established || !nsHarden() || r.field <= r.sow) return null;
+      const actual = doneOf(r.planting, 'harden');
+      return actual ? s2d(actual) : new Date(Math.max(r.sow, addDays(r.field, -nsHarden())));
+    }
+    const sowOptions = (p, r) => ({ id: p.id, plants: r.plants, crop: r.c, planting: p, settings, nursery: S.nursery, tower: r.tw, rack: r.rack,
+      sowDate: dayText(r.sow), plannedSowDate: dayText(r.plannedSow), fieldDate: dayText(r.field), potUpDate: dayText(potUpDate(r)), hardenDate: dayText(hardenStart(r)) });
+    function sowSingle(p, r) {
+      const plan = Sow.sowingPlan(sowOptions(p, r));
+      if (!plan || plan.error) return plan;
+      return { ...plan, batchId: 'individual:' + p.id, batch: plan, memberIds: [p.id], shared: false, allocation: false };
+    }
+    let sowBuilt = null;
+    function sowBuild() {
+      const groups = new Map(), plans = new Map(), batches = [];
+      for (const p of S.plantings || []) {
+        const r = baseOf(p);
+        if (!r || r.b.active === false || r.g.active === false) continue;
+        const opts = sowOptions(p, r), key = Sow.batchKey(opts, p.id);
+        if (!key) continue;
+        // sowings planned for different days stay apart even when their recorded dates happen to meet
+        const groupKey = JSON.stringify([key, opts.plannedSowDate]);
+        if (!groups.has(groupKey)) groups.set(groupKey, []);
+        groups.get(groupKey).push({ p, r, opts });
+      }
+      for (const [key, members] of groups) {
+        const result = Sow.sowingBatch({ members: members.map(x => x.opts) });
+        if (result.error) { for (const item of members) plans.set(item.p, sowSingle(item.p, item.r)); continue; }
+        const memberIds = members.map(x => x.p.id), shared = members.length > 1, batch = result.plan;
+        for (const item of members) {
+          const allocation = result.members.find(x => x.id === item.p.id);
+          plans.set(item.p, { ...batch, ...allocation, batchId: key, batch, memberIds, shared, allocation: shared, targetPlants: allocation.plants, extraCells: Math.max(0, allocation.cells - allocation.minimumCells) });
+        }
+        batches.push({ id: key, plan: batch, memberIds, members: members.map(x => ({ p: x.p, r: x.r })) });
+      }
+      return (sowBuilt = { plans, batches, known: new Set(S.plantings || []) });
+    }
+    /** A planting's sowing: its share of a shared batch, or its own when it is not in the plan or stands alone. */
+    function sowingFor(p, r) {
+      const built = sowBuilt || sowBuild();
+      if (!built.known.has(p)) return sowSingle(p, r);
+      return built.plans.get(p) || sowSingle(p, r);
+    }
+    /** Every sowing batch in the plan: the rounded plan, and the plantings it is raised for. */
+    const sowingBatches = () => sowingOn ? (sowBuilt || sowBuild()).batches : [];
     function plannedOutDate(p, r) {
       const b = r.b, sh = b.shelter;
       if (!shelterValid(b)) return null;
@@ -812,20 +876,28 @@
       const resting = !here.length && plantingsIn(b.id).some(p => { const r = calc(p); return r && occupancyFrom(p, r) <= date && date <= occupancyThrough(p, r); });
       return { crops: here, cap, used, free: Math.max(0, cap - used), resting };
     }
-    // ── heated bench room in use: v7's nursery load, without its shared-sowing-batch rounding ──
+    // ── heated bench room in use: v7's nursery load ──
     const ctFt2 = ct => { const [w, l] = ctDims(ct); return w * l; };
     function potUpDate(r) {
       if (!r || !r.sow || r.c.prop !== 'potup' || r.tw || r.established) return null;
       const actual = doneOf(r.planting, 'potup');
       return actual ? s2d(actual) : addDays(r.sow, Math.round(Math.max(0, finite(r.c.potUpWk, 2)) * 7));
     }
-    /** What one planting's seedlings take up on a date: trays, or carriers of pots once potted up. */
+    /**
+     * What one planting's seedlings take up on a date: trays, or carriers of pots once potted up.
+     * A planting in a shared batch takes its share of the batch's whole trays or whole carriers.
+     */
     function propOf(r, date) {
       if (!r || !r.sow || !r.cells) return null;
-      const c = r.c, pd = potUpDate(r), pot = !r.tw && (c.prop === 'pot' || (c.prop === 'potup' && (!date || (pd && date >= pd))));
-      if (pot) { const per = Math.max(1, Math.round(positive(c.perCarrier, 10))), size = positive(c.potSize, 4.5), n = Math.ceil(r.cells / per); return { kind: 'pot', n, eq: n * size * size * per / 144 / TRAY_FT2 }; }
-      const n = r.trays || Math.ceil(r.cells / positive(c.tray, 72));
-      return { kind: r.tw ? 'rockwool' : 'tray', n, eq: n };
+      const c = r.c, pd = potUpDate(r), plan = r.sowing, pot = !r.tw && (c.prop === 'pot' || (c.prop === 'potup' && (!date || (pd && date >= pd))));
+      if (pot) {
+        const per = Math.max(1, Math.round(positive(c.perCarrier, 10))), size = positive(c.potSize, 4.5), cells = plan && plan.potUpCells != null ? plan.potUpCells : r.cells;
+        const batchCells = plan && plan.batch && plan.batch.potUpCells != null ? plan.batch.potUpCells : cells;
+        const n = plan && plan.shared && batchCells ? Math.ceil(batchCells / per) * cells / batchCells : Math.ceil(cells / per), ft2 = n * size * size * per / 144;
+        return { kind: 'pot', n, eq: ft2 / TRAY_FT2, ft2 };
+      }
+      const n = plan && plan.trays != null ? plan.trays : (r.trays || Math.ceil(r.cells / positive(c.tray, 72)));
+      return { kind: r.tw ? 'rockwool' : 'tray', n, eq: plan && plan.eq != null ? plan.eq : n, ft2: plan && plan.ft2 != null ? plan.ft2 : n * TRAY_FT2 };
     }
     let benchItemsCache = null;
     /** Everything that stands on a heated bench at some time: live trays, seedlings, and crates sheltered until they move out. */
@@ -869,7 +941,8 @@
       crops: () => cropList, crop, variety, cropColor, isCoverCrop, isPerennial,
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
-      heatedTraySpaces, benchList, benchItems, benchDay, cratesOnBenches,
+      heatedTraySpaces, benchList, benchItems, benchDay, cratesOnBenches, propOf, potUpDate, hardenStart,
+      sowingBatches, sowingOn, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,
       footprint, overflow, holders, conflicts,

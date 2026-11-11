@@ -72,6 +72,8 @@
     }
     return next;
   }
+  // An engine made only to ask whether something fits: dates and ground are all it is asked, so it skips working out sowing batches.
+  const PROBE = { sowing: false };
   const plain = p => { const q = { ...p }; delete q.bedLayout; delete q.startFt; delete q.ft; delete q.trays; return q; };
 
   /**
@@ -181,12 +183,12 @@
     let work = { ...eng.plan, plantings: eng.plan.plantings.filter(q => !moving.has(q.id)) };
     const ops = [];
     for (const o of others.slice().sort((a, b) => a.from - b.from)) {
-      const res = propose(E.create(work, eng.lib), { plantingId: o.p.id }, { bedId: A.id, date: E.s2d(o.p.date) }, { source: o.p, noShrink: true });
+      const res = propose(E.create(work, eng.lib, PROBE), { plantingId: o.p.id }, { bedId: A.id, date: E.s2d(o.p.date) }, { source: o.p, noShrink: true });
       if (res.state !== 'ok') return null;
       work = { ...work, plantings: [...work.plantings, res.p] };
       ops.push({ before: o.p, after: res.p });
     }
-    const mine = propose(E.create(work, eng.lib), payload, { bedId: B.id, date: target.date }, { source: p, noShrink: true });
+    const mine = propose(E.create(work, eng.lib, PROBE), payload, { bedId: B.id, date: target.date }, { source: p, noShrink: true });
     if (mine.state !== 'ok') return null;
     return { ...mine, state: 'swap', ops: [{ before: p, after: mine.p }, ...ops], traded: others.map(o => o.p) };
   }
@@ -281,7 +283,7 @@
     const options = [], late = g.late, earlyIds = new Set(g.early.map(o => o.p.id));
     const offer = (id, ops, info) => {
       const work = { ...eng.plan, plantings: eng.plan.plantings.map(q => { const op = ops.find(x => x.before.id === q.id); return op ? op.after : q; }) };
-      const after = E.create(work, eng.lib);
+      const after = E.create(work, eng.lib, PROBE);
       if (after.conflicts(after.planting(late.id)).some(o => !o.rest && earlyIds.has(o.p.id))) return;
       if (refusal(eng, after, ops.map(op => op.after.id))) return;   // must pass the same gate as any edit
       options.push({ id, ops, ...info });
@@ -291,7 +293,7 @@
       // Plant it once the ground is clear. Whatever it would then run into is pushed back in turn.
       const date = E.addDays(new Date(lastThrough), 1), ops = [{ before: late, after: { ...late, date: E.d2s(date) } }], also = [];
       for (let i = 0; i < 8; i++) {
-        const work = { ...eng.plan, plantings: eng.plan.plantings.map(q => { const op = ops.find(x => x.before.id === q.id); return op ? op.after : q; }) }, after = E.create(work, eng.lib);
+        const work = { ...eng.plan, plantings: eng.plan.plantings.map(q => { const op = ops.find(x => x.before.id === q.id); return op ? op.after : q; }) }, after = E.create(work, eng.lib, PROBE);
         let pushed = false;
         for (const op of ops.slice()) {
           const now = after.planting(op.after.id), r = after.calc(now), mineFrom = +after.occupancyFrom(now, r), through = +after.occupancyThrough(now, r);

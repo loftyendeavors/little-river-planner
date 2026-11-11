@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.11">
+<meta name="lrf-build" content="0.12">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -23,6 +23,7 @@
   <nav class="views" aria-label="Views">
     <button type="button" data-view-btn="map" aria-pressed="true">Map</button>
     <button type="button" data-view-btn="timeline" aria-pressed="false">Timeline</button>
+    <button type="button" data-view-btn="sow" aria-pressed="false">Sowing</button>
     <button type="button" data-view-btn="trays" aria-pressed="false">Trays</button>
     <button type="button" data-view-btn="assume" aria-pressed="false">Assumptions</button>
     <button type="button" data-view-btn="seeds" aria-pressed="false">Seeds</button>
@@ -110,6 +111,7 @@
       </div>
     </div>
 
+    <div class="view view-sow" id="sowView"><div class="as-wrap tr-wrap sw-wrap" id="swWrap"></div></div>
     <div class="view view-trays" id="traysView"><div class="as-wrap tr-wrap" id="trWrap"></div></div>
 
     <div class="view view-assume" id="assumeView">
@@ -200,6 +202,7 @@
 
 <script src="js/library.js"></script>
 <script src="js/guide.js"></script>
+<script src="js/sowing.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/planio.js"></script>
 <script src="js/zip.js"></script>
@@ -220,6 +223,7 @@
 <script src="js/seeds.js"></script>
 <script src="js/bench.js"></script>
 <script src="js/traysview.js"></script>
+<script src="js/sowview.js"></script>
 <script src="js/main.js"></script>
 <script src="js/pwa.js"></script>
 </body>

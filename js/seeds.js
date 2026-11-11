@@ -642,7 +642,7 @@
     const bare = m.live.filter(v => !v.supplier && !v.url && !v.catalogDtm).length, sown = m.need.rows.reduce((n, r) => n + (r.plantings - r.waiting - r.established), 0);
     add(clear($('sdFoot')),
       m.live.length && bare === m.live.length ? 'These varieties carry planning figures only. Supplier, product code and page come in when you load your backup here. ' : null,
-      `Seed counts allow for ${m.need.settings.germ}% germination${m.need.settings.buffer ? ` and ${m.need.settings.buffer}% extra plugs on transplants` : ''}. `,
+      `Seed counts allow for ${m.need.settings.germ}% germination${m.need.settings.buffer ? ` and ${m.need.settings.buffer}% extra plugs on transplants` : ''}. Transplants are sown in whole rows of their tray, and plantings of one variety sown the same day are rounded together, as on the Sowing view. `,
       sown ? `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted and left out. ` : null,
       'Type what you have under On hand; click an order when it arrives. “Vendor size” is what covers a shortfall at least cost, in the sizes that variety’s vendor sells. Each variety’s lots and sizes are in its panel. ',
       h('button.link', { type: 'button', onclick: () => download(m) }, 'Download seeds required (.csv)'));

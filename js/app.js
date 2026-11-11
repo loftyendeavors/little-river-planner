@@ -311,6 +311,37 @@
     const p = state.engine.planting(id);
     return p ? sowingStep(`${cropLabel(p)}: sowing taken back`, ctx => ({ before: p, ...SL.takeBackSowing(state.engine, inventoryNow(), p, ctx) })) : null;
   }
+  /**
+   * Several sowings as one undoable step. Each planting is worked exactly as it would be alone, with the seed stock
+   * carried from one to the next, so two plantings of a variety draw the same lots down in turn. A planting that
+   * cannot be done (a date that contradicts work already recorded, say) is left alone and reported; the rest go ahead.
+   */
+  function sowingSteps(label, items, work) {
+    const ctx = { now: new Date().toISOString(), uid, year: planYear(), name: '', today: todayText() }, ops = [], done = [], failed = [];
+    let inventory = inventoryNow(), touched = false;
+    for (const item of items || []) {
+      const p = state.engine.planting(item.id);
+      if (!p) continue;
+      try {
+        const result = work(p, item, inventory, ctx);
+        ops.push({ before: p, after: result.planting });
+        if (result.inventory) { inventory = result.inventory; touched = true; }
+        done.push({ id: p.id, ...result });
+      } catch (error) { failed.push({ id: p.id, label: cropLabel(p), why: error.message || 'It could not be recorded.' }); }
+    }
+    if (!ops.length) { toast(failed.length ? failed[0].why : 'Nothing to record.'); return null; }
+    if (touched) ops.push({ kind: 'inventory', before: state.plan.seedInventory || null, after: inventory });
+    const was = state.engine;
+    if (!commit(label(done.length), ops, { unchecked: true })) return null;
+    const total = key => Math.round(done.reduce((n, r) => n + (Array.isArray(r[key]) ? r[key].reduce((m, u) => m + u.quantity, 0) : Number(r[key]) || 0), 0) * 1e6) / 1e6;
+    return { done, failed, overlaps: impact(was, state.engine).overlaps, used: total('used'), untracked: total('untracked'), returned: total('returned'), lost: total('lost') };
+  }
+  /** Record several sowings on one date: items [{ id, quantity? }]. Quantities left out are the plan's own. */
+  const recordSowings = (items, input) => sowingSteps(n => `${n} sowing${n === 1 ? '' : 's'} recorded ${day(E.s2d(input.date))}`, items,
+    (p, item, inventory, ctx) => SL.recordSowing(state.engine, inventory, p, { date: input.date, quantity: item.quantity, note: input.note }, ctx));
+  /** Take several recorded sowings back at once. */
+  const takeBackSowings = ids => sowingSteps(n => `${n} sowing${n === 1 ? '' : 's'} taken back`, (ids || []).map(id => ({ id })),
+    (p, item, inventory, ctx) => SL.takeBackSowing(state.engine, inventory, p, ctx));
 
   // ───────────────────────── live trays ─────────────────────────
   const Trays = root.LRFTrays;
@@ -357,7 +388,7 @@
       let monday;
       try { monday = Trays.mondayOnOrAfter(tray.from); } catch (_) { continue; }
       if (monday === tray.from || monday > tray.through) continue;
-      try { const eng = E.create(plan, Lib); plan = Trays.apply(plan, { ...tray, from: monday }, { uid, now: new Date().toISOString(), crop: id => eng.crop(id), records, keepRecorded: true }).plan; moved.push({ name: tray.name, from: tray.from, to: monday }); } catch (_) { /* that plan stays as the backup has it */ }
+      try { const eng = E.create(plan, Lib, { sowing: false }); plan = Trays.apply(plan, { ...tray, from: monday }, { uid, now: new Date().toISOString(), crop: id => eng.crop(id), records, keepRecorded: true }).plan; moved.push({ name: tray.name, from: tray.from, to: monday }); } catch (_) { /* that plan stays as the backup has it */ }
     }
     return { plan, moved };
   }
@@ -434,7 +465,7 @@
     const ops = [];
     let working = state.plan, missed = 0;
     for (let i = 1; i <= count; i++) {
-      const date = E.addDays(E.s2d(source.date), every * i), eng = E.create(working, Lib);
+      const date = E.addDays(E.s2d(source.date), every * i), eng = E.create(working, Lib, { sowing: false });
       let placed = null;
       for (const bed of candidates) {
         const res = Rails.propose(eng, { plantingId: source.id, copy: true }, { bedId: bed.id, date }, { source, noShrink: true });
@@ -620,7 +651,7 @@
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, setAssumption, setGardenType,
-    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
+    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => store && store.retry(), isSample, setOwn, traysToMonday: () => applyTrayStart()
   };
 })(window);
