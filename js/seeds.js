@@ -579,7 +579,8 @@
       const r = m.byV.get(v.id), basis = v.catalogMaturityBasis || 'unspecified', crop = eng.crop(v.cropId), site = SL.hostOf(v.url);
       const stage = v.catalogHarvestStage && v.catalogHarvestStage !== 'unspecified' ? v.catalogHarvestStage : '';
       const cell = {
-        name: () => h('td', h('div.sd-cell', T.el({ varietyId: v.id, color: crop && eng.cropColor(crop), label: v.name, size: 34 }), h('span.sd-name', h('span.as-vname', v.name), flat ? h('small', cropName(crop)) : null))),
+        name: () => h('td', h('div.sd-cell', T.el({ varietyId: v.id, color: crop && eng.cropColor(crop), label: v.name, size: 34 }), h('span.sd-name', h('span.as-vname', v.name), flat ? h('small', cropName(crop)) : null),
+          h('button.sd-addlot', { type: 'button', title: `Add a seed lot of ${v.name}: fills the line at the top, ready for the amount`, 'aria-label': `Add a seed lot of ${v.name}`, onclick: () => { if (quickPick) quickPick(v); } }, '+ lot'))),
         sup: () => h('td.sd-sup', supplierShort(v) || (v.source === 'Farm entry' ? 'By hand' : ''), site ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer', title: `${v.sku ? v.sku + ' · ' : ''}open the page on ${site}` }, ' ↗') : null),
         days: () => h('td.sd-num.sd-days', daysText(v) || '—', stage ? h('small', stage) : null),
         from: () => v.catalogDtm ? h('td.sd-from' + (basis === 'unspecified' ? '.sd-open' : ''), sel('from', BASIS_SHORT, basis, { 'aria-label': `${v.name}: days start at`, onchange: async e => {
@@ -593,7 +594,7 @@
         first: () => h('td.sd-num', r && r.first ? day(r.first) : ''),
         uses: () => h('td.sd-num', m.used.get(v.id) || '')
       };
-      return h('tr.sd-var', { tabIndex: 0, 'aria-label': `${v.name}, ${cropName(crop)}`, dataset: { variety: v.id }, onclick: e => { if (!e.target.closest('a, select, input, button')) select({ type: 'variety', id: v.id }); }, onkeydown: rowKey }, ids.map(id => cell[id]()));
+      return h('tr.sd-var' + (flat ? '' : '.in-group'), { tabIndex: 0, 'aria-label': `${v.name}, ${cropName(crop)}`, dataset: { variety: v.id }, onclick: e => { if (!e.target.closest('a, select, input, button')) select({ type: 'variety', id: v.id }); }, onkeydown: rowKey }, ids.map(id => cell[id]()));
     };
     let shown = 0;
     if (!grouped) {
@@ -624,7 +625,7 @@
             tosow: () => h('td.sd-num', amount(r)), hand: () => stockCell(r, `${cropName(g.crop)}, no variety`), short: () => h('td.sd-num', r.short > 0 ? num(r.short) : ''),
             first: () => h('td.sd-num', r.first ? day(r.first) : ''), uses: () => h('td.sd-num', r.waiting === r.plantings ? r.plantings : `${r.waiting} of ${r.plantings}`)
           };
-          body.append(h('tr.sd-need', { dataset: { key: r.key } }, ids.map(id => cell[id]())));
+          body.append(h('tr.sd-need.in-group', { dataset: { key: r.key } }, ids.map(id => cell[id]())));
         }
       }
     }
@@ -737,7 +738,7 @@
       const s = App.sowingOf(p), open = ui.sowOpen === p.id;
       return [h('div.sd-plrow',
         h('button.sd-pl', { type: 'button', title: 'Show on the map', onclick: () => { App.setView('map'); App.setDate(c.field); App.select({ type: 'planting', id: p.id }); } },
-          h('b', day(c.field)), h('span', App.bedLabel(c.b)), h('small', `harvest ${day(c.first)}${eng.pinned(p) ? ' · own days' : ''}`)),
+          h('b', day(c.field)), h('span', { title: App.bedLabel(c.b) }, h('em', `${{ bed: 'Bed', tower: 'Tower', bench: 'Bench' }[eng.spaceKind(c.b)] || ''} ${c.b.bed}`.trim()), ` ${(eng.gardenOf(c.b) || {}).name || ''}`), h('small', `harvest ${day(c.first)}${eng.pinned(p) ? ' · own days' : ''}`)),
         s ? h('button.sd-sowbtn' + (s.sown ? '.done' : ''), { type: 'button', 'aria-expanded': String(open), dataset: { sowfor: p.id }, title: s.sown ? 'See what was recorded, or take it back' : 'Record that this was sown: the seed comes off stock', onclick: () => { ui.sowOpen = open ? null : p.id; ui.panelKey = ''; schedule(); } }, s.sown ? '✓ sown' : 'Sown…') : h('span.sd-sowbtn.none', 'in place')),
         open ? root.LRFPanels.sowingBox(p) : null];
     })), mine.length > 40 ? h('p.dlg-hint', `and ${mine.length - 40} more`) : null);
@@ -791,6 +792,7 @@
   // Vendor, variety, year, amount: Enter saves. The variety is found as it is typed; one that is not in the library yet asks
   // for its crop and is added with the lot, in the same step. The line is built once and reads the plan as it is used.
   const quick = { varietyId: '', hits: [], at: 0, open: false, status: 'usable' };
+  let quickPick = null;   // set a variety into the line from anywhere in the view (a row's "+ lot")
   function initQuick() {
     const host = $('sdQuick');
     if (!host) return;
@@ -859,6 +861,15 @@
         sync(); say.textContent = ''; (year.value ? amount : year).focus();
       } else { quick.varietyId = ''; sync(); cropPick.focus(); }   // a new variety: its crop is asked for next
     }
+    // a variety handed in from its row: the line is filled with it and its vendor, and waits for the amount
+    quickPick = v => {
+      shut();
+      quick.varietyId = v.id; name.value = v.name; cropPick.value = '';
+      vendor.value = v.supplier || (v.source === 'Farm entry' ? '' : v.source) || vendor.value;
+      sync(); say.textContent = '';
+      host.scrollIntoView({ block: 'nearest' });
+      amount.focus(); amount.select();
+    };
     name.addEventListener('input', () => { quick.varietyId = ''; quick.at = 0; say.textContent = ''; show(); sync(); });
     name.addEventListener('focus', () => { if (!quick.varietyId && name.value.trim()) { show(); sync(); } });
     name.addEventListener('keydown', e => {
