@@ -86,6 +86,8 @@
   }
   function commit(label, ops, options = {}) {
     if (!ops.length) return false;
+    // A sowing day set by hand belongs to the date it was set against: when the planting moves, the plan's own day applies again.
+    ops = ops.map(op => { if (op.kind || !op.before || !op.after || !op.after.sowOn || op.after.liveTray || op.before.date === op.after.date || op.before.sowOn !== op.after.sowOn) return op; const after = { ...op.after }; delete after.sowOn; return { ...op, after }; });
     if (!isSample()) ops = noted(ops);
     const plan = withOps(state.plan, ops, 'do'), engine = E.create(plan, Lib);
     const no = options.unchecked ? null : Rails.refusal(state.engine, engine, touched(ops, engine));
@@ -339,6 +341,40 @@
   /** Record several sowings on one date: items [{ id, quantity? }]. Quantities left out are the plan's own. */
   const recordSowings = (items, input) => sowingSteps(n => `${n} sowing${n === 1 ? '' : 's'} recorded ${day(E.s2d(input.date))}`, items,
     (p, item, inventory, ctx) => SL.recordSowing(state.engine, inventory, p, { date: input.date, quantity: item.quantity, note: input.note }, ctx));
+  /**
+   * Set the day sowings are planned for, as one step. Nothing is marked sown and no seed leaves stock: this moves the plan.
+   * A transplant keeps the day it goes out and is raised for longer or shorter. A tray batch keeps the day it is due.
+   * Seed sown in the ground moves with its planting, so the guard rails have their say. With no date, the plan's own day is put back.
+   */
+  function planSowings(ids, date) {
+    const ops = [], skipped = [], when = date ? E.s2d(date) : null;
+    if (date && !E.validDate(when)) { toast('Choose a real calendar date.'); return null; }
+    for (const id of ids || []) {
+      const p = state.engine.planting(id), r = p && state.engine.calc(p);
+      if (!r || p.established === true) continue;
+      const skip = why => skipped.push({ id, label: cropLabel(p), why });
+      if (r.rack) {
+        if (date) {
+          if (!(when < r.first)) { skip('that is not before the day the trays are due'); continue; }
+          if (date !== p.date) ops.push({ before: p, after: { ...p, date, dtm: E.dayDiff(r.first, when), sowOn: date } });
+        } else if (p.sowOn) {
+          const demand = p.liveTray && (state.plan.liveTrayPlans || []).find(x => x.id === p.liveTray.planId), row = demand && demand.rows.find(x => x.id === p.liveTray.rowId);
+          if (!row) { skip('its weekly demand is not in this plan'); continue; }
+          const after = { ...p, date: E.d2s(E.addDays(r.first, -row.days)), dtm: row.days }; delete after.sowOn;
+          ops.push({ before: p, after });
+        }
+      } else if (r.plannedSow) {
+        if (date && !(when < r.planned)) { skip('that is not before the day it goes out'); continue; }
+        const after = { ...p };
+        if (date && date !== E.d2s(r.sowDefault)) after.sowOn = date; else delete after.sowOn;
+        if (after.sowOn !== p.sowOn) ops.push({ before: p, after });
+      } else if (date && date !== p.date) ops.push({ before: p, after: { ...p, date } });
+    }
+    if (!ops.length) { toast(skipped.length ? `Nothing moved: ${skipped[0].label}: ${skipped[0].why}.` : date ? 'Those are already planned for that day.' : 'Those are on the plan’s own day already.'); return null; }
+    const was = state.engine;
+    if (!commit(date ? `${ops.length} sowing${ops.length === 1 ? '' : 's'} planned for ${day(when)}` : `${ops.length} sowing${ops.length === 1 ? '' : 's'} put back on the plan’s day`, ops)) return null;
+    return { moved: ops.length, skipped, overlaps: impact(was, state.engine).overlaps };
+  }
   /** Take several recorded sowings back at once. */
   const takeBackSowings = ids => sowingSteps(n => `${n} sowing${n === 1 ? '' : 's'} taken back`, (ids || []).map(id => ({ id })),
     (p, item, inventory, ctx) => SL.takeBackSowing(state.engine, inventory, p, ctx));
@@ -651,7 +687,7 @@
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, setAssumption, setGardenType,
-    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
+    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => store && store.retry(), isSample, setOwn, traysToMonday: () => applyTrayStart()
   };
 })(window);

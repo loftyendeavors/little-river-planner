@@ -161,7 +161,7 @@
     const mine = (prev && prev.lrfNext) || {}, plan = { ...next }, keep = {}, notes = [];
     if (!prev || mine.sample) return { plan, keep, notes, gone: [] };
     if (figures(prev.assumptions) && !figures(next.assumptions)) { plan.assumptions = prev.assumptions; const n = figures(prev.assumptions); notes.push(`your assumptions list (${n} figure${n === 1 ? '' : 's'})`); }
-    for (const key of ['crates', 'trayStart']) if (mine[key]) keep[key] = mine[key];
+    for (const key of ['crates', 'trayStart', 'trays']) if (mine[key]) keep[key] = mine[key];
     const facts = {}, changed = [];
     for (const list of FACT_LISTS) {
       const entries = Object.entries((mine.facts || {})[list] || {});

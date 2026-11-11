@@ -578,7 +578,43 @@
         }
         batches.push({ id: key, plan: batch, memberIds, members: members.map(x => ({ p: x.p, r: x.r })) });
       }
+      if (shareTrays) shareOut(batches, plans);
       return (sowBuilt = { plans, batches, known: new Set(S.plantings || []) });
+    }
+    /**
+     * Varieties of one crop sown the same day into the same kind of tray stand in the same trays. (v7 gives every variety
+     * whole trays of its own.) Each variety still fills whole rows; the trays are counted once for the lot and shared out
+     * by cells, so four varieties taking 24 rows of a 16-row tray hold two trays, not four. Seeds and cells do not change.
+     */
+    const shareTrays = sowingOn && !legacy && !(S.lrfNext && S.lrfNext.trays === 'variety');
+    function shareOut(batches, plans) {
+      const groups = new Map();
+      for (const b of batches) {
+        const plan = b.plan;
+        if (!plan || plan.legacy || plan.medium === 'pots' || !plan.cells) continue;
+        let outer;
+        try { outer = JSON.parse(b.id); } catch (_) { continue; }
+        if (!Array.isArray(outer) || typeof outer[0] !== 'string' || outer[0][0] !== '[') continue;   // a planting that stands alone has no dates to match on
+        const inner = JSON.parse(outer[0]);
+        inner.splice(1, 1);                                                                           // everything that makes a batch, except the variety
+        const key = JSON.stringify([inner, outer[1]]);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(b);
+      }
+      for (const [id, list] of groups) {
+        if (list.length < 2) continue;
+        const tray = list[0].plan.tray, cells = list.reduce((n, b) => n + b.plan.cells, 0), trays = Math.ceil(cells / tray.cells), area = tray.widthIn * tray.lengthIn;
+        const group = { id, tray, cells, trays, eq: trays * area / Sow.STANDARD_AREA_IN2, ft2: trays * area / 144, apart: list.reduce((n, b) => n + b.plan.trays, 0),
+          parts: list.map(b => ({ batchId: b.id, first: b.memberIds[0], cells: b.plan.cells, rows: b.plan.rowsSown })) };
+        for (const b of list) {
+          const own = b.plan, share = own.cells / cells;
+          b.plan = { ...own, trays: trays * share, eq: group.eq * share, ft2: group.ft2 * share, ownTrays: own.trays, trayGroup: group };
+          for (const m of b.members) {
+            const mine = plans.get(m.p), part = own.cells ? mine.cells / own.cells : 0;
+            plans.set(m.p, { ...mine, batch: b.plan, trays: b.plan.trays * part, eq: b.plan.eq * part, ft2: b.plan.ft2 * part, traySpace: b.plan.eq * part, trayGroup: group });
+          }
+        }
+      }
     }
     /** A planting's sowing: its share of a shared batch, or its own when it is not in the plan or stands alone. */
     function sowingFor(p, r) {
@@ -625,7 +661,9 @@
       }
       if (c.material === 'bulb' && !tw && !rack) { bulbs = Math.ceil(plants); seeds = 0; seedG = 0; cells = 0; trays = 0; gh = null; }
       if (p.established === true) { seeds = 0; seedG = 0; cells = 0; trays = 0; bulbs = 0; gh = null; }
-      const plannedGh = gh; gh = gh ? sowDateOf(p, gh) : null;
+      // Not in v7: the day a transplant is sown can be set by hand. It holds while it falls before the day the planting goes out.
+      const sowDefault = gh, sowOwn = gh && typeof p.sowOn === 'string' && validDate(s2d(p.sowOn)) && s2d(p.sowOn) < planned ? s2d(p.sowOn) : null;
+      const plannedGh = sowOwn || gh; gh = plannedGh ? sowDateOf(p, plannedGh) : null;
 
       const period = harvestPeriod(c, b, field, p), { first } = period;
       const actualClear = clearDateOf(p), failure = p.workflow && p.workflow.outcome === 'failed' ? s2d(p.workflow.failureDate) : null;
@@ -639,7 +677,7 @@
         established: p.established === true, layout, physicalLength, len, cap: capOf(b), partial: !tw && len < capOf(b),
         rows, totalRows: layout ? layout.totalRows : rows, inRow, rowSp, plants, seeds, seedG, bulbs, cells, trays,
         usedSites: tw ? plants : null, totalSites: tw ? sites(b) : null,
-        planned, field, sow: gh, plannedSow: plannedGh, start: gh || field, slip: dayDiff(field, planned),
+        planned, field, sow: gh, plannedSow: plannedGh, sowDefault, sowSet: !!sowOwn, start: gh || field, slip: dayDiff(field, planned),
         first, last, modeledLast: period.modeledLast, automaticEnd: period.automaticEnd, harvestMode: period.harvestMode,
         harvestDays, expectedHarvestDays: period.expectedDays, removal: period.removal, actualClear,
         area: tw || rack || ct ? 0 : (+b.w || 0) * len, days, blackoutDays,
@@ -942,7 +980,7 @@
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
       heatedTraySpaces, benchList, benchItems, benchDay, cratesOnBenches, propOf, potUpDate, hardenStart,
-      sowingBatches, sowingOn, base: baseOf,
+      sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,
       footprint, overflow, holders, conflicts,
