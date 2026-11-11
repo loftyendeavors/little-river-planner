@@ -902,3 +902,8 @@ table.sw td small.sw-set { color: var(--flag); font: 500 10px var(--mono); text-
 .sw-record .sw-later { flex-basis: 100%; order: 9; color: var(--ink-2); font-size: 12.5px; }
 .sow-own { margin-left: 8px; font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--flag); text-decoration: none; }
 .sow-own:hover { text-decoration: underline; }
+
+/* the plan folder, in the Backup menu */
+.menu-pop .menu-note { margin: 0; padding: 4px 10px 6px; border-top: 0; font: 400 12px/1.4 var(--body); color: var(--ink-2); }
+#folderMenu { display: grid; }
+#folderMenu:empty { display: none; }

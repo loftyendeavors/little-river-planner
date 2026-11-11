@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.13">
+<meta name="lrf-build" content="0.14">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -35,6 +35,8 @@
     <div class="menu">
       <button type="button" class="btn" id="dataBtn" aria-haspopup="true" aria-expanded="false">Backup</button>
       <div class="menu-pop" id="dataMenu" hidden>
+        <button type="button" id="saveNowBtn"><b>Save now</b><small id="saveNowNote">Downloads a backup file</small></button>
+        <div id="folderMenu"></div>
         <button type="button" id="exportBtn"><b>Download a backup</b><small>A plan file the v7 planner can restore</small></button>
         <button type="button" id="importBtn"><b>Load a v7 backup…</b><small>Replace this plan with a .zip or .json backup</small></button>
         <input type="file" id="importFile" accept=".zip,.json,application/zip,application/json" hidden>
@@ -213,6 +215,7 @@
 <script src="js/store.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/thumbs.js"></script>
+<script src="js/folder.js"></script>
 <script src="js/app.js"></script>
 <script src="js/drag.js"></script>
 <script src="js/map.js"></script>
