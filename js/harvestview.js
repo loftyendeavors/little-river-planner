@@ -53,6 +53,8 @@
     try { root.print(); } catch (_) { UI.toast('Printing is not available in this view. Copy the list instead.'); }
     setTimeout(done, 1500);
   }
+  // Inside another page's frame (the Claude page) a download or a print is refused without a word, so those buttons are not offered there.
+  const framed = (() => { try { return root.self !== root.top; } catch (_) { return true; } })();
   /** The list that goes to a chef: pick the stretch, look at it, then copy, print or download it. */
   function share() {
     const m = model(), wk = thisWeek(m), weeks = F.periods(m, 'week'), at = weeks.findIndex(c => c.key === wk.key), s = F.season(m);
@@ -70,9 +72,10 @@
       h('h2', 'A list to send'), h('p', 'What the plan expects to have, as plain text for an email or a text message. Quantities are rounded down, never up.'),
       h('div.hv-opts', range, kind, h('label', varieties, 'Name the varieties'), h('label', prices, 'Show prices')),
       sheet,
+      framed ? h('p.dlg-hint', 'Here the list can be copied. Printing it or downloading a spreadsheet needs the planner opened at its own address.') : null,
       h('div.dialog-actions',
-        h('button.btn', { type: 'button', id: 'hvCsv', onclick: () => { const r = current(); download(`${(App.state.plan.settings.farm || 'farm').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-availability-${m.year}.csv`, F.csv(m, r.cols, { grain: r.grain }), 'text/csv'); } }, 'Download spreadsheet'),
-        h('button.btn', { type: 'button', id: 'hvPrint', onclick: () => print(current().text) }, 'Print'),
+        framed ? null : h('button.btn', { type: 'button', id: 'hvCsv', onclick: () => { const r = current(); download(`${(App.state.plan.settings.farm || 'farm').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-availability-${m.year}.csv`, F.csv(m, r.cols, { grain: r.grain }), 'text/csv'); } }, 'Download spreadsheet'),
+        framed ? null : h('button.btn', { type: 'button', id: 'hvPrint', onclick: () => print(current().text) }, 'Print'),
         h('span.grow'),
         h('button.btn', { type: 'button', onclick: close }, 'Close'),
         h('button.btn.primary', { type: 'button', id: 'hvCopy', onclick: () => copy(current().text, sheet) }, 'Copy')));
