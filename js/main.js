@@ -22,7 +22,7 @@
     $('undoBtn').title = App.state.undo.length ? `Undo: ${App.state.undo[App.state.undo.length - 1].label} (Ctrl+Z)` : 'Nothing to undo';
     $('seasonYear').textContent = App.planYear();
     const plan = App.state.plan, info = plan.lrfNext || {};
-    $('buildNote').textContent = `Rebuild preview 0.15 · ${plan.plantings.length} plantings · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
+    $('buildNote').textContent = `Rebuild preview 0.16 · ${plan.plantings.length} plantings · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
   });
   $('undoBtn').addEventListener('click', App.undo);
   $('redoBtn').addEventListener('click', App.redo);
@@ -64,12 +64,15 @@
   App.on('folder', folderMenu); App.on('plan', folderMenu);
   $('importBtn').addEventListener('click', () => $('importFile').click());
   $('importFile').addEventListener('change', e => { const file = e.target.files[0]; e.target.value = ''; closeMenu(); if (file) App.importBackup(file); });
+  // Photos for the plan that is open: the plan is never replaced by anything chosen here.
+  $('photosBtn').addEventListener('click', () => $('photosFile').click());
+  $('photosFile').addEventListener('change', e => { const files = [...e.target.files]; e.target.value = ''; closeMenu(); if (files.length) App.addPhotos(files); });
 
-  // Drop a backup file anywhere on the page.
+  // Drop a backup file anywhere on the page. A picture or a photo file dropped is added to the open plan.
   const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
   document.addEventListener('dragover', e => { if (hasFiles(e)) { e.preventDefault(); document.body.classList.add('file-over'); } });
   document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('file-over'); });
-  document.addEventListener('drop', e => { if (!hasFiles(e)) return; e.preventDefault(); document.body.classList.remove('file-over'); const file = e.dataTransfer.files[0]; if (file) App.importBackup(file); });
+  document.addEventListener('drop', e => { if (!hasFiles(e)) return; e.preventDefault(); document.body.classList.remove('file-over'); if (e.dataTransfer.files.length) App.openFiles(e.dataTransfer.files); });
 
   document.addEventListener('keydown', e => {
     const typing = /^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') && e.target.type !== 'range';

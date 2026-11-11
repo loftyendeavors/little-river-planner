@@ -117,12 +117,12 @@
     const crates = fig.onBenches
       ? h('p.bn-crates', 'Sheltered crates are counted as standing on the benches, the way v7 counts them. ', h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', null, 'Sheltered crates stand on the floor') }, 'They stand on the floor'))
       : fig.floorMost ? h('p.bn-crates', `Up to ${num(fig.floorMost)} crates are sheltered under heat${fig.floorUntil ? ` until ${day(fig.floorUntil)}` : ''}. They stand on the floor and take no bench room. `, h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', 'bench', 'Count sheltered crates on the benches') }, 'Count them on the benches instead')) : null;
-    const eng = App.state.engine, apart = eng.shareTrays === false;
-    const sharing = eng.sowingBatches().length ? h('p.bn-share', apart ? 'Every variety is counted in trays of its own, the way v7 counts them. ' : 'Varieties of one crop sown the same day share trays, each in whole rows. Tower crops sown the same day share rockwool sheets, whatever the crop. ',
+    const eng = App.state.engine, apart = eng.shareTrays === false, SHEET = root.LRFSowing.ROCKWOOL_SHEET;
+    const sharing = eng.sowingBatches().length ? h('p.bn-share', apart ? 'Every variety is counted in trays of its own, the way v7 counts them. ' : 'Varieties of one crop sown the same day share trays, each in whole rows. Tower crops sown the same day share rockwool sheets, whatever the crop. A sheet is ' + `${SHEET.cells} cells, ${SHEET.rows} rows of ${SHEET.columns}. `,
       h('button.linkish', { type: 'button', onclick: () => App.setOwn('trays', apart ? null : 'variety', apart ? 'Varieties of one crop share trays' : 'Every variety in trays of its own') }, apart ? 'Let varieties of one crop share trays' : 'Count every variety in trays of its own')) : null;
     // The trays themselves. A rockwool sheet rides in an open 10 × 20 tray; a live tray is one, and leaves with the sale.
     const plugText = fig.plugMost.map(t => `${num(t.n)} × ${t.name.replace(/ plug tray$/, '')}`).join(', '), fl = fig.flats;
-    const openText = [fl.carriers ? `up to ${num(fl.carriers)} at once under rockwool sheets` : '', fl.sold ? `${num(fl.sold)} go out with live trays over the season (${num(fl.live)} on the benches at the most)` : ''].filter(Boolean).join('; ');
+    const openText = [fl.carriers ? `up to ${num(fl.carriers)} with drainage holes at once, one under each ${SHEET.cells}-cell rockwool sheet` : '', fl.sold ? `${num(fl.sold)} go out with live trays over the season (${num(fl.live)} on the benches at the most)` : ''].filter(Boolean).join('; ');
     const traysLine = plugText || openText ? h('p.bn-trays', { id: 'bnTrays' }, h('b', 'Trays in use. '), plugText ? `Plug trays at the most on one day: ${plugText}. ` : '', openText ? `Open 10 × 20 trays: ${openText}.` : '') : null;
     return h('section.bn', h('h3', title), h('p.bn-note', reading),
       fig.weeks.length ? h('div.bn-legend', { 'aria-label': 'What the colours stand for' }, fig.kinds.map(([k, label]) => h('span', h('i', { 'data-kind': k }), label))) : null,

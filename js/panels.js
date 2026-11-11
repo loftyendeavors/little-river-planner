@@ -120,6 +120,28 @@
       h('p.help', `This copy of the planner was built from your v7 backup of ${when(n.backup)}${n.counts && n.counts.plantings ? `, ${num(n.counts.plantings)} plantings` : ''}. The plan open now is the one this browser already held${n.held ? `, from ${when(n.held)}` : ''}.`),
       h('div.newer-actions', h('button.btn.primary', { type: 'button', onclick: switchPlan }, `Use the ${when(n.backup)} plan`), h('button.btn', { type: 'button', onclick: () => App.keepMine() }, 'Keep this one'))));
   }
+  /** One over-long set in plain words: "28 plantings are 22 ft long, but the beds in the north field are 20 ft." */
+  function tooLong(eng, list) {
+    const { r, want, cap } = list[0], garden = (eng.gardenOf(r.b) || {}).name || 'this garden', n = list.length, one = new Set(list.map(x => x.r.b.id)).size === 1;
+    const kind = eng.spaceKind(r.b), what = `${num(n)} planting${n === 1 ? '' : 's'}`;
+    if (kind === 'bench') return `${what} ${n === 1 ? 'takes' : 'each take'} ${num(want, 1)} tray${want === 1 ? '' : 's'}, but ${one ? `bench ${r.b.bed}` : 'each bench'} in ${garden} holds ${num(cap, 1)}.`;
+    if (kind === 'containers') return `${what} ${n === 1 ? 'fills' : 'each fill'} ${num(want, 1)} container${want === 1 ? '' : 's'}, but ${one ? `${r.b.bed}` : 'each group'} in ${garden} has ${num(cap, 1)}.`;
+    return `${what} ${n === 1 ? 'is' : 'are'} ${num(want, 1)} ft long, but ${one ? `bed ${r.b.bed} in ${garden} is` : `the beds in ${garden} are`} ${num(cap, 1)} ft.`;
+  }
+  /** Pictures the plan should have and has not: said once, here, with the one thing to do about it. */
+  function renderPhotos(host) {
+    const gaps = App.photoGaps();
+    if (!gaps.map && !gaps.varieties) return;
+    const n = gaps.varieties, lines = [];
+    if (gaps.map) lines.push(h('li', h('b', 'The farm photo'), 'A plan file holds the plan only, so the photo did not come with it. The beds keep their places and wait for it.'));
+    if (n) lines.push(h('li', h('b', `${num(n)} variety photo${n === 1 ? '' : 's'}`),
+      gaps.working ? `Being fetched from where each was first found: ${num(gaps.left)} to go. Each is kept here once it arrives.`
+        : gaps.shown ? `${gaps.shown === n ? 'Shown' : `${num(gaps.shown)} shown`} from the supplier’s own site while this computer is online, not kept here yet. ${gaps.service ? 'The fetch service could not get them this time; the planner tries again in a week.' : 'Those suppliers do not hand their pictures to another site. Add them below, or set up the link reader on the Seeds view, which can fetch them.'}`
+          : 'Their records name a photo but not where it came from.'));
+    add(host, h('section.insp-section.photos', { id: 'photoGaps' }, h('h3', 'Pictures missing'), h('ul.how', lines),
+      h('button.btn', { type: 'button', id: 'photoGapsAdd', onclick: () => $('photosFile').click() }, 'Add photos…'),
+      h('p.help', 'A picture file for the farm photo; for varieties, your complete backup (.zip) or the plan folder’s thumbnails.json. Or drop them anywhere on the page. The plan is not replaced.')));
+  }
   function renderCleanup(host) {
     const eng = App.state.engine, todo = cleanupOf(eng);
     if (!todo.count) return;
@@ -127,7 +149,7 @@
     for (const x of todo.long) { const key = `${x.r.b.gardenId}|${x.want}|${x.cap}`; (sets.get(key) || sets.set(key, []).get(key)).push(x); }
     const total = sets.size + todo.groups.length;
     const section = h('section.insp-section.cleanup', h('h3', `To settle · ${total}`),
-      h('p.help', 'Ground booked twice, or plantings longer than their bed. They came in with the v7 plan or from a change to the assumptions. The map will not let you add to them.'));
+      h('p.help', 'Ground booked twice, or plantings longer than their bed. They came in with the plan, or follow from a change to the assumptions. Each has a fix in one click; the map will not let you add to them.'));
     const run = (label, ops) => { if (App.commit(label, ops)) UI.toast(label, { label: 'Undo', run: App.undo }); };
     const action = (label, detail, onclick) => h('button.fix-btn', { type: 'button', onclick }, h('b', label), detail ? h('small', detail) : null);
 
@@ -138,9 +160,9 @@
       const mates = App.state.plan.beds.filter(b => b.gardenId === r.b.gardenId && b.active !== false && eng.isSoilBed(b)), uniform = eng.isSoilBed(r.b) && mates.every(b => eng.capOf(b) === cap);
       return h('div.fix',
         h('button.fix-title', { type: 'button', onclick: () => { App.setDate(list[0].r.field); App.select({ type: 'planting', id: list[0].p.id }); } }, garden.name || 'Garden'),
-        h('p', `${n} planting${n === 1 ? ' is' : 's are'} ${num(want, 1)} ${unit} long in ${num(cap, 1)}-${unit} ${n === 1 ? 'space' : 'beds'}.`),
+        h('p', tooLong(eng, list)),
         h('div.fix-actions',
-          action(`Make ${n === 1 ? 'it' : 'them'} ${num(cap, 1)} ${unit}`, 'Plant counts follow the shorter length', () => run(`Fit ${n} planting${n === 1 ? '' : 's'} to ${n === 1 ? 'its bed' : 'their beds'}`, Rails.trimOps(eng, list))),
+          action(`Make ${n === 1 ? 'it' : 'them'} ${num(cap, 1)} ${unit}`, unit === 'ft' ? 'Plant counts follow the shorter length' : '', () => run(`Fit ${n} planting${n === 1 ? '' : 's'} to ${n === 1 ? 'its bed' : 'their beds'}`, Rails.trimOps(eng, list))),
           uniform ? action(`The beds are ${num(want, 1)} ft`, `Lengthens all ${mates.length} beds in ${garden.name}`, () => { if (App.updateBeds(mates.map(b => b.id), { l: want }, `Set ${garden.name} beds to ${num(want, 1)} ft`)) UI.toast(`${garden.name} beds are now ${num(want, 1)} ft`, { label: 'Undo', run: App.undo }); }) : null));
     });
     // Two crops booked into the same ground.
@@ -180,6 +202,7 @@
     add(host, h('header.insp-head', h('p.eyebrow', `${plan.settings.farm || 'Farm'} · ${App.planYear()} season`), h('h2', 'Plan overview')),
       h('div.stats', stat('Plantings', num(plan.plantings.length)), stat('Growing spaces', num(plan.beds.filter(b => b.active !== false && !App.state.engine.isPool(b)).length)), ground));
     renderNewer(host);
+    renderPhotos(host);
     renderCleanup(host);
     add(host, h('section.insp-section.howto', h('h3', 'On the map'),
       h('ul.how',
@@ -457,6 +480,7 @@
     host.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.closest('.p-row')) open(e); });
     App.on('plan', render);
     App.on('sel', render);
+    App.on('photos', render);
     App.on('view', () => { if (stale) render(); });
     App.on('date', () => {
       const sel = App.state.sel, ground = $('statGround');

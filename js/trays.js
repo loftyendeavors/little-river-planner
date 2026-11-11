@@ -2,7 +2,7 @@
  *
  * The records are v7's own, so either planner reads what the other saved: a demand plan in
  * `liveTrayPlans` (crops, days to ready, price, trays a week in spring, summer and fall), and one
- * ordinary planting per crop per week, filed under the shared heated-bench space. The schedule and
+ * ordinary planting per crop per week, filed under the heated greenhouse benches. The schedule and
  * the way a saved plan is turned into plantings follow v7.16.172's live-trays module line for line;
  * tests/trays_test.cjs runs the two side by side.
  *
@@ -78,6 +78,10 @@
     }
     return { plan: p, batches, weeks, trays: sum(batches, b => b.trays), revenue: sum(batches, b => b.revenue), firstSow: batches.map(b => b.sow).sort()[0] || null };
   }
+  // The stand-in garden live trays are filed under. v7 named it "Shared heated space"; the grower calls it the heated greenhouse benches.
+  const POOL_NAME = 'Heated greenhouse benches', POOL_NAME_V7 = 'Shared heated space';
+  /** That garden's record under its present name, or null when there is nothing to rename. A name the grower gave it himself is left alone. */
+  const poolRenamed = g => (g && g.liveTrayPool === true && g.name === POOL_NAME_V7 ? { ...g, name: POOL_NAME } : null);
   /** Has work been recorded on this batch? Such a batch is history and is never regenerated or removed with its plan. */
   function locked(plan, p, records) {
     const harvests = (records && records.harvests) || plan.harvests, picks = ((records && records.fieldRecords) || plan.fieldRecords || {}).picks;
@@ -100,10 +104,10 @@
     if (done.length && !options.keepRecorded) throw Error('This plan contains recorded work. Keep those batches intact; create a separate demand plan for new weeks.');
     plan.id = (prior && prior.id) || uid();
     let garden = state.gardens.find(g => g.liveTrayPool === true), bed = state.beds.find(b => b.liveTrayPool === true);
-    if (bed && (!garden || bed.gardenId !== garden.id)) throw Error('Review the shared heated-space destination before continuing.');
-    if (!garden) { garden = { id: uid(), name: 'Shared heated space', type: 'greenhouse', active: true, frost: false, dtmFactor: 1, curveMode: 'flat', gapMode: 'none', liveTrayPool: true, growingEnvironment: { v: 1, kind: 'heated', minTempF: null } }; state.gardens.push(garden); }
+    if (bed && (!garden || bed.gardenId !== garden.id)) throw Error('Review the heated greenhouse benches record before continuing.');
+    if (!garden) { garden = { id: uid(), name: POOL_NAME, type: 'greenhouse', active: true, frost: false, dtmFactor: 1, curveMode: 'flat', gapMode: 'none', liveTrayPool: true, growingEnvironment: { v: 1, kind: 'heated', minTempF: null } }; state.gardens.push(garden); }
     if (!bed) { bed = { id: uid(), gardenId: garden.id, bed: 'Live trays · shared benches', type: 'Bench', trays: 0, w: 0, l: 0, orient: '', active: true, px: null, liveTrayPool: true, note: 'Uses existing heated nursery benches; adds no physical capacity.' }; state.beds.push(bed); }
-    if (garden.active === false || bed.active === false) throw Error('The shared heated-space destination is inactive. Reactivate it before planning trays.');
+    if (garden.active === false || bed.active === false) throw Error('The heated greenhouse benches are set inactive. Reactivate them before planning trays.');
     const crops = new Map();
     for (const r of plan.rows) {
       let c = r.cropId && crop ? crop(r.cropId) : null;
@@ -192,5 +196,5 @@
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  return { draft, validate, schedule, locked, apply, remove, ops, batches, weeks, byCrop, monday, mondayOnOrAfter, add, short, norm, SEASONS };
+  return { POOL_NAME, POOL_NAME_V7, poolRenamed, draft, validate, schedule, locked, apply, remove, ops, batches, weeks, byCrop, monday, mondayOnOrAfter, add, short, norm, SEASONS };
 });

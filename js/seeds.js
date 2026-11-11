@@ -127,7 +127,7 @@
       refresh();
     }, 'small'));
     const start = data.start || { basis: 'unspecified', statement: '' };
-    add(startNote, start.statement ? h('span', `${start.source || 'Supplier page'}: “${start.statement}”`) : h('span', 'The page does not say where its days are counted from.'),
+    add(startNote, start.statement ? h('span', `${start.source || 'Supplier page'}: “${start.statement}”`) : h('span', 'The page does not say where its days start.'),
       start.conditional ? h('b', ' It gives a rule per use, so choose.') : null);
     const photo = data.images && data.images[0] ? h('img.sd-photo', { src: data.images[0].url, alt: '', referrerPolicy: 'no-referrer', loading: 'lazy', onerror: e => { const note = e.target.nextElementSibling; if (note && note.classList.contains('sd-photo-note')) note.remove(); e.target.remove(); } }) : null;
 
@@ -139,7 +139,7 @@
           newCropBox, matchBox,
           h('h3', 'Days to maturity'),
           printed ? h('p.sd-evidence', h('span', `The page prints: “${printed}”`), stageButtons.length ? h('span.sd-stages', stageButtons) : null) : h('p.sd-evidence', 'No days to maturity were found on the page.'),
-          h('div.sd-grid', fld('Earliest day', dtmMin), fld('Latest day', dtmMax), fld('Counted from', basisSel), fld('Harvest stage', stageSel)),
+          h('div.sd-grid', fld('Earliest day', dtmMin), fld('Latest day', dtmMax), fld('Days start at', basisSel), fld('Harvest stage', stageSel)),
           startNote, planLine,
           h('h3', 'Growing and seed'),
           h('div.sd-grid',
@@ -148,7 +148,7 @@
             fld('Days in nursery', numIn('nurseryDays', exact(nursery), { max: 728 }), nursery ? `Page: ${nursery.min === nursery.max ? nursery.min : nursery.min + '–' + nursery.max} days` : 'Empty uses the crop’s'),
             fld('Germination (%)', numIn('germ', f.germinationPercent, { max: 100 }), 'Empty uses the plan’s'),
             fld('Seeds per packet', numIn('seedsPerPacket', f.seedsPerPacket, { min: 1 })), fld('Seeds per ounce', numIn('seedsPerOz', f.seedsPerOz, { min: 1 }), f.seedsPerLb ? `Page: ${num(f.seedsPerLb)} per lb` : null))),
-        h('aside.sd-side', photo, photo ? h('p.dlg-hint.sd-photo-note', 'Shown from the supplier’s site. Photos are not saved with the variety yet.') : null,
+        h('aside.sd-side', photo, photo ? h('p.dlg-hint.sd-photo-note', 'Kept with the variety when it is saved.') : null,
           (data.warnings || []).length ? h('ul.sd-warn', data.warnings.map(w => h('li', w))) : null,
           h('p.dlg-hint', `${data.extraction || 'Read'}${(data.refined || []).length ? ' · corrected here: ' + data.refined.map(k => (k === 'maturity' ? 'days' : 'starting point')).join(', ') : ''}`))),
       h('details.sd-all', h('summary', `Everything read from the page (${(data.specifications || []).length} details, ${(data.prices || []).length} prices)`),
@@ -203,6 +203,9 @@
         if (!crop) throw new Error('Choose the crop this variety belongs to.');
         if (o.dtmMin && crop.method === 'TP' && o.basis === 'unspecified' && !(await UI.confirm({ title: 'Save without a starting point?', confirmLabel: 'Save anyway', body: `${crop.name} is transplanted, and the page’s ${o.dtmMin} days could be counted from seeding or from transplanting. Those differ by the whole nursery time. ${planLine.textContent}` }))) return;
         const { saved, after } = candidate(o, crop);
+        // The page's first product picture is the variety's photo. One it already has is left alone.
+        const picture = data.images && data.images[0] && data.images[0].url;
+        if (picture && /^https:\/\//i.test(picture) && !(saved && saved.photo)) after.photo = { sourceUrl: picture, sourcePage: data.url || after.url || '', credit: after.supplier || after.source || '', importedAt: new Date().toISOString() };
         ops.push({ kind: 'variety', before: saved || null, after });
         const label = saved ? `Update ${after.name} from its supplier page` : `Add ${after.name} to the library`;
         if (!(await App.revise(label, ops))) return;
@@ -211,8 +214,7 @@
         d.close();
         if (!kept) toast(`${after.name} is saved. This view has nowhere to keep the page text itself, so a backup made here will carry the variety without it.`);
         ui.query = ''; $('sdSearch').value = ''; ui.filter = 'all'; if (ui.tab === 'crops') ui.tab = 'list'; ui.closed.delete(after.cropId); ui.sel = { type: 'variety', id: after.id }; schedule();
-        const picture = data.images && data.images[0] && data.images[0].url;
-        if (picture && serviceReady() && !T.get(after.id)) Reader.fetchImage(picture, service()).then(blob => T.make(blob)).then(uri => App.keepThumb(after.id, uri)).catch(() => { /* the variety is saved; it just has no photo */ });
+        if (!T.get(after.id)) App.rebuildThumbs([after.id]);   // fetched and kept when it can be; shown from the supplier's site until then
       } catch (error) { d.say(error.message || 'That could not be saved.', 'bad'); }
     }
   }
@@ -235,7 +237,7 @@
         h('label.fld.span2', h('span', 'Product page'), inp('url', v.url, { type: 'text', inputMode: 'url', spellcheck: false }))),
       h('h3', 'Days to maturity'),
       h('div.sd-grid', fld('Supplier’s earliest day', numIn('dtmMin', v.catalogDtm, { min: 1, max: 3650, step: 1 })), fld('Supplier’s latest day', numIn('dtmMax', v.catalogDtmMax, { min: 1, max: 3650, step: 1 })),
-        fld('Counted from', sel('basis', BASIS_OPTIONS, v.catalogMaturityBasis || 'unspecified')), fld('Harvest stage', sel('stage', STAGE_OPTIONS, v.catalogHarvestStage || 'unspecified')),
+        fld('Days start at', sel('basis', BASIS_OPTIONS, v.catalogMaturityBasis || 'unspecified')), fld('Harvest stage', sel('stage', STAGE_OPTIONS, v.catalogHarvestStage || 'unspecified')),
         hasSupplierDays ? null : fld('Your own days to harvest', numIn('dtm', v.dtm, { min: 1, max: 3650, step: 1 }), 'From the day it goes in the bed. Use this or the supplier’s days.')),
       evidence, planLine,
       h('h3', 'Growing and seed'),
@@ -255,7 +257,7 @@
       if (d.closed || !record) return;
       const w = record.webImport || {}, s = Reader.maturityStatement({ url: v.url, sourceText: record.catalogSourceText || w.sourceText || '', specifications: w.specifications || [] });
       const printed = w.evidence && w.evidence.maturity && w.evidence.maturity.value ? String(w.evidence.maturity.value).slice(0, 120) : '';
-      add(clear(evidence), printed ? h('span', `The page printed: “${printed}”. `) : null, s.statement ? h('span', `${s.source}: “${s.statement}”`) : h('span', 'Its saved page does not say where the days are counted from.'),
+      add(clear(evidence), printed ? h('span', `The page printed: “${printed}”. `) : null, s.statement ? h('span', `${s.source}: “${s.statement}”`) : h('span', 'Its saved page does not say where the days start.'),
         s.basis !== 'unspecified' && s.basis !== val(form, 'basis') ? button(`Set to ${BASIS_TEXT[s.basis]}`, () => { form.elements.basis.value = s.basis; refresh(); }, 'small') : null);
     }).catch(() => {});
 
@@ -370,6 +372,7 @@
           if (s.base && !Reader.serviceBase(s.base)) { d.say('That is not a complete https address.', 'bad'); return; }
           if (!keepService(s.base || s.key ? s : null)) { d.say('This browser would not keep them. Its storage may be switched off.', 'bad'); return; }
           d.close(); toast(s.base && s.key ? 'Link reader saved in this browser.' : 'Link reader cleared.'); schedule();
+          if (s.base && s.key) App.rebuildThumbs();   // variety photos that could not be fetched without it can be now
         }, 'primary'))));
   }
 
@@ -554,7 +557,7 @@
    * The variety column takes what is left and never less than NAME_MIN, so a narrow window loses the columns
    * that say least (supplier, then the count of plantings, the first sowing date, the vendor size) before it loses names.
    */
-  const LIST_COLS = [['name', 'Variety'], ['sup', 'Supplier', 0, 122, 1], ['days', 'Days', 1, 84], ['from', 'Counted from', 0, 124], ['tosow', 'To sow', 1, 88],
+  const LIST_COLS = [['name', 'Variety'], ['sup', 'Supplier', 0, 122, 1], ['days', 'Days', 1, 84], ['from', 'Days start at', 0, 124], ['tosow', 'To sow', 1, 88],
     ['hand', 'On hand', 1, 130], ['short', 'Short', 1, 62], ['size', 'Vendor size', 1, 134, 4], ['first', 'First sow', 1, 84, 3], ['uses', 'Plantings', 1, 84, 2]];
   const NAME_MIN = 190;
   function listCols() {
@@ -579,9 +582,9 @@
         name: () => h('td', h('div.sd-cell', T.el({ varietyId: v.id, color: crop && eng.cropColor(crop), label: v.name, size: 34 }), h('span.sd-name', h('span.as-vname', v.name), flat ? h('small', cropName(crop)) : null))),
         sup: () => h('td.sd-sup', supplierShort(v) || (v.source === 'Farm entry' ? 'By hand' : ''), site ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer', title: `${v.sku ? v.sku + ' · ' : ''}open the page on ${site}` }, ' ↗') : null),
         days: () => h('td.sd-num.sd-days', daysText(v) || '—', stage ? h('small', stage) : null),
-        from: () => v.catalogDtm ? h('td.sd-from' + (basis === 'unspecified' ? '.sd-open' : ''), sel('from', BASIS_SHORT, basis, { 'aria-label': `${v.name}: days counted from`, onchange: async e => {
+        from: () => v.catalogDtm ? h('td.sd-from' + (basis === 'unspecified' ? '.sd-open' : ''), sel('from', BASIS_SHORT, basis, { 'aria-label': `${v.name}: days start at`, onchange: async e => {
           const value = e.target.value;
-          if (!(await App.revise(`${v.name}: days counted from ${BASIS_TEXT[value]}`, [{ kind: 'variety', before: v, after: { ...v, catalogMaturityBasis: value, catalogSourceChoice: v.catalogSourceChoice || 'url' } }]))) schedule();
+          if (!(await App.revise(`${v.name}: days start at ${BASIS_TEXT[value]}`, [{ kind: 'variety', before: v, after: { ...v, catalogMaturityBasis: value, catalogSourceChoice: v.catalogSourceChoice || 'url' } }]))) schedule();
         } })) : h('td.sd-from', v.dtm > 0 ? h('small', 'the day it goes in') : ''),
         tosow: () => h('td.sd-num', r && r.toSow > 0 ? amount(r) : ''),
         hand: () => stockCell(r, v.name),
@@ -701,7 +704,7 @@
         h('div.sd-stats', stat('Varieties', num(m.live.length), `${m.live.filter(v => m.used.has(v.id)).length} planted`), stat('To sow', num(seeds), 'seeds'), stat('Short', num(short), 'varieties')),
         onOrder ? h('button.sd-task.plain', { type: 'button', id: 'sdReceiveAll', onclick: receiveAll }, h('b', `Seed for ${onOrder} variet${onOrder === 1 ? 'y' : 'ies'} is on order`), h('span', 'When the box comes, click an order in the list to count it as on hand, or click here to mark every order as arrived.')) : null,
         m.unlisted.length ? unlistedBox(m) : null,
-        open ? h('button.sd-task', { type: 'button', onclick: () => { ui.filter = 'open'; ui.tab = 'list'; schedule(); } }, h('b', `${open} variet${open === 1 ? 'y has' : 'ies have'} supplier days with no starting point`), h('span', 'For a transplanted crop that can move the harvest by the whole nursery time. Set each one in the “Counted from” column.')) : null,
+        open ? h('button.sd-task', { type: 'button', onclick: () => { ui.filter = 'open'; ui.tab = 'list'; schedule(); } }, h('b', `${open} variet${open === 1 ? 'y has' : 'ies have'} supplier days with no starting point`), h('span', 'For a transplanted crop that can move the harvest by the whole nursery time. Set each one in the “Days start at” column.')) : null,
         h('p.dlg-hint', 'Click a variety to see and edit it here. With a row in focus, ↑ and ↓ move between varieties and Enter jumps to its first field.'),
         h('p.dlg-hint', serviceReady() ? 'Link reader is set in this browser.' : 'Reading a variety from a supplier link needs the link reader set up. Pasting a page works without it.'));
       return;
@@ -784,7 +787,124 @@
     if (downloads) Promise.resolve(downloads).then(dl => dl.save({ filename, data: blob })).catch(error => { if (!error || error.code !== 'declined') fallback(); }); else fallback();
   }
 
+  // ───────────────────────── a seed lot in one line ─────────────────────────
+  // Vendor, variety, year, amount: Enter saves. The variety is found as it is typed; one that is not in the library yet asks
+  // for its crop and is added with the lot, in the same step. The line is built once and reads the plan as it is used.
+  const quick = { varietyId: '', hits: [], at: 0, open: false, status: 'usable' };
+  function initQuick() {
+    const host = $('sdQuick');
+    if (!host) return;
+    const eng = () => App.state.engine, live = () => App.state.plan.varieties.filter(v => v.active !== false && !v.deleted);
+    const vendor = h('input', { id: 'qlVendor', type: 'text', placeholder: 'Vendor', autocomplete: 'off', spellcheck: false, 'aria-label': 'Vendor', list: 'qlVendors' }), vendors = h('datalist', { id: 'qlVendors' });
+    const name = h('input', { id: 'qlVariety', type: 'text', placeholder: 'Variety', autocomplete: 'off', spellcheck: false, role: 'combobox', 'aria-label': 'Variety', 'aria-autocomplete': 'list', 'aria-expanded': 'false', 'aria-controls': 'qlList' });
+    const tag = h('span.ql-tag'), listbox = h('ul.ql-list', { id: 'qlList', role: 'listbox', hidden: true });
+    const cropPick = h('select', { id: 'qlCrop', hidden: true, 'aria-label': 'Crop of the new variety' });
+    const year = h('input', { id: 'qlYear', type: 'number', min: 1900, max: 2200, step: 1, placeholder: 'Year', title: 'The year the seed was packed for, or bought', 'aria-label': 'Year', value: new Date().getFullYear() });
+    const amount = h('input', { id: 'qlAmount', type: 'number', min: 0, step: 1, placeholder: 'Seeds', 'aria-label': 'Amount' }), unitWord = h('span.ql-unit', 'seeds');
+    const where = h('div.seg.ql-where', { role: 'group', 'aria-label': 'Where the seed is' }, [['usable', 'On hand'], ['ordered', 'Ordered']].map(([id, label]) =>
+      h('button', { type: 'button', 'aria-pressed': String(quick.status === id), dataset: { where: id }, onclick: () => { quick.status = id; for (const b of where.children) b.setAttribute('aria-pressed', String(b.dataset.where === id)); } }, label)));
+    const say = h('p.ql-say', { id: 'qlSay', role: 'status', 'aria-live': 'polite' });
+    const form = h('form.sd-quick-form', { novalidate: true, autocomplete: 'off', onsubmit: e => { e.preventDefault(); save(); } },
+      h('span.ql-label', 'Add a seed lot'), vendor, vendors,
+      h('div.ql-combo', name, tag, listbox), cropPick, year, h('label.ql-amount', amount, unitWord), where,
+      h('button.btn', { type: 'submit', id: 'qlAdd' }, 'Add'));
+    add(host, form, say);
+
+    const picked = () => (quick.varietyId ? eng().variety(quick.varietyId) : null);
+    const stockUnitOf = v => { const crop = eng().crop(v.cropId), stock = App.stockNow(); return SL.STOCK_UNITS.find(u => stock['v:' + v.id + '|' + u]) || unitFor(crop); };
+    const typedMatch = () => { const key = SL.norm(name.value); return key ? live().filter(v => SL.norm(v.name) === key) : []; };
+    function unit() { const v = picked(); return v ? stockUnitOf(v) : unitFor(cropPick.value ? eng().crop(cropPick.value) : null); }
+    function sync() {
+      const v = picked(), u = unit(), fresh = !v && !!name.value.trim() && !typedMatch().length && !quick.open;
+      tag.textContent = v ? cropName(eng().crop(v.cropId)) : '';
+      form.classList.toggle('has-pick', !!v);
+      cropPick.hidden = !fresh;
+      if (fresh && !cropPick.options.length) add(cropPick, h('option', { value: '' }, 'Crop of this new variety…'), sortedCrops().map(c => h('option', { value: c.id }, c.name)));
+      unitWord.textContent = u === 'g' ? 'grams' : u; amount.placeholder = u === 'g' ? 'Grams' : u === 'plants' ? 'Plants' : 'Seeds'; amount.step = u === 'g' ? 'any' : 1;
+    }
+    /** Varieties that fit what is typed: every word found in the name, crop or supplier; names that start with it first, the typed vendor's own first among equals. */
+    function find(text) {
+      const words = SL.norm(text).split(' ').filter(Boolean), want = SL.supplierKey(vendor.value), q = SL.norm(text);
+      if (!words.length) return [];
+      const out = [];
+      for (const v of live()) {
+        const crop = eng().crop(v.cropId), n = SL.norm(v.name), hay = `${n} ${SL.norm(cropName(crop))} ${SL.norm(v.supplier || v.source || '')} ${SL.norm(v.sku || '')}`;
+        if (!words.every(w => hay.includes(w))) continue;
+        const rank = (n === q ? 0 : n.startsWith(q) ? 1 : n.split(' ').some(part => part.startsWith(words[0])) ? 2 : 3) * 2 + (want && SL.supplierKey(v.supplier || v.source || '') === want ? 0 : 1);
+        out.push({ v, crop, rank });
+      }
+      return out.sort((a, b) => a.rank - b.rank || String(a.v.name).localeCompare(String(b.v.name))).slice(0, 8);
+    }
+    function show() {
+      const text = name.value.trim();
+      quick.hits = find(text);
+      const exact = quick.hits.some(x => SL.norm(x.v.name) === SL.norm(text));
+      const rows = quick.hits.map((x, i) => h('li', { role: 'option', id: 'qlOpt' + i, 'aria-selected': String(i === quick.at), dataset: { at: i } },
+        T.el({ varietyId: x.v.id, color: eng().cropColor(x.crop), label: x.v.name, size: 22 }), h('b', x.v.name), h('span', cropName(x.crop)), h('small', supplierShort(x.v))));
+      if (text && !exact) rows.push(h('li.ql-new', { role: 'option', id: 'qlOpt' + quick.hits.length, 'aria-selected': String(quick.at === quick.hits.length), dataset: { at: quick.hits.length } }, h('b', `New variety: ${text}`), h('span', 'choose its crop next')));
+      quick.open = rows.length > 0;
+      if (quick.at >= rows.length) quick.at = 0;
+      clear(listbox); add(listbox, rows);
+      for (const li of listbox.children) li.setAttribute('aria-selected', String(+li.dataset.at === quick.at));
+      listbox.hidden = !quick.open; name.setAttribute('aria-expanded', String(quick.open));
+      if (quick.open) name.setAttribute('aria-activedescendant', 'qlOpt' + quick.at); else name.removeAttribute('aria-activedescendant');
+    }
+    function shut() { quick.open = false; listbox.hidden = true; name.setAttribute('aria-expanded', 'false'); name.removeAttribute('aria-activedescendant'); }
+    function choose(i) {
+      const hit = quick.hits[i];
+      shut();
+      if (hit) {
+        quick.varietyId = hit.v.id; name.value = hit.v.name;
+        if (!vendor.value.trim()) vendor.value = hit.v.supplier || (hit.v.source === 'Farm entry' ? '' : hit.v.source) || '';
+        sync(); say.textContent = ''; (year.value ? amount : year).focus();
+      } else { quick.varietyId = ''; sync(); cropPick.focus(); }   // a new variety: its crop is asked for next
+    }
+    name.addEventListener('input', () => { quick.varietyId = ''; quick.at = 0; say.textContent = ''; show(); sync(); });
+    name.addEventListener('focus', () => { if (!quick.varietyId && name.value.trim()) { show(); sync(); } });
+    name.addEventListener('keydown', e => {
+      const n = listbox.children.length;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!quick.open) { show(); return; } quick.at = (quick.at + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; show(); const on = listbox.children[quick.at]; if (on) on.scrollIntoView({ block: 'nearest' }); }
+      else if (e.key === 'Enter' && quick.open) { e.preventDefault(); choose(quick.at); }
+      else if (e.key === 'Escape' && quick.open) { e.stopPropagation(); shut(); sync(); }
+    });
+    // leaving the field with a name typed in full is choosing it, when only one variety has that name
+    name.addEventListener('blur', () => setTimeout(() => { if (form.contains(document.activeElement) && document.activeElement === name) return; if (!quick.varietyId) { const same = typedMatch(); if (same.length === 1) { quick.varietyId = same[0].id; name.value = same[0].name; if (!vendor.value.trim()) vendor.value = same[0].supplier || ''; } } shut(); sync(); }, 120));
+    listbox.addEventListener('pointerdown', e => { const li = e.target.closest('li'); if (li) { e.preventDefault(); choose(+li.dataset.at); } });
+    cropPick.addEventListener('change', () => { sync(); say.textContent = ''; if (cropPick.value) (year.value ? amount : year).focus(); });
+    vendor.addEventListener('focus', () => {
+      const seen = new Map();
+      for (const s of [...live().map(v => v.supplier || (v.source === 'Farm entry' ? '' : v.source) || ''), ...((App.inventoryNow().lots || []).map(l => (l && l.supplier) || ''))]) { const key = SL.supplierKey(s); if (key && !/\.[a-z]{2,}$/i.test(s.trim()) && !seen.has(key)) seen.set(key, s.trim()); }
+      clear(vendors); add(vendors, [...seen.values()].sort((a, b) => a.localeCompare(b)).map(v => h('option', { value: v })));
+    });
+
+    function save() {
+      if (App.isSample()) { say.textContent = 'This is the sample plan. Load your own first.'; return; }
+      if (quick.open && quick.hits.length && !quick.varietyId) { choose(quick.at); return; }
+      if (!quick.varietyId) { const same = typedMatch(); if (same.length === 1) quick.varietyId = same[0].id; else if (same.length > 1) { say.textContent = `${same.length} varieties are called ${name.value.trim()}. Choose one from the list.`; name.focus(); show(); return; } }
+      const ctx = { now: new Date().toISOString(), uid: App.uid, year: App.planYear(), name: '' }, before = App.state.plan.seedInventory || null;
+      let done;
+      try { done = SL.quickLot(App.state.plan, App.inventoryNow(), { varietyId: quick.varietyId, name: name.value, cropId: cropPick.value, vendor: vendor.value, year: year.value, quantity: amount.value, unit: unit(), status: quick.status }, ctx); }
+      catch (error) {
+        say.textContent = error.message || 'That lot could not be added.';
+        const el = /crop/i.test(say.textContent) && !quick.varietyId && name.value.trim() ? cropPick : /Variety/.test(say.textContent) ? name : /year/i.test(say.textContent) ? year : amount;
+        if (el === cropPick) { shut(); sync(); }
+        el.focus();
+        return;
+      }
+      const v = done.variety, u = done.unit, what = `${num(done.lot.quantity, u === 'g' ? 1 : 0)} ${u === 'g' ? 'g' : u} of ${v.name}`, state = quick.status === 'ordered' ? 'on order' : 'on hand';
+      const ops = [...(done.added ? [{ kind: 'variety', before: null, after: done.added }] : []), { kind: 'inventory', before, after: done.inventory }];
+      if (!App.commit(`${what} ${state}`, ops, { unchecked: true })) { say.textContent = 'That lot could not be added.'; return; }
+      toast(`${what} ${state}${done.added ? `. ${v.name} was added to the library under ${cropName(eng().crop(v.cropId))}` : ''}`, { label: 'Undo', run: App.undo });
+      // ready for the next packet: vendor, year and where it is stay; the list shows the variety just added to
+      quick.varietyId = ''; name.value = ''; amount.value = ''; cropPick.value = ''; say.textContent = ''; shut(); sync();
+      ui.query = ''; $('sdSearch').value = ''; ui.filter = 'all'; if (ui.tab === 'crops') ui.tab = 'list'; ui.closed.delete(v.cropId); ui.sel = { type: 'variety', id: v.id }; ui.panelKey = ''; schedule();
+      name.focus();
+    }
+    sync();
+  }
+
   function init() {
+    initQuick();
     for (const b of document.querySelectorAll('[data-sd-tab]')) b.addEventListener('click', () => { ui.tab = b.dataset.sdTab; if (ui.tab === 'crops' && ui.sel && ui.sel.type === 'variety') ui.sel = null; schedule(); });
     $('sdSearch').addEventListener('input', e => { ui.query = e.target.value; schedule(); });
     // the list drops and regains columns as its room changes
@@ -796,5 +916,5 @@
     App.on('plan', () => { ui.rev++; schedule(); }); App.on('view', schedule);
     document.addEventListener('keydown', e => { if (e.key === '/' && App.state.view === 'seeds' && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') && !document.querySelector('dialog[open]')) { e.preventDefault(); $('sdSearch').focus(); } });
   }
-  root.LRFSeeds = { init, openImporter, openVariety, openCrop, openSettings, service, planningLine, select };
+  root.LRFSeeds = { init, openImporter, openVariety, openCrop, openSettings, service, serviceReady, planningLine, select };
 })(window);
