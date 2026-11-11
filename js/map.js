@@ -131,8 +131,87 @@
   const boxOf = (geo, f) => { const k = geo.L / geo.ft, a1 = Math.min(f.a1, geo.ft); return { x: geo.W * (f.x0 - 0.5), y: geo.L / 2 - a1 * k, w: geo.W * (f.x1 - f.x0), h: Math.max(0, a1 - f.a0) * k }; };
   const tint = hex => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || ''); if (!m) return hex; const to = [244, 241, 230]; return '#' + [1, 2, 3].map((i, n) => Math.round(parseInt(m[i], 16) * 0.58 + to[n] * 0.42).toString(16).padStart(2, '0')).join(''); };
 
+  // ── the whole season at once ──
+  // "Whole season" shows, in every space, everything it grows this year: one band per crop, first crop first, each band as
+  // large as its share of the ground and the days it holds it. A tower is a pie; pots and crates are counted out.
+  let wholeSeason = false;
+  /** What a space grows over the plan's year: runs of one crop in the order they go in (pots and crates: one entry per crop). */
+  function seasonOf(eng, bed) {
+    const y0 = new Date(App.planYear(), 0, 1), y1 = new Date(App.planYear(), 11, 31), cap = eng.capOf(bed) || 1, byCrop = eng.isCt(bed) || eng.isRack(bed), runs = [];
+    const items = eng.plantingsIn(bed.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).sort((a, b) => a.r.field - b.r.field || String(a.p.id).localeCompare(String(b.p.id)));
+    for (const { p, r } of items) {
+      const through = eng.occupancyThrough(p, r), from = eng.occupancyFrom(p, r) < y0 ? y0 : eng.occupancyFrom(p, r), to = through === Infinity || through > y1 ? y1 : through, days = E.dayDiff(to, from) + 1;
+      if (days <= 0) continue;
+      const share = r.tw ? 1 : Math.min(1, Math.max(0.02, (r.len || cap) / cap));
+      let run = byCrop ? runs.find(x => x.c.id === r.c.id) : runs.length && runs[runs.length - 1].c.id === r.c.id ? runs[runs.length - 1] : null;
+      if (!run) runs.push(run = { c: r.c, weight: 0, list: [], from: r.field, first: r.first, last: r.last, varieties: new Set() });
+      run.weight += days * share; run.list.push(p);
+      if (r.c.vname) run.varieties.add(r.c.vname);
+      if (r.first < run.first) run.first = r.first;
+      if (r.last > run.last) run.last = r.last;
+    }
+    const total = runs.reduce((n, x) => n + x.weight, 0) || 1;
+    for (const run of runs) run.part = run.weight / total;
+    return runs;
+  }
+  const wedge = (r, a0, a1) => { const at = a => `${r * Math.sin(a)} ${-r * Math.cos(a)}`; return `M0 0L${at(a0)}A${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${at(a1)}Z`; };
+  function paintSeason() {
+    const eng = App.state.engine, counts = new Map(), sel = App.state.sel, selPlanting = sel && sel.type === 'planting' ? sel.id : null;
+    for (const item of beds.values()) {
+      const { bed, geo, g, fills } = item, runs = seasonOf(eng, bed);
+      clear(fills); item.parts = []; item.status = eng.bedStatus(bed, App.state.date); item.season = runs;
+      const holdsSel = !!selPlanting && runs.some(x => x.list.some(p => p.id === selPlanting));
+      // where the bed's own starting end points on the page: down or right means the bands run from the other end
+      const turn = (geo.rot || 0) * Math.PI / 180, flip = -Math.sin(turn) + Math.cos(turn) > 0;
+      for (const id of new Set(runs.map(x => x.c.id))) counts.set(id, (counts.get(id) || 0) + 1);   // a space counts once for a crop, however often it returns
+      let at = 0;
+      runs.forEach((run, k) => {
+        const color = eng.cropColor(run.c), attrs = { fill: color, class: 'bed-fill pick season', 'data-crop': run.c.id }, name = run.c.name, a0 = at, a1 = k === runs.length - 1 ? 1 : at + run.part;
+        at = a1;
+        if (geo.shape === 'circle') {
+          fills.append(runs.length === 1 ? s('circle', { ...attrs, r: geo.W / 2 }) : s('path', { ...attrs, d: wedge(geo.W / 2, a0 * 2 * Math.PI, a1 * 2 * Math.PI) }));
+          if (runs.length === 1) item.parts.push({ id: `season-${k}`, name, short: String(bed.bed), w: geo.W, l: geo.L, cx: 0, cy: 0, along: false });
+          return;
+        }
+        if (geo.cells) {
+          const c = geo.cells, i0 = Math.round(a0 * c.count), i1 = Math.max(i0 + (k === runs.length - 1 ? 0 : 1), Math.round(a1 * c.count)), group = s('g', { 'data-crop': run.c.id });
+          for (let i = i0; i < Math.min(c.count, i1); i++) {
+            const x = -geo.W / 2 + (i % c.columns) * (c.w + c.gap), y = -geo.L / 2 + Math.floor(i / c.columns) * (c.l + c.gap);
+            group.append(c.round ? s('circle', { ...attrs, cx: x + c.w / 2, cy: y + c.l / 2, r: c.w * 0.46 }) : s('rect', { ...attrs, x: x + c.w * 0.04, y: y + c.l * 0.04, width: c.w * 0.92, height: c.l * 0.92, rx: c.w * 0.08 }));
+          }
+          fills.append(group);
+          if (runs.length === 1) item.parts.push({ id: `season-${k}`, name, w: geo.W, l: geo.L, cx: 0, cy: 0, along: geo.L >= geo.W });
+          return;
+        }
+        // a band along the bed: the first crop at the end nearer the top or left of the page, so every bed reads the same way
+        const hgt = geo.L * (a1 - a0), y = flip ? -geo.L / 2 + geo.L * a0 : geo.L / 2 - geo.L * a1;
+        fills.append(s('rect', { ...attrs, x: -geo.W / 2, y, width: geo.W, height: hgt }));
+        item.parts.push({ id: `season-${k}`, name, w: geo.W, l: hgt, cx: 0, cy: y + hgt / 2, along: hgt >= geo.W });
+      });
+      for (const part of item.parts) {
+        const base = geo.shape === 'circle' ? -geo.rot : upright(geo.rot, part.along ? -90 : 0);
+        part.el = s('text.bed-label', { transform: `translate(${part.cx} ${part.cy}) rotate(${base})`, 'text-anchor': 'middle', 'dominant-baseline': 'central' });
+        fills.append(part.el);
+      }
+      item.planted = runs.length > 0;
+      g.setAttribute('class', ['bed', geo.shape === 'circle' ? 'tower' : geo.shape === 'cells' ? 'pots' : '', runs.length ? 'is-planted' : 'is-empty',
+        highlightCrop && !runs.some(x => x.c.id === highlightCrop) ? 'dim' : '', sel && ((sel.type === 'bed' && sel.id === bed.id) || (sel.type === 'opening' && sel.bedId === bed.id)) ? 'sel' : '', holdsSel ? 'has-sel' : '', item.drop || ''].filter(Boolean).join(' '));
+    }
+    paintLegend(counts);
+    paintHandles();
+    scheduleLabels();
+  }
+  function setWholeSeason(on) {
+    wholeSeason = !!on; highlightCrop = null;
+    $('mapSeasonToggle').setAttribute('aria-pressed', String(wholeSeason));
+    $('mapView').classList.toggle('whole-season', wholeSeason);
+    $('mapBar').querySelector('.bar-title').textContent = wholeSeason ? 'Through the season' : 'In the ground';
+    hideTip(); paint();
+  }
+
   function paint() {
     if (!App.state.ready) return;
+    if (wholeSeason) { paintSeason(); return; }
     const eng = App.state.engine, date = App.state.date, counts = new Map(), sel = App.state.sel, selPlanting = sel && sel.type === 'planting' ? sel.id : null;
     for (const item of beds.values()) {
       const { bed, geo, g, fills } = item, status = eng.bedStatus(bed, date), cap = status.cap || 1;
@@ -192,10 +271,10 @@
     const eng = App.state.engine, host = clear($('mapLegend'));
     const rows = [...counts].map(([id, n]) => ({ c: eng.crop(id), n })).filter(x => x.c).sort((a, b) => (b.c.id === highlightCrop) - (a.c.id === highlightCrop) || b.n - a.n);
     $('mapBar').classList.toggle('empty', !rows.length);
-    if (!rows.length) { host.append(h('span.legend-empty', 'Nothing on this date')); fitLegend(); return; }
+    if (!rows.length) { host.append(h('span.legend-empty', wholeSeason ? 'Nothing planted this season' : 'Nothing on this date')); fitLegend(); return; }
     for (const { c, n } of rows) {
       const on = highlightCrop === c.id;
-      host.append(h('button.legend-chip' + (on ? '.on' : ''), { type: 'button', 'aria-pressed': String(on), title: on ? `Showing only ${c.name}. Click to show everything.` : `${c.name}: ${n} space${n === 1 ? '' : 's'}. Click to show only this crop.`,
+      host.append(h('button.legend-chip' + (on ? '.on' : ''), { type: 'button', 'aria-pressed': String(on), title: on ? `Showing only ${c.name}. Click to show everything.` : `${c.name}: ${n} space${n === 1 ? '' : 's'}${wholeSeason ? ' this season' : ''}. Click to show only this crop.`,
         onclick: () => { highlightCrop = on ? null : c.id; paint(); } },
         h('i', { style: { background: eng.cropColor(c) } }), h('span', c.name), h('b', n)));
     }
@@ -216,7 +295,7 @@
   // ── the selected planting: an outline and two ends to drag ──
   function selected() {
     const sel = App.state.sel, p = sel && sel.type === 'planting' ? App.state.engine.planting(sel.id) : null, item = p && beds.get(p.bedId);
-    const part = item && item.parts.find(x => x.id === p.id);
+    const part = !wholeSeason && item && item.parts.find(x => x.id === p.id);
     return part && part.f && item.geo.ft ? { p, item, part } : null;
   }
   function paintHandles(preview) {
@@ -398,6 +477,20 @@
     if (!item || !item.status) return;
     const { bed, status } = item, date = App.state.date, unit = eng.capUnit(bed), over = e.target.closest('[data-planting]');
     const nodes = [h('strong', App.bedLabel(bed)), h('span.tip-spec', eng.isSoilBed(bed) ? `${num(bed.w, 1)} × ${num(bed.l, 1)} ft` : `${num(status.cap)} ${unit}`)];
+    if (wholeSeason) {
+      // everything this space grows this year, in the order it goes in
+      const runs = item.season || [], on = e.target.closest('[data-crop]');
+      for (const run of runs.slice(0, 8)) {
+        const n = run.list.length, kinds = [...run.varieties], first = run.list[0];
+        nodes.push(h('div.tip-crop' + (on && on.dataset.crop === run.c.id ? '.on' : ''), root.LRFThumbs.el({ varietyId: kinds.length === 1 ? first.varietyId : null, cropId: run.c.id, color: eng.cropColor(run.c), label: run.c.name, size: 30, cls: 'key' }),
+          h('span', `${run.c.name}${kinds.length === 1 ? ' · ' + kinds[0] : kinds.length > 1 ? ` · ${kinds.length} varieties` : ''}`),
+          h('small', `${n > 1 ? `${n} plantings · ` : ''}in ${day(run.from)} · harvest ${span(run.first, run.last)}`)));
+      }
+      if (runs.length > 8) nodes.push(h('div.tip-free', `and ${runs.length - 8} more`));
+      if (!runs.length) nodes.push(h('div.tip-free', 'Nothing planned here this season'));
+      showTip(e, nodes);
+      return;
+    }
     const listed = status.crops.length > 6 && over ? status.crops.filter(r => r.planting.id === over.dataset.planting) : status.crops.slice(0, 6);
     for (const r of listed) {
       const f = eng.footprint(r.planting, r), where = f && r.partial ? ` · ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} ft${f.rows && f.rows.count < f.rows.total ? `, ${f.rows.count} of ${f.rows.total} rows` : ''}` : r.partial ? ` · ${num(r.len, 1)} ${unit}` : '';
@@ -469,14 +562,15 @@
     $('mapFit').addEventListener('click', () => fit());
     $('mapPhotoToggle').addEventListener('click', e => { layers.photo = !layers.photo; e.currentTarget.setAttribute('aria-pressed', layers.photo); build(); });
     $('mapLabelToggle').addEventListener('click', e => { layers.labels = !layers.labels; e.currentTarget.setAttribute('aria-pressed', layers.labels); updateLabels(); });
+    $('mapSeasonToggle').addEventListener('click', () => setWholeSeason(!wholeSeason));
     new ResizeObserver(() => { if (App.state.ready && !view.fitted) fit(); if (App.state.ready) fitLegend(); }).observe(svg);
     $('legendMore').addEventListener('click', () => { legendOpen = !legendOpen; fitLegend(); });
     App.on('plan', () => { $('mapSample').hidden = !App.isSample(); });
     App.on('plan', build);
-    App.on('date', paint);
+    App.on('date', () => { if (!wholeSeason) paint(); });   // the whole season does not depend on the day
     App.on('sel', () => { paint(); const sel = App.state.sel; if (sel && App.state.view === 'map') { const p = sel.type === 'planting' ? App.state.engine.planting(sel.id) : null; focusBed(p ? p.bedId : sel.type === 'opening' ? sel.bedId : sel.id); } });
     App.on('view', () => { if (App.state.view === 'map' && !view.fitted) requestAnimationFrame(() => fit()); });
   }
 
-  root.LRFMap = { init, targetAt, showDrop, fit, fitGarden };
+  root.LRFMap = { init, targetAt, showDrop, fit, fitGarden, wholeSeason: on => { if (on !== undefined) setWholeSeason(on); return wholeSeason; }, seasonOf };
 })(window);

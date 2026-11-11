@@ -11,7 +11,8 @@
  * crate space is one row per crop until a crop is opened to its plantings, and
  * live trays are one strip of trays standing each week.
  *
- * The scale is continuous. Every position is a day count multiplied by one
+ * The scale is continuous, set by the buttons above the chart (or Ctrl and the
+ * wheel); the plain wheel scrolls the rows. Every position is a day count multiplied by one
  * number (--ppd, pixels per day) in the style sheet, so zooming changes that
  * number and nothing is drawn again; only the labels are fitted again, by
  * measured width, so none is ever cut off.
@@ -30,7 +31,7 @@
   const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many || one + 's'}`;
 
   // ── what this browser remembers about the timeline: the filter, the scale, what is opened or shut ──
-  const prefs = { filter: 'all', ppd: 0, open: {}, shut: {}, openings: true, hinted: false };
+  const prefs = { filter: 'all', ppd: 0, open: {}, shut: {}, openings: true };
   function loadPrefs() {
     try {
       const kept = JSON.parse(root.localStorage.getItem(PREF_KEY) || 'null');
@@ -38,7 +39,7 @@
       if (FILTERS.some(f => f[0] === kept.filter)) prefs.filter = kept.filter;
       if (kept.ppd > 0 && kept.ppd <= MAX_PPD) prefs.ppd = +kept.ppd;
       for (const key of ['open', 'shut']) if (kept[key] && typeof kept[key] === 'object') prefs[key] = Object.fromEntries(Object.entries(kept[key]).filter(([, v]) => v === true));
-      prefs.openings = kept.openings !== false; prefs.hinted = kept.hinted === true;
+      prefs.openings = kept.openings !== false;
     } catch (_) { /* nothing remembered: the defaults stand */ }
   }
   let saveTimer = 0;
@@ -511,16 +512,15 @@
     const endPan = () => { if (pan && pan.moved) scroll.classList.remove('panning'); pan = null; };
     scroll.addEventListener('pointerup', endPan);
     scroll.addEventListener('pointercancel', endPan);
-    // The wheel over the chart changes the scale, about the day under the pointer. Over the names it scrolls the rows as anywhere else.
+    // The wheel scrolls the rows, as it always did, and with Shift it scrolls sideways: the browser's own behaviour, left alone.
+    // (He tried the wheel as the zoom in 0.17 and asked for this back.) Only Ctrl and the wheel, or a pinch, change the scale,
+    // about the day under the pointer.
     scroll.addEventListener('wheel', e => {
-      if (!inLanes(e)) return;
-      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? scroll.clientHeight : 1;
-      if (e.shiftKey && !e.ctrlKey) { e.preventDefault(); scroll.scrollLeft += (e.deltaY || e.deltaX) * unit; return; }
-      if (!e.ctrlKey && Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;   // a sideways swipe moves the chart sideways
+      if (!e.ctrlKey || !inLanes(e)) return;
       e.preventDefault();
-      const dy = Math.max(-240, Math.min(240, e.deltaY * unit));
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? scroll.clientHeight : 1, dy = Math.max(-240, Math.min(240, e.deltaY * unit));
       // several notches can arrive between two frames: they are added up and drawn once
-      wheel.factor *= Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0018)); wheel.x = e.clientX;
+      wheel.factor *= Math.exp(-dy * 0.0018); wheel.x = e.clientX;
       if (!wheel.frame) wheel.frame = requestAnimationFrame(() => { const f = wheel.factor; wheel.frame = 0; wheel.factor = 1; setScale(ppd * f, wheel.x); });
     }, { passive: false });
     scroll.addEventListener('click', e => {
@@ -568,7 +568,6 @@
         const first = settle();
         const x = xOf(App.state.date) - laneRoom() / 2;
         if (first && scroll.scrollLeft === 0 && x > 0) scroll.scrollLeft = x;
-        if (first && !prefs.hinted) { prefs.hinted = true; savePrefs(); UI.toast('The mouse wheel over the bars zooms in and out. Over the names it scrolls the rows. Hold and drag empty chart to move.'); }
       });
     });
   }

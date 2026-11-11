@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.17">
+<meta name="lrf-build" content="0.18">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -81,6 +81,7 @@
         <button type="button" class="icon-btn" id="mapZoomIn" aria-label="Zoom in">+</button>
         <button type="button" class="icon-btn" id="mapZoomOut" aria-label="Zoom out">−</button>
         <button type="button" class="tool-btn" id="mapFit">Fit farm</button>
+        <button type="button" class="tool-btn" id="mapSeasonToggle" aria-pressed="false" title="Show everything each space grows this season at once, instead of what stands on the planning date">Whole season</button>
         <button type="button" class="tool-btn" id="mapPhotoToggle" aria-pressed="true">Photo</button>
         <button type="button" class="tool-btn" id="mapLabelToggle" aria-pressed="true">Labels</button>
       </div>
@@ -101,7 +102,7 @@
       <div class="tl-tools">
         <div class="seg tl-filters" id="tlFilters" role="group" aria-label="Which growing spaces to show"></div>
         <button type="button" id="tlOpenToggle" aria-pressed="true" title="Show where whole beds stand open before, after or between crops">Openings</button>
-        <div class="tl-zoom" role="group" aria-label="Timeline zoom" title="The mouse wheel over the bars zooms. Over the names it scrolls the rows. Hold and drag empty chart to move.">
+        <div class="tl-zoom" role="group" aria-label="Timeline zoom" title="Months, Weeks and Days set the scale; − and + step it. Ctrl and the mouse wheel zoom about the pointer. Hold and drag empty chart to move it.">
           <button type="button" class="tl-step" id="tlZoomOut" aria-label="Zoom out">−</button>
           <button type="button" data-tl-zoom="months" aria-pressed="true" title="The whole year">Months</button>
           <button type="button" data-tl-zoom="weeks" aria-pressed="false">Weeks</button>
