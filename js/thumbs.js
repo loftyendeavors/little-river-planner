@@ -35,6 +35,8 @@
     best = next;
   }
   const forCrop = cropId => get(best[cropId]);
+  /** Is there a picture for this crop, kept here or to be shown from where it came? */
+  const cropHas = cropId => has(best[cropId]);
   const letter = (node, label) => { node.classList.add('none'); node.replaceChildren(h('span', String(label || '').trim().charAt(0).toUpperCase())); };
 
   /**
@@ -48,6 +50,9 @@
     // from the supplier's own site: no referrer is sent, it loads when it scrolls into view, and offline the letter stands in
     else if (far) node.append(h('img', { src: far, alt: '', decoding: 'async', loading: 'lazy', referrerPolicy: 'no-referrer', draggable: false, onerror: () => letter(node, o.label) }));
     else letter(node, o.label);
+    // A picture is never something to drag by itself: left to the browser, pressing on one starts dragging the image
+    // and the planner's own drag (a crop onto a bed, a bar along the timeline) is cancelled.
+    for (const img of node.querySelectorAll('img')) img.setAttribute('draggable', 'false');
     return node;
   }
   /** A picture file or blob -> a small JPEG data: address. */
@@ -63,5 +68,5 @@
   }
   /** Several thumbnails at once, with one notice to the views. */
   function putAll(more) { map = { ...map, ...more }; tell(); }
-  root.LRFThumbs = { set, put, putAll, get, has, count, index, forCrop, el, make, setRemote, remoteOf, on: fn => listeners.push(fn), all: () => map };
+  root.LRFThumbs = { set, put, putAll, get, has, cropHas, count, index, forCrop, el, make, setRemote, remoteOf, on: fn => listeners.push(fn), all: () => map };
 })(window);
