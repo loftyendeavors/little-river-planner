@@ -279,10 +279,13 @@
   function sowingNote(r) {
     const w = r && r.sowing, Sow = root.LRFSowing;
     if (!w || !Sow) return null;
-    const batch = w.batch || w, others = (w.memberIds || []).length - 1, tray = batch.tray && batch.medium !== 'pots' ? `${batch.tray.name}: ` : '';
+    const batch = w.batch || w, others = (w.memberIds || []).length - 1, tray = batch.tray && batch.medium !== 'pots' ? `${batch.tray.name}: ` : '', g = batch.trayGroup;
+    // Where trays are shared, the batch's own tray count is a fraction of the lot's: say the rows, then the trays the lot stands in.
+    const what = g ? `${Number.isInteger(batch.rowsSown) ? `${num(batch.rowsSown)} row${batch.rowsSown === 1 ? '' : 's'} of ${num(batch.tray.columns)}` : `${num(batch.cells)} cells`} · ${num(batch.seeds)} seed${batch.seeds === 1 ? '' : 's'}` : Sow.description(batch);
+    const sharing = g ? ` It stands in ${num(g.trays)} tray${g.trays === 1 ? '' : 's'} shared with ${num(g.parts.length - 1)} other ${g.parts.length === 2 ? 'variety' : 'varieties'} of this crop sown that day.` : '';
     return h('p.note.sow-how', w.shared
-      ? `Sown as one batch with ${num(others)} other planting${others === 1 ? '' : 's'} of this variety. ${tray}${Sow.description(batch)}. This planting’s share is ${num(w.cells)} cells and ${num(w.seeds)} seeds.`
-      : `${tray}${Sow.description(batch)}.`,
+      ? `Sown as one batch with ${num(others)} other planting${others === 1 ? '' : 's'} of this variety. ${tray}${what}. This planting’s share is ${num(w.cells)} cells and ${num(w.seeds)} seeds.${sharing}`
+      : `${tray}${what}.${sharing}`,
       batch.mode === 'row' || batch.mode === 'half' || batch.mode === 'tray' ? h('small', ` ${num(batch.buffer)}% extra, ${num(batch.germination * 100)}% germination, rounded up to ${batch.mode === 'row' ? 'whole rows' : batch.mode === 'half' ? 'half trays' : 'whole trays'}.`) : null);
   }
 
@@ -378,7 +381,8 @@
       h('section.insp-section',
         h('h3', 'Schedule'),
         h('ol.schedule',
-          r.sow ? h('li' + (sow && sow.kind === 'sow' && sow.done ? '.done' : ''), h('span', sow && sow.kind === 'sow' && sow.done ? 'Sown in nursery' : 'Sow in nursery'), h('b', day(r.sow))) : null,
+          r.sow ? h('li' + (sow && sow.kind === 'sow' && sow.done ? '.done' : ''), h('span', sow && sow.kind === 'sow' && sow.done ? 'Sown in nursery' : 'Sow in nursery',
+            r.sowSet && !(sow && sow.done) ? h('button.link.sow-own', { type: 'button', title: `You set this day. The plan works out ${day(r.sowDefault)}. Click to use the plan’s day.`, onclick: () => App.planSowings([p.id], null) }, 'your day') : null), h('b', day(r.sow))) : null,
           h('li' + (sow && sow.kind === 'field' && sow.done ? '.done' : ''), h('span', c.method === 'TP' ? 'Transplant' : sow && sow.kind === 'field' && sow.done ? 'Direct sown' : 'Direct sow'), h('b', day(r.field))),
           h('li', h('span', 'First harvest'), h('b', day(r.first))),
           h('li', h('span', 'Last harvest'), h('b', r.harvestDays ? day(r.last) : 'None before the season ends')),

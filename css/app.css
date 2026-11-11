@@ -724,7 +724,7 @@ button.sd-stat.jump:hover { border-color: var(--ink-2); }
 .tr-addwrap { display: flex; gap: 6px; margin-left: auto; }
 .tr-add { width: 250px; }
 .tr-note, .bn-note { color: var(--ink-2); font-size: 13.5px; max-width: 92ch; margin-top: 8px; }
-.bn-note.small, .bn-crates { color: var(--muted); font-size: 12.5px; max-width: 110ch; margin-top: 6px; }
+.bn-note.small, .bn-crates, .bn-share { color: var(--muted); font-size: 12.5px; max-width: 110ch; margin-top: 6px; }
 .bn h3 { font: 800 19px/1.1 var(--display); font-stretch: 80%; }
 .linkish { border: 0; background: none; padding: 0; color: var(--ink-2); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .linkish:hover { color: var(--ink); }
@@ -883,3 +883,22 @@ table.sw input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(-
 .tr-weeks-head .grow { flex: 1; }
 .tr-weeks-head .tr-tosow { font-size: 12.5px; }
 .tr-weeks-head { justify-content: flex-start; }
+
+/* varieties of one crop sharing trays: one row says so and draws each tray, row by row */
+table.sw tr.sw-group td { height: 34px; padding-top: 8px; padding-bottom: 2px; border-bottom-color: transparent; cursor: default; background: none !important; }
+.sw-group-in { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); }
+.sw-group-in b { color: var(--ink); font-weight: 650; }
+.sw-trays { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.sw-tray { display: inline-flex; gap: 1px; padding: 2px; border: 1px solid var(--line); border-radius: 4px; background: var(--raised); }
+.sw-tray i { width: 5px; height: 15px; border-radius: 1px; background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.sw-tray i[data-k="0"], .sw-key[data-k="0"] { background: var(--tr-live); }
+.sw-tray i[data-k="1"], .sw-key[data-k="1"] { background: var(--tr-tray); }
+.sw-tray i[data-k="2"], .sw-key[data-k="2"] { background: var(--tr-rockwool); }
+.sw-tray i[data-k="3"], .sw-key[data-k="3"] { background: var(--tr-pot); }
+.sw-tray i[data-k="4"], .sw-key[data-k="4"] { background: var(--tr-crate); }
+.sw-tray i[data-k="5"], .sw-key[data-k="5"] { background: var(--ink-2); }
+.sw-key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 7px; vertical-align: 0; }
+table.sw td small.sw-set { color: var(--flag); font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: 0.04em; }
+.sw-record .sw-later { flex-basis: 100%; order: 9; color: var(--ink-2); font-size: 12.5px; }
+.sow-own { margin-left: 8px; font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--flag); text-decoration: none; }
+.sow-own:hover { text-decoration: underline; }

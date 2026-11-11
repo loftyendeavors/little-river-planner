@@ -67,7 +67,18 @@
       line.sub = line.kind === 'live' ? (line.demand ? line.demand.name : '') : line.variety ? T.short(line.crop.name) : 'no variety chosen';
       line.trays = line.kind === 'live' ? line.members.reduce((n, m) => n + m.r.len, 0) : line.batch && line.batch.medium !== 'pots' ? line.batch.trays : 0;
     }
-    list.sort((a, b) => a.date.localeCompare(b.date) || KINDS.findIndex(k => k[0] === a.kind) - KINDS.findIndex(k => k[0] === b.kind) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
+    const kindAt = l => KINDS.findIndex(k => k[0] === l.kind), groupOf = l => (l.batch && l.batch.trayGroup) || null;
+    list.sort((a, b) => a.date.localeCompare(b.date) || kindAt(a) - kindAt(b) || String(a.crop.name).localeCompare(String(b.crop.name)) || String(groupOf(a) ? groupOf(a).id : '').localeCompare(String(groupOf(b) ? groupOf(b).id : '')) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
+    // Varieties that share trays are filled in the order listed, so each line can be told its tray and rows.
+    const fills = new Map();
+    for (const line of list) {
+      const g = groupOf(line);
+      line.set = line.members.some(m => m.p.sowOn && !m.s.done && !m.s.sown);
+      if (!g || !Number.isInteger(line.batch.rowsSown) || !(g.tray.rows > 0)) continue;
+      const f = fills.get(g) || { at: 0, lines: [] };
+      line.group = g; line.slot = f.lines.length; line.rowsFrom = f.at; line.rowsTo = f.at + line.batch.rowsSown; line.groupLines = f.lines;
+      f.at = line.rowsTo; f.lines.push(line); fills.set(g, f);
+    }
     const weeks = [...new Set(list.map(l => l.week))].sort();
     const out = { list, weeks, total: list.length, done: list.filter(l => l.state === 'done').length };
     cache.set(eng, out);
@@ -86,9 +97,30 @@
     if (!b) return `${num(line.members.reduce((n, m) => n + m.r.cells, 0))} cells`;
     if (b.medium === 'pots') return `${plural(b.cells, 'pot')}`;
     const rows = b.mode === 'row' && Number.isInteger(b.rowsSown) ? `${plural(b.rowsSown, 'row')} of ${num(b.tray.columns)}` : `${num(b.cells)} cells`;
-    return `${rows} · ${plural(b.trays, 'tray')}`;
+    return line.group ? rows : `${rows} · ${plural(b.trays, 'tray')}`;   // shared trays are counted on the group's own row
   }
-  const howNote = line => line.kind === 'plugs' && line.batch && line.batch.medium !== 'pots' ? `${num(line.batch.tray.cells)}-cell tray` : line.kind === 'rockwool' && line.batch ? `${num(line.batch.tray.cells)}-cell sheet` : '';
+  /** Where a line sits in the trays it shares: "tray 1, rows 13–16". */
+  function slotText(line) {
+    const per = line.group.tray.rows, a = line.rowsFrom, b = line.rowsTo - 1, t1 = Math.floor(a / per) + 1, t2 = Math.floor(b / per) + 1, r1 = a % per + 1, r2 = b % per + 1;
+    return t1 === t2 ? `tray ${t1}, ${r1 === r2 ? 'row ' + r1 : `rows ${r1}–${r2}`}` : `tray ${t1} from row ${r1}, into tray ${t2} to row ${r2}`;
+  }
+  const howNote = line => line.group ? slotText(line) : line.kind === 'plugs' && line.batch && line.batch.medium !== 'pots' ? `${num(line.batch.tray.cells)}-cell tray` : line.kind === 'rockwool' && line.batch ? `${num(line.batch.tray.cells)}-cell sheet` : '';
+  const SLOTS = 5;   // colours that tell varieties apart in a shared tray; beyond them one neutral
+  /** The row above varieties that share trays: how many trays, and each tray drawn row by row. */
+  function groupRow(line) {
+    const g = line.group, list = line.groupLines, per = g.tray.rows, owner = new Array(g.trays * per).fill(null), shown = Math.min(g.trays, 8);
+    for (const l of list) for (let k = l.rowsFrom; k < l.rowsTo && k < owner.length; k++) owner[k] = l;
+    const trays = [];
+    for (let t = 0; t < shown; t++) {
+      const mine = owner.slice(t * per, (t + 1) * per), names = [...new Set(mine.filter(Boolean).map(l => l.name))], empty = mine.filter(l => !l).length;
+      trays.push(h('span.sw-tray', { role: 'img', 'aria-label': `Tray ${t + 1}: ${names.join(', ')}${empty ? `, ${empty} rows empty` : ''}`, title: `Tray ${t + 1}: ${names.join(', ')}${empty ? ` · ${empty} rows empty` : ''}` },
+        mine.map(l => h('i', l ? { dataset: { k: Math.min(l.slot, SLOTS) } } : {}))));
+    }
+    return h('tr.sw-group', { dataset: { group: line.key } }, h('td'), h('td', { colSpan: 6 }, h('div.sw-group-in',
+      h('b', `${T.short(line.crop.name)}: ${plural(list.length, 'variety', 'varieties')} share ${plural(g.trays, 'tray')}`),
+      h('span', `${num(g.cells / g.tray.columns)} rows of ${num(g.tray.columns)} in ${num(g.tray.cells)}-cell ${line.kind === 'rockwool' ? 'sheets' : 'trays'}, filled in the order listed`),
+      h('span.sw-trays', trays, g.trays > shown ? h('small', `+${num(g.trays - shown)} more`) : null))));
+  }
   /** Where it is going: the beds a transplant is raised for and the day it goes out, or the beds a direct sowing is in. */
   function whereText(line) {
     if (line.kind === 'live') return `ready ${dayName(line.members[0].r.first)}`;
@@ -129,6 +161,20 @@
       + (done.failed.length ? ` · ${plural(done.failed.length, 'planting')} left as it was: ${done.failed[0].why}` : '')
       + (done.overlaps ? ` · ${done.overlaps === 1 ? 'one planting now overlaps another' : done.overlaps + ' plantings now overlap others'}: see To settle` : ''), { label: 'Undo', run: App.undo });
   }
+  /** A day after today cannot be a record. It sets when the ticked sowings are planned for. */
+  function planFor(fig) {
+    const lines = fig.list.filter(l => ui.sel.has(l.key) && l.open.length), date = ui.date;
+    if (!lines.length) return;
+    const done = App.planSowings(lines.flatMap(l => l.open.map(m => m.p.id)), date);
+    if (!done) return;
+    ui.sel.clear(); ui.qty.clear(); ui.date = App.today();
+    render();   // the lines are still open, so nothing else takes the ticks away
+    UI.toast(`${plural(lines.length, 'sowing')} planned for ${dayName(d(date))} · nothing marked sown${done.skipped.length ? ` · ${plural(done.skipped.length, 'planting')} left where it was: ${done.skipped[0].why}` : ''}`, { label: 'Undo', run: App.undo });
+  }
+  function putBack(line) {
+    const done = App.planSowings(line.open.map(m => m.p.id), null);
+    if (done) UI.toast(`${line.name}: back on the day the plan works out`, { label: 'Undo', run: App.undo });
+  }
   function takeBack(line) {
     const done = App.takeBackSowings(line.members.filter(m => m.s.done).map(m => m.p.id));
     if (done) UI.toast(`${line.name}: sowing taken back${done.returned ? ` · ${amountText(done.returned, line.stockUnit)} returned to stock` : ''}${done.lost ? ` · ${amountText(done.lost, line.stockUnit)} could not go back: that lot is gone` : ''}`, { label: 'Undo', run: App.undo });
@@ -146,13 +192,14 @@
     const first = line.members[0];
     return h('tr' + (on ? '.on' : '') + (open ? '' : '.done'), { dataset: { line: line.key, kind: line.kind, state: line.state }, onclick: e => { if (!open || e.target.closest('input, button, a')) return; if (on) { ui.sel.delete(line.key); ui.qty.delete(line.key); } else ui.sel.add(line.key); render(); } },
       h('td.sw-pick', pick),
-      h('td.sw-when', h('b', withWeek ? day(d(line.date)) : UI.DAYS[d(line.date).getDay()]), h('small', withWeek ? UI.DAYS[d(line.date).getDay()] : day(d(line.date)))),
+      h('td.sw-when', h('b', withWeek ? day(d(line.date)) : UI.DAYS[d(line.date).getDay()]), h('small', withWeek ? UI.DAYS[d(line.date).getDay()] : day(d(line.date))), line.set && open ? h('small.sw-set', { title: 'This day was set here, not worked out from the planting date' }, 'your day') : null),
       h('td.sw-what', h('div.sd-cell', Thumbs.el({ varietyId: line.variety && line.variety.id, cropId: line.crop.id, color, label: line.name, size: 34 }), h('span.sd-name', h('b', line.name), line.sub ? h('small', line.sub) : null))),
-      h('td.sw-how', h('span', howText(line)), howNote(line) ? h('small', howNote(line)) : null),
+      h('td.sw-how', h('span', line.group ? h('i.sw-key', { dataset: { k: Math.min(line.slot, SLOTS) } }) : null, howText(line)), howNote(line) ? h('small', howNote(line)) : null),
       h('td.sw-seed', seed, stockNote(line, stock), !open && line.doneOn ? h('small', `sown ${day(d(line.doneOn))}`) : line.state === 'part' ? h('small', `${num(line.members.length - line.open.length)} of ${num(line.members.length)} recorded`) : null),
       h('td.sw-where', h('button.linkish', { type: 'button', title: 'Show on the map', onclick: () => { App.setView('map'); App.setDate(first.r.field); App.select({ type: 'planting', id: first.p.id }); } }, whereText(line)),
         line.members.length > 1 && line.kind !== 'live' ? h('small', ` ${plural(line.members.length, 'planting')}`) : null),
-      h('td.sw-act', !open && line.members.some(m => m.s.done) ? h('button.link', { type: 'button', onclick: () => takeBack(line) }, 'Take back') : null));
+      h('td.sw-act', !open && line.members.some(m => m.s.done) ? h('button.link', { type: 'button', onclick: () => takeBack(line) }, 'Take back')
+        : open && line.set ? h('button.link', { type: 'button', title: 'Back to the day the plan works out', onclick: () => putBack(line) }, 'Plan’s day') : null));
   }
   function table(lines, stock, withWeek) {
     const openKeys = lines.filter(l => l.state !== 'done').map(l => l.key), all = openKeys.length > 0 && openKeys.every(k => ui.sel.has(k));
@@ -160,7 +207,7 @@
       h('thead', h('tr',
         h('th.sw-pick', openKeys.length ? h('input', { type: 'checkbox', checked: all, 'aria-label': 'All of these', title: 'All of these', onchange: e => { for (const k of openKeys) { if (e.target.checked) ui.sel.add(k); else { ui.sel.delete(k); ui.qty.delete(k); } } render(); } }) : null),
         h('th.sw-when', withWeek ? 'Planned' : 'Day'), h('th.sw-what', 'What'), h('th.sw-how', 'How much'), h('th.sw-seed', 'Seed'), h('th.sw-where', 'For'), h('th.sw-act'))),
-      h('tbody', lines.map(l => lineRow(l, stock, withWeek)))));
+      h('tbody', lines.flatMap((l, i) => l.group && l.groupLines.length > 1 && (i === 0 || lines[i - 1].group !== l.group) ? [groupRow(l), lineRow(l, stock, withWeek)] : [lineRow(l, stock, withWeek)]))));
   }
   function sections(lines, stock, withWeek) {
     const out = [];
@@ -183,7 +230,8 @@
     // a selection outlives a redraw, but not the line it pointed at
     const known = new Set(fig.list.filter(l => l.state !== 'done').map(l => l.key));
     for (const k of [...ui.sel]) if (!known.has(k)) { ui.sel.delete(k); ui.qty.delete(k); }
-    if (!ui.date || ui.date > today) ui.date = today;
+    if (!ui.date) ui.date = today;
+    const later = ui.date > today;
     const week = fig.list.filter(l => l.week === now), earlier = fig.list.filter(l => l.week < now && l.state !== 'done'), weekOpen = week.filter(l => l.state !== 'done');
     const sum = (list, unit) => list.filter(l => l.unit === unit).reduce((n, l) => n + l.amount, 0), trays = week.reduce((n, l) => n + l.trays, 0);
     const next = fig.weeks.find(w => w > now), prev = fig.weeks.filter(w => w < now).pop(), step = n => () => App.setDate(E.addDays(d(now), n));
@@ -213,9 +261,10 @@
         h('b', `${plural(selected.length, 'sowing')} ticked`),
         h('span', (() => { const s = sum(selected, 'seeds'), g = sum(selected, 'g'); return [s ? amountText(s, 'seeds') : '', g ? amountText(g, 'g') + ' of seed' : ''].filter(Boolean).join(' · '); })()),
         h('span.grow'),
-        h('label', h('span', 'Sown on'), h('input', { type: 'date', value: ui.date, max: today, 'aria-label': 'Sown on', onchange: e => { ui.date = e.target.value || today; } })),
+        h('label', h('span', later ? 'Plan for' : 'Sown on'), h('input', { type: 'date', value: ui.date, 'aria-label': later ? 'Plan for' : 'Sown on', onchange: e => { ui.date = e.target.value || today; render(); } })),
         h('button.btn', { type: 'button', onclick: () => { ui.sel.clear(); ui.qty.clear(); render(); } }, 'Clear'),
-        h('button.btn.primary', { type: 'button', id: 'swRecord', onclick: () => record(fig) }, `Record ${plural(selected.length, 'sowing')}`)) : null,
+        h('button.btn.primary', { type: 'button', id: 'swRecord', onclick: () => (later ? planFor(fig) : record(fig)) }, later ? `Plan ${plural(selected.length, 'sowing')} for ${dayName(d(ui.date))}` : `Record ${plural(selected.length, 'sowing')}`),
+        later ? h('small.sw-later', 'A day after today is a plan. Nothing is marked sown and no seed leaves stock: the sowing moves to that day.') : null) : null,
       Bench.section('Heated bench room'));
     host.parentElement.scrollTop = keep;
   }

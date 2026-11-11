@@ -24,6 +24,8 @@ In **Seeds**, choose **Add from a supplier page**. Pasting the page works anywhe
 
 - **Sowing** lists everything sown from seed, a week at a time, as the acts they are: a batch of plug trays filled for several beds, rockwool for the towers, the week's live trays, a variety drilled into its beds.
 - Transplants are sown the way v7 works them out: the plants wanted, plus the buffer, divided by germination, rounded up to whole rows of the plug tray. Plantings of one variety with one schedule are rounded once, as one batch.
+- Varieties of one crop sown the same day share trays, each in whole rows: the list says how many trays the lot takes, draws each tray row by row, and tells each variety its rows. (v7 gives every variety trays of its own; the bench section can count that way instead.)
+- A day after today is a plan, not a record: choosing one moves the ticked sowings to that day. Nothing is marked sown and no seed leaves stock.
 - Tick the lines that were sown and record them in one step. Each planting is dated and its seed comes off the lots on hand, exactly as recording one planting does. One Undo takes the whole step back.
 
 ## Live trays and heated bench room

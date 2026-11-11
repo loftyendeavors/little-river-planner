@@ -119,6 +119,8 @@
         liveTray: { ...((original && original.liveTray) || {}), planId: plan.id, key: b.key, ready: b.ready, week: b.week, rowId: b.rowId } };
       p.growingDefaults = { v: 1, cropId: p.cropId, crop: { mk: { present: true, value: 1 }, baseUnit: { present: true, value: 'tray' }, yBasis: { present: true, value: 'tray' }, gh: { present: true, value: 0 } } };
       if (plan.customerId) p.customerId = plan.customerId; else delete p.customerId;
+      // Not in v7: a batch's sowing day can be set by hand on the Sowing view. It holds while it falls before the day the batch is due.
+      if (p.sowOn && p.sowOn < b.ready) { p.date = p.sowOn; p.dtm = Math.round((date(b.ready) - date(p.sowOn)) / 86400000); } else delete p.sowOn;
       // Not in v7: a crop row may name the variety its trays are sown with, so that sowing them draws that variety's seed.
       const row = plan.rows.find(r => r.id === b.rowId);
       if (row && 'varietyId' in row) { if (row.varietyId) p.varietyId = row.varietyId; else delete p.varietyId; }

@@ -108,10 +108,13 @@
     const crates = fig.onBenches
       ? h('p.bn-crates', 'Sheltered crates are counted as standing on the benches, the way v7 counts them. ', h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', null, 'Sheltered crates stand on the floor') }, 'They stand on the floor'))
       : fig.floorMost ? h('p.bn-crates', `Up to ${num(fig.floorMost)} crates are sheltered under heat${fig.floorUntil ? ` until ${day(fig.floorUntil)}` : ''}. They stand on the floor and take no bench room. `, h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', 'bench', 'Count sheltered crates on the benches') }, 'Count them on the benches instead')) : null;
+    const eng = App.state.engine, apart = eng.shareTrays === false;
+    const sharing = eng.sowingBatches().length ? h('p.bn-share', apart ? 'Every variety is counted in trays of its own, the way v7 counts them. ' : 'Varieties of one crop sown the same day share trays, each in whole rows. ',
+      h('button.linkish', { type: 'button', onclick: () => App.setOwn('trays', apart ? null : 'variety', apart ? 'Varieties of one crop share trays' : 'Every variety in trays of its own') }, apart ? 'Let varieties of one crop share trays' : 'Count every variety in trays of its own')) : null;
     return h('section.bn', h('h3', title), h('p.bn-note', reading),
       fig.weeks.length ? h('div.bn-legend', { 'aria-label': 'What the colours stand for' }, fig.kinds.map(([k, label]) => h('span', h('i', { 'data-kind': k }), label))) : null,
       fig.weeks.length ? h('div.bn-chart-wrap', chart(fig, tip), tip) : null,
-      crates,
+      crates, sharing,
       h('p.bn-note.small', `${areas.size ? [...areas].map(([name, a]) => `${name}: ${num(a.benches)} benches, ${num(a.cap)} tray spaces`).join(' · ') + '. Room' : 'Benches come in with a v7 backup. Their room'} is bench area × ${num((App.state.plan.nursery || {}).packing || 85)}% packing ÷ one 10 × 20 tray, as v7 counts it.`));
   }
 
