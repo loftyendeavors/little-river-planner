@@ -46,7 +46,7 @@
         const box = h('div.lib-vars', h('p.lib-meta', cropMeta(c)));
         for (const v of (nameHit ? varieties : varietyHits)) {
           const on = armed && armed.varietyId === v.id;
-          box.append(h('div.lib-row.lib-var' + (on ? '.armed' : ''), { dataset: { crop: c.id, variety: v.id }, role: 'button', tabindex: 0, title: `${v.name}${v.catalogDtm ? ` · ${v.catalogDtm} days printed${v.catalogMaturityBasis && v.catalogMaturityBasis !== 'unspecified' ? ' from ' + v.catalogMaturityBasis : ''}` : ''}` },
+          box.append(h('div.lib-row.lib-var' + (on ? '.armed' : ''), { dataset: { crop: c.id, variety: v.id }, role: 'button', tabindex: 0, title: `${v.name}${v.catalogDtm ? ` · ${v.catalogDtm} days printed${v.catalogMaturityBasis && v.catalogMaturityBasis !== 'unspecified' ? ' from ' + ({ seed: 'sowing', direct: 'direct sowing', transplant: 'transplanting' }[v.catalogMaturityBasis] || v.catalogMaturityBasis) : ''}` : ''}` },
             root.LRFThumbs.el({ varietyId: v.id, color, label: v.name, size: 22 }), h('span.lib-name', v.name), v.catalogDtm ? h('span.lib-count', `${v.catalogDtm} d`) : null));
         }
         row.append(box);
@@ -419,9 +419,9 @@
     };
     const split = f && f.rows && f.rows.count < f.rows.total, totalRows = f ? (f.rows ? f.rows.total : r.rows) : 0;
     const whereText = !f ? null : r.partial || split ? `Feet ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} of ${num(r.cap, 1)}. Drag its ends on the map to change them.` : 'Whole bed. Shorten it here, or drag its ends on the map, to share the bed.';
-    const dtmSource = timing.activeMode === 'catalog' ? `From the supplier's ${timing.printed}-day figure${timing.conversion === 'seed-minus-nursery' ? `, less ${timing.nurseryDays} nursery days` : ''}.`
+    const dtmSource = timing.activeMode === 'catalog' ? `From the supplier's ${timing.printed}-day figure${timing.conversion === 'seed-minus-nursery' ? `, less ${timing.nurseryDays} nursery days` : timing.conversion === 'direct-less' ? `, which is for seed sown in place: ${timing.off} days less as a transplant` : ''}.${timing.basisBy === 'guess' ? ' Where those days start is a guess from the wording of the supplier’s page: set it on the Assumptions tab.' : ''}`
       : p.dtm > 0 ? 'Pinned: this planting keeps its own days. Clear the field and it follows the assumptions list.' : v && v.dtm > 0 ? 'Your figure for this variety.' : 'Crop default. Set your own on the Assumptions tab.';
-    const fromList = c.assumed ? `From your assumptions list: ${c.assumed.level === 'variety' ? (c.vname || 'this variety') : c.name}, ${root.LRFAssume.LABEL[c.assumed.env].toLowerCase()}.` : null;
+    const fromList = c.assumed ? `From your assumptions list: ${c.assumed.level === 'variety' ? (c.vname || 'this variety') : c.name}, ${root.LRFAssume.LABEL[c.assumed.env].toLowerCase()}${c.assumed.off ? `. ${c.assumed.typed} days from ${c.assumed.basis === 'direct' ? 'direct sowing' : 'sowing'}, less ${c.assumed.off}` : ''}.` : null;
 
     add(host,
       h('header.insp-head.planting', { style: { '--crop': color } },

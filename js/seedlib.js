@@ -57,7 +57,12 @@
     if (!Number.isFinite(n) || n < min || n > max || (whole && !Number.isInteger(n))) throw new Error(`${what}: enter ${whole ? 'a whole number' : 'a number'} from ${min} to ${max.toLocaleString('en-US')}, or leave it empty.`);
     return n;
   }
-  const BASES = ['seed', 'transplant', 'unspecified'], STAGES = ['unspecified', 'mature', 'baby', 'flower'];
+  const BASES = ['seed', 'direct', 'transplant', 'unspecified'], STAGES = ['unspecified', 'mature', 'baby', 'flower'];
+  /**
+   * Where a supplier's days start, from what its page was read as and the sentence it used. The reader knows two
+   * answers; "from direct seeding" is a third: a figure for seed sown in place, which a transplant beats by about two weeks.
+   */
+  const startOf = (basis, statement) => basis === 'seed' && /direct/i.test(String(statement || '')) ? 'direct' : BASES.includes(basis) ? basis : 'unspecified';
   /**
    * The variety fields a reviewed supplier page fills. `data` is what the reader returned; `input` is the review form.
    * Returns { patch, cleared }: values to set, and names to remove when the form leaves them empty.
@@ -579,6 +584,6 @@
     return out;
   }
 
-  return { norm, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
+  return { norm, startOf, BASES, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
     sizeOf, packs, cover, toCover, money, sowing, lotsToUse, recordSowing, takeBackSowing, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
 });

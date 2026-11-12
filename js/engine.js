@@ -58,6 +58,14 @@
   const VARIETY_ENV_FIELDS = ['inRow', 'rowSp', 'rowsPerBed', 'dtm', 'gh', 'hw'];
   const ROW_COVER = { rate: 0.10, maxDays: 7 };
 
+  /** The three places a crop's days can start, and how many days a transplant saves on a figure for seed sown in place. */
+  const STARTS = ['transplant', 'seed', 'direct'], START_LESS = 14;
+  /** Days in the bed, from a figure that starts at `basis`. */
+  function inBed(figure, basis, method, nursery, less) {
+    if (method !== 'TP' || (basis !== 'seed' && basis !== 'direct')) return { days: figure, off: 0, conversion: 'none' };
+    const off = Math.max(0, Math.round(basis === 'direct' ? less : nursery));
+    return { days: figure - off, off, conversion: basis === 'direct' ? 'direct-less' : 'seed-minus-nursery' };
+  }
   /** Does a catalog's maturity clock start at sowing or at transplanting? */
   function basisFromText(text) {
     const s = String(text || '').toLowerCase();
@@ -288,24 +296,24 @@
     function catalogInfo(entry) {
       const min = wholeDays(entry.printedMin ?? entry.dtmMin ?? entry.catalogDtm ?? entry.dtm);
       const max = wholeDays(entry.printedMax ?? entry.dtmMax ?? entry.catalogDtmMax ?? entry.dtm2) || min;
-      const stated = entry.basis || entry.dtmBasis || entry.catalogMaturityBasis || entry.dtmFrom;
-      const basis = ['seed', 'transplant'].includes(stated) ? stated
+      const said = entry.basis || entry.dtmBasis || entry.catalogMaturityBasis || entry.dtmFrom, stated = legacy && said === 'direct' ? 'seed' : said;
+      const basis = STARTS.includes(stated) ? stated
         : entry._basisFromText || basisFromText(entry.sourceText || entry.catalogSourceText || entry.dtmText || entry.catalogDtmText || '');
       // What the supplier's page text suggests when no starting point is stated (see catalogDays).
       const pageTextBasis = entry._pageTextBasis || basisFromText(entry.sourceText || entry.catalogSourceText || '');
-      return { printedMin: min, printedMax: max, basis, pageTextBasis, harvestStage: entry.harvestStage || entry.catalogHarvestStage || 'unspecified', catalogStatus: entry.catalogStatus || '', needsCropReview: entry.needsCropReview === true };
+      return { printedMin: min, printedMax: max, basis, said: STARTS.includes(stated), pageTextBasis, harvestStage: entry.harvestStage || entry.catalogHarvestStage || 'unspecified', catalogStatus: entry.catalogStatus || '', needsCropReview: entry.needsCropReview === true };
     }
     function catalogSource(v) {
       if (!v) return null;
       if (['url', 'snapshot'].includes(v.catalogSourceChoice)) {
         const value = wholeDays(v.catalogDtm) || wholeDays(v.catalogDtmMax) ? catalogInfo(v) : null;
-        if (value) { value.basis = v.catalogMaturityBasis || 'unspecified'; value.harvestStage = v.catalogHarvestStage || 'unspecified'; }
+        if (value) { value.basis = (legacy && v.catalogMaturityBasis === 'direct' ? 'seed' : v.catalogMaturityBasis) || 'unspecified'; value.said = STARTS.includes(value.basis); value.harvestStage = v.catalogHarvestStage || 'unspecified'; }
         return value;
       }
       if (wholeDays(v.catalogDtm) || wholeDays(v.catalogDtmMax)) {
         const value = catalogInfo(v);
         // Older builds copied one crop's convention onto unrelated varieties.
-        if (/peione-parsley-seed-5551/.test(v.maturitySource || '') && v.cropId !== 'parsley' && !v.catalogId) value.basis = v._catalogTextBasis || basisFromText(v.catalogSourceText || '');
+        if (/peione-parsley-seed-5551/.test(v.maturitySource || '') && v.cropId !== 'parsley' && !v.catalogId) { value.basis = v._catalogTextBasis || basisFromText(v.catalogSourceText || ''); value.said = false; }
         return value;
       }
       return null; // bundled-catalog SKU lookup is not part of this build
@@ -318,16 +326,24 @@
      * from sowing to transplant" reads as a seed clock), so the result records
      * `inferred` and the planner flags it.
      */
-    function catalogDays(source, c, { method, environment, environmentReviewed, nurseryDays }) {
+    function catalogDays(source, c, { method, environment, environmentReviewed, nurseryDays, rule }) {
       if (source.catalogStatus === 'legacy-invalid' || source.needsCropReview || !source.printedMin) return null;
       if (source.printedMax && source.printedMax < source.printedMin) return null;
       if (['tower', 'living-tray'].includes(environment) && environmentReviewed !== true) return null;
-      const stated = ['seed', 'transplant'].includes(source.basis);
-      const basis = stated ? source.basis : (options.inferBasisFromPageText !== false ? source.pageTextBasis : 'unspecified');
+      // Who says where the printed days start: the variety itself, then the crop's rule on the list.
+      // Only where neither speaks is v7's reading of the page text still used, and marked as a guess.
+      const stated = STARTS.includes(source.basis), set = !!(rule && rule.set) && source.said !== true;
+      const basis = set ? rule.from : stated ? source.basis : (options.inferBasisFromPageText !== false ? source.pageTextBasis : 'unspecified');
       if (method === 'DS' && basis === 'transplant') return null;
-      let days = source.printedMin, conversion = 'none';
-      if (method === 'TP' && basis === 'seed') { days = source.printedMin - nurseryDays; conversion = 'seed-minus-nursery'; if (days < 1) return null; }
-      return { days, basis, conversion, inferred: !stated && basis !== 'unspecified', printed: source.printedMin, nurseryDays };
+      const turn = inBed(source.printedMin, basis, method, nurseryDays, rule ? rule.less : START_LESS);
+      if (turn.days < 1) return null;
+      return { days: turn.days, basis, conversion: turn.conversion, off: turn.off, inferred: !set && !stated && basis !== 'unspecified', by: source.said === true ? 'variety' : set ? 'crop' : stated ? 'variety' : basis !== 'unspecified' ? 'guess' : 'none', printed: source.printedMin, nurseryDays };
+    }
+    /** Days between sowing and going into the bed: the recorded ones when both days are recorded. */
+    function nurseryOf(p, e, c, b) {
+      const sow = doneOf(p, 'sow'), field = doneOf(p, 'field');
+      return sow && field && s2d(field) >= s2d(sow) ? dayDiff(s2d(field), s2d(sow))
+        : isTower(b) ? Math.max(0, Math.round(c.rockwoolDays ?? 21)) : Math.max(0, Math.round((e.gh || 0) * 7));
     }
     function timingMode(p, v) {
       if (TIMING_MODES.includes(p && p.timingMode)) return p.timingMode;
@@ -346,14 +362,12 @@
         if (source) {
           const environment = isTower(b) ? 'tower' : isRack(b) ? 'living-tray' : 'field';
           const reviewed = p.timingEnvironmentReviewed === true || (v.timingEnvironmentReviewed && v.timingEnvironmentReviewed[environment] === true);
-          const sow = doneOf(p, 'sow'), field = doneOf(p, 'field');
-          const nurseryDays = sow && field && s2d(field) >= s2d(sow) ? dayDiff(s2d(field), s2d(sow))
-            : isTower(b) ? Math.max(0, Math.round(c.rockwoolDays ?? 21)) : Math.max(0, Math.round((e.gh || 0) * 7));
-          const conv = catalogDays(source, c, { method: isTower(b) ? 'TP' : e.method, environment, environmentReviewed: reviewed, nurseryDays: (isTower(b) ? 'TP' : e.method) === 'TP' ? nurseryDays : 0 });
+          const nurseryDays = nurseryOf(p, e, c, b);
+          const conv = catalogDays(source, c, { method: isTower(b) ? 'TP' : e.method, environment, environmentReviewed: reviewed, nurseryDays: (isTower(b) ? 'TP' : e.method) === 'TP' ? nurseryDays : 0, rule: startRule(p.cropId) });
           if (conv) {
             const fieldDate = s2d(fieldDateOf(p)), g = gardenOf(b) || {}, flat = gCurve(g) === 'flat';
             const mult = !legacy || isRack(b) || c.micro ? 1 : (flat ? 1 : positive(seasonMult(c, fieldDate), 1)) * positive(g.dtmFactor, 1);
-            Object.assign(result, { activeMode: 'catalog', baseDays: conv.days, days: Math.max(1, Math.round(conv.days * mult)), printed: conv.printed, basis: conv.basis, conversion: conv.conversion, inferredBasis: conv.inferred, nurseryDays: conv.nurseryDays });
+            Object.assign(result, { activeMode: 'catalog', baseDays: conv.days, days: Math.max(1, Math.round(conv.days * mult)), printed: conv.printed, basis: conv.basis, conversion: conv.conversion, inferredBasis: conv.inferred, nurseryDays: conv.nurseryDays, off: conv.off, basisBy: conv.by });
             e.baseDtm = conv.days; e.seasonMult = mult;
           }
         }
@@ -385,6 +399,24 @@
     const envOf = b => !b || isRack(b) || isCt(b) && false ? '' : isTower(b) ? 'tower' : ({ field: 'field', tunnel: 'tunnel', greenhouse: 'heated' })[(gardenOf(b) || {}).type] || (isRack(b) ? '' : 'field');
     const listed = (kind, id, env) => { const a = S.assumptions, x = a && a[kind] && a[kind][id] && a[kind][id][env]; return x && Number.isFinite(+x.dtm) && +x.dtm > 0 ? Math.round(+x.dtm) : null; };
     const pinned = p => Number.isFinite(+p.dtm) && +p.dtm > 0;
+    // ── where days start ──
+    // plan.assumptions.starts = { cropId: { from: 'transplant' | 'seed' | 'direct', less: days } }
+    //   transplant  the figure is days in the bed
+    //   seed        the figure counts from sowing in the nursery: the nursery time comes off
+    //   direct      the figure is for seed sown in place: as a transplant the crop is in the bed `less` days fewer
+    // A variety that says where its own printed days start keeps that. A crop with no rule set counts as v7 did:
+    // from the day it goes in the bed, unless the supplier's page text suggested otherwise (shown as a guess).
+    function startRule(cropId) {
+      const x = !legacy && S.assumptions && S.assumptions.starts ? S.assumptions.starts[cropId] : null;
+      const from = x && STARTS.includes(x.from) ? x.from : null, less = x && x.less != null && Number.isFinite(+x.less) && +x.less >= 0 ? Math.round(+x.less) : null;
+      return { from: from || 'transplant', less: less == null ? START_LESS : less, set: !!from, lessSet: less != null };
+    }
+    /** Can this crop's starting point be chosen at all? Sown in place, or planted as a bulb or a bought plant, it cannot. */
+    const startFixed = c => !c ? 'sown' : c.micro ? 'tray' : (c.plantingMaterial || c.material) === 'bulb' || c.plantingMaterial === 'plant' ? 'planted' : c.method === 'TP' ? null : 'sown';
+    /** The published starting point for a crop, where a guide gives one and the crop's can be chosen. */
+    const startHint = cropId => { const c = crop(cropId); return !legacy && c && !startFixed(c) && lib.guide && lib.guide.startFor ? lib.guide.startFor(c) : null; };
+    /** Where the numbers in a row of the list start. */
+    const rowStart = (c, v, rule) => startFixed(c) ? 'transplant' : v && STARTS.includes(v.catalogMaturityBasis) ? v.catalogMaturityBasis : rule.from;
     /** Does the variety bring its own days to harvest for this planting? */
     function varietyFigure(p, e) {
       const v = growingVariety(p);
@@ -397,11 +429,17 @@
       if (!e || !S.assumptions || pinned(p)) return e;
       const b = plantingBed(p), env = envOf(b);
       if (!env || isRack(b) || e.micro) return e;
-      const v = variety(p.varietyId), mineV = v && v.cropId === p.cropId ? listed('varieties', v.id, env) : null;
-      if (mineV) return { ...e, dtm: mineV, assumed: { level: 'variety', env } };
+      const v = variety(p.varietyId), own = v && v.cropId === p.cropId ? v : null, mineV = own ? listed('varieties', v.id, env) : null;
+      // A number from the list counts from where its row says days start; what the planting needs is days in the bed.
+      const mine = (typed, level) => {
+        const rule = startRule(p.cropId), c = growingCrop(p), method = isTower(b) ? 'TP' : e.method, basis = rowStart(c, level === 'variety' ? own : null, rule);
+        const turn = inBed(typed, basis, method, method === 'TP' ? nurseryOf(p, e, c, b) : 0, rule.less);
+        return { ...e, dtm: Math.max(1, turn.days), assumed: { level, env, typed, basis, off: turn.off, conversion: turn.conversion } };
+      };
+      if (mineV) return mine(mineV, 'variety');
       if (varietyFigure(p, e)) return e;
       const mineC = listed('crops', p.cropId, env);
-      return mineC ? { ...e, dtm: mineC, assumed: { level: 'crop', env } } : e;
+      return mineC ? mine(mineC, 'crop') : e;
     }
     /**
      * One cell of the list: days to harvest for a crop (or one of its varieties) in one growing condition.
@@ -416,11 +454,20 @@
       if (!e) return { mine, fallback: null, value: mine, source: 'none' };
       const g = gardenOf(bed) || {}, factor = !legacy || isRack(bed) || e.micro ? 1 : positive(g.dtmFactor, 1), figure = v ? varietyFigure(probe, e) : null, published = guideFor(crop(cropId));
       const base = e.catalogTiming && e.catalogTiming.activeMode === 'catalog' ? e.catalogTiming.baseDays : isTower(bed) ? positive(e.towerDays, legacy ? Math.round(e.baseDtm * 0.8) : e.baseDtm) : e.baseDtm;
-      let fallback = Math.max(1, Math.round(base * factor)), source = figure || (published && !(isTower(bed) && e.towerDays > 0) ? 'guide' : 'library');
+      let inBedDays = Math.max(1, Math.round(base * factor)), source = figure || (published && !(isTower(bed) && e.towerDays > 0) ? 'guide' : 'library');
       // A variety with no figure of its own takes whatever the crop row says.
-      if (v && !figure) { const c = timingFor(cropId, null, env); fallback = c.value; source = c.mine ? 'crop-mine' : 'crop'; }
+      if (v && !figure) { const c = timingFor(cropId, null, env); inBedDays = c.bed; source = c.mine ? 'crop-mine' : 'crop'; }
       const curve = seasonCurve(crop(cropId)), swing = !legacy || isRack(bed) || e.micro || gCurve(g) === 'flat' ? [1, 1] : [Math.min(...curve), Math.max(...curve)];
-      return { mine, fallback, value: mine || fallback, source, guide: source === 'guide' ? published : null, printed: figure === 'supplier' ? e.catalogTiming.printed : null, basis: figure === 'supplier' ? e.catalogTiming.basis : null, swing };
+      // The row's numbers are shown, and typed, counted from where the row says days start. `bed` is what a planting gets.
+      const c0 = crop(cropId), rule = startRule(cropId), fixed = startFixed(c0), method = isTower(bed) ? 'TP' : e.method, ct = e.catalogTiming || {};
+      const nursery = method === 'TP' && !fixed ? nurseryOf(probe, e, growingCrop(probe), bed) : 0;
+      // The supplier's figure is shown by the start it is being read with (a guess included); a number of the grower's own by the row's.
+      const read = figure === 'supplier' && !fixed && !mine, start = read ? (STARTS.includes(ct.basis) ? ct.basis : 'transplant') : rowStart(c0, v && v.cropId === cropId ? v : null, rule);
+      const by = fixed ? 'fixed' : read ? ct.basisBy : v && v.cropId === cropId && STARTS.includes(v.catalogMaturityBasis) ? 'variety' : rule.set ? 'crop' : 'none';
+      const off = inBed(0, start, method, nursery, rule.less).off;
+      const fallback = figure === 'supplier' ? ct.printed : inBedDays + off, days = mine ? Math.max(1, mine - off) : inBedDays;
+      return { mine, fallback, value: mine || fallback, bed: days, nursery, total: nursery + days, off, start, startBy: by, fixed, less: rule.less, method,
+        source, guide: source === 'guide' ? published : null, printed: figure === 'supplier' ? ct.printed : null, basis: figure === 'supplier' ? ct.basis : null, swing };
     }
 
     // ── field-season rules ──
@@ -846,7 +893,7 @@
 
       const ct = r.c.catalogTiming;
       if (ct && ct.inferredBasis && ct.conversion === 'seed-minus-nursery') {
-        out.push({ k: 'model', t: `Maturity is a guess: the supplier prints ${ct.printed} days without saying from when. Its page text mentions sowing, so ${ct.nurseryDays} nursery days were subtracted, leaving ${ct.baseDays}. Confirm the starting point for this variety.` });
+        out.push({ k: 'model', t: `Maturity is a guess: the supplier prints ${ct.printed} days without saying from when. Its page text mentions sowing, so ${ct.nurseryDays} nursery days were subtracted, leaving ${ct.baseDays}. Confirm the starting point for this variety.` });   // v7's wording, kept for the parity check
       }
       const prev = plantingsIn(p.bedId).filter(q => q.id !== p.id).map(q => ({ q, x: calc(q) })).filter(x => x.x && x.x.field < r.field).sort((a, b) => b.x.field - a.x.field)[0];
       const years = settings.rotationYears || 3;
@@ -1045,7 +1092,7 @@
       yieldOf, unitOf, pickedOn, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),
-      effective, ENVS, envOf, timingFor, pinned, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,
+      effective, ENVS, envOf, timingFor, pinned, startRule, startFixed, startHint, STARTS, START_LESS, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,
       footprint, overflow, unbounded, holders, conflicts,
       occupancyFrom, occupancyThrough, turnoverFor, frostDates, firstFieldDate, lastFieldDate, standKey
     };

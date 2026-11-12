@@ -45,7 +45,25 @@
     const kept = unique.some(s => c.dtm >= s.range[0] && c.dtm <= s.range[1]);
     crops[c.id] = { dtm: kept ? c.dtm : Math.round((unique[0].range[0] + unique[0].range[1]) / 2), was: c.dtm, kept, sources: unique };
   }
-  const guide = { read: '2026-11-10', crops };
+  // ── where a crop's printed days start ──
+  // Johnny's says it on each variety page, and for flowers and herbs in one general sentence. The lines below are
+  // the ones those pages give (read from the pages kept with the farm's own varieties, 12 November 2026):
+  //   tomato, pepper, eggplant, cucumber, cabbage, head lettuce, tomatillo: "from transplanting"
+  //   kale, kohlrabi, summer squash: "from direct seeding; subtract about 14 days" for a transplant; beets "14-21"
+  //   onion, fennel: "from direct seeding", with no figure for a transplant: the same 14 is offered, marked as such
+  //   flowers and herbs: "days to maturity for all flowers and herbs is calculated from seeding date"
+  // Its transplant chart agrees with the 14 days: kale 40-50 and bulb onion 75-100 days from transplanting.
+  // A crop with no line here keeps counting from the day it goes in the bed. Nothing is applied until it is accepted.
+  const STARTS = [
+    [/tomat|pepper|eggplant|^cucumber|vining|cabbage|lettuce|salanova|little gem/i, 'transplant', null, 'Johnny’s counts these from transplanting'],
+    [/^kale\b|kohlrabi|summer squash|zucchini/i, 'direct', 14, 'Johnny’s: from direct seeding; subtract about 14 days for a transplant'],
+    [/^beets?\b/i, 'direct', 14, 'Johnny’s: from direct seeding; subtract 14 to 21 days for a transplant'],
+    [/onion|shallot|fennel/i, 'direct', 14, 'Johnny’s: from direct seeding. It gives no figure for a transplant; 14 days is its figure for kale and kohlrabi'],
+    [/basil|parsley|cilantro|dill|zinnia|cosmos|snapdragon|^stock\b|celosia|sunflower|marigold|strawflower|yarrow|lisianthus|bachelor|black.eyed|rudbeckia|daucus|ammi|statice|scabiosa|aster\b/i, 'seed', null, 'Johnny’s: days for all flowers and herbs are counted from the seeding date']
+  ];
+  /** The published starting point for a crop, by its name: { from, less, says }, or null. */
+  const startFor = c => { const row = c && !c.micro && STARTS.find(([match]) => match.test(String(c.name || ''))); return row ? { from: row[1], less: row[2], says: row[3] } : null; };
+  const guide = { read: '2026-11-10', crops, startFor };
   Lib.guide = guide;
   return guide;
 });
