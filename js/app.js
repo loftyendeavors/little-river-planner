@@ -588,20 +588,24 @@
   }
   /** Record that a planting was sown (or planted): input { date, quantity?, note? }. One undoable step. */
   function recordSowing(id, input) {
-    const p = state.engine.planting(id);
-    return p ? sowingStep(`${cropLabel(p)}: sown ${day(E.s2d(input.date))}`, ctx => ({ before: p, ...SL.recordSowing(state.engine, inventoryNow(), p, input, ctx) })) : null;
+    const p = state.engine.planting(id), s = p && sowingOf(p);
+    if (!s) return null;
+    const first = nothingRecorded(), before = state.plan;
+    const done = sowingStep(`${cropLabel(p)}: sown ${day(E.s2d(input.date))}`, ctx => ({ before: p, ...Week.record(state.engine, inventoryNow(), p, s.kind, input, ctx) }));
+    if (done && first) keepPlanOfRecord(before);
+    return done;
   }
   /** Take a recorded sowing back: the date is cleared and the seed goes back onto its lots. One undoable step. */
   function takeBackSowing(id) {
-    const p = state.engine.planting(id);
-    return p ? sowingStep(`${cropLabel(p)}: sowing taken back`, ctx => ({ before: p, ...SL.takeBackSowing(state.engine, inventoryNow(), p, ctx) })) : null;
+    const p = state.engine.planting(id), s = p && sowingOf(p);
+    return s ? sowingStep(`${cropLabel(p)}: sowing taken back`, ctx => ({ before: p, ...Week.takeBack(state.engine, inventoryNow(), p, s.kind, ctx) })) : null;
   }
   /**
    * Several sowings as one undoable step. Each planting is worked exactly as it would be alone, with the seed stock
    * carried from one to the next, so two plantings of a variety draw the same lots down in turn. A planting that
    * cannot be done (a date that contradicts work already recorded, say) is left alone and reported; the rest go ahead.
    */
-  function sowingSteps(label, items, work) {
+  function workOps(items, work) {
     const ctx = { now: new Date().toISOString(), uid, year: planYear(), name: '', today: todayText() }, ops = [], done = [], failed = [];
     let inventory = inventoryNow(), touched = false;
     for (const item of items || []) {
@@ -614,16 +618,57 @@
         done.push({ id: p.id, ...result });
       } catch (error) { failed.push({ id: p.id, label: cropLabel(p), why: error.message || 'It could not be recorded.' }); }
     }
-    if (!ops.length) { toast(failed.length ? failed[0].why : 'Nothing to record.'); return null; }
     if (touched) ops.push({ kind: 'inventory', before: state.plan.seedInventory || null, after: inventory });
+    return { ops, done, failed };
+  }
+  function sowingSteps(label, items, work) {
+    const { ops, done, failed } = workOps(items, work);
+    if (!ops.length) { toast(failed.length ? failed[0].why : 'Nothing to record.'); return null; }
     const was = state.engine;
     if (!commit(label(done.length), ops, { unchecked: true })) return null;
     const total = key => Math.round(done.reduce((n, r) => n + (Array.isArray(r[key]) ? r[key].reduce((m, u) => m + u.quantity, 0) : Number(r[key]) || 0), 0) * 1e6) / 1e6;
-    return { done, failed, overlaps: impact(was, state.engine).overlaps, used: total('used'), untracked: total('untracked'), returned: total('returned'), lost: total('lost') };
+    return { done, failed, overlaps: impact(was, state.engine).overlaps, used: total('used'), untracked: total('untracked'), returned: total('returned'), lost: total('lost'),
+      moved: done.filter(r => r.moved).map(r => ({ id: r.id, ...r.moved })), held: done.filter(r => r.held).length, restored: done.filter(r => r.restored).length };
   }
   /** Record several sowings on one date: items [{ id, quantity? }]. Quantities left out are the plan's own. */
-  const recordSowings = (items, input) => sowingSteps(n => `${n} sowing${n === 1 ? '' : 's'} recorded ${day(E.s2d(input.date))}`, items,
-    (p, item, inventory, ctx) => SL.recordSowing(state.engine, inventory, p, { date: input.date, quantity: item.quantity, note: input.note }, ctx));
+  const recordSowings = (items, input) => recordWork((items || []).map(item => { const p = state.engine.planting(item.id), s = p && sowingOf(p); return s ? { ...item, kind: s.kind } : null; }).filter(Boolean), input);
+
+  // The week's work. Sowing, potting up, hardening off, planting out and moving out are each ticked on the day they were
+  // really done. A recorded day is a fact: it is never refused. A transplant sown or hardened off late goes out as many
+  // days later, in the same step, unless `follow` is false; early work moves nothing after it.
+  const Week = root.LRFWeek;
+  const nothingRecorded = () => !state.plan.plantings.some(p => p.done && typeof p.done === 'object' && Object.keys(p.done).length);
+  /** The plan as it stood before the first work of its year was recorded, kept by name so plan and season can be compared later. */
+  function keepPlanOfRecord(plan) {
+    const year = +(plan.settings && plan.settings.year) || planYear();
+    return snapshot(`Plan of record ${year} (before the first work was recorded)`, { plan, why: 'record:' + year });
+  }
+  const jobWork = input => (p, item, inventory, ctx) => Week.record(state.engine, inventory, p, item.kind, { date: input.date, quantity: item.quantity, note: input.note, follow: input.follow }, ctx);
+  const seedJob = item => { const p = state.engine.planting(item.id), s = p && sowingOf(p); return !!s && s.kind === item.kind && (s.unit === 'seeds' || s.unit === 'g'); };
+  /** Record jobs on one date, as one undoable step: items [{ id, kind, quantity? }], input { date, follow?, note? }. */
+  function recordWork(items, input) {
+    items = items || [];
+    const sowings = items.length > 0 && items.every(seedJob), word = n => `${n} ${sowings ? 'sowing' : 'job'}${n === 1 ? '' : 's'}`;
+    const first = nothingRecorded(), before = state.plan;
+    const done = sowingSteps(n => `${word(n)} recorded ${day(E.s2d(input.date))}`, items, jobWork(input));
+    if (done && first) { done.planOfRecord = true; keepPlanOfRecord(before); }
+    return done;
+  }
+  /**
+   * What recording those jobs on that day would do, with nothing recorded: how many plantings it pushes and by how much,
+   * how many it would push out of the plan's year (those stay), and how many new pairs it books into the same ground.
+   */
+  function previewWork(items, input, options = {}) {
+    const { ops, done, failed } = workOps(items, jobWork(input));
+    const moved = done.filter(r => r.moved).map(r => ({ id: r.id, ...r.moved })), held = done.filter(r => r.held).length;
+    // the ground is looked at only when something is pushed: a day recorded for planting is a fact, and its overlaps are said when it is recorded
+    if (!ops.length || !moved.length || options.impact === false) return { n: done.length, moved, held, overlaps: 0, failed };
+    const engine = E.create(withOps(state.plan, ops, 'do'), Lib), pairs = eng => { const set = new Set(); for (const p of eng.plan.plantings) { const r = eng.calc(p); if (r) for (const o of eng.conflicts(p, r)) if (!o.rest) set.add([p.id, o.p.id].sort().join('|')); } return set; };
+    const was = pairs(state.engine);
+    return { n: done.length, moved, held, overlaps: [...pairs(engine)].filter(k => !was.has(k)).length, failed };
+  }
+  /** Take recorded jobs back, as one step: items [{ id, kind }]. */
+  const takeBackWork = items => sowingSteps(n => `${n} job${n === 1 ? '' : 's'} taken back`, items || [], (p, item, inventory, ctx) => Week.takeBack(state.engine, inventory, p, item.kind, ctx));
   /**
    * Set the day sowings are planned for, as one step. Nothing is marked sown and no seed leaves stock: this moves the plan.
    * A transplant keeps the day it goes out and is raised for longer or shorter. A tray batch keeps the day it is due.
@@ -660,7 +705,7 @@
   }
   /** Take several recorded sowings back at once. */
   const takeBackSowings = ids => sowingSteps(n => `${n} sowing${n === 1 ? '' : 's'} taken back`, (ids || []).map(id => ({ id })),
-    (p, item, inventory, ctx) => SL.takeBackSowing(state.engine, inventory, p, ctx));
+    (p, item, inventory, ctx) => { const s = sowingOf(p); if (!s) throw new Error('No sowing is recorded for this planting.'); return Week.takeBack(state.engine, inventory, p, s.kind, ctx); });
 
   // ───────────────────────── live trays ─────────────────────────
   const Trays = root.LRFTrays;
@@ -1196,13 +1241,15 @@
     if (!Snaps || !plan || (plan.lrfNext && plan.lrfNext.sample) || state.unreadable) return null;
     try {
       const key = contentKey(plan);
-      if (options.skipSame || options.daily) {
+      if (options.skipSame || options.daily || options.why) {
         const kept = await Snaps.list(), today = options.daily ? kept.find(s => s.why === 'day:' + options.daily) : null;
         if (today) return today;
+        const same = options.why ? kept.find(s => s.why === options.why) : null;   // one per reason: the plan of record of a year is kept once
+        if (same) return same;
         if (options.skipSame && kept[0] && kept[0].key === key) return kept[0];
       }
       const made = await planText(plan);
-      const record = await Snaps.add({ name, auto: !!options.auto, why: options.daily ? 'day:' + options.daily : '', plantings: plan.plantings.length, waiting: ((plan.lrfNext || {}).waiting || []).length, year: +(plan.settings && plan.settings.year) || null, key, device: Folder ? Folder.device() : '', at: made.savedAt }, made.text);
+      const record = await Snaps.add({ name, auto: !!options.auto, why: options.daily ? 'day:' + options.daily : options.why || '', plantings: plan.plantings.length, waiting: ((plan.lrfNext || {}).waiting || []).length, year: +(plan.settings && plan.settings.year) || null, key, device: Folder ? Folder.device() : '', at: made.savedAt }, made.text);
       emit('snaps');
       if (!record.auto) sendSnapshot(record, made.text);
       return record;
@@ -1452,7 +1499,7 @@
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
-    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
+    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
     saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, traysToMonday: () => applyTrayStart(),
     snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, sync: () => sync, syncInfo, snapshotsKept: () => !!Snaps

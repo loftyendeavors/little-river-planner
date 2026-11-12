@@ -1,16 +1,16 @@
-/* Little River Farm Planner — the Sowing view.
+/* Little River Farm Planner — the Week view (it began as the Sowing view, and its sowing lists are as they were).
  *
- * Everything that is sown, a week at a time, set out as the acts the grower performs: one batch of plug
- * trays filled for several beds, rockwool for the towers, the week's live trays, a variety drilled into
- * its beds. Tick what was done and record it in one step: each planting is dated and its seed comes off
- * stock, exactly as recording one planting does.
+ * The week's work, set out as the acts the grower performs. First what is sown: one batch of plug trays filled
+ * for several beds, rockwool for the towers, the week's live trays, a variety drilled into its beds. Then the rest
+ * of a planting's jobs: pot up, harden off, plant out (bulbs, canes and bought-in plants with the transplants),
+ * move out. Tick what was done and record it in one step, on the day it was really done: each planting is dated,
+ * seed comes off stock, and a transplant sown or hardened off late goes out as many days later (js/week.js).
  *
- * Only seed is listed. Bulbs, canes and bought-in plants are planted, not sown, and are recorded from
- * their own planting.
+ * On a phone this view is the whole page: the week, and nothing else. The same list prints as a sheet.
  */
 (function (root) {
   'use strict';
-  const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, SL = root.LRFSeedLib, T = root.LRFTrays, Thumbs = root.LRFThumbs, Bench = root.LRFBench, Sow = root.LRFSowing;
+  const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, SL = root.LRFSeedLib, T = root.LRFTrays, Thumbs = root.LRFThumbs, Bench = root.LRFBench, Sow = root.LRFSowing, Week = root.LRFWeek;
   const { h, clear, add, num, day } = UI;
   const $ = id => document.getElementById(id);
   const d = iso => E.s2d(iso);
@@ -18,7 +18,7 @@
   const round6 = n => Math.round(n * 1e6) / 1e6;
   const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many || one + 's'}`;
   /** Seed as it is handled: a count, or a weight in grams up to a pound and pounds beyond. */
-  const amountText = (n, unit) => unit === 'g' ? (!n ? '0 g' : n < 453.6 ? `${num(n, n < 10 ? 1 : 0)} g` : `${num(n / 453.592, 1)} lb`) : `${num(n)} seed${n === 1 ? '' : 's'}`;
+  const amountText = (n, unit) => unit === 'g' ? (!n ? '0 g' : n < 453.6 ? `${num(n, n < 10 ? 1 : 0)} g` : `${num(n / 453.592, 1)} lb`) : unit && unit !== 'seeds' ? `${num(n)} ${n === 1 ? unit.replace(/s$/, '') : unit}` : `${num(n)} seed${n === 1 ? '' : 's'}`;
 
   // In the order the sections are drawn.
   const KINDS = [
@@ -27,8 +27,26 @@
     ['live', 'Live trays', 'Whole trays sown to the weekly demand on the Trays view.'],
     ['direct', 'Sown in the ground', 'Seed that goes straight into a bed or a container.']
   ];
-  const ui = { sel: new Set(), qty: new Map(), filter: 'all', earlier: false, date: null };
+  // The rest of a planting's jobs, in the order they are drawn after the sowing.
+  const JOBS = [
+    ['potup', 'Pot up', 'Seedlings moved on from their plug trays into pots.'],
+    ['harden', 'Harden off', 'Trays moved out of the greenhouse ahead of planting.'],
+    ['plant', 'Plant out', 'Transplants going into beds, towers and containers, and what is planted, not sown: bulbs, canes, bought-in plants.'],
+    ['move', 'Move out', 'Sheltered containers going out to where they stand for the season.']
+  ];
+  const DID = { potup: 'potted up', harden: 'hardened off', plant: 'planted', move: 'moved out' };
+  const ui = { sel: new Set(), qty: new Map(), filter: 'all', earlier: false, date: null, follow: true };
   let dirty = true;
+  const isPhone = () => document.body.classList.contains('phone');
+  const days = n => `${num(n)} day${n === 1 ? '' : 's'}`;
+
+  // ── the other jobs of the week: pot up, harden off, plant out, move out (worked out in js/week.js) ──
+  const jobCache = new WeakMap();
+  function jobs() {
+    const eng = App.state.engine;
+    if (!jobCache.has(eng)) jobCache.set(eng, Week.lines(eng, App.state.plan, App.planYear()));
+    return jobCache.get(eng);
+  }
 
   // ── the lines of the list, worked out once per plan state ──
   const cache = new WeakMap();
@@ -128,12 +146,57 @@
       h('span.sw-trays', trays, g.trays > shown ? h('small', `+${num(g.trays - shown)} more`) : null))));
   }
   /** Where it is going: the beds a transplant is raised for and the day it goes out, or the beds a direct sowing is in. */
+  function placesText(members) {
+    const byGarden = new Map();
+    for (const m of members) { const list = byGarden.get(m.r.g.name) || []; list.push(String(m.r.b.bed)); byGarden.set(m.r.g.name, list); }
+    return [...byGarden].map(([garden, beds]) => { const uniq = [...new Set(beds)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })); return `${garden}${/\d$/.test(garden) ? ':' : ''} ${uniq.length > 6 ? uniq.slice(0, 5).join(', ') + ` +${uniq.length - 5}` : uniq.join(', ')}`; }).join('; ');
+  }
   function whereText(line) {
     if (line.kind === 'live') return `ready ${dayName(line.members[0].r.first)}`;
-    const byGarden = new Map();
-    for (const m of line.members) { const list = byGarden.get(m.r.g.name) || []; list.push(String(m.r.b.bed)); byGarden.set(m.r.g.name, list); }
-    const places = [...byGarden].map(([garden, beds]) => { const uniq = [...new Set(beds)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })); return `${garden}${/\d$/.test(garden) ? ':' : ''} ${uniq.length > 6 ? uniq.slice(0, 5).join(', ') + ` +${uniq.length - 5}` : uniq.join(', ')}`; }).join('; ');
+    const places = placesText(line.members);
     return line.kind === 'direct' ? places : `${places} · out ${day(line.field)}`;
+  }
+  // ── what a job's line says ──
+  const whole = n => Math.ceil(n - 1e-9);
+  /** How much there is to handle, and of what: [figure, note]. */
+  function jobHow(line) {
+    const trays = whole(line.trays);
+    if (line.section === 'potup') return [plural(line.pots, 'pot'), trays ? `from ${plural(trays, 'tray')}` : ''];
+    if (line.section === 'harden') return [trays ? plural(trays, 'tray') : plural(line.pots, 'pot'), `${num(line.plants)} plants`];
+    if (line.section === 'move') return [plural(line.containers, 'container'), `${num(line.plants)} plants`];
+    const beds = new Set(line.members.filter(m => !m.r.ct && !m.r.tw).map(m => m.r.b.id)).size, towers = line.members.filter(m => m.r.tw).length;
+    return [amountText(whole(line.plants), line.stock ? line.stock.unit : 'plants'), [beds ? plural(beds, 'bed') : '', towers ? plural(towers, 'tower') : '', line.containers ? plural(line.containers, 'container') : ''].filter(Boolean).join(' · ')];
+  }
+  /** Where the work is, or what it is for. */
+  function jobWhere(line) {
+    const places = placesText(line.members);
+    if (line.section === 'plant') return places;
+    if (line.section === 'move') return `to ${places}`;
+    return `${places} · out ${day(new Date(Math.min(...line.members.map(m => +m.r.field))))}`;
+  }
+  /** Why a job is not on the day first planned: an earlier job of the same plantings was done late, and pushed it. */
+  function pushNote(line) {
+    if (!line.pushed.length || line.state === 'done') return null;
+    const most = Math.max(...line.pushed.map(f => f.days));
+    return h('small.sw-set', { title: `First planned ${days(most)} earlier. Its seedlings were sown or hardened off late, so the day moved with them. Move the planting to set another day.` }, `${days(most)} later`);
+  }
+  /** What stands in the status column: what was done and when, or what is there to plant. */
+  function jobStatus(line, stock) {
+    if (line.passed) return h('small', 'no day recorded');
+    if (line.state === 'done') {
+      const late = line.late, pushed = line.members.map(m => m.st.pushed).filter(Boolean);
+      // the day it was done is the day the line stands on; here, how that sat against the plan
+      return [h('small.sw-did', { title: `${DID[line.section].charAt(0).toUpperCase() + DID[line.section].slice(1)} ${day(d(line.doneOn))}` }, late > 0 ? `${days(late)} late` : late < 0 ? `${days(-late)} early` : 'on the day'),
+        pushed.length ? h('small', `out ${days(Math.max(...pushed.map(f => f.days)))} later`) : null];
+    }
+    const out = [];
+    if (line.stock) {
+      const row = stock[line.stock.key + '|' + line.stock.stockUnit] || {}, have = row.onHand || 0;
+      out.push(have + 1e-9 >= line.estimate && have ? h('small', `${num(have)} on hand`) : have ? h('small.sw-short', `only ${num(have)} on hand`) : h('small', row.onOrder ? `${num(row.onOrder)} on order` : 'none on hand'));
+    }
+    out.push(pushNote(line));
+    if (line.state === 'part') out.push(h('small', `${num(line.members.length - line.open.length)} of ${num(line.members.length)} recorded`));
+    return out;
   }
   /** Whether the seed is there. Only a real shortfall is coloured: seed on order, or none counted yet, is said plainly. */
   function stockNote(line, stock) {
@@ -149,23 +212,42 @@
   /** What each planting of a line records when the line's total is typed over: the same shares, scaled. */
   function itemsFor(line) {
     const open = line.open, typed = ui.qty.get(line.key);
-    if (typed == null || typed === '' || !(Number(typed) >= 0) || round6(Number(typed)) === line.estimate) return open.map(m => ({ id: m.p.id }));
+    if (typed == null || typed === '' || !(Number(typed) >= 0) || round6(Number(typed)) === line.estimate) return open.map(m => ({ id: m.p.id, kind: m.s.kind }));
     const total = Number(typed), base = line.estimate || open.length, whole = line.stockUnit !== 'g';
     const shares = open.map(m => (line.estimate ? m.s.estimate : 1) / base * total), out = shares.map(x => whole ? Math.floor(x) : round6(x));
     if (whole) { let left = Math.round(total - out.reduce((n, x) => n + x, 0)); const order = shares.map((x, i) => [x - Math.floor(x), i]).sort((a, b) => b[0] - a[0]); for (let i = 0; left > 0 && order.length; i++, left--) out[order[i % order.length][1]]++; }
-    return open.map((m, i) => ({ id: m.p.id, quantity: out[i] }));
+    return open.map((m, i) => ({ id: m.p.id, kind: m.s.kind, quantity: out[i] }));
   }
+  /** What is ticked and still open: sowings, and the other jobs. */
+  const ticked = fig => ({ sow: fig.list.filter(l => ui.sel.has(l.key) && l.open.length), jobs: jobs().filter(l => ui.sel.has(l.key) && l.open.length) });
+  const itemsOf = t => [...t.sow.flatMap(itemsFor), ...t.jobs.flatMap(l => l.open.map(m => ({ id: m.p.id, kind: l.kind })))];
+  /**
+   * What recording the ticked lines on that day would move, worked out before anything is recorded: plantings pushed by late
+   * work, and the ground that would then be booked twice. Kept for as long as the plan and the ticks stand.
+   */
+  const preCache = new WeakMap();
+  function preview(t, date) {
+    const eng = App.state.engine, items = itemsOf(t), key = [date, ui.follow, ...items.map(i => `${i.id}:${i.kind}`)].join('|'), kept = preCache.get(eng);
+    if (kept && kept.key === key) return kept.value;
+    const value = App.previewWork(items, { date, follow: true }, { impact: ui.follow });
+    preCache.set(eng, { key, value });
+    return value;
+  }
+  const movedText = moved => { if (!moved.length) return ''; const lo = Math.min(...moved.map(m => m.days)), hi = Math.max(...moved.map(m => m.days)); return `${plural(moved.length, 'planting')} ${moved.length === 1 ? 'goes' : 'go'} out ${lo === hi ? days(hi) : `${num(lo)} to ${days(hi)}`} later`; };
   function record(fig) {
-    const lines = fig.list.filter(l => ui.sel.has(l.key) && l.open.length), date = ui.date || App.today();
+    const t = ticked(fig), lines = [...t.sow, ...t.jobs], date = ui.date || App.today();
     if (!lines.length) return;
-    const done = App.recordSowings(lines.flatMap(itemsFor), { date });
+    const done = App.recordWork(itemsOf(t), { date, follow: ui.follow });
     if (!done) return;
     for (const l of lines) { ui.sel.delete(l.key); ui.qty.delete(l.key); }
-    const units = [...new Set(lines.map(l => l.stockUnit))], unit = units.length === 1 ? units[0] : null, n = done.done.length;
-    UI.toast(`${plural(lines.length, 'sowing')} recorded ${day(d(date))}${n !== lines.length ? ` for ${plural(n, 'planting')}` : ''}`
+    const stocked = [...t.sow.map(l => l.stockUnit), ...t.jobs.filter(l => l.stock).map(l => l.stock.stockUnit)], units = [...new Set(stocked)], unit = units.length === 1 ? units[0] : null, n = done.done.length;
+    UI.toast(`${plural(lines.length, t.jobs.length ? 'job' : 'sowing')} recorded ${day(d(date))}${n !== lines.length ? ` for ${plural(n, 'planting')}` : ''}`
       + (unit ? ` · ${done.used ? amountText(done.used, unit) + ' off stock' : 'nothing off stock'}${done.untracked ? ` · ${amountText(done.untracked, unit)} not from a counted lot` : ''}` : done.used || done.untracked ? ' · seed taken off stock where there was any' : '')
+      + (done.moved.length ? ` · ${movedText(done.moved)}` : '')
+      + (done.held ? ` · ${plural(done.held, 'planting')} would have left ${App.planYear()} and stayed where ${done.held === 1 ? 'it was' : 'they were'}` : '')
       + (done.failed.length ? ` · ${plural(done.failed.length, 'planting')} left as it was: ${done.failed[0].why}` : '')
-      + (done.overlaps ? ` · ${done.overlaps === 1 ? 'one planting now overlaps another' : done.overlaps + ' plantings now overlap others'}: see To settle` : ''), { label: 'Undo', run: App.undo });
+      + (done.overlaps ? ` · ${done.overlaps === 1 ? 'one planting now overlaps another' : done.overlaps + ' plantings now overlap others'}: see To settle` : '')
+      + (done.planOfRecord ? ' · the plan as it stood is kept under Snapshots as the plan of record' : ''), { label: 'Undo', run: App.undo });
   }
   /** A day after today cannot be a record. It sets when the ticked sowings are planned for. */
   function planFor(fig) {
@@ -181,9 +263,15 @@
     const done = App.planSowings(line.open.map(m => m.p.id), null);
     if (done) UI.toast(`${line.name}: back on the day the plan works out`, { label: 'Undo', run: App.undo });
   }
+  const backText = done => (done.restored ? ` · ${plural(done.restored, 'planting')} back on the day first planned` : '');
   function takeBack(line) {
     const done = App.takeBackSowings(line.members.filter(m => m.s.done).map(m => m.p.id));
-    if (done) UI.toast(`${line.name}: sowing taken back${done.returned ? ` · ${amountText(done.returned, line.stockUnit)} returned to stock` : ''}${done.lost ? ` · ${amountText(done.lost, line.stockUnit)} could not go back: that lot is gone` : ''}`, { label: 'Undo', run: App.undo });
+    if (done) UI.toast(`${line.name}: sowing taken back${done.returned ? ` · ${amountText(done.returned, line.stockUnit)} returned to stock` : ''}${done.lost ? ` · ${amountText(done.lost, line.stockUnit)} could not go back: that lot is gone` : ''}${backText(done)}`, { label: 'Undo', run: App.undo });
+  }
+  function takeBackJob(line) {
+    const done = App.takeBackWork(line.members.filter(m => m.st.done).map(m => ({ id: m.p.id, kind: line.kind })));
+    const unit = line.stock ? line.stock.stockUnit : null;
+    if (done) UI.toast(`${line.name}: ${Week.NAME[line.kind].toLowerCase()} taken back${done.returned && unit ? ` · ${amountText(done.returned, unit)} returned to stock` : ''}${done.lost && unit ? ` · ${amountText(done.lost, unit)} could not go back: that lot is gone` : ''}${backText(done)}`, { label: 'Undo', run: App.undo });
   }
 
   // ── drawing ──
@@ -201,11 +289,50 @@
       h('td.sw-when', h('b', withWeek ? day(d(line.date)) : UI.DAYS[d(line.date).getDay()]), h('small', withWeek ? UI.DAYS[d(line.date).getDay()] : day(d(line.date))), line.set && open ? h('small.sw-set', { title: 'This day was set here, not worked out from the planting date' }, 'your day') : null),
       h('td.sw-what', h('div.sd-cell', Thumbs.el({ varietyId: line.variety && line.variety.id, cropId: line.crop.id, color, label: line.name, size: 34 }), h('span.sd-name', h('b', line.name), line.sub ? h('small', line.sub) : null))),
       h('td.sw-how', h('span', line.group ? h('i.sw-key', { dataset: { k: Math.min(line.slot, SLOTS) } }) : null, howText(line)), howNote(line) ? h('small', howNote(line)) : null),
-      h('td.sw-seed', seed, stockNote(line, stock), !open && line.doneOn ? h('small', `sown ${day(d(line.doneOn))}`) : line.state === 'part' ? h('small', `${num(line.members.length - line.open.length)} of ${num(line.members.length)} recorded`) : null),
-      h('td.sw-where', h('button.linkish', { type: 'button', title: 'Show on the map', onclick: () => { App.setView('map'); App.setDate(first.r.field); App.select({ type: 'planting', id: first.p.id }); } }, whereText(line)),
+      h('td.sw-seed', seed, stockNote(line, stock), !open && line.doneOn ? h('small', `sown ${day(d(line.doneOn))}`) : line.state === 'part' ? h('small', `${num(line.members.length - line.open.length)} of ${num(line.members.length)} recorded`) : null,
+        (() => { const f = line.members.map(m => Week.pushed(m.p, 'sow')).filter(Boolean); return f.length ? h('small.sw-pushed', `${days(Math.max(...f.map(x => x.days)))} late: out as much later`) : null; })()),
+      h('td.sw-where', h('button.linkish', { type: 'button', title: 'Show on the map', onclick: () => showOnMap(first) }, whereText(line)),
         line.members.length > 1 && line.kind !== 'live' ? h('small', ` ${plural(line.members.length, 'planting')}`) : null),
       h('td.sw-act', !open && line.members.some(m => m.s.done) ? h('button.link', { type: 'button', onclick: () => takeBack(line) }, 'Take back')
         : open && line.set ? h('button.link', { type: 'button', title: 'Back to the day the plan works out', onclick: () => putBack(line) }, 'Plan’s day') : null));
+  }
+  /** A line's place on the map. On a phone the page is the week and nothing else, so the words stay words. */
+  function showOnMap(m) { if (isPhone()) return; App.setView('map'); App.setDate(m.r.field); App.select({ type: 'planting', id: m.p.id }); }
+  function jobRow(line, stock, withWeek) {
+    const eng = App.state.engine, open = line.state !== 'done', on = ui.sel.has(line.key), color = eng.cropColor(line.crop), how = jobHow(line), first = line.members[0], when = d(line.date);
+    const flip = () => { if (on) ui.sel.delete(line.key); else ui.sel.add(line.key); render(); };
+    const pick = open ? h('input', { type: 'checkbox', checked: on, 'aria-label': `${line.name}: ${DID[line.section]}`, onchange: flip }) : line.passed ? h('span.sw-tick.none', { title: 'Later work is recorded for it, so it is not waiting; no day was recorded for this job' }, '–') : h('span.sw-tick', { title: 'Recorded' }, '✓');
+    return h('tr' + (on ? '.on' : '') + (open ? '' : '.done'), { dataset: { line: line.key, kind: line.section, state: line.passed ? 'passed' : line.state }, onclick: e => { if (!open || e.target.closest('input, button, a')) return; flip(); } },
+      h('td.sw-pick', pick),
+      h('td.sw-when', h('b', withWeek ? day(when) : UI.DAYS[when.getDay()]), h('small', withWeek ? UI.DAYS[when.getDay()] : day(when))),
+      h('td.sw-what', h('div.sd-cell', Thumbs.el({ varietyId: line.variety && line.variety.id, cropId: line.crop.id, color, label: line.name, size: 34 }), h('span.sd-name', h('b', line.name), line.sub ? h('small', line.sub) : null))),
+      h('td.sw-how', h('span', how[0]), how[1] ? h('small', how[1]) : null),
+      h('td.sw-seed', jobStatus(line, stock)),
+      h('td.sw-where', h('button.linkish', { type: 'button', title: 'Show on the map', onclick: () => showOnMap(first) }, jobWhere(line)),
+        line.members.length > 1 ? h('small', ` ${plural(line.members.length, 'planting')}`) : null),
+      h('td.sw-act', line.members.some(m => m.st.done) ? h('button.link', { type: 'button', onclick: () => takeBackJob(line) }, 'Take back') : null));
+  }
+  function jobTable(lines, stock, withWeek) {
+    const openKeys = lines.filter(l => l.state !== 'done').map(l => l.key), all = openKeys.length > 0 && openKeys.every(k => ui.sel.has(k));
+    return h('div.tr-scroll', h('table.as.sw.wk',
+      h('thead', h('tr',
+        h('th.sw-pick', openKeys.length ? h('input', { type: 'checkbox', checked: all, 'aria-label': 'All of these', title: 'All of these', onchange: e => { for (const k of openKeys) { if (e.target.checked) ui.sel.add(k); else ui.sel.delete(k); } render(); } }) : null),
+        h('th.sw-when', withWeek ? 'Planned' : 'Day'), h('th.sw-what', 'What'), h('th.sw-how', 'How much'), h('th.sw-seed'), h('th.sw-where', lines[0] && lines[0].section === 'plant' ? 'Where' : lines[0] && lines[0].section === 'move' ? 'Where to' : 'For'), h('th.sw-act'))),
+      h('tbody', lines.map(l => jobRow(l, stock, withWeek)))));
+  }
+  /** Pot up, harden off, plant out, move out: a section each, when the week has any. */
+  function jobSections(lines, stock, withWeek) {
+    const out = [];
+    for (const [id, title, about] of JOBS) {
+      if (ui.filter !== 'all' && ui.filter !== id) continue;
+      const mine = lines.filter(l => l.section === id);
+      if (!mine.length) continue;
+      const open = mine.filter(l => l.state !== 'done').length, plantings = mine.reduce((n, l) => n + l.members.length, 0);
+      out.push(h('section.wk-kind', { dataset: { kind: id } },
+        h('div.sw-kind-head', h('h4', title), h('span', [open === mine.length ? plural(mine.length, 'job') : `${num(mine.length - open)} of ${plural(mine.length, 'job')} recorded`, plantings !== mine.length ? plural(plantings, 'planting') : ''].filter(Boolean).join(' · ')), h('small', about)),
+        jobTable(mine, stock, withWeek)));
+    }
+    return out;
   }
   function table(lines, stock, withWeek) {
     const openKeys = lines.filter(l => l.state !== 'done').map(l => l.key), all = openKeys.length > 0 && openKeys.every(k => ui.sel.has(k));
@@ -229,55 +356,122 @@
     return out;
   }
 
+  // ── the printed sheet: the week as a list to carry and tick by hand ──
+  const framed = (() => { try { return root.self !== root.top; } catch (_) { return true; } })();
+  function sheetRows(title, lines, cells) {
+    if (!lines.length) return null;
+    return [h('tr.wkp-head', h('th', { colSpan: 6 }, title)), lines.map(l => { const c = cells(l), over = l.state === 'done'; return h('tr', h('td.wkp-box', over ? '☑' : '☐'), h('td.wkp-day', c[0]), h('td', h('b', l.name), l.sub ? h('span', ` ${l.sub}`) : null), h('td', c[1]), h('td', c[2]), h('td.wkp-done', over && l.doneOn ? day(d(l.doneOn)) : '')); })];
+  }
+  function sheetTable(sow, other, withWeek) {
+    const when = l => { const x = d(l.date); return withWeek ? `${day(x)}` : `${UI.DAYS[x.getDay()]} ${x.getDate()}`; };
+    const body = [
+      ...KINDS.map(([kind, title]) => sheetRows(kind === 'direct' ? 'Sow in the ground' : `Sow: ${title.toLowerCase()}`, sow.filter(l => l.kind === kind), l => [when(l), [howText(l), howNote(l), l.amount ? amountText(l.state === 'done' ? l.amount : l.estimate, l.unit) : ''].filter(Boolean).join(' · '), whereText(l)])),
+      ...JOBS.map(([id, title]) => sheetRows(title, other.filter(l => l.section === id && !l.passed), l => [when(l), jobHow(l).filter(Boolean).join(' · '), jobWhere(l)]))].filter(Boolean);
+    return body.length ? h('table', h('thead', h('tr', h('th'), h('th', withWeek ? 'Planned' : 'Day'), h('th', 'What'), h('th', 'How much'), h('th', 'Where, or for'), h('th', 'Done on'))), h('tbody', body)) : null;
+  }
+  /** The week as a sheet of paper: every job with a box to tick and a place to write the day it was done. */
+  function sheet(fig, now) {
+    const all = jobs(), week = fig.list.filter(l => l.week === now), weekJobs = all.filter(l => l.week === now), earlier = fig.list.filter(l => l.week < now && l.state !== 'done'), earlierJobs = all.filter(l => l.week < now && l.state !== 'done');
+    const last = E.addDays(d(now), 6);
+    return h('div.wkp',
+      h('h1', `Week of ${UI.dayLong(d(now)).replace(/^\w+ /, '')}`), h('p.wkp-sub', `Monday ${day(d(now))} to Sunday ${day(last)} · ${plural(week.length + weekJobs.filter(l => !l.passed).length, 'job')} · printed ${day(new Date())}`),
+      sheetTable(week, weekJobs, false) || h('p', 'Nothing is planned for this week.'),
+      // the earlier jobs are printed when they are open on the page: what is seen is what is printed
+      ui.earlier && earlier.length + earlierJobs.length ? [h('h2', 'Not recorded from earlier weeks'), sheetTable(earlier, earlierJobs, true)] : null,
+      h('p.wkp-foot', 'Tick what was done and write the day. Enter it in the planner afterwards: a job done late moves what comes after it.'));
+  }
+  function printWeek(fig, now) {
+    let host = $('printSheet');
+    if (!host) { host = h('div', { id: 'printSheet' }); document.body.append(host); }
+    clear(host); host.append(sheet(fig, now));
+    document.body.classList.add('printing');
+    const done = () => { document.body.classList.remove('printing'); root.removeEventListener('afterprint', done); };
+    root.addEventListener('afterprint', done);
+    try { root.print(); } catch (_) { UI.toast('Printing is not available in this view.'); }
+    setTimeout(done, 1500);
+  }
+
   function render() {
     if (!App.state.ready || App.state.view !== 'sow') { dirty = true; return; }
     dirty = false;
-    const host = $('swWrap'), keep = host.parentElement.scrollTop, fig = figures(), stock = App.stockNow(), now = T.monday(E.d2s(App.state.date)), today = App.today();
+    const host = $('swWrap'), keep = host.parentElement.scrollTop, fig = figures(), all = jobs(), stock = App.stockNow(), now = T.monday(E.d2s(App.state.date)), today = App.today(), phone = isPhone();
     // a selection outlives a redraw, but not the line it pointed at
-    const known = new Set(fig.list.filter(l => l.state !== 'done').map(l => l.key));
+    const known = new Set([...fig.list, ...all].filter(l => l.state !== 'done').map(l => l.key));
     for (const k of [...ui.sel]) if (!known.has(k)) { ui.sel.delete(k); ui.qty.delete(k); }
     if (!ui.date) ui.date = today;
     const later = ui.date > today;
     const week = fig.list.filter(l => l.week === now), earlier = fig.list.filter(l => l.week < now && l.state !== 'done'), weekOpen = week.filter(l => l.state !== 'done');
+    const weekJobs = all.filter(l => l.week === now && !l.passed), earlierJobs = all.filter(l => l.week < now && l.state !== 'done'), jobsOpen = weekJobs.filter(l => l.state !== 'done'), late = earlier.length + earlierJobs.length;
     const sum = (list, unit) => list.filter(l => l.unit === unit).reduce((n, l) => n + l.amount, 0), trays = week.reduce((n, l) => n + l.trays, 0);
-    const next = fig.weeks.find(w => w > now), prev = fig.weeks.filter(w => w < now).pop(), step = n => () => App.setDate(E.addDays(d(now), n));
-    const selected = fig.list.filter(l => ui.sel.has(l.key)), chips = [['all', 'Everything'], ...KINDS.map(k => [k[0], k[1]])].filter(([id]) => id === 'all' || week.some(l => l.kind === id) || (ui.earlier && earlier.some(l => l.kind === id)));
+    const busy = [...new Set([...fig.list.map(l => l.week), ...all.filter(l => !l.passed).map(l => l.week)])].sort();
+    const next = busy.find(w => w > now), prev = busy.filter(w => w < now).pop(), step = n => () => App.setDate(E.addDays(d(now), n));
+    const t = ticked(fig), selected = [...t.sow, ...t.jobs], word = t.jobs.length ? 'job' : 'sowing';
+    const chips = [['all', 'Everything'], ...KINDS.map(k => [k[0], k[1]]), ...JOBS.map(k => [k[0], k[1]])].filter(([id]) => id === 'all' || week.some(l => l.kind === id) || weekJobs.some(l => l.section === id) || (ui.earlier && (earlier.some(l => l.kind === id) || earlierJobs.some(l => l.section === id))));
     if (!chips.some(([id]) => id === ui.filter)) ui.filter = 'all';
+    const anything = week.length + weekJobs.length > 0, nothingAfter = !anything && !next;
+    const pre = selected.length && !later ? preview(t, ui.date) : null;
+    const jobNote = JOBS.map(([id, title]) => { const n = jobsOpen.filter(l => l.section === id).length; return n ? `${title.toLowerCase()} ${num(n)}` : ''; }).filter(Boolean).join(' · ');
+    const seasonJobs = all.filter(l => !l.passed), seasonDone = fig.done + seasonJobs.filter(l => l.state === 'done').length, seasonAll = fig.total + seasonJobs.length;
     clear(host);
     add(host,
-      h('header.as-head', h('p.eyebrow', `Sowing · ${App.planYear()}`), h('h2', 'What to sow, week by week'),
-        h('p', 'Each line is one sowing as it is done: a batch of plug trays filled for several beds, rockwool for the towers, the week’s live trays, a variety drilled into its beds. Tick what was sown and record it: the plantings are dated and the seed comes off stock.')),
+      h('header.as-head.wk-head', h('p.eyebrow', `Week · ${App.planYear()}`), h('h2', 'The week’s work'),
+        h('p', 'Tick what was done and record it on the day it was done. Seed comes off stock, and a transplant sown or hardened off late goes out as many days later.')),
       h('div.tr-stats.sw-stats',
-        stat(`Week of ${day(d(now))}`, week.length ? `${num(weekOpen.length)} to sow` : 'Nothing', week.length ? (week.length - weekOpen.length ? `${num(week.length - weekOpen.length)} of ${num(week.length)} recorded` : plural(week.length, 'sowing') + ' planned') : next ? `next sowing ${dayName(d(fig.list.find(l => l.week === next).date))}` : 'no sowing after this'),
+        stat(`Week of ${day(d(now))}`, week.length ? `${num(weekOpen.length)} to sow` : 'Nothing', week.length ? (week.length - weekOpen.length ? `${num(week.length - weekOpen.length)} of ${num(week.length)} recorded` : plural(week.length, 'sowing') + ' planned') : 'to sow'),
         stat('Seed this week', sum(week, 'seeds') ? num(sum(week, 'seeds')) : sum(week, 'g') ? amountText(sum(week, 'g'), 'g') : '—', sum(week, 'seeds') ? `seeds${sum(week, 'g') ? ' · ' + amountText(sum(week, 'g'), 'g') + ' for trays' : ''}` : sum(week, 'g') ? 'for live trays' : ''),
-        stat('Trays to fill', trays ? num(trays) : '—', trays ? [['plugs', 'seedling'], ['rockwool', 'tower'], ['live', 'live']].map(([k, word]) => { const n = week.filter(l => l.kind === k).reduce((m, l) => m + l.trays, 0); return n ? `${num(n)} ${word}` : ''; }).filter(Boolean).join(' · ') : ''),
-        stat('Earlier, not recorded', num(earlier.length), earlier.length ? `since ${day(d(earlier[0].date))}` : 'nothing is waiting'),
-        stat('This season', `${num(fig.done)} of ${num(fig.total)}`, 'sowings recorded')),
+        stat('Trays to fill', trays ? num(trays) : '—', trays ? [['plugs', 'seedling'], ['rockwool', 'tower'], ['live', 'live']].map(([k, w]) => { const n = week.filter(l => l.kind === k).reduce((m, l) => m + l.trays, 0); return n ? `${num(n)} ${w}` : ''; }).filter(Boolean).join(' · ') : ''),
+        stat('Other jobs', weekJobs.length ? `${num(jobsOpen.length)} to do` : 'Nothing', weekJobs.length ? (jobNote || `${plural(weekJobs.length, 'job')} recorded`) : 'to pot up, harden off or plant', 'wk-other'),
+        stat('Earlier, not recorded', num(late), late ? `since ${day(d([...earlier, ...earlierJobs].map(l => l.date).sort()[0]))}` : 'nothing is waiting', late ? 'wk-late' : ''),
+        stat('This season', `${num(seasonDone)} of ${num(seasonAll)}`, 'jobs recorded')),
       h('div.sw-bar',
         h('span.tr-stepper', h('button.icon-btn', { type: 'button', 'aria-label': 'Back one week', onclick: step(-7) }, '‹'), h('b', `Week of ${day(d(now))}`), h('button.icon-btn', { type: 'button', 'aria-label': 'Forward one week', onclick: step(7) }, '›')),
-        !week.length && next ? h('button.btn.small', { type: 'button', onclick: () => App.setDate(d(next)) }, `Next sowing: week of ${day(d(next))}`) : null,
-        !week.length && !next && prev ? h('button.btn.small', { type: 'button', onclick: () => App.setDate(d(prev)) }, `Last sowing: week of ${day(d(prev))}`) : null,
+        now !== T.monday(today) && String(App.planYear()) === today.slice(0, 4) ? h('button.btn.small', { type: 'button', id: 'wkToday', onclick: () => App.setDate(d(today)) }, 'This week') : null,
+        !anything && next ? h('button.btn.small', { type: 'button', onclick: () => App.setDate(d(next)) }, `Next work: week of ${day(d(next))}`) : null,
+        nothingAfter && prev ? h('button.btn.small', { type: 'button', onclick: () => App.setDate(d(prev)) }, `Last work: week of ${day(d(prev))}`) : null,
         h('span.grow'),
-        chips.length > 2 ? h('div.sd-filters', { role: 'group', 'aria-label': 'Which sowings to list' }, chips.map(([id, label]) => h('button.chip', { type: 'button', 'aria-pressed': String(ui.filter === id), onclick: () => { ui.filter = id; render(); } }, label))) : null),
-      earlier.length ? h('details.sw-earlier', { open: ui.earlier, ontoggle: e => { if (e.target.open !== ui.earlier) { ui.earlier = e.target.open; render(); } } },
-        h('summary', h('b', `${plural(earlier.length, 'earlier sowing')} ${earlier.length === 1 ? 'is' : 'are'} not recorded`), h('span', ' Planned before this week. Record them here, or leave them: nothing is assumed sown.')),
-        ui.earlier ? sections(earlier, stock, true) : null) : null,
-      week.length ? sections(week, stock, false) : h('p.empty.sw-none', `Nothing is sown in the week of ${day(d(now))}.`),
-      selected.length ? h('div.sw-record', { role: 'region', 'aria-label': 'Record the ticked sowings' },
-        h('b', `${plural(selected.length, 'sowing')} ticked`),
-        h('span', (() => { const s = sum(selected, 'seeds'), g = sum(selected, 'g'); return [s ? amountText(s, 'seeds') : '', g ? amountText(g, 'g') + ' of seed' : ''].filter(Boolean).join(' · '); })()),
+        chips.length > 2 ? h('div.sd-filters', { role: 'group', 'aria-label': 'Which jobs to list' }, chips.map(([id, label]) => h('button.chip', { type: 'button', 'aria-pressed': String(ui.filter === id), onclick: () => { ui.filter = id; render(); } }, label))) : null,
+        framed || phone ? null : h('button.btn', { type: 'button', id: 'wkPrint', title: 'This week as a sheet to carry: a box for each job and a place for the day it was done', onclick: () => printWeek(fig, now) }, 'Print the week')),
+      late ? h('details.sw-earlier', { open: ui.earlier, ontoggle: e => { if (e.target.open !== ui.earlier) { ui.earlier = e.target.open; render(); } } },
+        h('summary', h('b', `${plural(late, 'earlier job')} ${late === 1 ? 'is' : 'are'} not recorded`), h('span', ' Planned before this week. Record them here on the day they were done, or leave them: nothing is assumed done.')),
+        ui.earlier ? [sections(earlier, stock, true), jobSections(earlierJobs, stock, true)] : null) : null,
+      anything ? [sections(week, stock, false), jobSections(weekJobs, stock, false)] : h('p.empty.sw-none', `Nothing is planned for the week of ${day(d(now))}.`),
+      selected.length ? h('div.sw-record', { role: 'region', 'aria-label': 'Record what is ticked' },
+        h('b', `${plural(selected.length, word)} ticked`),
+        h('span', (() => { const s = sum(t.sow, 'seeds'), g = sum(t.sow, 'g'); return [s ? amountText(s, 'seeds') : '', g ? amountText(g, 'g') + ' of seed' : ''].filter(Boolean).join(' · '); })()),
         h('span.grow'),
-        h('label', h('span', later ? 'Plan for' : 'Sown on'), h('input', { type: 'date', value: ui.date, 'aria-label': later ? 'Plan for' : 'Sown on', onchange: e => { ui.date = e.target.value || today; render(); } })),
+        h('label', h('span', later ? 'Plan for' : t.jobs.length ? 'Done on' : 'Sown on'), h('input', { type: 'date', value: ui.date, 'aria-label': later ? 'Plan for' : t.jobs.length ? 'Done on' : 'Sown on', onchange: e => { ui.date = e.target.value || today; render(); } })),
         h('button.btn', { type: 'button', onclick: () => { ui.sel.clear(); ui.qty.clear(); render(); } }, 'Clear'),
-        h('button.btn.primary', { type: 'button', id: 'swRecord', onclick: () => (later ? planFor(fig) : record(fig)) }, later ? `Plan ${plural(selected.length, 'sowing')} for ${dayName(d(ui.date))}` : `Record ${plural(selected.length, 'sowing')}`),
-        later ? h('small.sw-later', 'A day after today is a plan. Nothing is marked sown and no seed leaves stock: the sowing moves to that day.') : null) : null,
-      Bench.section('Heated bench room'));
+        h('button.btn.primary', { type: 'button', id: 'swRecord', disabled: later && !t.sow.length, onclick: () => (later ? planFor(fig) : record(fig)) }, later ? `Plan ${plural(t.sow.length, 'sowing')} for ${dayName(d(ui.date))}` : `Record ${plural(selected.length, word)}`),
+        later ? h('small.sw-later', t.jobs.length ? `A day after today is a plan, not a record. Sowings move to that day; nothing is marked done and no seed leaves stock. ${t.sow.length ? 'The other jobs ticked stay' : 'These jobs stay'} where they are: to plan another day for planting out, move the planting.`
+          : 'A day after today is a plan. Nothing is marked sown and no seed leaves stock: the sowing moves to that day.') : null,
+        pre && pre.moved.length ? h('label.sw-follow', { id: 'wkFollow' },
+          h('input', { type: 'checkbox', checked: ui.follow, onchange: e => { ui.follow = e.target.checked; render(); } }), h('b', 'Later dates follow'),
+          h('span', ui.follow ? `Late by ${(() => { const lo = Math.min(...pre.moved.map(m => m.days)), hi = Math.max(...pre.moved.map(m => m.days)); return lo === hi ? days(hi) : `${num(lo)} to ${days(hi)}`; })()}: ${movedText(pre.moved)}.${pre.overlaps ? ` ${pre.overlaps === 1 ? 'One pair of plantings' : num(pre.overlaps) + ' pairs of plantings'} would then share ground, and wait under To settle.` : ''}`
+            : `${plural(pre.moved.length, 'planting')} ${pre.moved.length === 1 ? 'was' : 'were'} sown or hardened off late and ${pre.moved.length === 1 ? 'keeps the day it goes' : 'keep the days they go'} out.`)) : null,
+        pre && pre.held ? h('small.sw-later', `${plural(pre.held, 'planting')} would be pushed out of ${App.planYear()}, and ${pre.held === 1 ? 'stays' : 'stay'} where ${pre.held === 1 ? 'it is' : 'they are'}.`) : null) : null,
+      phone ? null : Bench.section('Heated bench room'));
     host.parentElement.scrollTop = keep;
   }
+
+  // ── a phone: the week is the whole page ──
+  // Narrower than a small tablet, the planner is this view and nothing else: no map, no library, no other views to stray into.
+  // "Full planner" leaves that for the visit, for a narrow window on a computer.
+  const narrow = root.matchMedia ? root.matchMedia('(max-width: 700px)') : null;
+  let fullHere = false;
+  function fitPhone() {
+    const phone = !!(narrow && narrow.matches) && !fullHere, was = isPhone();
+    document.body.classList.toggle('phone', phone);
+    if (phone && App.state.ready && App.state.view !== 'sow') { App.setView('sow'); return; }
+    if (phone !== was && App.state.ready) render();
+  }
+  function leavePhone() { fullHere = true; fitPhone(); }
 
   function init() {
     App.on('plan', render); App.on('view', render); App.on('date', () => { if (App.state.view === 'sow') render(); });
     Thumbs.on(() => { if (App.state.view === 'sow') render(); });
+    if (narrow) { narrow.addEventListener('change', fitPhone); App.on('plan', fitPhone); App.on('view', fitPhone); fitPhone(); }
+    const full = $('wkFull');
+    if (full) full.addEventListener('click', leavePhone);
   }
-  root.LRFSowView = { init, render, figures, get dirty() { return dirty; } };
+  root.LRFSowView = { init, render, figures, jobs, sheet: () => sheet(figures(), T.monday(E.d2s(App.state.date))), ticked: () => ticked(figures()), fitPhone, leavePhone, get dirty() { return dirty; }, get follow() { return ui.follow; } };
 })(window);
