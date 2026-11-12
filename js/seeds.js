@@ -12,9 +12,9 @@
   const $ = id => document.getElementById(id);
   const ui = { tab: 'list', query: '', filter: 'all', sort: 'crop', closed: new Set(), sel: null, rev: 0, panelKey: '', stock: null, sowOpen: null, dirty: true };
   const ENV_LABEL = { field: 'Field', tunnel: 'Unheated tunnel', heated: 'Heated greenhouse', tower: 'Towers' };
-  const BASIS_TEXT = { seed: 'seeding', transplant: 'transplanting', unspecified: 'not stated' };
-  const BASIS_OPTIONS = [['unspecified', 'Not stated'], ['seed', 'Seeding'], ['transplant', 'Transplanting into the bed']];
-  const BASIS_SHORT = [['unspecified', 'not stated'], ['seed', 'seeding'], ['transplant', 'transplanting']];
+  const BASIS_TEXT = { seed: 'seeding', direct: 'direct seeding', transplant: 'transplanting', unspecified: 'not stated' };
+  const BASIS_OPTIONS = [['unspecified', 'Not stated: as the crop'], ['seed', 'Seeding, in the nursery'], ['direct', 'Direct seeding, in place'], ['transplant', 'Transplanting into the bed']];
+  const BASIS_SHORT = [['unspecified', 'as the crop'], ['seed', 'seeding'], ['direct', 'direct seeding'], ['transplant', 'transplanting']];
   const STAGE_OPTIONS = [['unspecified', 'Not stated'], ['mature', 'Mature'], ['baby', 'Baby'], ['flower', 'First flower or cut']];
   const NEW_CROP = '__new_crop__', NEW_VARIETY = '__new__';
 
@@ -49,7 +49,7 @@
   function planningDays(variety) {
     const plan = App.state.plan, others = plan.varieties.filter(v => v.id !== variety.id);
     const eng = E.create({ ...plan, varieties: [...others, variety] }, Lib), out = [];
-    for (const env of eng.ENVS) { const t = eng.timingFor(variety.cropId, variety.id, env); if (t.source !== 'none' && t.value) out.push({ env, days: t.value, source: t.source, printed: t.printed, basis: t.basis }); }
+    for (const env of eng.ENVS) { const t = eng.timingFor(variety.cropId, variety.id, env); if (t.source !== 'none' && t.bed) out.push({ env, days: t.bed, source: t.source, printed: t.printed, basis: t.basis, off: t.off, by: t.startBy }); }
     return out;
   }
   function planningLine(variety, crop) {
@@ -62,8 +62,8 @@
     let why = '';
     if (!variety.catalogDtm && !(variety.dtm > 0)) why = ' That is the crop’s number: this variety has none of its own.';
     else if (variety.catalogDtm && !supplier) why = ` The supplier’s ${variety.catalogDtm} days cannot be used as given (${crop.method === 'DS' && variety.catalogMaturityBasis === 'transplant' ? 'it counts from transplanting and this crop is direct sown' : 'less the nursery time it leaves nothing'}), so the crop’s number stands.`;
-    else if (supplier && field.printed && field.days !== field.printed) why = ` The supplier prints ${field.printed} from ${BASIS_TEXT[field.basis] || 'seeding'}; the nursery time is taken off.`;
-    else if (supplier && variety.catalogMaturityBasis === 'unspecified' && crop.method === 'TP') why = field.basis && field.basis !== 'unspecified' ? ` No starting point is set, so the planner goes by the page text and reads it as from ${BASIS_TEXT[field.basis]}.` : ' No starting point is set, so the printed days are counted from the day it goes in the bed.';
+    else if (supplier && field.printed && field.days !== field.printed) why = ` The supplier prints ${field.printed} from ${BASIS_TEXT[field.basis] || 'seeding'}; ${field.basis === 'direct' ? `as a transplant it is in the bed ${field.off} days less` : 'the nursery time is taken off'}.${field.by === 'crop' ? ' That starting point is the crop’s, set on the Assumptions tab.' : field.by === 'guess' ? ' That starting point is a guess from the wording of the page: set it here or on the crop.' : ''}`;
+    else if (supplier && (variety.catalogMaturityBasis || 'unspecified') === 'unspecified' && crop.method === 'TP') why = field.by === 'crop' ? ' The crop’s starting point is used: transplanting.' : field.basis && field.basis !== 'unspecified' ? ` No starting point is set, so the planner goes by the page text and reads it as from ${BASIS_TEXT[field.basis]}.` : ' No starting point is set here or on the crop, so the printed days are counted from the day it goes in the bed.';
     return `The planner will count ${text} from the day it goes in the bed.${why}`;
   }
 
@@ -117,7 +117,7 @@
       fld('New crop name', inp('newCropName', '', { maxLength: 160 })), fld('Plant family (optional)', inp('newCropFamily', '', { maxLength: 160 })),
       fld('How it is planted', sel('newCropMethod', [['TP', 'Transplanted'], ['DS', 'Direct sown']], 'TP')), fld('Planted from', sel('newCropMaterial', [['seed', 'Seed'], ['plant', 'Bought-in plants'], ['bulb', 'Bulbs'], ['clove', 'Cloves'], ['piece', 'Seed pieces']], 'seed')));
     const matchBox = h('div.sd-match'), planLine = h('p.sd-plan'), startNote = h('p.sd-evidence');
-    const basisSel = sel('basis', BASIS_OPTIONS, f.maturityBasis || 'unspecified');
+    const basisSel = sel('basis', BASIS_OPTIONS, SL.startOf(f.maturityBasis, ev.maturityBasis && ev.maturityBasis.value));
     const stageSel = sel('stage', STAGE_OPTIONS, 'unspecified');
     const dtmMin = numIn('dtmMin', f.maturity ? f.maturity.min : '', { min: 1, max: 3650, step: 1 }), dtmMax = numIn('dtmMax', f.maturity ? f.maturity.max : '', { min: 1, max: 3650, step: 1 });
     const printed = ev.maturity && ev.maturity.value ? String(ev.maturity.value).slice(0, 120) : '';
@@ -257,8 +257,9 @@
       if (d.closed || !record) return;
       const w = record.webImport || {}, s = Reader.maturityStatement({ url: v.url, sourceText: record.catalogSourceText || w.sourceText || '', specifications: w.specifications || [] });
       const printed = w.evidence && w.evidence.maturity && w.evidence.maturity.value ? String(w.evidence.maturity.value).slice(0, 120) : '';
+      const said = SL.startOf(s.basis, s.statement);
       add(clear(evidence), printed ? h('span', `The page printed: “${printed}”. `) : null, s.statement ? h('span', `${s.source}: “${s.statement}”`) : h('span', 'Its saved page does not say where the days start.'),
-        s.basis !== 'unspecified' && s.basis !== val(form, 'basis') ? button(`Set to ${BASIS_TEXT[s.basis]}`, () => { form.elements.basis.value = s.basis; refresh(); }, 'small') : null);
+        said !== 'unspecified' && said !== val(form, 'basis') ? button(`Set to ${BASIS_TEXT[said]}`, () => { form.elements.basis.value = said; refresh(); }, 'small') : null);
     }).catch(() => {});
 
     const input = () => {
@@ -382,7 +383,8 @@
   const SUPPLIER_SHORT = [[/johnny/i, 'Johnny’s'], [/harris/i, 'Harris'], [/fedco/i, 'Fedco'], [/high\s*mowing/i, 'High Mowing'], [/berbee/i, 'Berbee'], [/stark/i, 'Stark Bro’s'], [/true\s*leaf/i, 'True Leaf'], [/territorial/i, 'Territorial'],
     [/paramount/i, 'Paramount'], [/osborne/i, 'Osborne'], [/whaley/i, 'A.P. Whaley'], [/trade\s*winds/i, 'Trade Winds'], [/pepper\s*joe/i, 'Pepper Joe’s'], [/rupp/i, 'Rupp'], [/sandia/i, 'Sandia']];
   const supplierShort = v => { const s = v.supplier || (v.source === 'Farm entry' ? '' : v.source) || ''; const hit = SUPPLIER_SHORT.find(([re]) => re.test(s)); return hit ? hit[1] : s; };
-  const noStart = v => !!v.catalogDtm && (v.catalogMaturityBasis || 'unspecified') === 'unspecified';
+  // A variety whose printed days have no starting point of their own, in a crop that has none set either.
+  const noStart = v => !!v.catalogDtm && (v.catalogMaturityBasis || 'unspecified') === 'unspecified' && !App.state.engine.startRule(v.cropId).set;
   const FILTERS = [['all', 'All'], ['planted', 'Planted'], ['tosow', 'To sow'], ['short', 'Short of seed'], ['open', 'No starting point']];
   const SORTS = [['crop', 'By crop'], ['name', 'Name'], ['days', 'Days'], ['tosow', 'Most to sow'], ['first', 'First sowing'], ['supplier', 'Supplier']];
   const amount = r => [h('b', num(r.toSow, r.unit === 'g' ? 1 : 0)), r.unit === 'seeds' ? null : h('small.sd-unitword', SL.UNIT_WORD[r.unit])];
@@ -770,7 +772,7 @@
         h('div.sd-stats', stat('Varieties', num(m.live.length), `${m.live.filter(v => m.used.has(v.id)).length} planted`), stat('To sow', num(seeds), 'seeds'), stat('Short', num(short), 'varieties')),
         onOrder ? h('button.sd-task.plain', { type: 'button', id: 'sdReceiveAll', onclick: receiveAll }, h('b', `Seed for ${onOrder} variet${onOrder === 1 ? 'y' : 'ies'} is on order`), h('span', 'When the box comes, click an order in the list to count it as on hand, or click here to mark every order as arrived.')) : null,
         m.unlisted.length ? unlistedBox(m) : null,
-        open ? h('button.sd-task', { type: 'button', onclick: () => { ui.filter = 'open'; ui.tab = 'list'; schedule(); } }, h('b', `${open} variet${open === 1 ? 'y has' : 'ies have'} supplier days with no starting point`), h('span', 'For a transplanted crop that can move the harvest by the whole nursery time. Set each one in the “Days start at” column.')) : null,
+        open ? h('button.sd-task', { type: 'button', onclick: () => { ui.filter = 'open'; ui.tab = 'list'; schedule(); } }, h('b', `${open} variet${open === 1 ? 'y has' : 'ies have'} supplier days with no starting point`), h('span', 'For a transplanted crop that can move the harvest by the whole nursery time. Set each one in the “Days start at” column, or set the crop’s once on the Assumptions tab.')) : null,
         h('p.dlg-hint', 'Click a variety to see and edit it here. With a row in focus, ↑ and ↓ move between varieties and Enter jumps to its first field.'),
         h('p.dlg-hint', serviceReady() ? 'Link reader is set in this browser.' : 'Reading a variety from a supplier link needs the link reader set up. Pasting a page works without it.'));
       return;

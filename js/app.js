@@ -146,23 +146,29 @@
   function impact(before, after) {
     const pairs = eng => { const set = new Set(); for (const p of eng.plan.plantings) { const r = eng.calc(p); if (r) for (const o of eng.conflicts(p, r)) if (!o.rest) set.add([p.id, o.p.id].sort().join('|')); } return set; };
     let changed = 0, later = 0, sooner = 0, most = 0;
+    const byCrop = new Map();
     for (const p of after.plan.plantings) {
       const a = after.calc(p), q = before.planting(p.id), b = q && before.calc(q);
       if (!a || !b) continue;
       const shift = E.dayDiff(a.first, b.first);
-      if (shift || +a.last !== +b.last) changed++;
+      if (shift || +a.last !== +b.last) { changed++; const row = byCrop.get(p.cropId) || { cropId: p.cropId, n: 0, shifts: [] }; row.n++; row.shifts.push(shift); byCrop.set(p.cropId, row); }
       if (shift > 0) later++; else if (shift < 0) sooner++;
       if (Math.abs(shift) > Math.abs(most)) most = shift;
     }
     const was = pairs(before), now = pairs(after);
-    return { changed, later, sooner, most, overlaps: [...now].filter(k => !was.has(k)).length };
+    return { changed, later, sooner, most, overlaps: [...now].filter(k => !was.has(k)).length, byCrop: [...byCrop.values()] };
   }
-  async function assume(label, ops) {
+  async function assume(label, ops, options = {}) {
     const plan = withOps(state.plan, ops, 'do'), engine = E.create(plan, Lib), hit = impact(state.engine, engine);
     const moves = hit.changed ? `${hit.changed} planting${hit.changed === 1 ? '' : 's'} ${hit.later && hit.sooner ? 'shift' : hit.later ? 'harvest later' : 'harvest sooner'}, by up to ${Math.abs(hit.most)} day${Math.abs(hit.most) === 1 ? '' : 's'}` : 'No planting’s dates change';
+    const line = row => { const c = engine.crop(row.cropId), lo = Math.min(...row.shifts), hi = Math.max(...row.shifts), days = lo === hi ? Math.abs(hi) : `${Math.min(Math.abs(lo), Math.abs(hi))} to ${Math.max(Math.abs(lo), Math.abs(hi))}`; return UI.h('li', UI.h('b', c ? c.name : 'Crop'), ` ${row.n} planting${row.n === 1 ? '' : 's'}, ${lo === 0 && hi === 0 ? 'harvest ends on another day' : `${days} day${hi === 1 || hi === -1 ? '' : 's'} ${lo < 0 && hi > 0 ? 'either way' : hi > 0 ? 'later' : 'sooner'}`}`); };
+    const detail = hit.changed ? UI.h('ul.moves', { id: 'assumeMoves' }, hit.byCrop.sort((a, b) => b.n - a.n).map(line)) : null;
     if (hit.overlaps) {
-      const ok = await UI.confirm({ title: label, confirmLabel: 'Apply', body: `${moves}. ${hit.overlaps} pair${hit.overlaps === 1 ? '' : 's'} of plantings would then be booked into the same ground. They are not refused, because the plan was only ever as good as the number. They will wait on the overview under “To settle”.` });
+      const ok = await UI.confirm({ title: label, confirmLabel: 'Apply', body: `${moves}. ${hit.overlaps} pair${hit.overlaps === 1 ? '' : 's'} of plantings would then be booked into the same ground. They are not refused, because the plan was only ever as good as the number. They will wait on the overview under “To settle”.`, detail });
       if (!ok) return false;
+    } else if (options.ask && hit.changed) {
+      // Several lines of the list changed at once: say what moves before it does.
+      if (!await UI.confirm({ title: label, confirmLabel: 'Apply', body: `${moves}. No ground ends up booked twice. One undo takes it all back.`, detail })) return false;
     }
     commit(label, ops, { unchecked: true });
     toast(`${label} · ${moves.charAt(0).toLowerCase()}${moves.slice(1)}`, { label: 'Undo', run: undo });
@@ -175,8 +181,49 @@
     const record = { ...(next[kind][id] || {}) };
     if (days > 0) record[env] = { dtm: Math.round(days) }; else delete record[env];
     if (Object.keys(record).length) next[kind][id] = record; else delete next[kind][id];
-    const empty = !Object.keys(next.crops || {}).length && !Object.keys(next.varieties || {}).length;
+    const empty = !Object.keys(next.crops || {}).length && !Object.keys(next.varieties || {}).length && !Object.keys(next.starts || {}).length;
     return assume(label, [{ kind: 'assume', before: current, after: empty ? null : next }]);
+  }
+  /**
+   * Say where crops' days start: `changes` is [{ cropId, from, less }]. `from` is transplant, seed or direct; `less` the days a
+   * transplant saves on a figure for seed sown in place. A null for either goes back to the default. One step, whatever the number of crops.
+   */
+  function setStarts(changes, label, options) {
+    const current = state.plan.assumptions || null, next = current ? JSON.parse(JSON.stringify(current)) : { v: 1, crops: {}, varieties: {} };
+    next.starts = next.starts || {};
+    for (const change of changes) {
+      const record = { ...(next.starts[change.cropId] || {}) };
+      for (const key of ['from', 'less']) { if (!(key in change)) continue; if (change[key] == null || change[key] === '') delete record[key]; else record[key] = key === 'less' ? Math.max(0, Math.round(+change[key])) : change[key]; }
+      if (Object.keys(record).length) next.starts[change.cropId] = record; else delete next.starts[change.cropId];
+    }
+    if (!Object.keys(next.starts).length) delete next.starts;
+    if (JSON.stringify(next) === JSON.stringify(current || { v: 1, crops: {}, varieties: {} })) return Promise.resolve(false);
+    const empty = !Object.keys(next.crops || {}).length && !Object.keys(next.varieties || {}).length && !next.starts;
+    return assume(label, [{ kind: 'assume', before: current, after: empty ? null : next }], options);
+  }
+  const setStart = (cropId, change, label) => setStarts([{ cropId, ...change }], label);
+
+  // ───────────────────────── figures kept on plantings ─────────────────────────
+  // A planting that carries its own days does not listen to the list. The audit (js/audit.js) finds them, shows what a
+  // release would move before anything changes, and carries the decisions out as one step, with the plan as it stood
+  // kept as a snapshot first. Recorded work and tray batches are never touched.
+  const Audit = root.LRFAudit;
+  const auditSurvey = () => Audit.survey(state.engine, Lib);
+  const auditStudy = () => Audit.study(state.plan, Lib);
+  function auditPreview(rows, choices) {
+    const step = Audit.build(state.plan, rows, choices);
+    return { step, ...Audit.preview(state.plan, Lib, step.ops, state.engine) };
+  }
+  async function auditApply(rows, choices) {
+    const step = Audit.build(state.plan, rows, choices), n = step.released + step.thaw + step.waiting;
+    if (!step.ops.length) return false;
+    const view = Audit.preview(state.plan, Lib, step.ops, state.engine);
+    await snapshot('Before plantings followed the list');
+    const label = `${n} planting${n === 1 ? '' : 's'} follow${n === 1 ? 's' : ''} the list`;
+    if (!commit(label, step.ops, { unchecked: true })) return false;
+    const moved = view.harvest || view.sowing ? `${view.harvest} harvest date${view.harvest === 1 ? '' : 's'} and ${view.sowing} sowing date${view.sowing === 1 ? '' : 's'} moved` : 'no date moved';
+    toast(`${label} · ${moved}`, { label: 'Undo', run: undo });
+    return { ...step, ...view };
   }
   /** Say what kind of place a garden is. Its house factor and frost setting follow, as they did in v7. */
   function setGardenType(gardenId, type) {
@@ -1341,7 +1388,8 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType,
+    commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts,
+    auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },

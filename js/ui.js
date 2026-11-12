@@ -64,11 +64,11 @@
   }
 
   /** In-page confirmation (the page's frame has no window.confirm). */
-  function confirm({ title, body, confirmLabel = 'Confirm', danger = false }) {
+  function confirm({ title, body, confirmLabel = 'Confirm', danger = false, detail = null }) {
     return new Promise(resolve => {
       const done = value => { dialog.close(); dialog.remove(); resolve(value); };
       const dialog = h('dialog.dialog', { oncancel: e => { e.preventDefault(); done(false); } },
-        h('h2', title), h('p', body),
+        h('h2', title), h('p', body), detail,
         h('div.dialog-actions',
           h('button.btn', { type: 'button', onclick: () => done(false) }, 'Cancel'),
           h('button.btn' + (danger ? '.danger' : '.primary'), { type: 'button', onclick: () => done(true) }, confirmLabel)));

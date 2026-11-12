@@ -130,7 +130,7 @@
   // A change is put back only while the backup still holds the value it was changed from; where v7 has moved on, v7's value stands.
   const FACT_LISTS = ['crops', 'varieties', 'gardens', 'beds'];
   const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
-  const figures = a => a ? ['crops', 'varieties'].reduce((n, k) => n + Object.values(a[k] || {}).reduce((m, envs) => m + Object.keys(envs || {}).length, 0), 0) : 0;
+  const figures = a => a ? ['crops', 'varieties'].reduce((n, k) => n + Object.values(a[k] || {}).reduce((m, envs) => m + Object.keys(envs || {}).length, 0), 0) + Object.keys(a.starts || {}).length : 0;
   /**
    * Record the difference one edit makes to a crop, variety, garden or bed. facts: { crops: { id: { name, set, was } }, … }.
    * `was` is what the record held before it was first changed here; a field put back to that is forgotten.

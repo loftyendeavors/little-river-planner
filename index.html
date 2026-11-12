@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.21">
+<meta name="lrf-build" content="0.22">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -148,9 +148,11 @@
         <header class="as-head">
           <p class="eyebrow">One list the whole plan rests on</p>
           <h2>Days to first harvest</h2>
-          <p>Days here start the day the crop goes into its bed or tower. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; where a tunnel, greenhouse or tower has no number of its own it shows the field figure, so set the ones that differ. A variety with its own figure keeps it; a planting with no variety uses the crop row.</p>
+          <p>Each row says where its days start, and its numbers count from there. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; a variety with its own figure keeps it, and a planting with no variety uses the crop row.</p>
         </header>
         <details class="as-places" id="asPlaces"><summary id="asPlacesSum">Where things grow</summary><div class="as-places-body" id="asPlacesBody"></div></details>
+        <section class="as-audit" id="asAudit" aria-label="Figures kept on plantings"></section>
+        <div class="as-hints" id="asHints" hidden></div>
         <div class="as-tools">
           <div class="seg" role="group" aria-label="Which crops to list">
             <button type="button" data-as-scope="mine" aria-pressed="true">My crops <small></small></button>
@@ -160,7 +162,7 @@
           <p class="as-key"><i class="k-default"></i>unchecked default <i class="k-guide"></i>checked against a guide <i class="k-own"></i>variety’s own <i class="k-mine"></i>yours <span id="asCount"></span></p>
         </div>
         <table class="as">
-          <thead><tr><th>Crop</th><th>Field</th><th>Unheated tunnel</th><th>Heated greenhouse</th><th>Towers</th><th>Plantings</th></tr></thead>
+          <thead><tr><th>Crop</th><th class="as-th-start" title="Where the numbers in the row count from. Transplanting: the day the crop goes in the bed. Sowing: the day it is sown in the nursery, so the nursery time comes off. Direct sowing: a figure for seed sown in place; as a transplant the crop is in the bed about two weeks less.">Days start at</th><th>Field</th><th>Unheated tunnel</th><th>Heated greenhouse</th><th>Towers</th><th title="Days in the nursery, plus days in the bed, and what that comes to from seed to first harvest. Worked out for the condition the crop is mostly grown in.">From seed</th><th>Plantings</th></tr></thead>
           <tbody id="asBody"></tbody>
         </table>
       </div>
@@ -242,6 +244,7 @@
 <script src="js/rails.js"></script>
 <script src="js/forecast.js"></script>
 <script src="js/succession.js"></script>
+<script src="js/audit.js"></script>
 <script src="js/store.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/thumbs.js"></script>
