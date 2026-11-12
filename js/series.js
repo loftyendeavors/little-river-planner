@@ -55,7 +55,8 @@
     if (source && r) { P.gardenIds = [r.b.gardenId]; P.every = everyFor(crop, source, r); P.from = E.d2s(E.addDays(r.field, +P.every)); }
     else {
       const planted = gardens.filter(g => g.planted);
-      P.gardenIds = planted.map(g => g.garden.id);
+      // grown nowhere yet: the first garden it can go in, so the form opens on a series to look at and not on a complaint
+      P.gardenIds = (planted.length ? planted : gardens.slice(0, 1)).map(g => g.garden.id);
       // where the crop is grown in towers, a new series follows the cycle those plantings use
       const like = S.models(eng, crop.id).find(m => planted.length && m.r.kind === planted[0].kind && m.r.kind !== 'bed');
       if (like) P.sourceId = like.p.id;
@@ -258,7 +259,9 @@
   /** Open the series tool with something in mind: { sourceId? | cropId?, varietyId?, bedId?, gardenId?, from? }. */
   function open(focus) {
     if (!App.state.ready) return;
-    const sel = App.state.sel;
+    const sel = App.state.sel, eng = App.state.engine, from = focus && focus.sourceId ? eng.planting(focus.sourceId) : null, asked = eng.crop(from ? from.cropId : focus && focus.cropId);
+    // a crop named that the tool does not plan is said so: the form never opens on some other crop in its place
+    if (asked && !seriesCrops(eng).includes(asked)) { toast(asked.micro ? `${asked.name} is planned from weekly demand, on the Trays view, not as a series.` : `${asked.name} has no harvest to space a series by. Use “more, every so many days” on one of its plantings.`); return; }
     P.back = sel && (sel.type === 'planting' || sel.type === 'bed') ? sel : null;
     seed(focus || {});
     if (!['map', 'timeline'].includes(App.state.view)) App.setView('timeline');

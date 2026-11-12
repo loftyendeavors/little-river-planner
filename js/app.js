@@ -853,7 +853,11 @@
     const monday = carried.keep.trayStart === 'monday' ? traysToMonday(core, records) : { plan: core, moved: [] };
     core = monday.plan;
     const kept = [...carried.notes, ...monday.moved.map(m => `${m.name} opening on a Monday (${day(E.s2d(m.to))}, not ${day(E.s2d(m.from))})`)];
-    if (replacing) {
+    if (state.unreadable) {
+      const ok = await UI.confirm({ title: 'Replace what is stored here?', body: `The plan stored in this browser could not be opened. Loading this one (${info.plantings} plantings for ${info.year || 'an unknown year'}) puts it in that place, and what is stored now is gone for good. If it may hold work that is nowhere else, cancel and use “Download what is stored” first.`, confirmLabel: 'Replace it', danger: true });
+      if (!ok) return false;
+      store.release(); state.unreadable = null;
+    } else if (replacing) {
       const ok = await UI.confirm({
         title: 'Replace the plan in this app?',
         body: `The backup holds ${info.plantings} plantings in ${info.beds} growing spaces across ${info.gardens} gardens for ${info.year || 'an unknown year'}. Plantings, tray demand and seed stock are replaced by the backup’s, including what was changed here. ${kept.length ? `Kept from this copy: ${kept.join('; ')}. ` : ''}${leftBehind ? `The ${leftBehind} planting${leftBehind === 1 ? '' : 's'} still to place here ${leftBehind === 1 ? 'is' : 'are'} not in that file and will be gone. ` : ''}${carried.gone.length ? `${carried.gone.length} variet${carried.gone.length === 1 ? 'y' : 'ies'} here ${carried.gone.length === 1 ? 'is' : 'are'} not in the backup and will be gone (${carried.gone.slice(0, 3).join(', ')}${carried.gone.length > 3 ? '…' : ''}). ` : ''}Your v7 planner and its data are not touched.`,
@@ -959,6 +963,7 @@
   /** The manual save: into the folder at once where there is one, a downloaded backup file where there is not. */
   async function saveNow() {
     const f = folderInfo();
+    if (state.unreadable) { toast('Not saved: the plan stored in this browser could not be opened and is kept as it is. The choices are at the top of the page.'); return null; }
     if (isSample()) { toast('This is the sample plan. Load your backup first.'); return null; }
     if (f.needsPermission) { await reconnectFolder(); return null; }
     if (f.conflict) { toast('The folder holds a different plan. Choose which to keep under Backup.'); return null; }
@@ -993,6 +998,44 @@
     if (ok) { clearTimeout(folderTimer); await Folder.accept(); }
     return ok;
   }
+  /**
+   * From a browser that holds no plan: choose the folder a plan is kept in and open what it holds, photos and all. Saving then
+   * carries on in that folder. Nothing is written until the plan is open, and a folder with no plan in it is let go again.
+   */
+  async function openMyFolder() {
+    if (!Folder || !Folder.supported()) { toast('This browser cannot open a folder. Chrome and Edge on a computer can. Load a backup file instead.'); return false; }
+    if (!isSample() && !state.unreadable) { toast('A plan is already open here. Backup has the folder choices.'); return false; }
+    let f, held = null;
+    try { f = await Folder.choose(); } catch (error) { if (!error || error.name !== 'AbortError') toast(`That folder could not be used: ${(error && error.message) || 'the browser refused'}`); return false; }
+    try { held = await Folder.read(); } catch (_) { held = null; }
+    if (held) { const ok = await openFolderPlan(); if (!ok && (isSample() || state.unreadable)) await Folder.forget(); return ok; }
+    const name = f.name, broken = !!(f.conflict && f.conflict.broken);
+    await Folder.forget();
+    toast(broken ? `The plan file in “${name}” cannot be read. It was left as it is.` : `“${name}” holds no plan (no ${Folder.PLAN}). Nothing was changed. Choose the folder your plan is kept in, or load a backup file.`);
+    return false;
+  }
+  /** What is stored in this browser, exactly as it is, as a file: for a plan that would not open. */
+  async function downloadStored() {
+    const text = store && store.raw();
+    if (text == null) { toast('There is nothing stored in this browser to download.'); return false; }
+    const filename = `little-river-stored-plan-unreadable-${E.d2s(new Date())}.txt`, blob = new Blob([text], { type: 'text/plain' });
+    try {
+      const downloads = root.claude && root.claude.use ? await root.claude.use('downloads') : null;
+      if (downloads) await downloads.save({ filename, data: blob });
+      else { const url = URL.createObjectURL(blob), a = h('a', { href: url, download: filename }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); }
+      toast('What was stored here is downloading, exactly as it is.');
+      return true;
+    } catch (error) { toast(`It could not be downloaded: ${(error && error.message) || 'the browser refused'}`); return false; }
+  }
+  /** Give up on the plan that would not open, and carry on from the one shown. Asked first: what is stored is replaced at the next save. */
+  async function useShown() {
+    if (!state.unreadable) return false;
+    const ok = await UI.confirm({ title: 'Carry on from the plan shown?', body: 'The plan stored in this browser could not be opened. Carrying on saves the plan shown here in its place, and what is stored now is gone for good. If it may hold work that is nowhere else, cancel and use “Download what is stored” first.', confirmLabel: 'Replace it', danger: true });
+    if (!ok) return false;
+    store.release(); state.unreadable = null;
+    store.save(state.plan); emit('plan');
+    return true;
+  }
   /** Keep the plan open here, and write it over the one in the folder. */
   const overwriteFolder = async () => { const done = await saveToFolder({ force: true }); if (done.saved) toast(`The folder “${folderInfo().name}” now holds this plan.`); return done; };
   const leaveFolder = async () => { clearTimeout(folderTimer); const name = folderInfo().name; await Folder.forget(); toast(`No longer saving to “${name}”. The files there are left as they are.`); };
@@ -1007,8 +1050,9 @@
     if (!el) return;
     statusNow = info;
     const f = folderInfo(), where = info.backend === 'cloud' ? 'Saved' : info.backend === 'device' ? 'Saved on this device' : 'Not saved';
-    let text = info.label || { saving: 'Saving…', pending: 'Saving…', saved: where, error: 'Save failed · click to retry', unsaved: 'Not saved in this view', loading: 'Opening plan…', sample: 'Sample plan' }[info.state] || where;
-    let state2 = info.state, title = info.detail || (info.backend === 'cloud' ? 'Synced to this page’s database' : info.backend === 'device' ? 'Kept in this browser only. Backup, Keep the plan in a folder, puts a file on the computer too.' : 'Storage is not available here');
+    let text = info.label || { saving: 'Saving…', pending: 'Saving…', saved: where, error: 'Save failed · click to retry', unsaved: 'Not saved in this view', loading: 'Opening plan…', sample: 'Sample plan', held: 'Not saving · stored plan unreadable' }[info.state] || where;
+    if (isSample() && info.state === 'saved') text = 'Sample plan';
+    let state2 = info.state === 'held' ? 'error' : isSample() && info.state === 'saved' ? 'sample' : info.state, title = info.state === 'held' ? 'The plan stored in this browser could not be opened. It is kept as it is; nothing is saved over it until you choose. Click for the choices.' : info.detail || (info.backend === 'cloud' ? 'Synced to this page’s database' : info.backend === 'device' ? 'Kept in this browser only. Backup, Keep the plan in a folder, puts a file on the computer too.' : 'Storage is not available here');
     // With a plan folder, the indicator answers for the file as well as for the browser's own copy.
     if (info.state === 'saved' || info.state === 'sample') {
       if (f.needsPermission) { text = 'Folder needs reconnecting · click'; state2 = 'error'; title = `The browser has to be asked again before it writes to “${f.name}”.`; }
@@ -1028,6 +1072,8 @@
     let saved = null, loadError = null, firstRun = false;
     await store.connect();
     try { saved = await store.load(); } catch (error) { loadError = error; }
+    // something is stored but it is not a plan (a list, an object with no plantings): treated as unreadable, not opened and not written over
+    if (saved && !(typeof saved === 'object' && Array.isArray(saved.plantings) && Array.isArray(saved.beds) && Array.isArray(saved.gardens))) { saved = null; loadError = new Error('what is stored is not a plan'); }
     state.bundled = await bundledInfo;
     if (saved) {
       state.plan = saved;
@@ -1048,7 +1094,16 @@
     state.date = defaultDate(); state.ready = true;
     document.body.dataset.view = state.view;
     emit('plan'); emit('date'); emit('sel'); emit('view');
-    if (loadError) { showStatus({ backend: store.backend, state: 'error', detail: loadError.message }); toast(`The saved plan could not be opened (${loadError.message}). Showing the starting plan; nothing is overwritten.`); return; }
+    if (Folder) Folder.on(() => { if (statusNow) showStatus(statusNow); emit('folder'); });
+    if (loadError) {
+      // Kept as it is: saving is held until he brings a plan in or says to start from the one shown. (Before 0.20 the next change wrote over it.)
+      store.hold();
+      state.unreadable = { why: loadError.message, stored: store.raw() != null };
+      showStatus({ backend: store.backend, state: 'held', detail: loadError.message });
+      emit('plan');
+      toast('The plan stored in this browser could not be opened. It is kept as it is: nothing done here is saved over it.');
+      return;
+    }
     if (firstRun || (tidied && saved)) store.save(state.plan); else showStatus({ backend: store.backend, state: saved ? 'saved' : 'sample' });
     if (saved) restoreMapImage();
     loadThumbs(); loadPacks(); topUpVarieties().catch(() => {}); adoptTrayPlans();
@@ -1056,7 +1111,6 @@
     loadInventory().then(found => { if (found) emit('plan'); }).catch(() => {});
     store.watch(() => toast('This plan was changed on another device.', { label: 'Reload', run: () => root.location.reload() }));
     if (Folder) {
-      Folder.on(() => { if (statusNow) showStatus(statusNow); emit('folder'); });
       Folder.restore().then(f => { if (f.connected && !f.conflict && !isSample() && (!f.savedAt || tidied)) saveToFolder(); }).catch(() => {});
     }
   }
@@ -1087,7 +1141,7 @@
     commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
-    saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
-    saveNow, chooseFolder, reconnectFolder, openFolderPlan, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, traysToMonday: () => applyTrayStart()
+    saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
+    saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, traysToMonday: () => applyTrayStart()
   };
 })(window);

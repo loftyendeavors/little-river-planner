@@ -25,13 +25,13 @@ with sync_playwright() as pw:
     ready = lambda: (page.wait_for_function("window.LRFApp && LRFApp.state.ready", timeout=20000), page.wait_for_timeout(700))
     js = lambda expr: page.evaluate(f"(() => {{ const A = LRFApp, S = A.state; return {expr}; }})()")
     page.goto(url); ready()
-    out["first"] = js("({sample: A.isSample(), plantings: S.plan.plantings.length, welcome: !!document.querySelector('.welcome'), fonts: [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family).sort().join(','), manifest: !!document.querySelector('link[rel=manifest]'), privateData: /Seapuit|Osterville/i.test(document.documentElement.innerHTML)})")
+    out["first"] = js("({sample: A.isSample(), plantings: S.plan.plantings.length, welcome: !!document.querySelector('.welcome'), strip: !document.getElementById('firstRun').hidden && /No plan of yours is in this browser/.test(document.getElementById('firstRun').textContent), fonts: [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family).sort().join(','), manifest: !!document.querySelector('link[rel=manifest]'), privateData: /Seapuit|Osterville/i.test(document.documentElement.innerHTML)})")
     page.set_input_files("#importFile", backup)
     page.wait_for_timeout(3500)
     try: page.wait_for_function("LRFThumbs.count() >= 100 && /Saved/.test(document.getElementById('saveState').textContent)", timeout=90000)   # variety photos are read after the plan is shown
     except Exception: pass
     out["photos"] = page.evaluate("({thumbs: LRFThumbs.count(), withPhoto: LRFApp.state.plan.varieties.filter(v => v.photo && v.photo.sha256).length, bytes: JSON.stringify(LRFThumbs.all()).length})")
-    out["imported"] = js("({plantings: S.plan.plantings.length, attic: S.plan.lrfNext.attic, image: !!(S.plan.lrfNext.mapImage), save: document.getElementById('saveState').textContent, toast: document.querySelector('#toast span').textContent})")
+    out["imported"] = js("({plantings: S.plan.plantings.length, attic: S.plan.lrfNext.attic, image: !!(S.plan.lrfNext.mapImage), stripGone: document.getElementById('firstRun').hidden, save: document.getElementById('saveState').textContent, toast: document.querySelector('#toast span').textContent})")
     page.evaluate("navigator.serviceWorker.ready.then(() => true)")
     page.wait_for_timeout(1500)
     out["worker"] = page.evaluate("navigator.serviceWorker.getRegistration().then(r => !!(r && r.active))")
@@ -67,3 +67,4 @@ with sync_playwright() as pw:
 server.shutdown()
 out["errors"] = errors
 print(json.dumps(out, indent=1))
+print(json.dumps({"no-plan strip at first sight": out["first"].get("strip"), "gone once a plan is loaded": out["imported"].get("stripGone"), "errors": len(errors)}))
