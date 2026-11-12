@@ -25,7 +25,7 @@
     $('seasonYear').textContent = App.planYear();
     const plan = App.state.plan, info = plan.lrfNext || {};
     const waits = App.waiting().length;
-    $('buildNote').textContent = `Rebuild preview 0.24 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
+    $('buildNote').textContent = `Rebuild preview 0.25 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
   });
   // A browser that holds no plan says so across the page, in every view, with the two ways to bring one in.
   // The same strip speaks for a stored plan that would not open: it is kept as it is until he chooses what to do.
