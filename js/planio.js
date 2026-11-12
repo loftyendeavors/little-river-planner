@@ -55,8 +55,10 @@
     const plan = { ...((attic && attic.rest) || {}) };
     for (const [key, value] of Object.entries(core)) if (key !== 'lrfNext') plan[key] = value; // lrfNext is this app's own bookkeeping
     plan.varieties = (core.varieties || []).map(v => {
-      const out = { ...v, ...(((attic && attic.varieties) || {})[v.id] || {}) };
-      for (const key of DERIVED_VARIETY_FIELDS) delete out[key];
+      const heavy = ((attic && attic.varieties) || {})[v.id], out = { ...v, ...(heavy || {}) };
+      // Where a variety's maturity is counted from was read out of its supplier text when that text was set aside. With the text
+      // going back into the file, split() reads it again; with no text to put back, what was read is all there is, and it stays.
+      if (heavy && Object.keys(heavy).length) for (const key of DERIVED_VARIETY_FIELDS) delete out[key];
       return out;
     });
     return plan;

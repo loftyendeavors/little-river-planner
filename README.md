@@ -2,12 +2,12 @@
 
 A crop planner that works on a map of the farm. Drag crops onto beds, move plantings, share beds, and keep one list of the assumptions the plan rests on.
 
-This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.20 at the time of writing).
+This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.21 at the time of writing).
 
 ## Using it
 
 1. Open the site (the address is shown under Settings, Pages in this repository).
-2. The first time, it opens on a small sample, and a strip across the top says that no plan is in that browser. A plan is kept in the browser it was made in: it does not follow you to another browser or another computer. Bring one in with **Load a backup** (a backup downloaded from this planner, or the complete backup from the v7 planner) or, in Chrome or Edge, **Open my plan folder** (the folder the plan is kept in, if you chose one under Backup). Your plan and map photo are then kept in that browser on that computer.
+2. The first time, it opens on a small sample, and a strip across the top says that no plan is in that browser. A plan is kept in the browser it was made in: it does not follow you to another browser or another computer. Bring one in with **Get it from the cloud** (if cloud sync is set up, below), **Load a backup** (a backup downloaded from this planner, or the complete backup from the v7 planner) or, in Chrome or Edge, **Open my plan folder** (the folder the plan is kept in, if you chose one under Backup). Your plan and map photo are then kept in that browser on that computer.
 3. In Chrome or Edge, use the install button in the address bar to add it as an app. After the first visit it opens with no connection.
 4. If the plan stored in a browser ever cannot be opened, the strip says so. What is stored is kept exactly as it is, and nothing is saved over it until you bring a plan in or choose to carry on; **Download what is stored** gives it to you as a file.
 5. When the site has been updated, the planner says so and offers **Reload**. Until it is reloaded it goes on running the version it opened with.
@@ -92,11 +92,42 @@ There is no page for these: they open where you are.
 - A folder inside a synced drive keeps a copy off the computer. If the plan file was changed somewhere else, the planner stops writing and asks which plan to keep; it never writes over a plan it did not put there.
 - Firefox and Safari cannot write to a folder. There the plan stays in the browser and **Save now** downloads a file.
 
+## Cloud sync
+
+Optional. It keeps one copy of the plan off your computers, in storage of your own, so a second computer or a phone can open it and a lost laptop does not take the plan with it.
+
+- **The plan in the browser stays the one you work on**, with or without a connection. A change is sent a few seconds after it is made.
+- **A write never lands on a plan the sender has not seen.** If another device has saved since this one last looked, nothing is sent and nothing is replaced: a strip across the page says so, describes both plans, and asks which to keep. Plans are never merged.
+- **A newer plan is opened by itself only when the planner starts, and only over a plan that has not been changed since its last sync.** While the page is in use it is offered (**Open it**, **Not now**), never swapped in.
+- Whatever replaces a whole plan, the plan that was open is kept as a snapshot first (below). The cloud also keeps the plan as it stood at the end of each of the last 30 days, and keeps any plan that was replaced on purpose.
+- The save indicator answers for the cloud copy: "Saved · cloud 9:14", "cloud waiting" with no connection, or what it needs from you.
+- The farm photo and the small variety photos travel with the plan.
+
+Setting it up, once (a free Cloudflare account is enough):
+
+1. Create an R2 bucket. Create a Worker and paste `worker/lrf-plan-sync.js` into it with **Edit code**, then **Deploy**.
+2. In the Worker's **Settings**, under **Bindings**, add the R2 bucket under the variable name `PLAN`. Under **Variables and secrets**, add a secret named `SYNC_KEY`: the passphrase.
+3. Open the Worker's address in a browser. It should say the bucket is bound and the passphrase is set.
+4. In the planner: **Backup**, **Cloud sync…**. Type the Worker's address, the passphrase, and a name for the device. On the next device, do the same, or use **Get it from the cloud…** on the strip.
+
+The passphrase is typed once per device and is not kept: the browser keeps a sign-in token instead, which is renewed as long as the device is in use and ends when the passphrase is changed. Wrong passphrases are counted by the service: five tries in a quarter of an hour, then it takes no passphrase for a quarter of an hour, then half an hour, doubling to a day. A device already signed in is not affected. The service answers the planner's own address only. Neither the Worker's address nor the passphrase is in this repository or in a plan file.
+
+Sync works from the planner's web address, in any current browser. The single offline file keeps its plan in that browser only.
+
+## Snapshots
+
+**Backup**, **Snapshots…** lists the whole plan as it stood at earlier moments, and goes back to any of them.
+
+- **Take a snapshot** before a large change, with a name of your own. A named snapshot is kept until you delete it, and is copied to the cloud when sync is set up, so it is listed on every device.
+- The planner takes one by itself at the first change of each day, and before anything that replaces the whole plan: opening the cloud's plan, going back to a snapshot, loading a backup file. Its newest 20 are kept.
+- **Go back to it** asks first, keeps the plan as it is now as a snapshot, and then opens the earlier plan with its photos. **Take it back** undoes that. **Download** gives a snapshot as an ordinary plan file.
+- Snapshots live in the browser's database, beside the plan. They are not in a plan file or a backup.
+
 ## Where the plan lives
 
-- In the browser you loaded it into, on that computer. Nothing is sent anywhere.
-- A different browser, computer or phone starts empty until you load a backup there. Copies do not sync.
-- Clearing that browser's site data removes the plan. Use **Backup**, **Download a backup** regularly.
+- In the browser you loaded it into, on that computer. Unless cloud sync is set up, nothing is sent anywhere.
+- A different browser, computer or phone starts empty until you bring the plan in there: from the cloud, from a backup, or from the plan folder. Without cloud sync, copies do not sync.
+- Clearing that browser's site data removes the plan and its snapshots. Keep a copy somewhere else: cloud sync, a plan folder, or **Backup**, **Download a backup**.
 - Loading a newer v7 backup replaces plantings, tray demand and seed stock with the backup's. What you settled here and v7 does not know is put back afterwards: the assumptions list, edits to crops, varieties, gardens and beds made here (while the backup still holds the value you changed), where sheltered crates stand, and tray plans opening on a Monday.
 
 ## What is here
@@ -116,9 +147,13 @@ There is no page for these: they open where you are.
 | `js/trays.js`, `js/traysview.js` | Weekly live-tray demand and the batches it produces, in v7's own record format. |
 | `js/bench.js` | Heated bench room week by week. |
 | `js/folder.js` | The plan kept as a file in a folder the user chose: written as it changes, daily history, and the rule that it never writes over a plan it did not put there. |
+| `js/sync.js` | Cloud sync: what to send, what to open, and when to stop and ask. It talks to the Worker in `worker/lrf-plan-sync.js`. |
+| `js/snapshots.js` | Snapshots of the whole plan, kept in the browser's database. |
+| `js/backupui.js` | The Cloud sync and Snapshots windows, and the strip that asks which plan to keep. |
 | `js/thumbs.js` | Small variety photos, shown wherever a crop or variety is named. They are made in the browser from the photos in a backup, from a file you choose, or from the address a variety's record names, and kept in that browser. |
 | `js/reader.js` | Reads a supplier's product page into variety details. Generated by `tools/build_reader.cjs` from `tools/reader/`; do not edit it here. |
-| `worker/` | The small fetch service (a Cloudflare Worker) that fetches supplier pages for the importer. Its key is set on the Worker and typed into the planner's settings; it is never stored in this repository. |
+| `worker/lrf-variety-fetch.js` | The small fetch service (a Cloudflare Worker) that fetches supplier pages for the importer. Its key is set on the Worker and typed into the planner's settings; it is never stored in this repository. |
+| `worker/lrf-plan-sync.js` | The plan sync service (a Cloudflare Worker with an R2 bucket): conditional writes, daily copies, snapshots, and a count of wrong passphrases. Its passphrase is set on the Worker; it is never stored in this repository. |
 | `fonts/` | Typefaces, under the SIL Open Font License (see `fonts/LICENSES.txt`). |
 | `sw.js`, `manifest.webmanifest`, `icons/` | What makes it installable and usable offline. |
 

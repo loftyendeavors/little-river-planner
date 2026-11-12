@@ -22,6 +22,20 @@
 
   let store = null;
   const rebuild = () => { state.engine = E.create(state.plan, Lib); };
+  /** What this app keeps beside a plan that v7 knows nothing of. It travels in a plan file's own note (see withOwn). */
+  const OWN_KEYS = ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting'];
+  /**
+   * A fingerprint of what the plan says: the same for the same plan, whenever and wherever it was opened. The app's own
+   * bookkeeping (when the plan was loaded, from which file) is left out. Sync and snapshots tell "changed" from "the same" by it.
+   */
+  function contentKey(plan = state.plan) {
+    const mine = plan.lrfNext || {}, keep = {};
+    for (const key of OWN_KEYS) if (mine[key] != null) keep[key] = mine[key];
+    const text = JSON.stringify({ ...plan, lrfNext: keep });
+    let a = 2166136261, b = 5381;
+    for (let i = 0; i < text.length; i++) { const c = text.charCodeAt(i); a = Math.imul(a ^ c, 16777619); b = (Math.imul(b, 33) ^ c) | 0; }
+    return `${(a >>> 0).toString(36)}-${(b >>> 0).toString(36)}-${text.length.toString(36)}`;
+  }
 
   // ───────────────────────────── navigation ─────────────────────────────
   function setDate(d) {
@@ -61,9 +75,11 @@
     return Object.assign(next, lists);
   }
   function adopt(plan, engine) {
+    startOfDay();   // the plan as it stood before the first change of a day is kept as a snapshot
     state.plan = plan; state.engine = engine || E.create(plan, Lib);
     store.save(state.plan);
     folderSoon();
+    if (sync) sync.touch();
     emit('plan');
   }
   const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings', 'inventory', 'trays', 'own'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
@@ -840,11 +856,12 @@
     const own = parsed.plan.lrfNextKeep && typeof parsed.plan.lrfNextKeep === 'object' ? parsed.plan.lrfNextKeep : null;
     delete parsed.plan.lrfNextKeep;
     const ownKeep = {};
-    for (const key of ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting']) if (own && own.keep && own.keep[key] != null) ownKeep[key] = own.keep[key];
+    for (const key of OWN_KEYS) if (own && own.keep && own.keep[key] != null) ownKeep[key] = own.keep[key];
     if (extra.image && !parsed.image) parsed.image = extra.image;
     const split = IO.split(parsed.plan), attic = split.attic, info = IO.summary(split.core), replacing = !isSample();
     // The plan comes from the backup. What was established here about the farm is put back on it.
-    const carried = IO.carry(state.plan, split.core);
+    // (Not for a snapshot or the cloud's plan: those are this app's own plan at another moment, and are opened exactly as they were.)
+    const carried = extra.exact ? { plan: split.core, keep: {}, notes: [], gone: [] } : IO.carry(state.plan, split.core);
     // A file this app saved says for itself what was waiting to be placed, even when that is nothing: the list open here does not ride over it.
     const leftBehind = own && carried.keep.waiting && !ownKeep.waiting ? carried.keep.waiting.length : 0;
     if (own && carried.keep.waiting) { delete carried.keep.waiting; carried.notes = carried.notes.filter(n => !/waiting to be placed$/.test(n)); }
@@ -857,7 +874,7 @@
       const ok = await UI.confirm({ title: 'Replace what is stored here?', body: `The plan stored in this browser could not be opened. Loading this one (${info.plantings} plantings for ${info.year || 'an unknown year'}) puts it in that place, and what is stored now is gone for good. If it may hold work that is nowhere else, cancel and use “Download what is stored” first.`, confirmLabel: 'Replace it', danger: true });
       if (!ok) return false;
       store.release(); state.unreadable = null;
-    } else if (replacing) {
+    } else if (replacing && !extra.asked) {
       const ok = await UI.confirm({
         title: 'Replace the plan in this app?',
         body: `The backup holds ${info.plantings} plantings in ${info.beds} growing spaces across ${info.gardens} gardens for ${info.year || 'an unknown year'}. Plantings, tray demand and seed stock are replaced by the backup’s, including what was changed here. ${kept.length ? `Kept from this copy: ${kept.join('; ')}. ` : ''}${leftBehind ? `The ${leftBehind} planting${leftBehind === 1 ? '' : 's'} still to place here ${leftBehind === 1 ? 'is' : 'are'} not in that file and will be gone. ` : ''}${carried.gone.length ? `${carried.gone.length} variet${carried.gone.length === 1 ? 'y' : 'ies'} here ${carried.gone.length === 1 ? 'is' : 'are'} not in the backup and will be gone (${carried.gone.slice(0, 3).join(', ')}${carried.gone.length > 3 ? '…' : ''}). ` : ''}Your v7 planner and its data are not touched.`,
@@ -865,6 +882,8 @@
       });
       if (!ok) return false;
     }
+    // Whatever replaces a whole plan, the plan that was open is kept as a snapshot first, so it can be gone back to.
+    if (replacing) state.lastAuto = await snapshot(extra.why || `Before loading ${file.name}`, { auto: true, skipSame: true });
     const cloud = store.backend !== 'memory';   // somewhere durable to keep the photo and the rest of the backup
     // A file that holds the plan only brings no pictures. The ones already here stay with the varieties they belong to, and the
     // farm photo stays while the new plan was drawn on the same one, so loading a newer plan file does not strip the app bare.
@@ -880,12 +899,12 @@
     rebuild(); state.date = defaultDate(); root.LRFMap.fit(true);
     emit('plan'); emit('date'); emit('sel');
     const gaps = photoGaps(), lacking = planOnly ? [gaps.map ? 'no farm photo' : '', gaps.varieties ? `${gaps.varieties} variety photo${gaps.varieties === 1 ? '' : 's'} missing` : ''].filter(Boolean) : [];
-    toast(`Loaded ${core.plantings.length} plantings in ${info.beds} growing spaces from ${file.name}${kept.length ? `. Kept from this copy: ${kept.join('; ')}` : ''}${lacking.length ? `. This file holds the plan only: ${lacking.join(', ')}. See the overview` : ''}`);
+    if (!extra.quiet) toast(`Loaded ${core.plantings.length} plantings in ${info.beds} growing spaces from ${file.name}${kept.length ? `. Kept from this copy: ${kept.join('; ')}` : ''}${lacking.length ? `. This file holds the plan only: ${lacking.join(', ')}. See the overview` : ''}`);
     const ownThumbs = async () => {
       if (!extra.thumbs) return;
       try { const kept = JSON.parse(extra.thumbs); state.keptThumbs = kept; Thumbs.set(kept); Thumbs.index(state.plan); emit('plan'); if (store.backend !== 'memory') await store.saveBlob('thumbs', extra.thumbs); } catch (_) { /* the plan is open without its small photos */ }
     };
-    if (!cloud) { store.save(core); await importPhotos(parsed, 'memory'); await ownThumbs(); rebuildThumbs(); return true; }
+    if (!cloud) { store.save(core); await importPhotos(parsed, 'memory'); await ownThumbs(); rebuildThumbs(); if (sync) sync.touch(); return true; }
     const where = store.backend;
     try { await store.clearBlob('attic-new'); } catch (_) { /* nothing was kept */ }
     // The plan itself is saved first; the bulky extras follow and may fail without harming it.
@@ -904,6 +923,7 @@
     await ownThumbs();
     store.save(core);
     folderSoon();
+    if (sync) sync.touch();
     rebuildThumbs();
     return true;
   }
@@ -926,25 +946,30 @@
   const Folder = root.LRFFolder;
   let folderTimer = 0, statusNow = null, thumbsRev = 0;
   /** The app's own record, added to a plan file so that opening the file here again loses nothing v7 does not know. */
-  function withOwn(plan, savedAt) {
-    const mine = state.plan.lrfNext || {}, keep = {};
-    for (const key of ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting']) if (mine[key] != null) keep[key] = mine[key];
+  function withOwn(plan, savedAt, source = state.plan) {
+    const mine = source.lrfNext || {}, keep = {};
+    for (const key of OWN_KEYS) if (mine[key] != null) keep[key] = mine[key];
     plan.lrfNextKeep = { v: 1, savedAt, device: Folder ? Folder.device() : null, keep };
     return plan;
   }
-  /** What goes in the folder: the complete plan (what Backup downloads), and the photos when they have changed. */
-  async function folderPayload() {
+  /** The whole plan as a file's text: what Backup downloads, what the folder, a snapshot and the cloud each hold. `plan` is taken as it stands at the call. */
+  async function planText(plan = state.plan) {
     let attic = null;
     try { attic = await loadAttic(); } catch (_) { attic = emptyAttic(); }   // the plan is saved even when the records v7 keeps beside it are out of reach
-    const extras = await loadExtras(), savedAt = new Date().toISOString(), mine = state.plan.lrfNext || {};
-    const plan = withOwn(IO.join(state.plan, { ...attic, varieties: { ...(attic.varieties || {}), ...extras.varieties } }), savedAt);
-    return { text: JSON.stringify(plan), savedAt, extrasKey: `${(mine.mapImage && mine.mapImage.sha256) || 'no-photo'}|${thumbsRev}|${Thumbs.count ? Thumbs.count() : 0}`,
-      extras: async () => {
-        let map = null, thumbs = null;
-        try { const b64 = mine.mapImage && store.backend !== 'memory' ? await store.loadBlob('mapimage') : null; if (b64) map = { bytes: fromBase64(b64), mime: mine.mapImage.mime || 'image/jpeg' }; } catch (_) { /* the plan is saved without its photo */ }
-        try { const all = Thumbs.all(), list = all instanceof Map ? Object.fromEntries(all) : all; if (list && Object.keys(list).length) thumbs = JSON.stringify(list); } catch (_) { /* nor its thumbnails */ }
-        return { map, thumbs };
-      } };
+    const extras = await loadExtras(), savedAt = new Date().toISOString();
+    return { text: JSON.stringify(withOwn(IO.join(plan, { ...attic, varieties: { ...(attic.varieties || {}), ...extras.varieties } }), savedAt, plan)), savedAt };
+  }
+  /** The photos kept beside the plan: the farm photo and the small variety photos. */
+  async function photoFiles(mine = state.plan.lrfNext || {}) {
+    let map = null, thumbs = null;
+    try { const b64 = mine.mapImage && store.backend !== 'memory' ? await store.loadBlob('mapimage') : null; if (b64) map = { bytes: fromBase64(b64), mime: mine.mapImage.mime || 'image/jpeg' }; } catch (_) { /* the plan is saved without its photo */ }
+    try { const all = Thumbs.all(), list = all instanceof Map ? Object.fromEntries(all) : all; if (list && Object.keys(list).length) thumbs = JSON.stringify(list); } catch (_) { /* nor its thumbnails */ }
+    return { map, thumbs };
+  }
+  /** What goes in the folder: the complete plan (what Backup downloads), and the photos when they have changed. */
+  async function folderPayload() {
+    const plan = state.plan, mine = plan.lrfNext || {}, made = await planText(plan);
+    return { ...made, extrasKey: `${(mine.mapImage && mine.mapImage.sha256) || 'no-photo'}|${thumbsRev}|${Thumbs.count ? Thumbs.count() : 0}`, extras: () => photoFiles(mine) };
   }
   const folderInfo = () => (Folder ? Folder.info() : { supported: false, connected: false });
   async function saveToFolder(options = {}) {
@@ -967,9 +992,18 @@
     if (isSample()) { toast('This is the sample plan. Load your backup first.'); return null; }
     if (f.needsPermission) { await reconnectFolder(); return null; }
     if (f.conflict) { toast('The folder holds a different plan. Choose which to keep under Backup.'); return null; }
+    const cloud = !!(sync && sync.info().configured);
+    if (!f.connected && cloud) {
+      // no folder, but a cloud: the manual save sends the plan there now
+      try { await store.saveNow(state.plan); } catch (_) { /* the indicator shows the browser's own trouble */ }
+      const c = await sync.run('save');
+      toast(c.status === 'in-step' ? `Saved to the cloud at ${clock(c.savedAt)}` : c.status === 'waiting' ? 'The cloud could not be reached. The plan is saved in this browser and is sent when there is a connection.' : 'Not sent to the cloud: see Backup, Cloud sync.');
+      return { cloud: c.status === 'in-step' };
+    }
     if (!f.connected) { await exportBackup(); return { downloaded: true }; }
     try { await store.saveNow(state.plan); } catch (_) { /* the folder is still written; the indicator shows the browser's own trouble */ }
     const done = await saveToFolder();
+    if (cloud) sync.run('save');
     if (done.saved) toast(`Saved to the folder “${f.name}” at ${clock(done.savedAt)}`);
     return done;
   }
@@ -1040,6 +1074,155 @@
   const overwriteFolder = async () => { const done = await saveToFolder({ force: true }); if (done.saved) toast(`The folder “${folderInfo().name}” now holds this plan.`); return done; };
   const leaveFolder = async () => { clearTimeout(folderTimer); const name = folderInfo().name; await Folder.forget(); toast(`No longer saving to “${name}”. The files there are left as they are.`); };
 
+  // ───────────────────────────── snapshots ─────────────────────────────
+  // The whole plan as it stood at a moment, kept in this browser (and, when named, in the cloud) so it can be gone back to.
+  const Snaps = root.LRFSnaps || null, Sync = root.LRFSync || null;
+  let sync = null, snapDay = '', flushing = false;
+  /**
+   * Keep the plan as it stands now. @returns the snapshot's record, or null when there is nothing to keep or nowhere to keep it.
+   * options: auto (taken by the planner, not asked for), skipSame (when the newest snapshot already holds this very plan, that one is returned),
+   * daily (a day, 'YYYY-MM-DD': one of these is kept per day, however often the page is opened), plan.
+   */
+  async function snapshot(name, options = {}) {
+    const plan = options.plan || state.plan;
+    if (!Snaps || !plan || (plan.lrfNext && plan.lrfNext.sample) || state.unreadable) return null;
+    try {
+      const key = contentKey(plan);
+      if (options.skipSame || options.daily) {
+        const kept = await Snaps.list(), today = options.daily ? kept.find(s => s.why === 'day:' + options.daily) : null;
+        if (today) return today;
+        if (options.skipSame && kept[0] && kept[0].key === key) return kept[0];
+      }
+      const made = await planText(plan);
+      const record = await Snaps.add({ name, auto: !!options.auto, why: options.daily ? 'day:' + options.daily : '', plantings: plan.plantings.length, waiting: ((plan.lrfNext || {}).waiting || []).length, year: +(plan.settings && plan.settings.year) || null, key, device: Folder ? Folder.device() : '', at: made.savedAt }, made.text);
+      emit('snaps');
+      if (!record.auto) sendSnapshot(record, made.text);
+      return record;
+    } catch (error) {
+      if (!options.auto) toast(`The snapshot could not be kept: ${(error && error.message) || 'the browser refused'}`);
+      return null;
+    }
+  }
+  /** A named snapshot goes to the cloud too, when there is one. One taken with no connection follows at the next sync. */
+  async function sendSnapshot(record, text) {
+    if (!sync || !sync.info().configured || record.auto || record.cloud) return false;
+    try {
+      const body = text || await Snaps.text(record.id);
+      if (!body) return false;
+      await sync.putSnap(record.id, { name: record.name, savedAt: record.at, plantings: record.plantings, waiting: record.waiting, year: record.year, bytes: record.bytes }, body);
+      await Snaps.note(record.id, { cloud: true }); emit('snaps');
+      return true;
+    } catch (_) { return false; }
+  }
+  async function flushSnapshots() {
+    if (flushing || !Snaps || !sync || !sync.info().configured) return;
+    flushing = true;
+    try { for (const s of await Snaps.list()) if (!s.auto && !s.cloud && !(await sendSnapshot(s))) break; } catch (_) { /* tried again at the next sync */ } finally { flushing = false; }
+  }
+  function startOfDay() {
+    const today = E.d2s(new Date());
+    if (snapDay === today || !state.ready || !Snaps) return;
+    snapDay = today;
+    snapshot(`Start of ${day(new Date())}`, { auto: true, skipSame: true, daily: today, plan: state.plan });
+  }
+  /** Every snapshot there is to go back to: the ones in this browser, and the ones the cloud holds (its named ones, its own, and a copy of each earlier day). */
+  async function snapshots() {
+    const local = Snaps ? await Snaps.list().catch(() => []) : [], rows = local.map(s => ({ ...s, kind: 'snap', here: true })), byId = new Map(rows.map(r => [r.id, r]));
+    let cloudNote = '';
+    if (sync && sync.info().configured) {
+      try {
+        const there = await sync.snaps(), ids = new Set(there.filter(c => c.kind === 'snap').map(c => c.id));
+        for (const r of rows) r.cloud = ids.has(r.id);
+        for (const c of there) {
+          if (c.kind === 'snap' && byId.has(c.id)) continue;
+          const m = c.meta || {}, d = c.kind === 'day' ? E.s2d(c.id) : null;
+          rows.push({ id: c.id, kind: c.kind, name: c.kind === 'day' ? `End of ${E.validDate(d) ? day(d) : c.id}` : m.name || 'Snapshot', at: m.savedAt || m.at || c.uploaded || '', auto: c.kind === 'day' || !!m.auto, plantings: m.plantings, waiting: m.waiting || 0, year: m.year || null, bytes: m.bytes || c.size, label: m.label || '', here: false, cloud: true });
+        }
+      } catch (error) { cloudNote = error.kind === 'offline' ? 'The cloud could not be reached, so only the snapshots in this browser are listed.' : `The cloud’s snapshots could not be listed: ${error.message}`; }
+    }
+    rows.sort((a, b) => (String(a.at) < String(b.at) ? 1 : String(a.at) > String(b.at) ? -1 : 0));
+    return { rows, cloudNote, available: !!Snaps && await Snaps.available() };
+  }
+  const snapshotText = row => (row.here ? Snaps.text(row.id) : sync.getSnap(row.kind, row.id));
+  /** Make the plan what it was at a snapshot. The plan as it is now is kept as a snapshot first. */
+  async function restoreSnapshot(row, options = {}) {
+    let text = null;
+    try { text = await snapshotText(row); } catch (error) { toast(`That snapshot could not be read: ${(error && error.message) || 'it is out of reach'}`); return false; }
+    if (!text) { toast('That snapshot is no longer kept.'); return false; }
+    if (!options.asked) {
+      const at = new Date(row.at), ok = await UI.confirm({ title: `Go back to “${row.name}”?`, body: `The plan becomes what it was ${Number.isFinite(+at) ? `on ${day(at)} at ${clock(row.at)}` : 'then'}${Number.isFinite(+row.plantings) ? `, with ${row.plantings} plantings` : ''}. The plan as it is now is kept as a snapshot first, so this can be taken back. The undo list starts again.`, confirmLabel: 'Go back to it' });
+      if (!ok) return false;
+    }
+    const done = await importBackup(new File([text], `the snapshot “${row.name}”`, { type: 'application/json' }), { exact: true, asked: true, quiet: true, why: `Before going back to “${row.name}”` });
+    if (!done) return false;
+    const before = state.lastAuto;   // the plan as it was a moment ago, kept by importBackup
+    if (options.asked) toast('Taken back: the plan is as it was before.');
+    else toast(`The plan is as it was at “${row.name}”.`, before ? { label: 'Take it back', run: () => restoreSnapshot({ ...before, kind: 'snap', here: true }, { asked: true }) } : undefined);
+    return true;
+  }
+  async function deleteSnapshot(row) {
+    try {
+      if (row.here && Snaps) await Snaps.remove(row.id);
+      if (row.cloud && sync && sync.info().configured) await sync.dropSnap(row.kind, row.id);
+    } catch (error) { toast(`It could not be deleted everywhere: ${(error && error.message) || 'the cloud is out of reach'}`); emit('snaps'); return false; }
+    emit('snaps');
+    return true;
+  }
+  async function downloadSnapshot(row) {
+    try {
+      const text = await snapshotText(row);
+      if (!text) throw new Error('it is no longer kept');
+      const filename = `little-river-plan-${String(row.at).slice(0, 10)}-${String(row.name).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'snapshot'}.json`;
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' })), a = h('a', { href: url, download: filename });
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+      return true;
+    } catch (error) { toast(`That snapshot could not be downloaded: ${(error && error.message) || 'it is out of reach'}`); return false; }
+  }
+
+  // ───────────────────────────── cloud sync ─────────────────────────────
+  // js/sync.js does the talking; this is what it may ask of the app.
+  let photoMemo = { at: '', key: '' };
+  const thumbList = () => { const all = Thumbs.all(); return (all instanceof Map ? Object.fromEntries(all) : all) || {}; };
+  /** A fingerprint of the photos kept beside the plan, worked out again only when they have changed. */
+  async function extrasKey() {
+    const mine = state.plan.lrfNext || {}, list = thumbList(), n = Object.keys(list).length, photo = (mine.mapImage && (mine.mapImage.sha256 || 'photo')) || 'none', at = `${photo}|${thumbsRev}|${n}`;
+    if (photoMemo.at !== at) {
+      const text = JSON.stringify(list);
+      let x = 2166136261;
+      for (let i = 0; i < text.length; i++) x = Math.imul(x ^ text.charCodeAt(i), 16777619);
+      photoMemo = { at, key: `${photo}|${n}|${(x >>> 0).toString(36)}` };
+    }
+    return photoMemo.key;
+  }
+  /** Photos that came from the cloud by themselves (another device added some): they replace the set kept here. The plan is not touched. */
+  async function takePhotos({ image, thumbs }) {
+    if (thumbs) {
+      try { const kept = JSON.parse(thumbs); state.keptThumbs = kept; Thumbs.set(kept); thumbsRev++; refreshRemote(); Thumbs.index(state.plan); if (store.backend !== 'memory') await store.saveBlob('thumbs', thumbs); } catch (_) { /* the ones here stay */ }
+    }
+    if (image && image.bytes) {
+      showMapImage(image.bytes, image.mime);
+      try { if (store.backend !== 'memory') await store.saveBlob('mapimage', toBase64(image.bytes)); } catch (_) { /* shown for this session */ }
+      state.plan = { ...state.plan, lrfNext: { ...(state.plan.lrfNext || {}), mapImage: { mime: image.mime, sha256: image.sha256 } } };
+      store.save(state.plan);
+    }
+    emit('plan'); folderSoon();
+  }
+  function startSync(photosReady) {
+    if (!Sync || sync) return;
+    sync = Sync.create({
+      mode: () => (state.unreadable ? 'held' : isSample() ? 'sample' : 'plan'),
+      key: () => contentKey(),
+      payload: async () => { const plan = state.plan, key = contentKey(plan), made = await planText(plan); return { ...made, key, plantings: plan.plantings.length, waiting: ((plan.lrfNext || {}).waiting || []).length, year: planYear() }; },
+      extrasKey, extras: () => photoFiles(), photos: takePhotos,
+      open: (text, o = {}) => importBackup(new File([text], o.from || 'the cloud', { type: 'application/json' }), { exact: true, asked: true, quiet: true, why: o.why, image: o.image, thumbs: o.thumbs }),
+      loads: () => planLoads, device: () => (Folder ? Folder.device() : 'd-session'), say: message => toast(message)
+    });
+    sync.on(info => { if (statusNow) showStatus(statusNow); emit('sync'); if (info.status === 'in-step') flushSnapshots(); });
+    // the photos are counted into what is sent: wait until the ones kept here have been read
+    Promise.resolve(photosReady).catch(() => {}).then(() => sync.start());
+  }
+  const syncInfo = () => (sync ? sync.info() : { supported: false, configured: false, status: 'off', url: '', label: '' });
+
   // ───────────────────────────── start-up ─────────────────────────────
   function defaultDate() {
     const year = planYear(), today = new Date();
@@ -1061,6 +1244,21 @@
       else if (f.connected && f.busy) { text = 'Saving to folder…'; state2 = 'saving'; }
       else if (f.connected && f.savedAt && info.state === 'saved') { text = `Saved · ${f.name} ${clock(f.savedAt)}`; title = `Kept in this browser, and written to the folder “${f.name}” at ${clock(f.savedAt)}.`; }
     }
+    // With cloud sync, it answers for the copy off this computer too. The folder's own trouble is said first.
+    const c = syncInfo(), folderFine = state2 !== 'error' && state2 !== 'saving';
+    let ask = '';
+    if ((info.state === 'saved' || info.state === 'sample') && folderFine && c.status !== 'off' && (c.configured || c.status === 'signin')) {
+      const filed = f.connected && f.savedAt && info.state === 'saved';
+      if (c.status === 'conflict') { text = 'Cloud holds another plan · click'; state2 = 'error'; ask = 'cloud'; title = 'Nothing is sent to the cloud or replaced here until you choose which plan to keep.'; }
+      else if (c.status === 'newer') { text = 'Newer plan in the cloud · click'; state2 = 'error'; ask = 'cloud'; title = 'Another device has saved a newer plan. Nothing here has changed since the last sync.'; }
+      else if (c.status === 'signin') { text = 'Cloud needs the passphrase · click'; state2 = 'error'; ask = 'cloud'; title = 'The plan is saved in this browser. It is not sent to the cloud until the passphrase is typed again.'; }
+      else if (c.status === 'error') { text = 'Cloud sync failed · click'; state2 = 'error'; ask = 'cloud'; title = c.error; }
+      else if (c.status === 'sending') { text = 'Sending to the cloud…'; state2 = 'saving'; }
+      else if (c.status === 'receiving') { text = 'Opening from the cloud…'; state2 = 'saving'; }
+      else if (c.status === 'waiting' && info.state === 'saved') { text = filed ? `Saved · ${f.name} · cloud waiting` : 'Saved here · cloud waiting'; title = 'The cloud could not be reached. The plan is saved in this browser and is sent when there is a connection.'; }
+      else if (c.status === 'in-step' && info.state === 'saved' && c.savedAt) { text = filed ? `Saved · folder + cloud ${clock(c.savedAt)}` : `Saved · cloud ${clock(c.savedAt)}`; title = `Kept in this browser${filed ? `, written to the folder “${f.name}” at ${clock(f.savedAt)}` : ''}, and sent to the cloud at ${clock(c.savedAt)}.`; }
+    }
+    if (ask) el.dataset.ask = ask; else delete el.dataset.ask;
     el.textContent = text; el.dataset.state = state2; el.title = title;
   }
   async function start() {
@@ -1102,17 +1300,22 @@
       showStatus({ backend: store.backend, state: 'held', detail: loadError.message });
       emit('plan');
       toast('The plan stored in this browser could not be opened. It is kept as it is: nothing done here is saved over it.');
+      startSync();   // nothing is sent or opened by itself in this state; the cloud's plan can be asked for
       return;
     }
     if (firstRun || (tidied && saved)) store.save(state.plan); else showStatus({ backend: store.backend, state: saved ? 'saved' : 'sample' });
     if (saved) restoreMapImage();
-    loadThumbs(); loadPacks(); topUpVarieties().catch(() => {}); adoptTrayPlans();
+    const photosReady = loadThumbs();
+    loadPacks(); topUpVarieties().catch(() => {}); adoptTrayPlans();
     // Stock is needed wherever a sowing can be recorded, not only on the Seeds view: fetch it now, not on first visit.
     loadInventory().then(found => { if (found) emit('plan'); }).catch(() => {});
     store.watch(() => toast('This plan was changed on another device.', { label: 'Reload', run: () => root.location.reload() }));
     if (Folder) {
       Folder.restore().then(f => { if (f.connected && !f.conflict && !isSample() && (!f.savedAt || tidied)) saveToFolder(); }).catch(() => {});
     }
+    startSync(photosReady);
+    // Ask the browser not to clear this site's data when the disk runs short. Chrome grants it without a question to a site in regular use.
+    try { if (saved && root.navigator && root.navigator.storage && root.navigator.storage.persist) root.navigator.storage.persist().catch(() => {}); } catch (_) { /* not offered here */ }
   }
 
   /** Replace the plan saved here with the one this copy of the page carries. */
@@ -1142,6 +1345,7 @@
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
-    saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, traysToMonday: () => applyTrayStart()
+    saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, traysToMonday: () => applyTrayStart(),
+    snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, sync: () => sync, syncInfo, snapshotsKept: () => !!Snaps
   };
 })(window);
