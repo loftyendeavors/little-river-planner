@@ -5,7 +5,8 @@
  * followed the list, and works out, before anything is changed, what a release would move:
  *
  *   survey()   how many plantings carry which figure of their own (cheap; shown on the Assumptions view)
- *   study()    the plantings that keep their own days, or their own nursery weeks, as rows to decide on
+ *   study()    the plantings that keep their own days, nursery weeks, yield, harvest days or turnover days,
+ *              or a copy of the crop's values from the old planner, as rows to decide on
  *   build()    the one step that carries out a set of decisions
  *   preview()  what that step moves, and which double bookings it would start
  *
@@ -16,12 +17,13 @@
  *
  * Nothing here touches recorded work: a planting with any step ticked off keeps its figures.
  * A tray batch takes its days from the tray plan, which is its own list, so it is counted and left alone.
+ * A tower cycle's one harvest day and no turnover are what make it a cycle: they are counted and left alone too.
  * Pure functions over a plan, so they run in Node for their tests.
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./engine.js'));
-  else root.LRFAudit = factory(root.LRFEngine);
-})(typeof self !== 'undefined' ? self : this, function (E) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./engine.js'), require('./forecast.js'));
+  else root.LRFAudit = factory(root.LRFEngine, root.LRFForecast);
+})(typeof self !== 'undefined' ? self : this, function (E, F) {
   'use strict';
   const has = (p, k) => p[k] != null && p[k] !== '';
   const pinned = p => Number.isFinite(+p.dtm) && +p.dtm > 0;
@@ -74,7 +76,13 @@
       later: {
         window: n(p => !trayBatch(p) && (has(p, 'hw') || has(p, 'harvestMode'))), turnover: n(p => !trayBatch(p) && has(p, 'turnover')), yield: n(p => !trayBatch(p) && has(p, 'yield')),
         copy: n(p => !trayBatch(p) && other(p)), spacing: n(p => has(p, 'inRow') || has(p, 'rowSp') || has(p, 'rowsPerBed'))
-      }
+      },
+      // what the review window can let go: plantings in beds, towers and crates with nothing recorded
+      harvest: (() => {
+        const live = P.filter(p => !trayBatch(p) && !recorded(p)), free = live.filter(p => !cycle(p));
+        return { yield: live.filter(ownYield).length, window: free.filter(ownWindow).length, turnover: free.filter(ownTurn).length, cycles: live.filter(p => cycle(p) && (ownWindow(p) || ownTurn(p))).length,
+          copy: live.filter(p => copied(p).length).length, recorded: P.filter(p => !trayBatch(p) && recorded(p) && (ownYield(p) || ownWindow(p) || ownTurn(p))).length };
+      })()
     };
   }
 
@@ -151,40 +159,181 @@
       row.ids.push(w.id); wait.set(key, row);
     }
     for (const r of wait.values()) { const twin = list.find(x => x.cropId === r.cropId && x.varietyId === r.varietyId && x.days === r.days); r.choice = twin && twin.choice !== 'keep' ? 'follow' : 'keep'; }
+    const more = harvestRows(plan, Lib, eng);
     const order = (a, b) => String((eng.crop(a.cropId) || {}).name || '').localeCompare(String((eng.crop(b.cropId) || {}).name || '')) || String((eng.variety(a.varietyId) || {}).name || '').localeCompare(String((eng.variety(b.varietyId) || {}).name || '')) || (a.days || 0) - (b.days || 0);
-    return { rows: [...list.sort(order), ...[...weeks.values()].sort(order), ...[...wait.values()].sort(order)], held: o.held.length };
+    const bySize = (a, b) => order(a, b) || String(a.field || '').localeCompare(String(b.field || '')) || String(a.value).localeCompare(String(b.value), 'en', { numeric: true });
+    return { rows: [...list.sort(order), ...[...weeks.values()].sort(order), ...[...wait.values()].sort(order), ...more.rows.sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || bySize(a, b))], held: new Set([...o.held.map(p => p.id), ...more.held]).size };
+  }
+
+  // ───────────────────────── yield, harvest days, turnover, and the old planner's copies ─────────────────────────
+  const KINDS = ['days', 'weeks', 'wait', 'yield', 'window', 'turn', 'copy'];
+  const cycle = p => !!(p.towerCycle && p.towerCycle.v === 1);
+  const ownYield = p => has(p, 'yield'), ownWindow = p => has(p, 'hw') || p.harvestMode === 'season' || p.harvestMode === 'window', ownTurn = p => has(p, 'turnover');
+  /** Crop values the old planner copied onto a planting that bear on its harvest. The rest are facts about that planting (a bulb, a bought plant, its spacing). */
+  const COPY = ['yield', 'price', 'mk', 'hw', 'harvestMode', 'yieldDays', 'harvestUntil', 'baseUnit', 'yBasis'];
+  const frozen = p => { const g = p.growingDefaults; return g && g.v === 1 && g.cropId === p.cropId && g.crop && typeof g.crop === 'object' && !Array.isArray(g.crop) ? g.crop : null; };
+  const copied = p => { const c = frozen(p); return c ? COPY.filter(k => c[k] && typeof c[k] === 'object') : []; };
+  const STRIP = {
+    yield: p => { const q = { ...p }; delete q.yield; return q; },
+    window: p => { const q = { ...p }; delete q.hw; delete q.harvestMode; return q; },
+    turn: p => { const q = { ...p }; delete q.turnover; return q; }
+  };
+  function uncopied(p, fields) {
+    const g = p.growingDefaults, crop = { ...g.crop };
+    for (const k of fields) delete crop[k];
+    return { ...p, growingDefaults: { ...g, crop } };
+  }
+  /** Everything about a planting that a harvest figure can change: its dates, how long it holds its ground, and what it yields. */
+  function figure(eng, p) {
+    const r = p && eng.calc(p);
+    if (!r) return null;
+    const y = eng.yieldOf(p, r), through = eng.occupancyThrough(p, r);
+    return { first: +r.first, last: +r.last, sow: +(r.sow || 0), through: through === Infinity ? Infinity : +through, units: y ? y.units : 0, unit: y ? y.unit : '', price: y ? y.price : 0, pattern: y ? y.pattern : '' };
+  }
+  const alike = (a, b) => !!a && !!b && a.first === b.first && a.last === b.last && a.sow === b.sow && a.through === b.through && Math.abs(a.units - b.units) < 1e-6 && a.unit === b.unit && Math.abs(a.price - b.price) < 1e-9 && a.pattern === b.pattern;
+  const with_ = (plan, ids, strip) => ({ ...plan, plantings: plan.plantings.map(p => ids.has(p.id) ? strip(p) : p) });
+  /** Write a figure the list takes from plantings onto its line, beside whatever the line already holds. */
+  function put(a, take) {
+    if (take.what === 'yield') {
+      const kind = take.level === 'crop' ? 'crops' : 'varieties';
+      a[kind] = a[kind] || {};
+      const record = { ...(a[kind][take.id] || {}) };
+      record[take.env] = { ...(record[take.env] || {}), yield: take.typed };
+      a[kind][take.id] = record;
+    } else { a.sell = a.sell || {}; a.sell[take.id] = { ...(a.sell[take.id] || {}), [take.what === 'window' ? 'days' : 'turnover']: take.typed }; }
+  }
+  const blank = () => ({ v: 1, crops: {}, varieties: {} });
+  function harvestRows(plan, Lib, eng) {
+    const live = plan.plantings.filter(p => !trayBatch(p)), open = live.filter(p => !recorded(p)), out = [];
+    const held = live.filter(p => recorded(p) && (ownYield(p) || ownWindow(p) || ownTurn(p))).map(p => p.id);
+    const windowOf = p => p.harvestMode === 'season' && !has(p, 'hw') ? 'season' : has(p, 'hw') ? String(Math.round(+p.hw)) : 'window';
+    const kinds = [
+      ['yield', open.filter(ownYield), p => String(+p.yield), (bare, q) => { const y = bare.yieldOf(q); return y ? +(+y.per).toFixed(3) : null; }],
+      ['window', open.filter(p => ownWindow(p) && !cycle(p)), windowOf, (bare, q) => { const r = bare.calc(q); return r ? (r.harvestMode === 'season' ? 'season' : Math.round(r.c.hw)) : null; }],
+      ['turn', open.filter(p => ownTurn(p) && !cycle(p)), p => String(Math.round(+p.turnover)), (bare, q) => bare.turnoverFor(q)]
+    ];
+    for (const [kind, list, valueOf, listOf] of kinds) {
+      if (!list.length) continue;
+      const ids = new Set(list.map(p => p.id)), strip = STRIP[kind], bare = E.create(with_(plan, ids, strip), Lib), split = kind === 'yield';
+      // One row is the plantings of a crop that carry the same figure (for a yield: in one growing condition), told apart by whether
+      // letting it go would change anything. A yield row no crop line can take is then set out variety by variety.
+      let rows = new Map();
+      for (const p of list) {
+        const env = eng.envOf(eng.bedOf(p.bedId)) || '', now = figure(eng, p), q = bare.planting(p.id), alone = figure(bare, q);
+        if (!now || !alone) continue;
+        const value = valueOf(p), ok = alike(now, alone), key = [kind, p.cropId, split ? env : '', value, ok ? 'same' : 'own'].join('|');
+        const row = rows.get(key) || { key, kind, cropId: p.cropId, varietyId: '', env: split ? env : '', value, ids: [], agrees: ok, take: null, list: new Set(), unit: now.unit, varieties: new Map() };
+        row.ids.push(p.id); row.list.add(listOf(bare, q)); row.varieties.set(p.id, p.varietyId || '');
+        rows.set(key, row);
+      }
+      const a0 = plan.assumptions || {}, lineOf = (level, id, env) => (((a0[level === 'crop' ? 'crops' : 'varieties'] || {})[id] || {})[env] || {}).yield;
+      // A line that already holds a figure of the grower's is never written over.
+      const taken = (level, id, env) => kind === 'yield' ? lineOf(level, id, env) != null && lineOf(level, id, env) !== '' : ((a0.sell || {})[id] || {})[kind === 'window' ? 'days' : 'turnover'] != null;
+      const typedFor = r => { const n = +r.value; if (!Number.isFinite(n) || n < 0) return null; if (kind === 'window') return n >= 1 ? Math.round(n) : null; if (kind === 'turn') return Math.round(n); const h = eng.harvestFor(r.cropId); return h && h.weekly ? n * 7 / h.nominal : n; };
+      const tryAll = cands => {
+        if (!cands.length) return;
+        const next = clone(plan.assumptions) || blank();
+        for (const c of cands) put(next, { what: kind, level: c.level, id: c.id, env: c.env, typed: c.typed });
+        const sim = E.create({ ...with_(plan, ids, strip), assumptions: next }, Lib);
+        for (const c of cands) {
+          const cropId = c.rows[0].cropId, mine = c.rows.flatMap(r => r.ids).every(id => alike(figure(eng, eng.planting(id)), figure(sim, sim.planting(id))));
+          c.ok = mine && plan.plantings.filter(p => p.cropId === cropId && !ids.has(p.id)).every(p => alike(figure(eng, p), figure(sim, sim.planting(p.id))));
+        }
+        // one that fails may have spoiled another's test: try the ones that passed again, alone together
+        const good = cands.filter(c => c.ok);
+        if (good.length && good.length < cands.length) {
+          const again = clone(plan.assumptions) || blank();
+          for (const c of good) put(again, { what: kind, level: c.level, id: c.id, env: c.env, typed: c.typed });
+          const sim2 = E.create({ ...with_(plan, ids, strip), assumptions: again }, Lib);
+          for (const c of good) { const cropId = c.rows[0].cropId; c.ok = plan.plantings.filter(p => p.cropId === cropId).every(p => alike(figure(eng, p), figure(sim2, sim2.planting(p.id)))); }
+        }
+        for (const c of cands) if (c.ok) for (const r of c.rows) r.take = { what: kind, level: c.level, id: c.id, env: c.env || '', typed: c.typed };
+      };
+      // a crop's line, where every planting of the crop there that differs carries the one figure
+      const groups = new Map();
+      for (const r of rows.values()) if (!r.agrees) { const g = [r.cropId, r.env].join('|'); groups.set(g, [...(groups.get(g) || []), r]); }
+      const whole = [];
+      for (const group of groups.values()) {
+        const first = group[0], typed = typedFor(first);
+        if (group.length === 1 && typed != null && (kind !== 'yield' || first.env) && !taken('crop', first.cropId, first.env)) whole.push({ rows: group, level: 'crop', id: first.cropId, env: first.env, typed });
+      }
+      tryAll(whole);
+      // else, for a yield, the variety's line
+      if (split) {
+        const next = new Map(), single = [];
+        for (const r of rows.values()) {
+          if (r.agrees || r.take) { next.set(r.key, r); continue; }
+          for (const id of r.ids) {
+            const vid = r.varieties.get(id), key = [kind, r.cropId, vid, r.env, r.value, 'own'].join('|');
+            const row = next.get(key) || { ...r, key, varietyId: vid, ids: [], list: r.list, varieties: new Map() };
+            row.ids.push(id); row.varieties.set(id, vid); next.set(key, row);
+          }
+        }
+        rows = next;
+        const byVariety = new Map();
+        for (const r of rows.values()) if (!r.agrees && !r.take && r.varietyId && r.env) { const g = [r.varietyId, r.env].join('|'); byVariety.set(g, [...(byVariety.get(g) || []), r]); }
+        for (const group of byVariety.values()) { const r = group[0], typed = typedFor(r); if (group.length === 1 && typed != null && !taken('variety', r.varietyId, r.env)) single.push({ rows: group, level: 'variety', id: r.varietyId, env: r.env, typed }); }
+        tryAll(single);
+      }
+      for (const r of rows.values()) { r.list = [...r.list].filter(x => x != null); r.varieties = [...new Set(r.varieties.values())].filter(Boolean); r.choice = r.agrees ? 'follow' : r.take ? 'take' : 'keep'; out.push(r); }
+    }
+    // The old planner's copies of crop values. A copy that says what the crop says now changes nothing and is let go in one row;
+    // one that says something else is a row of its own, let go where that changes nothing for its plantings and kept otherwise.
+    const sameIds = {}, differ = new Map();
+    for (const p of open) {
+      const c = frozen(p), crop = eng.plan.crops && eng.crop(p.cropId), record = (plan.crops || []).find(x => x && x.id === p.cropId) || {}, lib = (Lib.crops || []).find(x => x.id === p.cropId) || {};
+      if (!c || !crop) continue;
+      for (const k of copied(p)) {
+        const was = c[k].present === false ? undefined : c[k].value, now = k in record ? record[k] : lib[k];
+        if (JSON.stringify(was === undefined ? null : was) === JSON.stringify(now === undefined ? null : now)) { (sameIds[p.id] = sameIds[p.id] || []).push(k); continue; }
+        const key = ['copy', p.cropId, k, JSON.stringify(was === undefined ? null : was)].join('|'), row = differ.get(key) || { key, kind: 'copy', cropId: p.cropId, varietyId: '', env: '', field: k, value: was === undefined ? null : was, now: now === undefined ? null : now, ids: [], agrees: true, take: null };
+        row.ids.push(p.id); differ.set(key, row);
+      }
+    }
+    for (const r of differ.values()) {
+      const ids = new Set(r.ids), bare = E.create(with_(plan, ids, p => uncopied(p, [r.field])), Lib);
+      r.agrees = r.ids.every(id => alike(figure(eng, eng.planting(id)), figure(bare, bare.planting(id))));
+      r.choice = r.agrees ? 'follow' : 'keep'; out.push(r);
+    }
+    const same = Object.keys(sameIds);
+    if (same.length) out.push({ key: 'copy|same', kind: 'copy', cropId: '', varietyId: '', env: '', same: true, fields: sameIds, value: '', ids: same, agrees: true, take: null, choice: 'follow' });
+    return { rows: out, held };
   }
   const clone = x => x == null ? null : JSON.parse(JSON.stringify(x));
   function entry(assumptions, level, id, env, days) {
     const kind = level === 'crop' ? 'crops' : 'varieties';
     assumptions[kind] = assumptions[kind] || {};
-    assumptions[kind][id] = { ...(assumptions[kind][id] || {}), [env]: { dtm: Math.round(days) } };
+    assumptions[kind][id] = { ...(assumptions[kind][id] || {}), [env]: { ...((assumptions[kind][id] || {})[env] || {}), dtm: Math.round(days) } };
   }
 
   /** The one step that carries out the choices: `choices` maps a row's key to take, follow or keep. */
   function build(plan, rows, choices) {
     const pick = r => (choices && choices[r.key]) || r.choice, ops = [], by = new Map(plan.plantings.map(p => [p.id, p]));
-    const next = clone(plan.assumptions) || { v: 1, crops: {}, varieties: {} }, after = new Map();
-    const lines = new Set();
+    const next = clone(plan.assumptions) || blank(), after = new Map();
+    const lines = new Set(), stays = new Set();
     let released = 0, kept = 0, thaw = 0, waiting = 0;
     for (const r of rows) {
-      const choice = pick(r) === 'take' && !r.take ? 'keep' : pick(r);
-      if (choice === 'keep') { kept += r.ids.length; continue; }
+      const choice = pick(r) === 'take' && !r.take ? 'keep' : pick(r), later = !['days', 'weeks', 'wait'].includes(r.kind);
+      if (choice === 'keep') { if (later) r.ids.forEach(id => stays.add(id)); else kept += r.ids.length; continue; }
       if (r.kind === 'wait') { waiting += r.ids.length; continue; }
-      if (choice === 'take') { entry(next, r.take.level, r.take.id, r.take.env, r.take.typed); lines.add([r.take.level, r.take.id, r.take.env].join('|')); }
+      if (choice === 'take' && later) { put(next, r.take); lines.add([r.take.what, r.take.level, r.take.id, r.take.env].join('|')); }
+      else if (choice === 'take') { entry(next, r.take.level, r.take.id, r.take.env, r.take.typed); lines.add([r.take.level, r.take.id, r.take.env].join('|')); }
       for (const id of r.ids) {
         const p = after.get(id) || by.get(id);
         if (!p) continue;
-        after.set(id, r.kind === 'weeks' ? thawed(p) : freed(p));
+        after.set(id, r.kind === 'weeks' ? thawed(p) : r.kind === 'days' ? freed(p) : r.kind === 'copy' ? uncopied(p, r.same ? r.fields[id] : [r.field]) : STRIP[r.kind](p));
       }
-      if (r.kind === 'weeks') thaw += r.ids.length; else released += r.ids.length;
+      if (r.kind === 'weeks') thaw += r.ids.length; else if (r.kind === 'days') released += r.ids.length;
     }
+    // a planting counts once however many of its figures are let go; one that keeps any figure is among the kept
+    for (const id of after.keys()) stays.delete(id);
+    kept += stays.size;
     const taken = lines.size;   // lines of the list that take a number: two rows of one crop can share a line
     if (taken) ops.push({ kind: 'assume', before: plan.assumptions || null, after: next });
     for (const [id, to] of after) ops.push({ before: by.get(id), after: to });
     const list = waitingOf(plan), let_go = new Set(rows.filter(r => r.kind === 'wait' && pick(r) !== 'keep').flatMap(r => r.ids));
     if (let_go.size) ops.push({ kind: 'own', key: 'waiting', before: list, after: list.map(w => let_go.has(w.id) ? freed(w) : w) });
-    return { ops, taken, released, kept, thaw, waiting };
+    return { ops, taken, released, kept, thaw, waiting, plantings: after.size + let_go.size };
   }
   /** The plan after a step. Only the kinds of change this module makes. */
   function apply(plan, ops) {
@@ -215,10 +364,25 @@
       const first = E.dayDiff(b.first, a.first), last = E.dayDiff(b.last, a.last), sow = a.sow && b.sow ? E.dayDiff(b.sow, a.sow) : 0;
       if (first || last || sow) moves.push({ id: p.id, first, last, sow });
     }
-    const old = pairs(was), fresh = ops.length ? [...pairs(now)].filter(k => !old.has(k)).map(k => k.split('|')) : [];
+    const old = pairs(was), after = ops.length ? pairs(now) : old, fresh = [...after].filter(k => !old.has(k)).map(k => k.split('|')), settled = [...old].filter(k => !after.has(k)).map(k => k.split('|'));
     const most = moves.reduce((m, x) => Math.abs(x.first) > Math.abs(m) ? x.first : m, 0), mostSow = moves.reduce((m, x) => Math.abs(x.sow) > Math.abs(m) ? x.sow : m, 0);
-    return { moves, harvest: moves.filter(x => x.first || x.last).length, sowing: moves.filter(x => x.sow).length, most, mostSow, fresh, standing: old.size, engine: now };
+    // what the step does to yields, to what the season is worth, and to how long ground is held
+    const yields = [], ground = [];
+    if (ops.length) for (const p of plan.plantings) {
+      const a = figure(was, p), b = figure(now, now.planting(p.id));
+      if (!a || !b) continue;
+      if (Math.abs(a.units - b.units) > 1e-6 || a.unit !== b.unit || Math.abs(a.price - b.price) > 1e-9) yields.push({ id: p.id, cropId: p.cropId, unit: [a.unit, b.unit], units: [a.units, b.units], price: [a.price, b.price] });
+      if (a.through !== b.through && Number.isFinite(a.through) && Number.isFinite(b.through)) ground.push({ id: p.id, days: Math.round((b.through - a.through) / 86400000) });
+    }
+    const fa = F.build(was), fb = ops.length ? F.build(now) : fa, worthOf = m => m.rows.reduce((n, r) => n + r.worth, 0), totals = m => new Map(m.rows.map(r => [r.key, r]));
+    const ta = totals(fa), tb = totals(fb), crops = [];
+    for (const key of new Set([...ta.keys(), ...tb.keys()])) {
+      const a = ta.get(key), b = tb.get(key), one = a || b;
+      if (Math.abs((a ? a.total : 0) - (b ? b.total : 0)) > 1e-6 || Math.abs((a ? a.worth : 0) - (b ? b.worth : 0)) > 0.005) crops.push({ cropId: one.cropId, name: one.name, unit: one.unit, group: one.group, total: [a ? a.total : 0, b ? b.total : 0], worth: [a ? a.worth : 0, b ? b.worth : 0] });
+    }
+    return { moves, harvest: moves.filter(x => x.first || x.last).length, sowing: moves.filter(x => x.sow).length, most, mostSow, fresh, settled, standing: old.size, engine: now,
+      yields, ground, crops: crops.sort((a, b) => Math.abs(b.worth[1] - b.worth[0]) - Math.abs(a.worth[1] - a.worth[0])), worth: [worthOf(fa), worthOf(fb)] };
   }
 
-  return { survey, study, build, apply, preview, pairs, freed, pinned, recorded, trayBatch, frozenWeeks };
+  return { survey, study, build, apply, preview, pairs, freed, pinned, recorded, trayBatch, frozenWeeks, figure, alike, cycle, copied, KINDS, COPY };
 });

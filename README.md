@@ -2,7 +2,7 @@
 
 A crop planner that works on a map of the farm. Drag crops onto beds, move plantings, share beds, and keep one list of the assumptions the plan rests on.
 
-This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.22 at the time of writing).
+This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.23 at the time of writing).
 
 ## Using it
 
@@ -49,6 +49,8 @@ Click a bed on the map and its panel shows width, length and area (a tower its s
 - **Vendor size** shows what covers a shortfall at least cost, in the sizes that variety's own vendor sells. The size list comes from the variety's supplier page, so a packet is whatever that vendor says it is.
 - Recording a sowing (in a planting's panel on the map, or beside a variety's plantings in Seeds) dates the planting and takes the seed it used off the lots on hand. A planned sowing never touches stock. A recorded one can be taken back, which returns the seed.
 
+- **Order sheet…**, beside the filters in Seeds, opens what is short today: what the plan still has to sow, less seed on hand and on order, set out by supplier in each supplier's own sizes at the least cost, with a subtotal for each and a total. It is right on whatever day it is opened, so it serves the main order and a top-up later. Type an amount on a line to buy more or less than the shortfall; add a variety that is not short; copy, print or download the sheet. **Mark as ordered** puts a supplier's lines into seed stock as on order, in the amounts shown, in one step: they stop counting as short, and "order arrived" in the list later turns each into seed on hand. Where ground is booked twice, seed for both plantings is counted, and the sheet says so.
+
 ## Sowing
 
 - **Sowing** lists everything sown from seed, a week at a time, as the acts they are: a batch of plug trays filled for several beds, rockwool for the towers, the week's live trays, a variety drilled into its beds.
@@ -70,9 +72,21 @@ There is no page for these: they open where you are.
 - **Where could this crop go this season?**, at the foot of the series tool, lists every opening the crop's whole cycle fits, soonest first, and the beds with nothing planned all year.
 - The quick **N more, every N days** in a planting's panel is unchanged.
 
+## Yield and price
+
+**Assumptions** has two tables. **Days to harvest** is the first. **Yield and price** is the second, opened with the buttons under the heading:
+
+- **Sold by** is the unit a crop is counted and sold in (each, bunch, lb, pint, quart, clamshell, head, stem). The yield and the price are in that unit; one unit is never turned into another. A variety can have its own unit and its own price: open the crop's row.
+- **Picked** says how the harvest comes in. *Over the days*: the yield is a total, picked evenly over the harvest days (held, and taken as it is wanted). *Each week*: the yield is one week's picking, so a longer harvest gives more. *All at once*: the whole total is counted the day the crop is ready. Switching between a total and a weekly figure turns the yields already typed into the other, over the crop's harvest days. **Comes to** shows the total and the weekly figure side by side.
+- **Days** is how long the crop is picked, and so how long its ground is held. A crop picked to the end of the season says "season"; a number typed there picks it for that many days instead.
+- **Yield** is from one plant or one bed-foot (the row says which), in each growing condition the farm has: field, unheated tunnel, heated greenhouse, towers.
+- **Sold %** is the part of what is picked that is good enough to sell. **Keeps wk** is how many weeks the crop keeps after picking: what is picked is then counted as there to sell evenly over those weeks, and the Harvest view gains **To sell** and **Picked**. **Turnover** is the days a crop's ground is held after its last harvest; where it settles ground that was booked twice, the planner says how many.
+- Grey is what the plan uses now, from the crop's own record. A figure typed is used by every planting that has none of its own, is one step, and is said with what it does to the season's worth; clearing a cell goes back to grey. A yield that is still a new crop's starting value ("1 each"), and a crop with no price, are marked in the row and counted above the table.
+- A planting with a yield, harvest days or turnover of its own keeps it. **Review…**, above either table, lists those plantings in groups, with the old planner's copies of crop values beside them, and says for each what letting it go would change: dates, yield, the season's worth, ground booked twice. Where the list can take a group's figure so that nothing changes, that is what is suggested. Nothing changes until Apply; the plan as it stood is kept as a snapshot first, and one undo takes the step back. A tower cycle's single harvest day and a tray batch's figures are left alone.
+
 ## Harvest forecast
 
-- **Harvest** shows what the plan is expected to give by day, week or month: vegetables, microgreen trays and flower stems, a row to a crop, each counted in the unit it is sold in. A planting's yield is what it is counted by (plants, bed-feet, trays) × the crop's yield each × its marketable share, spread evenly over the days it is picked. A live tray is counted whole on the Monday it is due.
+- **Harvest** shows what the plan is expected to give by day, week or month: vegetables, microgreen trays and flower stems, a row to a crop, each counted in the unit it is sold in, coming in as the crop's line under Assumptions says (evenly over its harvest days, a week at a time, or all at once). A planting's yield is what it is counted by (plants, bed-feet, trays) × the crop's yield each × its marketable share, spread evenly over the days it is picked. A live tray is counted whole on the Monday it is due.
 - The tiles give the week at a glance: crops ready, what they are worth at each crop's own price, trays and stems.
 - Click a figure to see which plantings it comes from. A crop sorted under the wrong heading can be moved between vegetables and flowers.
 - **A list to send** makes a plain-text availability list for a week, four weeks or the season, to copy into an email, print, or download as a spreadsheet. Quantities are rounded down, never up. Prices appear only if asked for.

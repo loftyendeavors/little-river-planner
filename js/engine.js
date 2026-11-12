@@ -424,7 +424,43 @@
       if (e.catalogTiming && e.catalogTiming.activeMode === 'catalog') return 'supplier';
       return v.dtm > 0 ? 'variety' : null;
     }
-    function effective(p) {
+    // ── what is picked, and what it is sold as: the second half of the list ──
+    // plan.assumptions.sell  = { cropId: { unit, price, pattern, days, keep, share, turnover } }
+    // plan.assumptions.sellV = { varietyId: { unit, price } }
+    // and a yield beside the days in a cell of the list: assumptions.crops[cropId][env].yield (the same for varieties)
+    //   pattern   spread  the yield is a total, picked evenly over the harvest days (held, and taken to demand)
+    //             weekly  the yield is what is picked each week, for as many weeks as the harvest lasts
+    //             once    the yield is a total, all of it counted the day the crop is ready
+    //   days      harvest days · keep  weeks it stores after picking · share  the marketable part, in percent
+    //   turnover  days the ground is held after the last harvest
+    // Nothing set means as before: the crop's own figures and v7's arithmetic.
+    const PATTERNS = ['spread', 'weekly', 'once'];
+    const amount0 = x => x != null && x !== '' && Number.isFinite(+x) && +x >= 0 ? +x : null;
+    const word = x => typeof x === 'string' && x.trim() ? x.trim() : null;
+    function sellRule(cropId) {
+      const x = (!legacy && S.assumptions && S.assumptions.sell && S.assumptions.sell[cropId]) || {}, share = amount0(x.share), turn = amount0(x.turnover);
+      return { unit: word(x.unit), price: amount0(x.price), pattern: PATTERNS.includes(x.pattern) ? x.pattern : null, days: wholeDays(x.days), keep: amount0(x.keep),
+        share: share != null && share <= 100 ? share : null, turnover: turn == null ? null : Math.round(turn) };
+    }
+    function sellVRule(varietyId) {
+      const x = (!legacy && varietyId && S.assumptions && S.assumptions.sellV && S.assumptions.sellV[varietyId]) || {};
+      return { unit: word(x.unit), price: amount0(x.price) };
+    }
+    const listedYield = (kind, id, env) => { const a = !legacy && S.assumptions, x = a && a[kind] && a[kind][id] && a[kind][id][env]; return x ? amount0(x.yield) : null; };
+    /** The harvest days a total is spoken of over: what turns a total into a weekly figure and back. */
+    const nominalDays = c => c.harvestBy === 'list' ? Math.max(1, c.hw) : c.harvestMode === 'season' ? positive(c.yieldDays, positive(c.hw, 1)) : Math.max(1, nonNegative(c.hw));
+    const ownHarvest = o => !!o && (o.harvestMode === 'season' || o.harvestMode === 'window' || hasHarvestDays(o));
+    /** The list's harvest days reach a planting that has none of its own, and whose variety brings none. */
+    function withHarvestRule(p, e) {
+      if (!e || e.micro) return e;
+      const days = sellRule(p.cropId).days;
+      if (days == null || ownHarvest(p)) return e;
+      const b = plantingBed(p), v = growingVariety(p);
+      if (!b || isRack(b) || (v && v.cropId === p.cropId && ownHarvest(v))) return e;
+      return { ...e, hw: days, harvestMode: 'window', harvestBy: 'list', harvestWas: { mode: e.harvestMode, hw: e.hw } };
+    }
+    const effective = p => withHarvestRule(p, effectiveDays(p));
+    function effectiveDays(p) {
       const e = computed(p);
       if (!e || !S.assumptions || pinned(p)) return e;
       const b = plantingBed(p), env = envOf(b);
@@ -526,7 +562,11 @@
 
     // A perennial or established stand shares one identity across season records.
     const turnoverDays = () => Math.max(0, Math.round(finite(settings.turnover, 7)));
-    const turnoverFor = p => p && p.turnover != null ? Math.max(0, Math.round(finite(p.turnover, turnoverDays()))) : turnoverDays();
+    const turnoverFor = p => {
+      if (p && p.turnover != null) return Math.max(0, Math.round(finite(p.turnover, turnoverDays())));
+      const mine = p ? sellRule(p.cropId).turnover : null;
+      return mine != null ? mine : turnoverDays();
+    };
     const isStandingCrop = (p, r) => !!p && (p.established === true || isPerennial((r && r.c) || growingCrop(p)));
     const standKey = p => isStandingCrop(p) ? (p.standId || p.id) : null;
     const standMates = p => { const key = standKey(p); return [p, ...plantingsIn(p.bedId).filter(q => q !== p && standKey(q) === key)]; };
@@ -1056,7 +1096,14 @@
     // ── what a planting is expected to yield (v7's own arithmetic) ──
     const cropUnits = () => (S.cropUnits && typeof S.cropUnits === 'object' ? S.cropUnits : {});
     /** The unit a crop is counted and sold in: trays for microgreens, else the farm's own unit for it, else the crop's. */
-    const unitOf = c => !c ? 'each' : c.micro ? 'tray' : String((cropUnits()[c.id] && cropUnits()[c.id].base) || c.baseUnit || 'each');
+    const recordUnit = c => String((cropUnits()[c.id] && cropUnits()[c.id].base) || c.baseUnit || 'each');
+    const unitOf = (c, v) => !c ? 'each' : c.micro ? 'tray' : String((v && v.cropId === c.id && sellVRule(v.id).unit) || sellRule(c.id).unit || recordUnit(c));
+    /** What one unit sells for: the planting's own price, the variety's line, the crop's line, the crop's record. */
+    function priceOf(p, c, v) {
+      if (p && p.price != null && p.price !== '') return nonNegative(p.price);
+      const mine = v && v.cropId === c.id ? sellVRule(v.id).price : null, crops = sellRule(c.id).price;
+      return mine != null ? mine : crops != null ? crops : nonNegative(c.price);
+    }
     /**
      * Marketable yield of one planting over its whole harvest: how many of what it is counted by (plants, bed-feet, trays,
      * containers) × yield each × the marketable share × the part of the expected harvest period that is really there.
@@ -1065,17 +1112,53 @@
     function yieldOf(p, r) {
       r = r || calc(p);
       if (!r || isCoverCrop(r.c)) return null;
-      const c = r.c, own = p.yield != null && p.yield !== '', per = nonNegative(own ? p.yield : c.yield), liveTray = r.rack && !!c.micro;
+      const c = r.c, own = p.yield != null && p.yield !== '', liveTray = r.rack && !!c.micro, rule = sellRule(p.cropId);
+      const saved = variety(p.varietyId), v = saved && saved.cropId === p.cropId ? saved : null, env = liveTray ? '' : envOf(r.b);
+      const fromV = !own && v && env ? listedYield('varieties', v.id, env) : null, fromC = !own && fromV == null && env ? listedYield('crops', p.cropId, env) : null, mine = fromV != null ? fromV : fromC;
       const basis = r.rack ? 'tray' : r.ct ? (p.yieldBasis === 'container' ? 'container' : 'plant') : c.yBasis === 'ft' && !r.tw ? 'ft' : 'plant';
       const count = basis === 'tray' || basis === 'container' || basis === 'ft' ? r.len : r.plants;
       // v7 took nothing from a harvest day inside a crop's "summer gap". The planner no longer second-guesses the plan that way:
       // what is planted to be picked in July counts in July. The v7 parity mode keeps the gap.
-      const mk = liveTray ? 1 : clamp(finite(c.mk, 0.9), 0, 1), part = clamp((r.harvestDays - (legacy ? r.blackoutDays : 0)) / Math.max(1, r.expectedHarvestDays), 0, 1);
-      const each = liveTray ? 1 : per, set = liveTray || (c.yield != null && c.yield !== '' && Number.isFinite(+c.yield)) || own;
-      return { basis, count, per: each, mk, part, units: count * each * mk * part, unit: unitOf(c), set, own, price: p.price != null && p.price !== '' ? nonNegative(p.price) : nonNegative(c.price) };
+      const mk = liveTray ? 1 : rule.share != null ? rule.share / 100 : clamp(finite(c.mk, 0.9), 0, 1), part = clamp((r.harvestDays - (legacy ? r.blackoutDays : 0)) / Math.max(1, r.expectedHarvestDays), 0, 1);
+      const set = liveTray || (c.yield != null && c.yield !== '' && Number.isFinite(+c.yield)) || own || mine != null;
+      // A planting's own yield is a total, as it always was, and is worked out as it always was. A figure that follows the list is in
+      // the crop's pattern: a total, or what is picked each week (then a longer harvest gives more, and a shorter one less).
+      const pattern = liveTray ? 'spread' : rule.pattern || 'spread', weekly = pattern === 'weekly' && !own, nominal = nominalDays(c);
+      const figure = liveTray ? 1 : nonNegative(own ? p.yield : mine != null ? mine : c.yield);
+      const perWeek = weekly ? (mine != null ? mine : figure * 7 / nominal) : null, each = weekly ? perWeek * r.harvestDays / 7 : figure;
+      return { basis, count, per: each, mk, part: weekly ? 1 : part, units: count * each * mk * (weekly ? 1 : part), unit: unitOf(c, v), set, own, price: priceOf(p, c, v),
+        pattern: own && pattern === 'weekly' ? 'spread' : pattern, perWeek, nominal, by: own ? 'own' : fromV != null ? 'variety' : fromC != null ? 'crop' : 'default', keep: liveTray ? 0 : rule.keep || 0 };
     }
     /** Is this a day the crop is picked? Any day of its harvest period (in the v7 parity mode, not the days in its summer gap). */
     const pickedOn = (r, date) => date >= r.first && date <= r.last && (!legacy || blackoutOverlapDays(r.c, date, date, { summerOK: r.c.summerOK }, r.g) === 0);
+
+    const usedEnvs = new Set((S.beds || []).filter(b => b.active !== false).map(envOf).filter(Boolean));
+    /**
+     * One row of the list's second table: what a crop, or one of its varieties, is sold as, how it is picked and what it yields.
+     * Each figure says what is set (`mine`) and what is used when nothing is (`fallback`). A yield is in the crop's pattern:
+     * a total, or what is picked each week; `total` and `weekly` give both, over the crop's nominal harvest days.
+     */
+    function harvestFor(cropId, varietyId) {
+      const c = crop(cropId);
+      if (!c) return null;
+      const saved = varietyId ? variety(varietyId) : null, v = saved && saved.cropId === cropId ? saved : null, rule = sellRule(cropId), ruleV = sellVRule(v && v.id), micro = !!c.micro;
+      const season = c.harvestMode === 'season', nominal = rule.days || nominalDays(c), pattern = micro ? 'once' : rule.pattern || 'spread', weekly = pattern === 'weekly';
+      const has = c.yield != null && c.yield !== '' && Number.isFinite(+c.yield), total0 = micro ? 1 : has ? nonNegative(c.yield) : null, unit0 = micro ? 'tray' : recordUnit(c), price0 = nonNegative(c.price);
+      const cells = {};
+      for (const env of ENVS) {
+        const fromC = listedYield('crops', cropId, env), mine = micro ? null : v ? listedYield('varieties', v.id, env) : fromC;
+        const fallback = v && fromC != null ? fromC : total0 == null ? null : weekly ? total0 * 7 / nominal : total0, value = mine != null ? mine : fallback;
+        cells[env] = { used: usedEnvs.has(env), mine, fallback, value, by: mine != null ? 'mine' : v && fromC != null ? 'crop-mine' : 'default',
+          total: value == null ? null : weekly ? value * nominal / 7 : value, weekly: value == null ? null : weekly ? value : value * 7 / nominal };
+      }
+      const pick = (mine, fallback) => ({ mine, fallback, value: mine != null ? mine : fallback });
+      return { micro, basis: micro ? 'tray' : c.yBasis === 'ft' ? 'ft' : 'plant', season, nominal, weekly, cells,
+        unit: pick(micro ? null : v ? ruleV.unit : rule.unit, v ? rule.unit || unit0 : unit0), price: pick(v ? ruleV.price : rule.price, v ? (rule.price != null ? rule.price : price0) : price0),
+        pattern: pick(micro ? null : rule.pattern, micro ? 'once' : 'spread'), days: pick(micro ? null : rule.days, micro || season ? null : Math.max(1, Math.round(nonNegative(c.hw)))),
+        share: pick(micro ? null : rule.share, micro ? 100 : Math.round(clamp(finite(c.mk, 0.9), 0, 1) * 100)), keep: pick(micro ? null : rule.keep, 0), turnover: pick(micro ? null : rule.turnover, micro ? 0 : turnoverDays()),
+        // figures nobody has looked at: the new-crop starting values, or nothing at all
+        open: { yield: !micro && (total0 == null || (total0 === 1 && unit0 === 'each')), price: !(price0 > 0) } };
+    }
 
     const benchList = () => benches().map(sp => ({ id: sp.id, name: sp.name || 'Bench', area: (((S.nursery || {}).benchAreas || []).find(a => a.id === (sp.benchLayout || {}).areaId) || {}).name || '', w: nonNegative(sp.w), l: nonNegative(sp.l), heated: sp.kind !== 'outside', active: sp.active !== false, cap: benchCap(sp) }));
 
@@ -1089,7 +1172,7 @@
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
       heatedTraySpaces, benchList, benchItems, benchDay, traysOn, cratesOnBenches, propOf, potUpDate, hardenStart,
-      yieldOf, unitOf, pickedOn, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
+      yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, startRule, startFixed, startHint, STARTS, START_LESS, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,

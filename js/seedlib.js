@@ -475,6 +475,59 @@
     return weight ? { how: 'weight', sizes, items: [], total: amount, cost: null, text: weight } : null;
   }
 
+  // ───────────────────────────── the order sheet ─────────────────────────────
+  // Seed is ordered from October on and then through the season, so the sheet is not a yearly document: it is what is short
+  // on the day it is opened, by supplier, in that supplier's own sizes. A line can be bought in another amount than its
+  // shortfall, and a variety that is not short can be added (a top-up after a sowing that failed).
+  const supplierOf = v => String((v && (v.supplier || v.catalogSupplier || (v.source === 'Farm entry' ? '' : v.source))) || '').trim();
+  /**
+   * rows: the rows of required(), each with `short` worked out (what is still to sow, less seed on hand and on order).
+   * coverFor(amount, unit, variety) names the sizes that cover an amount (toCover). amounts: { [row.key]: amount to buy instead }.
+   * Returns { groups: [{ key, name, lines, cost, unpriced }], lines, cost, unpriced, loose }: `loose` are rows with no variety
+   * chosen, which no supplier can be asked for by name.
+   */
+  function orderSheet(rows, coverFor, amounts = {}) {
+    const groups = new Map(), loose = [], names = (a, b) => String(a || '').localeCompare(String(b || ''));
+    for (const r of rows || []) {
+      const asked = amounts[r.key], set = asked != null && asked !== '' && Number.isFinite(+asked) && +asked >= 0, amount = set ? +asked : r.short;
+      if (!(amount > 0)) continue;
+      if (!r.variety) { loose.push({ key: r.key, row: r, crop: r.crop, unit: r.unit, amount }); continue; }
+      const v = r.variety, name = supplierOf(v), key = name ? supplierKey(name) || norm(name) : '';
+      const cover = r.unit === 'seeds' || r.unit === 'g' ? coverFor(amount, r.unit, v) : null, sized = !!cover && cover.how === 'sizes';
+      const line = { key: r.key, row: r, variety: v, crop: r.crop, sku: v.sku || '', unit: r.unit, amount, short: r.short || 0, set: set && +asked !== r.short, cover,
+        buy: sized && cover.total != null ? cover.total : amount, text: cover ? cover.text : '', sized, cost: cover && cover.cost != null ? cover.cost : null };
+      let g = groups.get(key);
+      if (!g) groups.set(key, g = { key, name: name || 'No supplier named', lines: [], cost: 0, unpriced: 0 });
+      else if (name && /\./.test(g.name) && !/\./.test(name)) g.name = name;   // "Fedco Seeds" reads better than "fedcoseeds.com"
+      g.lines.push(line);
+      if (line.cost != null) g.cost += line.cost; else g.unpriced++;
+    }
+    const list = [...groups.values()].sort((a, b) => (a.key ? 0 : 1) - (b.key ? 0 : 1) || names(a.name, b.name));
+    for (const g of list) g.lines.sort((a, b) => names(a.crop && a.crop.name, b.crop && b.crop.name) || names(a.variety.name, b.variety.name));
+    return { groups: list, lines: list.reduce((n, g) => n + g.lines.length, 0), cost: list.reduce((n, g) => n + g.cost, 0), unpriced: list.reduce((n, g) => n + g.unpriced, 0), loose };
+  }
+  const qty = (n, unit) => `${Number(n).toLocaleString('en-US', { maximumFractionDigits: unit === 'g' ? 1 : 0 })} ${UNIT_WORD[unit] === 'seeds' ? 'seeds' : unit === 'g' ? 'g' : UNIT_WORD[unit] || unit}`;
+  /** The sheet as plain text, to paste into an order form or an email, or to print. info: { farm, year, date, notes: [] }. */
+  function orderText(sheet, info = {}) {
+    const lines = [`${info.farm || 'Farm'}: seed to order${info.date ? ', ' + info.date : ''}`, `What the ${info.year || ''} plan still has to sow, less seed on hand and on order.`.replace('  ', ' ')];
+    for (const g of sheet.groups) {
+      lines.push('', `${g.name} · ${g.lines.length} line${g.lines.length === 1 ? '' : 's'}${g.cost > 0 ? ' · ' + money(g.cost) : ''}${g.unpriced ? ` · ${g.unpriced} with no price on file` : ''}`);
+      for (const l of g.lines) lines.push(`  ${l.crop ? l.crop.name + ' · ' : ''}${l.variety.name}${l.sku ? ' (' + l.sku + ')' : ''}: ${qty(l.amount, l.unit)}${l.text ? ' · ' + l.text : ' · size not on file'}${l.cost != null ? ' · ' + money(l.cost) : ''}`);
+    }
+    if (sheet.loose.length) { lines.push('', 'No variety chosen (nothing to order by name)'); for (const l of sheet.loose) lines.push(`  ${l.crop ? l.crop.name : 'Crop'}: ${qty(l.amount, l.unit)}`); }
+    lines.push('', sheet.lines ? `Total: ${money(sheet.cost)} for ${sheet.lines - sheet.unpriced} of ${sheet.lines} line${sheet.lines === 1 ? '' : 's'}${sheet.unpriced ? `; ${sheet.unpriced} with no price on file ${sheet.unpriced === 1 ? 'is' : 'are'} not in it` : ''}.` : 'Nothing is short.');
+    for (const n of info.notes || []) lines.push(n);
+    return lines.join('\n');
+  }
+  function orderCsv(sheet) {
+    const cell = x => { let t = x == null ? '' : String(x); if (/^\s*[=+\-@]/.test(t)) t = "'" + t; return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+    const out = [['Supplier', 'Crop', 'Variety', 'Product code', 'To buy', 'Unit', 'Vendor size', 'Cost', 'Short', 'On hand', 'Ordered', 'Still to sow', 'First sowing']];
+    const d2s = d => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '';
+    for (const g of sheet.groups) for (const l of g.lines) out.push([g.name, l.crop ? l.crop.name : '', l.variety.name, l.sku, Math.round(l.amount * 10) / 10, l.unit, l.text, l.cost != null ? l.cost.toFixed(2) : '', l.short, l.row.onHand || 0, l.row.onOrder || 0, Math.round((l.row.toSow || 0) * 10) / 10, d2s(l.row.first)]);
+    for (const l of sheet.loose) out.push(['', l.crop ? l.crop.name : '', '(no variety chosen)', '', Math.round(l.amount * 10) / 10, l.unit, '', '', l.amount, l.row.onHand || 0, l.row.onOrder || 0, Math.round((l.row.toSow || 0) * 10) / 10, d2s(l.row.first)]);
+    return out.map(r => r.map(cell).join(',')).join('\r\n');
+  }
+
   // ───────────────────────────── sowing draws stock down ─────────────────────────────
   // A planned sowing never touches stock. Recording that it happened does: the planting gets its actual date, and the
   // seed it used comes off the lots on hand. The records are v7's own (done, workflow.history, workflow.seedUse, and a
@@ -585,5 +638,5 @@
   }
 
   return { norm, startOf, BASES, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
-    sizeOf, packs, cover, toCover, money, sowing, lotsToUse, recordSowing, takeBackSowing, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
+    sizeOf, packs, cover, toCover, money, orderSheet, orderText, orderCsv, supplierOf, sowing, lotsToUse, recordSowing, takeBackSowing, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
 });
