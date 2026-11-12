@@ -932,7 +932,7 @@ body[data-view="harvest"] .stage { grid-template-rows: minmax(0, 1fr); }
 .hv-bar .seg button { padding-inline: 12px; }
 .hv-bar .sd-filters { margin: 0; }
 .hv-bar input[type="search"] { height: 31px; width: 170px; border: 1px solid var(--line); border-radius: 999px; background: var(--raised); padding: 0 12px; font-size: 13px; }
-.hv-scroll { overflow: auto; max-height: calc(100vh - 150px); border: 1px solid var(--line); border-radius: 10px; background: var(--raised); }
+.hv-scroll { overflow: auto; max-height: calc(100vh - 150px); border: 1px solid var(--line); border-radius: 10px; background: var(--raised); width: fit-content; max-width: 100%; margin-inline: auto; }
 table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
 .hv th, .hv td { height: 30px; padding: 0 6px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
 .hv thead th { position: sticky; top: 0; z-index: 3; background: var(--raised); font: 500 10.5px var(--mono); color: var(--muted); text-align: center; vertical-align: bottom; padding-bottom: 5px; height: 40px; border-bottom: 1px solid var(--line); cursor: pointer; }

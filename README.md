@@ -2,7 +2,7 @@
 
 A crop planner that works on a map of the farm. Drag crops onto beds, move plantings, share beds, and keep one list of the assumptions the plan rests on.
 
-This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.23 at the time of writing).
+This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.24 at the time of writing).
 
 ## Using it
 
@@ -15,6 +15,10 @@ This repository holds the app only. It contains no plan, no farm photo and no fa
 ## Reading a variety from a supplier's page
 
 In **Seeds**, choose **Add from a supplier page**. Pasting the page works anywhere, with no connection. Reading from a link needs the fetch service in `worker/`: put its address and key under **Link reader…** and use **Test connection**. Both are kept in that browser only, never in the plan or a backup.
+
+## How it looks
+
+The planner is light, whatever the computer's own setting says. On a wide screen the farm photo is settled so that no empty strip shows beside it while its other side runs off the screen (on a screen wider than the photo it sits in the middle), and the Harvest table sits in the middle of the page.
 
 ## Reading the timeline
 
