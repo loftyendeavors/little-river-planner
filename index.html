@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.19">
+<meta name="lrf-build" content="0.20">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -49,6 +49,17 @@
     </div>
   </div>
 </header>
+
+<section class="first-run" id="firstRun" aria-label="No plan in this browser" hidden>
+  <p id="firstNone"><b>No plan of yours is in this browser.</b> What you see is a sample. A plan stays in the browser it was made in: it does not follow you to another browser or another computer. If you made one somewhere else, it is still there. Bring it here from a backup file or from the folder it is kept in.</p>
+  <p id="firstBad" hidden><b>The plan stored in this browser could not be opened.</b> It is kept exactly as it is, and nothing you do here is saved over it. What you see is <span id="firstBadWhat">a sample</span>. Bring your plan back from the folder it is kept in or from a backup file. <span id="firstBadWhy"></span></p>
+  <div class="first-run-actions">
+    <button type="button" class="btn primary" id="firstLoad">Load a backup…</button>
+    <button type="button" class="btn" id="firstFolder" title="Choose the folder your plan is kept in. The plan and its photos are opened from it, and saving carries on there.">Open my plan folder…</button>
+    <button type="button" class="btn" id="firstStored" title="A file of what is stored here, exactly as it is, so it can be looked at or repaired" hidden>Download what is stored</button>
+    <button type="button" class="btn" id="firstUse" title="Give up on the stored plan and save the one shown in its place. Asked first." hidden>Carry on from the plan shown…</button>
+  </div>
+</section>
 
 <main class="work">
   <aside class="library" aria-label="Crop library">

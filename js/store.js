@@ -129,7 +129,7 @@
     }
 
     async function flush() {
-      if (saving || !dirty) return;
+      if (held || saving || !dirty) return;
       saving = true;
       while (dirty) {
         const core = dirty; dirty = null;
@@ -151,15 +151,22 @@
     /** Queue a save; bursts of edits collapse into one write. */
     function save(core) {
       dirty = core;
+      if (held) { status('held'); return; }
       if (backend === 'memory') { status('unsaved'); return; }
       status('pending');
       clearTimeout(timer);
       timer = setTimeout(flush, 700);
     }
-    const retry = () => { if (failed && dirty) flush(); };
+    const retry = () => { if (failed && dirty && !held) flush(); };
+    // A stored plan that would not open is never written over by accident: while saving is held, nothing reaches the store.
+    let held = false;
+    const hold = () => { held = true; clearTimeout(timer); }, release = () => { held = false; };
+    /** What is stored on this device, exactly as it is (for a plan that would not open). */
+    const raw = () => { try { return backend === 'device' ? root.localStorage.getItem(DEVICE_KEY) : null; } catch (_) { return null; } };
     /** Save and wait for it. Throws if the plan could not be written. */
     async function saveNow(core) {
       clearTimeout(timer); dirty = core;
+      if (held) { status('held'); throw new Error('The plan stored here could not be opened and is being kept as it is.'); }
       if (backend === 'memory') { status('unsaved'); return; }
       await flush();
       if (failed) throw new Error('The plan could not be saved.');
@@ -210,7 +217,7 @@
       if (manifest.exists) await db.doc(`blob-${name}/manifest`).delete();
     }
 
-    return { connect, load, save, saveNow, retry, watch, saveBlob, loadBlob, clearBlob, get backend() { return backend; }, get pending() { return !!dirty || saving; } };
+    return { connect, load, save, saveNow, retry, hold, release, raw, get held() { return held; }, watch, saveBlob, loadBlob, clearBlob, get backend() { return backend; }, get pending() { return !!dirty || saving; } };
   }
 
   root.LRFStore = { create, toParts, fromParts };

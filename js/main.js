@@ -24,8 +24,22 @@
     $('seasonYear').textContent = App.planYear();
     const plan = App.state.plan, info = plan.lrfNext || {};
     const waits = App.waiting().length;
-    $('buildNote').textContent = `Rebuild preview 0.19 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
+    $('buildNote').textContent = `Rebuild preview 0.20 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
   });
+  // A browser that holds no plan says so across the page, in every view, with the two ways to bring one in.
+  // The same strip speaks for a stored plan that would not open: it is kept as it is until he chooses what to do.
+  const firstRun = () => {
+    const bad = App.state.unreadable || null, show = App.state.ready && (App.isSample() || !!bad);
+    $('firstRun').hidden = !show; $('firstRun').classList.toggle('bad', !!bad); $('firstRun').setAttribute('aria-label', bad ? 'The stored plan could not be opened' : 'No plan in this browser');
+    $('firstNone').hidden = !!bad; $('firstBad').hidden = !bad;
+    $('firstFolder').hidden = !App.folder().supported; $('firstStored').hidden = !(bad && bad.stored); $('firstUse').hidden = !bad;
+    if (bad) { $('firstBadWhat').textContent = App.isSample() ? 'a sample' : 'the plan this copy of the planner came with'; $('firstBadWhy').textContent = bad.why ? `(The browser said: ${String(bad.why).slice(0, 140)}.)` : ''; }
+  };
+  App.on('plan', firstRun); firstRun();
+  $('firstLoad').addEventListener('click', () => $('importFile').click());
+  $('firstFolder').addEventListener('click', () => App.openMyFolder());
+  $('firstStored').addEventListener('click', () => App.downloadStored());
+  $('firstUse').addEventListener('click', () => App.useShown());
   $('undoBtn').addEventListener('click', App.undo);
   $('redoBtn').addEventListener('click', App.redo);
   // The save indicator is also the one-click manual save: with a plan folder it writes the file now; with trouble it retries; otherwise it opens the menu where a file can be had.

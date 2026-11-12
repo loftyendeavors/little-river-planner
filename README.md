@@ -2,14 +2,15 @@
 
 A crop planner that works on a map of the farm. Drag crops onto beds, move plantings, share beds, and keep one list of the assumptions the plan rests on.
 
-This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.19 at the time of writing).
+This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.20 at the time of writing).
 
 ## Using it
 
 1. Open the site (the address is shown under Settings, Pages in this repository).
-2. The first time, it opens on a small sample. Choose **Backup**, then **Load a v7 backup**, and pick your backup file. Your plan and map photo are then kept in that browser on that computer.
+2. The first time, it opens on a small sample, and a strip across the top says that no plan is in that browser. A plan is kept in the browser it was made in: it does not follow you to another browser or another computer. Bring one in with **Load a backup** (a backup downloaded from this planner, or the complete backup from the v7 planner) or, in Chrome or Edge, **Open my plan folder** (the folder the plan is kept in, if you chose one under Backup). Your plan and map photo are then kept in that browser on that computer.
 3. In Chrome or Edge, use the install button in the address bar to add it as an app. After the first visit it opens with no connection.
-4. When the site has been updated, the planner says so and offers **Reload**. Until it is reloaded it goes on running the version it opened with.
+4. If the plan stored in a browser ever cannot be opened, the strip says so. What is stored is kept exactly as it is, and nothing is saved over it until you bring a plan in or choose to carry on; **Download what is stored** gives it to you as a file.
+5. When the site has been updated, the planner says so and offers **Reload**. Until it is reloaded it goes on running the version it opened with.
 
 ## Reading a variety from a supplier's page
 

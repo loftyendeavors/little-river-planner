@@ -194,12 +194,15 @@
   const inGround = () => { const eng = App.state.engine, spaces = App.state.plan.beds.filter(b => b.active !== false && !eng.isPool(b)); return `${spaces.filter(b => eng.cropsAt(b.id, App.state.date).length).length} of ${spaces.length}`; };
   function renderOverview(host) {
     const plan = App.state.plan, date = App.state.date;
-    if (App.isSample()) {
+    if (App.isSample() && !App.state.unreadable) {
       add(host, h('section.welcome',
-        h('p.eyebrow', 'Start here'), h('h2', 'Load your plan'),
-        h('p', 'This is a sample layout so the page is not empty. Load the complete backup (.zip) from your v7 planner and your gardens, beds, plantings, varieties and map photo appear here.'),
-        h('button.btn.primary', { type: 'button', onclick: () => $('importFile').click() }, 'Load a v7 backup…'),
-        h('p.help', 'You can also drop the file anywhere on this page. Your v7 planner is not changed.')));
+        h('p.eyebrow', 'No plan in this browser'), h('h2', 'Load your plan'),
+        h('p', 'This is a sample layout so the page is not empty. A plan stays in the browser it was made in, so one made on another computer or in another browser is not here until you bring it.'),
+        h('p', 'Load a backup downloaded from this planner, or the complete backup (.zip) from your v7 planner, and your gardens, beds, plantings, varieties and map photo appear here.'),
+        h('div.welcome-actions',
+          h('button.btn.primary', { type: 'button', onclick: () => $('importFile').click() }, 'Load a backup…'),
+          App.folder().supported ? h('button.btn', { type: 'button', id: 'welcomeFolder', onclick: () => App.openMyFolder() }, 'Open my plan folder…') : null),
+        h('p.help', 'You can also drop the file anywhere on this page. The file and your v7 planner are not changed.')));
     }
     const ground = stat(`In the ground ${day(date)}`, inGround());
     ground.id = 'statGround';
@@ -213,7 +216,7 @@
     add(host, h('section.insp-section.howto', h('h3', 'On the map'),
       h('ul.how',
         h('li', h('b', 'Plant'), 'Drag a crop from the library onto a bed. It goes in on the date under the map.'),
-        h('li', h('b', 'Series'), 'One crop every so many days: ', h('button.linkish', { type: 'button', id: 'ovSeries', onclick: () => App.openAhead({ mode: 'series' }) }, 'plan a series'), ', or use “series” beside a crop in the library.'),
+        h('li', h('b', 'Series'), h('span', 'One crop every so many days: ', h('button.linkish', { type: 'button', id: 'ovSeries', onclick: () => App.openAhead({ mode: 'series' }) }, 'plan a series'), ', or use “series” beside a crop in the library.')),
         h('li', h('b', 'Move'), 'Drag a planting to other ground. It keeps its date. Hold Alt to leave a copy.'),
         h('li', h('b', 'Trade'), 'Drop a planting on ground that is held and the two trade places, when both fit.'),
         h('li', h('b', 'Share a bed'), 'Select a planting and drag its ends. The feet it gives up take the next crop.'),
@@ -465,7 +468,7 @@
           h('input', { type: 'number', id: 'fRepeatEvery', min: 1, max: 120, value: Math.max(7, Math.min(28, r.c.hw || 14)), 'aria-label': 'Days apart' }), h('span', 'days'),
           h('button.btn', { type: 'button', onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+$('fRepeatCount').value) || 1)), Math.max(1, Math.round(+$('fRepeatEvery').value) || 14)) }, 'Add')),
         h('p.help', `Each one takes this ${unit === 'sites' ? 'tower' : 'bed'} if it is free by then, otherwise the next free one in ${eng.gardenOf(bed).name}. `,
-          h('button.linkish', { type: 'button', id: 'fSeriesLink', onclick: () => App.openAhead({ mode: 'series', sourceId: p.id }) }, 'Plan a longer series: see it first, name gardens or beds, or leave them to place'))),
+          canSeries(eng, r.c) ? h('button.linkish', { type: 'button', id: 'fSeriesLink', onclick: () => App.openAhead({ mode: 'series', sourceId: p.id }) }, 'Plan a longer series: see it first, name gardens or beds, or leave them to place') : null)),
       h('div.insp-actions', h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')));
   }
 
