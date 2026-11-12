@@ -2,7 +2,7 @@
 
 A crop planner that works on a map of the farm. Drag crops onto beds, move plantings, share beds, and keep one list of the assumptions the plan rests on.
 
-This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.24 at the time of writing).
+This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.25 at the time of writing).
 
 ## Using it
 
@@ -18,7 +18,7 @@ In **Seeds**, choose **Add from a supplier page**. Pasting the page works anywhe
 
 ## How it looks
 
-The planner is light, whatever the computer's own setting says. On a wide screen the farm photo is settled so that no empty strip shows beside it while its other side runs off the screen (on a screen wider than the photo it sits in the middle), and the Harvest table sits in the middle of the page.
+The planner is light, whatever the computer's own setting says. On a wide screen the farm photo is settled so that no empty strip shows beside it while its other side runs off the screen (on a screen wider than the photo it sits in the middle), and the Harvest table sits in the middle of the page. The map's scale, top left, is a label over a ruler exactly as long as the distance it names, on a small plate with an edge all round.
 
 ## Reading the timeline
 
