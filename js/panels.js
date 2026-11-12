@@ -361,7 +361,7 @@
   function renderTrayBatch(host, p, r) {
     const eng = App.state.engine, T = root.LRFTrays, c = r.c, color = eng.cropColor(c), name = T.short(c.name);
     const plan = p.liveTray ? (App.state.plan.liveTrayPlans || []).find(x => x.id === p.liveTray.planId) : null, row = plan ? plan.rows.find(x => x.id === p.liveTray.rowId) : null;
-    const price = p.price != null && p.price !== '' ? +p.price : +c.price || 0, sown = !!(p.done && p.done.sow), v = eng.variety(p.varietyId);
+    const v = eng.variety(p.varietyId), price = eng.priceOf(p, c, v), sown = !!(p.done && p.done.sow);
     const mates = plan && row ? App.state.plan.plantings.filter(q => q.liveTray && q.liveTray.planId === plan.id && q.liveTray.rowId === row.id).length : 1;
     const varieties = eng.varietiesOf(p.cropId), variety = h('select', { id: 'fVariety', onchange: async e => {
       const id = e.target.value || null, label = id ? eng.variety(id).name : 'No variety';
@@ -388,6 +388,16 @@
       App.sowingOf(p) ? h('section.insp-section', h('h3', 'Sowing'), sowingBox(p)) : null,
       plan ? null : h('div.insp-actions', h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove batch')));
   }
+  /** What a planting is expected to give, and whose figure that rests on: its own, or the list's. */
+  function yieldLine(eng, p, r) {
+    const y = eng.yieldOf(p, r);
+    if (!y || r.rack) return null;
+    const F = root.LRFForecast, unit = y.unit === 'each' ? '' : ' ' + y.unit, basis = { plant: 'a plant', ft: 'a bed-foot', container: 'a container', tray: 'a tray' }[y.basis] || 'each';
+    const whose = y.own ? `its own yield, ${num(y.per, 2)}${unit} from ${basis}: “Review…” on the Assumptions tab lets it follow the list` : y.by === 'default' ? (y.set ? 'the crop’s own yield, not yet set on the Assumptions list' : 'no yield is set for this crop') : `your list’s yield for ${y.by === 'variety' ? 'the variety' : 'the crop'}`;
+    const how = y.pattern === 'weekly' ? `${num(y.perWeek, 2)}${unit} a week from ${basis}` : y.pattern === 'once' ? 'all at once' : '';
+    return h('p.help', { id: 'fYieldLine' }, `Expected: ${F.amount(y.units, y.unit, 'produce')}${y.price > 0 ? ` at $${num(y.price, 2)}, ${'$' + Math.round(y.units * y.price).toLocaleString('en-US')}` : ''}. From ${whose}${how ? ` (${how})` : ''}.${r.c.harvestBy === 'list' ? ' Harvest days are your list’s.' : ''}`);
+  }
+
   function renderPlanting(host, p) {
     const eng = App.state.engine, r = eng.calc(p);
     if (!r) { host.append(h('p.note', 'This planting cannot be calculated. Its saved data is kept.'), h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')); return; }
@@ -442,7 +452,8 @@
             onchange: e => { const n = Math.round(+e.target.value); set(n > 0 ? { dtm: n, timingMode: 'manual' } : { dtm: null, timingMode: p.timingMode === 'manual' ? null : p.timingMode }, 'Change days to harvest'); } })),
           field('Harvest days', h('input', { type: 'number', id: 'fHw', min: 0, max: 400, value: p.hw != null && p.hw !== '' ? p.hw : '', placeholder: r.harvestMode === 'season' ? 'To season end' : String(c.hw),
             onchange: e => { const raw = e.target.value; set(raw === '' ? { hw: null, harvestMode: null } : { hw: Math.max(0, Math.round(+raw)), harvestMode: 'window' }, 'Change harvest days'); } }))),
-        h('p.help', fromList || dtmSource)),
+        h('p.help', fromList || dtmSource),
+        yieldLine(eng, p, r)),
       h('section.insp-section',
         h('h3', 'Schedule'),
         h('ol.schedule',

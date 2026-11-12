@@ -155,34 +155,95 @@
       if (shift > 0) later++; else if (shift < 0) sooner++;
       if (Math.abs(shift) > Math.abs(most)) most = shift;
     }
-    const was = pairs(before), now = pairs(after);
-    return { changed, later, sooner, most, overlaps: [...now].filter(k => !was.has(k)).length, byCrop: [...byCrop.values()] };
+    const was = pairs(before), now = pairs(after), worthOf = eng => root.LRFForecast.build(eng).rows.reduce((n, r) => n + r.worth, 0);
+    return { changed, later, sooner, most, overlaps: [...now].filter(k => !was.has(k)).length, settled: [...was].filter(k => !now.has(k)).length, byCrop: [...byCrop.values()], worth: [worthOf(before), worthOf(after)] };
   }
+  const dollars = n => '$' + Math.round(n).toLocaleString('en-US');
   async function assume(label, ops, options = {}) {
     const plan = withOps(state.plan, ops, 'do'), engine = E.create(plan, Lib), hit = impact(state.engine, engine);
     const moves = hit.changed ? `${hit.changed} planting${hit.changed === 1 ? '' : 's'} ${hit.later && hit.sooner ? 'shift' : hit.later ? 'harvest later' : 'harvest sooner'}, by up to ${Math.abs(hit.most)} day${Math.abs(hit.most) === 1 ? '' : 's'}` : 'No planting’s dates change';
     const line = row => { const c = engine.crop(row.cropId), lo = Math.min(...row.shifts), hi = Math.max(...row.shifts), days = lo === hi ? Math.abs(hi) : `${Math.min(Math.abs(lo), Math.abs(hi))} to ${Math.max(Math.abs(lo), Math.abs(hi))}`; return UI.h('li', UI.h('b', c ? c.name : 'Crop'), ` ${row.n} planting${row.n === 1 ? '' : 's'}, ${lo === 0 && hi === 0 ? 'harvest ends on another day' : `${days} day${hi === 1 || hi === -1 ? '' : 's'} ${lo < 0 && hi > 0 ? 'either way' : hi > 0 ? 'later' : 'sooner'}`}`); };
     const detail = hit.changed ? UI.h('ul.moves', { id: 'assumeMoves' }, hit.byCrop.sort((a, b) => b.n - a.n).map(line)) : null;
+    // what the change does to the season's worth, and to ground booked twice, is said with it
+    const worth = Math.abs(hit.worth[1] - hit.worth[0]) >= 0.5 ? `the season’s worth goes from ${dollars(hit.worth[0])} to ${dollars(hit.worth[1])}` : '';
+    const settles = hit.settled ? `${hit.settled} double booking${hit.settled === 1 ? ' is' : 's are'} settled` : '';
+    const also = [worth, settles].filter(Boolean).join(' · ');
     if (hit.overlaps) {
-      const ok = await UI.confirm({ title: label, confirmLabel: 'Apply', body: `${moves}. ${hit.overlaps} pair${hit.overlaps === 1 ? '' : 's'} of plantings would then be booked into the same ground. They are not refused, because the plan was only ever as good as the number. They will wait on the overview under “To settle”.`, detail });
+      const ok = await UI.confirm({ title: label, confirmLabel: 'Apply', body: `${moves}. ${hit.overlaps} pair${hit.overlaps === 1 ? '' : 's'} of plantings would then be booked into the same ground. They are not refused, because the plan was only ever as good as the number. They will wait on the overview under “To settle”.${also ? ' Also: ' + also + '.' : ''}`, detail });
       if (!ok) return false;
     } else if (options.ask && hit.changed) {
       // Several lines of the list changed at once: say what moves before it does.
       if (!await UI.confirm({ title: label, confirmLabel: 'Apply', body: `${moves}. No ground ends up booked twice. One undo takes it all back.`, detail })) return false;
     }
     commit(label, ops, { unchecked: true });
-    toast(`${label} · ${moves.charAt(0).toLowerCase()}${moves.slice(1)}`, { label: 'Undo', run: undo });
+    toast(`${label} · ${hit.changed || !also ? moves.charAt(0).toLowerCase() + moves.slice(1) : ''}${hit.changed && also ? ' · ' : ''}${also}`, { label: 'Undo', run: undo });
     return true;
+  }
+  const blankList = () => ({ v: 1, crops: {}, varieties: {} });
+  const emptyList = a => !['crops', 'varieties', 'starts', 'sell', 'sellV'].some(k => a[k] && Object.keys(a[k]).length);
+  /** One change to the list, as a step: `edit` is handed a copy to change. Empty groups are dropped, and an empty list is no list. */
+  function listStep(edit) {
+    const current = state.plan.assumptions || null, next = current ? clone(current) : blankList();
+    edit(next);
+    for (const k of ['starts', 'sell', 'sellV']) if (next[k] && !Object.keys(next[k]).length) delete next[k];
+    if (JSON.stringify(next) === JSON.stringify(current || blankList())) return null;
+    return [{ kind: 'assume', before: current, after: emptyList(next) ? null : next }];
+  }
+  /** Set one figure in a cell of the list (days, or a yield), leaving what else the cell holds. No value clears it. */
+  function setCell(next, kind, id, env, field, value) {
+    next[kind] = next[kind] || {};
+    const record = { ...(next[kind][id] || {}) }, cell = { ...(record[env] || {}) };
+    if (value == null) delete cell[field]; else cell[field] = value;
+    if (Object.keys(cell).length) record[env] = cell; else delete record[env];
+    if (Object.keys(record).length) next[kind][id] = record; else delete next[kind][id];
   }
   /** Set, or with no days clear, the grower's days to harvest for a crop or variety in one growing condition. */
   function setAssumption(kind, id, env, days, label) {
-    const current = state.plan.assumptions || null, next = current ? JSON.parse(JSON.stringify(current)) : { v: 1, crops: {}, varieties: {} };
-    next[kind] = next[kind] || {};
-    const record = { ...(next[kind][id] || {}) };
-    if (days > 0) record[env] = { dtm: Math.round(days) }; else delete record[env];
-    if (Object.keys(record).length) next[kind][id] = record; else delete next[kind][id];
-    const empty = !Object.keys(next.crops || {}).length && !Object.keys(next.varieties || {}).length && !Object.keys(next.starts || {}).length;
-    return assume(label, [{ kind: 'assume', before: current, after: empty ? null : next }]);
+    const ops = listStep(next => setCell(next, kind, id, env, 'dtm', days > 0 ? Math.round(days) : null));
+    return ops ? assume(label, ops) : Promise.resolve(false);
+  }
+  // ── the second half of the list: what a crop is sold as, how it is picked, what it yields ──
+  const figure3 = x => Math.round(x * 1000) / 1000;
+  /** Set, or with null clear, a yield for a crop or variety in one growing condition. It is in the crop's pattern: a total, or a week's picking. */
+  function setYield(kind, id, env, value, label) {
+    const ops = listStep(next => setCell(next, kind, id, env, 'yield', value == null || value === '' || !(+value >= 0) ? null : figure3(+value)));
+    return ops ? assume(label, ops) : Promise.resolve(false);
+  }
+  /**
+   * Change a crop's line: `change` may hold unit, price, pattern, days, keep, share, turnover; a null goes back to the default.
+   * Changing between a weekly figure and a total turns the yields already typed for the crop and its varieties into the other,
+   * over the crop's harvest days, so the choice of words does not by itself change what is forecast.
+   */
+  function setSell(cropId, change, label, options) {
+    const eng = state.engine, before = eng.harvestFor(cropId);
+    const ops = listStep(next => {
+      next.sell = next.sell || {};
+      const record = { ...(next.sell[cropId] || {}) };
+      for (const key of ['unit', 'price', 'pattern', 'days', 'keep', 'share', 'turnover']) {
+        if (!(key in change)) continue;
+        const v = change[key];
+        if (v == null || v === '') delete record[key];
+        else record[key] = key === 'unit' || key === 'pattern' ? String(v) : key === 'days' ? Math.max(1, Math.round(+v)) : key === 'turnover' ? Math.max(0, Math.round(+v)) : key === 'share' ? Math.min(100, Math.max(0, +v)) : Math.max(0, +v);
+      }
+      if (Object.keys(record).length) next.sell[cropId] = record; else delete next.sell[cropId];
+      const weekly = (record.pattern || 'spread') === 'weekly';
+      if (before && 'pattern' in change && weekly !== before.weekly) {
+        const turn = y => figure3(weekly ? y * 7 / before.nominal : y * before.nominal / 7), mine = new Set(eng.varietiesOf(cropId).map(v => v.id));
+        for (const [kind, ids] of [['crops', [cropId]], ['varieties', Object.keys(next.varieties || {}).filter(id => mine.has(id))]])
+          for (const id of ids) for (const [env, cell] of Object.entries((next[kind] || {})[id] || {})) if (cell && cell.yield != null) next[kind][id][env] = { ...cell, yield: turn(+cell.yield) };
+      }
+    });
+    return ops ? assume(label, ops, options) : Promise.resolve(false);
+  }
+  /** A variety's own unit or price: `change` may hold unit and price; a null goes back to the crop's. */
+  function setSellV(varietyId, change, label) {
+    const ops = listStep(next => {
+      next.sellV = next.sellV || {};
+      const record = { ...(next.sellV[varietyId] || {}) };
+      for (const key of ['unit', 'price']) { if (!(key in change)) continue; const v = change[key]; if (v == null || v === '') delete record[key]; else record[key] = key === 'unit' ? String(v) : Math.max(0, +v); }
+      if (Object.keys(record).length) next.sellV[varietyId] = record; else delete next.sellV[varietyId];
+    });
+    return ops ? assume(label, ops) : Promise.resolve(false);
   }
   /**
    * Say where crops' days start: `changes` is [{ cropId, from, less }]. `from` is transplant, seed or direct; `less` the days a
@@ -198,8 +259,7 @@
     }
     if (!Object.keys(next.starts).length) delete next.starts;
     if (JSON.stringify(next) === JSON.stringify(current || { v: 1, crops: {}, varieties: {} })) return Promise.resolve(false);
-    const empty = !Object.keys(next.crops || {}).length && !Object.keys(next.varieties || {}).length && !next.starts;
-    return assume(label, [{ kind: 'assume', before: current, after: empty ? null : next }], options);
+    return assume(label, [{ kind: 'assume', before: current, after: emptyList(next) ? null : next }], options);
   }
   const setStart = (cropId, change, label) => setStarts([{ cropId, ...change }], label);
 
@@ -215,14 +275,15 @@
     return { step, ...Audit.preview(state.plan, Lib, step.ops, state.engine) };
   }
   async function auditApply(rows, choices) {
-    const step = Audit.build(state.plan, rows, choices), n = step.released + step.thaw + step.waiting;
+    const step = Audit.build(state.plan, rows, choices), n = step.plantings;
     if (!step.ops.length) return false;
     const view = Audit.preview(state.plan, Lib, step.ops, state.engine);
     await snapshot('Before plantings followed the list');
     const label = `${n} planting${n === 1 ? '' : 's'} follow${n === 1 ? 's' : ''} the list`;
     if (!commit(label, step.ops, { unchecked: true })) return false;
     const moved = view.harvest || view.sowing ? `${view.harvest} harvest date${view.harvest === 1 ? '' : 's'} and ${view.sowing} sowing date${view.sowing === 1 ? '' : 's'} moved` : 'no date moved';
-    toast(`${label} · ${moved}`, { label: 'Undo', run: undo });
+    const worth = Math.abs(view.worth[1] - view.worth[0]) >= 0.5 ? ` · the season’s worth goes from ${dollars(view.worth[0])} to ${dollars(view.worth[1])}` : view.yields.length ? ' · the season’s worth is unchanged' : '';
+    toast(`${label} · ${moved}${worth}`, { label: 'Undo', run: undo });
     return { ...step, ...view };
   }
   /** Say what kind of place a garden is. Its house factor and frost setting follow, as they did in v7. */
@@ -1388,7 +1449,7 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts,
+    commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),

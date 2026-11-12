@@ -855,6 +855,92 @@
     if (downloads) Promise.resolve(downloads).then(dl => dl.save({ filename, data: blob })).catch(error => { if (!error || error.code !== 'declined') fallback(); }); else fallback();
   }
 
+  // ───────────────────────── the order sheet ─────────────────────────
+  // Opened in place over the list. What is short today, by supplier, in each supplier's own sizes; an amount can be changed,
+  // a variety that is not short can be added, and a supplier's lines can be marked as ordered in one step.
+  let order = null;
+  const framed = (() => { try { return root.self !== root.top; } catch (_) { return true; } })();
+  function openOrder() {
+    if (order) return;
+    const amounts = {}, added = new Set(), host = h('div.od-scroll', { id: 'odScroll' }), sum = h('div.od-sum', { id: 'odSum' });
+    const close = () => { if (!order) return; order = null; el.close(); el.remove(); };
+    const today = () => UI.dayLong(new Date()).replace(/^\w+ /, '');
+    const build = () => {
+      const m = model(), rows = [...m.need.rows];
+      for (const id of added) { const r = m.byV.get(id); if (r && !rows.includes(r)) rows.push(r); }
+      const sheet = SL.orderSheet(rows, (amount, unit, v) => App.coverFor(amount, unit, v), amounts), pairs = root.LRFAudit.pairs(m.eng).size, waiting = App.waiting().length;
+      const blind = [...new Set(m.need.rows.filter(r => r.unit === 'g' && r.plantings > r.established && !(r.total > 0)).map(r => cropName(r.crop)))];
+      const notes = [pairs ? `Seed for both plantings is counted where ground is booked twice (${pairs} pair${pairs === 1 ? '' : 's'} in the plan).` : '', waiting ? `${waiting} planting${waiting === 1 ? '' : 's'} waiting to be placed ${waiting === 1 ? 'is' : 'are'} not counted.` : '',
+        blind.length ? `No seed is counted for ${blind.length} tray crop${blind.length === 1 ? '' : 's'} with no seed figure yet: ${blind.join(', ')}.` : '', 'Prices and sizes are as each supplier’s page gave them when it was last read.'].filter(Boolean);
+      return { m, sheet, notes };
+    };
+    const text = () => { const { m, sheet, notes } = build(); return SL.orderText(sheet, { farm: m.plan.settings.farm || 'Farm', year: App.planYear(), date: today(), notes }); };
+    const markOrdered = g => {
+      const year = new Date().getFullYear();
+      const done = App.editStock(`${g.name}: ${g.lines.length} line${g.lines.length === 1 ? '' : 's'} marked as ordered`, (lib, ctx) => g.lines.reduce((l, line) => SL.addLot(l, { key: line.row.stockKey, unit: line.row.stockUnit, quantity: line.unit === 'g' ? Math.round(line.buy * 10) / 10 : Math.ceil(line.buy), status: 'ordered', supplier: g.key ? g.name : '', year }, ctx), lib));
+      if (done) { for (const line of g.lines) { delete amounts[line.key]; added.delete(line.variety.id); } UI.toast(`${g.name}: ${g.lines.length} line${g.lines.length === 1 ? '' : 's'} on order. “Order arrived” in the list turns each into seed on hand.`, { label: 'Undo', run: App.undo }); }
+    };
+    const draw = () => {
+      const { m, sheet, notes } = build(), top = host.scrollTop;
+      clear(host);
+      if (!sheet.groups.length && !sheet.loose.length) host.append(h('p.od-none', { id: 'odNone' }, 'Nothing is short: seed on hand and on order covers everything still to sow.'));
+      for (const g of sheet.groups) {
+        host.append(h('div.od-group', { dataset: { supplier: g.key || '-' } },
+          h('div.od-head', h('b', g.name), h('span', `${g.lines.length} line${g.lines.length === 1 ? '' : 's'}`), h('span.grow'), g.unpriced ? h('small', `${g.unpriced} with no price on file`) : null, h('b.od-cost', g.cost > 0 ? SL.money(g.cost) : '—'),
+            h('button.btn.small', { type: 'button', dataset: { ordered: g.key || '-' }, title: 'Adds each line to your seed stock as “on order”, in the amounts shown, so it is no longer short. One undo takes it back.', onclick: () => markOrdered(g) }, 'Mark as ordered')),
+          h('table.od', h('tbody', g.lines.map(l => h('tr', { dataset: { line: l.key } },
+            h('td.od-name', h('b', l.variety.name), h('small', cropName(l.crop))),
+            h('td.od-sku', l.sku),
+            h('td.od-n', { title: `Still to sow ${num(l.row.toSow, l.unit === 'g' ? 1 : 0)}, on hand ${num(l.row.onHand || 0)}, on order ${num(l.row.onOrder || 0)}` }, l.short > 0 ? `${num(l.short, l.unit === 'g' ? 1 : 0)} short` : 'not short'),
+            h('td.od-amt', h('input', { type: 'number', min: 0, step: l.unit === 'g' ? 'any' : 1, value: amounts[l.key] != null ? amounts[l.key] : '', placeholder: String(l.short || 0), 'aria-label': `${l.variety.name}: amount to buy`, title: 'The amount to cover. Leave it empty for the shortfall.', dataset: { amount: l.key },
+              onchange: e => { const raw = e.target.value.trim(); if (raw === '' || !(+raw >= 0)) delete amounts[l.key]; else amounts[l.key] = +raw; draw(); } }), h('small', l.unit === 'g' ? 'g' : SL.UNIT_WORD[l.unit] || l.unit)),
+            h('td.od-size' + (l.sized ? '' : '.soft'), { title: l.sized ? `Covers ${num(l.amount, l.unit === 'g' ? 1 : 0)}: ${num(l.buy, l.unit === 'g' ? 1 : 0)} in all, the least cost among the sizes ${g.name} lists.` : 'This supplier’s sizes are not on file for this variety.' }, l.text || 'size not on file'),
+            h('td.od-n.od-cost', l.cost != null ? SL.money(l.cost) : '—'))))))); 
+      }
+      if (sheet.loose.length) host.append(h('div.od-group', { dataset: { supplier: 'loose' } }, h('div.od-head', h('b', 'No variety chosen'), h('span', 'nothing to order by name until a variety is picked for these plantings')),
+        h('table.od', h('tbody', sheet.loose.map(l => h('tr', h('td.od-name', h('b', cropName(l.crop))), h('td.od-sku'), h('td.od-n', `${num(l.amount, l.unit === 'g' ? 1 : 0)} ${l.unit === 'g' ? 'g' : SL.UNIT_WORD[l.unit] || l.unit}`), h('td'), h('td'), h('td')))))));
+      host.scrollTop = top;
+      // a variety that is not short can be added: a top-up
+      const on = new Set(sheet.groups.flatMap(g => g.lines.map(l => l.variety.id))), rest = m.live.filter(v => !on.has(v.id) && m.byV.get(v.id) && ['seeds', 'g'].includes(m.byV.get(v.id).unit)).sort((a, b) => cropName(m.eng.crop(a.cropId)).localeCompare(cropName(m.eng.crop(b.cropId))) || String(a.name).localeCompare(String(b.name)));
+      const pick = h('select', { id: 'odAdd', 'aria-label': 'Add a variety to the sheet' }, h('option', { value: '' }, 'Add a variety that is not short…'), rest.map(v => h('option', { value: v.id }, `${cropName(m.eng.crop(v.cropId))} · ${v.name}`)));
+      const qtyBox = h('input', { type: 'number', min: 1, step: 1, id: 'odAddQty', placeholder: 'amount', 'aria-label': 'Amount to buy' });
+      const addLine = () => { const r = m.byV.get(pick.value), n = +qtyBox.value; if (!r || !(n > 0)) { UI.toast('Choose a variety and an amount.'); return; } added.add(pick.value); amounts[r.key] = n; draw(); };
+      UI.add(clear(sum),
+        h('div.od-add', pick, qtyBox, h('button.btn.small', { type: 'button', id: 'odAddBtn', onclick: addLine }, 'Add')),
+        h('b.au-sumhead', { id: 'odTotal' }, sheet.lines ? `${SL.money(sheet.cost)} for ${sheet.lines - sheet.unpriced} of ${sheet.lines} line${sheet.lines === 1 ? '' : 's'}, from ${sheet.groups.length} supplier${sheet.groups.length === 1 ? '' : 's'}` : 'Nothing to order'),
+        sheet.unpriced ? h('p.au-line', { id: 'odUnpriced' }, `${sheet.unpriced} line${sheet.unpriced === 1 ? ' has' : 's have'} no price on file, so ${sheet.unpriced === 1 ? 'it is' : 'they are'} not in that total.`) : null,
+        h('p.au-fine', { id: 'odNotes' }, `As of ${today()}: what the plan still has to sow, less seed on hand and on order. ${notes.join(' ')}`));
+    };
+    const el = h('dialog.dialog.bk.wide.order', { id: 'orderDlg', oncancel: e => { e.preventDefault(); close(); } },
+      h('button.icon-btn.close', { type: 'button', id: 'odClose', 'aria-label': 'Close', title: 'Close. Nothing is changed.', onclick: () => close() }, '×'),
+      h('h2', 'Seed to order'),
+      h('p.dlg-lead', 'What is short today, by supplier, in each supplier’s own sizes at the least cost. Change an amount to buy more or less; mark a supplier’s lines as ordered once the order is placed, and they stop counting as short.'),
+      host, sum,
+      h('div.dialog-actions',
+        framed ? null : h('button.btn', { type: 'button', id: 'odCsv', onclick: () => saveText(`seed-order-${App.planYear()}-${E.d2s(new Date())}.csv`, '\ufeff' + SL.orderCsv(build().sheet), 'text/csv') }, 'Download (.csv)'),
+        framed ? null : h('button.btn', { type: 'button', id: 'odPrint', onclick: () => printText(text()) }, 'Print'),
+        h('span.grow'),
+        h('button.btn', { type: 'button', id: 'odDone', onclick: () => close() }, 'Close'),
+        h('button.btn.primary', { type: 'button', id: 'odCopy', onclick: async () => { const t = text(); try { await navigator.clipboard.writeText(t); UI.toast('Copied. Paste it into an order or an email.'); } catch (_) { UI.toast('Copying is not available here. Use Print or Download.'); } } }, 'Copy')));
+    order = { el, draw, close, text, sheet: () => build().sheet, amounts };
+    document.body.append(el); el.showModal(); draw();
+  }
+  function saveText(filename, text, type) {
+    const blob = new Blob([text], { type }), fallback = () => { const url = URL.createObjectURL(blob), a = h('a', { href: url, download: filename }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); };
+    const downloads = root.claude && root.claude.use ? root.claude.use('downloads') : null;
+    if (downloads) Promise.resolve(downloads).then(dl => dl.save({ filename, data: blob })).catch(error => { if (!error || error.code !== 'declined') fallback(); }); else fallback();
+  }
+  function printText(text) {
+    let sheet = $('printSheet');
+    if (!sheet) { sheet = h('div', { id: 'printSheet' }); document.body.append(sheet); }
+    sheet.textContent = text;
+    document.body.classList.add('printing');
+    const done = () => { document.body.classList.remove('printing'); root.removeEventListener('afterprint', done); };
+    root.addEventListener('afterprint', done);
+    try { root.print(); } catch (_) { UI.toast('Printing is not available in this view. Copy the sheet instead.'); }
+    setTimeout(done, 1500);
+  }
+
   // ───────────────────────── a seed lot in one line ─────────────────────────
   // Vendor, variety, year, amount: Enter saves. The variety is found as it is typed; one that is not in the library yet asks
   // for its crop and is added with the lot, in the same step. The line is built once and reads the plan as it is used.
@@ -981,8 +1067,9 @@
     $('sdAddHand').addEventListener('click', () => openVariety(null));
     $('sdAddCrop').addEventListener('click', () => openCrop(null));
     $('sdSettings').addEventListener('click', openSettings);
-    App.on('plan', () => { ui.rev++; schedule(); }); App.on('view', schedule);
+    $('sdOrder').addEventListener('click', openOrder);
+    App.on('plan', () => { ui.rev++; schedule(); if (order) order.draw(); }); App.on('view', schedule);
     document.addEventListener('keydown', e => { if (e.key === '/' && App.state.view === 'seeds' && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') && !document.querySelector('dialog[open]')) { e.preventDefault(); $('sdSearch').focus(); } });
   }
-  root.LRFSeeds = { init, openImporter, openVariety, openCrop, openSettings, service, serviceReady, planningLine, select };
+  root.LRFSeeds = { init, openImporter, openVariety, openCrop, openSettings, openOrder, order: () => order, service, serviceReady, planningLine, select };
 })(window);

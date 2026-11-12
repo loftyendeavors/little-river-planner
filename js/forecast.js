@@ -1,8 +1,12 @@
 /* Little River Farm Planner — the harvest forecast.
  *
- * What the plan is expected to yield, day by day: every planting's marketable yield (engine.yieldOf)
- * spread evenly over the days it is picked, then added up by crop. A crop is counted in its own unit
- * (heads, bunches, pounds, stems, trays) and different units are never added together.
+ * What the plan is expected to yield, day by day: every planting's marketable yield (engine.yieldOf),
+ * added up by crop. How it comes in is the crop's harvest pattern: evenly over the days it is picked
+ * (a total, or a weekly figure), or all of it the day it is ready. A crop that keeps after picking is
+ * then drawn down evenly over the weeks it keeps, so each row has two series: `picked`, what comes
+ * out of the ground, and `days`, what there is to sell. With nothing keeping they are the same.
+ * A crop is counted in its own unit (heads, bunches, pounds, stems, trays) and different units are
+ * never added together.
  *
  * Three kinds of thing are forecast, because that is how they are sold: vegetables (with herbs and
  * fruit), microgreen trays, and flower stems.
@@ -71,8 +75,8 @@
       const crop = eng.crop(p.cropId) || r.c, key = p.cropId + '|' + y.unit;
       let row = rows.get(key);
       if (!row) {
-        row = { key, cropId: p.cropId, name: short(crop.name || r.c.name || 'Crop'), unit: y.unit, group: groupOf(crop, y.unit, own), color: eng.cropColor(r.c), days: new Float64Array(n), value: new Float64Array(n),
-          total: 0, worth: 0, plantings: [], varieties: new Map(), unset: 0, first: null, last: null };
+        row = { key, cropId: p.cropId, name: short(crop.name || r.c.name || 'Crop'), unit: y.unit, group: groupOf(crop, y.unit, own), color: eng.cropColor(r.c), days: new Float64Array(n), picked: new Float64Array(n), value: new Float64Array(n),
+          total: 0, pickedTotal: 0, worth: 0, plantings: [], varieties: new Map(), unset: 0, first: null, last: null, keeps: 0, patterns: new Set() };
         rows.set(key, row);
       }
       if (!y.set || !(y.units > 0)) { row.unset++; unset.push({ p, r, why: y.set ? 'its yield works out to nothing' : 'no yield is set for this crop' }); if (!y.set) continue; }
@@ -82,12 +86,23 @@
       if (!picked.length || !(y.units > 0)) continue;
       const rate = y.units / picked.length, vId = p.varietyId || '', v = eng.variety(p.varietyId);
       let variety = row.varieties.get(vId);
-      if (!variety) { variety = { id: vId, name: v && v.name ? v.name : 'No variety chosen', days: new Float64Array(n), total: 0 }; row.varieties.set(vId, variety); }
-      let inYear = 0;
-      for (const i of picked) { if (i < 0 || i >= n) continue; row.days[i] += rate; row.value[i] += rate * y.price; variety.days[i] += rate; inYear += rate; }
-      if (!(inYear > 0)) continue;
-      row.total += inYear; row.worth += inYear * y.price; variety.total += inYear; counted++;
-      row.plantings.push({ p, r, units: y.units, inYear, rate, i0: Math.max(0, picked[0]), i1: Math.min(n - 1, picked[picked.length - 1]), price: y.price });
+      if (!variety) { variety = { id: vId, name: v && v.name ? v.name : 'No variety chosen', days: new Float64Array(n), picked: new Float64Array(n), total: 0 }; row.varieties.set(vId, variety); }
+      // what comes out of the ground each day, and what there is to sell: a crop that keeps is drawn down evenly over the weeks it keeps
+      const keep = Math.max(1, Math.round((y.keep || 0) * 7)), lo = picked[0], span = picked[picked.length - 1] - lo + keep, out = new Float64Array(span), avail = new Float64Array(span);
+      const lots = y.pattern === 'once' ? [[lo, y.units]] : picked.map(i => [i, rate]);
+      for (const [i, q] of lots) { out[i - lo] += q; if (keep === 1) avail[i - lo] += q; else for (let k = 0; k < keep; k++) avail[i - lo + k] += q / keep; }
+      let inYear = 0, cut = 0;
+      for (let k = 0; k < span; k++) {
+        const i = lo + k;
+        if (i < 0 || i >= n) continue;
+        if (out[k]) { row.picked[i] += out[k]; variety.picked[i] += out[k]; cut += out[k]; }
+        if (avail[k]) { row.days[i] += avail[k]; row.value[i] += avail[k] * y.price; variety.days[i] += avail[k]; inYear += avail[k]; }
+      }
+      if (!(inYear > 0) && !(cut > 0)) continue;
+      row.total += inYear; row.pickedTotal += cut; row.worth += inYear * y.price; variety.total += inYear; counted++;
+      if (keep > 1) row.keeps = Math.max(row.keeps, y.keep);
+      row.patterns.add(y.pattern);
+      row.plantings.push({ p, r, units: y.units, inYear, rate, lo, avail, out, pattern: y.pattern, keep: y.keep || 0, i0: Math.max(0, lo), i1: Math.min(n - 1, lo + span - 1), p0: Math.max(0, lo), p1: Math.min(n - 1, picked[picked.length - 1]), price: y.price });
       const a = new Date(Math.max(r.first, start)), z = new Date(Math.min(r.last, E.addDays(start, n - 1)));
       if (!row.first || a < row.first) row.first = a;
       if (!row.last || z > row.last) row.last = z;
@@ -95,9 +110,16 @@
     const order = { produce: 0, micro: 1, flower: 2 };
     const list = [...rows.values()].filter(r => r.total > 0 || r.unset).sort((a, b) => order[a.group] - order[b.group] || a.name.localeCompare(b.name));
     for (const row of list) row.varieties = [...row.varieties.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
-    return { year, start, days: n, rows: list, unset, counted, date: i => E.addDays(start, i), index: at };
+    return { year, start, days: n, rows: list, unset, counted, keeps: list.some(r => r.keeps > 0), date: i => E.addDays(start, i), index: at };
   }
 
+  /** How much of one planting falls between two days: of what there is to sell, or (`picked`) of what comes out of the ground. */
+  function share(x, i0, i1, picked) {
+    const series = picked ? x.out : x.avail;
+    let total = 0;
+    for (let i = Math.max(i0, x.lo), end = Math.min(i1, x.lo + series.length - 1); i <= end; i++) total += series[i - x.lo];
+    return total;
+  }
   const sum = (days, i0, i1) => { let total = 0; for (let i = Math.max(0, i0); i <= i1 && i < days.length; i++) total += days[i]; return total; };
   const monday = d => E.addDays(d, -((d.getDay() + 6) % 7));
   /** The columns of a table: days, weeks (Monday to Sunday) or months, each with the days of the year it covers. */
@@ -188,5 +210,5 @@
     return out;
   }
 
-  return { GROUPS, MONTHS, build, sum, periods, season, available, glance, text, csv, gaps, groupOf, unitWord, shown, amount, monday };
+  return { GROUPS, MONTHS, build, sum, share, periods, season, available, glance, text, csv, gaps, groupOf, unitWord, shown, amount, monday };
 });

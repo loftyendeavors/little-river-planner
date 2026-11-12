@@ -12,7 +12,8 @@
   const $ = id => document.getElementById(id);
   const money = n => Number(n || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
   const TITLES = Object.fromEntries(F.GROUPS.map(([g, short, long]) => [g, { short, long }]));
-  let dirty = true, grain = 'week', group = 'all', query = '';
+  let dirty = true, grain = 'week', group = 'all', query = '', series = 'days';   // series: what there is to sell ('days'), or what is picked ('picked')
+  const seriesOf = (m, x) => (series === 'picked' && m.keeps ? x.picked : x.days);
   const opened = new Set();
 
   const cache = new WeakMap();
@@ -83,14 +84,16 @@
   }
   /** Where a figure comes from: the plantings picked in that stretch. */
   function sources(row, col) {
-    const eng = App.state.engine, list = row.plantings.filter(x => x.i0 <= col.i1 && x.i1 >= col.i0).map(x => ({ ...x, here: x.rate * (Math.min(x.i1, col.i1) - Math.max(x.i0, col.i0) + 1) })).sort((a, b) => b.here - a.here);
+    const eng = App.state.engine, picked = series === 'picked' && model().keeps;
+    const list = row.plantings.map(x => ({ ...x, here: F.share(x, col.i0, col.i1, picked) })).filter(x => x.here > 1e-9).sort((a, b) => b.here - a.here), total = list.reduce((n, x) => n + x.here, 0);
     const close = () => { dialog.close(); dialog.remove(); };
     const go = x => { close(); App.setDate(x.r.first > App.state.date ? x.r.first : App.state.date); App.setView('map'); App.select({ type: 'planting', id: x.p.id }); };
+    const how = x => x.pattern === 'once' ? `all of it ${day(x.r.first)}` : `picked ${UI.span(x.r.first, x.r.last)}`;
     const dialog = h('dialog.dialog.wide', { id: 'hvFrom', oncancel: e => { e.preventDefault(); close(); } },
-      h('h2', `${row.name}, ${colTitle(col)}`), h('p', `${F.amount(F.sum(row.days, col.i0, col.i1), row.unit, row.group)} from ${num(list.length)} planting${list.length === 1 ? '' : 's'}. Each one’s yield is spread evenly over the days it is picked.`),
+      h('h2', `${row.name}, ${colTitle(col)}`), h('p', `${F.amount(total, row.unit, row.group)} ${picked ? 'picked' : 'to sell'}, from ${num(list.length)} planting${list.length === 1 ? '' : 's'}. How each comes in is the crop’s line on the Assumptions list: evenly over the days it is picked, or all at once${row.keeps ? `; what keeps is counted as there to sell over the ${num(row.keeps, 1)} week${row.keeps === 1 ? '' : 's'} it keeps` : ''}.`),
       h('ul.hv-from', list.map(x => h('li',
         h('b', `${App.bedLabel(x.r.b, eng)}${x.r.c.vname ? ' · ' + x.r.c.vname : ''}`),
-        h('span', `picked ${UI.span(x.r.first, x.r.last)}`), h('span', F.amount(x.here, row.unit, row.group)),
+        h('span', `${how(x)}${x.keep ? `, keeps ${num(x.keep, 1)} wk` : ''}`), h('span', F.amount(x.here, row.unit, row.group)),
         h('button.link', { type: 'button', onclick: () => go(x) }, 'Show on the map')))),
       h('div.dialog-actions', h('button.btn.primary', { type: 'button', onclick: close }, 'Close')));
     document.body.append(dialog); dialog.showModal();
@@ -140,17 +143,18 @@
         const many = row.varieties.length > 1 || (row.varieties.length === 1 && row.varieties[0].id), isOpen = opened.has(row.key);
         const name = h('td.hv-name', h('button.hv-crop', { type: 'button', disabled: !many, 'aria-expanded': many ? String(isOpen) : null, style: { '--crop': row.color }, title: many ? `${isOpen ? 'Hide' : 'Show'} the varieties` : row.name,
           onclick: () => { if (isOpen) opened.delete(row.key); else opened.add(row.key); render(); } }, h('span.caret', many ? (isOpen ? '▾' : '▸') : ''), h('i'), h('span', row.name), h('small', F.unitWord(2, row.unit, row.group) || 'each')));
-        body.push(line('.hv-row', name, h('td.hv-total', { title: `${money(row.worth)} at its own price` }, row.total > 0 ? F.amount(row.total, row.unit, row.group) : '—'), row.days, row));
+        const whole = series === 'picked' && m.keeps ? row.pickedTotal : row.total;
+        body.push(line('.hv-row', name, h('td.hv-total', { title: `${money(row.worth)} at its own price${row.keeps ? ` · keeps ${num(row.keeps, 1)} week${row.keeps === 1 ? '' : 's'} after picking` : ''}` }, whole > 0 ? F.amount(whole, row.unit, row.group) : '—'), seriesOf(m, row), row));
         body[body.length - 1].dataset.crop = row.cropId;
         if (many && isOpen) {
-          const peak = Math.max(0, ...cols.map(c => F.sum(row.days, c.i0, c.i1)));
-          for (const v of row.varieties) body.push(line('.hv-var', h('td.hv-name', { title: v.name }, v.name), h('td.hv-total', F.amount(v.total, row.unit, row.group)), v.days, null, peak));
+          const peak = Math.max(0, ...cols.map(c => F.sum(seriesOf(m, row), c.i0, c.i1)));
+          for (const v of row.varieties) body.push(line('.hv-var', h('td.hv-name', { title: v.name }, v.name), h('td.hv-total', F.amount(v.total, row.unit, row.group)), seriesOf(m, v), null, peak));
           if (g !== 'micro') body.push(h('tr.hv-var', h('td.hv-name', { colSpan: 2 }, 'Listed with ', h('button.linkish.hv-move', { type: 'button', onclick: () => moveCrop(row, g === 'flower' ? 'produce' : 'flower') }, `move to ${g === 'flower' ? 'vegetables' : 'flowers'}`)), h('td', { colSpan: cols.length })));
         }
       }
       // trays add up, and so do stems; pounds and heads and bunches do not
       if (g !== 'produce' && part.length > 1) {
-        const all = new Float64Array(m.days); for (const r of part) for (let k = 0; k < m.days; k++) all[k] += r.days[k];
+        const all = new Float64Array(m.days); for (const r of part) { const src = seriesOf(m, r); for (let k = 0; k < m.days; k++) all[k] += src[k]; }
         body.push(line('.hv-sum', h('td.hv-name', g === 'micro' ? 'All trays' : 'All stems'), h('td.hv-total', num(F.shown(F.sum(all, 0, m.days - 1)))), all, null));
       }
     }
@@ -177,18 +181,20 @@
     const noYield = m.unset.filter(u => u.why.startsWith('no yield'));
     UI.add(clear(host),
       h('header.as-head', h('p.eyebrow', `Harvest forecast · ${App.state.plan.settings.farm || 'Farm'} · ${m.year}`), h('h2', 'What is ready, and when'),
-        h('p', 'Every planting’s expected yield, spread evenly over the days it is picked and added up by crop. Each crop is counted in the unit it is sold in. Click a figure to see which plantings it comes from.')),
+        h('p', 'Every planting’s expected yield, added up by crop, as each crop’s line on the Assumptions list says it comes in: evenly over the days it is picked, a week at a time, or all at once. Each crop is counted in the unit it is sold in. Click a figure to see which plantings it comes from.')),
       tiles(m),
       h('div.hv-bar',
         h('span.tr-stepper', h('button.icon-btn', { type: 'button', 'aria-label': 'Back one week', id: 'hvPrev', onclick: () => App.setDate(E.addDays(App.state.date, -7)) }, '‹'),
           h('b', { id: 'hvWeek' }, `Week of ${day(wk.start)}`), h('button.icon-btn', { type: 'button', 'aria-label': 'Forward one week', id: 'hvNext', onclick: () => App.setDate(E.addDays(App.state.date, 7)) }, '›')),
         h('div.seg', { role: 'group', 'aria-label': 'Show by' }, seg('day', 'Days'), seg('week', 'Weeks'), seg('month', 'Months')),
+        m.keeps ? h('div.seg.hv-series', { role: 'group', 'aria-label': 'What to count', title: 'Some crops keep after picking. To sell: what is there to sell each week, drawn down over the weeks it keeps. Picked: what comes out of the ground.' },
+          ['days', 'picked'].map(value => h('button', { type: 'button', 'aria-pressed': String(series === value), dataset: { hvSeries: value }, onclick: () => { series = value; render(); } }, value === 'days' ? 'To sell' : 'Picked'))) : null,
         h('div.sd-filters', { role: 'group', 'aria-label': 'Which kinds' }, chip('all', 'All', m.rows.filter(r => r.total > 0).length), F.GROUPS.map(([g, short]) => chip(g, short, m.rows.filter(r => r.total > 0 && r.group === g).length))),
         h('span.grow'), search,
         h('button.btn.primary', { type: 'button', id: 'hvShareBtn', onclick: share }, 'A list to send…')),
       !m.rows.some(r => r.total > 0) ? h('p.hv-empty', 'Nothing in this plan has a harvest to forecast yet.') : !rows.length ? h('p.hv-empty', 'No crop matches.') : table(m, cols, rows),
       noYield.length ? h('p.hv-note.warn', `${num(noYield.length)} planting${noYield.length === 1 ? ' has' : 's have'} no yield figure for the crop, so nothing is forecast for ${noYield.length === 1 ? 'it' : 'them'}: ${[...new Set(noYield.map(u => u.r.c.name))].slice(0, 6).join(', ')}.`) : null,
-      h('p.hv-note', 'A planting’s yield is what it is counted by (plants, bed-feet, trays) × the crop’s yield each × its marketable share. A live tray is counted whole on the Monday it is due. Days to harvest are the same in every month, so an early or late planting is as good here as a midsummer one: read the ends of the season with that in mind.'));
+      h('p.hv-note', 'A planting’s yield is what it is counted by (plants, bed-feet, trays) × the yield each × the share that is sold. The yield, the unit, the price and how the harvest comes in are each crop’s line under Assumptions, “Yield and price”; a planting with a figure of its own keeps it. A live tray is counted whole on the Monday it is due. Days to harvest are the same in every month, so an early or late planting is as good here as a midsummer one: read the ends of the season with that in mind.'));
     host.parentElement.scrollTop = keepTop;
     const scroller = $('hvScroll');
     if (scroller) {
@@ -200,5 +206,5 @@
   function init() {
     App.on('plan', render); App.on('view', render); App.on('date', () => { if (App.state.view === 'harvest') render(); });
   }
-  root.LRFHarvestView = { init, render, model, get dirty() { return dirty; } };
+  root.LRFHarvestView = { init, render, model, get dirty() { return dirty; }, series: () => series };
 })(window);
