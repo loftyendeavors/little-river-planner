@@ -364,9 +364,22 @@
     view.x = rect.width / 2 - (box.x0 + w / 2) * view.z; view.y = (rect.height - 46 + top) / 2 - (box.y0 + hgt / 2) * view.z;
     return true;
   }
+  /**
+   * The beds are framed; the farm photo is then settled under them. On a screen wider than the photo the whole photo sits in
+   * the middle, with the same margin either side. Where the photo is the wider, it is slid just far enough that no empty strip
+   * shows beside it while its other side runs off the screen. Either way every bed stays in view.
+   */
+  function settlePhoto() {
+    const photo = $('mapPhoto'), rect = $('map').getBoundingClientRect(), w = +photo.getAttribute('width') * view.z;
+    if (!App.state.mapImageUrl || !layers.photo || !(w > 0) || !beds.size) return;
+    const box = bounds([...beds.values()]), lo = 12 - box.x0 * view.z, hi = rect.width - 12 - box.x1 * view.z;
+    if (lo > hi) return;
+    view.x = clamp(w <= rect.width ? (rect.width - w) / 2 : clamp(view.x, rect.width - w, 0), lo, hi);
+  }
   function fit(later) {
     if (later === true) { view.fitted = false; return; }
     if (!frame([...beds.values()], 0.05)) return;
+    settlePhoto();
     view.home = view.z; view.fitted = true; applyView();
   }
   function fitGarden(id) {
