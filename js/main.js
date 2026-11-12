@@ -15,6 +15,7 @@
   root.LRFHarvestView.init();
   root.LRFAhead.init();
   root.LRFSeries.init();
+  root.LRFBackupUI.init();
 
   for (const button of document.querySelectorAll('[data-view-btn]')) button.addEventListener('click', () => App.setView(button.dataset.viewBtn));
   App.on('view', () => { for (const button of document.querySelectorAll('[data-view-btn]')) button.setAttribute('aria-pressed', String(button.dataset.viewBtn === App.state.view)); });
@@ -24,7 +25,7 @@
     $('seasonYear').textContent = App.planYear();
     const plan = App.state.plan, info = plan.lrfNext || {};
     const waits = App.waiting().length;
-    $('buildNote').textContent = `Rebuild preview 0.20 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
+    $('buildNote').textContent = `Rebuild preview 0.21 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your v7 backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
   });
   // A browser that holds no plan says so across the page, in every view, with the two ways to bring one in.
   // The same strip speaks for a stored plan that would not open: it is kept as it is until he chooses what to do.
@@ -45,6 +46,8 @@
   // The save indicator is also the one-click manual save: with a plan folder it writes the file now; with trouble it retries; otherwise it opens the menu where a file can be had.
   $('saveState').addEventListener('click', e => {
     const f = App.folder(), failed = $('saveState').dataset.state === 'error';
+    // when it is the cloud that wants something (a choice between two plans, the passphrase), the click opens Cloud sync
+    if ($('saveState').dataset.ask === 'cloud') { root.LRFBackupUI.openSync(); return; }
     if (failed) { App.retrySave(); return; }
     if (f.connected && !f.conflict) { App.saveNow(); return; }
     e.stopPropagation(); $('dataMenu').hidden = false; $('dataBtn').setAttribute('aria-expanded', 'true');
@@ -64,7 +67,8 @@
     const host = $('folderMenu'), f = App.folder(), U = root.LRFUI, h = U.h, when = iso => { const d = new Date(iso); return Number.isFinite(+d) ? `${U.MONTHS[d.getMonth()]} ${d.getDate()}, ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'an unknown time'; };
     const item = (title, small, run, id) => h('button', { type: 'button', id, onclick: () => { closeMenu(); run(); } }, h('b', title), small ? h('small', small) : null);
     host.replaceChildren();
-    $('saveNowNote').textContent = f.connected && !f.conflict ? `Writes the plan file in “${f.name}” (Ctrl+S)` : 'Downloads a backup file (Ctrl+S)';
+    const cloud = App.syncInfo().configured;
+    $('saveNowNote').textContent = f.connected && !f.conflict ? `Writes the plan file in “${f.name}”${cloud ? ' and sends it to the cloud' : ''} (Ctrl+S)` : cloud ? 'Sends the plan to the cloud now (Ctrl+S)' : 'Downloads a backup file (Ctrl+S)';
     if (!f.supported) { host.append(h('p.menu-note', App.storage() === 'cloud' ? 'On this page the plan is saved to the page’s own database as you work. Saving to a file by itself needs the site opened in Chrome or Edge on a computer.' : 'This browser cannot write to a folder by itself; Chrome and Edge on a computer can. The plan is kept in this browser: download a backup now and then.')); return; }
     if (f.needsPermission) host.append(item(`Reconnect the folder “${f.name}”`, 'The browser asks before it lets the planner write there again', App.reconnectFolder, 'folderReconnect'));
     else if (f.conflict) host.append(
@@ -77,7 +81,7 @@
     if (!f.connected && !f.needsPermission) host.append(item('Keep the plan in a folder…', 'Saved there by itself as you work. A synced folder keeps a copy off this computer.', App.chooseFolder, 'folderChoose'));
     else if (f.connected) host.append(item('Change folder…', '', App.chooseFolder, 'folderChange'));
   }
-  App.on('folder', folderMenu); App.on('plan', folderMenu);
+  App.on('folder', folderMenu); App.on('plan', folderMenu); App.on('sync', folderMenu);
   $('importBtn').addEventListener('click', () => $('importFile').click());
   $('importFile').addEventListener('change', e => { const file = e.target.files[0]; e.target.value = ''; closeMenu(); if (file) App.importBackup(file); });
   // Photos for the plan that is open: the plan is never replaced by anything chosen here.
