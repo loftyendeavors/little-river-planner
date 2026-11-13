@@ -1881,3 +1881,36 @@ body.phone .wk-scope button { padding: 8px 6px; font-size: 13.5px; }
 #fUse { width: 100%; }
 .hv-use { flex: none; }
 .hv-use button { white-space: nowrap; padding: 5px 12px; }
+
+/* ── "Season…": the farm's dates (0.35) ── */
+.season.stacked.tight .season-peak span:last-child { display: none; }
+.season.stacked.bare .season-peak { visibility: hidden; }
+.dialog.bk.fd { width: min(760px, calc(100vw - 32px)); }
+.dialog.bk.fd .dialog-actions { position: sticky; bottom: -20px; margin: 14px -20px -20px; padding: 12px 20px 16px; background: var(--raised); border-top: 1px solid var(--line-soft); }
+.fd-group { margin-top: 14px; }
+.fd-group h3 { font: 600 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding-bottom: 4px; border-bottom: 1px solid var(--line-soft); }
+.fd-row { display: grid; grid-template-columns: 180px 226px minmax(0, 1fr); column-gap: 14px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+.fd-row label { font-weight: 600; font-size: 13.5px; color: var(--ink); }
+.fd-set { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fd-row input[type="date"] { height: 31px; width: 142px; flex: none; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); padding: 0 8px; font-size: 13px; color: var(--ink); }
+.fd-row input[aria-invalid="true"] { border-color: var(--bad); }
+.fd-row[data-changed="true"] input[type="date"] { border-color: var(--ink-2); box-shadow: 0 0 0 1px var(--ink-2); }
+.fd-was { font: 500 11.5px var(--mono); color: var(--muted); white-space: nowrap; }
+.dialog .fd-does { font-size: 12.5px; line-height: 1.35; color: var(--muted); }
+.dialog .fd-fine { font-size: 12px; color: var(--muted); }
+.dialog .fd-cover { margin-top: 8px; }
+.fd-sum { margin-top: 14px; padding: 12px 14px; background: var(--paper); border-radius: var(--radius); display: grid; gap: 6px; }
+.fd-head { font-weight: 700; font-size: 15px; color: var(--ink); }
+.dialog .fd-line { font-size: 13.5px; color: var(--ink-2); }
+.fd-sum[data-state="refused"] .fd-head, .fd-errors { color: var(--warn); }
+.fd-errors, .fd-list { list-style: none; display: grid; gap: 1px; font-size: 13px; }
+.fd-list { color: var(--ink-2); }
+.fd-list b { font-weight: 600; color: var(--ink); }
+.fd-list small { color: var(--muted); font-size: 12px; }
+.fd-list .fd-more, .au-new .fd-more { color: var(--muted); }
+.dialog.bk.fd .btn.quiet { border-color: transparent; background: transparent; color: var(--ink-2); }
+.dialog.bk.fd .btn.quiet:not(:disabled):hover { border-color: var(--line); color: var(--ink); }
+@media (max-width: 700px) {
+  .fd-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
+  .fd-row .fd-does { grid-column: 1 / -1; }
+}
