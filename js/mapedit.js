@@ -25,7 +25,8 @@
 
   // on: the mode. picked: ids of the spaces picked, the first being the one the others are lined up to.
   // tool: null | 'block' | 'tape'. drag: the gesture in hand. draft: a garden drawn and not yet made. tape: a measured line.
-  const S = { on: false, picked: [], tool: null, drag: null, draft: null, tape: null, nudge: null };
+  // propose: a length offered and not yet set ({ l, why, ids }), when the layout is opened from a fix that wants beds another length
+  const S = { on: false, picked: [], tool: null, drag: null, draft: null, tape: null, nudge: null, propose: null };
   let layer = null, ghosts = null, read = null, pill = null, side = null, panel = null, button = null;
 
   // ── the plan, read as ground ──
@@ -178,6 +179,7 @@
       if (i < 0) next.push(id); else if (how.toggle) next.splice(i, 1);
     }
     S.picked = next;
+    S.propose = null;
     refresh();
   }
   const pickGarden = (gardenId, how) => pick(inGarden(gardenId).map(b => b.id), how);
@@ -193,14 +195,22 @@
       M.lock(true);
       button.setAttribute('aria-pressed', 'true');
     }
-    if (focus.bedId && bedOf(focus.bedId)) { pick([focus.bedId]); M.fitSpaces(inGarden(bedOf(focus.bedId).gardenId).map(b => b.id), true); }
+    if (focus.bedIds && focus.bedIds.some(id => bedOf(id))) {
+      // several beds at once, and perhaps a length for them: offered in the length field, and set only when he sets it
+      pick(focus.bedIds);
+      const l = focus.propose && +focus.propose.l;
+      if (l > 0 && S.picked.length) { S.propose = { l, why: String(focus.propose.why || ''), ids: S.picked.slice() }; refresh(); }
+      M.fitSpaces(S.picked, true);
+      if (S.propose && !focus.field) focus = { ...focus, field: 'fLayL' };
+    }
+    else if (focus.bedId && bedOf(focus.bedId)) { pick([focus.bedId]); M.fitSpaces(inGarden(bedOf(focus.bedId).gardenId).map(b => b.id), true); }
     else refresh();
-    if (focus.field) { const el = $(focus.field); if (el) { el.focus(); el.select(); } }
+    if (focus.field) { const el = $(focus.field); if (el) { el.focus(); if (el.select) el.select(); } }
   }
   function close() {
     if (!S.on) return;
     settleNudge(); dropDrag();
-    S.on = false; S.picked = []; S.tool = null; S.draft = null; S.tape = null;
+    S.on = false; S.picked = []; S.tool = null; S.draft = null; S.tape = null; S.propose = null;
     delete document.body.dataset.layout;
     M.lock(false);
     button.setAttribute('aria-pressed', 'false');
@@ -530,8 +540,9 @@
     const after = new Map(), changes = new Map();
     for (const b of beds) { const x = M.shapeOf(b.id), k = pxPerFt(b); if (x) { after.set(b.id, { ...x, [field === 'w' ? 'W' : 'L']: value * k }); changes.set(b.id, { [field]: value }); } }
     const bad = clash(after, false);
-    if (bad) { toast(`${clashText(bad)} at that size: nothing was changed.`); refresh(); return; }
+    if (bad) { App.refuse(`${clashText(bad)} at that size: nothing was changed.`); refresh(); return; }
     if (!change(`Change ${describe(beds.map(b => b.id))} ${field === 'w' ? 'width' : 'length'}`, changes)) refresh();
+    else if (field === 'l') S.propose = null;
   }
   /** How large a garden is drawn against its real size: the way a whole garden is matched to the photo. */
   function drawAt(garden, percent) {
@@ -540,7 +551,7 @@
     const own = shapes(inGarden(garden.id).map(b => b.id)), [cx, cy] = middle(own, Geo.frameOf(own)), moves = Geo.scaleAbout(own, cx, cy, k / was), after = new Map();
     for (const x of own) after.set(x.id, { ...x, ...moves.get(x.id), W: x.W * k / was, L: x.L * k / was });
     const bad = clash(after);
-    if (bad) { toast(`${clashText(bad)} at that size: nothing was changed.`); refresh(); return; }
+    if (bad) { App.refuse(`${clashText(bad)} at that size: nothing was changed.`); refresh(); return; }
     const next = { ...garden }; if (Math.abs(k - 1) < 1e-9) delete next.mapScale; else next.mapScale = k;
     if (!change(`Draw ${garden.name} at ${num(percent, 1)}%`, new Map([...moves].map(([id, p]) => [id, p])), [{ kind: 'garden', before: garden, after: next }])) refresh();
   }
@@ -723,6 +734,8 @@
     else if (S.tool === 'tape') panelTape();
     else if (!S.picked.length) panelFarm();
     else panelPicked();
+    const headEl = panel.querySelector('header.insp-head');
+    if (headEl && root.LRFPanels && root.LRFPanels.savedLine) headEl.after(root.LRFPanels.savedLine());
     panel.scrollTop = keep;
     const again = focused && $(focused);
     if (again && again !== document.activeElement) again.focus();
@@ -761,9 +774,18 @@
         ['field', 'tunnel', 'greenhouse'].map(t => h('option', { value: t, selected: garden.type === t }, { field: 'Field', tunnel: 'Unheated tunnel', greenhouse: 'Heated greenhouse' }[t]))), 'Growing conditions follow the kind of place: changing it can move harvest dates, and says so first.'));
     }
     if (one) form.append(field('Name or number', h('input', { type: 'text', id: 'leBed', value: one.bed, maxLength: 40, onchange: e => renameBed(one, e.target.value) })));
+    const same2 = (a, b) => a.length === b.length && a.every(id => b.includes(id));
+    const offer = S.propose && soil.length === beds.length && same2(S.propose.ids, S.picked) && +l !== S.propose.l ? S.propose : null;
     if (soil.length) form.append(h('div.field-pair',
       field('Width (ft)', number('fLayW', w, n => resize('w', n), { min: 0.5, max: 30, placeholder: 'mixed' })),
-      field('Length (ft)', number('fLayL', l, n => resize('l', n), { min: 1, max: 2000, placeholder: 'mixed' }))));
+      field('Length (ft)', number('fLayL', offer ? offer.l : l, n => resize('l', n), { min: 1, max: 2000, placeholder: 'mixed', dataset: offer ? { proposed: String(offer.l) } : {},
+        onkeydown: e => { if (offer && e.key === 'Enter' && +e.target.value === offer.l) { e.preventDefault(); resize('l', offer.l); } } }))));
+    // A length asked for elsewhere (To settle) is offered here and set here, under the same guard rail as any other size.
+    if (offer) form.append(h('div.le-offer', { id: 'leOffer' },
+      h('p', h('b', 'Not set yet. '), `${offer.why ? offer.why.charAt(0).toUpperCase() + offer.why.slice(1) + '; ' : ''}${beds.length === 1 ? 'the bed is' : 'the beds are'} ${l == null ? 'of mixed lengths' : `${num(l, 2)} ft`} now.`),
+      h('div.le-offer-acts',
+        h('button.btn.primary', { type: 'button', id: 'leOfferSet', onclick: () => resize('l', offer.l) }, `Set ${beds.length === 1 ? 'it' : `all ${beds.length}`} to ${num(offer.l, 1)} ft`),
+        h('button.link', { type: 'button', id: 'leOfferDrop', onclick: () => { S.propose = null; refresh(); } }, beds.length === 1 ? 'Leave it as it is' : 'Leave them as they are'))));
     if (one && kindOf(one) === 'containers') {
       const cells = M.cellsOf(one.id) || { columns: 1 }, layout = one.potLayout || {};
       form.append(field('Kind of container', h('select', { id: 'leCt', onchange: e => setGroup(one, { ct: e.target.value }) }, (plan().containers || []).map(c => h('option', { value: c.id, selected: c.id === one.ct }, c.name)))),
@@ -773,6 +795,17 @@
     }
     if (x && !x.round) form.append(field('Turned (°)', number('leTurn', round2(Geo.turn(x.rot)), n => turnTo(n), { min: 0, max: 360, step: 1 }), beds.length > 1 ? 'The whole group turns about its middle.' : 'Clockwise from the top of the photo.'));
     if (garden && beds.length > 1) form.append(field('Drawn at (% of true size)', number('leDrawn', round2(scaleOf(garden) * 100), n => drawAt(garden, n), { min: 50, max: 200, step: 0.5 }), 'For matching a whole garden to the photo. The beds’ real sizes do not change.'));
+    const F = root.LRFForecast;
+    if (F && F.useOfBed && App.setUse) {
+      const whole = !!(garden && beds.length > 1), uses = whole ? [garden.use === 'personal' ? 'personal' : 'commercial'] : [...new Set(beds.map(b => F.useOfBed(eng(), b).use))], now = uses.length === 1 ? uses[0] : '';
+      const by = one ? F.useOfBed(eng(), one).by : '';
+      const pickUse = h('select', { id: 'leUse', dataset: { scope: whole ? 'garden' : 'bed', use: now }, onchange: e => { if (!App.setUse(whole ? 'garden' : 'bed', whole ? [garden.id] : beds.map(b => b.id), e.target.value)) refresh(); } },
+        now ? null : h('option', { value: '', selected: true, disabled: true }, 'mixed'),
+        h('option', { value: 'commercial', selected: now === 'commercial' }, 'Commercial'), h('option', { value: 'personal', selected: now === 'personal' }, 'Personal use'));
+      form.append(field(whole ? 'Grown for (the whole garden)' : 'Grown for', pickUse,
+        whole ? 'Every bed here follows, unless one says otherwise. Personal use is planted and picked like the rest, and left out of revenue and out of the list you send.'
+          : `${by === 'garden' ? `Follows ${gardenOf(one).name || 'its garden'}. ` : by === 'bed' ? 'Set on this space. ' : ''}Plantings follow their bed unless one says otherwise. Personal use is left out of revenue and out of the list you send.`));
+    }
     form.append(h('p.help', { id: 'leFollow' }, plantings ? `${plural(plantings, 'planting')} this season ${plantings === 1 ? 'follows' : 'follow'} ${beds.length === 1 ? 'this space' : 'these spaces'}: moving and turning change nothing in the plan; a new size works rows and plant counts out again.` : 'Nothing is planted here this season.'));
     panel.append(form);
     if (beds.length > 1) {

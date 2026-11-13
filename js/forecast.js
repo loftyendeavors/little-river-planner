@@ -11,6 +11,11 @@
  * Three kinds of thing are forecast, because that is how they are sold: vegetables (with herbs and
  * fruit), microgreen trays, and flower stems.
  *
+ * A planting is grown to sell unless it is marked for personal use (useOf): on the planting, or on its
+ * bed, or on its garden. A personal planting is picked like any other and is worth nothing here: its
+ * quantities are in the rows, its dollars are not. build(engine, { use: 'commercial' | 'personal' })
+ * counts one kind only; the list that is sent is the commercial one.
+ *
  * No DOM and no storage in this file. It runs in the browser and in Node.
  *
  *   const model = LRFForecast.build(engine);
@@ -31,6 +36,28 @@
     'helipterum', 'hibiscus', 'larkspur', 'lavender', 'lil(?:y|ies)', 'lisianthus', 'lupine', 'marigold', 'matricaria', 'feverfew', 'monarda', 'morning glory', 'narcissus', 'daffodil', 'nicotiana', 'nigella',
     'orlaya', 'peon(?:y|ies)', 'petunia', 'phacelia', 'phlox', 'popp(?:y|ies)', 'portulaca', 'queen anne', 'ranunculus', 'rudbeckia', 'black[- ]eyed susan', 'salvia', 'saponaria', 'scabiosa', 'snapdragon', 'statice',
     'stock', 'strawflower', 'sunflowers?', 'sweet peas?', 'tithonia', 'tulips?', 'verbena', 'viola', 'pansy', 'yarrow', 'xeranthemum', 'zinnias?'].join('|') + ')\\b', 'i');
+
+  // ── personal use or commercial ──
+  const said = record => record && (record.use === 'personal' || record.use === 'commercial') ? record.use : null;
+  const whose = (use, by) => ({ use, personal: use === 'personal', by });
+  /** A space's own word, or its garden's, or commercial: { use, personal, by: 'bed' | 'garden' | 'default' }. */
+  function useOfBed(eng, bed) {
+    const own = said(bed);
+    if (own) return whose(own, 'bed');
+    const garden = said(bed && eng.gardenOf(bed));
+    return garden ? whose(garden, 'garden') : whose('commercial', 'default');
+  }
+  /** Whom a planting is grown for: its own word, or its bed's, or its garden's, or commercial. by: 'planting' | 'bed' | 'garden' | 'default'. */
+  function useOf(eng, p) {
+    const own = said(p);
+    return own ? whose(own, 'planting') : useOfBed(eng, p && eng.bedOf(p.bedId));
+  }
+  /** What a record would be with nothing said on it: a planting follows its bed, a bed its garden, a garden is commercial. */
+  function follows(eng, kind, record) {
+    if (kind === 'planting') return useOfBed(eng, record && eng.bedOf(record.bedId)).use;
+    if (kind === 'bed') return said(record && eng.gardenOf(record)) || 'commercial';
+    return 'commercial';
+  }
 
   /** Which of the three a crop is sold as. `own` is the grower's say: { cropId: 'produce' | 'flower' }. */
   function groupOf(crop, unit, own) {
@@ -59,19 +86,27 @@
   const amount = (n, unit, group) => { const v = shown(n), w = unitWord(v, unit, group); return `${fmt(v)}${w ? ' ' + w : ''}`; };
 
   /**
-   * The forecast for one season. options: { year, groups: the grower's own sorting of crops }.
+   * The forecast for one season. options: { year, groups: the grower's own sorting of crops, use }.
    * rows are one per crop and unit, each with a quantity for every day of the year.
+   * use: 'commercial' or 'personal' counts only those plantings; without it every planting is counted, and a personal
+   * one gives its quantity and no dollars. `personal` is how many plantings of the season are marked for personal use,
+   * whichever were counted.
    */
   function build(eng, options = {}) {
     const plan = eng.plan, year = +options.year || +(plan.settings && plan.settings.year) || new Date().getFullYear();
     const start = new Date(year, 0, 1), n = Math.round(E.dayDiff(new Date(year + 1, 0, 1), start)), own = options.groups || (plan.lrfNext && plan.lrfNext.groups) || null;
     const rows = new Map(), unset = [], at = d => Math.round(E.dayDiff(d, start));
-    let counted = 0;
+    const use = options.use === 'commercial' || options.use === 'personal' ? options.use : 'all';
+    let counted = 0, marked = 0;
     for (const p of plan.plantings || []) {
       const r = eng.calc(p);
       if (!r || r.b.active === false || r.g.active === false || !(r.harvestDays > 0) || r.last < start || at(r.first) >= n) continue;
-      const y = eng.yieldOf(p, r);
-      if (!y) continue;                                             // a cover crop: nothing to pick
+      const y0 = eng.yieldOf(p, r);
+      if (!y0) continue;                                            // a cover crop: nothing to pick
+      const personal = useOf(eng, p).personal;
+      if (personal) marked++;
+      if (use !== 'all' && personal !== (use === 'personal')) continue;
+      const y = personal ? { ...y0, price: 0 } : y0;                // grown for the farm's own table: picked, and not sold
       const crop = eng.crop(p.cropId) || r.c, key = p.cropId + '|' + y.unit;
       let row = rows.get(key);
       if (!row) {
@@ -102,7 +137,7 @@
       row.total += inYear; row.pickedTotal += cut; row.worth += inYear * y.price; variety.total += inYear; counted++;
       if (keep > 1) row.keeps = Math.max(row.keeps, y.keep);
       row.patterns.add(y.pattern);
-      row.plantings.push({ p, r, units: y.units, inYear, rate, lo, avail, out, pattern: y.pattern, keep: y.keep || 0, i0: Math.max(0, lo), i1: Math.min(n - 1, lo + span - 1), p0: Math.max(0, lo), p1: Math.min(n - 1, picked[picked.length - 1]), price: y.price });
+      row.plantings.push({ p, r, units: y.units, inYear, rate, lo, avail, out, pattern: y.pattern, keep: y.keep || 0, i0: Math.max(0, lo), i1: Math.min(n - 1, lo + span - 1), p0: Math.max(0, lo), p1: Math.min(n - 1, picked[picked.length - 1]), price: y.price, personal });
       const a = new Date(Math.max(r.first, start)), z = new Date(Math.min(r.last, E.addDays(start, n - 1)));
       if (!row.first || a < row.first) row.first = a;
       if (!row.last || z > row.last) row.last = z;
@@ -110,7 +145,7 @@
     const order = { produce: 0, micro: 1, flower: 2 };
     const list = [...rows.values()].filter(r => r.total > 0 || r.unset).sort((a, b) => order[a.group] - order[b.group] || a.name.localeCompare(b.name));
     for (const row of list) row.varieties = [...row.varieties.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
-    return { year, start, days: n, rows: list, unset, counted, keeps: list.some(r => r.keeps > 0), date: i => E.addDays(start, i), index: at };
+    return { year, start, days: n, rows: list, unset, counted, use, personal: marked, keeps: list.some(r => r.keeps > 0), date: i => E.addDays(start, i), index: at };
   }
 
   /** How much of one planting falls between two days: of what there is to sell, or (`picked`) of what comes out of the ground. */
@@ -210,5 +245,5 @@
     return out;
   }
 
-  return { GROUPS, MONTHS, build, sum, share, periods, season, available, glance, text, csv, gaps, groupOf, unitWord, shown, amount, monday };
+  return { GROUPS, MONTHS, useOf, useOfBed, follows, build, sum, share, periods, season, available, glance, text, csv, gaps, groupOf, unitWord, shown, amount, monday };
 });

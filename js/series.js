@@ -43,7 +43,10 @@
   const supplyOf = (model, cropId, unit) => { const rows = model.rows.filter(r => r.cropId === cropId && r.unit === unit); return (a, b) => rows.reduce((n, r) => n + F.sum(r.days, model.index(a), model.index(b)), 0); };
   const paceNow = eng => S.pace(eng, { ...whereTo(), cropId: P.cropId, varietyId: P.varietyId || undefined, sourceId: P.sourceId || undefined, from: P.hFrom });
   const seriesCrops = eng => eng.crops().filter(c => !c.micro && !eng.isCoverCrop(c) && +c.dtm > 0);
-  const forecast = eng => root.LRFHarvestView && eng === App.state.engine ? root.LRFHarvestView.model() : F.build(eng, { year: App.planYear() });
+  // What the plan already gives, for a tool that sizes plantings to an amount wanted for sale: what is grown to sell.
+  // A planting marked for personal use gives the kitchen its share and the amount wanted none (said beside the tick when the crop has any).
+  const forecast = eng => root.LRFHarvestView && eng === App.state.engine ? root.LRFHarvestView.model('commercial') : F.build(eng, { year: App.planYear(), use: 'commercial' });
+  const ownUse = (eng, cropId) => !!F.useOf && eng.plan.plantings.some(p => p.cropId === cropId && F.useOf(eng, p).personal);
   const everyFor = (crop, source, r) => String(source && r && r.tw && source.towerCycle && source.towerCycle.days ? 7 : Math.max(7, Math.min(28, +((r && r.c.hw) || crop.hw) || 14)));
   /** The first day worth offering: today's planning date, or the first day this crop may go into the ground it is headed for. */
   function firstDay(eng, crop) {
@@ -268,7 +271,7 @@
             field('To', h('input', { type: 'date', id: 'srHTo', value: P.hTo, onchange: e => set({ hTo: e.target.value }) }))),
           field('A planting every (days)', h('input', { type: 'number', id: 'srHEvery', min: 1, max: 366, step: 1, value: P.hEvery, onchange: e => set({ hEvery: e.target.value }) }),
             pc && !pc.error ? `${pc.pattern === 'once' ? (pc.keep > 0 ? `One planting is picked in a day and keeps ${num(pc.keep, 1)} wk` : 'One planting is all picked the day it is ready') : `One planting is picked for ${num(pc.days)} days`}${+P.hEvery !== pc.every ? `: every ${num(pc.every)} would follow it` : ''}${+P.hEvery < pc.every && pc.pattern !== 'once' ? '. Closer than that they overlap, and the first weeks come up short.' : +P.hEvery > pc.every ? '. Further apart leaves days with nothing.' : '.'}` : null),
-          h('label.ah-check', h('input', { type: 'checkbox', id: 'srNet', checked: P.net, onchange: e => set({ net: e.target.checked }) }), h('span', `Take off what the plan already gives: only what is missing is planted`)),
+          h('label.ah-check', h('input', { type: 'checkbox', id: 'srNet', checked: P.net, onchange: e => set({ net: e.target.checked }) }), h('span', { id: 'srNetText' }, `Take off what the plan already gives: only what is missing is planted${ownUse(eng, P.cropId) ? '. Plantings for personal use are not counted as giving any' : ''}`)),
         ] : [
         h('div.field-pair', field(P.basis === 'harvest' ? 'First harvest on' : 'First one goes in', h('input', { type: 'date', id: 'srFrom', value: P.from, onchange: e => set({ from: e.target.value }) })),
           field('Then every (days)', h('input', { type: 'number', id: 'srEvery', min: 1, max: 366, step: 1, value: P.every, onchange: e => set({ every: e.target.value }) }))),
@@ -320,7 +323,7 @@
       add(out, h('ol.sr-waves' + (z ? '.sr-sized' : ''), { id: 'srWaves' }, rows));
       if (n || z) {
         // the weeks are judged on the forecast itself, with these plantings in it: not on the arithmetic that sized them
-        const model = forecast(eng), eng2 = n ? E.create({ ...App.state.plan, plantings: [...App.state.plan.plantings, ...result.plantings] }, Lib) : eng, after = n ? F.build(eng2, { year: App.planYear() }) : model;
+        const model = forecast(eng), eng2 = n ? E.create({ ...App.state.plan, plantings: [...App.state.plan.plantings, ...result.plantings] }, Lib) : eng, after = n ? F.build(eng2, { year: App.planYear(), use: 'commercial' }) : model;
         const strip = z ? (meet(model, after, crop.id, z.unit, z.want, result.waves[0].target, result.waves[result.waves.length - 1].window.to) || {}).el : coverage(model, after, crop.id);
         if (strip) add(out, strip);
         if (z) add(out, h('p.help', { id: 'srSame' }, 'Days to harvest are the same in every month here. In the ground, spring plantings bunch up and fall ones stretch out.'));
