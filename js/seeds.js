@@ -73,37 +73,84 @@
     return `The planner will count ${text} from the day it goes in the bed.${why}`;
   }
 
-  // ───────────────────────── importer: link or pasted page, review, save ─────────────────────────
+  // ───────────────────────── importer: a link, review, save; the page's text only once a link has failed ─────────────────────────
+  /**
+   * Why a link was not read, in plain words: which step failed and what to do about it.
+   * { step: 'address' | 'setup' | 'signin' | 'connection' | 'list' | 'supplier' | 'page', text, fallback }.
+   * `fallback` says whether a read was tried and failed, which is when copying the page's text is offered; a box left empty or an address that is not one is no failed read.
+   */
+  function linkFailure(error, address, how = linkHow()) {
+    const below = ' Or copy the page’s text instead, below.', only = ' Copy the page’s text instead, below.';
+    const msg = error && error.name !== 'TypeError' && error.message ? String(error.message) : '', own = how === 'own';
+    let host = ''; try { host = new URL(address).hostname.replace(/^www\./, ''); } catch (_) { host = ''; }
+    if (!String(address || '').trim()) return { step: 'address', fallback: false, text: 'Paste the product page’s address first.' };
+    if (how === 'none') return { step: 'setup', fallback: true, text: 'Links are read through Cloud sync, and this device is not connected to it. Connect it under Backup, Cloud sync…' + below };
+    if (how === 'cloud-old') return { step: 'setup', fallback: true, text: 'Your Cloud sync cannot read links until its newer code is pasted into Cloudflare (one paste, in the Worker lrf-plan-sync).' + below };
+    if (/complete HTTPS product URL|public HTTPS supplier product page|does not resolve to a public/i.test(msg)) return { step: 'address', fallback: false, text: 'That is not a complete web address. It starts with https:// and is the page for one variety.' };
+    if (/is not one of the supplier sites/i.test(msg)) return { step: 'list', fallback: true, text: `${host || 'That site'} is not on the list of suppliers whose pages can be read from a link.` + only };
+    if (root.navigator && root.navigator.onLine === false) return { step: 'connection', fallback: true, text: 'This device is not online, so the link was not read. Try again once it is.' + below };
+    if (/fetch service did not answer/i.test(msg)) return { step: 'connection', fallback: true, text: (own ? 'Your fetch service did not answer. Check its address, at the foot of this window, and that this device is online.' : 'Cloud sync did not answer, so the link was not read. Check that this device is online, and try again.') + below };
+    if (/refused the key/i.test(msg)) return { step: 'signin', fallback: true, text: (own ? 'Your fetch service refused its key. Check the key, at the foot of this window.' : 'Cloud sync did not accept this device, so the link was not read. Open Backup, Cloud sync… and connect again.') + below };
+    if (/no key set|Set the fetch service/i.test(msg)) return { step: 'setup', fallback: true, text: (own ? 'Your fetch service is not fully set up: it needs its address and its key, at the foot of this window.' : 'Cloud sync is not ready to read links on this device. Open Backup, Cloud sync… and connect again.') + below };
+    if (/blocked the reader|verification page/i.test(msg)) return { step: 'supplier', fallback: true, text: `${host || 'The supplier'} refused to give its page to the reader.` + only };
+    if (/took too long/i.test(msg)) return { step: 'supplier', fallback: true, text: `${host || 'The supplier’s site'} took too long to answer. Try again.` + below };
+    if (/could not be reached|could not be verified|could not be resolved|empty response/i.test(msg)) return { step: 'supplier', fallback: true, text: `${host || 'The supplier’s site'} could not be reached. Try again.` + below };
+    if (/\(HTTP 404\)/.test(msg)) return { step: 'supplier', fallback: true, text: `${host || 'The supplier'} has no page at that address. Check the link.` + below };
+    if (/\(HTTP \d+\)/.test(msg)) return { step: 'supplier', fallback: true, text: `${host || 'The supplier'} did not give the page ${(/\(HTTP \d+\)/.exec(msg) || [''])[0]}. Try again.` + below };
+    // the page came, and is not one variety's page: the reader's own sentence says what it found
+    if (/several products|an article|could not be identified|redirects too many|Berbee/i.test(msg)) return { step: 'page', fallback: true, text: msg.replace(' or product text.', '.').replace(', or copy the displayed product details.', '.') + below };
+    return { step: 'page', fallback: true, text: (msg ? msg.split(/(?<=\.)\s/)[0] : 'The page could not be read.') + only };
+  }
   function openImporter(startURL, startCropId) {
     const d = openDialog('Add a variety from a supplier page', 'Nothing is saved until you have looked it over.');
     let busy = false;
+    const how = linkHow();
     const url = inp('url', startURL || '', { type: 'text', inputMode: 'url', placeholder: 'https://… the page for one variety', spellcheck: false });
-    const pasteName = inp('pasteName', '', { maxLength: 200, placeholder: 'Variety name' });
-    const pasteText = h('textarea', { name: 'pasteText', rows: 6, maxLength: 96000, placeholder: 'On the product page: select all, copy, paste here. Page source gives a fuller read.' });
+    const pasteName = inp('pasteName', '', { maxLength: 200 });
+    const pasteText = h('textarea', { name: 'pasteText', rows: 6, maxLength: 96000, placeholder: 'Ctrl+V' });
     const readBtn = button('Read page', () => read('link'), 'primary'), pasteBtn = button('Read pasted page', () => read('paste'));
-    const ready = serviceReady();
-    const intake = h('form.sd-intake', { onsubmit: e => { e.preventDefault(); read('link'); } },
-      fld('Product link', url, linkHow() === 'cloud' ? 'Paste the product page’s address. It is read through your Cloud sync: Johnny’s, Berbee, Harris, Fedco and 11 other suppliers are on its list.' : ready ? 'Paste the product page’s address. It is read through your fetch service: Johnny’s, Berbee, Harris, Fedco and 11 other suppliers are on its list.' : linkHow() === 'cloud-old' ? 'Your Cloud sync can read links once its newer code is pasted into Cloudflare (one paste, in the Worker lrf-plan-sync). Until then, paste the page below.' : 'Links are read through Cloud sync once this device is connected (Backup, Cloud sync…). Until then, paste the page below.'),
-      h('p.dlg-hint.sd-linkhow', { id: 'sdLinkHow', dataset: { how: linkHow() } }, h('button.linkish', { type: 'button', id: 'sdSettings', onclick: () => openSettings() }, linkHow() === 'own' ? 'A fetch service of your own is set in this browser…' : 'Use a fetch service of your own instead…')),
-      h('div.sd-row', readBtn, button('Cancel', () => d.close())),
-      h('details.sd-paste', { open: !ready }, h('summary', 'Paste the page instead'),
-        h('p.dlg-hint', 'Works with no connection and for any supplier. Give the link above too, so the variety keeps its source.'),
-        fld('Variety name', pasteName), fld('Copied page', pasteText), h('div.sd-row', pasteBtn)));
+    const suppliers = 'Johnny’s, Berbee, Harris, Fedco and 11 other suppliers are on its list.';
+    const hint = how === 'cloud' ? 'Paste the product page’s address. It is read through your Cloud sync: ' + suppliers : how === 'own' ? 'Paste the product page’s address. It is read through your fetch service: ' + suppliers
+      : how === 'cloud-old' ? 'Your Cloud sync can read links once its newer code is pasted into Cloudflare (one paste, in the Worker lrf-plan-sync).' : 'Links are read through Cloud sync once this device is connected (Backup, Cloud sync…).';
+    // said where the link failed, above what to do instead; both stay out of sight until a link has failed
+    const failed = h('p.sd-fail', { id: 'sdFail', role: 'alert', hidden: true });
+    const fallback = h('section.sd-fallback', { id: 'sdFallback', hidden: true, 'aria-label': 'Copy the page’s text instead' },
+      h('h3', 'Copy the page’s text instead'),
+      h('ol.sd-steps',
+        h('li', 'On the product page, press ', h('kbd', 'Ctrl'), '+', h('kbd', 'A'), ' then ', h('kbd', 'Ctrl'), '+', h('kbd', 'C'), ' (', h('kbd', '⌘'), ' on a Mac).'),
+        h('li', h('label', { for: 'sdPasteText' }, 'Paste it here.'), pasteText),
+        h('li', h('label', { for: 'sdPasteName' }, 'Type the variety’s name, as the supplier gives it.'), pasteName)),
+      h('div.sd-row', pasteBtn, h('span.dlg-hint', 'The link above is kept as the variety’s source.')),
+      h('p.dlg-hint.sd-linkhow', { id: 'sdLinkHow', dataset: { how } }, h('button.linkish', { type: 'button', id: 'sdSettings', onclick: () => openSettings() }, how === 'own' ? 'A fetch service of your own is set in this browser…' : 'Use a fetch service of your own instead…')));
+    pasteText.id = 'sdPasteText'; pasteName.id = 'sdPasteName';
+    const intake = h('form.sd-intake', { dataset: { how }, onsubmit: e => { e.preventDefault(); read('link'); } },
+      fld('Product link', url, hint), h('div.sd-row', readBtn, button('Cancel', () => d.close())), failed, fallback);
     d.body.append(intake);
     url.focus();
+    const done = () => { busy = false; readBtn.disabled = pasteBtn.disabled = false; };
+    const fail = f => {
+      d.say(''); failed.textContent = f.text; failed.dataset.step = f.step; failed.hidden = false;
+      if (f.fallback && fallback.hidden) { fallback.hidden = false; pasteText.focus({ preventScroll: true }); fallback.scrollIntoView({ block: 'nearest' }); }
+      done();
+    };
 
-    async function read(how) {
+    async function read(from) {
       if (busy) return;
       let data;
-      busy = true; readBtn.disabled = pasteBtn.disabled = true; d.say(how === 'link' ? 'Reading the page…' : 'Reading what you pasted…');
+      const address = url.value.trim(), now = linkHow();
+      if (from === 'link' && (!address || now === 'none' || now === 'cloud-old')) { fail(linkFailure(null, address, now)); return; }
+      // copied text does not say which of its lines is the name; page source carries its own
+      const name = pasteName.value.trim(), source = /<(?:html|body|main|script)\b/i.test(pasteText.value);
+      if (from === 'paste' && !pasteText.value.trim()) { d.say('Paste the page’s text into the box first.', 'bad'); pasteText.focus(); return; }
+      if (from === 'paste' && !name && !source) { d.say('Type the variety’s name too: copied text does not say which of its lines is the name.', 'bad'); pasteName.focus(); return; }
+      busy = true; readBtn.disabled = pasteBtn.disabled = true; failed.hidden = true; d.say(from === 'link' ? 'Reading the page…' : 'Reading what you pasted…');
       try {
-        if (how === 'link') data = await Reader.readLink(url.value.trim(), service());
-        else data = Reader.readPasted(pasteText.value, url.value.trim(), pasteName.value.trim() || ' ');
+        if (from === 'link') data = await Reader.readLink(address, service());
+        else data = Reader.readPasted(pasteText.value, address, name || 'Variety');
       } catch (error) {
-        const paste = how === 'link' ? ' You can paste the page instead.' : '';
-        d.say(error && error.name !== 'TypeError' && error.message ? error.message + (/paste/i.test(error.message) ? '' : paste) : 'The page could not be read.' + paste, 'bad');
-        if (how === 'link') intake.querySelector('details').open = true;
-        busy = false; readBtn.disabled = pasteBtn.disabled = false;
+        if (d.closed) return;
+        if (from === 'link') fail(linkFailure(error, address, now));
+        else { d.say(error && error.name !== 'TypeError' && error.message ? error.message : 'What was pasted could not be read as a product page.', 'bad'); done(); }
         return;
       }
       busy = false;
@@ -817,7 +864,7 @@
         m.unlisted.length ? unlistedBox(m) : null,
         open ? h('button.sd-task', { type: 'button', onclick: () => { ui.filter = 'open'; ui.tab = 'list'; schedule(); } }, h('b', `${open} variet${open === 1 ? 'y has' : 'ies have'} supplier days that do not say where they are counted from`), h('span', 'For a transplanted crop that can move the harvest by the whole nursery time. Set each one in the “Days counted from” column, or set the crop’s once on the Assumptions list.')) : null,
         h('p.dlg-hint', 'Click a variety to see and edit it here. With a row in focus, ↑ and ↓ move between varieties and Enter jumps to its first field.'),
-        h('p.dlg-hint', serviceReady() ? 'Links are read for you: paste a product page’s address.' : 'Links are read through Cloud sync once this device is connected. Pasting a page works without it.'));
+        h('p.dlg-hint', serviceReady() ? 'Links are read for you: paste a product page’s address.' : 'Links are read through Cloud sync once this device is connected. Where a link cannot be read, the page’s text can be copied in instead.'));
       return;
     }
     if (ui.sel.type === 'crop') {
@@ -1113,5 +1160,5 @@
     App.on('plan', () => { ui.rev++; schedule(); if (order) order.draw(); }); App.on('view', schedule);
     document.addEventListener('keydown', e => { if (e.key === '/' && App.state.view === 'seeds' && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') && !document.querySelector('dialog[open]')) { e.preventDefault(); $('sdSearch').focus(); } });
   }
-  root.LRFSeeds = { init, render, openImporter, openVariety, openCrop, openSettings, openOrder, order: () => order, service, serviceReady, linkHow, planningLine, select, drawn: () => ({ ...drawn }) };
+  root.LRFSeeds = { init, render, openImporter, openVariety, openCrop, openSettings, openOrder, order: () => order, service, serviceReady, linkHow, linkFailure, planningLine, select, drawn: () => ({ ...drawn }) };
 })(window);

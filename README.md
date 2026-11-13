@@ -32,7 +32,7 @@ The top bar has seven views in three groups.
 
 ## Reading a variety from a supplier's page
 
-In **Seeds**, choose **Add from a link** and paste the address of the supplier's product page. On a device that is on Cloud sync the link is read through the sync service, with nothing more to set up (the service must be version 2: paste `worker/lrf-plan-sync.js` into the Worker again if the planner says it is older). Without Cloud sync, pasting the page itself works anywhere, with no connection; or set up the fetch service in `worker/` under **Use a fetch service of your own instead…**, inside the importer. Its address and key are kept in that browser only, never in the plan or a backup.
+In **Seeds**, choose **Add from a link** and paste the address of the supplier's product page. On a device that is on Cloud sync the link is read through the sync service, with nothing more to set up (the service must be version 2: paste `worker/lrf-plan-sync.js` into the Worker again if the planner says it is older). The window opens on the link box alone. When a link cannot be read, it says which step failed and what to do (the device is not on Cloud sync, no connection, the supplier refused, the site is not on the list), and only then offers the other way in: copy the page's text (Ctrl+A, Ctrl+C on the product page), paste it, and give the variety's name. That works for any supplier, with no connection. The fetch service in `worker/` can be set up from the same place, under **Use a fetch service of your own instead…**; its address and key are kept in that browser only, never in the plan or a backup.
 
 ## How it looks
 
