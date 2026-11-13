@@ -766,13 +766,13 @@
     if (!commit(label, [{ kind: 'nursery', before, after }], { unchecked: true })) return null;
     return { ...extra, was, now: Nursery.roomOf(state.engine.benchList()) };
   }
-  /** What is on the shelf, or the mix one tray takes: the grower's own figures, kept beside the plan. */
+  /** What is on the shelf, the mix one tray, pot or crate takes, or the pots a carrying tray holds: the grower's own figures, kept beside the plan. */
   function setSupply(kind, id, value) {
     const before = (state.plan.lrfNext || {}).supplies || null;
     let after;
     try { after = Nursery.setSupply(before, kind, id, value); } catch (error) { toast(error.message); return null; }
     if (JSON.stringify(after) === JSON.stringify(before)) return { unchanged: true };
-    return commit(kind === 'mix' ? 'Mix a tray takes' : 'Supplies on hand', [{ kind: 'own', key: 'supplies', before, after }], { unchecked: true }) ? { changed: true } : null;
+    return commit(kind === 'mix' ? 'Mix one takes' : kind === 'pockets' ? 'Pots a carrying tray holds' : 'Supplies on hand', [{ kind: 'own', key: 'supplies', before, after }], { unchecked: true }) ? { changed: true } : null;
   }
   /**
    * How a live-tray crop is sown: in cells (cells a tray, seeds a cell) or broadcast in an open tray (grams a tray).
