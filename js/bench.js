@@ -287,36 +287,55 @@
   function supplies() {
     const eng = App.state.engine, fig = figures(), sup = N.supplies(eng, App.planYear(), (App.state.plan.lrfNext || {}).supplies || null, fig);
     if (!sup.any) return null;
-    const cell = (r, kind, value, label, step) => {
-      const input = h('input.tr-n', { type: 'number', min: 0, max: 1000000, step, value: value || '', placeholder: kind === 'mix' ? 'qt' : '0', 'aria-label': `${r.name}: ${label}`, inputMode: step === 1 ? 'numeric' : 'decimal', dataset: { f: kind } });
+    const cuft = n => num(n, n > 0 && n < 0.1 ? 3 : 2);
+    // one figure of his: shown is what he typed ('' where the page shows the round figure or nothing), said is the toast for what he types now
+    const cell = (r, kind, shown, label, step, placeholder, said) => {
+      const input = h('input.tr-n', { type: 'number', min: 0, max: 1000000, step, value: shown, placeholder, 'aria-label': `${r.name}: ${label}`, inputMode: step === 1 ? 'numeric' : 'decimal', dataset: { f: kind } });
       input.addEventListener('focus', () => input.select());
-      input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); else if (e.key === 'Escape') { input.value = value || ''; input.blur(); } });
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); else if (e.key === 'Escape') { input.value = shown; input.blur(); } });
       input.addEventListener('change', () => {
-        if (+input.value === +(value || 0)) return;
+        const text = input.value.trim();
+        if (text === shown || (text !== '' && shown !== '' && +text === +shown)) return;
         refocus = null;
-        const done = App.setSupply(kind, r.id, input.value);
-        if (!done) { input.value = value || ''; return; }
-        if (done.changed) UI.toast(kind === 'mix' ? `${r.name}: ${input.value.trim() === '' || +input.value === 0 ? 'no mix counted' : `${num(+input.value, 2)} qt of mix each`}` : `${r.name}: ${num(+input.value || 0)}${r.id === 'mix' ? ' qt' : ''} on hand`, { label: 'Undo', run: App.undo });
+        const done = App.setSupply(kind, r.id, text);
+        if (!done) { input.value = shown; return; }
+        if (done.changed) UI.toast(`${r.name}: ${said(text)}`, { label: 'Undo', run: App.undo });
       });
       return input;
     };
-    const how = r => r.how.map(x => h(x.aside ? 'small' : 'span', `${num(x.n)} ${x.text}${x.on ? ` (${day(x.on)})` : ''}`));
+    const onHand = (r, unit) => cell(r, 'have', r.have ? String(r.have) : '', unit ? `${unit} on hand` : 'on hand', 1, '0', text => `${num(+text || 0, unit ? 2 : 0)}${unit ? ` ${+text === 1 ? unit.replace(/s$/, '') : unit}` : ''} on hand`);
+    const mixEach = r => cell(r, 'mix', r.mixOwn ? String(r.mixEach) : '', 'cubic feet of mix one takes', 'any', r.mixDefault != null ? cuft(r.mixDefault) : 'cu ft',
+      text => text === '' ? (r.mixDefault != null ? `back to ${cuft(r.mixDefault)} cu ft of mix each` : 'no figure for mix') : +text === 0 ? 'no mix counted' : `${cuft(+text)} cu ft of mix each`);
+    const how = r => {
+      const lines = r.how.map(x => h(x.aside ? 'small' : 'span', `${num(x.n)} ${x.text}${x.on ? ` (${day(x.on)})` : ''}`));
+      if (r.pockets) {
+        const pick = h('select.bn-pockets', { 'aria-label': 'Pots one carrying tray holds', dataset: { f: 'pockets' } }, N.POCKETS.map(n => h('option', { value: n, selected: n === r.pockets }, `${n} pots`)));
+        pick.addEventListener('change', () => { refocus = null; const done = App.setSupply('pockets', r.id, pick.value); if (!done) pick.value = String(r.pockets); else if (done.changed) UI.toast(`A carrying tray holds ${pick.value} pots`, { label: 'Undo', run: App.undo }); });
+        lines.push(h('small.bn-pick', 'One holds ', pick, '; whole trays for each potting lot'));
+      }
+      return lines;
+    };
     const body = h('tbody');
     for (const r of sup.rows) body.append(h('tr', { dataset: { supply: r.id } },
       h('td', h('b', r.name)), h('td.tr-fig', num(r.need)), h('td.bn-how', how(r)),
-      h('td', cell(r, 'have', r.have, 'on hand', 1)), h('td.tr-fig.bn-buy', r.buy ? num(r.buy) : h('span.tr-unset', '—')),
-      h('td', r.fills > 0 ? cell(r, 'mix', r.mixEach, 'quarts of mix one takes', 0.05) : null),
-      h('td.tr-fig', r.fills > 0 ? (r.mixQt != null ? num(r.mixQt, 0) : h('span.tr-unset', '—')) : null)));
-    const m = sup.mix;
-    const mixHow = !m.of ? 'Nothing in this plan takes mix.' : !m.counted ? 'Say how much mix one tray or pot takes, in the column to the right, and it is added up here.'
-      : `${num(m.cuFt, 1)} cubic feet${m.missing.length ? `. Not counted, for want of a figure: ${m.missing.join(', ')}` : ''}.`;
+      h('td', onHand(r)), h('td.tr-fig.bn-buy', r.buy ? [num(r.buy), r.pack ? h('small.bn-pack', `${plural(r.pack.n, 'case')} of ${r.pack.size}`) : null] : h('span.tr-unset', '—')),
+      h('td.bn-each', r.fills > 0 ? [mixEach(r), r.perBag ? h('small.bn-bag', { title: `One ${num(sup.mix.bag, 1)} cu ft bag fills about this many` }, `about ${num(r.perBag)} a bag`) : null] : null),
+      h('td.tr-fig', r.fills > 0 ? (r.mixCuFt != null ? num(r.mixCuFt, 1) : h('span.tr-unset', '—')) : null)));
+    const m = sup.mix, bag = `${num(m.bag, 1)} cu ft`;
+    const mixHow = !m.of ? [h('span', 'Nothing in this plan takes mix.')] : !m.counted ? [h('span', 'Say how much mix one of each takes, in the column to the right, and it is added up here.')] : [
+      h('span', `${plural(m.bags, 'bag')} of ${bag} (${m.product}, loose fill)`),
+      m.crates.n ? h('small', `Crates take ${num(m.crates.cuFt, 0)} cu ft of it: ${plural(m.crates.n, 'crate')} counted, each filled fresh.`) : null,
+      m.missing.length ? h('small', `Not counted, for want of a figure: ${m.missing.join(', ')}.`) : null];
     body.append(h('tr.bn-mix', { dataset: { supply: 'mix' } },
-      h('td', h('b', 'Potting mix')), h('td.tr-fig', m.counted ? `${num(m.need, 0)} qt` : h('span.tr-unset', '—')), h('td.bn-how', h('span', mixHow)),
-      h('td', cell({ id: 'mix', name: 'Potting mix' }, 'have', m.have, 'quarts on hand', 1)), h('td.tr-fig.bn-buy', m.counted && m.buy > 0 ? `${num(m.buy, 0)} qt` : h('span.tr-unset', '—')),
-      h('td'), h('td.tr-fig', m.counted ? num(m.need, 0) : h('span.tr-unset', '—'))));
+      h('td', h('b', 'Potting mix')), h('td.tr-fig', m.counted ? `${num(m.need, 0)} cu ft` : h('span.tr-unset', '—')), h('td.bn-how', mixHow),
+      h('td', onHand({ id: 'mix', name: 'Potting mix', have: m.have }, 'bags')), h('td.tr-fig.bn-buy', m.counted && m.buy > 0 ? plural(m.buy, 'bag') : h('span.tr-unset', '—')),
+      h('td'), h('td.tr-fig', m.counted ? num(m.need, 1) : h('span.tr-unset', '—'))));
     return h('section.bn-sup', { id: 'bnSupplies' }, h('h3', 'Supplies for the season'),
-      h('ul.bn-sup-notes', h('li', h('b', 'Plug trays'), ' come back, so they are counted at the most in use on one day.'), h('li', h('b', 'Live trays, rockwool and mix'), ' leave or are used up, so they are counted over the season.'), h('li', h('b', 'Mix'), ` is in dry quarts: ${num(N.DRY_QT_PER_CUFT, 1)} to a cubic foot.`)),
-      h('div.tr-scroll', h('table.as.bn-supplies', h('thead', h('tr', h('th', 'Supply'), h('th', 'Needed'), h('th', 'Counted as'), h('th', 'On hand'), h('th', 'To buy'), h('th', { title: 'Dry quarts of potting mix one tray or pot takes' }, 'Mix each, qt'), h('th', 'Mix, qt'))), body)));
+      h('ul.bn-sup-notes',
+        h('li', h('b', 'Plug trays, live trays, rockwool and pots'), ' are used once, so every one filled is one to buy.'),
+        h('li', h('b', 'Carrying trays, the open trays under rockwool and crates'), ' come back, so they are counted at the most in use on one day.'),
+        h('li', h('b', 'Mix'), ` is in cubic feet and bags of ${bag}. Each tray, pot and crate starts from a round figure, in grey: type your own over it.`)),
+      h('div.tr-scroll', h('table.as.bn-supplies', h('thead', h('tr', h('th', 'Supply'), h('th', 'Needed'), h('th', 'Counted as'), h('th', 'On hand'), h('th', 'To buy'), h('th', { title: 'Cubic feet of potting mix one tray, pot or crate takes' }, 'Mix each, cu ft'), h('th', 'Mix, cu ft'))), body)));
   }
 
   // openEditor is kept for what was written against the old toggle: the benches are the Set-up tab now, and shutting them is going back to Bench room.
