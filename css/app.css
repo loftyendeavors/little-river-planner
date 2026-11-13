@@ -1889,7 +1889,7 @@ body.phone .wk-scope button { padding: 8px 6px; font-size: 13.5px; }
 .share-ask-head small { color: var(--muted); font-size: 12px; }
 .share-ask .fix-actions { display: grid; gap: 6px; }
 .share-ask .help { margin: 0; }
-.bed.mixing .bed-edge { stroke: var(--flag); stroke-width: 2px; }
+.bed[data-mixing] .bed-edge { stroke: var(--flag); stroke-width: 2px; }
 .mix-pill { bottom: 14px; }
 /* several varieties ticked in a planting's panel, and who it shares its bed with */
 .mix-pick { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: grid; gap: 6px; background: var(--raised); }

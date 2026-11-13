@@ -711,9 +711,9 @@
     const m = App.mixing && App.mixing(), eng = App.state.engine, bed = m && eng.bedOf(m.bedId), on = !!bed && App.state.view === 'map' && !document.body.dataset.layout;
     if (!mixPill) { if (!on) return; mixPill = h('div.le-pill.mix-pill', { id: 'mixPill' }); $('mapView').append(mixPill); }
     mixPill.hidden = !on;
-    for (const el of document.querySelectorAll('#mapBeds .bed.mixing')) el.classList.remove('mixing');
+    for (const el of document.querySelectorAll('#mapBeds .bed[data-mixing]')) el.removeAttribute('data-mixing');   // an attribute, not a class: the map writes a bed's classes afresh each time it is painted
     if (!on) return;
-    const item = beds.get(bed.id); if (item) item.g.classList.add('mixing');
+    const item = beds.get(bed.id); if (item) item.g.setAttribute('data-mixing', '');
     const here = eng.cropsAt(bed.id, App.state.date), n = here.length, same = n > 1 && here.every(r => Math.abs(r.physicalLength - here[0].physicalLength) < 0.01);
     UI.clear(mixPill).append(h('b', 'Mixing'), h('span', { id: 'mixPillText' }, `${App.bedLabel(bed)} · ${num(n)} planting${n === 1 ? '' : 's'}${m.by === 'rows' ? ' · sharing the rows' : same ? ` · ${num(here[0].physicalLength, 1)} ft each` : ''} · drop the next one in`),
       h('button.btn.primary', { type: 'button', id: 'mixDone', title: 'Stop mixing this bed: the next drop on it asks again (Escape)', onclick: () => App.endMixing() }, 'Done'));
