@@ -1642,6 +1642,11 @@ body.phone .tr-stepper { flex: 1 0 100%; }
 .bn-supplies td.bn-buy { font-weight: 700; }
 .bn-supplies tr.bn-mix td { border-top: 1px solid var(--line); }
 .bn-supplies .tr-n { width: 74px; }
+.bn-supplies td.bn-buy small, .bn-supplies td.bn-each small { display: block; margin-top: 2px; font: 500 11.5px/1.2 var(--body, inherit); color: var(--muted); white-space: nowrap; }
+.bn-supplies .tr-n::placeholder { color: var(--muted); opacity: 1; font-weight: 500; }
+.bn-how small.bn-pick { margin-top: 3px; }
+.bn-pockets { height: 24px; padding: 0 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font: 600 12px var(--mono); color: var(--ink); }
+.bn-pockets:focus { outline: 2px solid var(--flag); outline-offset: 1px; }
 .tr-sown { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .tr-how { height: 28px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 0 4px; font-size: 12.5px; color: var(--ink); }
 .tr-sown-n { display: inline-flex; align-items: center; gap: 4px; min-width: 132px; justify-content: flex-end; }

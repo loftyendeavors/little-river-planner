@@ -189,18 +189,35 @@
   }
 
   // ───────────────────────────── what the season uses ─────────────────────────────
+  const BAG_CUFT = 2.8;                        // potting mix is bought by the bag: 2.8 cubic feet, loose fill
+  const BAG_NAME = 'Sunshine Mix #5';
+  const CASES = { tray: 50, rockwool: 30 };    // plug trays come 50 to a case, rockwool sheets 30
+  const POCKETS = [15, 10];                    // pots a carrying tray holds; the first unless he says the other
+  const CRATE_FILL_FT = 0.5;                   // a crate filled to grow a crop: about 6 inches of mix
+  // Cubic feet of mix one of them takes: round figures to start from, each of which he can type over.
+  const MIX_EACH = { 'tray-50': 0.2, 'tray-72': 0.15, 'tray-128': 0.11, 'tray-200': 0.1, open: 0.15, 'live-unsaid': 0.15, 'pot-4': 0.015, 'pot-4.5': 0.02 };
+  const sig2 = n => { if (!(n > 0)) return null; const p = Math.pow(10, Math.max(0, Math.floor(Math.log10(n)) - 1)); return Math.round(n / p) * p; };
+  /** The most of something in use on one day, from spans { from, to (the first day it is free again), n }. */
+  function mostAtOnce(spans, count = x => x.n) {
+    let most = 0, on = null;
+    for (const s of spans) { const n = spans.reduce((sum, x) => sum + (x.from <= s.from && s.from < x.to ? count(x) : 0), 0); if (n > most) { most = n; on = new Date(s.from); } }
+    return { most, on };
+  }
   /**
-   * Trays, rockwool, pots and potting mix for the plantings of a plan year, less what is on the shelf.
-   * own: { have: { id: count }, mix: { id: quarts of mix one of them takes } } (the grower's figures, `plan.lrfNext.supplies`).
-   * Each row: { id, name, need, how: [words], have, buy, fills, mixEach, mixQt }. Plug trays come back and are counted at the
-   * most in use on one day; what leaves the farm or is used up (live trays, rockwool, mix) is counted over the season.
+   * Trays, rockwool, pots, carrying trays, crates and potting mix for the plantings of a plan year, less what is on the shelf.
+   * own: the grower's figures (`plan.lrfNext.supplies`): { have: { id: count, bags }, cuft: { id: cubic feet of mix one takes }, pockets: 10 }.
+   * Each row: { id, name, need, how: [words], have, buy, pack, fills, mixEach, mixOwn, mixDefault, perBag, mixCuFt }.
+   * Nothing comes back unless it is said to: plug trays, live trays, rockwool, pots and mix are counted over the season;
+   * carrying trays, the open trays under rockwool and crates come back, and are counted at the most in use on one day.
+   * Mix is in cubic feet and bags. A figure of his beats the round one; one typed in quarts in an earlier build is read as the quarts it was.
    * `figures` is the season() of the same engine and year, when the caller already has it.
    */
   function supplies(eng, year, own, figures) {
-    const fig = figures || season(eng, year), have = (own && own.have) || {}, mix = (own && own.mix) || {}, text = String(year);
-    const lots = new Map(), pots = new Map(), plug = new Map(), liveCells = new Map();
+    const fig = figures || season(eng, year), have = (own && own.have) || {}, cuft = (own && own.cuft) || {}, quarts = (own && own.mix) || {}, text = String(year);
+    const pockets = own && POCKETS.includes(+own.pockets) ? +own.pockets : POCKETS[0];
+    const lots = new Map(), pots = new Map(), potLots = new Map(), plug = new Map(), liveCells = new Map(), crates = new Map();
     let liveOpen = 0, liveUnsaid = 0, sheets = 0, woolCells = 0;
-    const trayRow = (cells, name) => { const id = 'tray-' + cells; if (!plug.has(id)) plug.set(id, { id, cells, name: name || `${cells}-cell plug tray`, atOnce: 0, on: null, filled: 0, sold: 0 }); return plug.get(id); };
+    const trayRow = (cells, name) => { const id = 'tray-' + cells; if (!plug.has(id)) plug.set(id, { id, cells, name: name || `${cells}-cell plug tray`, filled: 0, sold: 0 }); return plug.get(id); };
     for (const it of eng.benchItems()) {
       if (String(it.p.date).slice(0, 4) !== text) continue;
       const r = it.r, c = r.c;
@@ -211,7 +228,13 @@
       }
       if (it.kind !== 'prop') continue;
       const plan = r.sowing, potted = !r.tw && (c.prop === 'pot' || c.prop === 'potup');
-      if (potted) { const size = +c.potSize > 0 ? +c.potSize : 4.5, n = plan && plan.potUpCells != null ? plan.potUpCells : r.cells; pots.set(size, (pots.get(size) || 0) + n); }
+      if (potted) {
+        const size = +c.potSize > 0 ? +c.potSize : 4.5, n = plan && plan.potUpCells != null ? plan.potUpCells : r.cells;
+        pots.set(size, (pots.get(size) || 0) + n);
+        // a potting lot stands in whole carrying trays, from the day it is in pots until it leaves the nursery
+        const from = c.prop === 'pot' ? it.from : eng.potUpDate(r), key = plan && plan.batchId ? plan.batchId : it.p.id;
+        if (from && from < it.to) { const lot = potLots.get(key) || { from, to: it.to, n: 0 }; lot.n += n; if (from < lot.from) lot.from = from; if (it.to > lot.to) lot.to = it.to; potLots.set(key, lot); }
+      }
       if (!r.tw && c.prop === 'pot') continue;   // sown straight into pots: no tray
       const u = eng.propOf(r, r.sow);
       if (!u || u.kind === 'pot') continue;
@@ -219,44 +242,83 @@
       const cells = tray ? tray.cells : (+c.tray > 0 ? +c.tray : 72), lot = lots.get(key) || { n: 0, wool: u.kind === 'rockwool', cells, name: tray ? tray.name : null };
       lot.n += u.n; lots.set(key, lot);
     }
+    // crates filled this year: every planting in a crate takes fresh mix. Round pots that stand outside are not nursery work and are left out.
+    for (const p of (eng.plan.plantings || [])) {
+      if (String(p.date).slice(0, 4) !== text) continue;
+      const r = eng.calc(p);
+      if (!r || !r.ct || !(r.len > 0) || r.b.active === false || r.g.active === false) continue;
+      const t = eng.ctOf(r.b);
+      if (!t || t.shape === 'round') continue;
+      const [w, l] = eng.ctDims(t), id = 'crate-' + (t.id || 'crate'), row = crates.get(id) || { id, name: t.name || 'Crate', ft2: w * l, filled: 0, plantings: 0, spans: [] };
+      row.filled += r.len; row.plantings += 1;
+      const last = r.out && r.out > r.field ? (r.last && r.last > r.out ? r.last : r.out) : (r.last && r.last > r.field ? r.last : r.field);
+      row.spans.push({ from: r.field, to: plus(last, 1), n: r.len });
+      crates.set(id, row);
+    }
     for (const lot of lots.values()) { const n = whole(lot.n); if (lot.wool) { sheets += n; woolCells = lot.cells; } else trayRow(lot.cells, lot.name).filled += n; }
-    for (const t of fig.plugMost) { const m = /^tray-(\d+)$/.exec(t.id), row = m ? trayRow(+m[1], t.name) : null; if (row) { row.atOnce = t.n; row.on = t.on; } else plug.set(t.id, { id: t.id, cells: null, name: t.name, atOnce: t.n, on: t.on, filled: 0, sold: 0 }); }
     for (const [cells, n] of liveCells) trayRow(cells).sold += n;
     const rows = [];
-    const row = (id, name, need, how, fills) => {
-      const h = Number(have[id]) > 0 ? Math.floor(Number(have[id])) : 0, each = Number(mix[id]) > 0 ? Number(mix[id]) : null;
-      rows.push({ id, name, need, how: how.filter(Boolean), have: h, buy: Math.max(0, need - h), fills, mixEach: each, mixQt: each == null ? null : fills * each });
+    const row = (id, name, need, how, fills, extra = {}) => {
+      const h = Number(have[id]) > 0 ? Math.floor(Number(have[id])) : 0, buy = Math.max(0, need - h);
+      const mine = cuft[id] != null && Number(cuft[id]) >= 0 ? Number(cuft[id]) : Number(quarts[id]) > 0 ? Math.round(Number(quarts[id]) / DRY_QT_PER_CUFT * 1000) / 1000 : null;
+      const round = extra.mixDefault != null ? extra.mixDefault : MIX_EACH[id] != null ? MIX_EACH[id] : null, each = fills > 0 ? (mine != null ? mine : round) : null;
+      const size = extra.pack || null;
+      rows.push({ id, name, need, how: how.filter(Boolean), have: h, buy, pack: size && buy > 0 ? { size, n: Math.ceil(buy / size) } : null, fills, crates: !!extra.crates, pockets: extra.pockets || null,
+        mixEach: each, mixOwn: fills > 0 && mine != null, mixDefault: fills > 0 ? round : null, perBag: each > 0 ? sig2(BAG_CUFT / each) : null, mixCuFt: each == null ? null : fills * each });
     };
-    for (const t of [...plug.values()].sort((a, b) => (a.cells || 0) - (b.cells || 0))) {
-      // a row can come back between sowings; a tray that goes out with the sale does not
-      const need = Math.max(t.atOnce, 0) + t.sold;
-      row(t.id, t.name, need, [t.atOnce ? { n: t.atOnce, text: 'in use at once, at the most', on: t.on } : null, t.sold ? { n: t.sold, text: 'go out as live trays' } : null, t.filled ? { n: t.filled, text: 'filled over the season', aside: true } : null], t.filled + t.sold);
-    }
+    // a plug tray is used once: every tray filled is a tray to buy, and so is every live tray sown in cells of that size
+    for (const t of [...plug.values()].sort((a, b) => (a.cells || 0) - (b.cells || 0)))
+      row(t.id, t.name, t.filled + t.sold, [t.filled ? { n: t.filled, text: 'filled over the season, and thrown out after' } : null, t.sold ? { n: t.sold, text: 'go out as live trays' } : null], t.filled + t.sold, { pack: CASES.tray });
     if (fig.flats.carriers) row('open-holes', 'Open 10 × 20 tray, with holes', fig.flats.carriers, [{ n: fig.flats.carriers, text: 'one under each rockwool sheet, at the most at once', on: fig.flats.carriersOn }], 0);
     if (liveOpen) row('open', 'Open 10 × 20 tray', liveOpen, [{ n: liveOpen, text: 'go out as live trays' }], liveOpen);
     // sown in cells, but how many cells a tray is not said yet: the kind of tray is not known
     if (liveUnsaid) row('live-unsaid', 'Celled tray, cells not yet said', liveUnsaid, [{ n: liveUnsaid, text: 'go out as live trays; say the cells a tray in the demand table' }], liveUnsaid);
-    if (sheets) row('rockwool', `Rockwool sheet${woolCells ? `, ${woolCells} cells` : ''}`, sheets, [{ n: sheets, text: 'sown over the season' }], 0);
+    if (sheets) row('rockwool', `Rockwool sheet${woolCells ? `, ${woolCells} cells` : ''}`, sheets, [{ n: sheets, text: 'sown over the season' }], 0, { pack: CASES.rockwool });
     for (const [size, n] of [...pots].sort((a, b) => a[0] - b[0])) row('pot-' + size, `${size} in pot`, whole(n), [{ n: whole(n), text: 'filled over the season' }], whole(n));
-    // potting mix: for whatever takes mix and has a figure; the rest is named, never guessed
-    const takes = rows.filter(r => r.fills > 0), counted = takes.filter(r => r.mixEach != null), qt = counted.reduce((n, r) => n + r.mixQt, 0), haveQt = Number(have.mix) > 0 ? Number(have.mix) : 0;
-    const mixRow = { id: 'mix', name: 'Potting mix', unit: 'qt', need: qt, cuFt: qt / DRY_QT_PER_CUFT, have: haveQt, buy: Math.max(0, qt - haveQt), counted: counted.length, of: takes.length, missing: takes.filter(r => r.mixEach == null).map(r => r.name) };
-    return { year, rows, mix: mixRow, sheets, liveOpen, liveUnsaid, liveCells: [...liveCells], any: rows.length > 0 };
+    // carrying trays come back: whole trays for each potting lot, at the most in use on one day
+    if (potLots.size) {
+      const at = mostAtOnce([...potLots.values()], lot => Math.ceil(lot.n / pockets - 1e-9));
+      if (at.most) row('carrier', 'Carrying tray for pots', at.most, [{ n: at.most, text: 'in use at once, at the most', on: at.on }], 0, { pockets });
+    }
+    for (const c of [...crates.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+      const at = mostAtOnce(c.spans), round = Math.max(0.05, Math.round(c.ft2 * CRATE_FILL_FT * 20) / 20);
+      row(c.id, c.name, at.most, [{ n: c.filled, text: `filled over the season, in ${c.plantings} ${c.plantings === 1 ? 'planting' : 'plantings'}` }, { n: at.most, text: 'in use at once, at the most', on: at.on, aside: true }], c.filled, { mixDefault: round, crates: true });
+    }
+    // potting mix, in cubic feet and bags: whatever takes mix and has a figure; anything without one is named, never guessed
+    const takes = rows.filter(r => r.fills > 0), counted = takes.filter(r => r.mixEach != null), need = counted.reduce((n, r) => n + r.mixCuFt, 0), bags = Math.ceil(need / BAG_CUFT - 1e-9);
+    const haveBags = Number(have.bags) > 0 ? Number(have.bags) : Number(have.mix) > 0 ? Math.round(Number(have.mix) / DRY_QT_PER_CUFT / BAG_CUFT * 100) / 100 : 0;
+    const inCrates = counted.filter(r => r.crates);
+    const mixRow = { id: 'mix', name: 'Potting mix', unit: 'cu ft', need, bag: BAG_CUFT, product: BAG_NAME, bags, have: haveBags, buy: Math.max(0, Math.ceil(bags - haveBags - 1e-9)), counted: counted.length, of: takes.length,
+      own: counted.filter(r => r.mixOwn).length, missing: takes.filter(r => r.mixEach == null).map(r => r.name), crates: { n: inCrates.reduce((n, r) => n + r.fills, 0), cuFt: inCrates.reduce((n, r) => n + r.mixCuFt, 0) } };
+    return { year, rows, mix: mixRow, pockets, sheets, liveOpen, liveUnsaid, liveCells: [...liveCells], any: rows.length > 0 };
   }
-  /** One figure of the grower's supplies record, set or (with nothing) cleared; an empty record is no record. kind: 'have' | 'mix'. */
+  /**
+   * One figure of the grower's supplies record, set or (with nothing) cleared; an empty record is no record.
+   * kind: 'have' (a count on the shelf; for id 'mix', bags), 'mix' (cubic feet of mix one takes; 0 says it takes none, nothing goes back to the round figure),
+   * 'pockets' (pots a carrying tray holds). A figure kept in quarts by an earlier build is let go when its place is typed in again.
+   */
   function setSupply(own, kind, id, value) {
     const next = own && typeof own === 'object' ? clone(own) : {};
-    if (!['have', 'mix'].includes(kind)) throw Error('A supply has an amount on hand and, where it takes mix, the mix one takes.');
-    const text = value == null ? '' : String(value).trim(), group = { ...(next[kind] || {}) };
-    if (text === '') delete group[id];
-    else {
-      const n = Number(text), wholeOnly = kind === 'have' && id !== 'mix';
-      if (!Number.isFinite(n) || n < 0 || n > 1e6 || (wholeOnly && !Number.isInteger(n))) throw Error(kind === 'mix' ? 'Mix one takes: quarts, 0 or more.' : wholeOnly ? 'On hand: a whole number, 0 or more.' : 'On hand: quarts, 0 or more.');
-      if (n === 0) delete group[id]; else group[id] = Math.round(n * 100) / 100;
+    if (!['have', 'mix', 'pockets'].includes(kind)) throw Error('A supply has an amount on hand and, where it takes mix, the mix one takes.');
+    const text = value == null ? '' : String(value).trim(), n = Number(text);
+    const drop = (group, key) => { if (!next[group]) return; delete next[group][key]; if (!Object.keys(next[group]).length) delete next[group]; };
+    const put = (group, key, v) => { next[group] = { ...(next[group] || {}), [key]: v }; };
+    if (kind === 'pockets') {
+      if (text !== '' && !POCKETS.includes(n)) throw Error(`A carrying tray holds ${POCKETS.slice().sort((a, b) => a - b).join(' or ')} pots.`);
+      if (text === '' || n === POCKETS[0]) delete next.pockets; else next.pockets = n;
+    } else if (kind === 'mix') {
+      if (text !== '' && (!Number.isFinite(n) || n < 0 || n > 1000)) throw Error('Mix one takes: cubic feet, 0 or more.');
+      drop('mix', id);
+      if (text === '') drop('cuft', id); else put('cuft', id, Math.round(n * 1000) / 1000);
+    } else {
+      const bags = id === 'mix';
+      if (text !== '' && (!Number.isFinite(n) || n < 0 || n > 1e6 || (!bags && !Number.isInteger(n)))) throw Error(bags ? 'On hand: bags, 0 or more.' : 'On hand: a whole number, 0 or more.');
+      if (bags) drop('have', 'mix');
+      const key = bags ? 'bags' : id;
+      if (text === '' || n === 0) drop('have', key); else put('have', key, Math.round(n * 100) / 100);
     }
-    if (Object.keys(group).length) next[kind] = group; else delete next[kind];
     return Object.keys(next).length ? next : null;
   }
 
-  return { KINDS, KIND_IDS, STANDS, kindName, DRY_QT_PER_CUFT, blank, addBench, setBench, removeBench, moveBench, addArea, setOptions, setCool, removeCool, sharedNames, roomOf, season, supplies, setSupply };
+  return { KINDS, KIND_IDS, STANDS, kindName, DRY_QT_PER_CUFT, BAG_CUFT, BAG_NAME, CASES, POCKETS, MIX_EACH, blank, addBench, setBench, removeBench, moveBench, addArea, setOptions, setCool, removeCool, sharedNames, roomOf, season, supplies, setSupply };
 });
