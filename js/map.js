@@ -10,18 +10,28 @@
  *   pick a planting up and move it to other ground (Alt leaves a copy),
  *   drag the ends of the selected planting to lengthen or shorten it.
  * A drag on open ground pans; the wheel zooms; hold Space to pan from anywhere.
+ *
+ * Moves of the view that the grower asks for with a button, a garden's name or a double click are eased, and a mouse
+ * wheel's notches are smoothed; a move asked for by another part of the planner (fit, fitGarden) lands at once.
+ * Pots and crates: each crop keeps the same containers for as long as it stands (see seatsOf).
+ * Editing the layout itself (moving, sizing, adding beds) lives in mapedit.js, which borrows this map through
+ * lock(), watch() and the small readers at the foot of this file.
  */
 (function (root) {
   'use strict';
-  const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, Rails = root.LRFRails;
+  const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, Rails = root.LRFRails, Geo = root.LRFMapGeo;
   const { s, h, clear, day, span, num } = UI;
   const $ = id => document.getElementById(id);
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
-  const view = { x: 0, y: 0, z: 1, home: 1, fitted: false };
+  const view = { x: 0, y: 0, z: 1, home: 1, fitted: false, moved: false };   // moved: the grower has panned or zoomed since the farm was last fitted
   const beds = new Map();       // bedId -> { bed, geo, g, base, fills, tag, parts, status, drop }
   const gardenSize = new Map(); // gardenId -> number of spaces drawn
   let layers = { photo: true, labels: true }, highlightCrop = null, feetPerPx = 0.1, raf = 0, spaceDown = false;
+  // While the layout is being edited this map only moves the view: picking, dragging and hover cards are the editor's.
+  let locked = false;
+  const watchers = [];
+  const tell = (what, detail) => { for (const fn of watchers) fn(what, detail); };
 
   // ── geometry: saved map pixels, real feet ──
   function geometry(bed, slot) {
@@ -51,7 +61,7 @@
     const plan = App.state.plan, eng = App.state.engine, map = plan.map || {}, world = $('mapBeds'), labels = $('mapGardens'), plates = $('mapPlates');
     const hasPhoto = !!App.state.mapImageUrl;
     feetPerPx = +map.ftPerPx > 0 ? +map.ftPerPx : eng.lib.blankFeetPerPx;
-    clear(world); clear(labels); clear(plates); clear($('mapOver')); beds.clear(); gardenSize.clear();
+    clear(world); clear(labels); clear(plates); clear($('mapOver')); beds.clear(); gardenSize.clear(); seated.clear();
     const photo = $('mapPhoto');
     if (hasPhoto) { photo.setAttribute('href', App.state.mapImageUrl); photo.setAttribute('width', map.imgW || 2000); photo.setAttribute('height', map.imgH || 1200); }
     photo.style.display = hasPhoto && layers.photo ? '' : 'none';
@@ -88,6 +98,7 @@
     }
     if (!view.fitted) fit();
     paint(); applyView();
+    tell('build');
   }
   function corners(geo) {
     const r = geo.rot * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r), out = [];
@@ -130,6 +141,64 @@
   /** A planting's rectangle in the bed's own drawing space. */
   const boxOf = (geo, f) => { const k = geo.L / geo.ft, a1 = Math.min(f.a1, geo.ft); return { x: geo.W * (f.x0 - 0.5), y: geo.L / 2 - a1 * k, w: geo.W * (f.x1 - f.x0), h: Math.max(0, a1 - f.a0) * k }; };
   const tint = hex => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || ''); if (!m) return hex; const to = [244, 241, 230]; return '#' + [1, 2, 3].map((i, n) => Math.round(parseInt(m[i], 16) * 0.58 + to[n] * 0.42).toString(16).padStart(2, '0')).join(''); };
+
+  // ── pots and crates: a crop keeps its containers ──
+  // Which containers of a group each planting stands in is worked out for the whole season at once (Geo.seats): first in,
+  // first seated, side by side where there is room. So a crop is drawn in the same crates from the day it goes in to the
+  // day its ground is free again, and nothing shuffles when the planning date moves. A planting may carry `seat`, the
+  // first container chosen for it by hand; it is kept whenever those containers are free.
+  const seated = new Map();   // bedId -> Map(planting id -> [container index]); forgotten whenever the plan changes
+  const EPOCH = new Date(2000, 0, 1);
+  /** Every crop of a group for the season, as Geo.seats takes them. `trial` tries one planting in another place: { id, seat }. */
+  function seatsFor(bed, count, trial) {
+    const eng = App.state.engine, byKey = new Map();
+    for (const p of eng.plantingsIn(bed.id)) {
+      const r = eng.calc(p);
+      if (!r) continue;
+      const key = eng.standKey(p) || p.id, through = eng.occupancyThrough(p, r), seat = trial && trial.id === p.id ? trial.seat : p.seat;
+      const item = { id: key, ids: [p.id], from: E.dayDiff(eng.occupancyFrom(p, r), EPOCH), to: through === Infinity ? 1e9 : E.dayDiff(through, EPOCH), n: Math.max(1, Math.round(r.len)), pin: Number.isInteger(seat) ? seat : undefined };
+      const had = byKey.get(key);   // one stand kept over several plantings takes one place
+      if (had) { had.ids.push(p.id); had.from = Math.min(had.from, item.from); had.to = Math.max(had.to, item.to); had.n = Math.max(had.n, item.n); if (had.pin === undefined || (trial && trial.id === p.id)) had.pin = item.pin; }
+      else byKey.set(key, item);
+    }
+    const byStand = Geo.seats([...byKey.values()], count), out = new Map();
+    for (const item of byKey.values()) for (const id of item.ids) out.set(id, byStand.get(item.id) || []);
+    return out;
+  }
+  function seatsOf(bed, count) {
+    if (!seated.has(bed.id)) seated.set(bed.id, seatsFor(bed, count));
+    return seated.get(bed.id);
+  }
+  /** The container of a group under a screen point, or null between or beyond them. */
+  function cellAt(item, cx, cy) {
+    const { geo } = item, c = geo.cells, rect = $('map').getBoundingClientRect(), a = -geo.rot * Math.PI / 180;
+    const wx = (cx - rect.left - view.x) / view.z - geo.x, wy = (cy - rect.top - view.y) / view.z - geo.y;
+    const bx = wx * Math.cos(a) - wy * Math.sin(a) + geo.W / 2, by = wx * Math.sin(a) + wy * Math.cos(a) + geo.L / 2;
+    const col = Math.floor(bx / (c.w + c.gap)), row = Math.floor(by / (c.l + c.gap)), i = row * c.columns + col;
+    return bx >= 0 && by >= 0 && col < c.columns && i < c.count ? i : null;
+  }
+  /**
+   * Where a crop picked up in its own group of containers would stand if set down at `cell`: it moves as far as the
+   * pointer has, stays whole inside the group, and is `free` when no crop that goes in before it holds those containers.
+   * (Crops that go in later make room: their places are worked out after it.)
+   */
+  function reseat(held, cell) {
+    const eng = App.state.engine, p = held && eng.planting(held.plantingId), item = p && beds.get(p.bedId);
+    if (!item || !item.geo.cells || cell == null || held.cell == null) return null;
+    const count = item.geo.cells.count, now = seatsOf(item.bed, count).get(p.id) || [];
+    if (!now.length) return null;
+    const start = clamp(now[0] + cell - held.cell, 0, Math.max(0, count - now.length)), got = seatsFor(item.bed, count, { id: p.id, seat: start }).get(p.id) || [];
+    return { p, item, start, n: now.length, same: start === now[0] && got.length === now.length, free: got.length === now.length && got[0] === start && got[got.length - 1] === start + now.length - 1 };
+  }
+  /** The longest run of a crop's containers along one row of the group: where its name is written. */
+  function longestRun(indexes, columns) {
+    let best = null, run = null;
+    for (const i of indexes) {
+      if (run && i === run.to + 1 && Math.floor(i / columns) === run.row) run.to = i; else run = { from: i, to: i, row: Math.floor(i / columns) };
+      if (!best || run.to - run.from > best.to - best.from) best = { ...run };
+    }
+    return best;
+  }
 
   // ── the whole season at once ──
   // "Whole season" shows, in every space, everything it grows this year: one band per crop, first crop first, each band as
@@ -230,13 +299,20 @@
           item.parts.push({ id, name, short: String(bed.bed), w: geo.W, l: geo.L, cx: 0, cy: 0, along: false }); break;
         }
         if (geo.cells) {
-          const c = geo.cells, n = Math.max(1, Math.round(r.len)), group = s('g', { 'data-planting': id });
-          for (let i = used; i < Math.min(c.count, used + n); i++) {
+          // each crop in the containers that are its own for the season
+          const c = geo.cells, mine = seatsOf(bed, c.count).get(id) || [], group = s('g', { 'data-planting': id });
+          for (const i of mine) {
             const x = -geo.W / 2 + (i % c.columns) * (c.w + c.gap), y = -geo.L / 2 + Math.floor(i / c.columns) * (c.l + c.gap);
             group.append(c.round ? s('circle', { ...attrs, cx: x + c.w / 2, cy: y + c.l / 2, r: c.w * 0.46 }) : s('rect', { ...attrs, x: x + c.w * 0.04, y: y + c.l * 0.04, width: c.w * 0.92, height: c.l * 0.92, rx: c.w * 0.08 }));
           }
-          fills.append(group); used += n;
-          if (n >= c.count) item.parts.push({ id, name, w: geo.W, l: geo.L, cx: 0, cy: 0, along: geo.L >= geo.W });
+          fills.append(group); used += mine.length;
+          const run = longestRun(mine, c.columns);
+          if (mine.length >= c.count) item.parts.push({ id, name, w: geo.W, l: geo.L, cx: 0, cy: 0, along: geo.L >= geo.W });
+          else if (run) {
+            // its name goes on the longest run of its containers in one row
+            const n = run.to - run.from + 1, w = n * c.w + (n - 1) * c.gap;
+            item.parts.push({ id, name, w, l: c.l, cx: -geo.W / 2 + (run.from % c.columns) * (c.w + c.gap) + w / 2, cy: -geo.L / 2 + run.row * (c.l + c.gap) + c.l / 2, along: false });
+          }
           continue;
         }
         const f = eng.footprint(r.planting, r) || { a0: used, a1: Math.min(cap, used + r.len), x0: 0, x1: 1 };   // benches fill by count
@@ -330,6 +406,7 @@
     bar.style.width = (nice * ftPx) + 'px'; bar.textContent = `${nice} ft`;
     paintHandles();
     scheduleLabels();
+    tell('view');
   }
   function scheduleLabels() { cancelAnimationFrame(raf); raf = requestAnimationFrame(updateLabels); }
   function updateLabels() {
@@ -356,39 +433,92 @@
       if (hit) el.style.visibility = 'hidden'; else kept.push(r);
     }
   }
-  function frame(items, pad, top = 30) {
+  /** The view that frames some spaces, with room for the tools above and the legend below. Nothing is moved here. */
+  function framed(items, pad, top = 30, most = 60) {
     const rect = $('map').getBoundingClientRect();
-    if (!rect.width || !items.length) return false;
+    if (!rect.width || !items.length) return null;
     const box = bounds(items), w = (box.x1 - box.x0) || 100, hgt = (box.y1 - box.y0) || 100;
-    view.z = Math.min(60, rect.width / (w * (1 + 2 * pad)), (rect.height - top - 46) / (hgt * (1 + 2 * pad)));
-    view.x = rect.width / 2 - (box.x0 + w / 2) * view.z; view.y = (rect.height - 46 + top) / 2 - (box.y0 + hgt / 2) * view.z;
-    return true;
+    const z = Math.min(60, most, rect.width / (w * (1 + 2 * pad)), (rect.height - top - 46) / (hgt * (1 + 2 * pad)));
+    return { z, x: rect.width / 2 - (box.x0 + w / 2) * z, y: (rect.height - 46 + top) / 2 - (box.y0 + hgt / 2) * z };
+  }
+  // ── moving the view smoothly ──
+  const calm = () => !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  let gliding = 0, wheel = null;
+  function settle() { if (gliding) { cancelAnimationFrame(gliding); gliding = 0; } if (wheel) { cancelAnimationFrame(wheel.raf); wheel = null; } }
+  /**
+   * Take the view to `to` in one eased motion. The point in the middle of the map is carried in a straight line while the
+   * zoom changes by equal ratios, so near and far moves both read as one movement and not a slide followed by a jump.
+   */
+  function glide(to, ms = 280) {
+    settle();
+    const rect = $('map').getBoundingClientRect();
+    if (calm() || !(ms > 0) || !rect.width) { view.x = to.x; view.y = to.y; view.z = to.z; applyView(); return; }
+    const mid = v => [(rect.width / 2 - v.x) / v.z, (rect.height / 2 - v.y) / v.z], from = { x: view.x, y: view.y, z: view.z }, a = mid(from), b = mid(to), t0 = performance.now();
+    const step = now => {
+      const k = clamp((now - t0) / ms, 0, 1), e = 1 - Math.pow(1 - k, 3);   // a frame's own clock can read a hair before the click that started this
+      const z = Math.exp(Math.log(from.z) + (Math.log(to.z) - Math.log(from.z)) * e), cx = a[0] + (b[0] - a[0]) * e, cy = a[1] + (b[1] - a[1]) * e;
+      view.z = z; view.x = rect.width / 2 - cx * z; view.y = rect.height / 2 - cy * z;
+      if (k >= 1) { view.x = to.x; view.y = to.y; view.z = to.z; gliding = 0; } else gliding = requestAnimationFrame(step);
+      applyView();
+    };
+    gliding = requestAnimationFrame(step);
+  }
+  /** The view after zooming by `factor` about a point on the screen. */
+  function zoomed(cx, cy, factor) {
+    const rect = $('map').getBoundingClientRect(), px = cx - rect.left, py = cy - rect.top, z = clamp(view.z * factor, 0.05, 60);
+    return { z, x: px - (px - view.x) * (z / view.z), y: py - (py - view.y) * (z / view.z) };
   }
   /**
    * The beds are framed; the farm photo is then settled under them. On a screen wider than the photo the whole photo sits in
    * the middle, with the same margin either side. Where the photo is the wider, it is slid just far enough that no empty strip
    * shows beside it while its other side runs off the screen. Either way every bed stays in view.
    */
-  function settlePhoto() {
-    const photo = $('mapPhoto'), rect = $('map').getBoundingClientRect(), w = +photo.getAttribute('width') * view.z;
-    if (!App.state.mapImageUrl || !layers.photo || !(w > 0) || !beds.size) return;
-    const box = bounds([...beds.values()]), lo = 12 - box.x0 * view.z, hi = rect.width - 12 - box.x1 * view.z;
-    if (lo > hi) return;
-    view.x = clamp(w <= rect.width ? (rect.width - w) / 2 : clamp(view.x, rect.width - w, 0), lo, hi);
+  function settlePhoto(v) {
+    const photo = $('mapPhoto'), rect = $('map').getBoundingClientRect(), w = +photo.getAttribute('width') * v.z;
+    if (!App.state.mapImageUrl || !layers.photo || !(w > 0) || !beds.size) return v;
+    const box = bounds([...beds.values()]), lo = 12 - box.x0 * v.z, hi = rect.width - 12 - box.x1 * v.z;
+    if (lo > hi) return v;
+    return { ...v, x: clamp(w <= rect.width ? (rect.width - w) / 2 : clamp(v.x, rect.width - w, 0), lo, hi) };
   }
-  function fit(later) {
+  /** Take the view somewhere: at once, or eased when the grower asked for it by hand. */
+  function go(to, eased) { if (eased) glide(to); else { settle(); view.x = to.x; view.y = to.y; view.z = to.z; applyView(); } }
+  function fit(later, eased) {
     if (later === true) { view.fitted = false; return; }
-    if (!frame([...beds.values()], 0.05)) return;
-    settlePhoto();
-    view.home = view.z; view.fitted = true; applyView();
+    const to = framed([...beds.values()], 0.05);
+    if (!to) return;
+    const home = settlePhoto(to);
+    view.home = home.z; view.fitted = true; view.moved = false;
+    go(home, eased === true);
   }
-  function fitGarden(id) {
-    if (frame([...beds.values()].filter(x => x.bed.gardenId === id), 0.22, 54)) applyView();
+  function fitGarden(id, eased) {
+    const to = framed([...beds.values()].filter(x => x.bed.gardenId === id), 0.22, 54);
+    if (to) { view.moved = true; go(to, eased === true); }
+  }
+  /** Frame some spaces by id: the layout editor brings what is being worked on into view. It never zooms closer than is useful. */
+  function fitSpaces(ids, eased, pad = 0.3) {
+    const to = framed(ids.map(id => beds.get(id)).filter(Boolean), pad, 54, Math.max(view.z, 22));
+    if (to) { view.moved = true; go(to, eased === true); }
   }
   function zoomAt(cx, cy, factor) {
-    const rect = $('map').getBoundingClientRect(), px = cx - rect.left, py = cy - rect.top, z = clamp(view.z * factor, 0.05, 60);
-    view.x = px - (px - view.x) * (z / view.z); view.y = py - (py - view.y) * (z / view.z); view.z = z;
+    const to = zoomed(cx, cy, factor);
+    view.x = to.x; view.y = to.y; view.z = to.z; view.moved = true;
     applyView();
+  }
+  /** One notch of a mouse wheel: the zoom it asks for is reached over a few frames, about the pointer. Notches add up. */
+  function wheelTo(cx, cy, factor) {
+    if (gliding) { cancelAnimationFrame(gliding); gliding = 0; }
+    const z = clamp((wheel ? wheel.z : view.z) * factor, 0.05, 60);
+    if (wheel) { wheel.z = z; wheel.cx = cx; wheel.cy = cy; return; }
+    wheel = { z, cx, cy, last: performance.now(), raf: 0 };
+    const step = now => {
+      if (!wheel) return;
+      const dt = Math.min(64, Math.max(1, now - wheel.last)), k = 1 - Math.exp(-dt / 60), want = Math.log(wheel.z), at = Math.log(view.z) + (want - Math.log(view.z)) * k, done = Math.abs(want - at) < 0.003;
+      wheel.last = now;
+      const target = done ? wheel.z : Math.exp(at), { cx: x, cy: y } = wheel;
+      if (done) wheel = null; else wheel.raf = requestAnimationFrame(step);
+      zoomAt(x, y, target / view.z);
+    };
+    wheel.raf = requestAnimationFrame(step);
   }
   function focusBed(bedId) {
     const item = beds.get(bedId), rect = $('map').getBoundingClientRect();
@@ -419,16 +549,20 @@
     if (e.button === 1) e.preventDefault();   // no browser auto-scroll on a middle-button pan
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     $('map').setPointerCapture(e.pointerId);
-    hideTip();
+    hideTip(); settle();
     if (pointers.size === 2) { const [a, b] = [...pointers.values()]; gesture = { kind: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), z: view.z }; return; }
     if (pointers.size !== 1) return;
-    const start = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, target: e.target }, mouse = e.pointerType !== 'touch', free = e.button === 0 && !spaceDown;
+    const start = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, target: e.target }, mouse = e.pointerType !== 'touch', free = e.button === 0 && !spaceDown && !locked;
     const grip = free && e.target.closest('[data-handle]'), fill = free && mouse && !App.state.armed && e.target.closest('#mapBeds [data-planting]');
     const cur = grip && selected();
     if (cur) { gesture = { ...start, kind: 'stretch', edge: grip.dataset.handle, cur, result: null }; $('map').classList.add('stretching'); return; }
     if (fill) {
       const p = App.state.engine.planting(fill.dataset.planting), r = p && App.state.engine.calc(p);
-      if (r) { gesture = { ...start, kind: 'hold' }; root.LRFDrag.watch(e, { payload: { plantingId: p.id }, label: App.cropLabel(p), color: App.state.engine.cropColor(r.c) }); return; }
+      if (r) {
+        const own = beds.get(p.bedId);
+        gesture = { ...start, kind: 'hold', plantingId: p.id, cell: own && own.geo.cells ? cellAt(own, e.clientX, e.clientY) : null };
+        root.LRFDrag.watch(e, { payload: { plantingId: p.id }, label: App.cropLabel(p), color: App.state.engine.cropColor(r.c) }); return;
+      }
     }
     gesture = { ...start, kind: e.button === 1 || spaceDown ? 'pan' : 'tap' };
     if (gesture.kind === 'pan') $('map').classList.add('panning');
@@ -450,7 +584,7 @@
     } else if (gesture.kind === 'tap' || gesture.kind === 'pan') {
       const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
       if (gesture.kind === 'tap' && Math.hypot(dx, dy) > 4) { gesture.kind = 'pan'; $('map').classList.add('panning'); }
-      if (gesture.kind === 'pan') { view.x = gesture.vx + dx; view.y = gesture.vy + dy; applyView(); }
+      if (gesture.kind === 'pan') { view.x = gesture.vx + dx; view.y = gesture.vy + dy; view.moved = true; applyView(); }
     }
   }
   function onUp(e) {
@@ -465,9 +599,21 @@
       if (!res || res.same || !App.updatePlanting(done.cur.p.id, res.change, `Resize ${App.cropLabel(done.cur.p)}`)) paintHandles();
       return;
     }
+    if (done.kind === 'hold' && root.LRFDrag.active() && !e.altKey) {
+      // a crop set down in its own group of containers: other containers, nothing else about it changes
+      const spot = targetAt(e.clientX, e.clientY), to = spot && spot.cell != null ? reseat(done, spot.cell) : null;
+      if (to && spot.bedId === to.p.bedId) {
+        root.LRFDrag.cancel();
+        if (to.same) return;
+        if (!to.free) { UI.toast(`Those containers are taken while ${App.cropLabel(to.p)} stands: a crop that goes in before it keeps its place.`); return; }
+        if (App.updatePlanting(to.p.id, { seat: to.start }, `Move ${App.cropLabel(to.p)} to other containers`)) UI.toast(`${App.cropLabel(to.p)} moved within ${App.bedLabel(to.item.bed)}. Later crops make room for it.`, { label: 'Undo', run: App.undo });
+        return;
+      }
+    }
     if (done.kind === 'hold' ? root.LRFDrag.active() : done.kind !== 'tap') return;
+    if (locked) { tell('tap', e); return; }   // a click on open ground while the layout is being edited: the editor's to answer
     const at = done.target.closest ? done.target : done.target.parentNode, label = at.closest('.garden-label');
-    if (label) { fitGarden(label.dataset.garden); return; }
+    if (label) { fitGarden(label.dataset.garden, true); return; }
     const fill = at.closest('#mapBeds [data-planting]'), bedEl = at.closest('[data-bed]');
     const bedId = bedEl ? bedEl.dataset.bed : nearest(e.clientX, e.clientY, 10);
     if (App.state.armed) { if (bedId) App.place(App.state.armed, bedId, App.state.date, aimAt(bedId, e.clientX, e.clientY)); return; }
@@ -477,7 +623,13 @@
     else if (bedId) App.select({ type: 'bed', id: bedId });
     else if (App.state.sel && App.state.sel.type !== 'series') App.select(null);   // a stray click on the photo does not throw a half-filled series away
   }
-  function onWheel(e) { e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0016))); }
+  function onWheel(e) {
+    e.preventDefault();
+    const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0016));
+    // A mouse wheel turns in notches, and each one is eased. A trackpad or a pinch sends a stream of small moves: those are followed as they come.
+    if (e.ctrlKey || e.deltaMode !== 0 || Math.abs(e.deltaY) < 40 || calm()) { settle(); zoomAt(e.clientX, e.clientY, factor); }
+    else wheelTo(e.clientX, e.clientY, factor);
+  }
 
   // ── hover card ──
   function showTip(e, nodes) {
@@ -489,7 +641,7 @@
     tip.style.top = clamp(e.clientY - host.top + 14, 8, host.height - th - 8) + 'px';
   }
   function hover(e) {
-    const el = e.target.closest && e.target.closest('[data-bed]');
+    const el = !locked && e.target.closest && e.target.closest('[data-bed]');
     if (!el) { hideTip(); return; }
     const item = beds.get(el.dataset.bed), eng = App.state.engine;
     if (!item || !item.status) return;
@@ -539,7 +691,9 @@
     if (cx < rect.left || cx > rect.right || cy < rect.top || cy > rect.bottom) return null;
     const el = document.elementFromPoint(cx, cy), bedEl = el && el.closest && el.closest('#map [data-bed]');
     const bedId = bedEl ? bedEl.dataset.bed : nearest(cx, cy);
-    return bedId ? { bedId, ...aimAt(bedId, cx, cy) } : null;
+    if (!bedId) return null;
+    const item = beds.get(bedId);
+    return item && item.geo.cells ? { bedId, cell: cellAt(item, cx, cy) } : { bedId, ...aimAt(bedId, cx, cy) };
   }
   /** While something is in the air: mark what each space would do, and draw where the drop would land. */
   function showDrop(states, target) {
@@ -554,6 +708,14 @@
     const over = $('mapOver');
     for (const el of over.querySelectorAll('.drop-layer')) el.remove();
     const item = target && beds.get(targetId), res = target && target.preview;
+    const to = item && item.geo.cells && gesture && gesture.kind === 'hold' && target.cell != null ? reseat(gesture, target.cell) : null;
+    if (to && to.p.bedId === targetId) {
+      // within its own group: the containers it would take, drawn one by one
+      const c = item.geo.cells, layer = s('g.drop-layer', { transform: bedTransform(item.geo) });
+      for (let i = to.start; i < to.start + to.n; i++) layer.append(s('rect.drop-ghost.cell', { x: -item.geo.W / 2 + (i % c.columns) * (c.w + c.gap), y: -item.geo.L / 2 + Math.floor(i / c.columns) * (c.l + c.gap), width: c.w, height: c.l, rx: c.w * 0.08, 'data-state': to.free ? 'ok' : 'blocked' }));
+      over.append(layer);
+      return;
+    }
     if (!item || !res || res.state === 'blocked') return;
     const geo = item.geo, layer = s('g.drop-layer', { transform: bedTransform(geo) });
     if (geo.ft && res.rect) { const b = boxOf(geo, res.rect); layer.append(s('rect.drop-ghost', { x: b.x, y: b.y, width: b.w, height: b.h, 'data-state': res.state })); }
@@ -569,19 +731,20 @@
     svg.addEventListener('pointercancel', onUp);
     svg.addEventListener('pointerleave', hideTip);
     svg.addEventListener('wheel', onWheel, { passive: false });
-    svg.addEventListener('dblclick', e => { if (!e.target.closest('.garden-label')) zoomAt(e.clientX, e.clientY, 1.8); });
+    svg.addEventListener('dblclick', e => { if (!e.target.closest('.garden-label')) { view.moved = true; glide(zoomed(e.clientX, e.clientY, 1.8), 220); } });
     svg.addEventListener('auxclick', e => e.preventDefault());
     const typing = e => /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test((e.target && e.target.tagName) || '');
     root.addEventListener('keydown', e => { if (e.code === 'Space' && !typing(e) && App.state.view === 'map') { spaceDown = true; svg.classList.add('pan-ready'); e.preventDefault(); } });
     root.addEventListener('keyup', e => { if (e.code === 'Space') { spaceDown = false; svg.classList.remove('pan-ready'); } });
     const center = () => { const r = svg.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
-    $('mapZoomIn').addEventListener('click', () => zoomAt(...center(), 1.4));
-    $('mapZoomOut').addEventListener('click', () => zoomAt(...center(), 1 / 1.4));
-    $('mapFit').addEventListener('click', () => fit());
+    $('mapZoomIn').addEventListener('click', () => { view.moved = true; glide(zoomed(...center(), 1.5), 200); });
+    $('mapZoomOut').addEventListener('click', () => { view.moved = true; glide(zoomed(...center(), 1 / 1.5), 200); });
+    $('mapFit').addEventListener('click', () => fit(false, true));
     $('mapPhotoToggle').addEventListener('click', e => { layers.photo = !layers.photo; e.currentTarget.setAttribute('aria-pressed', layers.photo); build(); });
     $('mapLabelToggle').addEventListener('click', e => { layers.labels = !layers.labels; e.currentTarget.setAttribute('aria-pressed', layers.labels); updateLabels(); });
     $('mapSeasonToggle').addEventListener('click', () => setWholeSeason(!wholeSeason));
-    new ResizeObserver(() => { if (App.state.ready && !view.fitted) fit(); if (App.state.ready) fitLegend(); }).observe(svg);
+    // A window that changes size (dragged to the other monitor, made full screen) is fitted again, unless the grower has moved the view since.
+    new ResizeObserver(() => { if (App.state.ready && App.state.view === 'map' && (!view.fitted || !view.moved)) fit(); if (App.state.ready) fitLegend(); }).observe(svg);
     $('legendMore').addEventListener('click', () => { legendOpen = !legendOpen; fitLegend(); });
     App.on('plan', () => { $('mapSample').hidden = !App.isSample(); });
     App.on('plan', build);
@@ -594,5 +757,16 @@
     App.on('view', () => { if (App.state.view === 'map' && !view.fitted) requestAnimationFrame(() => fit()); });
   }
 
-  root.LRFMap = { init, targetAt, showDrop, fit, fitGarden, wholeSeason: on => { if (on !== undefined) setWholeSeason(on); return wholeSeason; }, seasonOf };
+  // ── what the layout editor borrows ──
+  /** A space as plain geometry: centre, turn and drawn size in map pixels (see mapgeo.js). */
+  const shapeOf = id => { const item = beds.get(id); return item ? { id, x: item.geo.x, y: item.geo.y, rot: item.geo.rot, W: item.geo.W, L: item.geo.L, round: item.geo.shape === 'circle', placed: item.geo.placed } : null; };
+  const toWorld = (cx, cy) => { const rect = $('map').getBoundingClientRect(); return [(cx - rect.left - view.x) / view.z, (cy - rect.top - view.y) / view.z]; };
+  /** A map point on the page, measured from the map's own top left corner. */
+  const toScreen = (x, y) => [x * view.z + view.x, y * view.z + view.y];
+  function lock(on) { locked = !!on; hideTip(); $('map').classList.toggle('locked', locked); }
+
+  root.LRFMap = { init, targetAt, showDrop, fit, fitGarden, wholeSeason: on => { if (on !== undefined) setWholeSeason(on); return wholeSeason; }, seasonOf,
+    lock, watch: fn => { watchers.push(fn); }, shapeOf, spaces: () => [...beds.keys()], element: id => (beds.get(id) || {}).g || null, toWorld, toScreen, nearest, fitSpaces,
+    zoom: () => view.z, feetPerPx: () => feetPerPx, seatsOf: bedId => { const item = beds.get(bedId); return item && item.geo.cells ? seatsOf(item.bed, item.geo.cells.count) : new Map(); },
+    cellsOf: bedId => { const item = beds.get(bedId); return item ? item.geo.cells : null; } };
 })(window);

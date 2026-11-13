@@ -8,6 +8,14 @@ const read = f => fs.readFileSync(path.join(appDir, f), 'utf8');
 const put = (f, data) => { const to = path.join(outDir, f); fs.mkdirSync(path.dirname(to), { recursive: true }); fs.writeFileSync(to, data); return f; };
 const files = [];
 
+// The app folder must hold every script this site already serves. One that is missing means the app folder was put together before
+// another piece of work added that script to the repo: building from it would take that work off the site without a word. Stop instead.
+const serving = fs.existsSync(path.join(outDir, 'js')) ? fs.readdirSync(path.join(outDir, 'js')).filter(f => f.endsWith('.js') && f !== 'pwa.js') : [];
+const lacking = serving.filter(f => !fs.existsSync(path.join(appDir, 'js', f)));
+if (lacking.length && !process.argv.includes('--drop')) {
+  throw new Error(`The app folder has no ${lacking.join(', ')}, which this site serves. It was probably put together before ${lacking.length === 1 ? 'that script was' : 'those scripts were'} added: `
+    + 'copy js/ and css/app.css from this repo into the app folder, put your own changes back on top of them, and build again. (To take a script off the site on purpose, add --drop.)');
+}
 for (const dir of ['css', 'js', 'fonts']) fs.rmSync(path.join(outDir, dir), { recursive: true, force: true });
 for (const f of fs.readdirSync(path.join(appDir, 'js')).filter(f => f.endsWith('.js')).sort()) files.push(put(`js/${f}`, read(`js/${f}`)));
 files.push(put('css/app.css', read('css/app.css')));

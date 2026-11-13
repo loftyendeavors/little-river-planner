@@ -212,6 +212,87 @@ body.armed #map, body.armed #map * { cursor: crosshair; }
 .tip-crop.on span { font-weight: 700; }
 .tip-hint { font: 500 10.5px var(--mono); color: var(--muted); border-top: 1px solid var(--line-soft); padding-top: 5px; margin-top: 3px; }
 
+/* ── the layout of the farm, while it is being edited (mapedit.js) ──
+   The map becomes a drawing of the ground: the photo falls back, plantings are shown faintly, and what is picked is
+   outlined in the flag colour. Everything drawn over the map sits in screen space, so lines stay crisp at any zoom. */
+#mapEditToggle[aria-pressed="true"] { background: var(--flag); border-color: var(--flag); color: var(--flag-ink); }
+#layoutSide, #layoutPanel { display: none; }
+body[data-layout] .library > :not(#layoutSide), body[data-layout] #inspectorBody { display: none; }
+body[data-layout] #layoutSide { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+body[data-layout] #layoutPanel { display: block; }
+body[data-layout] #mapSeasonToggle, body[data-layout] .map-foot { display: none; }
+body[data-layout] #map { cursor: default; }
+body[data-layout] #map.panning, body[data-layout] #map.pan-ready, body[data-layout] #map.pan-ready * { cursor: grabbing; }
+body[data-layout] #map.on-photo #mapPhoto { filter: saturate(0.5) brightness(0.72); }
+body[data-layout] #map .bed, body[data-layout] #map .bed-fill { cursor: move; }
+body[data-layout] #map .bed-fill, body[data-layout] #map .bed-rows { opacity: 0.34; }
+body[data-layout] #map .bed-label { display: none !important; }
+body[data-layout] #map .bed-edge { stroke-width: 1.5px; }
+body[data-layout] #map .plate { stroke-dasharray: 3 3; }
+body[data-layout] #map .garden-label { cursor: pointer; }
+body[data-layout][data-le-tool="block"] #map, body[data-layout][data-le-tool="block"] #map *, body[data-layout][data-le-tool="tape"] #map, body[data-layout][data-le-tool="tape"] #map * { cursor: crosshair; }
+body.le-dragging #map, body.le-dragging #map * { cursor: grabbing !important; }
+#mapEdit { pointer-events: none; }
+.le-pick { fill: color-mix(in srgb, var(--flag) 16%, transparent); stroke: var(--flag); stroke-width: 2px; stroke-linejoin: round; }
+.le-pick.bad { fill: color-mix(in srgb, var(--bad) 30%, transparent); stroke: var(--bad); }
+.le-from { fill: none; stroke: #fff; stroke-width: 1.5px; stroke-dasharray: 4 4; opacity: 0.8; }
+.le-box { fill: none; stroke: var(--flag); stroke-width: 1px; stroke-dasharray: 5 4; opacity: 0.85; }
+.le-grip, .le-turn { fill: #fff; stroke: var(--flag); stroke-width: 2px; pointer-events: all; filter: drop-shadow(0 1px 2px rgba(8, 18, 14, 0.45)); }
+.le-grip:hover, .le-turn:hover { fill: var(--flag-soft); }
+.le-turn { cursor: grab; }
+.le-stem { stroke: var(--flag); stroke-width: 1.5px; }
+.le-guide { stroke: var(--flag); stroke-width: 1px; }
+.le-gap { stroke: #fff; stroke-width: 1.5px; }
+.le-lasso { fill: color-mix(in srgb, var(--flag) 12%, transparent); stroke: var(--flag); stroke-width: 1px; stroke-dasharray: 4 3; }
+.le-word { font: 600 11.5px var(--mono); fill: #fff; paint-order: stroke; stroke: rgba(8, 18, 14, 0.86); stroke-width: 4px; stroke-linejoin: round; }
+.le-word.small { font-size: 10.5px; }
+.le-tape { stroke: #fff; stroke-width: 1.5px; }
+.le-tape.under { stroke: rgba(8, 18, 14, 0.7); stroke-width: 4px; stroke-linecap: round; }
+.le-ghosts { pointer-events: none; }
+.le-block { fill: color-mix(in srgb, var(--flag) 8%, transparent); stroke: var(--flag); stroke-width: 1.5px; stroke-dasharray: 6 5; vector-effect: non-scaling-stroke; }
+.le-new { fill: color-mix(in srgb, var(--flag) 46%, transparent); stroke: #fff; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.le-block.bad, .le-new.bad { stroke: var(--bad); fill: color-mix(in srgb, var(--bad) 30%, transparent); }
+.le-read { z-index: 21; white-space: nowrap; }
+.le-read strong { font: 600 13px var(--body); font-variant-numeric: tabular-nums; }
+.le-read strong.bad { color: var(--bad); font-family: var(--body); }
+.le-read small { color: var(--muted); font-size: 11.5px; }
+.le-pill { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100% - 24px); background: var(--raised); border: 1px solid var(--flag); border-radius: 999px; padding: 5px 6px 5px 15px; box-shadow: var(--shadow); white-space: nowrap; }
+.le-pill b { font: 700 13px var(--display); font-stretch: 85%; color: var(--flag); text-transform: uppercase; letter-spacing: 0.05em; }
+.le-pill span { color: var(--ink-2); font-size: 13px; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.le-pill .btn { border-radius: 999px; padding: 4px 14px; }
+#layoutSide header { padding: 12px 12px 4px; display: grid; gap: 4px; }
+.le-lead { color: var(--ink-2); font-size: 12.5px; }
+.le-tools { display: grid; gap: 5px; padding: 8px 10px 6px; }
+.le-tool { text-align: left; border: 1px solid var(--line); background: var(--raised); border-radius: var(--radius); padding: 7px 10px; display: grid; gap: 1px; }
+.le-tool:hover { border-color: var(--ink-2); }
+.le-tool b { font-weight: 700; font-size: 13.5px; }
+.le-tool small { color: var(--muted); font-size: 11.5px; }
+.le-tool[aria-pressed="true"] { border-color: var(--flag); background: var(--flag-soft); box-shadow: inset 0 0 0 1px var(--flag); }
+#layoutSide .lib-meta { padding: 8px 14px 4px; }
+.le-list { flex: 1; overflow-y: auto; min-height: 0; padding: 0 6px 8px; display: grid; gap: 1px; align-content: start; }
+.le-garden { text-align: left; border: 1px solid transparent; background: none; border-radius: 6px; padding: 5px 8px; display: grid; gap: 0; min-width: 0; }
+.le-garden:hover { background: var(--raised); border-color: var(--line-soft); }
+.le-garden b { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.le-garden small { font: 500 10.5px var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.le-garden.on { background: var(--flag-soft); border-color: var(--flag); }
+.le-garden.part { border-color: color-mix(in srgb, var(--flag) 45%, var(--line)); border-style: dashed; }
+.le-keys { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; margin: 0; font-size: 12.5px; }
+.le-keys dt { font: 600 11px var(--mono); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; align-self: start; justify-self: start; white-space: nowrap; }
+.le-keys dd { margin: 0; color: var(--ink-2); }
+.le-row { display: flex; gap: 5px; flex-wrap: wrap; }
+.le-row .le-icon:nth-child(4) { margin-left: 8px; }
+.le-icon { width: 34px; height: 32px; border: 1px solid var(--line); background: var(--raised); border-radius: var(--radius); display: grid; place-items: center; padding: 0; }
+.le-icon:hover { border-color: var(--flag); background: var(--flag-soft); }
+.le-glyph line { stroke: var(--flag); stroke-width: 1.5px; }
+.le-glyph rect { fill: var(--ink-2); }
+.le-made { font: 600 12.5px var(--mono); color: var(--ink); background: var(--paper); border-radius: var(--radius); padding: 8px 10px; }
+.le-made.bad { color: var(--bad); background: var(--bad-soft); font-family: var(--body); }
+.fix-btn.danger b { color: var(--bad); }
+.fix-btn.danger:hover { border-color: var(--bad); background: var(--bad-soft); }
+#leForm .seg, #leDraft .seg { width: 100%; }
+.insp-aside .link + .link { margin-left: 14px; }
+.drop-ghost.cell[data-state="blocked"] { fill: color-mix(in srgb, var(--bad) 40%, transparent); stroke: var(--bad); }
+
 /* ── season ribbon ── */
 .season { background: var(--surface); border-top: 1px solid var(--line); padding: 8px 14px 6px; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 18px; align-items: center; }
 .season-date { display: flex; align-items: center; gap: 8px; }

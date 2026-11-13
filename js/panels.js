@@ -247,7 +247,9 @@
     if (editing) host.append(h('section.insp-section.form', { id: 'bedSizeForm' }, h('div.field-pair', field('Width (ft)', size('w')), field('Length (ft)', size('l'))),
       h('p.help', `${all.length ? `${num(all.length)} planting${all.length === 1 ? '' : 's'} here follow${all.length === 1 ? 's' : ''} the bed: ` : ''}rows and plant counts are worked out again from the new size. One Undo puts it back.`),
       h('button.btn', { type: 'button', id: 'bedSizeDone', onclick: () => { sizing = null; render(); } }, 'Done')));
-    else if (soil) host.append(h('p.insp-aside', h('button.link', { type: 'button', id: 'bedSizeEdit', onclick: () => { sizing = bed.id; render(); const el = $('fBedL'); if (el) { el.focus(); el.select(); } } }, 'Change this bed’s size…')));
+    else if (soil) host.append(h('p.insp-aside', h('button.link', { type: 'button', id: 'bedSizeEdit', onclick: () => { sizing = bed.id; render(); const el = $('fBedL'); if (el) { el.focus(); el.select(); } } }, 'Change this bed’s size…'),
+      root.LRFMapEdit ? h('button.link', { type: 'button', id: 'bedLayoutEdit', title: 'Move, turn or resize this bed on the map itself', onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit the layout…') : null));
+    if (!soil && root.LRFMapEdit && !eng.isPool(bed)) host.append(h('p.insp-aside', h('button.link', { type: 'button', id: 'bedLayoutEdit', title: 'Move or set out this space on the map itself', onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit the layout…')));
     const list = h('ul.p-list');
     for (const { p, r } of all) list.append(plantingRow(p, r));
     host.append(h('section.insp-section', h('h3', 'Plantings'), all.length ? list : h('p.note', 'Nothing planned here yet. Drag a crop onto this bed.'),
