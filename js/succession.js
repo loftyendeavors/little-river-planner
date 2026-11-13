@@ -508,7 +508,7 @@
     const cap = eng.heatedTraySpaces(), year = planYear(eng), weeks = [];
     if (!cap) return { cap: 0, weeks, least: null };
     for (let d = new Date(year, 0, 1); d.getFullYear() === year; d = E.addDays(d, 1)) {
-      const monday = E.addDays(d, -((d.getDay() + 6) % 7)), key = E.d2s(monday), total = eng.benchDay(d).total;
+      const monday = E.addDays(d, -((d.getDay() + 6) % 7)), key = E.d2s(monday), total = eng.benchDay(d).pools.heated.used;   // what stands under heat: seedlings hardening off outside are not in it
       let w = weeks[weeks.length - 1];
       if (!w || w.key !== key) { w = { key, start: new Date(Math.max(+monday, +new Date(year, 0, 1))), most: 0 }; weeks.push(w); }
       if (total > w.most) w.most = total;

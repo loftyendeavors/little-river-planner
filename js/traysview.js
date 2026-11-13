@@ -27,7 +27,7 @@
     const list = T.batches(eng, E).filter(b => ours.has(b.planId) || d(b.ready).getFullYear() === year || d(b.sow).getFullYear() === year);
     const crops = T.byCrop(list);
     const out = { year, list, weeks: T.weeks(list), crops, trays: list.reduce((n, b) => n + b.trays, 0), revenue: list.reduce((n, b) => n + b.revenue, 0),
-      seedG: list.reduce((n, b) => n + b.seedG, 0), unrated: crops.filter(c => !(c.crop.seedG > 0)).length, sown: list.filter(b => b.sown).length };
+      seedG: list.reduce((n, b) => n + b.seedG, 0), seeds: list.reduce((n, b) => n + b.seeds, 0), unrated: crops.filter(c => !eng.liveSow(c.crop).set).length, sown: list.filter(b => b.sown).length };
     cache.set(eng, out);
     return out;
   }
@@ -47,13 +47,26 @@
     UI.toast(`${after === before ? label : `${label}: ${num(before)} → ${num(after)} trays this season`}${done.kept ? ` · ${num(done.kept)} sown batch${done.kept === 1 ? '' : 'es'} left as recorded` : ''}`, { label: 'Undo', run: App.undo });
   }
   const setRow = (plan, rowId, key, value, label) => save(plan, now => ({ rows: now.rows.map(r => r.id === rowId ? { ...r, [key]: value } : r) }), label);
-  function setSeed(crop, value) {
-    const own = (App.state.plan.crops || []).find(c => c.id === crop.id);
-    if (!own) { UI.toast('This crop comes with the planner. Its seed rate is the built-in one.'); render(); return; }
-    const grams = value === '' ? null : +value;
-    if (grams !== null && !(grams >= 0 && grams <= 2000)) { UI.toast('Seed per tray is a weight in grams, from 0 to 2,000.'); render(); return; }
-    if ((own.seedG == null ? null : own.seedG) === grams) return;
-    if (App.commit(`Seed per tray, ${T.short(own.name)}`, [{ kind: 'crop', before: own, after: { ...own, seedG: grams } }], { unchecked: true })) UI.toast(`${T.short(own.name)}: ${grams == null ? 'no seed rate' : `${num(grams, 1)} g of seed a tray`}`, { label: 'Undo', run: App.undo });
+  /** Seed for trays, in the two ways it is counted: seeds for what is sown in cells, weight for what is broadcast. */
+  const seedText = (seeds, grams) => [seeds ? `${num(seeds)} seed${seeds === 1 ? '' : 's'}` : '', grams ? weight(grams) : ''].filter(Boolean).join(' · ') || '—';
+  /** How one tray of a crop is sown, said in a line. */
+  const sownText = how => !how.set ? 'no seed figure' : how.how === 'cells' ? `${num(how.cells)} cells × ${num(how.perCell, 1)} = ${num(how.seeds)} seeds a tray` : `${num(how.grams, 1)} g of seed a tray`;
+  function setSown(crop, change) {
+    const done = App.setLiveSow(crop.id, change);
+    if (!done) { render(); return; }
+    if (done.changed) UI.toast(`${done.name}: ${sownText(done.sow)}`, { label: 'Undo', run: App.undo });
+  }
+  /** The cell of the demand table that says how a tray is sown: in cells (cells a tray × seeds a cell) or in an open tray (grams). */
+  function sownCell(crop, name, own) {
+    const how = App.state.engine.liveSow(crop), live = (crop.liveSow && typeof crop.liveSow === 'object' ? crop.liveSow : {});
+    const pick = h('select.tr-how', { 'aria-label': `${name}, how a tray is sown`, disabled: !own, title: own ? 'In cells: seed is counted in seeds. Open tray: seed is counted by weight.' : 'This crop comes with the planner' },
+      h('option', { value: 'open', selected: how.how === 'open' }, 'Open tray'), h('option', { value: 'cells', selected: how.how === 'cells' }, 'In cells'));
+    pick.addEventListener('change', () => setSown(crop, { how: pick.value }));
+    const figures = how.how === 'cells'
+      ? [numberCell(live.cells == null ? null : live.cells, { min: 1, max: 1000, label: `${name}, cells a tray`, disabled: !own, placeholder: 'cells', onset: v => setSown(crop, { cells: v }) }), h('i', '×'),
+        numberCell(live.perCell == null ? null : live.perCell, { min: 0.1, max: 1000, step: 0.1, label: `${name}, seeds a cell`, disabled: !own, placeholder: 'seeds', onset: v => setSown(crop, { perCell: v }) })]
+      : [numberCell(crop.seedG > 0 ? crop.seedG : null, { min: 0, max: 2000, step: 0.1, label: `${name}, grams of seed per tray`, disabled: !own, placeholder: '—', onset: v => setSown(crop, { grams: v }) }), h('i', 'g')];
+    return h('div.tr-sown', { dataset: { how: how.how, set: how.set ? '1' : '' } }, pick, h('span.tr-sown-n', figures));
   }
   /** The first ready date. Where trays are wanted on Mondays, a mid-week date opens on the Monday on or after it. */
   function setFrom(plan, value) {
@@ -95,7 +108,7 @@
     const body = h('tbody');
     for (const r of plan.rows) {
       const crop = eng.crop(r.cropId), rows = mine.filter(b => b.p.liveTray && b.p.liveTray.rowId === r.id), trays = rows.reduce((n, b) => n + b.trays, 0), revenue = rows.reduce((n, b) => n + b.revenue, 0);
-      const own = crop && (farm.crops || []).some(c => c.id === crop.id), rate = crop && crop.seedG > 0 ? crop.seedG : null;
+      const own = crop && (farm.crops || []).some(c => c.id === crop.id), seeds = rows.reduce((n, b) => n + b.seeds, 0), grams = rows.reduce((n, b) => n + b.seedG, 0);
       const q = (key, text) => h('td', numberCell(r[key], { label: `${r.name}, ${text}`, onset: v => setRow(plan, r.id, key, v, `${r.name}, ${text}`) }));
       body.append(h('tr', { dataset: { row: r.id } },
         h('td', h('div.as-name', Thumbs.el({ varietyId: r.varietyId || undefined, cropId: r.cropId, color: crop ? eng.cropColor(crop) : 'var(--line)', label: r.name, size: 24, cls: 'key' }), h('b', r.name),
@@ -104,14 +117,14 @@
         h('td', numberCell(r.price, { min: 0, max: 100000, step: 0.01, label: `${r.name}, price per tray`, onset: v => setRow(plan, r.id, 'price', v, `${r.name}, price per tray`) })),
         q('spring', 'spring trays a week'), q('summer', 'summer trays a week'), q('fall', 'fall trays a week'),
         h('td.tr-fig', num(trays)), h('td.tr-fig', money(revenue)),
-        h('td', crop ? numberCell(rate, { min: 0, max: 2000, step: 0.1, label: `${r.name}, grams of seed per tray`, disabled: !own, placeholder: 'g', onset: v => setSeed(crop, v) }) : '—'),
-        h('td.tr-fig', rate ? weight(trays * rate) : h('span.tr-unset', '—')),
+        h('td', crop ? sownCell(crop, r.name, own) : '—'),
+        h('td.tr-fig.tr-seed', seeds || grams ? seedText(seeds, grams) : h('span.tr-unset', '—')),
         h('td', h('button.tr-x', { type: 'button', title: `Take ${r.name} out of this plan`, 'aria-label': `Take ${r.name} out of this plan`, disabled: plan.rows.length < 2,
           onclick: () => save(plan, now => ({ rows: now.rows.filter(x => x.id !== r.id) }), `${r.name} taken out`) }, '×'))));
     }
-    const total = mine.reduce((n, b) => n + b.trays, 0), totalRevenue = mine.reduce((n, b) => n + b.revenue, 0), totalSeed = mine.reduce((n, b) => n + b.seedG, 0);
+    const total = mine.reduce((n, b) => n + b.trays, 0), totalRevenue = mine.reduce((n, b) => n + b.revenue, 0), totalSeed = mine.reduce((n, b) => n + b.seedG, 0), totalSeeds = mine.reduce((n, b) => n + b.seeds, 0);
     const sumOf = key => plan.rows.reduce((n, r) => n + (r[key] || 0), 0);
-    const foot = h('tfoot', h('tr', h('td', 'All crops'), h('td'), h('td'), h('td.tr-fig', num(sumOf('spring'))), h('td.tr-fig', num(sumOf('summer'))), h('td.tr-fig', num(sumOf('fall'))), h('td.tr-fig', num(total)), h('td.tr-fig', money(totalRevenue)), h('td'), h('td.tr-fig', totalSeed ? weight(totalSeed) : h('span.tr-unset', '—')), h('td')));
+    const foot = h('tfoot', h('tr', h('td', 'All crops'), h('td'), h('td'), h('td.tr-fig', num(sumOf('spring'))), h('td.tr-fig', num(sumOf('summer'))), h('td.tr-fig', num(sumOf('fall'))), h('td.tr-fig', num(total)), h('td.tr-fig', money(totalRevenue)), h('td'), h('td.tr-fig.tr-seed', totalSeed || totalSeeds ? seedText(totalSeeds, totalSeed) : h('span.tr-unset', '—')), h('td')));
     // the three seasons, as the dates below cut them
     const spans = (() => { try { return { spring: `${day(d(plan.from))} – ${day(E.addDays(d(plan.summer), -1))}`, summer: `${day(d(plan.summer))} – ${day(E.addDays(d(plan.fall), -1))}`, fall: `${day(d(plan.fall))} – ${day(d(plan.through))}` }; } catch (_) { return {}; } })();
     const season = (text, key) => h('th', { title: `Trays wanted each week, ${spans[key] || ''}` }, text, h('small', spans[key] || ''));
@@ -142,7 +155,7 @@
           if (ok && await App.removeTrays(plan.id)) UI.toast(`${plan.name} deleted`, { label: 'Undo', run: App.undo });
         } }, 'Delete plan')),
       h('div.tr-scroll', h('table.as.tr-demand',
-        h('thead', h('tr', h('th', 'Crop'), h('th', { title: 'Days from sowing until the tray is ready to sell' }, 'Days'), h('th', '$ / tray'), season('Spring / wk', 'spring'), season('Summer / wk', 'summer'), season('Fall / wk', 'fall'), h('th', 'Trays'), h('th', 'Expected'), h('th', { title: 'Grams of seed sown in one 10 × 20 tray' }, 'Seed g / tray'), h('th', 'Seed'), h('th', ''))),
+        h('thead', h('tr', h('th', 'Crop'), h('th', { title: 'Days from sowing until the tray is ready to sell' }, 'Days'), h('th', '$ / tray'), season('Spring / wk', 'spring'), season('Summer / wk', 'summer'), season('Fall / wk', 'fall'), h('th', 'Trays'), h('th', 'Expected'), h('th', { title: 'How one tray is sown: in cells, so many seeds a cell, or broadcast in an open 10 × 20 tray, by weight' }, 'Sown'), h('th', 'Seed'), h('th', ''))),
         body, foot)),
       h('div.tr-window',
         dateCell(plan.from, 'First ready date', v => setFrom(plan, v)),
@@ -204,20 +217,20 @@
       h('div.tr-stats',
         stat('Trays this season', num(fig.trays), `${num(fig.list.length)} batches · ${num(fig.crops.length)} crop${fig.crops.length === 1 ? '' : 's'}${fig.sown ? ` · ${num(fig.sown)} sown` : ''}`),
         stat('Expected', money(fig.revenue), 'if every tray sells at its price'),
-        stat('Seed for the season', fig.seedG ? weight(fig.seedG) : '—', !fig.crops.length ? '' : fig.unrated === fig.crops.length ? 'no grams per tray set yet' : fig.unrated ? `${num(fig.crops.length - fig.unrated)} of ${num(fig.crops.length)} crops counted so far` : 'every crop counted'),
+        stat('Seed for the season', fig.seeds ? `${num(fig.seeds)} seeds` : fig.seedG ? weight(fig.seedG) : '—', (fig.seeds && fig.seedG ? `and ${weight(fig.seedG)} by weight · ` : '') + (!fig.crops.length ? '' : fig.unrated === fig.crops.length ? 'no seed figure set yet' : fig.unrated ? `${num(fig.crops.length - fig.unrated)} of ${num(fig.crops.length)} crops counted so far` : 'every crop counted')),
         stat(`Week of ${day(d(now))}`, `${num(week.sow)} to sow`, `${num(week.ready)} ready · ${money(week.revenue)}`),
-        stat('Benches at their fullest', t ? (bench.cap ? `${num(t.total, 0)} of ${num(t.cap)}` : `${num(t.total, 0)} spaces`) : '—', !t ? 'nothing under cover' : !bench.cap ? `${day(t.date)} · no benches listed` : `${day(t.date)}${t.over > 0.05 ? ` · ▲ ${num(t.over, 1)} over` : ' · room to spare'}`, t && bench.cap && t.over > 0.05 ? 'over' : '')),
+        stat(bench.shown.length > 1 ? 'Heated benches, fullest' : 'Benches at their fullest', t ? (bench.cap ? `${num(t.used, 0)} of ${num(t.cap)}` : `${num(t.used, 0)} spaces`) : '—', !t ? 'nothing under cover' : !bench.cap ? `${day(t.date)} · no benches listed` : `${day(t.date)}${t.over > 0.05 ? ` · ▲ ${num(t.over, 1)} over` : ' · room to spare'}`, t && bench.cap && t.over > 0.05 ? 'over' : '')),
       orphans ? h('p.tr-callout', `${num(orphans)} tray batches belong to a demand plan whose record is missing. They are shown below but cannot be changed from here. Loading the v7 backup again restores the record.`) : null,
       list.length ? list.map(p => planSection(p, fig)) : emptyState(),
       list.length ? h('p.tr-more', h('button.btn', { type: 'button', onclick: () => { const year = App.planYear(), n = list.length + 1, first = T.draft(year); App.saveTrays('Weekly demand plan added', { ...first, from: T.mondayOnOrAfter(first.from), name: `${year} live trays ${n}`, rows: [{ id: App.uid(), name: 'New crop', days: 21, price: 0, spring: 0, summer: 0, fall: 0 }] }); } }, '+ Another demand plan'),
         h('small', 'One plan holds one set of weekly numbers. A second customer is a second plan.')) : null,
-      Bench.section(), weekSection(fig));
+      Bench.section(), Bench.supplies(), weekSection(fig));
     host.parentElement.scrollTop = keep;
     if (focus && focus[0]) { const again = [...host.querySelectorAll('input, select, button')].find(el => el.getAttribute('aria-label') === focus[0] && (!focus[1] || (el.closest('[data-plan]') && el.closest('[data-plan]').dataset.plan === focus[1]))); if (again) again.focus({ preventScroll: true }); }
   }
 
   function init() {
-    App.on('plan', render); App.on('view', render); App.on('date', () => { if (App.state.view === 'trays') render(); });
+    App.on('plan', render); App.on('view', render); App.on('nursery', render); App.on('date', () => { if (App.state.view === 'trays') render(); });
     Thumbs.on(() => { if (App.state.view === 'trays') render(); });
   }
   root.LRFTraysView = { init, render, figures, get dirty() { return dirty; } };

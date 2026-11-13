@@ -414,7 +414,8 @@
     for (const u of unlisted) if (u.why === 'unit') { const r = byV.get(u.variety.id); (r.odd || (r.odd = [])).push(u); }
     return { eng, plan, live, need, stock, used, usedCrop, byV, byCrop, unlisted, hasStock: Object.keys(stock).length > 0 };
   }
-  const unitFor = crop => (crop && crop.micro ? 'g' : crop && crop.plantingMaterial === 'plant' ? 'plants' : 'seeds');
+  // a live-tray crop sown in cells is counted in seeds; broadcast in an open tray, by weight
+  const unitFor = crop => (crop && crop.micro ? (App.state.engine.liveSow(crop).how === 'cells' ? 'seeds' : 'g') : crop && crop.plantingMaterial === 'plant' ? 'plants' : 'seeds');
   // ── stock, edited where it is shown ──
   function receive(key, unit, name) {
     const done = App.editStock(`${name}: order arrived`, (lib, ctx) => {
@@ -450,7 +451,11 @@
    */
   function unitChoice(u, name) {
     const lot = u.lot, crop = App.state.engine.crop(u.variety.cropId), n = num(lot.quantity);
-    return [h('p.sd-odd', `Recorded as ${n} ${unitWord(lot.unit)}, but the plan counts ${name} in ${unitWord(u.unit)}, so no row counts this lot. One of the two is wrong.`),
+    // seed bought by weight for a crop counted in seeds (a live tray sown in cells, say), or the reverse: the vendor's seeds per gram turns one into the other
+    const rate = SL.perGram(u.variety), q = Number(lot.quantity), turned = !(rate > 0) || !(q > 0) ? null : lot.unit === 'g' && u.unit === 'seeds' ? Math.floor(q * rate) : lot.unit === 'seeds' && u.unit === 'g' ? Math.round(q / rate * 10) / 10 : null;
+    const rateText = rate > 0 ? `${num(rate, rate < 10 ? 1 : 0)} seeds a gram` : '';
+    return [h('p.sd-odd', `Recorded as ${n} ${unitWord(lot.unit)}, but the plan counts ${name} in ${unitWord(u.unit)}, so no row counts this lot.${turned != null ? '' : ' One of the two is wrong.'}`),
+      turned != null ? h('button.link', { type: 'button', dataset: { fix: 'turn' }, onclick: () => refile(u, { unit: u.unit, quantity: turned, reason: `${n} ${unitWord(lot.unit)} turned into ${unitWord(u.unit)} at ${rateText}, the figure on the variety.` }, `${name}: ${n} ${unitWord(lot.unit)} counted as ${num(turned, u.unit === 'g' ? 1 : 0)} ${unitWord(u.unit)}`) }, `Count it as ${num(turned, u.unit === 'g' ? 1 : 0)} ${unitWord(u.unit)} (${rateText}, from the variety’s record)`) : null,
       h('button.link', { type: 'button', dataset: { fix: 'unit' }, onclick: () => refile(u, { unit: u.unit, reason: `Counted in ${u.unit}, as the plan counts ${name}.` }, `${name}: ${n} counted as ${unitWord(u.unit)}`) }, `The lot is wrong: count ${n} ${unitWord(u.unit)}`),
       crop && lot.unit === 'seeds' && u.unit === 'plants' && boughtIn(crop) && soldAsSeed(u.variety) ? h('button.link', { type: 'button', dataset: { fix: 'seed' }, onclick: () => sowFromSeed(crop) }, `The crop is wrong: ${cropName(crop)} is sown from seed`)
         : crop ? h('button.link', { type: 'button', dataset: { fix: 'crop' }, onclick: () => select({ type: 'crop', id: crop.id }) }, `The crop is wrong: open ${cropName(crop)}`) : null];
@@ -621,6 +626,19 @@
     for (const rank of [1, 2, 3, 4]) { if (fixed() + NAME_MIN <= room) break; cols = cols.filter(c => c[4] !== rank); }
     return { cols, fixed: fixed(), key: cols.map(c => c[0]).join(' ') };
   }
+  // Rows of the list are kept from one drawing to the next. A row is built again only when what it shows has changed:
+  // its variety's record, what the plan needs of it, its lots, its picture, or the columns. The rest stay where they are,
+  // so a change to one variety redraws one row, and pictures are not loaded twice.
+  const rowCache = new Map(), drawn = { built: 0, kept: 0, moved: 0, builtEver: 0 };
+  /** Make `body` hold exactly these rows in this order, touching only what differs. */
+  function settle(body, wanted) {
+    let at = body.firstChild;
+    for (const node of wanted) { if (node === at) at = at.nextSibling; else { body.insertBefore(node, at); drawn.moved++; } }
+    while (at) { const next = at.nextSibling; at.remove(); at = next; }
+  }
+  const lotsSig = r => SL.lotsFor(App.inventoryNow(), r.stockKey).map(l => [l.id, l.quantity, l.unit, l.life, l.usable === true]);
+  const needSig = r => !r ? 0 : [r.key, r.unit, r.stockUnit, r.toSow, r.onHand, r.onOrder, r.short, r.first ? +r.first : 0, r.waiting, r.plantings, r.cover ? [r.cover.how, r.cover.text, r.cover.cost, r.cover.total] : 0, r.odd ? r.odd.map(u => [u.lot.id, u.lot.quantity, u.lot.unit, u.unit]) : 0, lotsSig(r)];
+  const thumbSig = id => { const uri = T.get(id); return uri ? uri.length + uri.slice(-12) : T.remoteOf(id); };
   function listTable(m, list, q) {
     const { eng } = m, grouped = ui.sort === 'crop', plan = listCols(), ids = plan.cols.map(c => c[0]);
     ui.colsKey = plan.key;
@@ -631,8 +649,23 @@
     // a redraw while a lot is being typed (a photo arriving, say) must not take the cursor out of it
     const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('.sd-lotrow') ? document.activeElement.id : '';
     if (typing && !lotRow.focus) lotRow.focus = typing;
-    const body = clear($('sdBody')), cols = ids.length;
+    const body = $('sdBody'), cols = ids.length, wanted = [], seen = new Set();
+    drawn.built = drawn.kept = drawn.moved = 0;
+    const kept = (key, sig, same, build, extra) => {
+      const was = rowCache.get(key);
+      seen.add(key);
+      if (was && was.sig === sig && same(was)) { drawn.kept++; return was.nodes; }
+      const nodes = build();
+      rowCache.set(key, { sig, nodes, ...extra }); drawn.built++; drawn.builtEver++;
+      return nodes;
+    };
     const row = (v, flat) => {
+      // a row with a lot being added under it is always drawn afresh: the line beneath it is the one being typed in
+      if (lotRow.varietyId === v.id) { rowCache.delete('v:' + v.id); seen.add('v:' + v.id); drawn.built++; drawn.builtEver++; return rowOf(v, flat); }
+      const crop = eng.crop(v.cropId);
+      return kept('v:' + v.id, JSON.stringify([plan.key, flat, cropName(crop), crop && eng.cropColor(crop), m.used.get(v.id) || 0, thumbSig(v.id), needSig(m.byV.get(v.id))]), was => was.v === v, () => rowOf(v, flat), { v });
+    };
+    const rowOf = (v, flat) => {
       const r = m.byV.get(v.id), basis = v.catalogMaturityBasis || 'unspecified', crop = eng.crop(v.cropId), site = SL.hostOf(v.url);
       const stage = v.catalogHarvestStage && v.catalogHarvestStage !== 'unspecified' ? v.catalogHarvestStage : '';
       const cell = {
@@ -661,7 +694,7 @@
     let shown = 0;
     if (!grouped) {
       const key = { name: v => v.name, days: v => v.catalogDtm || v.dtm || 9999, tosow: v => -((m.byV.get(v.id) || {}).toSow || 0), first: v => { const r = m.byV.get(v.id); return r && r.first ? +r.first : Infinity; }, supplier: v => supplierShort(v) || '~' }[ui.sort];
-      for (const v of list.slice().sort((a, b) => { const x = key(a), y = key(b); return (typeof x === 'string' ? x.localeCompare(y) : x - y) || String(a.name).localeCompare(String(b.name)); })) { body.append(...row(v, true)); shown++; }
+      for (const v of list.slice().sort((a, b) => { const x = key(a), y = key(b); return (typeof x === 'string' ? x.localeCompare(y) : x - y) || String(a.name).localeCompare(String(b.name)); })) { wanted.push(...row(v, true)); shown++; }
     } else {
       const groups = groupsOf(m, list);
       // crops planted with no variety chosen still need seed
@@ -670,15 +703,15 @@
       for (const g of groups) {
         const closed = ui.closed.has(g.id), color = g.crop ? eng.cropColor(g.crop) : 'var(--line)', plain = (m.byCrop.get(g.id) || []).filter(r => r.toSow > 0 && ui.filter !== 'short' && ui.filter !== 'open');
         const seeds = g.list.reduce((n, v) => { const r = m.byV.get(v.id); return n + (r && r.unit === 'seeds' ? r.toSow : 0); }, 0) + plain.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0);
-        body.append(h('tr.sd-crop' + (closed ? '.closed' : ''), { dataset: { crop: g.id }, onclick: e => { if (e.target.closest('.link')) return; closed ? ui.closed.delete(g.id) : ui.closed.add(g.id); schedule(); } }, h('td', { colSpan: cols }, h('div.as-name',
+        wanted.push(...kept('c:' + g.id, JSON.stringify([cols, closed, color, cropName(g.crop), g.list.length, g.crop ? howPlanted(g.crop) : '', seeds, thumbSig((g.list.find(v => T.has(v.id)) || {}).id), T.forCrop(g.id).length]), () => true, () => [h('tr.sd-crop' + (closed ? '.closed' : ''), { dataset: { crop: g.id }, onclick: e => { if (e.target.closest('.link')) return; closed ? ui.closed.delete(g.id) : ui.closed.add(g.id); schedule(); } }, h('td', { colSpan: cols }, h('div.as-name',
           h('button.as-more', { type: 'button', 'aria-expanded': String(!closed), 'aria-label': `${closed ? 'Show' : 'Hide'} ${cropName(g.crop)}` }, closed ? '▸' : '▾'),
           T.el({ cropId: g.id, color, label: cropName(g.crop), size: 26, cls: 'key' }), h('b', g.crop ? g.crop.name : 'A crop that is no longer in the library'),
           h('small', `${g.list.length} variet${g.list.length === 1 ? 'y' : 'ies'}${g.crop ? ' · ' + howPlanted(g.crop) : ''}${seeds ? ` · ${num(seeds)} seeds to sow` : ''}`),
           h('span.grow'),
           g.crop ? h('button.link', { type: 'button', onclick: () => select({ type: 'crop', id: g.id }) }, 'Edit crop') : null,
-          g.crop ? h('button.link', { type: 'button', onclick: () => openVariety(null, g.id) }, 'Add a variety') : null))));
+          g.crop ? h('button.link', { type: 'button', onclick: () => openVariety(null, g.id) }, 'Add a variety') : null)))]));
         if (closed) continue;
-        for (const v of g.list) { body.append(...row(v, false)); shown++; }
+        for (const v of g.list) { wanted.push(...row(v, false)); shown++; }
         for (const r of plain) {
           shown++;
           const cell = {
@@ -687,11 +720,13 @@
             tosow: () => h('td.sd-num', amount(r)), hand: () => stockCell(r, `${cropName(g.crop)}, no variety`), short: () => h('td.sd-num', r.short > 0 ? num(r.short) : ''),
             first: () => h('td.sd-num', r.first ? day(r.first) : ''), uses: () => h('td.sd-num', r.waiting === r.plantings ? r.plantings : `${r.waiting} of ${r.plantings}`)
           };
-          body.append(h('tr.sd-need.in-group', { dataset: { key: r.key } }, ids.map(id => cell[id]())));
+          wanted.push(...kept('n:' + r.key, JSON.stringify([plan.key, color, cropName(g.crop), T.forCrop(g.id).length, needSig(r)]), () => true, () => [h('tr.sd-need.in-group', { dataset: { key: r.key } }, ids.map(id => cell[id]()))]));
         }
       }
     }
-    if (!shown && !body.children.length) body.append(h('tr', h('td.empty', { colSpan: cols }, q ? `No variety matches “${ui.query}”.` : ui.filter === 'open' ? 'Every variety with supplier days has a starting point.' : ui.filter !== 'all' ? 'No variety fits this filter.' : App.isSample() ? 'The sample plan has no varieties. Load your backup, or add one.' : 'No varieties yet. Add one from a supplier page.')));
+    if (!shown && !wanted.length) wanted.push(h('tr', h('td.empty', { colSpan: cols }, q ? `No variety matches “${ui.query}”.` : ui.filter === 'open' ? 'Every variety with supplier days has a starting point.' : ui.filter !== 'all' ? 'No variety fits this filter.' : App.isSample() ? 'The sample plan has no varieties. Load your backup, or add one.' : 'No varieties yet. Add one from a supplier page.')));
+    settle(body, wanted);
+    for (const key of [...rowCache.keys()]) if (!seen.has(key)) rowCache.delete(key);
     foot(m);
     if (lotRow.focus) {
       const el = $(lotRow.focus), fresh = !typing;
@@ -711,11 +746,13 @@
   }
   function foot(m) {
     const bare = m.live.filter(v => !v.supplier && !v.url && !v.catalogDtm).length, sown = m.need.rows.reduce((n, r) => n + (r.plantings - r.waiting - r.established), 0);
-    add(clear($('sdFoot')),
-      m.live.length && bare === m.live.length ? 'These varieties carry planning figures only. Supplier, product code and page come in when you load your backup here. ' : null,
-      `Seed counts allow for ${m.need.settings.germ}% germination${m.need.settings.buffer ? ` and ${m.need.settings.buffer}% extra plugs on transplants` : ''}. Transplants are sown in whole rows of their tray, and plantings of one variety sown the same day are rounded together, as on the Sowing view. `,
-      sown ? `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted and left out. ` : null,
-      'Type what you have under On hand; click an order when it arrives. “Vendor size” is what covers a shortfall at least cost, in the sizes that variety’s vendor sells. Each variety’s lots and sizes are in its panel. ',
+    const item = (label, ...text) => h('li', h('b', label), h('span', text));
+    add(clear($('sdFoot')), h('ul.sd-foot-list',
+      m.live.length && bare === m.live.length ? item('Figures only', 'These varieties carry planning figures only. Supplier, product code and page come in when you load your backup here.') : null,
+      item('Seed counts', `allow for ${m.need.settings.germ}% germination${m.need.settings.buffer ? ` and ${m.need.settings.buffer}% extra plugs on transplants` : ''}. Transplants are sown in whole rows of their tray; plantings of one variety sown the same day are rounded together, as on the Week view.`),
+      sown ? item('Left out', `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted.`) : null,
+      item('On hand', 'Type what you have; click an order when it arrives. Each variety’s lots and sizes are in its panel.'),
+      item('Vendor size', 'What covers a shortfall at least cost, in the sizes that variety’s vendor sells.')),
       h('button.link', { type: 'button', onclick: () => download(m) }, 'Download seeds required (.csv)'));
   }
   function gallery(m, list, q) {
@@ -1071,5 +1108,5 @@
     App.on('plan', () => { ui.rev++; schedule(); if (order) order.draw(); }); App.on('view', schedule);
     document.addEventListener('keydown', e => { if (e.key === '/' && App.state.view === 'seeds' && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') && !document.querySelector('dialog[open]')) { e.preventDefault(); $('sdSearch').focus(); } });
   }
-  root.LRFSeeds = { init, openImporter, openVariety, openCrop, openSettings, openOrder, order: () => order, service, serviceReady, planningLine, select };
+  root.LRFSeeds = { init, render, openImporter, openVariety, openCrop, openSettings, openOrder, order: () => order, service, serviceReady, planningLine, select, drawn: () => ({ ...drawn }) };
 })(window);
