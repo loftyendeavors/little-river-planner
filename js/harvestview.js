@@ -95,7 +95,11 @@
         h('b', `${App.bedLabel(x.r.b, eng)}${x.r.c.vname ? ' · ' + x.r.c.vname : ''}`),
         h('span', `${how(x)}${x.keep ? `, keeps ${num(x.keep, 1)} wk` : ''}`), h('span', F.amount(x.here, row.unit, row.group)),
         h('button.link', { type: 'button', onclick: () => go(x) }, 'Show on the map')))),
-      h('div.dialog-actions', h('button.btn.primary', { type: 'button', onclick: close }, 'Close')));
+      h('div.dialog-actions',
+        // more of it wanted that week: the series tool, asked from the harvest end, opens on this crop from that day
+        row.group !== 'micro' && root.LRFSeries && eng.crop(row.cropId) && +eng.crop(row.cropId).dtm > 0 && !eng.isCoverCrop(eng.crop(row.cropId))
+          ? h('button.btn', { type: 'button', id: 'hvPlan', title: `Say how much ${row.name.toLowerCase()} is wanted each week from here on, and see the plantings that would give it`, onclick: () => { close(); App.openAhead({ mode: 'series', by: 'harvest', cropId: row.cropId, from: E.d2s(col.start) }); } }, 'Plan to a weekly amount…') : null,
+        h('button.btn.primary', { type: 'button', onclick: close }, 'Close')));
     document.body.append(dialog); dialog.showModal();
   }
 

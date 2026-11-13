@@ -4,6 +4,9 @@
  *                     ground. It opens in the details panel, from a crop, a planting, a bed or an opening, and
  *                     shows what it would add as ghost bars on the timeline before anything is added. The
  *                     plantings go to the gardens ticked, to the beds named, or nowhere yet.
+ *   To a weekly amount  the same tool asked from the other end: so much of the crop wanted each week between two
+ *                     days. It says how far apart the plantings belong and makes each as large as its share takes,
+ *                     less what the plan already gives; the weeks are then judged on the forecast itself.
  *   To place          plantings with no bed. A series asked to wait puts all of its plantings here; one sent to
  *                     gardens or beds leaves here whatever found no ground. A date is never moved to make one
  *                     fit. They count toward nothing (seeds, sowing, benches, the forecast) until placed, so the
@@ -30,7 +33,15 @@
 
   // ───────────────────────────── the series tool ─────────────────────────────
   const P = { cropId: '', varietyId: '', sourceId: '', place: 'gardens', gardenIds: [], bedIds: [], basis: 'planting', from: '', endMode: 'count', count: 4, to: '', every: '', unit: 'whole', amount: 1,
-    skipCovered: false, more: false, room: false, roomAll: false, done: null, back: null };
+    skipCovered: false, more: false, room: false, roomAll: false, done: null, back: null,
+    // to a weekly amount: so much wanted each week, from one day of harvest to another, the plantings so many days apart
+    by: 'spacing', want: '', hFrom: '', hTo: '', hEvery: '', net: true, hFor: '' };
+  const sized = () => P.by === 'harvest';
+  const whereTo = () => ({ place: P.place, gardenIds: P.gardenIds, bedIds: P.bedIds });
+  /** A round figure to open on: the form starts from something sensible, not from a blank. */
+  const round = n => !(n > 0) ? 1 : n >= 20 ? Math.round(n / 5) * 5 : n >= 2 ? Math.round(n) : Math.max(0.1, Math.round(n * 10) / 10);
+  const supplyOf = (model, cropId, unit) => { const rows = model.rows.filter(r => r.cropId === cropId && r.unit === unit); return (a, b) => rows.reduce((n, r) => n + F.sum(r.days, model.index(a), model.index(b)), 0); };
+  const paceNow = eng => S.pace(eng, { ...whereTo(), cropId: P.cropId, varietyId: P.varietyId || undefined, sourceId: P.sourceId || undefined, from: P.hFrom });
   const seriesCrops = eng => eng.crops().filter(c => !c.micro && !eng.isCoverCrop(c) && +c.dtm > 0);
   const forecast = eng => root.LRFHarvestView && eng === App.state.engine ? root.LRFHarvestView.model() : F.build(eng, { year: App.planYear() });
   const everyFor = (crop, source, r) => String(source && r && r.tw && source.towerCycle && source.towerCycle.days ? 7 : Math.max(7, Math.min(28, +((r && r.c.hw) || crop.hw) || 14)));
@@ -49,7 +60,8 @@
     // opened on a bed: the crop last planned there, when it can be had in a series
     if (!ok(crop) && bed) crop = eng.plantingsIn(bed.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r && ok(eng.crop(x.p.cropId))).sort((a, b) => b.r.field - a.r.field).map(x => eng.crop(x.p.cropId))[0];
     if (!ok(crop)) crop = [eng.crop(P.cropId), crops.find(c => used.has(c.id) && c.id === 'radish'), crops.find(c => used.has(c.id)), crops[0]].find(ok);
-    Object.assign(P, { cropId: crop ? crop.id : '', varietyId: source ? source.varietyId || '' : focus.varietyId || '', sourceId: source && ok(crop) ? source.id : '', place: 'gardens', gardenIds: [], bedIds: [], from: '', done: null, unit: 'whole', amount: 1, roomAll: false });
+    Object.assign(P, { cropId: crop ? crop.id : '', varietyId: source ? source.varietyId || '' : focus.varietyId || '', sourceId: source && ok(crop) ? source.id : '', place: 'gardens', gardenIds: [], bedIds: [], from: '', done: null, unit: 'whole', amount: 1, roomAll: false,
+      by: focus.by === 'harvest' || (focus.keepBy && P.by === 'harvest') ? 'harvest' : 'spacing' });
     if (!crop) return;
     const gardens = S.gardensFor(eng, crop), r = source ? eng.calc(source) : null;
     if (source && r) { P.gardenIds = [r.b.gardenId]; P.every = everyFor(crop, source, r); P.from = E.d2s(E.addDays(r.field, +P.every)); }
@@ -66,12 +78,35 @@
     if (bed) { P.gardenIds = gardens.some(g => g.garden.id === bed.gardenId) ? [bed.gardenId] : P.gardenIds; if (S.suits(eng, crop, bed)) { P.place = 'beds'; P.bedIds = [bed.id]; } }
     if (focus.from && E.validDate(E.s2d(focus.from))) P.from = focus.from;
     if (!P.from) P.from = firstDay(eng, crop);
+    if (sized()) seedHarvest(focus.by === 'harvest' ? focus.from : null);
+  }
+  /**
+   * Open the weekly amount on something to look at: where the crop is already picked, its own season and what it gives in an
+   * ordinary week now; where it is not, eight weeks from the first day it could be ready, and what one bed would give.
+   */
+  function seedHarvest(from) {
+    const eng = App.state.engine, crop = eng.crop(P.cropId);
+    if (!crop) return;
+    const model = forecast(eng), ask = { ...whereTo(), cropId: P.cropId, varietyId: P.varietyId || undefined, sourceId: P.sourceId || undefined };
+    const soonest = S.pace(eng, { ...ask, from: firstDay(eng, crop), basis: 'planting' });
+    if (soonest.error) { Object.assign(P, { hFrom: P.from, hTo: E.d2s(E.addDays(E.s2d(P.from), 55)), hEvery: 14, want: 1, hFor: crop.id }); return; }
+    const rows = model.rows.filter(r => r.cropId === crop.id && r.unit === soonest.unit && r.total > 0), s = rows.length ? F.season(model, rows) : null;
+    let a, z, want;
+    if (s) { a = model.date(s.i0); z = model.date(s.i1); want = rows.reduce((n, r) => n + F.sum(r.days, s.i0, s.i1), 0) / Math.max(1, F.periods(model, 'week', s.i0, s.i1).length); }
+    else { a = soonest.first; z = E.addDays(a, 55); want = soonest.per * (soonest.soil ? Math.max(1, soonest.cap) : 1) * 7 / Math.max(7, soonest.every); }
+    const asked = from ? E.s2d(from) : null;
+    if (E.validDate(asked) && asked.getFullYear() === App.planYear()) { a = asked; if (z < E.addDays(a, 13)) z = E.addDays(a, 55); }
+    const last = new Date(App.planYear(), 11, 31);
+    if (z > last) z = last;
+    Object.assign(P, { hFrom: E.d2s(a), hTo: E.d2s(z), want: round(want), hFor: crop.id });
+    const here = paceNow(eng);
+    P.hEvery = here.error ? soonest.every : here.every;
   }
   /** Another crop in the same form: where it goes is kept as far as that crop can go there. */
   function changeCrop(id) {
     const eng = App.state.engine, crop = eng.crop(id), keep = { place: P.place, bedIds: P.bedIds, gardenIds: P.gardenIds, from: P.from };
     if (!crop) return;
-    seed({ cropId: id });
+    seed({ cropId: id, keepBy: true });
     const gardens = new Set(S.gardensFor(eng, crop).map(g => g.garden.id)), beds = keep.bedIds.filter(b => S.suits(eng, crop, eng.bedOf(b))), mine = keep.gardenIds.filter(g => gardens.has(g));
     if (keep.place === 'hold') P.place = 'hold';
     else if (keep.place === 'beds' && beds.length) { P.place = 'beds'; P.bedIds = beds; }
@@ -80,6 +115,11 @@
   }
   function input(model) {
     const rows = model ? model.rows.filter(r => r.cropId === P.cropId) : [];
+    if (sized()) {
+      const eng = App.state.engine, pc = paceNow(eng);
+      return { cropId: P.cropId, varietyId: P.varietyId || undefined, sourceId: P.sourceId || undefined, ...whereTo(), unit: 'yield', want: P.want, from: P.hFrom, to: P.hTo, every: P.hEvery, net: P.net,
+        supply: model && !pc.error ? supplyOf(model, P.cropId, pc.unit) : undefined };
+    }
     return { cropId: P.cropId, varietyId: P.varietyId || undefined, sourceId: P.sourceId || undefined, place: P.place, gardenIds: P.gardenIds, bedIds: P.bedIds, basis: P.basis, from: P.from, every: P.every, unit: P.unit, amount: P.amount,
       ...(P.endMode === 'count' ? { count: P.count } : { to: P.to }), skipCovered: P.skipCovered, covered: model ? d => { const i = model.index(d); return i >= 0 && i < model.days && rows.some(r => r.days[i] > 1e-9); } : undefined };
   }
@@ -94,8 +134,8 @@
     const copied = P.sourceId ? eng.planting(P.sourceId) : null;
     if (P.sourceId && !(copied && copied.cropId === P.cropId)) P.sourceId = '';
     P.bedIds = P.bedIds.filter(id => eng.bedOf(id));
-    const key = JSON.stringify([P.cropId, P.varietyId, P.sourceId, P.place, P.gardenIds, P.bedIds, P.basis, P.from, P.endMode, P.count, P.to, P.every, P.unit, P.amount, P.skipCovered]);
-    if (memo.eng !== eng || memo.key !== key) memo = { eng, key, result: S.series(eng, input(P.skipCovered ? forecast(eng) : null)) };
+    const key = JSON.stringify([P.cropId, P.varietyId, P.sourceId, P.place, P.gardenIds, P.bedIds, P.basis, P.from, P.endMode, P.count, P.to, P.every, P.unit, P.amount, P.skipCovered, P.by, P.want, P.hFrom, P.hTo, P.hEvery, P.net]);
+    if (memo.eng !== eng || memo.key !== key) memo = { eng, key, result: S.series(eng, input(P.skipCovered || (sized() && P.net) ? forecast(eng) : null)) };
     return memo.result;
   }
   /** What the series tool would add, for the timeline and the map to draw: null unless the tool is open with something to show. */
@@ -132,6 +172,35 @@
       h('div.ah-strip-row', h('span', 'Now'), cells(now, null)),
       h('div.ah-strip-row', h('span', 'Then'), cells(then, now)),
       h('p.help', `Weeks with a harvest, ${day(cols[0].start)} to ${day(cols[cols.length - 1].start)}. ${gapsThen.length ? `${plural(gapsThen.length, 'gap')} left${gapsNow.length ? ` (${num(gapsNow.length)} now)` : ''}.` : now.length && gapsNow.length ? `Closes ${plural(gapsNow.length, 'gap')}.` : 'No week without one between the first and the last.'}`));
+  }
+
+  /**
+   * The weeks asked for, against the amount wanted: now, and with the series. A week is full when the forecast gives what was
+   * asked of it (a week the dates only partly cover is asked for its share), part when it gives something, empty when nothing.
+   */
+  function meet(model, after, cropId, unit, want, from, to) {
+    const i0 = Math.max(0, model.index(from)), i1 = Math.min(model.days - 1, model.index(to));
+    if (!(i1 >= i0)) return null;
+    const now = model.rows.filter(r => r.cropId === cropId && r.unit === unit), then = after.rows.filter(r => r.cropId === cropId && r.unit === unit), cols = F.periods(model, 'week', i0, i1);
+    const group = (then[0] || now[0] || {}).group || F.groupOf(App.state.engine.crop(cropId), unit, (App.state.plan.lrfNext || {}).groups), qty = (rows, c) => rows.reduce((n, r) => n + F.sum(r.days, Math.max(c.i0, i0), Math.min(c.i1, i1)), 0);
+    const weeks = cols.map(c => { const days = Math.min(c.i1, i1) - Math.max(c.i0, i0) + 1, asked = want * days / 7; return { c, asked, was: qty(now, c), will: qty(then, c) }; });
+    const state = (q, asked) => q >= asked * (1 - S.NEAR) ? 'full' : q > 1e-9 ? 'part' : 'none', count = key => weeks.filter(w => state(w[key], w.asked) === 'full').length;
+    const cells = key => h('div.ah-cells', weeks.map(w => { const st = state(w[key], w.asked); return h('i' + (st === 'full' ? '.on' : st === 'part' ? '.part' : ''), { dataset: { week: w.c.key, state: st }, title: `Week of ${day(w.c.start)}: ${w[key] > 1e-9 ? F.amount(w[key], unit, group) : 'nothing'}, of ${F.amount(w.asked, unit, group)} wanted` }); }));
+    const short = weeks.filter(w => state(w.will, w.asked) !== 'full'), word = F.unitWord(want, unit, group);
+    return { weeks, full: { now: count('was'), then: count('will') }, short, el: h('div.ah-strip.sr-strip.sr-meet', { id: 'srStrip', role: 'img', 'aria-label': `Weeks giving ${num(want, 1)}${word ? ' ' + word : ''} or more: ${count('was')} now, ${count('will')} with this series, of ${weeks.length}` },
+      h('div.ah-strip-row', h('span', 'Now'), cells('was')),
+      h('div.ah-strip-row', h('span', 'Then'), cells('will')),
+      h('p.help', { id: 'srMeet' }, `Weeks giving ${num(want, 1)}${word ? ' ' + word : ''} or more, ${day(cols[0].start)} to ${day(cols[cols.length - 1].start)}: ${num(count('was'))} now, ${num(count('will'))} with these, of ${num(weeks.length)}. Solid is a full week, pale a week with less.`),
+      short.length ? h('p.help', { id: 'srShort' }, `Still short: ${short.slice(0, 3).map(w => `week of ${day(w.c.start)} (${w.will > 1e-9 ? F.amount(w.will, unit, group) : 'nothing'})`).join(', ')}${short.length > 3 ? `, and ${num(short.length - 3)} more` : ''}.`) : null) };
+  }
+  /** What the sizes rest on, in a line: the yield, whose figure it is, and how long a planting is picked. */
+  function restsLine(result, crop, eng) {
+    const z = result.sized, r = z.rests, group = F.groupOf(crop, z.unit, (App.state.plan.lrfNext || {}).groups), w = n => F.unitWord(n, z.unit, group) || 'each';
+    const of = r.basis === 'ft' ? 'a foot of bed' : r.basis === 'container' ? 'a container' : r.basis === 'tray' ? 'a tray' : 'a plant';
+    const whose = { own: 'the yield of the planting copied', variety: 'this variety’s line on your list', crop: 'the crop’s line on your list', default: 'the crop’s own record: no line of your list says it' }[r.by] || 'the crop’s own record';
+    const gives = r.pattern === 'weekly' && r.perWeek != null ? `${num(r.perWeek, 2)} ${w(r.perWeek)} a week from ${of}` : `${num(r.each, 2)} ${w(r.each)} ${of}`;
+    const comes = r.pattern === 'once' ? (r.keep > 0 ? `all picked the day it is ready, and kept ${num(r.keep, 1)} week${r.keep === 1 ? '' : 's'}` : 'all picked the day it is ready') : `picked over ${num(r.days)} days${r.days < r.meant ? ` (of ${num(r.meant)}: the season cuts it short)` : ''}${r.keep > 0 ? `, kept ${num(r.keep, 1)} week${r.keep === 1 ? '' : 's'}` : ''}`;
+    return h('p.help.sr-rests', { id: 'srRests', dataset: { by: r.by } }, h('b', 'Sized at '), `${gives}, ${num(Math.round(r.mk * 100))} % of it sold: ${num(r.per, 2)} to sell from ${r.soil ? 'a foot of bed' : `a ${S.kindWord[eng.spaceKind(r.bed)] || 'space'}`} in ${App.bedLabel(r.bed, eng)}. A planting is ${comes}. That is ${whose}.`);
   }
 
   /** "Where on the farm could this crop go, and when?": openings its whole cycle fits, and beds with nothing planned. */
@@ -180,14 +249,27 @@
         h('p.help', 'Or click beds on the map, or rows on the timeline. Each planting takes the first of these that is free, in this order.'));
     } else whereBody = h('p.help.sr-holdnote', { id: 'srHoldNote' }, 'None gets a bed now. Each waits under “To place” on its own date, to be dragged onto a bed, and counts toward nothing until then: not seeds, sowing, benches or the forecast.');
     const unitWord = kind === 'tower' ? 'whole towers' : kind === 'containers' ? 'whole groups' : 'whole beds';
+    const pc = sized() ? paceNow(eng) : null;
     const modelSel = models.length ? h('select', { id: 'srModel', onchange: e => set({ sourceId: e.target.value }) }, h('option', { value: '' }, 'The crop’s own figures'),
       models.map(m => h('option', { value: m.p.id, selected: m.p.id === P.sourceId }, `Like ${App.bedLabel(m.r.b)}, ${day(m.r.field)}${m.r.c.vname ? ' · ' + m.r.c.vname : ''} (${num(E.dayDiff(m.r.first, m.r.field))} days, picked ${num(m.r.harvestDays)})`))) : null;
 
     add(host,
       h('header.insp-head.planting', { style: { '--crop': color } }, T.el({ varietyId: P.varietyId || undefined, cropId: crop.id, color, label: crop.name, size: 64, cls: 'head' }),
-        h('p.eyebrow', 'A series'), h('h2', { id: 'srTitle' }, `${crop.name} every ${num(+P.every || 0)} days`), x),
+        h('p.eyebrow', 'A series'), h('h2', { id: 'srTitle' }, sized() ? `${crop.name}: ${num(+P.want || 0, 1)}${pc && !pc.error && F.unitWord(+P.want || 0, pc.unit, F.groupOf(crop, pc.unit, (App.state.plan.lrfNext || {}).groups)) ? ' ' + F.unitWord(+P.want || 0, pc.unit, F.groupOf(crop, pc.unit, (App.state.plan.lrfNext || {}).groups)) : ''} a week` : `${crop.name} every ${num(+P.every || 0)} days`), x),
       h('section.insp-section.form', { id: 'srForm' },
         field('Crop', cropSel), field('Variety', varSel),
+        h('div.field', h('span', 'Plan it'), h('div.seg.sr-by', { role: 'group', 'aria-label': 'How the series is worked out', id: 'srBy' },
+          [['spacing', 'Every so many days', 'You say how far apart and how large; it says what that gives'], ['harvest', 'To a weekly amount', 'You say how much is wanted each week; it says how far apart and how large']].map(([id, name, title]) =>
+            h('button', { type: 'button', dataset: { by: id }, 'aria-pressed': String(P.by === id), title, onclick: () => { if (P.by === id) return; P.by = id; if (id === 'harvest' && P.hFor !== P.cropId) seedHarvest(); set({}); } }, name)))),
+        ...(sized() ? [
+          h('div.field-pair', field('Wanted each week', h('input', { type: 'number', id: 'srWant', min: 0, step: 'any', value: P.want, onchange: e => set({ want: e.target.value }) })),
+            field('Of', h('input', { type: 'text', id: 'srWantUnit', disabled: true, value: pc && !pc.error ? F.unitWord(2, pc.unit, F.groupOf(crop, pc.unit, (App.state.plan.lrfNext || {}).groups)) || 'each' : '—' }))),
+          h('div.field-pair', field('Picked from', h('input', { type: 'date', id: 'srHFrom', value: P.hFrom, onchange: e => set({ hFrom: e.target.value }) })),
+            field('To', h('input', { type: 'date', id: 'srHTo', value: P.hTo, onchange: e => set({ hTo: e.target.value }) }))),
+          field('A planting every (days)', h('input', { type: 'number', id: 'srHEvery', min: 1, max: 366, step: 1, value: P.hEvery, onchange: e => set({ hEvery: e.target.value }) }),
+            pc && !pc.error ? `${pc.pattern === 'once' ? (pc.keep > 0 ? `One planting is picked in a day and keeps ${num(pc.keep, 1)} wk` : 'One planting is all picked the day it is ready') : `One planting is picked for ${num(pc.days)} days`}${+P.hEvery !== pc.every ? `: every ${num(pc.every)} would follow it` : ''}${+P.hEvery < pc.every && pc.pattern !== 'once' ? '. Closer than that they overlap, and the first weeks come up short.' : +P.hEvery > pc.every ? '. Further apart leaves days with nothing.' : '.'}` : null),
+          h('label.ah-check', h('input', { type: 'checkbox', id: 'srNet', checked: P.net, onchange: e => set({ net: e.target.checked }) }), h('span', `Take off what the plan already gives: only what is missing is planted`)),
+        ] : [
         h('div.field-pair', field(P.basis === 'harvest' ? 'First harvest on' : 'First one goes in', h('input', { type: 'date', id: 'srFrom', value: P.from, onchange: e => set({ from: e.target.value }) })),
           field('Then every (days)', h('input', { type: 'number', id: 'srEvery', min: 1, max: 366, step: 1, value: P.every, onchange: e => set({ every: e.target.value }) }))),
         h('div.field-pair', field('How many', h('select', { id: 'srEnd', onchange: e => set({ endMode: e.target.value, to: endDefault() }) }, h('option', { value: 'count', selected: P.endMode === 'count' }, 'This many'), h('option', { value: 'to', selected: P.endMode === 'to' }, 'Until a date'))),
@@ -195,15 +277,16 @@
             : field('Last one by', h('input', { type: 'date', id: 'srTo', value: P.to, onchange: e => set({ to: e.target.value }) }))),
         h('div.field-pair', field('Each one takes', h('input', { type: 'number', id: 'srAmount', min: 1, max: 2000, step: 1, value: P.amount, onchange: e => set({ amount: e.target.value }) })),
           field('Of', kind === 'bed' ? h('select', { id: 'srUnit', onchange: e => set({ unit: e.target.value, amount: e.target.value === 'ft' ? 30 : 1 }) }, h('option', { value: 'whole', selected: P.unit === 'whole' }, 'whole beds'), h('option', { value: 'ft', selected: P.unit === 'ft' }, 'feet of bed')) : h('input', { type: 'text', value: unitWord, disabled: true, id: 'srUnitWord' }))),
+        ]),
         h('div.field', h('span', 'Where they go'), where), whereBody,
         h('button.linkish.sr-moretoggle', { type: 'button', id: 'srMore', 'aria-expanded': String(P.more), onclick: () => { P.more = !P.more; redraw(); } }, P.more ? 'Fewer settings' : 'More settings'),
         P.more ? h('div.sr-more', { id: 'srMoreBody' },
-          modelSel ? field('Days and settings', modelSel) : null,
-          h('div.field', h('span', 'Dates are for'), h('div.seg', { role: 'group' },
+          modelSel ? field('Days and settings', modelSel) : sized() ? h('p.help', 'Nothing more to set: the days and the yield are the crop’s own.') : null,
+          sized() ? null : h('div.field', h('span', 'Dates are for'), h('div.seg', { role: 'group' },
             h('button', { type: 'button', 'aria-pressed': String(P.basis === 'planting'), id: 'srBasisPlant', onclick: () => set({ basis: 'planting' }) }, 'Going in'),
             h('button', { type: 'button', 'aria-pressed': String(P.basis === 'harvest'), id: 'srBasisHarvest', onclick: () => set({ basis: 'harvest' }) }, 'First harvest')),
             h('small', 'Either way the plantings are the same number of days apart; this only says what the first date means.')),
-          h('label.ah-check', h('input', { type: 'checkbox', id: 'srSkip', checked: P.skipCovered, onchange: e => set({ skipCovered: e.target.checked }) }), h('span', `Leave one out when ${lower(crop)} is already being picked on the day it would first be ready`))) : null));
+          sized() ? null : h('label.ah-check', h('input', { type: 'checkbox', id: 'srSkip', checked: P.skipCovered, onchange: e => set({ skipCovered: e.target.checked }) }), h('span', `Leave one out when ${lower(crop)} is already being picked on the day it would first be ready`))) : null));
 
     // what it comes to
     const out = h('section.insp-section.sr-out', { id: 'srOut' }, h('h3', 'What it comes to'));
@@ -212,26 +295,35 @@
       add(out, h('p.sr-sum', { id: 'srDone' }, [n ? `Added ${plural(n, 'planting')}.` : '', m ? `${plural(m, 'planting')} ${m === 1 ? 'waits' : 'wait'} under “To place”: not counted until ${m === 1 ? 'it is' : 'they are'} on a bed.` : ''].filter(Boolean).join(' ')),
         h('div.sr-actions', h('button.btn', { type: 'button', id: 'srUndo', onclick: () => { App.undo(); P.done = null; refresh(); } }, 'Undo'), h('button.btn.primary', { type: 'button', id: 'srAgain', onclick: () => { P.done = null; refresh(); } }, 'Plan another'),
           App.state.view !== 'timeline' ? h('button.linkish', { type: 'button', id: 'srSee', onclick: () => App.setView('timeline') }, 'See them on the timeline') : null));
-    } else if (!result || result.error) add(out, h('p.sr-sum.bad', { id: 'srError' }, (result && result.error) || 'Choose a crop.'));
+    } else if (!result || result.error) add(out, h('p.sr-sum.bad', { id: 'srError', dataset: result && result.unchecked ? { unchecked: '1' } : {} }, (result && result.error) || 'Choose a crop.'),
+      result && result.unchecked && root.LRFAssume ? h('div.sr-actions', h('button.btn', { type: 'button', id: 'srToYield', onclick: () => { App.setView('assume'); root.LRFAssume.setMode('harvest'); } }, 'Open Yield and price')) : null);
     else {
       const n = result.plantings.length, m = result.held.length, total = result.waves.length, group = F.groupOf(crop, result.unit, (App.state.plan.lrfNext || {}).groups);
-      const said = [n ? `${plural(n, 'planting')} onto ${P.place === 'beds' ? 'the beds named' : 'beds'}` : '', m ? `${plural(m, 'planting')} to place, with no bed yet` : ''].filter(Boolean).join('; ');
-      add(out, h('p.sr-sum', { id: 'srSum' }, n || m ? `${said}.${n ? ` Harvest ${span(result.firstHarvest, result.lastHarvest)}${result.units > 0 ? `, about ${F.amount(result.units, result.unit, group)}` : ''}.` : ''}${result.skipped ? ` ${num(result.skipped)} left out: already being picked then.` : ''}`
-        : result.skipped === total ? `Nothing to add: ${lower(crop)} is already being picked on every one of those days.` : 'None of these can be placed, and nothing is held to place later.'));
+      const z = result.sized || null, amt = q => F.amount(q, result.unit, group);
+      const said = [n ? `${plural(n, 'planting')} onto ${P.place === 'beds' ? 'the beds named' : 'beds'}${z && z.feet > 0 ? `, ${num(Math.round(z.feet))} ft of bed in all` : ''}` : '', m ? `${plural(m, 'planting')} to place, with no bed yet${z && z.heldFeet > 0 ? ` (${num(Math.round(z.heldFeet))} ft)` : ''}` : ''].filter(Boolean).join('; ');
+      add(out, h('p.sr-sum', { id: 'srSum' }, n || m ? `${said}.${n ? ` Harvest ${span(result.firstHarvest, result.lastHarvest)}${result.units > 0 ? `, about ${F.amount(result.units, result.unit, group)}` : ''}.` : ''}${result.skipped ? (z ? ` ${num(result.skipped)} left out: the plan already gives enough then.` : ` ${num(result.skipped)} left out: already being picked then.`) : ''}`
+        : result.skipped === total ? (z ? `Nothing to add: the plan already gives ${amt(z.want)} a week of ${lower(crop)} in every stretch asked for.` : `Nothing to add: ${lower(crop)} is already being picked on every one of those days.`) : 'None of these can be placed, and nothing is held to place later.'));
+      if (z) add(out, restsLine(result, crop, eng));
       const rows = result.waves.map(w => {
         const head = h('b', day(w.target));
+        if (z && w.skipped) return h('li.skip', { dataset: { wave: w.k + 1, state: 'covered' } }, head, h('span', `The plan already gives ${amt(w.have)} of the ${amt(w.asked)} wanted to ${day(w.window.to)}`));
         if (w.skipped) return h('li.skip', head, h('span', `Left out: already being picked ${day(w.firstHarvest)}`));
         const first = w.placed[0], placedText = w.placed.map(v => `${spaceName(v.bed, eng)}${v.r.tw || v.r.physicalLength >= v.r.cap - 1e-6 ? '' : ` (${num(v.r.physicalLength, 1)} ft)`}`).join('; ');
         const why = w.why.map(v => `${v.why}${v.spaces > 1 ? ` (${num(v.spaces)} spaces)` : ''}`).join(' · ');
-        const heldText = w.held.length ? `${w.placed.length ? `${w.held.length === 1 && w.held[0].ft ? `${num(w.held[0].ft, 1)} ft more` : plural(w.held.length, 'more')} to place` : w.held.length === 1 ? (w.held[0].ft ? `${num(w.held[0].ft, 1)} ft, to place` : 'To place') : `${num(w.held.length)} to place`}` : w.short > 1e-6 ? 'No room, and not held' : '';
+        const heldFt = w.held.reduce((sum, x) => sum + (+x.ft || 0), 0);
+        const heldText = w.unsized ? 'No room, and nothing to size what waits by' : z && heldFt > 0 ? `${num(heldFt)} ft ${w.placed.length ? 'more ' : ''}to place${w.held.length > 1 ? `, as ${num(w.held.length)} plantings` : ''}` : w.held.length ? `${w.placed.length ? `${w.held.length === 1 && w.held[0].ft ? `${num(w.held[0].ft, 1)} ft more` : plural(w.held.length, 'more')} to place` : w.held.length === 1 ? (w.held[0].ft ? `${num(w.held[0].ft, 1)} ft, to place` : 'To place') : `${num(w.held.length)} to place`}` : w.short > 1e-6 ? 'No room, and not held' : '';
         return h('li' + (w.held.length || w.short > 1e-6 ? '.wait' : ''), { dataset: { wave: w.k + 1 } }, head,
           h('span', placedText || null, placedText && heldText ? h('br') : null, heldText ? h('em', heldText) : null, heldText && why && P.place !== 'hold' ? h('small', why) : null),
+          z ? h('small.sr-asked', `wanted ${num(F.shown(w.asked), 1)}${w.have > 1e-9 ? ` · the plan has ${num(F.shown(w.have), 1)}` : ''}${w.placed.length ? ` · ${w.placed.length === 1 ? 'this gives' : 'these give'} ${amt(w.got)}${w.past ? `, some of it after ${day(w.window.to)}` : ''}` : ` ${F.unitWord(F.shown(w.asked), result.unit, group)}`}`) : null,
           first ? h('small.sr-when', `${first.r.sow ? `sow ${day(first.r.sow)} · ` : ''}pick ${day(first.r.first)}${E.d2s(first.r.field) !== E.d2s(w.target) ? ` · in ${day(first.r.field)}` : ''}`) : w.held[0] && w.held[0].date !== E.d2s(w.target) ? h('small.sr-when', `in ${day(E.s2d(w.held[0].date))}`) : null);
       });
-      add(out, h('ol.sr-waves', { id: 'srWaves' }, rows));
-      if (n) {
-        const model = forecast(eng), plan2 = { ...App.state.plan, plantings: [...App.state.plan.plantings, ...result.plantings] }, eng2 = E.create(plan2, Lib), strip = coverage(model, F.build(eng2, { year: App.planYear() }), crop.id);
+      add(out, h('ol.sr-waves' + (z ? '.sr-sized' : ''), { id: 'srWaves' }, rows));
+      if (n || z) {
+        // the weeks are judged on the forecast itself, with these plantings in it: not on the arithmetic that sized them
+        const model = forecast(eng), eng2 = n ? E.create({ ...App.state.plan, plantings: [...App.state.plan.plantings, ...result.plantings] }, Lib) : eng, after = n ? F.build(eng2, { year: App.planYear() }) : model;
+        const strip = z ? (meet(model, after, crop.id, z.unit, z.want, result.waves[0].target, result.waves[result.waves.length - 1].window.to) || {}).el : coverage(model, after, crop.id);
         if (strip) add(out, strip);
+        if (z) add(out, h('p.help', { id: 'srSame' }, 'Days to harvest are the same in every month here. In the ground, spring plantings bunch up and fall ones stretch out.'));
         if (result.plantings.some(p => { const r = eng2.calc(p); return r && r.sow; })) {
           const was = S.benchRoom(eng), will = S.benchRoom(eng2);
           if (will.cap && will.least) add(out, h('p.help', { id: 'srBench' }, `Heated benches with these seedlings: ${num(Math.floor(will.least.free))} of ${num(will.cap)} tray spaces free in the tightest week (${day(will.least.start)})${was.least ? `; ${num(Math.floor(was.least.free))} now` : ''}.`));
@@ -242,7 +334,7 @@
       add(out, h('div.sr-actions',
         h('button.btn.primary', { type: 'button', id: 'srAdd', disabled: !(n || m), onclick: () => {
           P.done = { n, m };
-          if (!App.addSeries(result, `Add a series of ${lower(crop)}: ${[n ? plural(n, 'planting') : '', m ? `${num(m)} to place` : ''].filter(Boolean).join(', ')}`)) { P.done = null; return; }
+          if (!App.addSeries(result, `Add ${z ? `${lower(crop)} to ${num(z.want, 1)} a week` : `a series of ${lower(crop)}`}: ${[n ? plural(n, 'planting') : '', m ? `${num(m)} to place` : ''].filter(Boolean).join(', ')}`)) { P.done = null; return; }
           toast([n ? `Added ${plural(n, 'planting')} of ${lower(crop)}` : '', m ? `${num(m)} ${n ? 'more ' : ''}${lower(crop)} to place` : ''].filter(Boolean).join(' · '), { label: 'Undo', run: () => { App.undo(); P.done = null; refresh(); } });
           refresh();
         } }, label),

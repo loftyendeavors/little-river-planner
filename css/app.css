@@ -1249,6 +1249,14 @@ body[data-view="sow"] .wait-badge .wb-more, body[data-view="harvest"] .wait-badg
 .sr-strip .ah-cells { gap: 1px; }
 .sr-strip .ah-cells i { height: 13px; border-radius: 2px; }
 .sr-none { padding: 0; }
+/* the series tool asked from the harvest end: so much each week */
+.sr-by button { font-size: 12.5px; padding: 6px 4px; }
+.ah-cells i.part { background: color-mix(in srgb, var(--hv-seq) 32%, var(--raised)); }
+.sr-waves li .sr-asked { grid-column: 2; }
+.sr-waves.sr-sized li { grid-template-columns: 50px minmax(0, 1fr); }
+.sr-rests { padding: 8px 10px; border-radius: var(--radius); background: var(--raised); border: 1px solid var(--line-soft); color: var(--ink-2); }
+.sr-rests b { color: var(--ink); font-weight: 600; }
+.sr-rests[data-by="default"] { border-color: color-mix(in srgb, var(--flag) 60%, var(--line)); background: var(--flag-soft); }
 .wt-note { margin: 0; padding: 8px 14px; background: var(--flag-soft); border-bottom: 1px solid var(--line-soft); font-size: 12.5px; color: var(--ink); }
 .wt-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 /* how a bed is shared */
