@@ -161,8 +161,24 @@
     const cratesOnBenches = legacy || !!(S.lrfNext && S.lrfNext.crates === 'bench');
     const benches = () => Array.isArray(S.nursery && S.nursery.spaces) ? S.nursery.spaces.filter(x => x && typeof x === 'object') : [];
     const benchPacking = () => clamp(positive(S.nursery && S.nursery.packing, 85) / 100, 0.3, 1);
-    const benchCap = sp => Math.floor(nonNegative(sp.w) * nonNegative(sp.l) * benchPacking() / TRAY_FT2);
-    const heatedTraySpaces = () => benches().filter(sp => sp.active !== false && sp.kind !== 'outside').reduce((n, sp) => n + benchCap(sp), 0);
+    // Three kinds of bench: under heat, under cover without heat, and outside, where seedlings harden off.
+    // (v7 knows two: whatever is not outside is under cover. Its mode still reads them that way.)
+    const benchKind = sp => sp.kind === 'outside' ? 'outside' : !legacy && sp.kind === 'unheated' ? 'unheated' : 'heated';
+    const benchEstimate = sp => Math.floor(nonNegative(sp.w) * nonNegative(sp.l) * benchPacking() / TRAY_FT2);
+    /** The grower's own count of what a bench holds, where he has given one. */
+    const benchHolds = sp => !legacy && sp.holds != null && sp.holds !== '' && Number.isFinite(+sp.holds) && +sp.holds >= 0 ? Math.floor(+sp.holds) : null;
+    /** What a bench holds, in tray spaces: his own count, else its area × packing ÷ one tray. */
+    const benchCap = sp => { const mine = benchHolds(sp); return mine == null ? benchEstimate(sp) : mine; };
+    /** A bench outside can be put away for part of the year: v7's "available from" and "through", as a month and a day. */
+    function benchOpen(sp, date) {
+      if (sp.active === false) return false;
+      if (benchKind(sp) !== 'outside') return true;
+      const part = v => validMonthDay(v) ? v : v && validDate(s2d(v)) ? String(v).slice(5) : '', md = d2s(date).slice(5), from = part(sp.from), to = part(sp.to);
+      return from && to && from > to ? (md >= from || md <= to) : (!from || md >= from) && (!to || md <= to);
+    }
+    const heatedTraySpaces = () => benches().filter(sp => sp.active !== false && benchKind(sp) === 'heated').reduce((n, sp) => n + benchCap(sp), 0);
+    /** Tray spaces on each kind of bench on a day. */
+    const benchRoom = date => { const room = { heated: 0, unheated: 0, outside: 0 }; for (const sp of benches()) if (benchOpen(sp, date)) room[benchKind(sp)] += benchCap(sp); return room; };
     /** The stand-in space v7 files live trays under: it is every heated bench at once, and has no place of its own. */
     const isPool = b => !!b && b.liveTrayPool === true && isRack(b);
     /** Capacity in the space's own unit: tower sites, trays, containers or bed-feet. */
@@ -732,6 +748,16 @@
     }
     const outDate = (p, r) => { const actual = doneOf(p, 'move'); return actual ? s2d(actual) : plannedOutDate(p, r); };
 
+    /**
+     * How a live-tray crop is sown, as the grower has said: { how: 'cells', cells, perCell, seeds (a tray), set } or
+     * { how: 'open', grams (a tray), set }. Nothing is assumed: a crop said to be sown in cells counts no seed until both figures are there.
+     */
+    function liveSow(c) {
+      const x = !legacy && c && c.micro && c.liveSow && typeof c.liveSow === 'object' ? c.liveSow : null;
+      if (x && x.how === 'cells') { const cells = Math.round(positive(x.cells, 0)), perCell = positive(x.perCell, 0), set = cells > 0 && perCell > 0; return { how: 'cells', cells, perCell, set, seeds: set ? cells * perCell : 0 }; }
+      const grams = c && finite(c.seedG) > 0 ? +c.seedG : 0;
+      return { how: 'open', grams, set: grams > 0 };
+    }
     function calcRaw(p) {
       const b = plantingBed(p), c = effective(p);
       if (!b || !c || !p.date || !validDate(s2d(p.date))) return null;
@@ -744,7 +770,10 @@
       let rows = 1, plants, seeds, trays = 0, cells = 0, gh = null, seedG = 0, bulbs = 0;
       const plugNeeds = () => { cells = Math.ceil(plants * buffer); seeds = Math.ceil(cells * positive(c.spc, 1) / germ); trays = Math.ceil(cells / positive(c.tray, 72)); };
 
-      if (rack) { plants = len; seedG = len * (c.seedG || 0); seeds = 0; }
+      // A live tray is sown in cells (so many seeds a cell: its seed is counted in seeds) or broadcast in an open tray (grams a tray).
+      const live = rack && c.micro ? liveSow(c) : null;
+      if (rack && live && live.how === 'cells') { plants = len; seeds = Math.ceil(len * live.seeds - 1e-9); seedG = 0; }
+      else if (rack) { plants = len; seedG = len * (c.seedG || 0); seeds = 0; }
       else if (ct) {
         plants = len * positive(p.perC, positive(ctOf(b).plants, 1));
         if (c.method === 'TP') { plugNeeds(); gh = c.gh > 0 ? addDays(planned, -7 * c.gh) : null; } else seeds = Math.ceil(plants / germ);
@@ -1066,15 +1095,27 @@
     }
     /** Heated bench room on one day, in tray spaces: what is there by kind, the total, and what the benches hold. */
     function benchDay(date) {
-      const row = { date: new Date(date), cap: heatedTraySpaces(), live: 0, crate: 0, tray: 0, pot: 0, rockwool: 0, total: 0, floorCrates: 0, items: [] };
+      const row = { date: new Date(date), cap: heatedTraySpaces(), live: 0, crate: 0, tray: 0, pot: 0, rockwool: 0, total: 0, harden: 0, floorCrates: 0, items: [] };
+      const hard = { live: 0, crate: 0, tray: 0, pot: 0, rockwool: 0 };
       for (const it of benchItems()) {
         if (date < it.from || date >= it.to) continue;
         if (it.floor) { row.floorCrates += it.n; continue; }   // under cover, but standing on the floor: no bench room
         const u = it.kind === 'prop' ? propOf(it.r, date) : { kind: it.kind, n: it.n, eq: it.eq };
         if (!u) continue;
-        row[u.kind] += u.eq; row.total += u.eq; row.items.push({ p: it.p, r: it.r, kind: u.kind, n: u.n, eq: u.eq });
+        // from the day hardening off starts (planned, or recorded) a seedling can stand outside
+        const hs = it.kind === 'prop' ? hardenStart(it.r) : null, hardening = !!hs && date >= hs;
+        row[u.kind] += u.eq; row.total += u.eq; row.items.push({ p: it.p, r: it.r, kind: u.kind, n: u.n, eq: u.eq, harden: hardening });
+        if (hardening) { hard[u.kind] += u.eq; row.harden += u.eq; }
       }
-      row.over = Math.max(0, row.total - row.cap);
+      // Where it all stands. What hardens off goes outside first, then onto unheated benches, and what fits on neither
+      // stays under heat (v7's rule, with the unheated benches between). Everything else is under heat. A load, never a rule.
+      const room = benchRoom(date), out = Math.min(row.harden, room.outside), cool = Math.min(row.harden - out, room.unheated), part = n => row.harden > 0 ? n / row.harden : 0;
+      const pool = (cap, used, of) => { const p = { cap, used, over: Math.max(0, used - cap) }; for (const k of Object.keys(hard)) p[k] = of(k); return p; };
+      row.pools = {
+        heated: pool(legacy ? row.cap : room.heated, row.total - out - cool, k => row[k] - hard[k] * part(out + cool)),
+        unheated: pool(room.unheated, cool, k => hard[k] * part(cool)),
+        outside: pool(room.outside, out, k => hard[k] * part(out)) };
+      row.over = legacy ? Math.max(0, row.total - row.cap) : row.pools.heated.over;
       return row;
     }
     /**
@@ -1168,7 +1209,8 @@
         open: { yield: !micro && (total0 == null || (total0 === 1 && unit0 === 'each')), price: !(price0 > 0) } };
     }
 
-    const benchList = () => benches().map(sp => ({ id: sp.id, name: sp.name || 'Bench', area: (((S.nursery || {}).benchAreas || []).find(a => a.id === (sp.benchLayout || {}).areaId) || {}).name || '', w: nonNegative(sp.w), l: nonNegative(sp.l), heated: sp.kind !== 'outside', active: sp.active !== false, cap: benchCap(sp) }));
+    const benchList = () => benches().map(sp => ({ id: sp.id, name: sp.name || 'Bench', area: (((S.nursery || {}).benchAreas || []).find(a => a.id === (sp.benchLayout || {}).areaId) || {}).name || '', areaId: (sp.benchLayout || {}).areaId || '',
+      w: nonNegative(sp.w), l: nonNegative(sp.l), kind: benchKind(sp), heated: sp.kind !== 'outside', active: sp.active !== false, cap: benchCap(sp), holds: benchHolds(sp), estimate: benchEstimate(sp) }));
 
     function nextPlanting(bedId, date) {
       return plantingsIn(bedId).map(calc).filter(r => r && r.field > date).sort((a, b) => a.field - b.field)[0] || null;
@@ -1179,7 +1221,7 @@
       crops: () => cropList, crop, variety, cropColor, isCoverCrop, isPerennial,
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
-      heatedTraySpaces, benchList, benchItems, benchDay, traysOn, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
+      heatedTraySpaces, benchRoom, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
       yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),

@@ -108,7 +108,7 @@
   // ── what a line says ──
   /** How the sowing is done: rows of a tray, a number of trays, or rows in the ground. */
   function howText(line) {
-    if (line.kind === 'live') { const g = line.crop.seedG > 0 ? ` · ${num(line.crop.seedG, 1)} g a tray` : ''; return `${plural(line.trays, 'tray')}${g}`; }
+    if (line.kind === 'live') { const how = App.state.engine.liveSow(line.crop), g = !how.set ? '' : how.how === 'cells' ? ` · ${num(how.cells)} cells, ${num(how.perCell, 1)} seed${how.perCell === 1 ? '' : 's'} a cell` : ` · ${num(how.grams, 1)} g a tray`; return `${plural(line.trays, 'tray')}${g}`; }
     if (line.kind === 'direct') {
       const rowFt = line.members.reduce((n, m) => n + (m.r.ct ? 0 : m.r.rows * m.r.physicalLength), 0), crates = line.members.reduce((n, m) => n + (m.r.ct ? m.r.len : 0), 0);
       return [rowFt ? `${num(rowFt)} row-ft` : '', crates ? plural(crates, 'container') : ''].filter(Boolean).join(' · ') || plural(line.members.reduce((n, m) => n + m.r.plants, 0), 'plant');
@@ -201,7 +201,7 @@
   /** Whether the seed is there. Only a real shortfall is coloured: seed on order, or none counted yet, is said plainly. */
   function stockNote(line, stock) {
     if (line.state === 'done') return null;
-    if (line.kind === 'live' && !(line.crop.seedG > 0)) return h('small', 'no grams per tray set');
+    if (line.kind === 'live' && !App.state.engine.liveSow(line.crop).set) return h('small', 'no seed figure set');
     const row = stock[line.stockKey + '|' + line.stockUnit] || {}, have = row.onHand || 0, bare = n => amountText(n, line.stockUnit).replace(/ seeds?$/, '');
     if (have + 1e-9 >= line.estimate && have) return h('small', `${bare(have)} on hand`);
     if (have) return h('small.sw-short', `only ${bare(have)} on hand`);
@@ -449,7 +449,7 @@
           h('span', ui.follow ? `Late by ${(() => { const lo = Math.min(...pre.moved.map(m => m.days)), hi = Math.max(...pre.moved.map(m => m.days)); return lo === hi ? days(hi) : `${num(lo)} to ${days(hi)}`; })()}: ${movedText(pre.moved)}.${pre.overlaps ? ` ${pre.overlaps === 1 ? 'One pair of plantings' : num(pre.overlaps) + ' pairs of plantings'} would then share ground, and wait under To settle.` : ''}`
             : `${plural(pre.moved.length, 'planting')} ${pre.moved.length === 1 ? 'was' : 'were'} sown or hardened off late and ${pre.moved.length === 1 ? 'keeps the day it goes' : 'keep the days they go'} out.`)) : null,
         pre && pre.held ? h('small.sw-later', `${plural(pre.held, 'planting')} would be pushed out of ${App.planYear()}, and ${pre.held === 1 ? 'stays' : 'stay'} where ${pre.held === 1 ? 'it is' : 'they are'}.`) : null) : null,
-      phone ? null : Bench.section('Heated bench room'));
+      phone ? null : Bench.section());
     host.parentElement.scrollTop = keep;
   }
 
@@ -467,7 +467,7 @@
   function leavePhone() { fullHere = true; fitPhone(); }
 
   function init() {
-    App.on('plan', render); App.on('view', render); App.on('date', () => { if (App.state.view === 'sow') render(); });
+    App.on('plan', render); App.on('view', render); App.on('nursery', render); App.on('date', () => { if (App.state.view === 'sow') render(); });
     Thumbs.on(() => { if (App.state.view === 'sow') render(); });
     if (narrow) { narrow.addEventListener('change', fitPhone); App.on('plan', fitPhone); App.on('view', fitPhone); fitPhone(); }
     const full = $('wkFull');

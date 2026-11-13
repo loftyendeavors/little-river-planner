@@ -23,7 +23,7 @@
   let store = null;
   const rebuild = () => { state.engine = E.create(state.plan, Lib); };
   /** What this app keeps beside a plan that v7 knows nothing of. It travels in a plan file's own note (see withOwn). */
-  const OWN_KEYS = ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting'];
+  const OWN_KEYS = ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting', 'supplies'];
   /**
    * A fingerprint of what the plan says: the same for the same plan, whenever and wherever it was opened. The app's own
    * bookkeeping (when the plan was loaded, from which file) is left out. Sync and snapshots tell "changed" from "the same" by it.
@@ -67,6 +67,7 @@
       if (op.kind === 'settings') { next.settings = to; continue; }
       if (op.kind === 'inventory') { if (to) next.seedInventory = to; else delete next.seedInventory; continue; }
       if (op.kind === 'trays') { if (to) next.liveTrayPlans = to; else delete next.liveTrayPlans; continue; }
+      if (op.kind === 'nursery') { if (to) next.nursery = to; else delete next.nursery; continue; }
       if (op.kind === 'own') { next.lrfNext = { ...(next.lrfNext || {}) }; if (to == null) delete next.lrfNext[op.key]; else next.lrfNext[op.key] = to; continue; }
       const key = { bed: 'beds', garden: 'gardens', variety: 'varieties', crop: 'crops' }[op.kind] || 'plantings', list = lists[key] || (lists[key] = (plan[key] || []).slice());
       const index = from ? list.findIndex(x => x.id === from.id) : -1;
@@ -82,7 +83,7 @@
     if (sync) sync.touch();
     emit('plan');
   }
-  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings', 'inventory', 'trays', 'own'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
+  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings', 'inventory', 'trays', 'nursery', 'own'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
   /** Why the guard rails refuse an edit, in words. */
   function refusalText(no, engine) {
     const bed = engine.bedOf(no.p.bedId), what = cropLabel(no.p, engine), unit = engine.capUnit(bed);
@@ -743,6 +744,55 @@
     const before = (state.plan.lrfNext || {})[key];
     if ((before == null ? null : before) === (value == null ? null : value)) return false;
     return commit(label, [{ kind: 'own', key, before: before == null ? null : before, after: value == null ? null : value }], { unchecked: true });
+  }
+  // ───────────────────────── the nursery ─────────────────────────
+  // The benches are a statement about the farm, like the list of assumptions: a change is never refused, it moves no
+  // planting, and what it does to the room is said when it is made.
+  const Nursery = root.LRFNursery;
+  /**
+   * One change to the benches, as a step that can be undone. `edit` is handed the nursery record as it stands and gives
+   * back the changed one (or { nursery, … }). Returns null when it was refused (the reason is on the page),
+   * { unchanged: true } when nothing differs, else the room on each kind of bench before and after.
+   */
+  function editNursery(label, edit) {
+    const before = state.plan.nursery || null;
+    let out;
+    try { out = edit(before); } catch (error) { toast(error.message); return null; }
+    const extra = out && out.nursery ? out : {}, changed = extra.nursery || out;
+    if (JSON.stringify(changed) === JSON.stringify(before)) return { ...extra, unchanged: true };
+    const after = { ...changed, lrfEdited: true };   // so that loading an older backup does not quietly take the benches back (IO.carry)
+    const was = Nursery.roomOf(state.engine.benchList());
+    if (!commit(label, [{ kind: 'nursery', before, after }], { unchecked: true })) return null;
+    return { ...extra, was, now: Nursery.roomOf(state.engine.benchList()) };
+  }
+  /** What is on the shelf, or the mix one tray takes: the grower's own figures, kept beside the plan. */
+  function setSupply(kind, id, value) {
+    const before = (state.plan.lrfNext || {}).supplies || null;
+    let after;
+    try { after = Nursery.setSupply(before, kind, id, value); } catch (error) { toast(error.message); return null; }
+    if (JSON.stringify(after) === JSON.stringify(before)) return { unchanged: true };
+    return commit(kind === 'mix' ? 'Mix a tray takes' : 'Supplies on hand', [{ kind: 'own', key: 'supplies', before, after }], { unchecked: true }) ? { changed: true } : null;
+  }
+  /**
+   * How a live-tray crop is sown: in cells (cells a tray, seeds a cell) or broadcast in an open tray (grams a tray).
+   * change: { how?: 'cells' | 'open', cells?, perCell?, grams? }; '' clears a figure. The figures of the way not in use are kept.
+   */
+  function setLiveSow(cropId, change) {
+    const own = (state.plan.crops || []).find(c => c.id === cropId);
+    if (!own || !own.micro) { toast('This crop comes with the planner. Add it to a demand plan to give it your own figures.'); return null; }
+    const after = { ...own }, live = { how: 'open', ...(own.liveSow && typeof own.liveSow === 'object' ? own.liveSow : {}) };
+    const figure = (value, what, lo, hi, whole) => { if (value == null || String(value).trim() === '') return null; const n = Number(value); if (!Number.isFinite(n) || n < lo || n > hi || (whole && !Number.isInteger(n))) throw Error(`${what}: ${whole ? 'a whole number' : 'a number'} from ${lo} to ${hi.toLocaleString('en-US')}.`); return n; };
+    try {
+      if ('how' in change) { if (!['cells', 'open'].includes(change.how)) throw Error('A live tray is sown in cells or in an open tray.'); live.how = change.how; }
+      if ('cells' in change) { const n = figure(change.cells, 'Cells a tray', 1, 1000, true); if (n == null) delete live.cells; else live.cells = n; }
+      if ('perCell' in change) { const n = figure(change.perCell, 'Seeds a cell', 0.1, 1000, false); if (n == null) delete live.perCell; else live.perCell = Math.round(n * 10) / 10; }
+      if ('grams' in change) { const n = figure(change.grams, 'Grams of seed a tray', 0, 2000, false); after.seedG = n == null ? null : Math.round(n * 10) / 10; }
+    } catch (error) { toast(error.message); return null; }
+    if (live.how === 'open' && live.cells == null && live.perCell == null) delete after.liveSow; else after.liveSow = live;
+    if (JSON.stringify(after) === JSON.stringify(own)) return { unchanged: true };
+    const name = String(own.name || '').replace(/^micro\s*[·-]?\s*/i, '').trim();
+    if (!commit(`How ${name} trays are sown`, [{ kind: 'crop', before: own, after }], { unchecked: true })) return null;
+    return { changed: true, name, sow: state.engine.liveSow(state.engine.crop(cropId)) };
   }
   /** Trays are wanted on Mondays: a demand window that opens mid-week is moved to the Monday on or after it. Returns the plan and what moved. */
   function traysToMonday(farm, records) {
@@ -1501,7 +1551,7 @@
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
-    saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, traysToMonday: () => applyTrayStart(),
+    saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, editNursery, setSupply, setLiveSow, traysToMonday: () => applyTrayStart(),
     snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, sync: () => sync, syncInfo, snapshotsKept: () => !!Snaps
   };
 })(window);

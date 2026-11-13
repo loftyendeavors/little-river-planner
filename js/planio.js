@@ -163,7 +163,9 @@
     const mine = (prev && prev.lrfNext) || {}, plan = { ...next }, keep = {}, notes = [];
     if (!prev || mine.sample) return { plan, keep, notes, gone: [] };
     if (figures(prev.assumptions) && !figures(next.assumptions)) { plan.assumptions = prev.assumptions; const n = figures(prev.assumptions); notes.push(`your assumptions list (${n} figure${n === 1 ? '' : 's'})`); }
-    for (const key of ['crates', 'trayStart', 'trays', 'groups']) if (mine[key]) keep[key] = mine[key];
+    for (const key of ['crates', 'trayStart', 'trays', 'groups', 'supplies']) if (mine[key]) keep[key] = mine[key];
+    // Benches changed here are a statement about the farm that no v7 backup holds: they stay as they were set.
+    if (prev.nursery && prev.nursery.lrfEdited === true) { plan.nursery = prev.nursery; notes.push('your benches'); }
     // Plantings waiting to be placed were made here and are in no v7 backup: they stay, still waiting.
     if (Array.isArray(mine.waiting) && mine.waiting.length) { keep.waiting = mine.waiting; notes.push(`${mine.waiting.length} planting${mine.waiting.length === 1 ? '' : 's'} waiting to be placed`); }
     const facts = {}, changed = [];

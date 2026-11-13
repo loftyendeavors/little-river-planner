@@ -140,6 +140,8 @@
    * Counts are the engine's own: germination and the tray margin are already in them.
    * A planting marked sown, planted or harvested no longer needs seed; one marked established never did.
    */
+  /** A live tray's seed is counted in seeds where the crop is sown in cells, and by weight where it is broadcast in an open tray. */
+  const liveUnit = (engine, c) => (engine.liveSow && engine.liveSow(c).how === 'cells' ? 'seeds' : 'g');
   function required(engine) {
     const plan = engine.plan, year = String(plan.settings && plan.settings.year), rows = new Map();
     for (const p of plan.plantings || []) {
@@ -148,7 +150,7 @@
       if (!r || r.b.active === false) continue;
       const c = r.c, saved = engine.variety(p.varietyId), v = saved && saved.cropId === p.cropId ? saved : null;
       const material = r.rack ? 'seed' : c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed');
-      const unit = r.rack ? 'g' : material === 'seed' ? 'seeds' : material + 's';
+      const unit = r.rack ? liveUnit(engine, c) : material === 'seed' ? 'seeds' : material + 's';
       const key = (v ? 'v:' + v.id : 'c:' + p.cropId) + '|' + unit;
       let row = rows.get(key);
       if (!row) rows.set(key, row = { key, crop: engine.crop(p.cropId), variety: v, unit, plantings: 0, waiting: 0, total: 0, toSow: 0, trays: 0, first: null, established: 0 });
@@ -265,8 +267,10 @@
     if (to.unit !== undefined) {
       if (!STOCK_UNITS.includes(to.unit)) throw new Error('Choose seeds, grams or plants.');
       after.unit = to.unit;
-      if (after.quantity != null && after.quantity !== '') after.quantity = amountOf(after.quantity, to.unit, 'Quantity');
+      if (to.quantity === undefined && after.quantity != null && after.quantity !== '') after.quantity = amountOf(after.quantity, to.unit, 'Quantity');
     }
+    // a lot weighed where the plan counts seeds (or the other way round) is turned into the plan's unit by the vendor's seeds per gram
+    if (to.quantity !== undefined) after.quantity = amountOf(to.quantity, after.unit, 'Quantity');
     if (to.name) after.name = to.name;
     if (JSON.stringify(after) === JSON.stringify(before)) return null;
     after.updatedAt = ctx.now; lib.lots[lib.lots.indexOf(before)] = after; logged(lib, 'details', before, after, to.reason || '', ctx);
@@ -552,7 +556,7 @@
     if (!r || p.established === true) return null;
     const c = r.c, saved = engine.variety(p.varietyId), v = saved && saved.cropId === p.cropId ? saved : null;
     const material = r.rack ? 'seed' : c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed');
-    const unit = r.rack ? 'g' : material === 'seed' ? 'seeds' : material + 's', stock = stockUnit(unit);
+    const unit = r.rack ? liveUnit(engine, c) : material === 'seed' ? 'seeds' : material + 's', stock = stockUnit(unit);
     const kind = material === 'seed' && (r.rack || r.plannedSow) ? 'sow' : 'field';
     const amount = (unit === 'g' ? r.seedG : unit === 'seeds' ? r.seeds : (r.bulbs || Math.ceil(r.plants))) || 0;
     const flow = p.workflow && typeof p.workflow === 'object' ? p.workflow : {}, uses = Array.isArray(flow.seedUse) ? flow.seedUse : [];
@@ -640,5 +644,5 @@
   }
 
   return { norm, startOf, BASES, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
-    sizeOf, packs, cover, toCover, money, orderSheet, orderText, orderCsv, supplierOf, sowing, lotsToUse, recordSowing, takeBackSowing, doneDate, realDay, DONE_ORDER, DONE_WORD, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
+    sizeOf, packs, cover, toCover, money, perGram, orderSheet, orderText, orderCsv, supplierOf, sowing, lotsToUse, recordSowing, takeBackSowing, doneDate, realDay, DONE_ORDER, DONE_WORD, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
 });

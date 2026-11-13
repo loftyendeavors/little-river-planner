@@ -169,7 +169,7 @@
       const price = p.price != null && p.price !== '' ? Math.max(0, +p.price || 0) : Math.max(0, +r.c.price || 0);
       const yld = Math.max(0, +(p.yield != null && p.yield !== '' ? p.yield : r.c.yield) || 0), mk = Math.min(1, Math.max(0, Number.isFinite(+r.c.mk) && r.c.mk !== null && r.c.mk !== '' ? +r.c.mk : 0.9));
       out.push({ p, r, id: p.id, cropId: p.cropId, name: short(r.c.name), sow: E.d2s(r.field), ready: E.d2s(r.first), trays: r.len, price, revenue: r.len * yld * mk * price,
-        seedG: r.seedG || 0, sown: !!(p.done && p.done.sow), planned: !!p.liveTray, planId: p.liveTray ? p.liveTray.planId : null });
+        seedG: r.seedG || 0, seeds: r.rack ? r.seeds || 0 : 0, sown: !!(p.done && p.done.sow), planned: !!p.liveTray, planId: p.liveTray ? p.liveTray.planId : null });
     }
     return out.sort((a, b) => a.sow.localeCompare(b.sow) || a.name.localeCompare(b.name));
   }
@@ -188,8 +188,8 @@
   function byCrop(list) {
     const map = new Map();
     for (const b of list) {
-      const row = map.get(b.cropId) || { cropId: b.cropId, name: b.name, crop: b.r.c, trays: 0, batches: 0, revenue: 0, seedG: 0, sown: 0, first: b.sow, last: b.ready };
-      row.trays += b.trays; row.batches++; row.revenue += b.revenue; row.seedG += b.seedG; if (b.sown) row.sown += b.trays;
+      const row = map.get(b.cropId) || { cropId: b.cropId, name: b.name, crop: b.r.c, trays: 0, batches: 0, revenue: 0, seedG: 0, seeds: 0, sown: 0, first: b.sow, last: b.ready };
+      row.trays += b.trays; row.batches++; row.revenue += b.revenue; row.seedG += b.seedG; row.seeds += b.seeds; if (b.sown) row.sown += b.trays;
       if (b.sow < row.first) row.first = b.sow; if (b.ready > row.last) row.last = b.ready;
       map.set(b.cropId, row);
     }
