@@ -65,6 +65,7 @@
       const from = direction === 'undo' ? op.after : op.before, to = direction === 'undo' ? op.before : op.after;
       if (op.kind === 'assume') { if (to) next.assumptions = to; else delete next.assumptions; continue; }
       if (op.kind === 'settings') { next.settings = to; continue; }
+      if (op.kind === 'map') { next.map = to || {}; continue; }   // the photo's scale and the like (mapedit.js)
       if (op.kind === 'inventory') { if (to) next.seedInventory = to; else delete next.seedInventory; continue; }
       if (op.kind === 'trays') { if (to) next.liveTrayPlans = to; else delete next.liveTrayPlans; continue; }
       if (op.kind === 'nursery') { if (to) next.nursery = to; else delete next.nursery; continue; }
@@ -83,7 +84,7 @@
     if (sync) sync.touch();
     emit('plan');
   }
-  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings', 'inventory', 'trays', 'nursery', 'own'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
+  const touched = (ops, engine) => { const ids = new Set(); for (const op of ops) { if (['assume', 'garden', 'variety', 'crop', 'settings', 'map', 'inventory', 'trays', 'nursery', 'own'].includes(op.kind)) continue; if (op.kind === 'bed') { for (const p of engine.plantingsIn((op.after || op.before).id)) ids.add(p.id); } else if (op.after) ids.add(op.after.id); } return [...ids]; };
   /** Why the guard rails refuse an edit, in words. */
   function refusalText(no, engine) {
     const bed = engine.bedOf(no.p.bedId), what = cropLabel(no.p, engine), unit = engine.capUnit(bed);
