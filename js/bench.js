@@ -1,7 +1,8 @@
 /* Little River Farm Planner — the benches: their room week by week, the benches themselves, and what a season uses.
  *
  * Seedling trays, tower seedlings, potted seedlings and live trays stand under heat; from the day they start
- * hardening off, seedlings stand outside where there is a bench for them. Each kind of bench with room or with
+ * hardening off, seedlings stand on the unheated benches and then outside, where there is a bench for them; and a crop
+ * said to be grown on without heat stands on the unheated benches in its season. Each kind of bench with room or with
  * anything on it gets a chart: one column a week, stacked by what stands there, at that kind's fullest day.
  * The load is shown, never enforced: nothing here moves a planting.
  *
@@ -93,7 +94,7 @@
     if (!t || !(t.used > 1e-9)) reading = 'Nothing stands here this season.';
     else if (!pool.cap) reading = `No room to measure against. The most wanted on one day is ${num(t.used, 1)} tray spaces, on ${dayName(t.date)}.`;
     else if (pool.over.length) { state = 'over'; reading = `Over in ${plural(pool.over.length, 'week')}, worst on ${dayName(t.date)}: ${num(t.used, 1)} tray spaces wanted, ${num(t.cap)} there${kind === 'heated' && t.live ? `. Live trays are ${share('live')}% of that day’s load` : ''}.`; }
-    else if (t.cap - t.used < 0.05) { state = 'full'; reading = `Full at its fullest, on ${dayName(t.date)}: ${num(t.used, 1)} of ${num(t.cap)} tray spaces${kind === 'heated' ? '' : '. What does not fit stays further in'}.`; }
+    else if (t.cap - t.used < 0.05) { state = 'full'; reading = `Full at its fullest, on ${dayName(t.date)}: ${num(t.used, 1)} of ${num(t.cap)} tray spaces${kind === 'outside' ? '. What does not fit stays under heat' : kind === 'unheated' ? '. What hardens off and does not fit goes outside, or stays under heat' : ''}.`; }
     else { state = 'ok'; reading = `Room to spare all season. The fullest day is ${dayName(t.date)}: ${num(t.used, 1)} of ${num(t.cap)} tray spaces.`; }
     return h('li', { dataset: { pool: kind, state } }, h('b', N.kindName(kind)), h('span.bn-pool-room', benches), h('span.bn-pool-reading', reading));
   }
@@ -103,21 +104,22 @@
     if (!days) return h('li', { dataset: { pool: 'harden' } }, h('b', 'Hardening off'), h('span.bn-pool-room', 'not planned'), h('span.bn-pool-reading', 'Seedlings stay under cover until they are planted. Set the days under Benches.'));
     if (!(hd.most > 1e-9)) return null;
     const out = fig.room.outside, cool = fig.room.unheated;
-    const where = !out && !cool ? 'No bench is listed outside, so they are counted under heat until they are planted.'
-      : hd.inside > 0.05 ? `The benches ${out ? 'outside' : 'without heat'} take what they hold; up to ${num(hd.inside, 1)} tray spaces stay under cover (${dayName(hd.insideOn)}).`
-      : `The benches outside take all of it.`;
+    const takers = cool && out ? 'The unheated benches, then those outside,' : cool ? 'The unheated benches' : 'The benches outside';
+    const where = !out && !cool ? 'No bench is listed outside or without heat, so they are counted under heat until they are planted.'
+      : hd.inside > 0.05 ? `${takers} take what they have room for; up to ${num(hd.inside, 1)} tray spaces stay under heat (${dayName(hd.insideOn)}).`
+      : `${takers} take all of it.`;
     return h('li', { dataset: { pool: 'harden' } }, h('b', 'Hardening off'), h('span.bn-pool-room', `${plural(days, 'day')} before planting out`), h('span.bn-pool-reading', `Up to ${num(hd.most, 1)} tray spaces at once, on ${dayName(hd.on)}. ${where}`));
   }
 
   // ── the benches themselves, edited in place ──
   const roomText = r => N.KIND_IDS.filter(k => r.was[k] !== r.now[k]).map(k => `${N.kindName(k).toLowerCase()} ${num(r.was[k])} → ${num(r.now[k])} tray spaces`).join(' · ');
   /** Make one change, say what it did to the room, and come back to the field it was made in. */
-  function change(label, edit, focus) {
+  function change(label, edit, focus, say) {
     refocus = focus || null;
     const done = App.editNursery(label, edit);
     if (!done) { refocus = null; App.emit('nursery'); return null; }
     if (done.unchanged) { refocus = null; return done; }
-    const room = roomText(done);
+    const room = [roomText(done), say ? say() : ''].filter(Boolean).join(' · ');
     UI.toast(room ? `${label} · ${room}` : label, { label: 'Undo', run: App.undo });
     return done;
   }
@@ -179,6 +181,28 @@
       input.dataset.f = id;
       return h('label.bn-opt', h('span', label), input, h('small', unit));
     };
+    // crops grown on without heat: a line a crop, with its season and the days it has under heat first
+    const eng = App.state.engine, year = App.planYear(), rules = eng.coolRules(), cropName = id => { const c = eng.crop(id); return c ? c.name : 'A crop no longer in the library'; };
+    const said = () => { const c = figures().cool; return c.most > 0.05 ? `up to ${num(c.most, 1)} tray spaces on the unheated benches (${dayName(c.on)})` : 'nothing of it is in the nursery on those days'; };
+    const raised = new Map();
+    for (const it of eng.benchItems()) if (it.kind === 'prop' && !it.r.tw) raised.set(it.p.cropId, cropName(it.p.cropId));
+    const free = [...raised].filter(([id]) => !rules.some(r => r.cropId === id)).sort((a, b) => a[1].localeCompare(b[1]));
+    const coolBody = h('tbody');
+    for (const rule of rules) {
+      const name = cropName(rule.cropId), row = { id: 'cool:' + rule.cropId };
+      const date = (f, value, label) => { const input = h('input.tr-date', { type: 'date', value: value ? `${year}-${value}` : '', min: `${year}-01-01`, max: `${year}-12-31`, 'aria-label': `${name}: ${label}`, dataset: { f } }); input.addEventListener('change', () => { if (!change(`${name} is grown on without heat ${f === 'from' ? 'from' : 'through'} ${input.value ? day(d(input.value)) : 'no set day'}`, n => N.setCool(n, rule.cropId, { [f]: input.value }), [row.id, f], said)) input.value = value ? `${year}-${value}` : ''; }); return input; };
+      const after = h('input.tr-n', { type: 'number', min: 0, max: 60, step: 1, value: rule.after == null ? 0 : rule.after, 'aria-label': `${name}: days under heat first`, inputMode: 'numeric', dataset: { f: 'after' } });
+      after.addEventListener('focus', () => after.select());
+      after.addEventListener('keydown', e => { if (e.key === 'Enter') after.blur(); else if (e.key === 'Escape') { after.value = rule.after; after.blur(); } });
+      after.addEventListener('change', () => { if (!change(`${name} has ${after.value} days under heat first`, n => N.setCool(n, rule.cropId, { after: after.value }), [row.id, 'after'], said)) after.value = rule.after; });
+      coolBody.append(h('tr', { dataset: { bench: row.id, cool: rule.cropId } }, h('td', h('b', name)), h('td', date('from', rule.from, 'on the unheated benches from')), h('td', date('to', rule.to, 'on the unheated benches through')), h('td', after),
+        h('td.bn-tools', h('button.tr-x', { type: 'button', 'aria-label': `${name} is raised under heat again`, title: `Take ${name} off this list`, dataset: { f: 'remove' }, onclick: () => change(`${name} is raised under heat again`, n => N.removeCool(n, rule.cropId), ['', 'bnCoolCrop']) }, '×'))));
+    }
+    const pick = h('select.bn-house', { id: 'bnCoolCrop', 'aria-label': 'Crop to grow on without heat', dataset: { f: 'bnCoolCrop' } }, h('option', { value: '' }, 'Choose a crop…'), free.map(([id, name]) => h('option', { value: id }, name)));
+    const addCool = () => { if (!pick.value) { pick.focus(); return; } const id = pick.value; change(`${cropName(id)} is grown on without heat, all year until its days are set`, n => N.setCool(n, id, {}), ['cool:' + id, 'from'], said); };
+    const coolBox = h('div.bn-cool', { id: 'bnCool' }, h('div.bn-edit-head', h('h4', 'Grown on without heat'), h('p', 'Between its two days a crop’s plug trays and pots stand on the unheated benches, once they have had their days under heat to come up. Tower seedlings stay under heat.')),
+      rules.length ? h('table.as.bn-benches.bn-cool-table', h('thead', h('tr', h('th', 'Crop'), h('th', 'From'), h('th', 'Through'), h('th', { title: 'Days from sowing that the trays stay under heat, to germinate' }, 'Days under heat first'), h('th', ''))), coolBody) : null,
+      h('div.bn-edit-foot', pick, h('button.btn', { type: 'button', id: 'bnCoolAdd', onclick: addCool }, '+ Add a crop')));
     const close = () => { editing = false; newHouse = null; refocus = ['', 'bnEdit']; App.emit('nursery'); };
     const box = h('div.bn-edit', { id: 'bnEditor', role: 'group', 'aria-label': 'The benches' },
       h('div.bn-edit-head', h('h4', 'Benches'), h('p', `A bench holds its area × ${num(packing)}% ÷ one 10 × 20 tray, unless you say what it holds.`),
@@ -188,7 +212,8 @@
       h('div.bn-edit-foot',
         h('button.btn', { type: 'button', id: 'bnAdd', onclick: () => { const done = change('Bench added', n => N.addBench(n, { uid: App.uid }), null); if (done && done.bench) { refocus = [done.bench.id, 'name']; App.emit('nursery'); } } }, '+ Add a bench'),
         option('bnPacking', packing, 'Share of a bench that takes trays', '%', 'packing', v => `${v}% of a bench takes trays`, 30, 100),
-        option('bnHarden', fig.hardenDays, 'Hardening off', 'days before planting out', 'harden', v => `Hardening off starts ${v} days before planting out`, 0, 21)));
+        option('bnHarden', fig.hardenDays, 'Hardening off', 'days before planting out', 'harden', v => `Hardening off starts ${v} days before planting out`, 0, 21)),
+      coolBox);
     box.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
     return box;
   }

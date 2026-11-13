@@ -100,6 +100,27 @@
     if ('harden' in change) { const d = Number(change.harden); if (!Number.isInteger(d) || d < 0 || d > 21) throw Error('Days of hardening off: a whole number from 0 to 21.'); n.harden = d; }
     return n;
   }
+  /**
+   * A crop grown on without heat: between two days of the year (month and day; either may be left open) its plug trays and
+   * pots stand on the unheated benches once they have had `after` days under heat to come up. One line a crop.
+   */
+  function setCool(nursery, cropId, change) {
+    const n = open(nursery), list = Array.isArray(n.cool) ? n.cool.filter(x => x && x.cropId) : [], at = list.findIndex(x => x.cropId === cropId);
+    if (!cropId) throw Error('Choose the crop that is grown on without heat.');
+    const rule = { cropId, from: '', to: '', after: 5, ...(at >= 0 ? list[at] : {}) };
+    const md = (value, what) => { const text = String(value || '').trim(), m = /^(?:\d{4}-)?(\d{2})-(\d{2})$/.exec(text); if (!text) return ''; if (!m || +m[1] < 1 || +m[1] > 12 || +m[2] < 1 || +m[2] > new Date(2028, +m[1], 0).getDate()) throw Error(`${what}: choose a day of the year, or leave it open.`); return `${m[1]}-${m[2]}`; };
+    if ('from' in change) rule.from = md(change.from, 'From');
+    if ('to' in change) rule.to = md(change.to, 'Through');
+    if ('after' in change) { const d = typeof change.after === 'string' && !change.after.trim() ? NaN : Number(change.after); if (!Number.isInteger(d) || d < 0 || d > 60) throw Error('Days under heat first: a whole number from 0 to 60.'); rule.after = d; }
+    if (at >= 0) list[at] = rule; else list.push(rule);
+    n.cool = list;
+    return n;
+  }
+  function removeCool(nursery, cropId) {
+    const n = open(nursery), list = (Array.isArray(n.cool) ? n.cool : []).filter(x => x && x.cropId && x.cropId !== cropId);
+    if (list.length) n.cool = list; else delete n.cool;
+    return n;
+  }
   /** Names more than one bench in use goes by: two benches called the same cannot be told apart on a list. */
   function sharedNames(benches) {
     const seen = new Map();
@@ -124,12 +145,13 @@
    *              row is the engine's bench day at the week's fullest; pools[kind] is that kind of bench at its own fullest day.
    *   pools      for each kind of bench: its room, its fullest day, the weeks it is over, and whether it is used at all.
    *   hardening  the most hardening off on one day, and the most of it left under heat for want of room elsewhere.
+   *   cool       the most standing on the unheated benches by a crop's rule on one day.
    * Then the trays themselves, as before: the most of each kind of plug tray on one day, carriers, live trays.
    */
   function season(eng, year) {
     const weeks = new Map(), plugMost = new Map(), flats = { carriers: 0, carriersOn: null, live: 0, liveOn: null };
     let floorMost = 0, floorUntil = null;
-    const hardening = { most: 0, on: null, inside: 0, insideOn: null };
+    const hardening = { most: 0, on: null, inside: 0, insideOn: null }, cool = { most: 0, on: null };
     for (let date = new Date(year, 0, 1), i = 0; i < 366 && date.getFullYear() === year; i++, date = plus(date, 1)) {
       const row = eng.benchDay(date);
       if (row.floorCrates > floorMost) floorMost = row.floorCrates;
@@ -140,7 +162,8 @@
       if (use.carriers > flats.carriers) { flats.carriers = use.carriers; flats.carriersOn = new Date(date); }
       if (use.live > flats.live) { flats.live = use.live; flats.liveOn = new Date(date); }
       if (row.harden > hardening.most) { hardening.most = row.harden; hardening.on = new Date(date); }
-      const inside = row.harden - row.pools.outside.used;
+      const inside = row.hardenIn;
+      if (row.cool > cool.most) { cool.most = row.cool; cool.on = new Date(date); }
       if (inside > hardening.inside + 1e-9) { hardening.inside = inside; hardening.insideOn = new Date(date); }
       const key = mondayOf(date), week = weeks.get(key) || { row: null, livePeak: 0, pools: {} };
       if (!week.row || row.total > week.row.total) week.row = row;
@@ -158,7 +181,7 @@
         over: list.filter(w => w.pools && w.pools[k].cap > 0 && w.pools[k].over > 0.05), stands: STANDS.filter(s => mine.some(w => w.pools[k][s] > 1e-9)) };
     }
     const sold = eng.benchItems().filter(it => it.kind === 'live' && it.r.first.getFullYear() === year).reduce((n, it) => n + it.n, 0);
-    return { year, weeks: list, pools, room, benches, hardening, hardenDays: eng.hardenDays(), cap: room.heated,
+    return { year, weeks: list, pools, room, benches, hardening, cool, hardenDays: eng.hardenDays(), cap: room.heated,
       // the kinds of bench worth drawing: those with room, and the heated ones whenever anything stands under cover
       shown: KIND_IDS.filter(k => room[k] > 0 || pools[k].used || (k === 'heated' && list.length > 0)),
       tightest: pools.heated.tightest, over: room.heated ? pools.heated.over : [],
@@ -176,14 +199,14 @@
   function supplies(eng, year, own, figures) {
     const fig = figures || season(eng, year), have = (own && own.have) || {}, mix = (own && own.mix) || {}, text = String(year);
     const lots = new Map(), pots = new Map(), plug = new Map(), liveCells = new Map();
-    let liveOpen = 0, sheets = 0, woolCells = 0;
+    let liveOpen = 0, liveUnsaid = 0, sheets = 0, woolCells = 0;
     const trayRow = (cells, name) => { const id = 'tray-' + cells; if (!plug.has(id)) plug.set(id, { id, cells, name: name || `${cells}-cell plug tray`, atOnce: 0, on: null, filled: 0, sold: 0 }); return plug.get(id); };
     for (const it of eng.benchItems()) {
       if (String(it.p.date).slice(0, 4) !== text) continue;
       const r = it.r, c = r.c;
       if (it.kind === 'live') {
         const how = eng.liveSow(c);
-        if (how.how === 'cells' && how.cells > 0) liveCells.set(how.cells, (liveCells.get(how.cells) || 0) + it.n); else liveOpen += it.n;
+        if (how.how === 'cells' && how.cells > 0) liveCells.set(how.cells, (liveCells.get(how.cells) || 0) + it.n); else if (how.how === 'cells') liveUnsaid += it.n; else liveOpen += it.n;
         continue;
       }
       if (it.kind !== 'prop') continue;
@@ -211,12 +234,14 @@
     }
     if (fig.flats.carriers) row('open-holes', 'Open 10 × 20 tray, with holes', fig.flats.carriers, [{ n: fig.flats.carriers, text: 'one under each rockwool sheet, at the most at once', on: fig.flats.carriersOn }], 0);
     if (liveOpen) row('open', 'Open 10 × 20 tray', liveOpen, [{ n: liveOpen, text: 'go out as live trays' }], liveOpen);
+    // sown in cells, but how many cells a tray is not said yet: the kind of tray is not known
+    if (liveUnsaid) row('live-unsaid', 'Celled tray, cells not yet said', liveUnsaid, [{ n: liveUnsaid, text: 'go out as live trays; say the cells a tray in the demand table' }], liveUnsaid);
     if (sheets) row('rockwool', `Rockwool sheet${woolCells ? `, ${woolCells} cells` : ''}`, sheets, [{ n: sheets, text: 'sown over the season' }], 0);
     for (const [size, n] of [...pots].sort((a, b) => a[0] - b[0])) row('pot-' + size, `${size} in pot`, whole(n), [{ n: whole(n), text: 'filled over the season' }], whole(n));
     // potting mix: for whatever takes mix and has a figure; the rest is named, never guessed
     const takes = rows.filter(r => r.fills > 0), counted = takes.filter(r => r.mixEach != null), qt = counted.reduce((n, r) => n + r.mixQt, 0), haveQt = Number(have.mix) > 0 ? Number(have.mix) : 0;
     const mixRow = { id: 'mix', name: 'Potting mix', unit: 'qt', need: qt, cuFt: qt / DRY_QT_PER_CUFT, have: haveQt, buy: Math.max(0, qt - haveQt), counted: counted.length, of: takes.length, missing: takes.filter(r => r.mixEach == null).map(r => r.name) };
-    return { year, rows, mix: mixRow, sheets, liveOpen, liveCells: [...liveCells], any: rows.length > 0 };
+    return { year, rows, mix: mixRow, sheets, liveOpen, liveUnsaid, liveCells: [...liveCells], any: rows.length > 0 };
   }
   /** One figure of the grower's supplies record, set or (with nothing) cleared; an empty record is no record. kind: 'have' | 'mix'. */
   function setSupply(own, kind, id, value) {
@@ -233,5 +258,5 @@
     return Object.keys(next).length ? next : null;
   }
 
-  return { KINDS, KIND_IDS, STANDS, kindName, DRY_QT_PER_CUFT, blank, addBench, setBench, removeBench, moveBench, addArea, setOptions, sharedNames, roomOf, season, supplies, setSupply };
+  return { KINDS, KIND_IDS, STANDS, kindName, DRY_QT_PER_CUFT, blank, addBench, setBench, removeBench, moveBench, addArea, setOptions, setCool, removeCool, sharedNames, roomOf, season, supplies, setSupply };
 });

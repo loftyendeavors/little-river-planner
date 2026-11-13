@@ -179,6 +179,16 @@
     const heatedTraySpaces = () => benches().filter(sp => sp.active !== false && benchKind(sp) === 'heated').reduce((n, sp) => n + benchCap(sp), 0);
     /** Tray spaces on each kind of bench on a day. */
     const benchRoom = date => { const room = { heated: 0, unheated: 0, outside: 0 }; for (const sp of benches()) if (benchOpen(sp, date)) room[benchKind(sp)] += benchCap(sp); return room; };
+    // Crops grown on without heat: `nursery.cool = [{ cropId, from: 'MM-DD', to: 'MM-DD', after: days }]`. Between those
+    // dates the crop's plug trays and pots stand on the unheated benches once they have had `after` days under heat to come up.
+    const coolRules = () => (!legacy && Array.isArray(S.nursery && S.nursery.cool) ? S.nursery.cool.filter(x => x && typeof x === 'object' && x.cropId) : []);
+    const inSpan = (date, from, to) => { const md = d2s(date).slice(5), a = validMonthDay(from) ? from : '', b = validMonthDay(to) ? to : ''; return a && b && a > b ? (md >= a || md <= b) : (!a || md >= a) && (!b || md <= b); };
+    /** Does this planting's seedling stand on an unheated bench by rule on this day? (Tower seedlings in rockwool never do.) */
+    function coolOn(r, date) {
+      if (!r || r.tw || !r.sow) return false;
+      const rule = coolRules().find(x => x.cropId === r.planting.cropId);
+      return !!rule && inSpan(date, rule.from, rule.to) && date >= addDays(r.sow, Math.max(0, Math.round(finite(rule.after, 0))));
+    }
     /** The stand-in space v7 files live trays under: it is every heated bench at once, and has no place of its own. */
     const isPool = b => !!b && b.liveTrayPool === true && isRack(b);
     /** Capacity in the space's own unit: tower sites, trays, containers or bed-feet. */
@@ -753,10 +763,12 @@
      * { how: 'open', grams (a tray), set }. Nothing is assumed: a crop said to be sown in cells counts no seed until both figures are there.
      */
     function liveSow(c) {
-      const x = !legacy && c && c.micro && c.liveSow && typeof c.liveSow === 'object' ? c.liveSow : null;
-      if (x && x.how === 'cells') { const cells = Math.round(positive(x.cells, 0)), perCell = positive(x.perCell, 0), set = cells > 0 && perCell > 0; return { how: 'cells', cells, perCell, set, seeds: set ? cells * perCell : 0 }; }
-      const grams = c && finite(c.seedG) > 0 ? +c.seedG : 0;
-      return { how: 'open', grams, set: grams > 0 };
+      const x = !legacy && c && c.micro && c.liveSow && typeof c.liveSow === 'object' ? c.liveSow : null, grams = c && finite(c.seedG) > 0 ? +c.seedG : 0;
+      // The grower sows his tray crops by the cell (pea shoots by weight). So a crop he has said nothing about, and that has
+      // no weight to count, is taken as sown in cells; it still counts nothing until its two figures are there.
+      const how = x && (x.how === 'cells' || x.how === 'open') ? x.how : legacy || grams > 0 || !(c && c.micro) ? 'open' : 'cells';
+      if (how === 'cells') { const cells = Math.round(positive(x && x.cells, 0)), perCell = positive(x && x.perCell, 0), set = cells > 0 && perCell > 0; return { how: 'cells', cells, perCell, set, seeds: set ? cells * perCell : 0, said: !!x }; }
+      return { how: 'open', grams, set: grams > 0, said: !!x };
     }
     function calcRaw(p) {
       const b = plantingBed(p), c = effective(p);
@@ -1095,8 +1107,8 @@
     }
     /** Heated bench room on one day, in tray spaces: what is there by kind, the total, and what the benches hold. */
     function benchDay(date) {
-      const row = { date: new Date(date), cap: heatedTraySpaces(), live: 0, crate: 0, tray: 0, pot: 0, rockwool: 0, total: 0, harden: 0, floorCrates: 0, items: [] };
-      const hard = { live: 0, crate: 0, tray: 0, pot: 0, rockwool: 0 };
+      const row = { date: new Date(date), cap: heatedTraySpaces(), live: 0, crate: 0, tray: 0, pot: 0, rockwool: 0, total: 0, harden: 0, cool: 0, floorCrates: 0, items: [] };
+      const hard = { live: 0, crate: 0, tray: 0, pot: 0, rockwool: 0 }, cool = { live: 0, crate: 0, tray: 0, pot: 0, rockwool: 0 };
       for (const it of benchItems()) {
         if (date < it.from || date >= it.to) continue;
         if (it.floor) { row.floorCrates += it.n; continue; }   // under cover, but standing on the floor: no bench room
@@ -1104,16 +1116,20 @@
         if (!u) continue;
         // from the day hardening off starts (planned, or recorded) a seedling can stand outside
         const hs = it.kind === 'prop' ? hardenStart(it.r) : null, hardening = !!hs && date >= hs;
-        row[u.kind] += u.eq; row.total += u.eq; row.items.push({ p: it.p, r: it.r, kind: u.kind, n: u.n, eq: u.eq, harden: hardening });
-        if (hardening) { hard[u.kind] += u.eq; row.harden += u.eq; }
+        // a crop grown on without heat stands on the unheated benches by rule, hardening or not
+        const byRule = !hardening && it.kind === 'prop' && coolOn(it.r, date);
+        row[u.kind] += u.eq; row.total += u.eq; row.items.push({ p: it.p, r: it.r, kind: u.kind, n: u.n, eq: u.eq, harden: hardening, cool: byRule });
+        if (hardening) { hard[u.kind] += u.eq; row.harden += u.eq; } else if (byRule) { cool[u.kind] += u.eq; row.cool += u.eq; }
       }
-      // Where it all stands. What hardens off goes outside first, then onto unheated benches, and what fits on neither
-      // stays under heat (v7's rule, with the unheated benches between). Everything else is under heat. A load, never a rule.
-      const room = benchRoom(date), out = Math.min(row.harden, room.outside), cool = Math.min(row.harden - out, room.unheated), part = n => row.harden > 0 ? n / row.harden : 0;
+      // Where it all stands. What is grown on without heat is on the unheated benches. What hardens off goes onto the
+      // unheated benches too, as far as they have room left, then outside, and what fits on neither stays under heat.
+      // Everything else is under heat. A load, never a rule: only a crop sent to the unheated benches can put them over.
+      const room = benchRoom(date), un = Math.min(row.harden, Math.max(0, room.unheated - row.cool)), out = Math.min(row.harden - un, room.outside), part = n => row.harden > 0 ? n / row.harden : 0;
       const pool = (cap, used, of) => { const p = { cap, used, over: Math.max(0, used - cap) }; for (const k of Object.keys(hard)) p[k] = of(k); return p; };
+      row.hardenIn = row.harden - un - out;   // hardening off, and still under heat for want of room
       row.pools = {
-        heated: pool(legacy ? row.cap : room.heated, row.total - out - cool, k => row[k] - hard[k] * part(out + cool)),
-        unheated: pool(room.unheated, cool, k => hard[k] * part(cool)),
+        heated: pool(legacy ? row.cap : room.heated, row.total - row.cool - un - out, k => row[k] - cool[k] - hard[k] * part(un + out)),
+        unheated: pool(room.unheated, row.cool + un, k => cool[k] + hard[k] * part(un)),
         outside: pool(room.outside, out, k => hard[k] * part(out)) };
       row.over = legacy ? Math.max(0, row.total - row.cap) : row.pools.heated.over;
       return row;
@@ -1221,7 +1237,7 @@
       crops: () => cropList, crop, variety, cropColor, isCoverCrop, isPerennial,
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
-      heatedTraySpaces, benchRoom, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
+      heatedTraySpaces, benchRoom, coolRules, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
       yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),

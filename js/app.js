@@ -780,7 +780,8 @@
   function setLiveSow(cropId, change) {
     const own = (state.plan.crops || []).find(c => c.id === cropId);
     if (!own || !own.micro) { toast('This crop comes with the planner. Add it to a demand plan to give it your own figures.'); return null; }
-    const after = { ...own }, live = { how: 'open', ...(own.liveSow && typeof own.liveSow === 'object' ? own.liveSow : {}) };
+    const after = { ...own }, live = { ...(own.liveSow && typeof own.liveSow === 'object' ? own.liveSow : {}) };
+    live.how = state.engine.liveSow(state.engine.crop(cropId)).how;   // the way it is counted now, said or not
     const figure = (value, what, lo, hi, whole) => { if (value == null || String(value).trim() === '') return null; const n = Number(value); if (!Number.isFinite(n) || n < lo || n > hi || (whole && !Number.isInteger(n))) throw Error(`${what}: ${whole ? 'a whole number' : 'a number'} from ${lo} to ${hi.toLocaleString('en-US')}.`); return n; };
     try {
       if ('how' in change) { if (!['cells', 'open'].includes(change.how)) throw Error('A live tray is sown in cells or in an open tray.'); live.how = change.how; }
@@ -788,7 +789,7 @@
       if ('perCell' in change) { const n = figure(change.perCell, 'Seeds a cell', 0.1, 1000, false); if (n == null) delete live.perCell; else live.perCell = Math.round(n * 10) / 10; }
       if ('grams' in change) { const n = figure(change.grams, 'Grams of seed a tray', 0, 2000, false); after.seedG = n == null ? null : Math.round(n * 10) / 10; }
     } catch (error) { toast(error.message); return null; }
-    if (live.how === 'open' && live.cells == null && live.perCell == null) delete after.liveSow; else after.liveSow = live;
+    after.liveSow = live;   // once he has touched it, the way a tray is sown is on the record and no longer follows a default
     if (JSON.stringify(after) === JSON.stringify(own)) return { unchanged: true };
     const name = String(own.name || '').replace(/^micro\s*[·-]?\s*/i, '').trim();
     if (!commit(`How ${name} trays are sown`, [{ kind: 'crop', before: own, after }], { unchecked: true })) return null;
