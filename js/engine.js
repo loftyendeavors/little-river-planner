@@ -631,9 +631,13 @@
     const nsHarden = () => Math.round(clamp(nonNegative(S.nursery && S.nursery.harden, 7), 0, 21));
     /** When seedlings move out to harden off: so many days before planting, or the day recorded. */
     function hardenStart(r) {
+      const planned = hardenPlanned(r), actual = planned ? doneOf(r.planting, 'harden') : null;
+      return actual ? s2d(actual) : planned;
+    }
+    /** The day the plan works out for hardening off, whatever was recorded for it. */
+    function hardenPlanned(r) {
       if (!r || !r.sow || r.tw || r.established || !nsHarden() || r.field <= r.sow) return null;
-      const actual = doneOf(r.planting, 'harden');
-      return actual ? s2d(actual) : new Date(Math.max(r.sow, addDays(r.field, -nsHarden())));
+      return new Date(Math.max(r.sow, addDays(r.field, -nsHarden())));
     }
     // Tower seedlings are sown in the grower's rockwool sheets (98 cubes, 14 rows of 7). v7 counted them in the crop's plug tray; its mode still does.
     const sheet = legacy ? null : Sow && Sow.ROCKWOOL_SHEET;
@@ -1018,9 +1022,13 @@
     // ── heated bench room in use: v7's nursery load ──
     const ctFt2 = ct => { const [w, l] = ctDims(ct); return w * l; };
     function potUpDate(r) {
+      const planned = potUpPlanned(r), actual = planned ? doneOf(r.planting, 'potup') : null;
+      return actual ? s2d(actual) : planned;
+    }
+    /** The day the plan works out for potting up, whatever was recorded for it. */
+    function potUpPlanned(r) {
       if (!r || !r.sow || r.c.prop !== 'potup' || r.tw || r.established) return null;
-      const actual = doneOf(r.planting, 'potup');
-      return actual ? s2d(actual) : addDays(r.sow, Math.round(Math.max(0, finite(r.c.potUpWk, 2)) * 7));
+      return addDays(r.sow, Math.round(Math.max(0, finite(r.c.potUpWk, 2)) * 7));
     }
     /**
      * What one planting's seedlings take up on a date: trays, or carriers of pots once potted up.
@@ -1171,7 +1179,7 @@
       crops: () => cropList, crop, variety, cropColor, isCoverCrop, isPerennial,
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
-      heatedTraySpaces, benchList, benchItems, benchDay, traysOn, cratesOnBenches, propOf, potUpDate, hardenStart,
+      heatedTraySpaces, benchList, benchItems, benchDay, traysOn, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
       yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),

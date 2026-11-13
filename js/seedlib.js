@@ -156,7 +156,7 @@
       if (p.established === true) { row.established++; continue; }
       const amount = unit === 'g' ? r.seedG : unit === 'seeds' ? r.seeds : (r.bulbs || Math.ceil(r.plants));
       row.total += amount || 0;
-      const done = p.done || {}, sown = ['sow', 'field', 'harvest', 'flip'].some(k => typeof done[k] === 'string' && done[k]);
+      const done = p.done || {}, sown = SOWN_KINDS.some(k => typeof done[k] === 'string' && done[k]);
       if (sown) continue;
       row.waiting++; row.toSow += amount || 0; row.trays += r.trays || 0;
       const start = r.sow || r.field;
@@ -532,7 +532,9 @@
   // A planned sowing never touches stock. Recording that it happened does: the planting gets its actual date, and the
   // seed it used comes off the lots on hand. The records are v7's own (done, workflow.history, workflow.seedUse, and a
   // "use" entry in the lot's change log), so either planner reads what the other recorded.
-  const SOWN_KINDS = ['sow', 'field', 'harvest', 'flip'];
+  // Work that can only follow the sowing: once any of it is recorded, the seed is no longer counted as still to sow.
+  // (v7 knew sow, field, harvest and flip; potting up, hardening off and moving out are recorded since the Week view.)
+  const SOWN_KINDS = ['sow', 'potup', 'harden', 'field', 'move', 'harvest', 'flip'];
   const realDay = s => { if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false; const d = new Date(s + 'T12:00:00Z'); return !Number.isNaN(+d) && d.toISOString().slice(0, 10) === s; };
   const doneDate = (p, kind) => { const v = p && p.done && typeof p.done === 'object' ? p.done[kind] : null; return realDay(v) ? v : null; };
   const DONE_ORDER = [['sow', 'potup'], ['sow', 'harden'], ['sow', 'field'], ['potup', 'harden'], ['potup', 'field'], ['harden', 'field'], ['amend', 'field'], ['field', 'move'], ['field', 'sidedress'], ['field', 'harvest'],
@@ -638,5 +640,5 @@
   }
 
   return { norm, startOf, BASES, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
-    sizeOf, packs, cover, toCover, money, orderSheet, orderText, orderCsv, supplierOf, sowing, lotsToUse, recordSowing, takeBackSowing, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
+    sizeOf, packs, cover, toCover, money, orderSheet, orderText, orderCsv, supplierOf, sowing, lotsToUse, recordSowing, takeBackSowing, doneDate, realDay, DONE_ORDER, DONE_WORD, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
 });

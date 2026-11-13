@@ -301,7 +301,7 @@
       return add(box, h('p.sow-done', h('b', `✓ ${act} ${dayY(E.s2d(s.done))}`), h('span', sownText(s))),
         h('button.link', { type: 'button', dataset: { sow: 'back' }, onclick: () => {
           const done = App.takeBackSowing(p.id);
-          if (done) toast(`${App.cropLabel(p)}: sowing taken back${done.returned ? ` · ${qty(done.returned, done.stockUnit)} returned to stock` : ''}${done.lost ? ` · ${qty(done.lost, done.stockUnit)} could not go back: that lot is gone` : ''}`, { label: 'Undo', run: App.undo });
+          if (done) toast(`${App.cropLabel(p)}: sowing taken back${done.returned ? ` · ${qty(done.returned, done.stockUnit)} returned to stock` : ''}${done.lost ? ` · ${qty(done.lost, done.stockUnit)} could not go back: that lot is gone` : ''}${done.restored ? ' · back on the day first planned' : ''}`, { label: 'Undo', run: App.undo });
         } }, 'Take it back'));
     }
     if (s.sown) return add(box, h('p.sow-done', h('span', 'Later work is already recorded for this planting, so its seed is no longer counted as still to sow.')));
@@ -322,9 +322,43 @@
           const done = App.recordSowing(p.id, { date: date.value, quantity: used.value });
           if (!done) return;
           const off = done.used.reduce((n, u) => n + u.quantity, 0);
-          toast(`${App.cropLabel(p)} ${act.toLowerCase()} ${dayY(E.s2d(date.value))} · ${off ? `${qty(off, done.stockUnit)} off stock` : 'nothing off stock'}${done.untracked ? ` · ${qty(done.untracked, done.stockUnit)} not from a counted lot` : ''}${done.overlaps ? ` · it now overlaps ${done.overlaps === 1 ? 'another planting' : done.overlaps + ' plantings'}: see To settle` : ''}`, { label: 'Undo', run: App.undo });
+          toast(`${App.cropLabel(p)} ${act.toLowerCase()} ${dayY(E.s2d(date.value))} · ${off ? `${qty(off, done.stockUnit)} off stock` : 'nothing off stock'}${done.untracked ? ` · ${qty(done.untracked, done.stockUnit)} not from a counted lot` : ''}${done.moved ? ` · ${num(done.moved.days)} day${done.moved.days === 1 ? '' : 's'} late, so it goes out as much later` : ''}${done.overlaps ? ` · it now overlaps ${done.overlaps === 1 ? 'another planting' : done.overlaps + ' plantings'}: see To settle` : ''}`, { label: 'Undo', run: App.undo });
         } }, 'Record')),
       note);
+  }
+
+  // ── the jobs of one planting, each ticked on the day it was done ──
+  let jobOpen = null;   // the job whose day is being typed: { id, kind }
+  const JOB_WORDS = { potup: ['Pot up', 'Potted up'], harden: ['Harden off', 'Hardened off'], move: ['Move out', 'Moved out'] };
+  /**
+   * The schedule's first lines: sow, pot up, harden off, plant out, move out. A job done shows the day it was done and how
+   * that sat against the plan. The job that uses the seed is recorded in the box below, with what was used; the others here.
+   */
+  function jobItems(p, r, c, sow) {
+    const Week = root.LRFWeek, eng = App.state.engine, today = App.today(), seedDirect = sow && sow.kind === 'field' && (sow.unit === 'seeds' || sow.unit === 'g');
+    const words = st => st.kind === 'sow' ? ['Sow in nursery', 'Sown in nursery'] : st.kind === 'field' ? (c.method === 'TP' ? ['Transplant', 'Transplanted'] : seedDirect ? ['Direct sow', 'Direct sown'] : ['Plant', 'Planted']) : JOB_WORDS[st.kind];
+    return Week.steps(eng, p).map(st => {
+      const w = words(st), open = jobOpen && jobOpen.id === p.id && jobOpen.kind === st.kind && !st.done;
+      const late = st.done ? (st.late > 0 ? `${num(st.late)} d late` : st.late < 0 ? `${num(-st.late)} d early` : '') : '', pushed = !st.done && st.kind !== 'sow' && st.kind !== 'potup' && (Week.pushed(p, 'sow') || Week.pushed(p, 'harden'));
+      const save = input => {
+        const done = App.recordWork([{ id: p.id, kind: st.kind }], { date: input.value });
+        if (!done) return;
+        jobOpen = null;
+        toast(`${App.cropLabel(p)}: ${w[1].toLowerCase()} ${dayY(E.s2d(input.value))}${done.moved.length ? ` · it goes out ${num(done.moved[0].days)} day${done.moved[0].days === 1 ? '' : 's'} later` : ''}${done.overlaps ? ` · it now overlaps ${done.overlaps === 1 ? 'another planting' : done.overlaps + ' plantings'}: see To settle` : ''}${done.planOfRecord ? ' · the plan as it stood is kept under Snapshots as the plan of record' : ''}`, { label: 'Undo', run: App.undo });
+      };
+      const date = open ? h('input', { type: 'date', value: today, max: today, 'aria-label': `${w[1]} on`, dataset: { job: 'date' }, onkeydown: e => { if (e.key === 'Enter') save(e.target); else if (e.key === 'Escape') { e.stopPropagation(); jobOpen = null; render(); } } }) : null;
+      return h('li' + (st.done ? '.done' : st.passed ? '.passed' : ''), { dataset: { job: st.kind, state: st.done ? 'done' : st.passed ? 'passed' : 'open' } },
+        h('span', st.done ? w[1] : w[0],
+          st.kind === 'sow' && r.sowSet && !st.done ? h('button.link.sow-own', { type: 'button', title: `You set this day. The plan works out ${day(r.sowDefault)}. Click to use the plan’s day.`, onclick: () => App.planSowings([p.id], null) }, 'your day') : null,
+          late ? h('small.job-late', late) : null,
+          pushed ? h('small.job-late', { title: 'Its seedlings were sown or hardened off late, so the day moved with them. Change the date above to set another.' }, `${num(pushed.days)} d later`) : null,
+          st.passed ? h('small.job-late', 'no day recorded') : null,
+          // the job that uses the seed, the bulbs or the plants is recorded below, with what was used
+          !st.done && !st.passed && !st.seed && !open ? h('button.link.job-tick', { type: 'button', dataset: { job: 'tick' }, onclick: () => { jobOpen = { id: p.id, kind: st.kind }; render(); } }, 'record') : null,
+          st.done && !st.seed ? h('button.link.job-tick', { type: 'button', dataset: { job: 'back' }, onclick: () => { const done = App.takeBackWork([{ id: p.id, kind: st.kind }]); if (done) toast(`${App.cropLabel(p)}: ${w[0].toLowerCase()} taken back${done.restored ? ' · back on the day first planned' : ''}`, { label: 'Undo', run: App.undo }); } }, 'take back') : null),
+        open ? h('span.job-record', date, h('button.btn.small', { type: 'button', dataset: { job: 'save' }, onclick: () => save(date) }, 'Record'), h('button.icon-btn.job-x', { type: 'button', 'aria-label': 'Leave it', title: 'Leave it', onclick: () => { jobOpen = null; render(); } }, '×'))
+          : h('b', day(st.done ? E.s2d(st.done) : st.planned)));
+    });
   }
 
   /**
@@ -456,10 +490,8 @@
         yieldLine(eng, p, r)),
       h('section.insp-section',
         h('h3', 'Schedule'),
-        h('ol.schedule',
-          r.sow ? h('li' + (sow && sow.kind === 'sow' && sow.done ? '.done' : ''), h('span', sow && sow.kind === 'sow' && sow.done ? 'Sown in nursery' : 'Sow in nursery',
-            r.sowSet && !(sow && sow.done) ? h('button.link.sow-own', { type: 'button', title: `You set this day. The plan works out ${day(r.sowDefault)}. Click to use the plan’s day.`, onclick: () => App.planSowings([p.id], null) }, 'your day') : null), h('b', day(r.sow))) : null,
-          h('li' + (sow && sow.kind === 'field' && sow.done ? '.done' : ''), h('span', c.method === 'TP' ? 'Transplant' : sow && sow.kind === 'field' && sow.done ? 'Direct sown' : 'Direct sow'), h('b', day(r.field))),
+        h('ol.schedule', { id: 'jobList' },
+          jobItems(p, r, c, sow),
           h('li', h('span', 'First harvest'), h('b', day(r.first))),
           h('li', h('span', 'Last harvest'), h('b', r.harvestDays ? day(r.last) : 'None before the season ends')),
           h('li', h('span', 'Ground free again'), h('b', through === Infinity ? 'Stays planted' : day(E.addDays(through, 1)))))),
