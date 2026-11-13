@@ -2,7 +2,7 @@
 
 A crop planner that works on a map of the farm. Drag crops onto beds, move plantings, share beds, and keep one list of the assumptions the plan rests on.
 
-This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.30 at the time of writing).
+This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.31 at the time of writing).
 
 ## Using it
 
@@ -35,7 +35,7 @@ A bar names its crop first, then its variety ("Carrot · Early Orange"), with a 
 
 ## A bed's size
 
-Click a bed on the map and its panel shows width, length and area (a tower its sites, a bench its tray spaces). They are for reading: to change them, choose **Change this bed's size…** in that panel. Hovering a bed shows the same figures.
+Click a bed on the map and its panel shows width, length and area (a tower its sites, a bench its tray spaces). They are for reading: nothing in that panel changes them. A size is changed in one place, **Edit layout** on the map, and **Edit the layout…** under the figures goes there with that bed picked. Hovering a bed shows the same figures.
 
 ## Editing the layout
 
@@ -53,7 +53,7 @@ Click a bed on the map and its panel shows width, length and area (a tower its s
 
 Guard rails, not flags. A change that would lay one space on top of another does not happen: it is shown in red while it is held and goes back when let go (an overlap that came with the plan may stay). A space that holds plantings cannot be removed, and a bed cannot be made shorter than what is planted in it. Every change is one Undo.
 
-On the plan's own map, a crop keeps the same pots or crates for as long as it stands, with its name on them, in place of crates filled afresh in order on every date. Dragging a crop within its own group gives it other containers; a crop that went in earlier keeps its place, and later ones make room. Fit farm, the zoom buttons, a garden's name and a double click move the view in one eased motion, a mouse wheel's notches are smoothed, and a window that changes size is fitted again unless the view has been moved by hand.
+On the plan's own map, a crop keeps the same pots or crates for as long as it stands, with its name on them, in place of crates filled afresh in order on every date. Dragging a crop within its own group gives it other containers; a crop that went in earlier keeps its place, and later ones make room. Fit farm, the zoom buttons, a garden's name and a double click move the view in one eased motion. The wheel is not eased: it zooms at once, about the pointer. A window that changes size is fitted again unless the view has been moved by hand.
 
 ## Photos
 

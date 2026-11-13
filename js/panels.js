@@ -224,16 +224,13 @@
         h('li', h('b', 'Colours'), 'Pale while a crop is growing, full colour while it is being picked, hatched while the bed turns over. Click a crop in the bar under the map to show only that crop.'))));
   }
 
-  let sizing = null;   // the bed whose size is being changed, if any
   function renderBed(host, bed) {
     const eng = App.state.engine, date = App.state.date, status = eng.bedStatus(bed, date), g = eng.gardenOf(bed) || {}, unit = eng.capUnit(bed), soil = eng.isSoilBed(bed);
     const all = eng.plantingsIn(bed.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).sort((a, b) => a.r.field - b.r.field);
     const kind = { bed: 'Bed', tower: 'Tower', bench: 'Bench', containers: 'Containers' }[eng.spaceKind(bed)];
-    const size = key => h('input', { type: 'number', min: key === 'w' ? 0.5 : 1, max: key === 'w' ? 30 : 2000, step: 0.5, value: bed[key], id: key === 'w' ? 'fBedW' : 'fBedL',
-      onchange: e => { const n = +e.target.value; if (!(n > 0) || !App.updateBeds([bed.id], { [key]: n }, `Change ${App.bedLabel(bed)} ${key === 'w' ? 'width' : 'length'}`)) render(); } });
-    // What the space measures is there to be read at a glance. It is a fact about the farm, so it is changed only on purpose:
-    // the fields appear when asked for, and go again when the bed is left.
-    const editing = soil && sizing === bed.id, fig = (label, value, id) => { const el = stat(label, value); if (id) el.id = id; return el; };
+    // What the space measures is there to be read at a glance, and this panel never changes it. It is a fact about the farm,
+    // so it has one home: the layout, edited on the map (mapedit.js). The link under the figures goes there with this space picked.
+    const fig = (label, value, id) => { const el = stat(label, value); if (id) el.id = id; return el; };
     // the unit rides in the label, so a figure never wraps in a narrow panel
     const dims = soil ? [fig('Width (ft)', num(bed.w, 2), 'bedWidth'), fig('Length (ft)', num(bed.l, 2), 'bedLength'), fig('Area (sq ft)', num(bed.w * bed.l), 'bedArea')]
       : [fig({ tower: 'Sites', bench: 'Tray spaces', containers: 'Containers' }[eng.spaceKind(bed)] || 'Holds', num(status.cap), 'bedHolds')];
@@ -244,12 +241,8 @@
       h('div.stats.dims', { id: 'bedDims', 'aria-label': 'Size of this space' }, dims),
       h('div.stats', stat(`On ${day(date)}`, status.crops.length ? `${num(status.used, 1)} of ${num(status.cap, 1)} ${unit} planted` : status.resting ? 'Turning over' : 'Free'),
         stat('This season', `${all.length} planting${all.length === 1 ? '' : 's'}`)));
-    if (editing) host.append(h('section.insp-section.form', { id: 'bedSizeForm' }, h('div.field-pair', field('Width (ft)', size('w')), field('Length (ft)', size('l'))),
-      h('p.help', `${all.length ? `${num(all.length)} planting${all.length === 1 ? '' : 's'} here follow${all.length === 1 ? 's' : ''} the bed: ` : ''}rows and plant counts are worked out again from the new size. One Undo puts it back.`),
-      h('button.btn', { type: 'button', id: 'bedSizeDone', onclick: () => { sizing = null; render(); } }, 'Done')));
-    else if (soil) host.append(h('p.insp-aside', h('button.link', { type: 'button', id: 'bedSizeEdit', onclick: () => { sizing = bed.id; render(); const el = $('fBedL'); if (el) { el.focus(); el.select(); } } }, 'Change this bed’s size…'),
-      root.LRFMapEdit ? h('button.link', { type: 'button', id: 'bedLayoutEdit', title: 'Move, turn or resize this bed on the map itself', onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit the layout…') : null));
-    if (!soil && root.LRFMapEdit && !eng.isPool(bed)) host.append(h('p.insp-aside', h('button.link', { type: 'button', id: 'bedLayoutEdit', title: 'Move or set out this space on the map itself', onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit the layout…')));
+    if (root.LRFMapEdit && (soil || !eng.isPool(bed))) host.append(h('p.insp-aside', h('button.link', { type: 'button', id: 'bedLayoutEdit',
+      title: soil ? 'Sizes are changed in Edit layout: move, turn or resize this bed on the map itself' : 'Move or set out this space on the map itself', onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit the layout…')));
     const list = h('ul.p-list');
     for (const { p, r } of all) list.append(plantingRow(p, r));
     host.append(h('section.insp-section', h('h3', 'Plantings'), all.length ? list : h('p.note', 'Nothing planned here yet. Drag a crop onto this bed.'),
@@ -532,7 +525,6 @@
       clear(host);
       // an opening that has gone (something was planted in it) gives way to its bed
       const p = sel && sel.type === 'planting' ? eng.planting(sel.id) : null, opening = sel && sel.type === 'opening', bed = sel && sel.type === 'bed' ? eng.bedOf(sel.id) : opening ? eng.bedOf(sel.bedId) : null;
-      if (!bed || bed.id !== sizing || opening) sizing = null;   // leaving a bed ends any change to its size
       const Series = root.LRFSeries;
       if (p) renderPlanting(host, p); else if (opening && root.LRFAhead && root.LRFAhead.opening(host, sel, render)) { /* drawn */ } else if (bed) renderBed(host, bed);
       else if (sel && sel.type === 'series' && Series && Series.panel(host, render)) { /* the series tool */ }

@@ -9,6 +9,7 @@ The rules under test:
   - what is dragged lines up with its neighbours and keeps their path; a change that would lay one space on another does not happen;
   - a bed with plantings cannot be removed, nor made shorter than what is planted in it;
   - every change is one Undo; arrow keys move ground and leave the planning date alone;
+  - the wheel zooms at once, about the pointer; a bed's panel shows its size and never changes it;
   - nothing is clipped or wrapped in the panel at 1280, 1480 or 3440 wide.
 """
 import functools, http.server, json, os, socketserver, sys, threading
@@ -171,10 +172,18 @@ def run(page, width):
     check(tag + 'Fit farm glides back to the whole farm', part > back and abs(back - home) < 1e-6, [part, back, home])
     js('document.getElementById("mapZoomIn").click()'); js('LRFMap.fit()'); now = js('LRFMap.zoom()'); page.wait_for_timeout(350)
     check(tag + 'a fit asked for by the planner lands at once, and a glide in progress gives way to it', abs(now - home) < 1e-6 and abs(js('LRFMap.zoom()') - home) < 1e-6, [now, home])
+    # The wheel is not eased. What the view is, is read inside the wheel event itself, after the map's own handler has run
+    # (a listener on the window hears the event last), so "at once" is not a race with the browser. The pointer is held off
+    # the middle of the map, so a zoom about the middle shows as ground sliding under the pointer.
     box = page.locator('#map').bounding_box()
-    page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2); page.mouse.wheel(0, -100)
-    w1 = js('LRFMap.zoom()'); page.wait_for_timeout(450); w2 = js('LRFMap.zoom()')
-    check(tag + 'one notch of the mouse wheel is smoothed and ends where a notch always ended', home <= w1 < w2 and abs(w2 / home - 1.1735) < 0.004, [home, w1, w2])
+    wx, wy = round(box['x'] + box['width'] * 0.3), round(box['y'] + box['height'] * 0.38)   # whole pixels: the event carries no fractions
+    js("""(() => { window.__wheelSeen = []; window.__wheelSpy = e => window.__wheelSeen.push({ z: LRFMap.zoom(), at: LRFMap.toWorld(e.clientX, e.clientY) }); window.addEventListener('wheel', window.__wheelSpy, { passive: true }); })()""")
+    page.mouse.move(wx, wy); under = js('LRFMap.toWorld(%d, %d)' % (wx, wy))
+    page.mouse.wheel(0, -100); page.wait_for_timeout(450)
+    seen = js('window.__wheelSeen'); w2 = js('LRFMap.zoom()'); js("window.removeEventListener('wheel', window.__wheelSpy)")
+    first = seen[0] if seen else {'z': 0, 'at': [1e9, 1e9]}
+    check(tag + 'one notch of the mouse wheel zooms at once and ends where a notch always ended: the view is there before the event is over, and does not move after it', len(seen) == 1 and abs(first['z'] / home - 1.1735) < 0.004 and abs(w2 - first['z']) < 1e-9, [home, seen, w2])
+    check(tag + 'the wheel zooms about the pointer: the ground under it stays under it', len(seen) == 1 and abs(first['at'][0] - under[0]) < 1e-6 and abs(first['at'][1] - under[1]) < 1e-6, [under, seen])
     js('LRFMap.fit()')
     # a window that changes size is fitted again, unless the view was moved by hand
     page.set_viewport_size({'width': width - 180, 'height': 760}); page.wait_for_timeout(350)
@@ -544,11 +553,12 @@ def run(page, width):
     sel = js('LRFApp.state.sel')
     check(tag + 'back in the plan, a click on a bed opens its panel as before', sel is not None and sel['type'] in ('bed', 'planting'), sel)
     js("LRFApp.select({ type: 'bed', id: '%s' })" % ids[1]); page.wait_for_timeout(100)
-    links = js("(() => { const a = document.getElementById('bedSizeEdit'), b = document.getElementById('bedLayoutEdit'); return { size: !!a, layout: !!b, oneLine: !!a && !!b && document.querySelector('.insp-aside').getClientRects().length === 1 && b.getBoundingClientRect().top === a.getBoundingClientRect().top }; })()")
+    links = js("(() => { const host = document.getElementById('inspectorBody'), b = document.getElementById('bedLayoutEdit'), spill = e => e.scrollWidth > e.clientWidth + 1; return { figures: ['bedWidth', 'bedLength', 'bedArea'].filter(id => document.getElementById(id)).length, fields: host.querySelectorAll('input, select, textarea').length, size: !!document.getElementById('bedSizeEdit') || !!document.getElementById('bedSizeForm'), layout: !!b, links: host.querySelectorAll('.insp-aside button').length, oneLine: !!b && b.getClientRects().length === 1 && !spill(b), words: b ? b.textContent : '' }; })()")
+    check(tag + 'the bed’s panel shows the size and holds nothing that changes it: three figures, no field, no size form', links['figures'] == 3 and links['fields'] == 0 and not links['size'], links)
     if links['layout']:
         page.click('#bedLayoutEdit'); page.wait_for_timeout(500)
-    via = js("({ on: LRFMapEdit.on(), picked: LRFMapEdit.picked(), sel: LRFApp.state.sel })")
-    check(tag + 'the bed’s panel keeps “Change this bed’s size…” and beside it, on the same line, “Edit the layout…” opens the mode with that bed picked', links['size'] and links['layout'] and links['oneLine'] and via['on'] and via['picked'] == [ids[1]] and via['sel'] is None, {'links': links, 'via': via})
+    via = js("({ on: LRFMapEdit.on(), picked: LRFMapEdit.picked(), sel: LRFApp.state.sel, w: (document.getElementById('fLayW') || {}).value, l: (document.getElementById('fLayL') || {}).value })")
+    check(tag + 'its one link, “Edit the layout…”, on one line, opens the mode with that bed picked and its width and length there to type', links['layout'] and links['links'] == 1 and links['oneLine'] and via['on'] and via['picked'] == [ids[1]] and via['sel'] is None and via['w'] not in (None, '') and via['l'] not in (None, ''), {'links': links, 'via': via})
     js("LRFApp.setView('timeline')"); page.wait_for_timeout(120)
     check(tag + 'going to another view ends the editing', not js('LRFMapEdit.on()') and js("!document.body.dataset.layout"))
     js("LRFApp.setView('map')"); page.wait_for_timeout(120)

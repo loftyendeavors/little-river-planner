@@ -11,8 +11,8 @@
  *   drag the ends of the selected planting to lengthen or shorten it.
  * A drag on open ground pans; the wheel zooms; hold Space to pan from anywhere.
  *
- * Moves of the view that the grower asks for with a button, a garden's name or a double click are eased, and a mouse
- * wheel's notches are smoothed; a move asked for by another part of the planner (fit, fitGarden) lands at once.
+ * Moves of the view that the grower asks for with a button, a garden's name or a double click are eased. The wheel is not:
+ * every turn of it zooms at once, about the pointer. A move asked for by another part of the planner (fit, fitGarden) lands at once too.
  * Pots and crates: each crop keeps the same containers for as long as it stands (see seatsOf).
  * Editing the layout itself (moving, sizing, adding beds) lives in mapedit.js, which borrows this map through
  * lock(), watch() and the small readers at the foot of this file.
@@ -443,8 +443,8 @@
   }
   // ── moving the view smoothly ──
   const calm = () => !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  let gliding = 0, wheel = null;
-  function settle() { if (gliding) { cancelAnimationFrame(gliding); gliding = 0; } if (wheel) { cancelAnimationFrame(wheel.raf); wheel = null; } }
+  let gliding = 0;
+  function settle() { if (gliding) { cancelAnimationFrame(gliding); gliding = 0; } }
   /**
    * Take the view to `to` in one eased motion. The point in the middle of the map is carried in a straight line while the
    * zoom changes by equal ratios, so near and far moves both read as one movement and not a slide followed by a jump.
@@ -503,22 +503,6 @@
     const to = zoomed(cx, cy, factor);
     view.x = to.x; view.y = to.y; view.z = to.z; view.moved = true;
     applyView();
-  }
-  /** One notch of a mouse wheel: the zoom it asks for is reached over a few frames, about the pointer. Notches add up. */
-  function wheelTo(cx, cy, factor) {
-    if (gliding) { cancelAnimationFrame(gliding); gliding = 0; }
-    const z = clamp((wheel ? wheel.z : view.z) * factor, 0.05, 60);
-    if (wheel) { wheel.z = z; wheel.cx = cx; wheel.cy = cy; return; }
-    wheel = { z, cx, cy, last: performance.now(), raf: 0 };
-    const step = now => {
-      if (!wheel) return;
-      const dt = Math.min(64, Math.max(1, now - wheel.last)), k = 1 - Math.exp(-dt / 60), want = Math.log(wheel.z), at = Math.log(view.z) + (want - Math.log(view.z)) * k, done = Math.abs(want - at) < 0.003;
-      wheel.last = now;
-      const target = done ? wheel.z : Math.exp(at), { cx: x, cy: y } = wheel;
-      if (done) wheel = null; else wheel.raf = requestAnimationFrame(step);
-      zoomAt(x, y, target / view.z);
-    };
-    wheel.raf = requestAnimationFrame(step);
   }
   function focusBed(bedId) {
     const item = beds.get(bedId), rect = $('map').getBoundingClientRect();
@@ -623,13 +607,9 @@
     else if (bedId) App.select({ type: 'bed', id: bedId });
     else if (App.state.sel && App.state.sel.type !== 'series') App.select(null);   // a stray click on the photo does not throw a half-filled series away
   }
-  function onWheel(e) {
-    e.preventDefault();
-    const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0016));
-    // A mouse wheel turns in notches, and each one is eased. A trackpad or a pinch sends a stream of small moves: those are followed as they come.
-    if (e.ctrlKey || e.deltaMode !== 0 || Math.abs(e.deltaY) < 40 || calm()) { settle(); zoomAt(e.clientX, e.clientY, factor); }
-    else wheelTo(e.clientX, e.clientY, factor);
-  }
+  // The wheel zooms at once, about the pointer: a notch of a mouse wheel, a trackpad and a pinch alike. (Easing it was tried and
+  // taken out: a wheel that lags the hand reads as slow.) A glide still on its way, from a button or a double click, gives way to it.
+  function onWheel(e) { e.preventDefault(); settle(); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0016))); }
 
   // ── hover card ──
   function showTip(e, nodes) {
