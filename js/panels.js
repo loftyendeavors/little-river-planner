@@ -262,7 +262,7 @@
         h('li', h('b', 'Series'), h('span', 'One crop every so many days: ', h('button.linkish', { type: 'button', id: 'ovSeries', onclick: () => App.openAhead({ mode: 'series' }) }, 'plan a series'), ', or use “series” beside a crop in the library.')),
         h('li', h('b', 'Move'), 'Drag a planting to other ground. It keeps its date. Hold Alt to leave a copy.'),
         h('li', h('b', 'Trade'), 'Drop a planting on ground that is held and the two trade places, when both fit.'),
-        h('li', h('b', 'Share a bed'), 'Select a planting and drag its ends. The feet it gives up take the next crop.'),
+        h('li', h('b', 'Share a bed'), 'Drop a crop onto a bed that is held: it asks whether to split the bed or replace what is there, once, and then keeps splitting until you press Done. Or use “Several varieties in this bed…” in a planting’s panel. Push a planting’s end into its neighbour to move the line between them.'),
         h('li', h('b', 'Look closer'), 'Click a garden name to zoom to it. Wheel zooms, drag pans, Space pans from anywhere.'),
         h('li', h('b', 'Colours'), 'Pale while a crop is growing, full colour while it is being picked, hatched while the bed turns over. Click a crop in the bar under the map to show only that crop.'))));
   }
@@ -476,6 +476,41 @@
     return h('p.help', { id: 'fYieldLine' }, `Expected: ${F.amount(y.units, y.unit, 'produce')}${personal ? ', for personal use: not counted as revenue' : y.price > 0 ? ` at $${num(y.price, 2)}, ${'$' + Math.round(y.units * y.price).toLocaleString('en-US')}` : ''}. From ${whose}${how ? ` (${how})` : ''}.${r.c.harvestBy === 'list' ? ' Harvest days are your list’s.' : ''}`);
   }
 
+  // ── several varieties in one bed (stage c of the bed panel build) ──
+  // Under Variety, "Several varieties…" opens the crop's varieties to tick. Each one ticked becomes a planting of its own
+  // beside this one, same date and same choices, and the bed is shared in equal parts. What that comes to is said first.
+  let several = null;   // { id: the planting, picked: Set of variety ids, by: 'length' | 'rows' }
+  function severalBox(eng, p, r, varieties) {
+    const mates = Rails.mates(eng, p), inBed = new Set(mates.filter(x => x.p.cropId === p.cropId).map(x => x.p.varietyId || '')), by = several.by;
+    const redraw = () => render();
+    const row = v => {
+      const here = v.id === p.varietyId, there = !here && inBed.has(v.id), tick = h('input', { type: 'checkbox', checked: here || there || several.picked.has(v.id), disabled: here || there, dataset: { variety: v.id },
+        onchange: e => { if (e.target.checked) several.picked.add(v.id); else several.picked.delete(v.id); redraw(); } });
+      return h('label', tick, root.LRFThumbs.el({ varietyId: v.id, cropId: p.cropId, color: eng.cropColor(r.c), label: v.name, size: 26, cls: 'key' }), h('span', v.name, here ? h('small', ' · this planting') : there ? h('small', ' · in the bed') : null));
+    };
+    const picked = [...several.picked].filter(id => varieties.some(v => v.id === id)), plan = picked.length ? App.planVarieties(p.id, picked, by) : null;
+    const says = !picked.length ? 'Tick the varieties to grow beside this one. Nothing changes until you press Divide the bed.'
+      : plan.no ? plan.no
+        : `${App.bedLabel(plan.bed)}: ${num(plan.n)} plantings, ${by === 'rows' ? `${num(plan.rows.count)} of ${num(plan.rows.total)} rows each` : `${num(plan.len, 1)} ft each of ${num(r.cap, 1)}`}. ${r.c.vname || r.c.name} goes from ${num(plan.plants[0])} plants to ${num(plan.plants[1])}. The same date for all.`;
+    const seg = (value, text) => h('button', { type: 'button', 'aria-pressed': String(by === value), dataset: { by: value }, onclick: () => { several.by = value; redraw(); } }, text);
+    return h('div.mix-pick', { id: 'mixPick' },
+      h('b', 'Several varieties in this bed'),
+      h('div.mix-pick-list', { id: 'mixPickList' }, varieties.map(row)),
+      r.rows >= 2 && r.rows <= 12 ? h('div.seg', { id: 'mixBy', role: 'group', 'aria-label': 'How the bed is shared' }, seg('length', 'Along the bed'), seg('rows', 'By rows')) : null,
+      h('p.mix-pick-says' + (plan && plan.no ? '.bad' : ''), { id: 'mixSays' }, says),
+      h('div.mix-pick-acts', h('button.btn.primary', { type: 'button', id: 'mixDivide', disabled: !plan || !!plan.no, onclick: () => { const added = App.addVarieties(p.id, picked, by); if (added) several = null; render(); } }, 'Divide the bed'),
+        h('button.link', { type: 'button', id: 'mixCancel', onclick: () => { several = null; render(); } }, 'Cancel')));
+  }
+  /** Who a planting shares its bed with, and a way back to equal shares. */
+  function matesBox(eng, p) {
+    const mates = Rails.mates(eng, p);
+    if (mates.length < 2) return null;
+    const size = x => x.rect && x.rect.rows && x.rect.rows.count < x.rect.rows.total ? `${num(x.rect.rows.count)} of ${num(x.rect.rows.total)} rows` : `${num(x.r.physicalLength, 1)} ft`;
+    return h('div.field', { id: 'fMatesField' }, h('span', `Shares ${App.bedLabel(eng.bedOf(p.bedId))} with`),
+      h('ul.mix-mates', { id: 'fMates' }, mates.map(x => h('li', { dataset: { mate: x.p.id } }, x.p.id === p.id ? h('b', `${App.cropLabel(x.p)} (this one)`) : h('button.link', { type: 'button', onclick: () => App.select({ type: 'planting', id: x.p.id }) }, App.cropLabel(x.p)), h('span', size(x))))),
+      h('small', h('button.linkish', { type: 'button', id: 'fEqual', onclick: () => App.equalShares(p.id) }, 'Make them equal'), ' · on the map, push an end into its neighbour to move the line between them.'));
+  }
+
   function renderPlanting(host, p) {
     const eng = App.state.engine, r = eng.calc(p);
     if (!r) { host.append(h('p.note', 'This planting cannot be calculated. Its saved data is kept.'), h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')); return; }
@@ -488,6 +523,8 @@
     const varieties = eng.varietiesOf(p.cropId), variety = h('select', { id: 'fVariety', onchange: e => set({ varietyId: e.target.value || null, variety: null }, 'Change variety') }, h('option', { value: '' }, 'No variety chosen'));
     if (v && !varieties.includes(v)) variety.append(h('option', { value: v.id, selected: true }, `${v.name} (retired)`));
     for (const x of varieties) variety.append(h('option', { value: x.id, selected: x.id === p.varietyId }, x.name));
+    if (several && several.id !== p.id) several = null;
+    const canMix = eng.isSoilBed(bed) && varieties.length >= 2;
     // Space
     const space = h('select', { id: 'fSpace', onchange: e => { if (!App.place({ plantingId: p.id }, e.target.value, E.s2d(p.date), { noSwap: true })) render(); } });
     for (const garden of App.state.plan.gardens) {
@@ -526,8 +563,10 @@
         h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select({ type: 'bed', id: bed.id }) }, '×')),
       h('section.insp-section.form',
         field(c.method === 'TP' ? 'Transplant date' : sow && sow.kind === 'field' && sow.done ? 'Planned sowing date' : 'Sowing date', h('input', { type: 'date', id: 'fDate', value: p.date, onchange: e => { if (E.validDate(E.s2d(e.target.value))) set({ date: e.target.value }, 'Change date'); else render(); } })),
-        field('Variety', variety),
+        field('Variety', variety, canMix && !several ? h('button.linkish', { type: 'button', id: 'fSeveral', title: 'Grow several varieties in this bed: each becomes a planting of its own beside this one, and the bed is shared equally', onclick: () => { several = { id: p.id, picked: new Set(), by: 'length' }; render(); } }, 'Several varieties in this bed…') : null),
+        canMix && several ? severalBox(eng, p, r, varieties) : null,
         field('Growing space', space),
+        eng.isSoilBed(bed) ? matesBox(eng, p) : null,
         r.tw ? null : field(r.ct ? 'Containers' : r.rack ? 'Trays' : 'Length (ft)',
           h('input', { type: 'number', id: 'fLength', min: 1, max: r.cap, step: r.ct || r.rack ? 1 : 0.5, value: whole ? '' : +(+p[lengthKey]).toFixed(2), placeholder: `Whole ${r.ct ? 'group' : r.rack ? 'bench' : 'bed'} · ${num(r.cap, 1)}`,
             onchange: e => setLength(e.target.value) }), whereText),
@@ -564,7 +603,9 @@
           h('button.btn', { type: 'button', onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+$('fRepeatCount').value) || 1)), Math.max(1, Math.round(+$('fRepeatEvery').value) || 14)) }, 'Add')),
         h('p.help', `Each one takes this ${unit === 'sites' ? 'tower' : 'bed'} if it is free by then, otherwise the next free one in ${eng.gardenOf(bed).name}. `,
           canSeries(eng, r.c) ? h('button.linkish', { type: 'button', id: 'fSeriesLink', onclick: () => App.openAhead({ mode: 'series', sourceId: p.id }) }, 'Plan a longer series: see it first, name gardens or beds, or leave them to place') : null)),
-      h('div.insp-actions', h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')));
+      h('div.insp-actions',
+        h('button.btn', { type: 'button', id: 'fToWait', title: 'Take it out of this bed and keep it, with its date, under To place. What it shared the bed with takes up its ground.', onclick: () => App.sendToWait(p.id) }, 'Send to To place'),
+        h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')));
   }
 
   // Removing a focused field can fire its change handler, which asks for another render: finish this one first.

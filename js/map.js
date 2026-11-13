@@ -559,12 +559,13 @@
       const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
       zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, (gesture.z * d / gesture.d) / view.z);
     } else if (gesture.kind === 'stretch') {
-      const { cur } = gesture, res = Rails.stretch(App.state.engine, cur.p, gesture.edge, inBed(cur.item, e.clientX, e.clientY).along);
+      // pulled back, an end gives up feet; pushed on against a neighbour, the line between the two moves and the neighbour gives them up
+      const { cur } = gesture, res = Rails.slide(App.state.engine, cur.p, gesture.edge, inBed(cur.item, e.clientX, e.clientY).along);
       if (!res) return;
       gesture.result = res;
       paintHandles(res);
       const r = App.state.engine.calc(cur.p), plants = r.rows * Math.floor(res.len * 12 / r.inRow);
-      showTip(e, [h('strong', `${num(res.len, 1)} ft`), h('span.tip-spec', `${num(res.a0, 1)}–${num(res.a1, 1)} ft of ${num(r.cap, 1)} · ${num(plants)} plants`)]);
+      showTip(e, [h('strong', `${num(res.len, 1)} ft`), h('span.tip-spec', `${num(res.a0, 1)}–${num(res.a1, 1)} ft of ${num(r.cap, 1)} · ${num(plants)} plants`), res.other ? h('span.tip-spec', { id: 'tipOther' }, `${App.cropLabel(res.other.p)} keeps ${num(res.other.len, 1)} ft`) : null]);
     } else if (gesture.kind === 'tap' || gesture.kind === 'pan') {
       const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
       if (gesture.kind === 'tap' && Math.hypot(dx, dy) > 4) { gesture.kind = 'pan'; $('map').classList.add('panning'); }
@@ -580,7 +581,8 @@
     if (done.kind === 'stretch') {
       hideTip();
       const res = done.result;
-      if (!res || res.same || !App.updatePlanting(done.cur.p.id, res.change, `Resize ${App.cropLabel(done.cur.p)}`)) paintHandles();
+      const moved = res && !res.same && (res.ops ? App.commit(`Move the line between ${App.cropLabel(done.cur.p)} and ${App.cropLabel(res.other.p)}`, res.ops) : App.updatePlanting(done.cur.p.id, res.change, `Resize ${App.cropLabel(done.cur.p)}`));
+      if (!moved) paintHandles();
       return;
     }
     if (done.kind === 'hold' && root.LRFDrag.active() && !e.altKey) {
@@ -703,8 +705,22 @@
     over.append(layer);
   }
 
+  // ── a bed being mixed: varieties dropped into it one after another split it again without asking (app.js, shareDrop) ──
+  let mixPill = null;
+  function drawMixing() {
+    const m = App.mixing && App.mixing(), eng = App.state.engine, bed = m && eng.bedOf(m.bedId), on = !!bed && App.state.view === 'map' && !document.body.dataset.layout;
+    if (!mixPill) { if (!on) return; mixPill = h('div.le-pill.mix-pill', { id: 'mixPill' }); $('mapView').append(mixPill); }
+    mixPill.hidden = !on;
+    for (const el of document.querySelectorAll('#mapBeds .bed.mixing')) el.classList.remove('mixing');
+    if (!on) return;
+    const item = beds.get(bed.id); if (item) item.g.classList.add('mixing');
+    const here = eng.cropsAt(bed.id, App.state.date), n = here.length, same = n > 1 && here.every(r => Math.abs(r.physicalLength - here[0].physicalLength) < 0.01);
+    UI.clear(mixPill).append(h('b', 'Mixing'), h('span', { id: 'mixPillText' }, `${App.bedLabel(bed)} · ${num(n)} planting${n === 1 ? '' : 's'}${m.by === 'rows' ? ' · sharing the rows' : same ? ` · ${num(here[0].physicalLength, 1)} ft each` : ''} · drop the next one in`),
+      h('button.btn.primary', { type: 'button', id: 'mixDone', title: 'Stop mixing this bed: the next drop on it asks again (Escape)', onclick: () => App.endMixing() }, 'Done'));
+  }
   function init() {
     const svg = $('map');
+    App.on('mixing', drawMixing); App.on('plan', drawMixing); App.on('date', drawMixing); App.on('view', drawMixing);
     svg.addEventListener('pointerdown', onDown);
     svg.addEventListener('pointermove', onMove);
     svg.addEventListener('pointerup', onUp);
