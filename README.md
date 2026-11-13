@@ -2,7 +2,7 @@
 
 A crop planner that works on a map of the farm. Drag crops onto beds, move plantings, share beds, and keep one list of the assumptions the plan rests on.
 
-This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.32 at the time of writing).
+This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.33 at the time of writing).
 
 ## Using it
 
@@ -53,7 +53,25 @@ A bar names its crop first, then its variety ("Carrot · Early Orange"), with a 
 
 ## A bed's size
 
-Click a bed on the map and its panel shows width, length and area (a tower its sites, a bench its tray spaces). They are for reading: to change them, choose **Change this bed's size…** in that panel. Hovering a bed shows the same figures.
+Click a bed on the map and its panel shows width, length and area (a tower its sites, a bench its tray spaces). They are for reading: nothing in that panel changes them. A size is changed in one place, **Edit layout** on the map, and **Edit the layout…** under the figures goes there with that bed picked. Hovering a bed shows the same figures.
+
+## Editing the layout
+
+**Edit layout**, the first of the map's tools, turns the map from a plan into a drawing of the ground. The crop library gives way to a list of the gardens, the details panel to the size and place of what is picked, and plantings are shown faintly: they stay with their beds, and nothing here plans a crop. **Done**, or Escape with nothing picked, goes back. Going to another view goes back too, and so does a press on either count in the header (to place, to settle), so that the list it opens can be seen.
+
+- **Pick.** Click a bed; Shift-click picks more; Shift-drag picks a box; a garden's name on the map, or its line in the list, picks all of it; a double click on a bed picks its garden.
+- **Move.** Drag what is picked. It lines up with spaces lying the same way and takes the path the row beside it already keeps, with guide lines and the path in feet; Ctrl moves freely. Alt-drag leaves it where it is and sets down a copy (a whole garden copied is a new garden). The arrow keys nudge half a foot (Shift 5 ft, Alt a tenth), and a run of presses is one Undo; they do not move the planning date while the layout is being edited.
+- **Size.** With one bed picked, drag an end to change its real length or a side to change its real width, in half feet; near a neighbour's length it takes that length and says whose. The other end stays where it is. Width and length can also be typed, for every bed picked.
+- **Turn.** Drag the round handle. A turn settles on a neighbour's line or a square one when it comes close, otherwise on a whole degree.
+- **New garden.** Drag a block on the map: it takes the lines of the ground beside it (Ctrl draws it square to the photo) and beds fill it as it is drawn, at the bed width and path the farm mostly uses. Name it, choose the kind of place, the bed width, the path and which way the beds run, or pots and crates instead of beds, then make it. It is made in one step and is picked, ready to move or turn.
+- **Tidy.** With several picked: line up sides, ends or middles; space them a typed path apart, or even out the paths between the two outer ones; set them out in rows; number them as they read on the map.
+- **A whole garden** can be renamed, given another kind of place (which says first what it does to harvest dates), and drawn larger or smaller than true size to match the photo, its beds' real sizes unchanged.
+- **Pots and crates.** A group is set out by how many, of what kind, how many side by side and how far apart.
+- **Measure.** Drag between two points for the distance in feet. Typing what that line really measures sets the photo's scale.
+
+Guard rails, not flags. A change that would lay one space on top of another does not happen: it is shown in red while it is held and goes back when let go (an overlap that came with the plan may stay). A space that holds plantings cannot be removed, and a bed cannot be made shorter than what is planted in it. Every change is one Undo.
+
+On the plan's own map, a crop keeps the same pots or crates for as long as it stands, with its name on them, in place of crates filled afresh in order on every date. Dragging a crop within its own group gives it other containers; a crop that went in earlier keeps its place, and later ones make room. Fit farm, the zoom buttons, a garden's name and a double click move the view in one eased motion. The wheel is not eased: it zooms at once, about the pointer. A window that changes size is fitted again unless the view has been moved by hand.
 
 ## Photos
 
@@ -181,6 +199,9 @@ Sync works from the planner's web address, in any current browser. The single of
 | `index.html`, `css/`, `js/` | The app. Plain scripts, no build step needed to run. |
 | `js/engine.js` | Planning calculations. |
 | `js/rails.js` | The rules that keep two plantings out of the same ground. |
+| `js/map.js` | The farm map: every space drawn where it lies, what stands in it on the planning date or through the season, dropping and moving plantings, and the view. |
+| `js/mapgeo.js` | The geometry of the map, with no page: frames turned to the beds, lining up and spacing, snapping to a neighbour's line and path, filling a block with beds, the rule that keeps one space off another, and which containers a crop stands in. Tested by `tools/mapgeo_test.cjs` on made-up shapes. |
+| `js/mapedit.js` | Editing the layout: picking, moving, sizing, turning, copying, adding and removing spaces, a new garden drawn as a block, tidying, pots and crates, measuring and the photo's scale. |
 | `js/guide.js` | Crop defaults checked against Johnny's Selected Seeds and the New England Vegetable Management Guide. |
 | `js/seeds.js`, `js/seedlib.js` | The seed library: one list of varieties with what the plan needs of each, seed stock, vendor sizes, sowing records, a photo gallery, the crops, a detail panel, and the importer. |
 | `js/sowing.js`, `js/week.js`, `js/sowview.js` | Practical sowing (plug trays, whole rows, batches shared by plantings), carried over from v7's own model; the tasks of a planting and what recording one moves; and the Tasks view, nursery and field. |
