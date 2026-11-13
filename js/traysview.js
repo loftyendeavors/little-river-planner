@@ -1,8 +1,9 @@
-/* Little River Farm Planner — the Trays view.
+/* Little River Farm Planner — the Nursery view (view id "trays": it began as the view of live trays alone).
  *
- * Weekly demand for whole live trays and the sowing it asks for, week by week. The demand table is
- * edited in place: each change regenerates that plan's batches as one step and can be undone.
- * Batches already sown stay as they were recorded; the rest follow the numbers.
+ * Everything raised on a bench, in four tabs. Bench room: what stands there week by week against what the benches hold.
+ * Live trays: weekly demand for whole trays and the sowing it asks for; the demand table is edited in place, each change
+ * regenerates that plan's batches as one step, and batches already sown stay as recorded. Supplies: what the season uses.
+ * Set-up: the benches themselves and the rules for what stands where (js/bench.js draws all but Live trays).
  */
 (function (root) {
   'use strict';
@@ -16,6 +17,18 @@
   /** Seed by weight the way it is bought: grams up to a pound, pounds beyond. */
   const weight = g => !g ? '—' : g < 453.6 ? `${num(g, 0)} g` : `${num(g / 453.592, 1)} lb`;
   let dirty = true;
+
+  // ── the four parts of the nursery. A visit starts on Bench room; the tab is kept while the page is open ──
+  const TABS = [
+    ['room', 'Bench room', 'Everything raised on a bench: seedling trays, tower seedlings, pots and live trays, week by week against what the benches hold. It is shown, never enforced.'],
+    ['live', 'Live trays', 'Whole 10 × 20 trays sold live. Say how many are wanted each week and how long each crop takes: every batch is sown that many days before the Monday it is due, and stands on the heated benches until then.'],
+    ['supplies', 'Supplies', 'What the season uses of trays, rockwool, pots and mix, less what is on the shelf.'],
+    ['setup', 'Set-up', 'The benches themselves, and the rules for what stands where. Changing any of it moves no sowing, planting or harvest day.']
+  ];
+  let tab = 'room', drawn = null;
+  function setTab(next) { if (!TABS.some(t => t[0] === next)) return false; tab = next; render(); return true; }
+  /** Go to the Nursery, on one of its tabs: the way in from the other views. */
+  function open(next) { if (next && TABS.some(t => t[0] === next)) tab = next; if (App.state.view !== 'trays') App.setView('trays'); else render(); }
 
   // ── figures the page is drawn from, worked out once per plan state ──
   const cache = new WeakMap();
@@ -198,34 +211,57 @@
     }
     const step = n => () => App.setDate(E.addDays(d(now), n));
     return h('section.tr-weeks', h('div.tr-weeks-head', h('h3', 'Week by week'),
-      h('button.linkish.tr-tosow', { type: 'button', onclick: () => App.setView('sow') }, 'Record what was sown on the Week view'), h('span.grow'),
+      h('button.linkish.tr-tosow', { type: 'button', id: 'trToTasks', onclick: () => { if (root.LRFSowView && root.LRFSowView.open) root.LRFSowView.open('nursery'); else App.setView('sow'); } }, 'Record what was sown, in Tasks'), h('span.grow'),
       h('span.tr-stepper', h('button.icon-btn', { type: 'button', 'aria-label': 'Back one week', onclick: step(-7) }, '‹'), h('b', `Week of ${day(d(now))}`), h('button.icon-btn', { type: 'button', 'aria-label': 'Forward one week', onclick: step(7) }, '›'))),
       body.children.length ? h('div.tr-scroll', h('table.as.tr-week', h('thead', h('tr', h('th', 'Week of'), h('th', 'Sow'), h('th', { title: 'Sown on the Monday unless a day is shown' }, 'What to sow'), h('th', 'Ready'), h('th', 'Expected'), h('th', { title: 'Most live trays standing on the benches on any day of the week' }, 'On the benches'))), body)) : h('p.tr-note', 'No trays are planned this season.'));
   }
 
+  // ── the tabs ──
+  /** Bench room: the season at a glance, this week on the benches and in the nursery's list, then the lines and charts. */
+  function roomTab() {
+    const bench = Bench.figures(), t = bench.tightest, now = T.monday(E.d2s(App.state.date)), wk = bench.weeks.find(w => w.week === now), here = wk && wk.pools ? wk.pools : {};
+    const heat = here.heated, others = bench.shown.filter(k => k !== 'heated' && here[k] && (here[k].used > 1e-9 || here[k].cap)).map(k => `${root.LRFNursery.kindName(k).toLowerCase()} ${here[k].cap ? `${num(here[k].used, 0)} of ${num(here[k].cap)}` : num(here[k].used, 0)}`);
+    const hd = bench.hardening, days = bench.hardenDays;
+    const todo = root.LRFSowView && root.LRFSowView.weekCounts ? root.LRFSowView.weekCounts(now) : null, parts = todo ? [['sow', 'to sow'], ['potup', 'to pot up'], ['harden', 'to harden off']].filter(([k]) => todo[k]).map(([k, w]) => `${num(todo[k])} ${w}`) : [];
+    return [h('div.tr-stats.nu-stats',
+      stat(bench.shown.length > 1 ? 'Heated benches, fullest' : 'Benches at their fullest', t ? (bench.cap ? `${num(t.used, 0)} of ${num(t.cap)}` : `${num(t.used, 0)} spaces`) : '—', !t ? 'nothing under cover' : !bench.cap ? `${day(t.date)} · no benches listed` : `${day(t.date)}${t.over > 0.05 ? ` · ▲ ${num(t.over, 1)} over` : ' · room to spare'}`, t && bench.cap && t.over > 0.05 ? 'over' : ''),
+      stat(`On the benches, week of ${day(d(now))}`, heat && heat.used > 1e-9 ? (heat.cap ? `${num(heat.used, 0)} of ${num(heat.cap)}` : `${num(heat.used, 0)} spaces`) : 'Nothing', [bench.shown.length > 1 && heat && heat.used > 1e-9 ? 'under heat' : '', ...others].filter(Boolean).join(' · ') || (heat && heat.used > 1e-9 ? `fullest on ${dayName(heat.date)}` : 'stands under heat'), heat && heat.cap && heat.over > 0.05 ? 'over' : ''),
+      stat('Hardening off, most at once', !days ? 'Not planned' : hd && hd.most > 1e-9 ? `${num(hd.most, 0)} spaces` : 'Nothing', !days ? 'seedlings stay under cover until planted' : hd && hd.most > 1e-9 ? `${day(hd.on)} · ${num(days)} day${days === 1 ? '' : 's'} before planting out` : `${num(days)} day${days === 1 ? '' : 's'} before planting out`),
+      h('div.tr-stat.nu-week', { id: 'nuWeek' }, h('span', 'This week in the nursery'), h('strong', todo && todo.nursery ? `${num(todo.nursery)} to do` : 'Nothing'), h('small', parts.join(' · ') || 'to sow, pot up or harden off'),
+        h('button.linkish', { type: 'button', id: 'nuToTasks', title: 'The week’s list, with only the nursery’s tasks', onclick: () => { if (root.LRFSowView && root.LRFSowView.open) root.LRFSowView.open('nursery'); } }, 'Open the nursery’s list, in Tasks'))),
+    Bench.room()];
+  }
+  /** Live trays: the season's figures, each demand plan, and under them the same batches week by week. */
+  function liveTab() {
+    const fig = figures(), list = plans(), now = T.monday(E.d2s(App.state.date)), week = fig.weeks.find(w => w.week === now) || { sow: 0, ready: 0, revenue: 0 };
+    const orphans = fig.list.filter(b => b.planned && !(App.state.plan.liveTrayPlans || []).some(p => p.id === b.planId)).length;
+    return [h('div.tr-stats.nu-stats',
+      stat('Trays this season', num(fig.trays), `${num(fig.list.length)} batches · ${num(fig.crops.length)} crop${fig.crops.length === 1 ? '' : 's'}${fig.sown ? ` · ${num(fig.sown)} sown` : ''}`),
+      stat('Expected', money(fig.revenue), 'if every tray sells at its price'),
+      stat('Seed for the season', fig.seeds ? `${num(fig.seeds)} seeds` : fig.seedG ? weight(fig.seedG) : '—', (fig.seeds && fig.seedG ? `and ${weight(fig.seedG)} by weight · ` : '') + (!fig.crops.length ? '' : fig.unrated === fig.crops.length ? 'no seed figure set yet' : fig.unrated ? `${num(fig.crops.length - fig.unrated)} of ${num(fig.crops.length)} crops counted so far` : 'every crop counted')),
+      stat(`Week of ${day(d(now))}`, `${num(week.sow)} to sow`, `${num(week.ready)} ready · ${money(week.revenue)}`)),
+    orphans ? h('p.tr-callout', `${num(orphans)} tray batches belong to a demand plan whose record is missing. They are shown below but cannot be changed from here. Loading the v7 backup again restores the record.`) : null,
+    list.length ? list.map(p => planSection(p, fig)) : emptyState(),
+    list.length ? h('p.tr-more', h('button.btn', { type: 'button', onclick: () => { const year = App.planYear(), n = list.length + 1, first = T.draft(year); App.saveTrays('Weekly demand plan added', { ...first, from: T.mondayOnOrAfter(first.from), name: `${year} live trays ${n}`, rows: [{ id: App.uid(), name: 'New crop', days: 21, price: 0, spring: 0, summer: 0, fall: 0 }] }); } }, '+ Another demand plan'),
+      h('small', 'One plan holds one set of weekly numbers. A second customer is a second plan.')) : null,
+    weekSection(fig)];
+  }
+  const suppliesTab = () => Bench.supplies() || h('p.tr-note.nu-none', 'Nothing in this plan is raised in a tray, a sheet or a pot, so there is nothing to count.');
+
   function render() {
     if (!App.state.ready || App.state.view !== 'trays') { dirty = true; return; }
     dirty = false;
-    const host = $('trWrap'), keep = host.parentElement.scrollTop, focus = document.activeElement && host.contains(document.activeElement) ? [document.activeElement.getAttribute('aria-label'), document.activeElement.closest('[data-plan]') && document.activeElement.closest('[data-plan]').dataset.plan] : null;
-    const fig = figures(), bench = Bench.figures(), list = plans(), now = T.monday(E.d2s(App.state.date)), week = fig.weeks.find(w => w.week === now) || { sow: 0, ready: 0, revenue: 0 };
-    const customers = [...new Set(list.map(p => ((App.state.plan.customers || []).find(c => c.id === p.customerId) || {}).name).filter(Boolean))];
-    const t = bench.tightest, orphans = fig.list.filter(b => b.planned && !(App.state.plan.liveTrayPlans || []).some(p => p.id === b.planId)).length;
+    const host = $('trWrap'), scroller = host.parentElement, keep = drawn === tab ? scroller.scrollTop : 0, focus = document.activeElement && host.contains(document.activeElement) ? [document.activeElement.getAttribute('aria-label'), document.activeElement.closest('[data-plan]') && document.activeElement.closest('[data-plan]').dataset.plan] : null;
+    const [, title, lead] = TABS.find(x => x[0] === tab);
     clear(host);
+    host.dataset.tab = tab;
     add(host,
-      h('header.as-head', h('p.eyebrow', `Live trays${customers.length ? ' · ' + customers.join(', ') : ''} · ${fig.year}`), h('h2', 'Weekly trays, sown to order'),
-        h('p', 'Whole 10 × 20 trays sold live. Say how many are wanted each week and how long each crop takes: every batch is sown that many days before the Monday it is due, and stands on the heated benches until then.')),
-      h('div.tr-stats',
-        stat('Trays this season', num(fig.trays), `${num(fig.list.length)} batches · ${num(fig.crops.length)} crop${fig.crops.length === 1 ? '' : 's'}${fig.sown ? ` · ${num(fig.sown)} sown` : ''}`),
-        stat('Expected', money(fig.revenue), 'if every tray sells at its price'),
-        stat('Seed for the season', fig.seeds ? `${num(fig.seeds)} seeds` : fig.seedG ? weight(fig.seedG) : '—', (fig.seeds && fig.seedG ? `and ${weight(fig.seedG)} by weight · ` : '') + (!fig.crops.length ? '' : fig.unrated === fig.crops.length ? 'no seed figure set yet' : fig.unrated ? `${num(fig.crops.length - fig.unrated)} of ${num(fig.crops.length)} crops counted so far` : 'every crop counted')),
-        stat(`Week of ${day(d(now))}`, `${num(week.sow)} to sow`, `${num(week.ready)} ready · ${money(week.revenue)}`),
-        stat(bench.shown.length > 1 ? 'Heated benches, fullest' : 'Benches at their fullest', t ? (bench.cap ? `${num(t.used, 0)} of ${num(t.cap)}` : `${num(t.used, 0)} spaces`) : '—', !t ? 'nothing under cover' : !bench.cap ? `${day(t.date)} · no benches listed` : `${day(t.date)}${t.over > 0.05 ? ` · ▲ ${num(t.over, 1)} over` : ' · room to spare'}`, t && bench.cap && t.over > 0.05 ? 'over' : '')),
-      orphans ? h('p.tr-callout', `${num(orphans)} tray batches belong to a demand plan whose record is missing. They are shown below but cannot be changed from here. Loading the v7 backup again restores the record.`) : null,
-      list.length ? list.map(p => planSection(p, fig)) : emptyState(),
-      list.length ? h('p.tr-more', h('button.btn', { type: 'button', onclick: () => { const year = App.planYear(), n = list.length + 1, first = T.draft(year); App.saveTrays('Weekly demand plan added', { ...first, from: T.mondayOnOrAfter(first.from), name: `${year} live trays ${n}`, rows: [{ id: App.uid(), name: 'New crop', days: 21, price: 0, spring: 0, summer: 0, fall: 0 }] }); } }, '+ Another demand plan'),
-        h('small', 'One plan holds one set of weekly numbers. A second customer is a second plan.')) : null,
-      Bench.section(), Bench.supplies(), weekSection(fig));
-    host.parentElement.scrollTop = keep;
+      h('header.as-head.nu-head', h('p.eyebrow', `Nursery · ${App.planYear()}`), h('h2', { id: 'nuTitle' }, title)),
+      h('div.seg.nu-tabs', { id: 'nuTabs', role: 'group', 'aria-label': 'Which part of the nursery' }, TABS.map(([id, label]) => h('button', { type: 'button', dataset: { tab: id }, 'aria-pressed': String(id === tab), onclick: () => setTab(id) }, label))),
+      h('p.nu-lead', { id: 'nuLead' }, lead),
+      tab === 'room' ? roomTab() : tab === 'live' ? liveTab() : tab === 'supplies' ? suppliesTab() : Bench.setup());
+    drawn = tab;
+    scroller.scrollTop = keep;
     if (focus && focus[0]) { const again = [...host.querySelectorAll('input, select, button')].find(el => el.getAttribute('aria-label') === focus[0] && (!focus[1] || (el.closest('[data-plan]') && el.closest('[data-plan]').dataset.plan === focus[1]))); if (again) again.focus({ preventScroll: true }); }
   }
 
@@ -233,5 +269,5 @@
     App.on('plan', render); App.on('view', render); App.on('nursery', render); App.on('date', () => { if (App.state.view === 'trays') render(); });
     Thumbs.on(() => { if (App.state.view === 'trays') render(); });
   }
-  root.LRFTraysView = { init, render, figures, get dirty() { return dirty; } };
+  root.LRFTraysView = { init, render, figures, setTab, open, tab: () => tab, TABS: TABS.map(t => t.slice(0, 2)), get dirty() { return dirty; } };
 })(window);

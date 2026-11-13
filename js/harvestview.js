@@ -82,6 +82,8 @@
         h('button.btn.primary', { type: 'button', id: 'hvCopy', onclick: () => copy(current().text, sheet) }, 'Copy')));
     document.body.append(dialog); draw(); dialog.showModal();
   }
+  /** A crop the series tool can size to a weekly amount: one with a harvest to space plantings by. Tray crops follow weekly demand instead. */
+  function plannable(row) { const eng = App.state.engine, c = eng.crop(row.cropId); return row.group !== 'micro' && !!root.LRFSeries && !!c && +c.dtm > 0 && !eng.isCoverCrop(c); }
   /** Where a figure comes from: the plantings picked in that stretch. */
   function sources(row, col) {
     const eng = App.state.engine, picked = series === 'picked' && model().keeps;
@@ -97,7 +99,7 @@
         h('button.link', { type: 'button', onclick: () => go(x) }, 'Show on the map')))),
       h('div.dialog-actions',
         // more of it wanted that week: the series tool, asked from the harvest end, opens on this crop from that day
-        row.group !== 'micro' && root.LRFSeries && eng.crop(row.cropId) && +eng.crop(row.cropId).dtm > 0 && !eng.isCoverCrop(eng.crop(row.cropId))
+        plannable(row)
           ? h('button.btn', { type: 'button', id: 'hvPlan', title: `Say how much ${row.name.toLowerCase()} is wanted each week from here on, and see the plantings that would give it`, onclick: () => { close(); App.openAhead({ mode: 'series', by: 'harvest', cropId: row.cropId, from: E.d2s(col.start) }); } }, 'Plan to a weekly amount…') : null,
         h('button.btn.primary', { type: 'button', onclick: close }, 'Close')));
     document.body.append(dialog); dialog.showModal();
@@ -146,7 +148,9 @@
       for (const row of part) {
         const many = row.varieties.length > 1 || (row.varieties.length === 1 && row.varieties[0].id), isOpen = opened.has(row.key);
         const name = h('td.hv-name', h('button.hv-crop', { type: 'button', disabled: !many, 'aria-expanded': many ? String(isOpen) : null, style: { '--crop': row.color }, title: many ? `${isOpen ? 'Hide' : 'Show'} the varieties` : row.name,
-          onclick: () => { if (isOpen) opened.delete(row.key); else opened.add(row.key); render(); } }, h('span.caret', many ? (isOpen ? '▾' : '▸') : ''), h('i'), h('span', row.name), h('small', F.unitWord(2, row.unit, row.group) || 'each')));
+          onclick: () => { if (isOpen) opened.delete(row.key); else opened.add(row.key); render(); } }, h('span.caret', many ? (isOpen ? '▾' : '▸') : ''), h('i'), h('span', row.name), h('small', F.unitWord(2, row.unit, row.group) || 'each')),
+          // more or less of it wanted: the series tool, asked from the harvest end, on this crop's own season
+          plannable(row) ? h('button.hv-plan', { type: 'button', dataset: { crop: row.cropId }, 'aria-label': `Plan ${row.name} to a weekly amount`, title: `Say how much ${row.name.toLowerCase()} is wanted each week, and see the plantings that would give it`, onclick: () => App.openAhead({ mode: 'series', by: 'harvest', cropId: row.cropId }) }, 'plan…') : null);
         const whole = series === 'picked' && m.keeps ? row.pickedTotal : row.total;
         body.push(line('.hv-row', name, h('td.hv-total', { title: `${money(row.worth)} at its own price${row.keeps ? ` · keeps ${num(row.keeps, 1)} week${row.keeps === 1 ? '' : 's'} after picking` : ''}` }, whole > 0 ? F.amount(whole, row.unit, row.group) : '—'), seriesOf(m, row), row));
         body[body.length - 1].dataset.crop = row.cropId;
@@ -184,8 +188,12 @@
     search.addEventListener('input', () => { query = search.value; render(); const again = $('hvSearch'); again.focus(); again.setSelectionRange(query.length, query.length); });
     const noYield = m.unset.filter(u => u.why.startsWith('no yield'));
     UI.add(clear(host),
-      h('header.as-head', h('p.eyebrow', `Harvest forecast · ${App.state.plan.settings.farm || 'Farm'} · ${m.year}`), h('h2', 'What is ready, and when'),
+      // what the page is, and beside it the two things done from it: plan more of a crop, send what is there
+      h('header.as-head.hv-head', h('div.hv-head-text', h('p.eyebrow', `Harvest forecast · ${App.state.plan.settings.farm || 'Farm'} · ${m.year}`), h('h2', 'What is ready, and when'),
         h('p', 'Every planting’s expected yield, added up by crop, as each crop’s line on the Assumptions list says it comes in: evenly over the days it is picked, a week at a time, or all at once. Each crop is counted in the unit it is sold in. Click a figure to see which plantings it comes from.')),
+        h('div.hv-head-acts',
+          root.LRFSeries ? h('button.btn', { type: 'button', id: 'hvPlanBar', title: 'Say how much of a crop is wanted each week between two days: the planner says how many plantings, when and how large. It opens beside the timeline.', onclick: () => App.openAhead({ mode: 'series', by: 'harvest' }) }, 'Plan to a weekly amount…') : null,
+          h('button.btn.primary', { type: 'button', id: 'hvShareBtn', onclick: share }, 'A list to send…'))),
       tiles(m),
       h('div.hv-bar',
         h('span.tr-stepper', h('button.icon-btn', { type: 'button', 'aria-label': 'Back one week', id: 'hvPrev', onclick: () => App.setDate(E.addDays(App.state.date, -7)) }, '‹'),
@@ -194,8 +202,7 @@
         m.keeps ? h('div.seg.hv-series', { role: 'group', 'aria-label': 'What to count', title: 'Some crops keep after picking. To sell: what is there to sell each week, drawn down over the weeks it keeps. Picked: what comes out of the ground.' },
           ['days', 'picked'].map(value => h('button', { type: 'button', 'aria-pressed': String(series === value), dataset: { hvSeries: value }, onclick: () => { series = value; render(); } }, value === 'days' ? 'To sell' : 'Picked'))) : null,
         h('div.sd-filters', { role: 'group', 'aria-label': 'Which kinds' }, chip('all', 'All', m.rows.filter(r => r.total > 0).length), F.GROUPS.map(([g, short]) => chip(g, short, m.rows.filter(r => r.total > 0 && r.group === g).length))),
-        h('span.grow'), search,
-        h('button.btn.primary', { type: 'button', id: 'hvShareBtn', onclick: share }, 'A list to send…')),
+        h('span.grow'), search),
       !m.rows.some(r => r.total > 0) ? h('p.hv-empty', 'Nothing in this plan has a harvest to forecast yet.') : !rows.length ? h('p.hv-empty', 'No crop matches.') : table(m, cols, rows),
       noYield.length ? h('p.hv-note.warn', `${num(noYield.length)} planting${noYield.length === 1 ? ' has' : 's have'} no yield figure for the crop, so nothing is forecast for ${noYield.length === 1 ? 'it' : 'them'}: ${[...new Set(noYield.map(u => u.r.c.name))].slice(0, 6).join(', ')}.`) : null,
       h('p.hv-note', 'A planting’s yield is what it is counted by (plants, bed-feet, trays) × the yield each × the share that is sold. The yield, the unit, the price and how the harvest comes in are each crop’s line under Assumptions, “Yield and price”; a planting with a figure of its own keeps it. A live tray is counted whole on the Monday it is due. Days to harvest are the same in every month, so an early or late planting is as good here as a midsummer one: read the ends of the season with that in mind.'));

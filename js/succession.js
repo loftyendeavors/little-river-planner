@@ -85,7 +85,7 @@
   function normalize(eng, input) {
     const o = { ...input }, crop = eng.crop(o.cropId);
     if (!crop) return { error: 'Choose a crop.' };
-    if (crop.micro) return { error: 'Live trays are planned from weekly demand, on the Trays view.' };
+    if (crop.micro) return { error: 'Live trays are planned from weekly demand, under Live trays in the Nursery view.' };
     const source = o.sourceId ? eng.planting(o.sourceId) : null;
     if (o.sourceId && (!source || source.cropId !== crop.id)) return { error: 'The planting this series copies is no longer in the plan.' };
     const from = E.s2d(o.from);
