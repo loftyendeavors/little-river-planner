@@ -1678,3 +1678,17 @@ body.phone .tr-stepper { flex: 1 0 100%; }
 .bn-cool .tr-date { height: 28px; }
 .bn-cool .bn-edit-foot { margin-top: 8px; }
 .bn-kind { width: 190px; }
+/* the Tasks view: how far ahead is listed */
+.wk-span { flex: none; }
+.wk-span button { font-size: 12.5px; padding: 5px 10px; white-space: nowrap; }
+/* plantings that differ from the list: one press for what changes nothing, and a window for the rest */
+.au-acts { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.au-lead { color: var(--ink-2); }
+.au-more > summary { cursor: pointer; font-size: 12px; color: var(--muted); list-style-position: inside; }
+.au-more[open] > summary { margin-bottom: 6px; }
+.au-more .au-figs, .au-more .au-line, .au-more .au-fine { margin-top: 4px; }
+.au-view { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 2px 0 8px; }
+.au-view .seg { flex: none; }
+.au-view .seg button { font-size: 12.5px; padding: 5px 12px; white-space: nowrap; }
+.au-view .ah-check { font-size: 12.5px; align-items: center; }
+tr.au-none td { padding: 18px 12px; color: var(--ink-2); font-size: 13px; }

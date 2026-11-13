@@ -194,8 +194,15 @@ check('and can be fetched there', (await b.sync.getSnap('snap', 's-abc-123')) ==
 check('the cloud\'s own kept plans are listed and can be fetched too', listed.some(s => s.meta.auto) && (await b.sync.getSnap('snap', listed.find(s => s.meta.auto).id)).includes('plantings'));
 await b.sync.dropSnap('snap', 's-abc-123'); check('and deleted', !(await a.sync.snaps()).some(s => s.id === 's-abc-123'));
 
+// ── the seed library's reader borrows the sign-in (since the service's version 2) ──
+{
+  const ls = b.sync.linkService(), fresh = browser(w, 'fresh');
+  check('a signed-in device hands the reader the service\'s address, its token and the version the service said', !!ls && ls.base === b.sync.info().url && /^v1\./.test(ls.key) && ls.v === 2 && ls.key !== KEY, ls && { base: ls.base, v: ls.v });
+  check('a device that is not connected hands it nothing', fresh.make().linkService() === null);
+}
 // ── leaving ──
 a.sync.disconnect();
+check('and after disconnecting the reader gets nothing', a.sync.linkService() === null);
 check('disconnecting forgets the address and the sign-in here, and leaves the cloud alone', a.saved === null && a.sync.info().status === 'off' && w.store.has('plan'));
 info = await a.change('after-leaving'); check('and nothing more is sent', info.status === 'off' && !(await w.text('plan')).includes('after-leaving'));
 

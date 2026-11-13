@@ -649,7 +649,7 @@
   /** Record jobs on one date, as one undoable step: items [{ id, kind, quantity? }], input { date, follow?, note? }. */
   function recordWork(items, input) {
     items = items || [];
-    const sowings = items.length > 0 && items.every(seedJob), word = n => `${n} ${sowings ? 'sowing' : 'job'}${n === 1 ? '' : 's'}`;
+    const sowings = items.length > 0 && items.every(seedJob), word = n => `${n} ${sowings ? 'sowing' : 'task'}${n === 1 ? '' : 's'}`;
     const first = nothingRecorded(), before = state.plan;
     const done = sowingSteps(n => `${word(n)} recorded ${day(E.s2d(input.date))}`, items, jobWork(input));
     if (done && first) { done.planOfRecord = true; keepPlanOfRecord(before); }
@@ -669,7 +669,7 @@
     return { n: done.length, moved, held, overlaps: [...pairs(engine)].filter(k => !was.has(k)).length, failed };
   }
   /** Take recorded jobs back, as one step: items [{ id, kind }]. */
-  const takeBackWork = items => sowingSteps(n => `${n} job${n === 1 ? '' : 's'} taken back`, items || [], (p, item, inventory, ctx) => Week.takeBack(state.engine, inventory, p, item.kind, ctx));
+  const takeBackWork = items => sowingSteps(n => `${n} task${n === 1 ? '' : 's'} taken back`, items || [], (p, item, inventory, ctx) => Week.takeBack(state.engine, inventory, p, item.kind, ctx));
   /**
    * Set the day sowings are planned for, as one step. Nothing is marked sown and no seed leaves stock: this moves the plan.
    * A transplant keeps the day it goes out and is raised for longer or shorter. A tray batch keeps the day it is due.
@@ -1553,6 +1553,6 @@
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
     saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, editNursery, setSupply, setLiveSow, traysToMonday: () => applyTrayStart(),
-    snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, sync: () => sync, syncInfo, snapshotsKept: () => !!Snaps
+    snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, sync: () => sync, syncInfo, linkService: () => (sync && sync.linkService ? sync.linkService() : null), snapshotsKept: () => !!Snaps
   };
 })(window);

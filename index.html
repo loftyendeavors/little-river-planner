@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.29">
+<meta name="lrf-build" content="0.30">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -23,7 +23,7 @@
   <nav class="views" aria-label="Views">
     <button type="button" data-view-btn="map" aria-pressed="true">Map</button>
     <button type="button" data-view-btn="timeline" aria-pressed="false">Timeline</button>
-    <button type="button" data-view-btn="sow" aria-pressed="false">Week</button>
+    <button type="button" data-view-btn="sow" aria-pressed="false">Tasks</button>
     <button type="button" data-view-btn="trays" aria-pressed="false">Trays</button>
     <button type="button" data-view-btn="harvest" aria-pressed="false">Harvest</button>
     <button type="button" data-view-btn="assume" aria-pressed="false">Assumptions</button>
@@ -169,7 +169,7 @@
         <p class="as-hints ah-open" id="ahOpen" hidden></p>
         <table class="as ah" id="ahTable" hidden><thead id="ahHead"></thead><tbody id="ahBody"></tbody></table>
         <table class="as" id="asTable">
-          <thead><tr><th>Crop</th><th class="as-th-start" title="Where the numbers in the row count from. Transplanting: the day the crop goes in the bed. Sowing: the day it is sown in the nursery, so the nursery time comes off. Direct sowing: a figure for seed sown in place; as a transplant the crop is in the bed about two weeks less.">Days start at</th><th>Field</th><th>Unheated tunnel</th><th>Heated greenhouse</th><th>Towers</th><th title="Days in the nursery, plus days in the bed, and what that comes to from seed to first harvest. Worked out for the condition the crop is mostly grown in.">From seed</th><th>Plantings</th></tr></thead>
+          <thead><tr><th>Crop</th><th class="as-th-start" title="Where the numbers in the row count from. Transplanting: the day the crop goes in the bed. Seeding in trays: the day it is sown in the nursery, so the nursery time comes off. Direct seeding: a figure for seed sown in place; as a transplant the crop is in the bed about two weeks less.">Days counted from</th><th>Field</th><th>Unheated tunnel</th><th>Heated greenhouse</th><th>Towers</th><th title="Days in the nursery, plus days in the bed, and what that comes to from seed to first harvest. Worked out for the condition the crop is mostly grown in.">From seed</th><th>Plantings</th></tr></thead>
           <tbody id="asBody"></tbody>
         </table>
       </div>
@@ -182,10 +182,9 @@
             <div class="sd-title"><p class="eyebrow">Seed library</p><h2 id="sdTitle">Varieties</h2></div>
             <input type="search" id="sdSearch" placeholder="Search  ( / )" title="Search varieties, crops, suppliers and product codes" autocomplete="off">
             <div class="sd-actions">
-              <button type="button" class="btn primary" id="sdAddLink">Add from a supplier page</button>
+              <button type="button" class="btn primary" id="sdAddLink" title="Paste the address of a supplier’s product page: the variety, its days, sizes and prices are read from it">Add from a link</button>
               <button type="button" class="btn" id="sdAddHand" title="Add a variety that has no supplier page">+ By hand</button>
               <button type="button" class="btn" id="sdAddCrop" title="Add a crop">+ Crop</button>
-              <button type="button" class="btn" id="sdSettings">Link reader…</button>
             </div>
           </header>
           <div class="sd-quick" id="sdQuick"></div>
