@@ -20,9 +20,15 @@
 
   // ───────────────────────── link reader settings (this browser only) ─────────────────────────
   const SERVICE_KEY = 'lrf-next:fetch';
-  function service() { try { const s = JSON.parse(root.localStorage.getItem(SERVICE_KEY) || 'null'); return s && typeof s === 'object' ? { base: String(s.base || ''), key: String(s.key || '') } : { base: '', key: '' }; } catch (_) { return { base: '', key: '' }; } }
+  function ownService() { try { const s = JSON.parse(root.localStorage.getItem(SERVICE_KEY) || 'null'); return s && typeof s === 'object' ? { base: String(s.base || ''), key: String(s.key || '') } : { base: '', key: '' }; } catch (_) { return { base: '', key: '' }; } }
+  // A link is read through a fetch service of the grower's own where one is set in this browser; otherwise through Cloud sync, which
+  // reads supplier pages from its version 2 on, for a device that is signed in. `how` says which: 'own', 'cloud', 'cloud-old' (signed
+  // in, but the service is still the older code) or 'none'.
+  const cloudService = () => (App.linkService ? App.linkService() : null);
+  function linkHow() { const own = ownService(); if (Reader.serviceBase(own.base) && own.key.trim()) return 'own'; const c = cloudService(); return !c ? 'none' : c.v >= 2 ? 'cloud' : 'cloud-old'; }
+  function service() { const how = linkHow(), c = cloudService(); return how === 'cloud' ? { base: c.base, key: c.key } : ownService(); }
   function keepService(s) { try { if (s) root.localStorage.setItem(SERVICE_KEY, JSON.stringify(s)); else root.localStorage.removeItem(SERVICE_KEY); return true; } catch (_) { return false; } }
-  const serviceReady = () => { const s = service(); return !!(Reader.serviceBase(s.base) && s.key.trim()); };
+  const serviceReady = () => { const how = linkHow(); return how === 'own' || how === 'cloud'; };
 
   // ───────────────────────── small form pieces ─────────────────────────
   const fld = (label, control, hint) => h('label.fld', h('span', label), control, hint ? h('small', hint) : null);
@@ -62,8 +68,8 @@
     let why = '';
     if (!variety.catalogDtm && !(variety.dtm > 0)) why = ' That is the crop’s number: this variety has none of its own.';
     else if (variety.catalogDtm && !supplier) why = ` The supplier’s ${variety.catalogDtm} days cannot be used as given (${crop.method === 'DS' && variety.catalogMaturityBasis === 'transplant' ? 'it counts from transplanting and this crop is direct sown' : 'less the nursery time it leaves nothing'}), so the crop’s number stands.`;
-    else if (supplier && field.printed && field.days !== field.printed) why = ` The supplier prints ${field.printed} from ${BASIS_TEXT[field.basis] || 'seeding'}; ${field.basis === 'direct' ? `as a transplant it is in the bed ${field.off} days less` : 'the nursery time is taken off'}.${field.by === 'crop' ? ' That starting point is the crop’s, set on the Assumptions tab.' : field.by === 'guess' ? ' That starting point is a guess from the wording of the page: set it here or on the crop.' : ''}`;
-    else if (supplier && (variety.catalogMaturityBasis || 'unspecified') === 'unspecified' && crop.method === 'TP') why = field.by === 'crop' ? ' The crop’s starting point is used: transplanting.' : field.basis && field.basis !== 'unspecified' ? ` No starting point is set, so the planner goes by the page text and reads it as from ${BASIS_TEXT[field.basis]}.` : ' No starting point is set here or on the crop, so the printed days are counted from the day it goes in the bed.';
+    else if (supplier && field.printed && field.days !== field.printed) why = ` The supplier prints ${field.printed} from ${BASIS_TEXT[field.basis] || 'seeding'}; ${field.basis === 'direct' ? `as a transplant it is in the bed ${field.off} days less` : 'the nursery time is taken off'}.${field.by === 'crop' ? ' That is the crop’s “Days counted from”, set on the Assumptions tab.' : field.by === 'guess' ? ' That is a guess from the wording of the page: set it here or on the crop.' : ''}`;
+    else if (supplier && (variety.catalogMaturityBasis || 'unspecified') === 'unspecified' && crop.method === 'TP') why = field.by === 'crop' ? ' The crop’s own is used: counted from transplanting.' : field.basis && field.basis !== 'unspecified' ? ` Nothing says where the days are counted from, so the planner goes by the page text and reads it as from ${BASIS_TEXT[field.basis]}.` : ' Nothing here or on the crop says where the days are counted from, so the printed days are counted from the day it goes in the bed.';
     return `The planner will count ${text} from the day it goes in the bed.${why}`;
   }
 
@@ -77,7 +83,8 @@
     const readBtn = button('Read page', () => read('link'), 'primary'), pasteBtn = button('Read pasted page', () => read('paste'));
     const ready = serviceReady();
     const intake = h('form.sd-intake', { onsubmit: e => { e.preventDefault(); read('link'); } },
-      fld('Product link', url, ready ? 'Read through your fetch service. Johnny’s, Berbee, Harris, Fedco and 11 other suppliers are on its list.' : 'Reading from a link needs the link reader set up (Link reader… on the seed library). Pasting the page works without it.'),
+      fld('Product link', url, linkHow() === 'cloud' ? 'Paste the product page’s address. It is read through your Cloud sync: Johnny’s, Berbee, Harris, Fedco and 11 other suppliers are on its list.' : ready ? 'Paste the product page’s address. It is read through your fetch service: Johnny’s, Berbee, Harris, Fedco and 11 other suppliers are on its list.' : linkHow() === 'cloud-old' ? 'Your Cloud sync can read links once its newer code is pasted into Cloudflare (one paste, in the Worker lrf-plan-sync). Until then, paste the page below.' : 'Links are read through Cloud sync once this device is connected (Backup, Cloud sync…). Until then, paste the page below.'),
+      h('p.dlg-hint.sd-linkhow', { id: 'sdLinkHow', dataset: { how: linkHow() } }, h('button.linkish', { type: 'button', id: 'sdSettings', onclick: () => openSettings() }, linkHow() === 'own' ? 'A fetch service of your own is set in this browser…' : 'Use a fetch service of your own instead…')),
       h('div.sd-row', readBtn, button('Cancel', () => d.close())),
       h('details.sd-paste', { open: !ready }, h('summary', 'Paste the page instead'),
         h('p.dlg-hint', 'Works with no connection and for any supplier. Give the link above too, so the variety keeps its source.'),
@@ -139,7 +146,7 @@
           newCropBox, matchBox,
           h('h3', 'Days to maturity'),
           printed ? h('p.sd-evidence', h('span', `The page prints: “${printed}”`), stageButtons.length ? h('span.sd-stages', stageButtons) : null) : h('p.sd-evidence', 'No days to maturity were found on the page.'),
-          h('div.sd-grid', fld('Earliest day', dtmMin), fld('Latest day', dtmMax), fld('Days start at', basisSel), fld('Harvest stage', stageSel)),
+          h('div.sd-grid', fld('Earliest day', dtmMin), fld('Latest day', dtmMax), fld('Days counted from', basisSel), fld('Harvest stage', stageSel)),
           startNote, planLine,
           h('h3', 'Growing and seed'),
           h('div.sd-grid',
@@ -201,7 +208,7 @@
           o.cropId = crop.id;
         }
         if (!crop) throw new Error('Choose the crop this variety belongs to.');
-        if (o.dtmMin && crop.method === 'TP' && o.basis === 'unspecified' && !(await UI.confirm({ title: 'Save without a starting point?', confirmLabel: 'Save anyway', body: `${crop.name} is transplanted, and the page’s ${o.dtmMin} days could be counted from seeding or from transplanting. Those differ by the whole nursery time. ${planLine.textContent}` }))) return;
+        if (o.dtmMin && crop.method === 'TP' && o.basis === 'unspecified' && !(await UI.confirm({ title: 'Save without saying where the days are counted from?', confirmLabel: 'Save anyway', body: `${crop.name} is transplanted, and the page’s ${o.dtmMin} days could be counted from seeding or from transplanting. Those differ by the whole nursery time. ${planLine.textContent}` }))) return;
         const { saved, after } = candidate(o, crop);
         // The page's first product picture is the variety's photo. One it already has is left alone.
         const picture = data.images && data.images[0] && data.images[0].url;
@@ -237,7 +244,7 @@
         h('label.fld.span2', h('span', 'Product page'), inp('url', v.url, { type: 'text', inputMode: 'url', spellcheck: false }))),
       h('h3', 'Days to maturity'),
       h('div.sd-grid', fld('Supplier’s earliest day', numIn('dtmMin', v.catalogDtm, { min: 1, max: 3650, step: 1 })), fld('Supplier’s latest day', numIn('dtmMax', v.catalogDtmMax, { min: 1, max: 3650, step: 1 })),
-        fld('Days start at', sel('basis', BASIS_OPTIONS, v.catalogMaturityBasis || 'unspecified')), fld('Harvest stage', sel('stage', STAGE_OPTIONS, v.catalogHarvestStage || 'unspecified')),
+        fld('Days counted from', sel('basis', BASIS_OPTIONS, v.catalogMaturityBasis || 'unspecified')), fld('Harvest stage', sel('stage', STAGE_OPTIONS, v.catalogHarvestStage || 'unspecified')),
         hasSupplierDays ? null : fld('Your own days to harvest', numIn('dtm', v.dtm, { min: 1, max: 3650, step: 1 }), 'From the day it goes in the bed. Use this or the supplier’s days.')),
       evidence, planLine,
       h('h3', 'Growing and seed'),
@@ -352,7 +359,7 @@
 
   // ───────────────────────── link reader settings ─────────────────────────
   function openSettings() {
-    const now = service(), d = openDialog('Link reader', 'A web page may not read another website’s pages, so links are read through your own fetch service. Its address and key are kept in this browser only. They are never put in the plan or in a backup.');
+    const now = ownService(), d = openDialog('A fetch service of your own', 'A web page may not read another website’s pages, so links are read through your own fetch service. Its address and key are kept in this browser only. They are never put in the plan or in a backup.');
     const base = inp('base', now.base, { type: 'text', inputMode: 'url', placeholder: 'https://… .workers.dev', spellcheck: false }), key = inp('key', now.key, { type: 'password', spellcheck: false, autocomplete: 'off' });
     const show = h('label.sd-check', h('input', { type: 'checkbox', onchange: e => { key.type = e.target.checked ? 'text' : 'password'; } }), ' Show the key');
     const typed = () => ({ base: base.value.trim(), key: key.value.trim() });
@@ -367,12 +374,12 @@
     d.body.append(h('form.sd-review', { onsubmit: e => { e.preventDefault(); } },
       fld('Service address', base), fld('Key', key), show,
       h('p.dlg-hint', 'The test sends the key to the service and asks it for one supplier’s home page. It reads nothing from your plan.'),
-      actions(now.base || now.key ? button('Forget them', () => { keepService(null); d.close(); toast('The link reader’s address and key were removed from this browser.'); schedule(); }, 'danger') : null, h('span.grow'), testBtn, button('Cancel', () => d.close()),
+      actions(now.base || now.key ? button('Forget them', () => { keepService(null); d.close(); toast('The fetch service’s address and key were removed from this browser.'); schedule(); }, 'danger') : null, h('span.grow'), testBtn, button('Cancel', () => d.close()),
         button('Save', () => {
           const s = typed();
           if (s.base && !Reader.serviceBase(s.base)) { d.say('That is not a complete https address.', 'bad'); return; }
           if (!keepService(s.base || s.key ? s : null)) { d.say('This browser would not keep them. Its storage may be switched off.', 'bad'); return; }
-          d.close(); toast(s.base && s.key ? 'Link reader saved in this browser.' : 'Link reader cleared.'); schedule();
+          d.close(); toast(s.base && s.key ? 'Fetch service saved in this browser.' : 'Fetch service cleared.'); schedule();
           if (s.base && s.key) App.rebuildThumbs();   // variety photos that could not be fetched without it can be now
         }, 'primary'))));
   }
@@ -537,7 +544,6 @@
     App.loadInventory().then(found => { if (found) { ui.panelKey = ''; schedule(); } }).catch(() => {});
     const m = model(), q = ui.query.trim().toLowerCase();
     for (const b of document.querySelectorAll('[data-sd-tab]')) b.setAttribute('aria-pressed', String(b.dataset.sdTab === ui.tab));
-    $('sdSettings').textContent = serviceReady() ? 'Link reader: set' : 'Link reader…';
     const text = v => `${v.name} ${cropName(m.eng.crop(v.cropId))} ${v.supplier || v.source || ''} ${v.sku || ''}`.toLowerCase();
     const list = m.live.filter(v => passes(m, v, ui.filter) && (!q || text(v).includes(q)));
     $('sdTitle').textContent = ui.tab === 'crops' ? 'Crops' : `${list.length === m.live.length ? 'All' : list.length + ' of'} ${m.live.length} varieties`;
@@ -616,7 +622,7 @@
     return h('tr.sd-lotrow' + (flat ? '' : '.in-group'), { dataset: { lotFor: v.id } }, h('td', { colSpan: cols }, form, say));
   }
 
-  const LIST_COLS = [['name', 'Variety'], ['sup', 'Supplier', 0, 122, 1], ['days', 'Days', 1, 84], ['from', 'Days start at', 0, 124], ['tosow', 'To sow', 1, 88],
+  const LIST_COLS = [['name', 'Variety'], ['sup', 'Supplier', 0, 122, 1], ['days', 'Days', 1, 84], ['from', 'Days counted from', 0, 138], ['tosow', 'To sow', 1, 88],
     ['hand', 'On hand', 1, 130], ['short', 'Short', 1, 62], ['size', 'Vendor size', 1, 134, 4], ['first', 'First sow', 1, 84, 3], ['uses', 'Plantings', 1, 84, 2]];
   const NAME_MIN = 190;
   function listCols() {
@@ -675,7 +681,7 @@
         days: () => h('td.sd-num.sd-days', daysText(v) || '—', stage ? h('small', stage) : null),
         from: () => v.catalogDtm ? h('td.sd-from' + (basis === 'unspecified' ? '.sd-open' : ''), sel('from', BASIS_SHORT, basis, { 'aria-label': `${v.name}: days start at`, onchange: async e => {
           const value = e.target.value;
-          if (!(await App.revise(`${v.name}: days start at ${BASIS_TEXT[value]}`, [{ kind: 'variety', before: v, after: { ...v, catalogMaturityBasis: value, catalogSourceChoice: v.catalogSourceChoice || 'url' } }]))) schedule();
+          if (!(await App.revise(`${v.name}: days counted from ${BASIS_TEXT[value]}`, [{ kind: 'variety', before: v, after: { ...v, catalogMaturityBasis: value, catalogSourceChoice: v.catalogSourceChoice || 'url' } }]))) schedule();
         } })) : h('td.sd-from', v.dtm > 0 ? h('small', 'the day it goes in') : ''),
         tosow: () => h('td.sd-num', r && r.toSow > 0 ? amount(r) : ''),
         hand: () => stockCell(r, v.name),
@@ -724,7 +730,7 @@
         }
       }
     }
-    if (!shown && !wanted.length) wanted.push(h('tr', h('td.empty', { colSpan: cols }, q ? `No variety matches “${ui.query}”.` : ui.filter === 'open' ? 'Every variety with supplier days has a starting point.' : ui.filter !== 'all' ? 'No variety fits this filter.' : App.isSample() ? 'The sample plan has no varieties. Load your backup, or add one.' : 'No varieties yet. Add one from a supplier page.')));
+    if (!shown && !wanted.length) wanted.push(h('tr', h('td.empty', { colSpan: cols }, q ? `No variety matches “${ui.query}”.` : ui.filter === 'open' ? 'Every variety with supplier days says where they are counted from.' : ui.filter !== 'all' ? 'No variety fits this filter.' : App.isSample() ? 'The sample plan has no varieties. Load your backup, or add one.' : 'No varieties yet. Add one from a supplier page.')));
     settle(body, wanted);
     for (const key of [...rowCache.keys()]) if (!seen.has(key)) rowCache.delete(key);
     foot(m);
@@ -809,9 +815,9 @@
         h('div.sd-stats', stat('Varieties', num(m.live.length), `${m.live.filter(v => m.used.has(v.id)).length} planted`), stat('To sow', num(seeds), 'seeds'), stat('Short', num(short), 'varieties')),
         onOrder ? h('button.sd-task.plain', { type: 'button', id: 'sdReceiveAll', onclick: receiveAll }, h('b', `Seed for ${onOrder} variet${onOrder === 1 ? 'y' : 'ies'} is on order`), h('span', 'When the box comes, click an order in the list to count it as on hand, or click here to mark every order as arrived.')) : null,
         m.unlisted.length ? unlistedBox(m) : null,
-        open ? h('button.sd-task', { type: 'button', onclick: () => { ui.filter = 'open'; ui.tab = 'list'; schedule(); } }, h('b', `${open} variet${open === 1 ? 'y has' : 'ies have'} supplier days with no starting point`), h('span', 'For a transplanted crop that can move the harvest by the whole nursery time. Set each one in the “Days start at” column, or set the crop’s once on the Assumptions tab.')) : null,
+        open ? h('button.sd-task', { type: 'button', onclick: () => { ui.filter = 'open'; ui.tab = 'list'; schedule(); } }, h('b', `${open} variet${open === 1 ? 'y has' : 'ies have'} supplier days that do not say where they are counted from`), h('span', 'For a transplanted crop that can move the harvest by the whole nursery time. Set each one in the “Days counted from” column, or set the crop’s once on the Assumptions tab.')) : null,
         h('p.dlg-hint', 'Click a variety to see and edit it here. With a row in focus, ↑ and ↓ move between varieties and Enter jumps to its first field.'),
-        h('p.dlg-hint', serviceReady() ? 'Link reader is set in this browser.' : 'Reading a variety from a supplier link needs the link reader set up. Pasting a page works without it.'));
+        h('p.dlg-hint', serviceReady() ? 'Links are read for you: paste a product page’s address.' : 'Links are read through Cloud sync once this device is connected. Pasting a page works without it.'));
       return;
     }
     if (ui.sel.type === 'crop') {
@@ -1103,10 +1109,9 @@
     $('sdAddLink').addEventListener('click', () => openImporter());
     $('sdAddHand').addEventListener('click', () => openVariety(null));
     $('sdAddCrop').addEventListener('click', () => openCrop(null));
-    $('sdSettings').addEventListener('click', openSettings);
     $('sdOrder').addEventListener('click', openOrder);
     App.on('plan', () => { ui.rev++; schedule(); if (order) order.draw(); }); App.on('view', schedule);
     document.addEventListener('keydown', e => { if (e.key === '/' && App.state.view === 'seeds' && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') && !document.querySelector('dialog[open]')) { e.preventDefault(); $('sdSearch').focus(); } });
   }
-  root.LRFSeeds = { init, render, openImporter, openVariety, openCrop, openSettings, openOrder, order: () => order, service, serviceReady, planningLine, select, drawn: () => ({ ...drawn }) };
+  root.LRFSeeds = { init, render, openImporter, openVariety, openCrop, openSettings, openOrder, order: () => order, service, serviceReady, linkHow, planningLine, select, drawn: () => ({ ...drawn }) };
 })(window);

@@ -17,6 +17,7 @@
  *   PUT    /file/<name>
  *   GET    /snaps            the snapshots kept here
  *   GET    /snap/<id>   PUT /snap/<id>   DELETE /snap/<id>
+ *   GET    /fetch?url=…      a seed supplier's product page (or, with &kind=image, a product photo), for the seed library's reader
  *
  * Three rules:
  *   1. A write never lands on a plan the sender has not seen. Every PUT /plan names the stamp (etag) of the plan
@@ -35,15 +36,15 @@ const LIMITS = { plan: 8 * 1024 * 1024, file: 16 * 1024 * 1024, meta: 1800, days
 const GUARD = { key: 'guard', tries: 5, window: 15 * 60, lock: 15 * 60, longest: 24 * 3600, forget: 24 * 3600 };
 const TOKEN = { life: 180 * 24 * 3600, renew: 7 * 24 * 3600 };
 const FILES = { map: true, thumbs: true };
-const VERSION = 1;
+const VERSION = 2;
 
 const isLocal = origin => /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 const allowedOrigin = origin => PLANNERS.includes(origin) || isLocal(origin);
 const cors = origin => ({
   'access-control-allow-origin': origin && allowedOrigin(origin) ? origin : PLANNERS[0],
-  'access-control-allow-headers': 'authorization, content-type, x-lrf-base, x-lrf-meta, x-lrf-replace, x-lrf-type',
+  'access-control-allow-headers': 'authorization, content-type, x-lrf-base, x-lrf-key, x-lrf-meta, x-lrf-replace, x-lrf-type',
   'access-control-allow-methods': 'GET, PUT, POST, DELETE, OPTIONS',
-  'access-control-expose-headers': 'x-lrf-etag, x-lrf-meta, x-lrf-token, x-lrf-type, retry-after',
+  'access-control-expose-headers': 'x-lrf-etag, x-lrf-final-url, x-lrf-meta, x-lrf-token, x-lrf-type, content-type, retry-after',
   'access-control-max-age': '86400',
   'cache-control': 'no-store',
   vary: 'origin'
@@ -178,8 +179,61 @@ async function putPlan(request, env, origin, now) {
 }
 const send = (obj, origin, extra) => new Response(obj.body, { status: 200, headers: { 'content-type': (obj.httpMetadata && obj.httpMetadata.contentType) || 'application/octet-stream', 'x-lrf-etag': obj.etag, 'x-lrf-meta': encodeURIComponent(JSON.stringify(metaOf(obj))), ...cors(origin), ...(extra || {}) } });
 
+// ── supplier pages, read for the seed library (since version 2) ──
+// A web page may not read another website's pages, so the planner asks this service to fetch a seed supplier's product page for
+// it: GET /fetch?url=<supplier page>, or with &kind=image a product photo. Only for a signed-in device, only from the supplier
+// sites listed here (add more, comma separated, in a variable named LRF_SITES), and nothing fetched is kept.
+const SITES = ['johnnyseeds.com', 'berbeeus.com', 'harrisseeds.com', 'fedcoseeds.com', 'tradewindsfruit.com', 'pepperjoe.com', 'awhaley.com',
+  'paramountseeds.com', 'highmowingseeds.com', 'starkbros.com', 'trueleafmarket.com', 'territorialseed.com', 'osborneseed.com', 'ruppseeds.com', 'sandiaseed.com'];
+const FETCH = { page: 3 * 1024 * 1024, image: 8 * 1024 * 1024, redirects: 4, timeout: 20000 };
+function siteList(env) {
+  const extra = String((env && env.LRF_SITES) || '').split(',').map(s => s.trim().toLowerCase().replace(/^www\./, '')).filter(s => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(s));
+  return [...SITES, ...extra];
+}
+/** A public https address, or null. No bare IP addresses, no local names, no odd ports. */
+function publicURL(value) {
+  let u;
+  try { u = new URL(value); } catch (_) { return null; }
+  const host = u.hostname.toLowerCase();
+  if (u.protocol !== 'https:' || u.username || u.password || (u.port && u.port !== '443')) return null;
+  if (!host.includes('.') || /^[\d.]+$/.test(host) || host.includes(':') || /(^|\.)(localhost|local|internal|lan|home|corp)$/.test(host)) return null;
+  return u;
+}
+const onList = (u, sites) => sites.some(site => u.hostname.toLowerCase() === site || u.hostname.toLowerCase().endsWith('.' + site));
+async function relay(target, kind, sites) {
+  const image = kind === 'image', limit = image ? FETCH.image : FETCH.page, stop = new AbortController(), timer = setTimeout(() => stop.abort(), FETCH.timeout);
+  try {
+    let u = target, response = null;
+    for (let hop = 0; hop <= FETCH.redirects; hop++) {
+      if (!image && !onList(u, sites)) return { status: 403, error: `${u.hostname} is not one of the supplier sites this service fetches from.` };
+      response = await fetch(u.href, { redirect: 'manual', signal: stop.signal, headers: { accept: image ? 'image/avif,image/webp,image/*' : 'text/html,application/xhtml+xml,application/json;q=0.9', 'accept-language': 'en-US,en;q=0.8', 'user-agent': 'Mozilla/5.0 (compatible; LittleRiverFarmPlanner/1.0; variety lookup at a grower\'s request)' } });
+      if (response.status < 300 || response.status >= 400) break;
+      const next = publicURL(new URL(response.headers.get('location') || '', u).href);
+      if (!next) return { status: 502, error: 'The supplier page redirected somewhere this service will not follow.' };
+      u = next; response = null;
+    }
+    if (!response) return { status: 502, error: 'The supplier page redirected too many times.' };
+    const type = (response.headers.get('content-type') || '').toLowerCase();
+    if (image ? !type.startsWith('image/') : !/(text\/html|application\/xhtml|application\/json|text\/plain)/.test(type)) return { status: 415, error: `The address returned ${type || 'an unknown kind of file'}, not a ${image ? 'picture' : 'page'}.` };
+    if (+response.headers.get('content-length') > limit) return { status: 413, error: 'That is larger than this service will fetch.' };
+    const body = await response.arrayBuffer();
+    if (body.byteLength > limit) return { status: 413, error: 'That is larger than this service will fetch.' };
+    return { status: response.status, body, type, final: u.href };
+  } catch (error) {
+    return { status: 504, error: error && error.name === 'AbortError' ? 'The supplier site took too long to answer.' : 'The supplier site could not be reached.' };
+  } finally { clearTimeout(timer); }
+}
+async function supplierPage(env, origin, url) {
+  const target = publicURL(url.searchParams.get('url') || '');
+  if (!target) return json(400, { error: 'Give a full https address of a supplier page.' }, origin);
+  const result = await relay(target, url.searchParams.get('kind') === 'image' ? 'image' : 'page', siteList(env));
+  if (result.error) return json(result.status, { error: result.error }, origin);
+  return new Response(result.body, { status: result.status, headers: { ...cors(origin), 'content-type': result.type, 'x-lrf-final-url': result.final } });
+}
+
 async function route(request, env, origin, url, now) {
   const bucket = env.PLAN, path = url.pathname.replace(/\/+$/, '') || '/', method = request.method;
+  if (path === '/fetch' && method === 'GET') return supplierPage(env, origin, url);
   if (path === '/state' && method === 'GET') {
     const [plan, map, thumbs] = await Promise.all([bucket.head('plan'), bucket.head('file/map'), bucket.head('file/thumbs')]);
     return json(200, { v: VERSION, plan: stamp(plan), files: { map: map ? { etag: map.etag, size: map.size } : null, thumbs: thumbs ? { etag: thumbs.etag, size: thumbs.size } : null }, now: new Date(now * 1000).toISOString() }, origin);
@@ -238,7 +292,9 @@ export default {
         await env.PLAN.put(GUARD.key, JSON.stringify(freshGuard()), { httpMetadata: { contentType: 'application/json' } });
         return json(200, await newToken(env, now), origin);
       }
-      const left = await tokenLeft(env, request.headers.get('authorization'), now);
+      // the seed library's reader sends its token the way it sends a key to a fetch service of its own
+      const viaKey = url.pathname === '/fetch' && !request.headers.get('authorization') ? request.headers.get('x-lrf-key') : null;
+      const left = await tokenLeft(env, viaKey ? 'Bearer ' + viaKey : request.headers.get('authorization'), now);
       if (!left) return json(401, { error: 'signin' }, origin);
       const response = await route(request, env, origin, url, now);
       // a device in regular use never has to type the passphrase again: its token is renewed as it goes

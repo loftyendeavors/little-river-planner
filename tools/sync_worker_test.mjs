@@ -190,3 +190,31 @@ for (const wildcard of [true, false, 'throws']) {
   const again = await putPlan(s, t, 'SECOND FIRST', 'none'), stale = await putPlan(s, t, 'STALE', 'not-the-etag'), next = await putPlan(s, t, 'NEXT', first.plan && first.plan.etag);
   check('on such a bucket the first plan is stored, and every later write is still conditional', r.status === 200 && again.status === 412 && stale.status === 412 && next.status === 200 && (await (await ask(s, 'plan', { token: t })).text()) === 'NEXT', [r.status, again.status, stale.status, next.status]);
 }
+
+// ── supplier pages for the seed library (version 2) ──
+{
+  const s = make(), t = (await login(s)).token, real = globalThis.fetch, asked = [];
+  globalThis.fetch = async href => { asked.push(href); if (/redirect/.test(href)) return new Response(null, { status: 302, headers: { location: 'https://somewhere-else.example/x' } }); if (/photo/.test(href)) return new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } }); return new Response('<html>Seed page</html>', { headers: { 'content-type': 'text/html; charset=utf-8' } }); };
+  const page = 'https://www.johnnyseeds.com/vegetables/x.html', q = u => 'fetch?url=' + encodeURIComponent(u);
+  r = await ask(s, q(page)); check('a supplier page is not read for a device that is not signed in', r.status === 401 && asked.length === 0, r.status);
+  r = await ask(s, q(page), { token: t }); text = await r.text();
+  check('signed in, a supplier page is fetched and handed back with its address', r.status === 200 && text.includes('Seed page') && r.headers.get('x-lrf-final-url') === page && r.headers.get('access-control-allow-origin') === SITE && /x-lrf-final-url/.test(r.headers.get('access-control-expose-headers')), [r.status, text.slice(0, 80)]);
+  r = await ask(s, q(page), { headers: { 'x-lrf-key': t } }); check('the token is taken in the reader\'s own header too', r.status === 200, r.status);
+  r = await ask(s, q(page), { headers: { 'x-lrf-key': KEY } }); check('the passphrase is not taken there', r.status === 401, r.status);
+  r = await ask(s, 'state', { headers: { 'x-lrf-key': t } }); check('and that header opens nothing but the reader', r.status === 401, r.status);
+  const n = asked.length;
+  r = await ask(s, q('https://example.com/page'), { token: t }); check('a site that is not a supplier is refused and never fetched', r.status === 403 && asked.length === n, [r.status, asked.length - n]);
+  r = await ask(s, q('http://johnnyseeds.com/x'), { token: t }); check('only https is fetched', r.status === 400 && asked.length === n, r.status);
+  r = await ask(s, q('https://127.0.0.1/x'), { token: t }); check('a bare address is not fetched', r.status === 400 && asked.length === n, r.status);
+  r = await ask(s, 'fetch', { token: t }); check('no address is an error the planner can show', r.status === 400 && /https address/.test((await r.json()).error));
+  r = await ask(s, q('https://johnnyseeds.com/redirect'), { token: t }); check('a redirect to a site off the list is not followed', r.status === 403 && asked.length === n + 1, [r.status, asked.length - n]);
+  r = await ask(s, 'fetch?kind=image&url=' + encodeURIComponent('https://cdn.example.net/photo.jpg'), { token: t }); check('a product photo is fetched as a picture', r.status === 200 && r.headers.get('content-type') === 'image/jpeg', r.status);
+  r = await ask(s, q('https://johnnyseeds.com/photo.jpg'), { token: t }); check('a picture is not handed back as a page', r.status === 415, r.status);
+  r = await ask(s, q('https://extra-seeds.example/p'), { token: t, e: { ...s.env, LRF_SITES: 'extra-seeds.example' } }); check('a site added in LRF_SITES is fetched', r.status === 200, r.status);
+  r = await ask(s, q(page), { token: t, method: 'POST' }); check('nothing is posted through it', r.status >= 400, r.status);
+  r = await ask(s, q(page), { token: t, origin: 'https://someone-else.example' }); check('another website cannot use it', r.status === 403);
+  r = await ask(s, 'state', { token: t }); check('the service says it is version 2', (await r.json()).v === 2);
+  r = await ask(s, 'fetch', { method: 'OPTIONS' }); check('the preflight allows the reader\'s header', /x-lrf-key/.test(r.headers.get('access-control-allow-headers')));
+  check('nothing fetched is kept in the bucket', ![...(s.store ? s.store.keys() : [])].some(k => /fetch|johnny/.test(k)));
+  globalThis.fetch = real;
+}

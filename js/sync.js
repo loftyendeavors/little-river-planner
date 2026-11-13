@@ -80,6 +80,10 @@
         savedAt: cfg.savedAt || null, busy: st.busy, checkedAt: st.checkedAt, offer: st.status === 'newer' && !!st.cloud && st.cloud.etag !== st.snoozed, photoNote: st.photoNote };
     }
 
+    // The service also reads seed suppliers' pages for the seed library, from its version 2 on. A device that is signed in hands the
+    // library's reader the service's address and its own token (never the passphrase); `v` is the version the service last said.
+    const noteVersion = remote => { const v = remote && Number.isInteger(remote.v) ? remote.v : 0; if (v && v !== cfg.v) keep({ v }); };
+    const linkService = () => (configured() && cfg.token ? { base: cfg.url, key: cfg.token, v: cfg.v || 0 } : null);
     async function call(method, path, { body, headers, raw, at, token } = {}) {
       const ctl = typeof AbortController === 'function' ? new AbortController() : null, t = later(() => ctl && ctl.abort(), timing.timeout), bearer = token === undefined ? cfg.token : token;
       let res;
@@ -202,7 +206,7 @@
           if (st.status === 'off' || st.status === 'signin') st.status = 'checking';
           emit();
           const remote = await call('GET', '/state');
-          st.cloud = remote.plan || null; st.files = remote.files || null; st.checkedAt = Date.now(); st.tries = 0;
+          st.cloud = remote.plan || null; st.files = remote.files || null; st.checkedAt = Date.now(); st.tries = 0; noteVersion(remote);
           const dirty = mode === 'plan' && host.key() !== cfg.key;
           const act = decide({ base: cfg.base || null, cloud: st.cloud && st.cloud.etag, dirty, sample: mode === 'sample' });
           if (act === 'nothing') set('empty');
@@ -249,7 +253,7 @@
       if (!configured()) return Promise.resolve(false);
       return solo(async () => {
         const remote = await call('GET', '/state');
-        st.cloud = remote.plan || null; st.files = remote.files || null; st.checkedAt = Date.now();
+        st.cloud = remote.plan || null; st.files = remote.files || null; st.checkedAt = Date.now(); noteVersion(remote);
         if (!st.cloud) { set('empty'); return false; }
         const before = st.status, ok = await pull('Before opening the plan from the cloud');
         if (!ok) set(before === 'receiving' ? 'newer' : before);
@@ -281,7 +285,7 @@
       if (!configured()) { emit(); return Promise.resolve(info()); }
       return run('start');
     }
-    return { info, on: fn => listeners.push(fn), start, run, touch, connect, disconnect, rename, openCloud, keepMine, snooze, snaps, putSnap, getSnap, dropSnap, configured, when, describe: what };
+    return { info, linkService, on: fn => listeners.push(fn), start, run, touch, connect, disconnect, rename, openCloud, keepMine, snooze, snaps, putSnap, getSnap, dropSnap, configured, when, describe: what };
   }
 
   const api = { create, decide, address, pack, unpack, supported, timing, KEY };

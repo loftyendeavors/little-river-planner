@@ -26,13 +26,14 @@
   const { h, clear, num } = UI;
   const $ = id => document.getElementById(id);
   const LABEL = { field: 'Field', tunnel: 'Unheated tunnel', heated: 'Heated greenhouse', tower: 'Towers' };
-  const START = { transplant: 'Transplanting', seed: 'Sowing', direct: 'Direct sowing' };
-  const FROM = { transplant: 'transplanting', seed: 'sowing', direct: 'direct sowing' };
-  const FIXED = { sown: ['sowing', 'Sown in place: its days start at sowing.'], planted: ['planting', 'Planted as a bulb or a bought plant: its days start the day it goes in.'], tray: ['sowing', 'Its days start when the tray is sown.'] };
+  const START = { transplant: 'Transplanting', seed: 'Seeding in trays', direct: 'Direct seeding' };
+  const FROM = { transplant: 'transplanting', seed: 'seeding in trays', direct: 'direct seeding' };
+  const FIXED = { sown: ['sowing', 'Sown in place: its days are counted from sowing.'], planted: ['planting', 'Planted as a bulb or a bought plant: its days start the day it goes in.'], tray: ['sowing', 'Its days start when the tray is sown.'] };
   const ui = { scope: 'mine', query: '', open: new Set(), dirty: true, frame: 0, mode: 'days' };
   const SHORT = { field: 'Field', tunnel: 'Tunnel', heated: 'Heated', tower: 'Towers' };
   const UNITS = ['each', 'bunch', 'lb', 'pint', 'quart', 'clamshell', 'head', 'stem'];
-  const PATTERN = { spread: 'Over the days', weekly: 'Each week', once: 'All at once' };
+  const PATTERN = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' };
+  const PATTERN_SAY = { weekly: 'picked gradually', once: 'cleared at once', spread: 'picked on demand' };
   const PATTERN_TIP = { spread: 'The yield is a total, picked evenly over the harvest days: held, and taken as it is wanted.', weekly: 'The yield is what is picked each week. A longer harvest gives more, a shorter one less.', once: 'The yield is a total, and all of it is counted the day the crop is ready.' };
   const BASIS = { plant: 'a plant', ft: 'a bed-foot', tray: 'a tray' };
   /** A yield or a price as it is read: no more decimals than it needs. */
@@ -92,11 +93,11 @@
   function startCell(eng, c) {
     const fixed = eng.startFixed(c), rule = eng.startRule(c.id);
     if (fixed) return h('td.as-start', h('span.as-fixed', { title: FIXED[fixed][1] }, FIXED[fixed][0]));
-    const pick = h('select.as-from' + (rule.set ? '.mine' : ''), { 'aria-label': `${c.name}: days start at`, dataset: { start: c.id },
+    const pick = h('select.as-from' + (rule.set ? '.mine' : ''), { 'aria-label': `${c.name}: days counted from`, dataset: { start: c.id },
       title: rule.set ? `Your choice: the numbers in this row count from ${FROM[rule.from]}.` : 'Not set: the numbers count from the day the crop goes in the bed, as they always have.',
       onchange: async e => {
         const value = e.target.value;
-        if (!await App.setStart(c.id, { from: value === 'unset' ? null : value }, value === 'unset' ? `${c.name}: days start as before` : `${c.name}: days start at ${FROM[value]}`)) schedule();
+        if (!await App.setStart(c.id, { from: value === 'unset' ? null : value }, value === 'unset' ? `${c.name}: days start as before` : `${c.name}: days counted from ${FROM[value]}`)) schedule();
       } },
       Object.entries(START).map(([value, text]) => h('option', { value, selected: rule.from === value }, text)), rule.set ? h('option', { value: 'unset' }, 'Back to not set') : null);
     const less = rule.from !== 'direct' ? null : h('label.as-less', { title: 'A figure for seed sown in place. As a transplant the crop is in the bed this many days less. Johnny’s gives about 14.' }, '−',
@@ -107,12 +108,12 @@
   function varietyStartCell(eng, c, v) {
     if (eng.startFixed(c)) return h('td.as-start');
     const basis = eng.STARTS.includes(v.catalogMaturityBasis) ? v.catalogMaturityBasis : 'unspecified';
-    return h('td.as-start', h('select.as-from' + (basis !== 'unspecified' ? '.own' : ''), { 'aria-label': `${v.name}: days start at`, dataset: { vstart: v.id },
+    return h('td.as-start', h('select.as-from' + (basis !== 'unspecified' ? '.own' : ''), { 'aria-label': `${v.name}: days counted from`, dataset: { vstart: v.id },
       title: basis === 'unspecified' ? 'Counted as the crop row says.' : `This variety’s own: its numbers count from ${FROM[basis]}, whatever the crop row says.`,
       onchange: async e => {
         const value = e.target.value, after = { ...v, catalogMaturityBasis: value };
         if (v.catalogDtm && !v.catalogSourceChoice) after.catalogSourceChoice = 'url';
-        if (!await App.revise(value === 'unspecified' ? `${v.name}: days start as the crop’s do` : `${v.name}: days start at ${FROM[value]}`, [{ kind: 'variety', before: v, after }])) schedule();
+        if (!await App.revise(value === 'unspecified' ? `${v.name}: days start as the crop’s do` : `${v.name}: days counted from ${FROM[value]}`, [{ kind: 'variety', before: v, after }])) schedule();
       } },
       h('option', { value: 'unspecified', selected: basis === 'unspecified' }, 'As the crop'), Object.entries(START).map(([value, text]) => h('option', { value, selected: basis === value }, text))));
   }
@@ -123,9 +124,14 @@
     if (!host) return;
     const s = App.auditSurvey(), d = s.days, hv = s.harvest, later = hv.yield + hv.window + hv.turnover + hv.copy, open = d.own + d.waiting + s.nursery.differ + later;
     const fig = (label, n, title) => h('span', { title }, h('i', label), h('b', num(n)));
+    const say = [d.own ? `${num(d.own)} their own days` : '', hv.yield ? `${num(hv.yield)} their own yield` : '', hv.window ? `${num(hv.window)} their own harvest days` : '', s.nursery.differ ? `${num(s.nursery.differ)} their own nursery weeks` : ''].filter(Boolean);
     clear(host).append(
-      h('div.au-head', h('b', 'Figures kept on plantings'),
-        h('button.btn.small', { type: 'button', id: 'asReview', disabled: !open, title: open ? 'See each group, what would move, and choose. Nothing changes until you press Apply.' : 'Nothing to review: every planting follows the list.', onclick: () => openAudit() }, 'Review…')),
+      h('div.au-head', h('b', 'Plantings that differ from your list'),
+        h('span.au-acts',
+          open ? h('button.btn.small.primary', { type: 'button', id: 'asTidy', title: 'Moves onto the list every figure that can go there with no date, no yield and no dollar changing. It is worked out and shown first; the plan as it stands is kept as a snapshot, and one undo takes it back.', onclick: e => tidy(e.currentTarget) }, 'Move onto the list what changes nothing…') : null,
+          h('button.btn.small', { type: 'button', id: 'asReview', disabled: !open, title: open ? 'The plantings that would change if they followed the list, crop by crop, with what would move. Nothing changes until you press Apply.' : 'Nothing to see: every planting follows the list.', onclick: () => openAudit() }, 'See what differs…'))),
+      h('p.au-line.au-lead', { id: 'asDiffLine' }, !open ? 'Every planting follows your list.' : `Some plantings still carry figures from the old planner, so your list does not decide them: ${say.length ? say.join(', ') : 'old copies of crop values'}. Most can go onto the list with nothing changing; the rest would move a date or a yield, and are yours to decide.`),
+      h('details.au-more', { id: 'asAuditMore' }, h('summary', 'The count, kind by kind'),
       h('p.au-figs', fig('own days', d.own, 'Plantings that carry their own days to harvest and do not follow this list'), fig('own nursery weeks', s.nursery.differ, 'Plantings that carry nursery weeks from the old planner that differ from the crop’s now'),
         fig('own yield', hv.yield, 'Plantings that carry their own yield'), fig('own harvest days', hv.window, 'Plantings that carry their own harvest days'), fig('own turnover', hv.turnover, 'Plantings that carry their own turnover days'),
         hv.copy ? fig('old copies', hv.copy, 'Plantings that carry the old planner’s copy of crop values that bear on the harvest: yield, price, marketable share, harvest days, unit') : null,
@@ -133,12 +139,40 @@
         hv.cycles ? fig('tower cycles', hv.cycles, 'A tower cycle’s single harvest day and no turnover are what make it a cycle. They are left alone.') : null),
       h('p.au-line', { id: 'asAuditLine' }, !d.own ? 'Every planting follows this list for its days to harvest.' : `${num(d.own)} of ${num(s.plantings - s.trays)} plantings in beds, towers and crates keep their own days. ${d.agree ? `${num(d.agree)} carry the number the list already gives; ` : ''}${num(d.differ)} carry a different one.`),
       h('p.au-line', { id: 'asHarvestLine' }, !later ? 'Every planting follows this list for its yield, harvest days and turnover.' : `${num(hv.yield)} keep their own yield, ${num(hv.window)} their own harvest days and ${num(hv.turnover)} their own turnover days${hv.copy ? `; ${num(hv.copy)} carry the old planner’s copy of crop values` : ''}. “Review…” shows what letting each go would change, before anything does.`),
-      s.guessed.plantings ? h('p.au-line.au-warn', { id: 'asGuessLine' }, `${plural(s.guessed.plantings, 'planting')} count${s.guessed.plantings === 1 ? 's' : ''} from a start guessed from the wording of a supplier’s page: ${s.guessed.crops.map(id => (App.state.engine.crop(id) || {}).name).filter(Boolean).join(', ')}. Setting “Days start at” for the crop settles it.`) : null,
-      h('p.au-fine', `Spacing set on ${num(s.later.spacing)} stays with the planting: beds differ.${d.recorded + hv.recorded ? ` ${plural(d.recorded + hv.recorded, 'planting')} with recorded work keep${d.recorded + hv.recorded === 1 ? 's' : ''} ${d.recorded + hv.recorded === 1 ? 'its' : 'their'} figures.` : ''}`));
+      s.guessed.plantings ? h('p.au-line.au-warn', { id: 'asGuessLine' }, `${plural(s.guessed.plantings, 'planting')} count${s.guessed.plantings === 1 ? 's' : ''} from a start guessed from the wording of a supplier’s page: ${s.guessed.crops.map(id => (App.state.engine.crop(id) || {}).name).filter(Boolean).join(', ')}. Setting “Days counted from” for the crop settles it.`) : null,
+      h('p.au-fine', `Spacing set on ${num(s.later.spacing)} stays with the planting: beds differ.${d.recorded + hv.recorded ? ` ${plural(d.recorded + hv.recorded, 'planting')} with recorded work keep${d.recorded + hv.recorded === 1 ? 's' : ''} ${d.recorded + hv.recorded === 1 ? 'its' : 'their'} figures.` : ''}`)));
+  }
+  /**
+   * One press for the part nobody needs to think about: every figure that can go onto the list with nothing changing. What it
+   * would do is worked out first and said, and it is done only if he agrees; whatever would move a date, a yield, the season's
+   * worth or the ground is left exactly as it is, for the window that shows what differs.
+   */
+  async function tidy(button) {
+    if (button) button.disabled = true;
+    try {
+      const made = App.auditStudy(), rows = made.rows, choices = Object.fromEntries(rows.map(r => [r.key, r.choice]));
+      let view = App.auditPreview(rows, choices);
+      const quiet = v => !v.harvest && !v.sowing && !v.yields.length && !v.ground.length && !v.fresh.length && !v.crops.length && Math.abs(v.worth[1] - v.worth[0]) < 0.005;
+      if (!quiet(view)) {
+        // the suggestion is meant to move nothing; if a group would, it is kept, and the rest is looked at again
+        const touched = new Set([...view.moves.map(m => m.id), ...view.yields.map(y => y.id), ...view.ground.map(g => g.id), ...view.fresh.flat()]);
+        for (const r of rows) if (choices[r.key] !== 'keep' && r.ids.some(id => touched.has(id))) choices[r.key] = 'keep';
+        view = App.auditPreview(rows, choices);
+      }
+      const step = view.step, differ = rows.filter(r => choices[r.key] === 'keep').length;
+      if (!step.ops.length || !quiet(view)) { UI.toast(differ ? 'Nothing can go onto the list without something changing. “See what differs…” shows each case.' : 'Every planting already follows your list.'); return false; }
+      const ok = await UI.confirm({ title: `Move ${plural(step.plantings, 'planting')} onto your list?`, confirmLabel: 'Move them',
+        body: `Worked out on your plan as it stands: ${plural(step.plantings, 'planting')} stop carrying figures of their own, and ${plural(step.taken, 'line')} of your list take the figures they carried. No harvest date, no sowing date, no yield and no dollar changes (the season stays at ${money(view.worth[0])}), and no ground is booked twice that was not before. ${step.kept ? `${plural(step.kept, 'planting')} that would change stay exactly as they are.` : ''} The plan as it stands is kept as a snapshot first, and one undo takes this back.` });
+      if (!ok) return false;
+      return !!(await App.auditApply(rows, choices));
+    } finally { if (button && button.isConnected) button.disabled = false; }
   }
 
   // ───────────────────────── figures kept on plantings: the review window ─────────────────────────
   let audit = null;
+  // how the window sets its groups out; it is kept while the page is open
+  const auView = { by: 'crop', all: false };
+  const KINDS = ['days', 'weeks', 'wait', 'yield', 'window', 'turn', 'copy'], KIND = { days: 'Days to harvest', weeks: 'Nursery weeks', wait: 'To place', yield: 'Yield', window: 'Harvest days', turn: 'Turnover days', copy: 'Old copy' };
   const DO = { take: 'The list takes', follow: 'Use the list’s', keep: 'Keep their own' };
   const LATER = ['yield', 'window', 'turn', 'copy'];
   const COPY = { yield: 'yield', price: 'price', mk: 'marketable share', hw: 'harvest days', harvestMode: 'how long it is picked', yieldDays: 'length of season', harvestUntil: 'picked until', baseUnit: 'unit', yBasis: 'counted by' };
@@ -171,7 +205,7 @@
   function openAudit() {
     if (audit) return;
     const eng = App.state.engine, made = App.auditStudy(), rows = made.rows, choices = Object.fromEntries(rows.map(r => [r.key, r.choice]));
-    const body = h('tbody', { id: 'auBody' }), sum = h('div.au-sum', { id: 'auSum' });
+    const body = h('tbody', { id: 'auBody' }), sum = h('div.au-sum', { id: 'auSum' }), view = auView;
     const apply = h('button.btn.primary', { type: 'button', id: 'auApply' }, 'Apply');
     const close = () => { if (!audit) return; audit = null; el.close(); el.remove(); };
     const name = r => { if (r.same) return [h('b', 'Copies that say what the crop says now')]; const c = eng.crop(r.cropId), v = eng.variety(r.varietyId); return [h('b', c ? c.name : 'Crop'), r.kind === 'copy' ? h('small', COPY[r.field] || r.field) : v ? h('small', v.name) : r.varieties && r.varieties.length > 1 ? h('small', `${r.varieties.length} varieties`) : null]; };
@@ -202,30 +236,53 @@
         h('p.au-fine', `${view.standing ? `The ${plural(view.standing, 'pair')} already booked into the same ground ${view.standing === 1 ? 'is' : 'are'} not counted as new. ` : ''}${made.held ? `${plural(made.held, 'planting')} with recorded work ${made.held === 1 ? 'is' : 'are'} left as ${made.held === 1 ? 'it is' : 'they are'}. ` : ''}The plan as it stands is kept as a snapshot first, and one undo takes this back.`));
       apply.disabled = !step.ops.length;
     };
+    // What is shown: the groups that would change if they followed the list (the ones the planner suggests keeping), crop by crop;
+    // or, on request, every group, and by kind of figure as the window was first built. What is not shown keeps its suggestion.
+    const differs = r => r.choice === 'keep', shown = () => (view.all ? rows : rows.filter(differs)), quiet = rows.filter(r => !differs(r)).length;
+    const rowEl = (r, first) => {
+      const effect = h('td.au-effect'); effects.set(r.key, effect);
+      const pick = h('select', { 'aria-label': 'What to do', dataset: { row: r.key }, onchange: e => { choices[r.key] = e.target.value; draw(); } }, options(r).filter(Boolean).map(([value, text]) => h('option', { value, selected: choices[r.key] === value }, text)));
+      return h('tr.au-row', { dataset: { key: r.key, kind: r.kind } },
+        h('td.au-name', first), h('td.au-where', r.kind === 'wait' ? 'To place' : r.env ? LABEL[r.env] : ''), h('td.au-n', num(r.ids.length)),
+        h('td.au-n', r.kind === 'wait' ? String(r.days) : theirs(r)),
+        h('td.au-n.au-list', r.kind === 'wait' ? '' : lists(r)), h('td.au-do', pick), effect);
+    };
     const section = (title, kind, note) => {
-      const list = rows.filter(r => r.kind === kind);
+      const list = shown().filter(r => r.kind === kind);
       if (!list.length) return;
       body.append(h('tr.au-sec', h('td', { colSpan: 7 }, h('b', title), h('small', note))));
-      for (const r of list) {
-        const effect = h('td.au-effect'); effects.set(r.key, effect);
-        const pick = h('select', { 'aria-label': 'What to do', dataset: { row: r.key }, onchange: e => { choices[r.key] = e.target.value; draw(); } }, options(r).filter(Boolean).map(([value, text]) => h('option', { value, selected: choices[r.key] === value }, text)));
-        body.append(h('tr.au-row', { dataset: { key: r.key, kind: r.kind } },
-          h('td.au-name', name(r)), h('td.au-where', r.kind === 'wait' ? 'To place' : r.env ? LABEL[r.env] : ''), h('td.au-n', num(r.ids.length)),
-          h('td.au-n', r.kind === 'wait' ? String(r.days) : theirs(r)),
-          h('td.au-n.au-list', r.kind === 'wait' ? '' : lists(r)), h('td.au-do', pick), effect));
-      }
+      for (const r of list) body.append(rowEl(r, name(r)));
     };
-    section('Days to harvest', 'days', 'their own number, against what the list gives');
-    section('Nursery weeks', 'weeks', 'kept from the old planner, where the crop now says otherwise');
-    section('To place', 'wait', 'waiting plantings that carry their own days');
-    section('Yield', 'yield', 'their own figure, a total over the harvest, against what the list gives');
-    section('Harvest days', 'window', 'how long they are picked, against the crop’s');
-    section('Turnover days', 'turn', 'how long the ground is held after the last harvest');
-    section('Copies from the old planner', 'copy', 'crop values copied onto a planting when it was made');
+    const fill = () => {
+      clear(body); effects.clear();
+      const list = shown();
+      if (!list.length) body.append(h('tr.au-none', h('td', { colSpan: 7, id: 'auNone' }, quiet ? `Nothing differs: all ${plural(quiet, 'group')} can follow your list with nothing changing. Apply does that, or tick the box below to see them.` : 'Every planting follows your list.')));
+      else if (view.by === 'kind') {
+        section('Days to harvest', 'days', 'their own number, against what the list gives');
+        section('Nursery weeks', 'weeks', 'kept from the old planner, where the crop now says otherwise');
+        section('To place', 'wait', 'waiting plantings that carry their own days');
+        section('Yield', 'yield', 'their own figure, a total over the harvest, against what the list gives');
+        section('Harvest days', 'window', 'how long they are picked, against the crop’s');
+        section('Turnover days', 'turn', 'how long the ground is held after the last harvest');
+        section('Copies from the old planner', 'copy', 'crop values copied onto a planting when it was made');
+      } else {
+        // crop by crop: everything one crop's plantings carry is read together
+        const groups = new Map(), label = r => r.same ? 'Copies that say what the crop says now' : (eng.crop(r.cropId) || { name: 'Crop' }).name;
+        for (const r of list) { const k = label(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+        for (const [title, mine] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
+          body.append(h('tr.au-sec.au-crop', { dataset: { crop: title } }, h('td', { colSpan: 7 }, h('b', title), h('small', `${plural(mine.reduce((n, r) => n + r.ids.length, 0), 'planting')} in ${plural(mine.length, 'group')}`))));
+          for (const r of mine.sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind))) { const v = eng.variety(r.varietyId); body.append(rowEl(r, [h('b', KIND[r.kind] || r.kind), r.same ? null : r.kind === 'copy' ? h('small', COPY[r.field] || r.field) : v ? h('small', v.name) : r.varieties && r.varieties.length > 1 ? h('small', `${r.varieties.length} varieties`) : null])); }
+        }
+      }
+      draw();
+    };
     const el = h('dialog.dialog.bk.audit', { id: 'auditDlg', oncancel: e => { e.preventDefault(); close(); } },
       h('button.icon-btn.close', { type: 'button', id: 'auClose', 'aria-label': 'Close', title: 'Close. Nothing is changed.', onclick: () => close() }, '×'),
-      h('h2', 'Plantings that keep their own figures'),
-      h('p.dlg-lead', 'A planting with a number of its own does not follow the list. For each group: the list can take their number, so nothing moves; they can use the list’s, so dates or yields change; or they can stay as they are. Nothing changes until you press Apply.'),
+      h('h2', 'Plantings that differ from your list'),
+      h('p.dlg-lead', 'These carry a figure of their own, and following your list would change a date or a yield. For each group, choose: keep their own, or use the list’s and see what moves. Nothing changes until you press Apply.'),
+      h('div.au-view', { id: 'auView' },
+        h('div.seg', { role: 'group', 'aria-label': 'How the groups are set out', id: 'auBy' }, [['crop', 'By crop'], ['kind', 'By kind of figure']].map(([id, text]) => h('button', { type: 'button', dataset: { by: id }, 'aria-pressed': String(view.by === id), onclick: e => { view.by = id; for (const b of e.currentTarget.parentElement.children) b.setAttribute('aria-pressed', String(b.dataset.by === id)); fill(); } }, text))),
+        quiet ? h('label.ah-check', h('input', { type: 'checkbox', id: 'auAll', checked: view.all, onchange: e => { view.all = e.target.checked; fill(); } }), h('span', `Also show the ${plural(quiet, 'group')} that can follow the list with nothing changing`)) : null),
       h('div.au-scroll', h('table.au', h('thead', h('tr', h('th', 'Crop and variety'), h('th', 'Where'), h('th.au-n', 'Plantings'), h('th.au-n', 'Theirs'), h('th.au-n', { title: 'What the list gives these plantings today' }, 'List'), h('th', 'What to do'), h('th', 'What that does'))), body)),
       sum,
       h('div.dialog-actions',
@@ -240,7 +297,7 @@
       if (done) close(); else apply.disabled = false;
     });
     audit = { el, rows, choices, close, draw };
-    document.body.append(el); el.showModal(); draw();
+    document.body.append(el); el.showModal(); fill();
   }
 
   // ───────────────────────── yield and price: the second table ─────────────────────────
@@ -262,7 +319,7 @@
     clear($('ahHead')).append(h('tr', h('th', 'Crop'),
       th('.ah-unit', 'Sold by', 'The unit the crop is counted and sold in. The yield and the price are in this unit; one unit is never turned into another.'),
       th('.ah-price', 'Price $', 'What one unit sells for. A variety can have its own.'),
-      th('.ah-pick', 'Picked', 'How the harvest comes in. Over the days: a total, picked evenly over the harvest days. Each week: the yield is a week’s picking. All at once: the whole total the day it is ready.'),
+      th('.ah-pick', 'Picked', 'How the harvest comes in. Gradually: picked week by week, and the yield is a week’s picking. Clear: the yield is a total, all of it taken the day it is ready. On demand: the yield is a total, held and taken evenly over the harvest days.'),
       th('.ah-days', 'Days', 'Harvest days: how long the crop is picked, or held to be picked. The ground is held that long.'),
       App.state.engine.ENVS.map(env => th('.ah-y', SHORT[env], `Yield ${LABEL[env].toLowerCase()}, for a plant or a bed-foot as the row says: a total, or a week’s picking where the crop is picked each week`, 'Yield')),
       th('.ah-comes', 'Comes to', 'The total and the weekly figure side by side, for the condition the crop is mostly grown in. One is yours; the other follows from the harvest days.'),
@@ -305,7 +362,7 @@
           unitOptions(unit, hc.unit.fallback).map(x => h('option', { value: x, selected: x === unit }, x)), hc.unit.mine ? h('option', { value: '(default)' }, `Back to ${hc.unit.fallback}`) : null));
       const pickCell = hc.micro ? h('td.as-start', h('span.as-fixed', { title: 'A live tray is counted whole on the Monday it is due.' }, 'when due'))
         : h('td.as-start', h('select.as-from.ah-sel' + (hc.pattern.mine ? '.mine' : ''), { 'aria-label': `${c.name}: picked`, dataset: { hk: `pick|${c.id}` }, title: `${PATTERN_TIP[hc.pattern.value]}${hc.pattern.mine ? '' : ' Not set: this is how every crop has been counted so far.'}`,
-          onchange: async e => { const value = e.target.value; if (!await App.setSell(c.id, { pattern: value === 'unset' ? null : value }, `${c.name}: picked ${value === 'unset' ? 'as before' : PATTERN[value].toLowerCase()}`)) schedule(); } },
+          onchange: async e => { const value = e.target.value; if (!await App.setSell(c.id, { pattern: value === 'unset' ? null : value }, `${c.name}: ${value === 'unset' ? 'picked as before' : PATTERN_SAY[value]}`)) schedule(); } },
           Object.entries(PATTERN).map(([value, text]) => h('option', { value, selected: hc.pattern.value === value }, text)), hc.pattern.mine ? h('option', { value: 'unset' }, 'Back to not set') : null));
       const fixed = (text, title) => h('td.as-cell.none', { title }, text);
       const yields = (kind, id, x, name) => eng.ENVS.map(env => {
@@ -364,7 +421,7 @@
     const a = plan.assumptions, cells = a ? Object.values(a.crops || {}).concat(Object.values(a.varieties || {})).flatMap(r => Object.values(r)) : [];
     const days = cells.filter(c => c && c.dtm != null).length, yields = cells.filter(c => c && c.yield != null).length, starts = a && a.starts ? Object.keys(a.starts).length : 0;
     const lines = a ? Object.values(a.sell || {}).concat(Object.values(a.sellV || {})).reduce((n, r) => n + Object.keys(r).length, 0) : 0;
-    $('asCount').textContent = days || starts || yields || lines ? [days ? `${days} number${days === 1 ? '' : 's'} of your own` : '', starts ? `${starts} starting point${starts === 1 ? '' : 's'} set` : '', yields ? `${yields} yield${yields === 1 ? '' : 's'}` : '', lines ? `${lines} other figure${lines === 1 ? '' : 's'} on crop lines` : ''].filter(Boolean).join(' · ') : 'Nothing set yet: every number is a default';
+    $('asCount').textContent = days || starts || yields || lines ? [days ? `${days} number${days === 1 ? '' : 's'} of your own` : '', starts ? `“Days counted from” set for ${starts} crop${starts === 1 ? '' : 's'}` : '', yields ? `${yields} yield${yields === 1 ? '' : 's'}` : '', lines ? `${lines} other figure${lines === 1 ? '' : 's'} on crop lines` : ''].filter(Boolean).join(' · ') : 'Nothing set yet: every number is a default';
   }
   const HEAD = {
     days: ['Days to first harvest', 'Each row says where its days start, and its numbers count from there. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; a variety with its own figure keeps it, and a planting with no variety uses the crop row.'],
@@ -420,7 +477,7 @@
           root.LRFThumbs.el({ cropId: c.id, color: eng.cropColor(c), label: c.name, size: 24, cls: 'key' }),
           // the name is never cut short: where the offer does not fit beside it, the offer goes on a line of its own
           h('span.as-nc', h('b', c.name),
-            hint ? h('button.as-hint', { type: 'button', dataset: { hint: c.id }, title: `${hint.says}. Press to count this crop that way; what moves is shown first.`, onclick: () => App.setStart(c.id, hintChange(eng, c, hint), `${c.name}: days start at ${hintWord(hint)}`) }, `Johnny’s: ${hintWord(hint)}`) : null))),
+            hint ? h('button.as-hint', { type: 'button', dataset: { hint: c.id }, title: `${hint.says}. Press to count this crop that way; what moves is shown first.`, onclick: () => App.setStart(c.id, hintChange(eng, c, hint), `${c.name}: days counted from ${hintWord(hint)}`) }, `Johnny’s: ${hintWord(hint)}`) : null))),
         startCell(eng, c),
         eng.ENVS.map(env => cell('crops', c.id, env, row[env], c.name)),
         seedCell(row[main], main),
@@ -432,7 +489,7 @@
           h('td', h('div.as-name', root.LRFThumbs.el({ varietyId: v.id, color: eng.cropColor(c), label: v.name, size: 22 }), h('span.as-nc', h('span.as-vname', v.name),
             v.catalogDtm ? h('small', `prints ${v.catalogDtm} d`) : null,
             guess ? h('small.as-guess', { title: 'The supplier does not say where these days start. The old planner went by the wording of its page, which can mislead. Set the crop row, or this variety, to settle it.' }, `read as from ${FROM[guess.start]}: a guess`) : null,
-            !guess && v.catalogMaturityBasis === 'seed' && eng.startRule(c.id).from === 'direct' ? h('small.as-guess', { title: 'This variety says its days start at sowing in the nursery, so the whole nursery time comes off. If its supplier meant seed sown in place, as the crop row now says, set it to Direct sowing.' }, 'sowing, not the crop’s direct sowing') : null))),
+            !guess && v.catalogMaturityBasis === 'seed' && eng.startRule(c.id).from === 'direct' ? h('small.as-guess', { title: 'This variety says its days are counted from seeding in trays, so the whole nursery time comes off. If its supplier meant seed sown in place, as the crop row now says, set it to Direct seeding.' }, 'seeding in trays, not the crop’s direct seeding') : null))),
           varietyStartCell(eng, c, v),
           eng.ENVS.map(env => cell('varieties', v.id, env, t[env], v.name)),
           (mine => seedCell(t[mine], mine))(mainEnv(whereV.get(v.id), t, main)),
@@ -446,7 +503,7 @@
     if (all) {
       all.hidden = !offers.length;
       clear(all);
-      if (offers.length) all.append(h('span', h('b', `${plural(offers.length, 'crop')} of yours ${offers.length === 1 ? 'has' : 'have'} a published starting point the plan does not use yet`), h('small', offers.map(o => o.c.name).join(', '))),
+      if (offers.length) all.append(h('span', h('b', `${plural(offers.length, 'crop')} of yours ${offers.length === 1 ? 'has' : 'have'} published guidance on where days are counted from that the plan does not use yet`), h('small', offers.map(o => o.c.name).join(', '))),
         h('button.btn.small', { type: 'button', id: 'asHintsAll', title: 'Count each of these crops the way Johnny’s says. What moves is shown before anything changes.', onclick: () => App.setStarts(offers.map(o => hintChange(eng, o.c, o.hint)), `${plural(offers.length, 'crop')}: days start where Johnny’s says`, { ask: true }) }, 'Use them all…'));
     }
     refocus();
@@ -464,5 +521,5 @@
     App.on('view', () => { if (App.state.view === 'assume' && ui.dirty) render(); });
   }
 
-  root.LRFAssume = { init, LABEL, openAudit, audit: () => audit, setMode: mode => { ui.mode = mode === 'harvest' ? 'harvest' : 'days'; render(); }, mode: () => ui.mode, fig };
+  root.LRFAssume = { init, LABEL, openAudit, audit: () => audit, auditView: change => Object.assign(auView, change || {}), tidy, setMode: mode => { ui.mode = mode === 'harvest' ? 'harvest' : 'days'; render(); }, mode: () => ui.mode, fig };
 })(window);

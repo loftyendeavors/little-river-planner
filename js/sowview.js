@@ -35,7 +35,8 @@
     ['move', 'Move out', 'Sheltered containers going out to where they stand for the season.']
   ];
   const DID = { potup: 'potted up', harden: 'hardened off', plant: 'planted', move: 'moved out' };
-  const ui = { sel: new Set(), qty: new Map(), filter: 'all', earlier: false, date: null, follow: true };
+  const ui = { sel: new Set(), qty: new Map(), filter: 'all', earlier: false, date: null, follow: true, span: 1 };
+  const SPANS = [[1, 'Week'], [2, '2 weeks'], [4, '4 weeks']];
   let dirty = true;
   const isPhone = () => document.body.classList.contains('phone');
   const days = n => `${num(n)} day${n === 1 ? '' : 's'}`;
@@ -241,7 +242,7 @@
     if (!done) return;
     for (const l of lines) { ui.sel.delete(l.key); ui.qty.delete(l.key); }
     const stocked = [...t.sow.map(l => l.stockUnit), ...t.jobs.filter(l => l.stock).map(l => l.stock.stockUnit)], units = [...new Set(stocked)], unit = units.length === 1 ? units[0] : null, n = done.done.length;
-    UI.toast(`${plural(lines.length, t.jobs.length ? 'job' : 'sowing')} recorded ${day(d(date))}${n !== lines.length ? ` for ${plural(n, 'planting')}` : ''}`
+    UI.toast(`${plural(lines.length, t.jobs.length ? 'task' : 'sowing')} recorded ${day(d(date))}${n !== lines.length ? ` for ${plural(n, 'planting')}` : ''}`
       + (unit ? ` · ${done.used ? amountText(done.used, unit) + ' off stock' : 'nothing off stock'}${done.untracked ? ` · ${amountText(done.untracked, unit)} not from a counted lot` : ''}` : done.used || done.untracked ? ' · seed taken off stock where there was any' : '')
       + (done.moved.length ? ` · ${movedText(done.moved)}` : '')
       + (done.held ? ` · ${plural(done.held, 'planting')} would have left ${App.planYear()} and stayed where ${done.held === 1 ? 'it was' : 'they were'}` : '')
@@ -301,7 +302,7 @@
   function jobRow(line, stock, withWeek) {
     const eng = App.state.engine, open = line.state !== 'done', on = ui.sel.has(line.key), color = eng.cropColor(line.crop), how = jobHow(line), first = line.members[0], when = d(line.date);
     const flip = () => { if (on) ui.sel.delete(line.key); else ui.sel.add(line.key); render(); };
-    const pick = open ? h('input', { type: 'checkbox', checked: on, 'aria-label': `${line.name}: ${DID[line.section]}`, onchange: flip }) : line.passed ? h('span.sw-tick.none', { title: 'Later work is recorded for it, so it is not waiting; no day was recorded for this job' }, '–') : h('span.sw-tick', { title: 'Recorded' }, '✓');
+    const pick = open ? h('input', { type: 'checkbox', checked: on, 'aria-label': `${line.name}: ${DID[line.section]}`, onchange: flip }) : line.passed ? h('span.sw-tick.none', { title: 'Later work is recorded for it, so it is not waiting; no day was recorded for this task' }, '–') : h('span.sw-tick', { title: 'Recorded' }, '✓');
     return h('tr' + (on ? '.on' : '') + (open ? '' : '.done'), { dataset: { line: line.key, kind: line.section, state: line.passed ? 'passed' : line.state }, onclick: e => { if (!open || e.target.closest('input, button, a')) return; flip(); } },
       h('td.sw-pick', pick),
       h('td.sw-when', h('b', withWeek ? day(when) : UI.DAYS[when.getDay()]), h('small', withWeek ? UI.DAYS[when.getDay()] : day(when))),
@@ -329,7 +330,7 @@
       if (!mine.length) continue;
       const open = mine.filter(l => l.state !== 'done').length, plantings = mine.reduce((n, l) => n + l.members.length, 0);
       out.push(h('section.wk-kind', { dataset: { kind: id } },
-        h('div.sw-kind-head', h('h4', title), h('span', [open === mine.length ? plural(mine.length, 'job') : `${num(mine.length - open)} of ${plural(mine.length, 'job')} recorded`, plantings !== mine.length ? plural(plantings, 'planting') : ''].filter(Boolean).join(' · ')), h('small', about)),
+        h('div.sw-kind-head', h('h4', title), h('span', [open === mine.length ? plural(mine.length, 'task') : `${num(mine.length - open)} of ${plural(mine.length, 'task')} recorded`, plantings !== mine.length ? plural(plantings, 'planting') : ''].filter(Boolean).join(' · ')), h('small', about)),
         jobTable(mine, stock, withWeek)));
     }
     return out;
@@ -370,20 +371,21 @@
     return body.length ? h('table', h('thead', h('tr', h('th'), h('th', withWeek ? 'Planned' : 'Day'), h('th', 'What'), h('th', 'How much'), h('th', 'Where, or for'), h('th', 'Done on'))), h('tbody', body)) : null;
   }
   /** The week as a sheet of paper: every job with a box to tick and a place to write the day it was done. */
-  function sheet(fig, now) {
-    const all = jobs(), week = fig.list.filter(l => l.week === now), weekJobs = all.filter(l => l.week === now), earlier = fig.list.filter(l => l.week < now && l.state !== 'done'), earlierJobs = all.filter(l => l.week < now && l.state !== 'done');
-    const last = E.addDays(d(now), 6);
+  function sheet(fig, now, span = 1) {
+    const until = E.d2s(E.addDays(d(now), 7 * span - 1)), inSpan = l => l.week >= now && l.week <= until;
+    const all = jobs(), week = fig.list.filter(inSpan), weekJobs = all.filter(inSpan), earlier = fig.list.filter(l => l.week < now && l.state !== 'done'), earlierJobs = all.filter(l => l.week < now && l.state !== 'done');
+    const last = d(until);
     return h('div.wkp',
-      h('h1', `Week of ${UI.dayLong(d(now)).replace(/^\w+ /, '')}`), h('p.wkp-sub', `Monday ${day(d(now))} to Sunday ${day(last)} · ${plural(week.length + weekJobs.filter(l => !l.passed).length, 'job')} · printed ${day(new Date())}`),
-      sheetTable(week, weekJobs, false) || h('p', 'Nothing is planned for this week.'),
+      h('h1', span === 1 ? `Week of ${UI.dayLong(d(now)).replace(/^\w+ /, '')}` : `${num(span)} weeks from ${UI.dayLong(d(now)).replace(/^\w+ /, '')}`), h('p.wkp-sub', `Monday ${day(d(now))} to Sunday ${day(last)} · ${plural(week.length + weekJobs.filter(l => !l.passed).length, 'task')} · printed ${day(new Date())}`),
+      sheetTable(week, weekJobs, span > 1) || h('p', span === 1 ? 'Nothing is planned for this week.' : 'Nothing is planned for these weeks.'),
       // the earlier jobs are printed when they are open on the page: what is seen is what is printed
       ui.earlier && earlier.length + earlierJobs.length ? [h('h2', 'Not recorded from earlier weeks'), sheetTable(earlier, earlierJobs, true)] : null,
-      h('p.wkp-foot', 'Tick what was done and write the day. Enter it in the planner afterwards: a job done late moves what comes after it.'));
+      h('p.wkp-foot', 'Tick what was done and write the day. Enter it in the planner afterwards: a task done late moves what comes after it.'));
   }
-  function printWeek(fig, now) {
+  function printWeek(fig, now, span = 1) {
     let host = $('printSheet');
     if (!host) { host = h('div', { id: 'printSheet' }); document.body.append(host); }
-    clear(host); host.append(sheet(fig, now));
+    clear(host); host.append(sheet(fig, now, span));
     document.body.classList.add('printing');
     const done = () => { document.body.classList.remove('printing'); root.removeEventListener('afterprint', done); };
     root.addEventListener('afterprint', done);
@@ -400,12 +402,14 @@
     for (const k of [...ui.sel]) if (!known.has(k)) { ui.sel.delete(k); ui.qty.delete(k); }
     if (!ui.date) ui.date = today;
     const later = ui.date > today;
-    const week = fig.list.filter(l => l.week === now), earlier = fig.list.filter(l => l.week < now && l.state !== 'done'), weekOpen = week.filter(l => l.state !== 'done');
-    const weekJobs = all.filter(l => l.week === now && !l.passed), earlierJobs = all.filter(l => l.week < now && l.state !== 'done'), jobsOpen = weekJobs.filter(l => l.state !== 'done'), late = earlier.length + earlierJobs.length;
+    // how far ahead is listed: this week, or the two or four weeks from its Monday (a phone shows the week and nothing else)
+    const span = phone ? 1 : ui.span, until = E.d2s(E.addDays(d(now), 7 * span - 1)), inSpan = l => l.week >= now && l.week <= until, stretch = span === 1 ? `Week of ${day(d(now))}` : `${day(d(now))} – ${day(d(until))}`;
+    const week = fig.list.filter(inSpan), earlier = fig.list.filter(l => l.week < now && l.state !== 'done'), weekOpen = week.filter(l => l.state !== 'done');
+    const weekJobs = all.filter(l => inSpan(l) && !l.passed), earlierJobs = all.filter(l => l.week < now && l.state !== 'done'), jobsOpen = weekJobs.filter(l => l.state !== 'done'), late = earlier.length + earlierJobs.length;
     const sum = (list, unit) => list.filter(l => l.unit === unit).reduce((n, l) => n + l.amount, 0), trays = week.reduce((n, l) => n + l.trays, 0);
     const busy = [...new Set([...fig.list.map(l => l.week), ...all.filter(l => !l.passed).map(l => l.week)])].sort();
-    const next = busy.find(w => w > now), prev = busy.filter(w => w < now).pop(), step = n => () => App.setDate(E.addDays(d(now), n));
-    const t = ticked(fig), selected = [...t.sow, ...t.jobs], word = t.jobs.length ? 'job' : 'sowing';
+    const next = busy.find(w => w > until), prev = busy.filter(w => w < now).pop(), step = n => () => App.setDate(E.addDays(d(now), n));
+    const t = ticked(fig), selected = [...t.sow, ...t.jobs], word = t.jobs.length ? 'task' : 'sowing';
     const chips = [['all', 'Everything'], ...KINDS.map(k => [k[0], k[1]]), ...JOBS.map(k => [k[0], k[1]])].filter(([id]) => id === 'all' || week.some(l => l.kind === id) || weekJobs.some(l => l.section === id) || (ui.earlier && (earlier.some(l => l.kind === id) || earlierJobs.some(l => l.section === id))));
     if (!chips.some(([id]) => id === ui.filter)) ui.filter = 'all';
     const anything = week.length + weekJobs.length > 0, nothingAfter = !anything && !next;
@@ -414,27 +418,28 @@
     const seasonJobs = all.filter(l => !l.passed), seasonDone = fig.done + seasonJobs.filter(l => l.state === 'done').length, seasonAll = fig.total + seasonJobs.length;
     clear(host);
     add(host,
-      h('header.as-head.wk-head', h('p.eyebrow', `Week · ${App.planYear()}`), h('h2', 'The week’s work'),
+      h('header.as-head.wk-head', h('p.eyebrow', `Tasks · ${App.planYear()}`), h('h2', { id: 'wkTitle' }, span === 1 ? 'This week’s tasks' : `Tasks for ${num(span)} weeks`),
         h('p', 'Tick what was done and record it on the day it was done. Seed comes off stock, and a transplant sown or hardened off late goes out as many days later.')),
       h('div.tr-stats.sw-stats',
-        stat(`Week of ${day(d(now))}`, week.length ? `${num(weekOpen.length)} to sow` : 'Nothing', week.length ? (week.length - weekOpen.length ? `${num(week.length - weekOpen.length)} of ${num(week.length)} recorded` : plural(week.length, 'sowing') + ' planned') : 'to sow'),
+        stat(stretch, week.length ? `${num(weekOpen.length)} to sow` : 'Nothing', week.length ? (week.length - weekOpen.length ? `${num(week.length - weekOpen.length)} of ${num(week.length)} recorded` : plural(week.length, 'sowing') + ' planned') : 'to sow'),
         stat('Seed this week', sum(week, 'seeds') ? num(sum(week, 'seeds')) : sum(week, 'g') ? amountText(sum(week, 'g'), 'g') : '—', sum(week, 'seeds') ? `seeds${sum(week, 'g') ? ' · ' + amountText(sum(week, 'g'), 'g') + ' for trays' : ''}` : sum(week, 'g') ? 'for live trays' : ''),
         stat('Trays to fill', trays ? num(trays) : '—', trays ? [['plugs', 'seedling'], ['rockwool', 'tower'], ['live', 'live']].map(([k, w]) => { const n = week.filter(l => l.kind === k).reduce((m, l) => m + l.trays, 0); return n ? `${num(n)} ${w}` : ''; }).filter(Boolean).join(' · ') : ''),
-        stat('Other jobs', weekJobs.length ? `${num(jobsOpen.length)} to do` : 'Nothing', weekJobs.length ? (jobNote || `${plural(weekJobs.length, 'job')} recorded`) : 'to pot up, harden off or plant', 'wk-other'),
+        stat('Other tasks', weekJobs.length ? `${num(jobsOpen.length)} to do` : 'Nothing', weekJobs.length ? (jobNote || `${plural(weekJobs.length, 'task')} recorded`) : 'to pot up, harden off or plant', 'wk-other'),
         stat('Earlier, not recorded', num(late), late ? `since ${day(d([...earlier, ...earlierJobs].map(l => l.date).sort()[0]))}` : 'nothing is waiting', late ? 'wk-late' : ''),
-        stat('This season', `${num(seasonDone)} of ${num(seasonAll)}`, 'jobs recorded')),
+        stat('This season', `${num(seasonDone)} of ${num(seasonAll)}`, 'tasks recorded')),
       h('div.sw-bar',
-        h('span.tr-stepper', h('button.icon-btn', { type: 'button', 'aria-label': 'Back one week', onclick: step(-7) }, '‹'), h('b', `Week of ${day(d(now))}`), h('button.icon-btn', { type: 'button', 'aria-label': 'Forward one week', onclick: step(7) }, '›')),
+        h('span.tr-stepper', h('button.icon-btn', { type: 'button', 'aria-label': 'Back one week', onclick: step(-7) }, '‹'), h('b', { id: 'wkStretch' }, stretch), h('button.icon-btn', { type: 'button', 'aria-label': 'Forward one week', onclick: step(7) }, '›')),
+        phone ? null : h('div.seg.wk-span', { role: 'group', 'aria-label': 'How far ahead to list', id: 'wkSpan' }, SPANS.map(([n, label]) => h('button', { type: 'button', dataset: { span: n }, 'aria-pressed': String(ui.span === n), title: n === 1 ? 'This week only' : `This week and the ${n - 1 === 1 ? 'one' : num(n - 1)} after it`, onclick: () => { ui.span = n; render(); } }, label))),
         now !== T.monday(today) && String(App.planYear()) === today.slice(0, 4) ? h('button.btn.small', { type: 'button', id: 'wkToday', onclick: () => App.setDate(d(today)) }, 'This week') : null,
         !anything && next ? h('button.btn.small', { type: 'button', onclick: () => App.setDate(d(next)) }, `Next work: week of ${day(d(next))}`) : null,
         nothingAfter && prev ? h('button.btn.small', { type: 'button', onclick: () => App.setDate(d(prev)) }, `Last work: week of ${day(d(prev))}`) : null,
         h('span.grow'),
-        chips.length > 2 ? h('div.sd-filters', { role: 'group', 'aria-label': 'Which jobs to list' }, chips.map(([id, label]) => h('button.chip', { type: 'button', 'aria-pressed': String(ui.filter === id), onclick: () => { ui.filter = id; render(); } }, label))) : null,
-        framed || phone ? null : h('button.btn', { type: 'button', id: 'wkPrint', title: 'This week as a sheet to carry: a box for each job and a place for the day it was done', onclick: () => printWeek(fig, now) }, 'Print the week')),
+        chips.length > 2 ? h('div.sd-filters', { role: 'group', 'aria-label': 'Which tasks to list' }, chips.map(([id, label]) => h('button.chip', { type: 'button', 'aria-pressed': String(ui.filter === id), onclick: () => { ui.filter = id; render(); } }, label))) : null,
+        framed || phone ? null : h('button.btn', { type: 'button', id: 'wkPrint', title: 'This week as a sheet to carry: a box for each task and a place for the day it was done', onclick: () => printWeek(fig, now, span) }, span === 1 ? 'Print the week' : `Print the ${num(span)} weeks`)),
       late ? h('details.sw-earlier', { open: ui.earlier, ontoggle: e => { if (e.target.open !== ui.earlier) { ui.earlier = e.target.open; render(); } } },
-        h('summary', h('b', `${plural(late, 'earlier job')} ${late === 1 ? 'is' : 'are'} not recorded`), h('span', ' Planned before this week. Record them here on the day they were done, or leave them: nothing is assumed done.')),
+        h('summary', h('b', `${plural(late, 'earlier task')} ${late === 1 ? 'is' : 'are'} not recorded`), h('span', ' Planned before this week. Record them here on the day they were done, or leave them: nothing is assumed done.')),
         ui.earlier ? [sections(earlier, stock, true), jobSections(earlierJobs, stock, true)] : null) : null,
-      anything ? [sections(week, stock, false), jobSections(weekJobs, stock, false)] : h('p.empty.sw-none', `Nothing is planned for the week of ${day(d(now))}.`),
+      anything ? [sections(week, stock, span > 1), jobSections(weekJobs, stock, span > 1)] : h('p.empty.sw-none', span === 1 ? `Nothing is planned for the week of ${day(d(now))}.` : `Nothing is planned from ${day(d(now))} to ${day(d(until))}.`),
       selected.length ? h('div.sw-record', { role: 'region', 'aria-label': 'Record what is ticked' },
         h('b', `${plural(selected.length, word)} ticked`),
         h('span', (() => { const s = sum(t.sow, 'seeds'), g = sum(t.sow, 'g'); return [s ? amountText(s, 'seeds') : '', g ? amountText(g, 'g') + ' of seed' : ''].filter(Boolean).join(' · '); })()),
@@ -442,7 +447,7 @@
         h('label', h('span', later ? 'Plan for' : t.jobs.length ? 'Done on' : 'Sown on'), h('input', { type: 'date', value: ui.date, 'aria-label': later ? 'Plan for' : t.jobs.length ? 'Done on' : 'Sown on', onchange: e => { ui.date = e.target.value || today; render(); } })),
         h('button.btn', { type: 'button', onclick: () => { ui.sel.clear(); ui.qty.clear(); render(); } }, 'Clear'),
         h('button.btn.primary', { type: 'button', id: 'swRecord', disabled: later && !t.sow.length, onclick: () => (later ? planFor(fig) : record(fig)) }, later ? `Plan ${plural(t.sow.length, 'sowing')} for ${dayName(d(ui.date))}` : `Record ${plural(selected.length, word)}`),
-        later ? h('small.sw-later', t.jobs.length ? `A day after today is a plan, not a record. Sowings move to that day; nothing is marked done and no seed leaves stock. ${t.sow.length ? 'The other jobs ticked stay' : 'These jobs stay'} where they are: to plan another day for planting out, move the planting.`
+        later ? h('small.sw-later', t.jobs.length ? `A day after today is a plan, not a record. Sowings move to that day; nothing is marked done and no seed leaves stock. ${t.sow.length ? 'The other tasks ticked stay' : 'These tasks stay'} where they are: to plan another day for planting out, move the planting.`
           : 'A day after today is a plan. Nothing is marked sown and no seed leaves stock: the sowing moves to that day.') : null,
         pre && pre.moved.length ? h('label.sw-follow', { id: 'wkFollow' },
           h('input', { type: 'checkbox', checked: ui.follow, onchange: e => { ui.follow = e.target.checked; render(); } }), h('b', 'Later dates follow'),
@@ -473,5 +478,5 @@
     const full = $('wkFull');
     if (full) full.addEventListener('click', leavePhone);
   }
-  root.LRFSowView = { init, render, figures, jobs, sheet: () => sheet(figures(), T.monday(E.d2s(App.state.date))), ticked: () => ticked(figures()), fitPhone, leavePhone, get dirty() { return dirty; }, get follow() { return ui.follow; } };
+  root.LRFSowView = { init, render, figures, jobs, sheet: () => sheet(figures(), T.monday(E.d2s(App.state.date)), isPhone() ? 1 : ui.span), span: () => ui.span, ticked: () => ticked(figures()), fitPhone, leavePhone, get dirty() { return dirty; }, get follow() { return ui.follow; } };
 })(window);
