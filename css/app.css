@@ -1692,3 +1692,77 @@ body.phone .tr-stepper { flex: 1 0 100%; }
 .au-view .seg button { font-size: 12.5px; padding: 5px 12px; white-space: nowrap; }
 .au-view .ah-check { font-size: 12.5px; align-items: center; }
 tr.au-none td { padding: 18px 12px; color: var(--ink-2); font-size: 13px; }
+
+/* ── 0.31: where things live. The top bar in three groups; the Nursery in four tabs; nursery and field apart in Tasks ── */
+.views { align-items: center; }
+.views-sep { flex: none; width: 1px; height: 16px; margin: 0 5px; background: var(--line); }
+body.phone .views-sep { display: none; }
+/* To settle, in the header: the page's own ink, no colour of alarm. It says how many and leads to the list. */
+.settle-badge { border: 1px solid var(--line); background: var(--raised); color: var(--ink-2); border-radius: 999px; padding: 4px 11px; font: 600 12.5px var(--body); white-space: nowrap; }
+.settle-badge[hidden] { display: none; }
+.settle-badge:hover { border-color: var(--ink-2); color: var(--ink); }
+.settle-badge b { font: 700 12.5px var(--mono); color: var(--ink); }
+body.phone #settleBadge { display: none !important; }
+.cleanup.flash { animation: wait-flash 0.9s ease-out; }
+@media (max-width: 1400px) { .views-sep { margin: 0 3px; } .settle-badge, .wait-badge { padding-inline: 9px; } }
+
+/* the Nursery: a title one line high, the tabs under it, so the tabs stay where they are from one to the next */
+.nu-head h2 { white-space: nowrap; }
+.nu-tabs { display: inline-flex; margin: 14px 0 0; }
+.nu-tabs button { flex: none; min-width: 124px; padding: 7px 14px; white-space: nowrap; }
+.nu-lead { margin: 12px 0 0; max-width: 78ch; color: var(--ink-2); font-size: 14px; }
+.tr-stats.nu-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .tr-stats.nu-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.nu-week .linkish { justify-self: start; margin-top: 3px; font-size: 12.5px; font-weight: 600; color: var(--ink); text-align: left; }
+.nu-none { margin-top: 26px; }
+.tr-wrap[data-tab="supplies"] .bn-sup { margin-top: 22px; }
+.tr-wrap[data-tab="live"] .tr-weeks { margin-top: 30px; }
+
+/* Bench room: its heading, the benches counted beside it, and the way to change them next to that: not across the page */
+.bn-head { flex-wrap: wrap; gap: 6px 12px; }
+.bn-head .btn { margin-left: 0; }
+.bn-count { font: 500 12px var(--mono); color: var(--muted); }
+.tr-wrap .bn { margin-top: 26px; }
+/* Set-up: three subjects, each in its own box and always open */
+.bn-setup .bn-edit { margin-top: 18px; }
+.bn-edit-head h3 { margin: 0; font: 800 17px/1.1 var(--display); font-stretch: 80%; white-space: nowrap; }
+.bn-rules .bn-edit-foot { margin-top: 8px; }
+.bn-rules .bn-cool { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.bn-counting .bn-facts { margin-top: 6px; }
+/* the one line another view shows of the benches */
+.bn-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; margin: 30px 0 0; padding: 10px 14px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--raised); font-size: 13.5px; color: var(--ink-2); }
+.bn-line b { color: var(--ink); font-weight: 650; }
+.bn-line span { font-variant-numeric: tabular-nums; }
+.bn-line[data-state="over"] { border-left: 3px solid var(--bad); }
+.bn-line .linkish { margin-left: auto; font-weight: 600; color: var(--ink); }
+body.phone .bn-line { display: none; }
+
+/* Tasks: which half, beside how far ahead; the kinds on a row of their own; each half under a rule of its own */
+.wk-scope { flex: none; }
+.wk-scope button { font-size: 12.5px; padding: 5px 12px; white-space: nowrap; }
+.wk-kinds { margin: 10px 0 0; }
+.wk-half { margin-top: 30px; }
+.wk-half:first-of-type { margin-top: 22px; }
+.wk-half-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding-bottom: 6px; border-bottom: 2px solid var(--ink); }
+.wk-half-head h3 { font: 800 22px/1.05 var(--display); font-stretch: 78%; }
+.wk-half-head span { font: 500 11.5px var(--mono); color: var(--ink-2); }
+.wk-half-head small { margin-left: auto; text-align: right; color: var(--muted); font-size: 12.5px; }
+.wk-half[data-half="nursery"] .wk-half-head { border-bottom-color: var(--good); }
+.wk-half[data-half="field"] .wk-half-head { border-bottom-color: var(--frost); }
+.wk-half .sw-kind:first-of-type, .wk-half-head + .wk-kind { margin-top: 14px; }
+.sw-earlier .wk-half:first-of-type { margin-top: 6px; }
+body.phone .wk-half-head small { display: none; }
+body.phone .wk-half-head h3 { font-size: 19px; }
+body.phone .wk-scope { flex: 1 1 100%; }
+body.phone .wk-scope button { padding: 8px 6px; font-size: 13.5px; }
+.wkp tr.wkp-half th { font: 700 12.5pt/1.2 Georgia, serif; padding-top: 12pt; border-bottom: 1.5pt solid #000; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Harvest: the weekly amount, asked from a crop's own row. It shows when the row is pointed at or holds the keyboard. */
+.hv-plan { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 1px solid var(--line); border-radius: 999px; background: var(--raised); padding: 1px 8px; font: 600 11.5px var(--body); color: var(--ink-2); opacity: 0; pointer-events: none; }
+.hv tr.hv-row:hover .hv-plan, .hv-plan:focus-visible { opacity: 1; pointer-events: auto; }
+.hv-plan:hover { border-color: var(--ink-2); color: var(--ink); }
+/* what is done from the page stands at its head, as on Seeds: plan more of a crop, send what is there */
+.hv-wrap .hv-head { display: flex; align-items: flex-end; gap: 12px 28px; flex-wrap: wrap; }
+.hv-head-text { display: grid; gap: 5px; flex: 1 1 520px; max-width: 78ch; min-width: 0; }
+.hv-head-acts { display: flex; gap: 8px; flex: none; margin-left: auto; }
+.hv-head-acts .btn { white-space: nowrap; }

@@ -111,6 +111,10 @@
   // ── cleanup: overlaps that came in with the plan, each with ways to settle it ──
   const cleanups = new WeakMap();
   const cleanupOf = eng => cleanups.get(eng) || cleanups.set(eng, Rails.cleanup(eng)).get(eng);
+  /** One over-long set is the plantings of one garden that are one length in beds of another. */
+  const longSets = todo => { const sets = new Map(); for (const x of todo.long) { const key = `${x.r.b.gardenId}|${x.want}|${x.cap}`; (sets.get(key) || sets.set(key, []).get(key)).push(x); } return sets; };
+  /** How many things wait under To settle: the number its heading says. */
+  function settleCount(eng = App.state.engine) { const todo = cleanupOf(eng); return todo.count ? longSets(todo).size + todo.groups.length : 0; }
   /** This copy of the page was built from a later v7 backup than the plan saved in this browser. */
   function renderNewer(host) {
     const n = App.state.newer;
@@ -140,7 +144,7 @@
     if (gaps.map) lines.push(h('li', h('b', 'The farm photo'), 'A plan file holds the plan only, so the photo did not come with it. The beds keep their places and wait for it.'));
     if (n) lines.push(h('li', h('b', `${num(n)} variety photo${n === 1 ? '' : 's'}`),
       gaps.working ? `Being fetched from where each was first found: ${num(gaps.left)} to go. Each is kept here once it arrives.`
-        : gaps.shown ? `${gaps.shown === n ? 'Shown' : `${num(gaps.shown)} shown`} from the supplier’s own site while this computer is online, not kept here yet. ${gaps.service ? 'The fetch service could not get them this time; the planner tries again in a week.' : 'Those suppliers do not hand their pictures to another site. Add them below, or set up the link reader on the Seeds view, which can fetch them.'}`
+        : gaps.shown ? `${gaps.shown === n ? 'Shown' : `${num(gaps.shown)} shown`} from the supplier’s own site while this computer is online, not kept here yet. ${gaps.service ? 'The fetch service could not get them this time; the planner tries again in a week.' : 'Those suppliers do not hand their pictures to another site. Add them below. With Cloud sync set up, or a fetch service of your own (Seeds, Add from a link), the planner fetches them itself.'}`
           : 'Their records name a photo but not where it came from.'));
     add(host, h('section.insp-section.photos', { id: 'photoGaps' }, h('h3', 'Pictures missing'), h('ul.how', lines),
       h('button.btn', { type: 'button', id: 'photoGapsAdd', onclick: () => $('photosFile').click() }, 'Add photos…'),
@@ -149,10 +153,9 @@
   function renderCleanup(host) {
     const eng = App.state.engine, todo = cleanupOf(eng);
     if (!todo.count) return;
-    const sets = new Map();
-    for (const x of todo.long) { const key = `${x.r.b.gardenId}|${x.want}|${x.cap}`; (sets.get(key) || sets.set(key, []).get(key)).push(x); }
+    const sets = longSets(todo);
     const total = sets.size + todo.groups.length;
-    const section = h('section.insp-section.cleanup', h('h3', `To settle · ${total}`),
+    const section = h('section.insp-section.cleanup', { id: 'toSettle' }, h('h3', `To settle · ${total}`),
       h('p.help', 'Ground booked twice, or plantings longer than their bed. They came in with the plan, or follow from a change to the assumptions. Each has a fix in one click; the map will not let you add to them.'));
     const run = (label, ops) => { if (App.commit(label, ops)) UI.toast(label, { label: 'Undo', run: App.undo }); };
     const action = (label, detail, onclick) => h('button.fix-btn', { type: 'button', onclick }, h('b', label), detail ? h('small', detail) : null);
@@ -409,7 +412,7 @@
       h('header.insp-head.planting', { style: { '--crop': color } },
         root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color, label: name, size: 64, cls: 'head' }),
         h('p.eyebrow', 'Live tray batch'), h('h2', name),
-        h('button.link', { type: 'button', onclick: () => App.setView('trays') }, plan ? plan.name : 'Trays'),
+        h('button.link', { type: 'button', onclick: () => root.LRFTraysView.open('live') }, plan ? plan.name : 'Live trays'),
         h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select(null) }, '×')),
       h('section.insp-section',
         h('div.stats', stat('Trays', num(r.len)), stat('Days', num(c.dtm)), stat('Expected', money(r.len * price))),
@@ -417,7 +420,7 @@
           h('li' + (sown ? '.done' : ''), h('span', sown ? 'Sown' : 'Sow'), h('b', UI.dayLong(r.field).replace(/, \d{4}$/, ''))),
           h('li', h('span', 'Ready'), h('b', UI.dayLong(r.first).replace(/, \d{4}$/, '')))),
         h('p.help', plan ? `From the weekly demand in ${plan.name}${sown ? '. It is sown, so it stays as recorded whatever the demand becomes.' : ': trays, days and dates are set there, and this batch follows them.'}` : 'This batch is not tied to a demand plan.'),
-        h('button.btn', { type: 'button', onclick: () => App.setView('trays') }, 'Open the Trays view')),
+        h('button.btn', { type: 'button', id: 'fToLive', onclick: () => root.LRFTraysView.open('live') }, 'Open Live trays, in Nursery')),
       varieties.length || v ? h('section.insp-section.form', field('Variety sown', variety, plan && row && mates > 1 ? `Applies to all ${num(mates)} ${name} batches not yet sown, so their seed comes off that variety’s stock.` : null)) : null,
       App.sowingOf(p) ? h('section.insp-section', h('h3', 'Sowing'), sowingBox(p)) : null,
       plan ? null : h('div.insp-actions', h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove batch')));
@@ -427,7 +430,7 @@
     const y = eng.yieldOf(p, r);
     if (!y || r.rack) return null;
     const F = root.LRFForecast, unit = y.unit === 'each' ? '' : ' ' + y.unit, basis = { plant: 'a plant', ft: 'a bed-foot', container: 'a container', tray: 'a tray' }[y.basis] || 'each';
-    const whose = y.own ? `its own yield, ${num(y.per, 2)}${unit} from ${basis}: “Review…” on the Assumptions tab lets it follow the list` : y.by === 'default' ? (y.set ? 'the crop’s own yield, not yet set on the Assumptions list' : 'no yield is set for this crop') : `your list’s yield for ${y.by === 'variety' ? 'the variety' : 'the crop'}`;
+    const whose = y.own ? `its own yield, ${num(y.per, 2)}${unit} from ${basis}: “See what differs…” on the Assumptions list lets it follow the list` : y.by === 'default' ? (y.set ? 'the crop’s own yield, not yet set on the Assumptions list' : 'no yield is set for this crop') : `your list’s yield for ${y.by === 'variety' ? 'the variety' : 'the crop'}`;
     const how = y.pattern === 'weekly' ? `${num(y.perWeek, 2)}${unit} a week from ${basis}` : y.pattern === 'once' ? 'all at once' : '';
     return h('p.help', { id: 'fYieldLine' }, `Expected: ${F.amount(y.units, y.unit, 'produce')}${y.price > 0 ? ` at $${num(y.price, 2)}, ${'$' + Math.round(y.units * y.price).toLocaleString('en-US')}` : ''}. From ${whose}${how ? ` (${how})` : ''}.${r.c.harvestBy === 'list' ? ' Harvest days are your list’s.' : ''}`);
   }
@@ -463,8 +466,8 @@
     };
     const split = f && f.rows && f.rows.count < f.rows.total, totalRows = f ? (f.rows ? f.rows.total : r.rows) : 0;
     const whereText = !f ? null : r.partial || split ? `Feet ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} of ${num(r.cap, 1)}. Drag its ends on the map to change them.` : 'Whole bed. Shorten it here, or drag its ends on the map, to share the bed.';
-    const dtmSource = timing.activeMode === 'catalog' ? `From the supplier's ${timing.printed}-day figure${timing.conversion === 'seed-minus-nursery' ? `, less ${timing.nurseryDays} nursery days` : timing.conversion === 'direct-less' ? `, which is for seed sown in place: ${timing.off} days less as a transplant` : ''}.${timing.basisBy === 'guess' ? ' Where those days start is a guess from the wording of the supplier’s page: set it on the Assumptions tab.' : ''}`
-      : p.dtm > 0 ? 'Pinned: this planting keeps its own days. Clear the field and it follows the assumptions list.' : v && v.dtm > 0 ? 'Your figure for this variety.' : 'Crop default. Set your own on the Assumptions tab.';
+    const dtmSource = timing.activeMode === 'catalog' ? `From the supplier's ${timing.printed}-day figure${timing.conversion === 'seed-minus-nursery' ? `, less ${timing.nurseryDays} nursery days` : timing.conversion === 'direct-less' ? `, which is for seed sown in place: ${timing.off} days less as a transplant` : ''}.${timing.basisBy === 'guess' ? ' Where those days start is a guess from the wording of the supplier’s page: set it on the Assumptions list.' : ''}`
+      : p.dtm > 0 ? 'Pinned: this planting keeps its own days. Clear the field and it follows the assumptions list.' : v && v.dtm > 0 ? 'Your figure for this variety.' : 'Crop default. Set your own on the Assumptions list.';
     const fromList = c.assumed ? `From your assumptions list: ${c.assumed.level === 'variety' ? (c.vname || 'this variety') : c.name}, ${root.LRFAssume.LABEL[c.assumed.env].toLowerCase()}${c.assumed.off ? `. ${c.assumed.typed} days from ${c.assumed.basis === 'direct' ? 'direct sowing' : 'sowing'}, less ${c.assumed.off}` : ''}.` : null;
 
     add(host,
@@ -532,20 +535,54 @@
       const p = sel && sel.type === 'planting' ? eng.planting(sel.id) : null, opening = sel && sel.type === 'opening', bed = sel && sel.type === 'bed' ? eng.bedOf(sel.id) : opening ? eng.bedOf(sel.bedId) : null;
       if (!bed || bed.id !== sizing || opening) sizing = null;   // leaving a bed ends any change to its size
       const Series = root.LRFSeries;
+      let overview = false;
       if (p) renderPlanting(host, p); else if (opening && root.LRFAhead && root.LRFAhead.opening(host, sel, render)) { /* drawn */ } else if (bed) renderBed(host, bed);
       else if (sel && sel.type === 'series' && Series && Series.panel(host, render)) { /* the series tool */ }
       else if (sel && sel.type === 'waiting' && Series && Series.waitingPanel(host, sel, render)) { /* a planting with no bed yet */ }
-      else renderOverview(host);
+      else { renderOverview(host); overview = true; }
       host.scrollTop = keep;
+      if (!overview) holdSettle = false; else if (holdSettle) settleInView(host);
     } finally {
       rendering = false;
       if (renderAgain) { renderAgain = false; render(); }
     }
   }
+  // ── To settle, in the header: the count, and one click to the list from any view ──
+  // Quiet on purpose: it says how many, in the page's own ink, and nothing else. The list and its fixes stay where they were.
+  let settleTimer = 0;
+  // After the click, the list is held at the top of the panel until the panel is touched: a box above it can come or go
+  // (pictures still being read after a backup is loaded), and the list must not slide out of sight with it.
+  let holdSettle = false;
+  function settleInView(host) {
+    const el = $('toSettle');
+    if (!el) { holdSettle = false; return; }
+    host.scrollTop += el.getBoundingClientRect().top - host.getBoundingClientRect().top;
+  }
+  function drawSettle() {
+    const badge = $('settleBadge');
+    if (!badge || !App.state.ready) return;
+    const n = App.isSample() ? 0 : settleCount();
+    badge.hidden = !n;
+    if (!n) return;
+    clear(badge); add(badge, h('b', num(n)), ' to settle');
+    badge.title = `${num(n)} ${n === 1 ? 'place' : 'places'} where ground is booked twice, or plantings are longer than their bed. Each has a fix in one click. Click to see ${n === 1 ? 'it' : 'them'}.`;
+  }
+  /** Worked out a moment after the plan changes, so a run of changes costs one count and typing is never held up by it. */
+  function laterSettle() { clearTimeout(settleTimer); settleTimer = setTimeout(drawSettle, 120); }
+  function showSettle() {
+    if (!['map', 'timeline'].includes(App.state.view)) App.setView('map');
+    cleanupOpen = true; holdSettle = true;
+    if (App.state.sel) App.select(null); else render();
+    requestAnimationFrame(() => { const el = $('toSettle'); if (!el) return; el.scrollIntoView({ block: 'start' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); });
+  }
   function initInspector() {
+    const badge = $('settleBadge');
+    if (badge) { badge.addEventListener('click', showSettle); App.on('plan', laterSettle); }
     const host = $('inspectorBody');
+    for (const kind of ['wheel', 'touchmove', 'keydown']) host.addEventListener(kind, () => { holdSettle = false; }, { passive: true });
     let press = null;
     host.addEventListener('pointerdown', e => {
+      holdSettle = false;
       press = { x: e.clientX, y: e.clientY };
       const row = e.target.closest('.p-row');
       if (!row) return;
@@ -571,5 +608,5 @@
     });
   }
 
-  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, sowingBox };
+  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, sowingBox, settleCount, showSettle };
 })(window);

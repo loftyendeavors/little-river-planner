@@ -353,7 +353,7 @@
     if (!App.state.ready) return;
     const sel = App.state.sel, eng = App.state.engine, from = focus && focus.sourceId ? eng.planting(focus.sourceId) : null, asked = eng.crop(from ? from.cropId : focus && focus.cropId);
     // a crop named that the tool does not plan is said so: the form never opens on some other crop in its place
-    if (asked && !seriesCrops(eng).includes(asked)) { toast(asked.micro ? `${asked.name} is planned from weekly demand, on the Trays view, not as a series.` : `${asked.name} has no harvest to space a series by. Use “more, every so many days” on one of its plantings.`); return; }
+    if (asked && !seriesCrops(eng).includes(asked)) { toast(asked.micro ? `${asked.name} is planned from weekly demand, under Live trays in the Nursery view, not as a series.` : `${asked.name} has no harvest to space a series by. Use “more, every so many days” on one of its plantings.`); return; }
     P.back = sel && (sel.type === 'planting' || sel.type === 'bed') ? sel : null;
     seed(focus || {});
     if (!['map', 'timeline'].includes(App.state.view)) App.setView('timeline');
