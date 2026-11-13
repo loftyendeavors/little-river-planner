@@ -12,7 +12,8 @@
   const state = {
     plan: null, engine: null, attic: null, extras: null, inventoryBase: null, inventoryAsked: null, packsBase: {}, keptThumbs: {}, bundled: null, mapImageUrl: '',
     date: new Date(), view: 'map', sel: null, armed: null,
-    undo: [], redo: [], ready: false
+    undo: [], redo: [], ready: false,
+    last: null   // the last change taken or refused: { kind: 'saved' | 'refused', label | text, at, step }, read by the panel's "Saved" line
   };
   const listeners = {};
   const on = (event, fn) => { (listeners[event] = listeners[event] || []).push(fn); };
@@ -61,7 +62,9 @@
    */
   function withOps(plan, ops, direction) {
     const lists = { plantings: plan.plantings.slice() }, next = { ...plan };
-    for (const op of ops) {
+    // Undo runs a step backwards, last change first, so that a record taken out goes back where it stood (its place is noted on
+    // the step as it is taken out). Put back at the end instead, the plan would read the same and still count as changed.
+    for (const op of direction === 'undo' ? ops.slice().reverse() : ops) {
       const from = direction === 'undo' ? op.after : op.before, to = direction === 'undo' ? op.before : op.after;
       if (op.kind === 'assume') { if (to) next.assumptions = to; else delete next.assumptions; continue; }
       if (op.kind === 'settings') { next.settings = to; continue; }
@@ -72,7 +75,9 @@
       if (op.kind === 'own') { next.lrfNext = { ...(next.lrfNext || {}) }; if (to == null) delete next.lrfNext[op.key]; else next.lrfNext[op.key] = to; continue; }
       const key = { bed: 'beds', garden: 'gardens', variety: 'varieties', crop: 'crops' }[op.kind] || 'plantings', list = lists[key] || (lists[key] = (plan[key] || []).slice());
       const index = from ? list.findIndex(x => x.id === from.id) : -1;
-      if (to && index >= 0) list[index] = to; else if (to) list.push(to); else if (index >= 0) list.splice(index, 1);
+      if (to && index >= 0) list[index] = to;
+      else if (to) { if (direction === 'undo' && Number.isInteger(op.at) && op.at <= list.length) list.splice(op.at, 0, to); else list.push(to); }
+      else if (index >= 0) { if (direction !== 'undo') op.at = index; list.splice(index, 1); }
     }
     return Object.assign(next, lists);
   }
@@ -110,16 +115,27 @@
     if (!isSample()) ops = noted(ops);
     const plan = withOps(state.plan, ops, 'do'), engine = E.create(plan, Lib);
     const no = options.unchecked ? null : Rails.refusal(state.engine, engine, touched(ops, engine));
-    if (no) { toast(refusalText(no, engine)); return false; }
-    state.undo.push({ label, ops });
+    if (no) { const text = refusalText(no, engine); state.last = { kind: 'refused', text, at: Date.now() }; toast(text); emit('refused'); return false; }
+    const step = { label, ops };
+    state.undo.push(step);
     if (state.undo.length > 200) state.undo.shift();
     state.redo.length = 0;
+    state.last = { kind: 'saved', label, at: Date.now(), step };
     adopt(plan, engine);
     return true;
+  }
+  /** A change turned down before it reached commit (the layout's own guard rail): said the same way, in a toast and in the panel. */
+  function refuse(text) { state.last = { kind: 'refused', text, at: Date.now() }; toast(text); emit('refused'); return false; }
+  /** The last change, as the panel says it: taken ("Saved", with its Undo while it is still the last step) or refused, and when. */
+  function lastChange() {
+    const l = state.last;
+    if (!l) return null;
+    return l.kind === 'saved' ? { kind: 'saved', label: l.label, at: l.at, canUndo: state.undo[state.undo.length - 1] === l.step } : { kind: 'refused', text: l.text, at: l.at };
   }
   function undo() {
     const step = state.undo.pop();
     if (!step) return;
+    state.last = null;
     state.redo.push(step); adopt(withOps(state.plan, step.ops, 'undo'));
     if (state.sel && state.sel.type === 'planting' && !state.engine.planting(state.sel.id)) select(null);
     if (state.sel && state.sel.type === 'waiting' && !waitingOne(state.sel.id)) select(null);
@@ -128,6 +144,7 @@
   function redo() {
     const step = state.redo.pop();
     if (!step) return;
+    state.last = null;
     state.undo.push(step); adopt(withOps(state.plan, step.ops, 'do'));
     if (state.sel && state.sel.type === 'waiting' && !waitingOne(state.sel.id)) select(null);
     toast(`Redid: ${step.label}`);
@@ -140,6 +157,37 @@
   function updateBeds(ids, change, label) {
     const ops = ids.map(id => state.engine.bedOf(id)).filter(Boolean).map(before => ({ kind: 'bed', before, after: changed(before, change) }));
     return commit(label || 'Edit bed', ops);
+  }
+  // ───────────────────── personal use or commercial ─────────────────────
+  /**
+   * Whom a planting is grown for: the farm's own table, or to sell. A flag, not a share. A planting follows its bed and a bed its
+   * garden, so the word is kept only where it differs from what the record would follow. kind: 'planting' | 'bed' | 'garden'.
+   * It moves no date and no yield: a personal planting is sown, grown and picked like any other, and is left out of revenue and
+   * out of the list that is sent. What that does to the season's worth is said with the change.
+   */
+  function setUse(kind, ids, use) {
+    const F = root.LRFForecast, eng = state.engine, want = use === 'personal' || use === 'commercial' ? use : null, ops = [];
+    const find = id => kind === 'planting' ? eng.planting(id) : kind === 'bed' ? eng.bedOf(id) : (state.plan.gardens || []).find(g => g.id === id);
+    for (const id of ids) {
+      const before = find(id);
+      if (!before) continue;
+      const after = { ...before };
+      delete after.use;
+      if (want && want !== F.follows(eng, kind, after)) after.use = want;
+      if ((before.use || null) !== (after.use || null)) ops.push(kind === 'planting' ? { before, after } : { kind, before, after });
+    }
+    if (!ops.length) return false;
+    const first = ops[0].after, n = ops.length;
+    const what = kind === 'planting' ? (n === 1 ? cropLabel(first) : `${n} plantings`) : kind === 'bed' ? (n === 1 ? bedLabel(first) : `${n} spaces`) : n === 1 ? first.name || 'Garden' : `${n} gardens`;
+    const label = `${what}: ${want === 'personal' ? 'personal use' : want === 'commercial' ? 'commercial' : kind === 'planting' ? 'follows its bed' : 'follows its garden'}`;
+    const engine = E.create(withOps(state.plan, ops, 'do'), Lib), worthOf = e => F.build(e).rows.reduce((sum, r) => sum + r.worth, 0), was = worthOf(eng), now = worthOf(engine);
+    let out = 0, back = 0;
+    for (const p of engine.plan.plantings) { const q = eng.planting(p.id), a = !!q && F.useOf(eng, q).personal, b = F.useOf(engine, p).personal; if (b && !a) out++; else if (a && !b) back++; }
+    if (!commit(label, ops, { unchecked: true })) return false;
+    const count = (k, words) => k ? `${k} planting${k === 1 ? '' : 's'} ${words}` : '';
+    const moved = [count(out, `${out === 1 ? 'is' : 'are'} left out of revenue`), count(back, `${back === 1 ? 'counts' : 'count'} as revenue again`)].filter(Boolean).join(', ') || 'no planting changes';
+    toast(`${label} · ${moved} · ${Math.abs(now - was) >= 0.5 ? `the season’s worth goes from ${dollars(was)} to ${dollars(now)}` : `the season’s worth stays ${dollars(now)}`}`, { label: 'Undo', run: undo });
+    return { was, now, out, back };
   }
   // ───────────────────────── assumptions ─────────────────────────
   // A change to the list, or to a garden's growing conditions, is a statement about the world, not
@@ -1548,7 +1596,7 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV,
+    commit, undo, redo, lastChange, refuse, setUse, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),

@@ -100,6 +100,43 @@
   const stat = (label, value) => h('div.stat', h('span', label), h('b', value));
   const names = list => list.length <= 2 ? list.join(' and ') : `${list[0]} and ${list.length - 1} more`;
 
+  // ── "Saved": the panel's own word that a change was taken ──
+  // A change in this panel applies the moment its field is left; there is nothing to press. This line, under the panel's
+  // heading, says so, and for a few seconds after a change says that it was taken, when, and offers its Undo. A change that
+  // was refused says why in the same place. It speaks for the change (App.commit); whether the plan is stored is the header's to say.
+  const SAID_FOR = 8000;
+  const clock = t => new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const selKey = () => { const sel = App.state.sel; return sel ? `${sel.type}:${sel.id}` : ''; };
+  let lastSeen = null, lastSel = '';
+  function fillSaved(el) {
+    const last = App.lastChange();
+    // the change is said in the panel that was open when it was made, not in whichever is opened next
+    if (last && last.at !== lastSeen) { lastSeen = last.at; lastSel = selKey(); }
+    const fresh = last && Date.now() - last.at < SAID_FOR && lastSel === selKey();
+    clearTimeout(el.lrfTimer);
+    clear(el);
+    if (!fresh) { el.dataset.state = 'idle'; add(el, 'Changes apply as you make them.'); return el; }
+    el.dataset.state = last.kind;
+    el.style.setProperty('--since', `${last.at - Date.now()}ms`);
+    if (last.kind === 'saved') add(el, h('b', 'Saved'), h('span', ` · ${last.label} · ${clock(last.at)}`), last.canUndo ? h('button.link', { type: 'button', dataset: { saved: 'undo' }, onclick: () => App.undo() }, 'Undo') : null);
+    else add(el, h('b', 'Not changed'), h('span', ` · ${last.text}`));
+    el.lrfTimer = setTimeout(() => { if (el.isConnected) fillSaved(el); }, SAID_FOR - (Date.now() - last.at) + 30);
+    return el;
+  }
+  const savedLine = () => fillSaved(h('p.insp-saved', { role: 'status' }));
+  // A field is left by clicking somewhere else, and that click can close the panel in the same breath (the map's open ground,
+  // another bed). The change was taken and its line was never seen: then, and only then, it is said once in a toast.
+  let saidAway = null;
+  function sayIfGone() {
+    const last = App.lastChange();
+    if (!last || last.kind !== 'saved' || last.at !== lastSeen || last.at === saidAway || !lastSel || lastSel === selKey() || Date.now() - last.at > 1500) return;
+    saidAway = last.at;
+    const host = $('toast');
+    if (host && host.classList.contains('show')) return;   // something is already being said about it
+    toast(`Saved · ${last.label}`, last.canUndo ? { label: 'Undo', run: App.undo } : undefined);
+  }
+  const resaid = () => { for (const el of document.querySelectorAll('.insp-saved')) fillSaved(el); };
+
   function plantingRow(p, r) {
     const eng = App.state.engine, f = eng.footprint(p, r);
     const where = f && r.partial ? ` · ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} ft${f.rows && f.rows.count < f.rows.total ? `, ${f.rows.count} of ${f.rows.total} rows` : ''}` : r.partial ? ` · ${num(r.len, 1)} ${eng.capUnit(r.b)}` : '';
@@ -170,7 +207,10 @@
         h('p', tooLong(eng, list)),
         h('div.fix-actions',
           action(`Make ${n === 1 ? 'it' : 'them'} ${num(cap, 1)} ${unit}`, unit === 'ft' ? 'Plant counts follow the shorter length' : '', () => run(`Fit ${n} planting${n === 1 ? '' : 's'} to ${n === 1 ? 'its bed' : 'their beds'}`, Rails.trimOps(eng, list))),
-          uniform ? action(`The beds are ${num(want, 1)} ft`, `Lengthens all ${mates.length} beds in ${garden.name}`, () => { if (App.updateBeds(mates.map(b => b.id), { l: want }, `Set ${garden.name} beds to ${num(want, 1)} ft`)) UI.toast(`${garden.name} beds are now ${num(want, 1)} ft`, { label: 'Undo', run: App.undo }); }) : null));
+          // A bed's length is a fact about the ground and is changed in one place, the layout, under its guard rail. This fix
+          // changes nothing itself: it opens the layout with these beds picked and the length ready to set.
+          uniform && root.LRFMapEdit ? h('button.fix-btn', { type: 'button', dataset: { fix: 'layout' }, onclick: () => root.LRFMapEdit.open({ bedIds: mates.map(b => b.id), propose: { l: want, why: `${num(want, 1)} ft is what is planted in ${mates.length === 1 ? 'it' : 'them'}` } }) },
+            h('b', `Set ${mates.length === 1 ? 'this bed' : 'these beds'} to ${num(want, 1)} ft in Edit layout…`), h('small', `${mates.length === 1 ? 'The bed' : `All ${mates.length} beds`} in ${garden.name}, picked there with the length ready. Nothing changes until you set it.`)) : null));
     });
     // Two crops booked into the same ground.
     for (const g of todo.groups) makers.push(() => {
@@ -246,6 +286,12 @@
         stat('This season', `${all.length} planting${all.length === 1 ? '' : 's'}`)));
     if (root.LRFMapEdit && (soil || !eng.isPool(bed))) host.append(h('p.insp-aside', h('button.link', { type: 'button', id: 'bedLayoutEdit',
       title: soil ? 'Sizes are changed in Edit layout: move, turn or resize this bed on the map itself' : 'Move or set out this space on the map itself', onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit the layout…')));
+    // whom this ground is grown for is a fact about the farm too: shown here, set in the layout (for a bed, or a whole garden)
+    if (root.LRFMapEdit && (soil || !eng.isPool(bed))) {
+      const use = root.LRFForecast.useOfBed(eng, bed);
+      host.append(h('p.insp-aside.bed-use', { id: 'bedUse', dataset: { use: use.use, by: use.by } }, 'Grown for ', h('b', use.personal ? 'personal use' : 'sale (commercial)'), use.by === 'garden' ? `, as all of ${g.name || 'its garden'} is` : '', '. ',
+        h('button.link', { type: 'button', id: 'bedUseEdit', title: 'Personal use or commercial is set in Edit layout, for a bed or a whole garden. A planting can say otherwise in its own panel.', onclick: () => root.LRFMapEdit.open({ bedId: bed.id, field: 'leUse' }) }, 'Change…')));
+    }
     const list = h('ul.p-list');
     for (const { p, r } of all) list.append(plantingRow(p, r));
     host.append(h('section.insp-section', h('h3', 'Plantings'), all.length ? list : h('p.note', 'Nothing planned here yet. Drag a crop onto this bed.'),
@@ -424,10 +470,10 @@
   function yieldLine(eng, p, r) {
     const y = eng.yieldOf(p, r);
     if (!y || r.rack) return null;
-    const F = root.LRFForecast, unit = y.unit === 'each' ? '' : ' ' + y.unit, basis = { plant: 'a plant', ft: 'a bed-foot', container: 'a container', tray: 'a tray' }[y.basis] || 'each';
+    const F = root.LRFForecast, personal = F.useOf(eng, p).personal, unit = y.unit === 'each' ? '' : ' ' + y.unit, basis = { plant: 'a plant', ft: 'a bed-foot', container: 'a container', tray: 'a tray' }[y.basis] || 'each';
     const whose = y.own ? `its own yield, ${num(y.per, 2)}${unit} from ${basis}: “See what differs…” on the Assumptions list lets it follow the list` : y.by === 'default' ? (y.set ? 'the crop’s own yield, not yet set on the Assumptions list' : 'no yield is set for this crop') : `your list’s yield for ${y.by === 'variety' ? 'the variety' : 'the crop'}`;
     const how = y.pattern === 'weekly' ? `${num(y.perWeek, 2)}${unit} a week from ${basis}` : y.pattern === 'once' ? 'all at once' : '';
-    return h('p.help', { id: 'fYieldLine' }, `Expected: ${F.amount(y.units, y.unit, 'produce')}${y.price > 0 ? ` at $${num(y.price, 2)}, ${'$' + Math.round(y.units * y.price).toLocaleString('en-US')}` : ''}. From ${whose}${how ? ` (${how})` : ''}.${r.c.harvestBy === 'list' ? ' Harvest days are your list’s.' : ''}`);
+    return h('p.help', { id: 'fYieldLine' }, `Expected: ${F.amount(y.units, y.unit, 'produce')}${personal ? ', for personal use: not counted as revenue' : y.price > 0 ? ` at $${num(y.price, 2)}, ${'$' + Math.round(y.units * y.price).toLocaleString('en-US')}` : ''}. From ${whose}${how ? ` (${how})` : ''}.${r.c.harvestBy === 'list' ? ' Harvest days are your list’s.' : ''}`);
   }
 
   function renderPlanting(host, p) {
@@ -463,6 +509,13 @@
     const whereText = !f ? null : r.partial || split ? `Feet ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} of ${num(r.cap, 1)}. Drag its ends on the map to change them.` : 'Whole bed. Shorten it here, or drag its ends on the map, to share the bed.';
     const dtmSource = timing.activeMode === 'catalog' ? `From the supplier's ${timing.printed}-day figure${timing.conversion === 'seed-minus-nursery' ? `, less ${timing.nurseryDays} nursery days` : timing.conversion === 'direct-less' ? `, which is for seed sown in place: ${timing.off} days less as a transplant` : ''}.${timing.basisBy === 'guess' ? ' Where those days start is a guess from the wording of the supplier’s page: set it on the Assumptions list.' : ''}`
       : p.dtm > 0 ? 'Pinned: this planting keeps its own days. Clear the field and it follows the assumptions list.' : v && v.dtm > 0 ? 'Your figure for this variety.' : 'Crop default. Set your own on the Assumptions list.';
+    // Whom it is grown for: a flag, which follows the bed (and the bed its garden) until it is set here.
+    const F = root.LRFForecast, use = F.useOf(eng, p), bedUse = F.useOfBed(eng, bed);
+    const useBtn = (value, text) => h('button', { type: 'button', 'aria-pressed': String(use.use === value), dataset: { use: value }, onclick: () => { if (use.use !== value) App.setUse('planting', [p.id], value); } }, text);
+    const useHelp = use.by === 'planting' ? `Set on this planting. Its bed is ${bedUse.personal ? 'for personal use' : 'commercial'}.`
+      : use.by === 'default' ? 'Personal use is sown, picked and counted like any other planting, and left out of revenue and out of the list you send.'
+        : `Follows ${use.by === 'bed' ? 'its bed' : (eng.gardenOf(bed) || {}).name || 'its garden'}, which is ${use.personal ? 'for personal use: left out of revenue and out of the list you send' : 'commercial'}.`;
+    const useField = h('div.field', { id: 'fUseField' }, h('span', 'Grown for'), h('div.seg', { id: 'fUse', role: 'group', 'aria-label': 'Grown for', dataset: { use: use.use, by: use.by } }, useBtn('commercial', 'Commercial'), useBtn('personal', 'Personal use')), h('small', useHelp));
     const fromList = c.assumed ? `From your assumptions list: ${c.assumed.level === 'variety' ? (c.vname || 'this variety') : c.name}, ${root.LRFAssume.LABEL[c.assumed.env].toLowerCase()}${c.assumed.off ? `. ${c.assumed.typed} days from ${c.assumed.basis === 'direct' ? 'direct sowing' : 'sowing'}, less ${c.assumed.off}` : ''}.` : null;
 
     add(host,
@@ -485,6 +538,7 @@
           field('Harvest days', h('input', { type: 'number', id: 'fHw', min: 0, max: 400, value: p.hw != null && p.hw !== '' ? p.hw : '', placeholder: r.harvestMode === 'season' ? 'To season end' : String(c.hw),
             onchange: e => { const raw = e.target.value; set(raw === '' ? { hw: null, harvestMode: null } : { hw: Math.max(0, Math.round(+raw)), harvestMode: 'window' }, 'Change harvest days'); } }))),
         h('p.help', fromList || dtmSource),
+        useField,
         yieldLine(eng, p, r)),
       h('section.insp-section',
         h('h3', 'Schedule'),
@@ -530,10 +584,14 @@
       const p = sel && sel.type === 'planting' ? eng.planting(sel.id) : null, opening = sel && sel.type === 'opening', bed = sel && sel.type === 'bed' ? eng.bedOf(sel.id) : opening ? eng.bedOf(sel.bedId) : null;
       const Series = root.LRFSeries;
       let overview = false;
-      if (p) renderPlanting(host, p); else if (opening && root.LRFAhead && root.LRFAhead.opening(host, sel, render)) { /* drawn */ } else if (bed) renderBed(host, bed);
+      let own = false;   // a planting's or a space's own panel: the ones whose fields change the plan as they are left
+      if (p) { renderPlanting(host, p); own = true; } else if (opening && root.LRFAhead && root.LRFAhead.opening(host, sel, render)) { /* drawn */ } else if (bed) { renderBed(host, bed); own = true; }
       else if (sel && sel.type === 'series' && Series && Series.panel(host, render)) { /* the series tool */ }
       else if (sel && sel.type === 'waiting' && Series && Series.waitingPanel(host, sel, render)) { /* a planting with no bed yet */ }
       else { renderOverview(host); overview = true; }
+      const headEl = own && host.querySelector('header.insp-head');
+      if (headEl) headEl.after(savedLine());
+      sayIfGone();
       host.scrollTop = keep;
       if (!overview) holdSettle = false; else if (holdSettle) settleInView(host);
     } finally {
@@ -592,6 +650,7 @@
     host.addEventListener('click', e => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) return; open(e); });
     host.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.closest('.p-row')) open(e); });
     App.on('plan', render);
+    App.on('refused', resaid);
     App.on('sel', render);
     App.on('photos', render);
     App.on('view', () => { if (stale) render(); });
@@ -602,5 +661,5 @@
     });
   }
 
-  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, sowingBox, settleCount, showSettle };
+  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, sowingBox, settleCount, showSettle, savedLine };
 })(window);

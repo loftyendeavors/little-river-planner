@@ -16,12 +16,21 @@
   const seriesOf = (m, x) => (series === 'picked' && m.keeps ? x.picked : x.days);
   const opened = new Set();
 
+  // Whom it is grown for. Every planting is counted until one is marked for personal use; from then on the page can show
+  // everything, what is grown to sell, or what is for the farm's own table. The list that is sent is always the commercial one.
+  let use = 'all';
+  const USES = [['all', 'Everything'], ['commercial', 'Commercial'], ['personal', 'Personal use']];
   const cache = new WeakMap();
-  function model() {
-    const eng = App.state.engine;
-    if (!cache.has(eng)) cache.set(eng, F.build(eng, { year: App.planYear() }));
-    return cache.get(eng);
+  /** The forecast of the open plan: every planting, or (which: 'commercial' | 'personal') one kind only. */
+  function model(which) {
+    const eng = App.state.engine, key = which === 'commercial' || which === 'personal' ? which : 'all';
+    if (!cache.has(eng)) cache.set(eng, {});
+    const kept = cache.get(eng);
+    if (!kept[key]) kept[key] = key !== 'all' && !model().personal ? kept.all : F.build(eng, { year: App.planYear(), ...(key === 'all' ? {} : { use: key }) });   // nothing marked: the three are one
+    return kept[key];
   }
+  /** The forecast the page is showing. */
+  const shownModel = () => model(model().personal ? use : 'all');
   const todayIndex = m => Math.max(0, Math.min(m.days - 1, m.index(App.state.date)));
   /** The week the planning date is in, as a column. */
   const thisWeek = m => { const i = todayIndex(m); return F.periods(m, 'week', i, i).find(c => c.i0 <= i && c.i1 >= i) || F.periods(m, 'week', i, i)[0]; };
@@ -58,7 +67,8 @@
   const framed = (() => { try { return root.self !== root.top; } catch (_) { return true; } })();
   /** The list that goes to a chef: pick the stretch, look at it, then copy, print or download it. */
   function share() {
-    const m = model(), wk = thisWeek(m), weeks = F.periods(m, 'week'), at = weeks.findIndex(c => c.key === wk.key), s = F.season(m);
+    // what is sent is what is for sale: plantings marked for personal use are not in it
+    const m = model('commercial'), left = model().personal, wk = thisWeek(m), weeks = F.periods(m, 'week'), at = weeks.findIndex(c => c.key === wk.key), s = F.season(m);
     const ranges = [['this', `Week of ${day(wk.start)}`, () => ({ cols: [wk], grain: 'week' })], ['four', 'The next four weeks', () => ({ cols: weeks.slice(at, at + 4), grain: 'week' })],
       ['weeks', 'The whole season, week by week', () => ({ cols: s ? F.periods(m, 'week', s.i0, s.i1) : [], grain: 'week' })], ['months', 'The whole season, month by month', () => ({ cols: s ? F.periods(m, 'month', s.i0, s.i1) : [], grain: 'month' })]];
     const range = h('select', { id: 'hvShareRange', 'aria-label': 'Which stretch' }, ranges.map(([v, label]) => h('option', { value: v }, label)));
@@ -71,6 +81,7 @@
     const close = () => { dialog.close(); dialog.remove(); };
     const dialog = h('dialog.dialog.wide', { id: 'hvShare', oncancel: e => { e.preventDefault(); close(); } },
       h('h2', 'A list to send'), h('p', 'What the plan expects to have, as plain text for an email or a text message. Quantities are rounded down, never up.'),
+      left ? h('p.dlg-hint', { id: 'hvShareOwn' }, `${num(left)} planting${left === 1 ? '' : 's'} marked for personal use ${left === 1 ? 'is' : 'are'} left out of this list.`) : null,
       h('div.hv-opts', range, kind, h('label', varieties, 'Name the varieties'), h('label', prices, 'Show prices')),
       sheet,
       framed ? h('p.dlg-hint', 'Here the list can be copied. Printing it or downloading a spreadsheet needs the planner opened at its own address.') : null,
@@ -86,7 +97,7 @@
   function plannable(row) { const eng = App.state.engine, c = eng.crop(row.cropId); return row.group !== 'micro' && !!root.LRFSeries && !!c && +c.dtm > 0 && !eng.isCoverCrop(c); }
   /** Where a figure comes from: the plantings picked in that stretch. */
   function sources(row, col) {
-    const eng = App.state.engine, picked = series === 'picked' && model().keeps;
+    const eng = App.state.engine, picked = series === 'picked' && shownModel().keeps;
     const list = row.plantings.map(x => ({ ...x, here: F.share(x, col.i0, col.i1, picked) })).filter(x => x.here > 1e-9).sort((a, b) => b.here - a.here), total = list.reduce((n, x) => n + x.here, 0);
     const close = () => { dialog.close(); dialog.remove(); };
     const go = x => { close(); App.setDate(x.r.first > App.state.date ? x.r.first : App.state.date); App.setView('map'); App.select({ type: 'planting', id: x.p.id }); };
@@ -95,7 +106,7 @@
       h('h2', `${row.name}, ${colTitle(col)}`), h('p', `${F.amount(total, row.unit, row.group)} ${picked ? 'picked' : 'to sell'}, from ${num(list.length)} planting${list.length === 1 ? '' : 's'}. How each comes in is the crop’s line on the Assumptions list: evenly over the days it is picked, or all at once${row.keeps ? `; what keeps is counted as there to sell over the ${num(row.keeps, 1)} week${row.keeps === 1 ? '' : 's'} it keeps` : ''}.`),
       h('ul.hv-from', list.map(x => h('li',
         h('b', `${App.bedLabel(x.r.b, eng)}${x.r.c.vname ? ' · ' + x.r.c.vname : ''}`),
-        h('span', `${how(x)}${x.keep ? `, keeps ${num(x.keep, 1)} wk` : ''}`), h('span', F.amount(x.here, row.unit, row.group)),
+        h('span', `${how(x)}${x.keep ? `, keeps ${num(x.keep, 1)} wk` : ''}${x.personal ? ' · personal use' : ''}`), h('span', F.amount(x.here, row.unit, row.group)),
         h('button.link', { type: 'button', onclick: () => go(x) }, 'Show on the map')))),
       h('div.dialog-actions',
         // more of it wanted that week: the series tool, asked from the harvest end, opens on this crop from that day
@@ -112,9 +123,11 @@
     let best = null;
     for (const c of F.periods(m, 'week')) { const worth = m.rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0); if (!best || worth > best.worth) best = { c, worth }; }
     const kinds = [[now.produce, 'vegetable', 'vegetables'], [now.micros, 'microgreen', 'microgreens'], [now.flowers, 'flower', 'flowers']].filter(x => x[0]).map(([n, one, many]) => `${num(n)} ${n === 1 ? one : many}`).join(' · ');
-    return h('div.tr-stats', { id: 'hvTiles' },
-      stat(`Ready the week of ${day(wk.start)}`, `${num(now.crops)} crop${now.crops === 1 ? '' : 's'}`, kinds || 'nothing is being picked'),
-      stat('Worth that week', money(now.worth), `${money(all.worth)} over the season, at each crop’s own price`),
+    // once anything is marked for personal use, each headline says which plantings it counts
+    const marked = model().personal > 0, which = !marked ? '' : m.use === 'commercial' ? ' · commercial only' : m.use === 'personal' ? ' · personal use only' : ' · personal use included';
+    return h('div.tr-stats', { id: 'hvTiles', dataset: { use: marked ? m.use : '' } },
+      stat(`Ready the week of ${day(wk.start)}`, `${num(now.crops)} crop${now.crops === 1 ? '' : 's'}`, (kinds || 'nothing is being picked') + which),
+      stat('Worth that week', money(now.worth), m.use === 'personal' ? 'personal use is not counted as revenue' : `${money(all.worth)} over the season, at each crop’s own price${marked ? ' · commercial plantings only' : ''}`),
       stat('Microgreen trays', num(F.shown(now.trays)), `that week · ${num(F.shown(all.trays))} over the season`),
       stat('Flower stems', num(F.shown(now.stems)), `that week · ${num(F.shown(all.stems))} over the season`),
       stat('Picking season', s ? UI.span(m.date(s.i0), m.date(s.i1)) : '—', best && best.worth > 0 ? `fullest week: ${day(best.c.start)}, ${money(best.worth)}` : ''));
@@ -166,7 +179,7 @@
         body.push(line('.hv-sum', h('td.hv-name', g === 'micro' ? 'All trays' : 'All stems'), h('td.hv-total', num(F.shown(F.sum(all, 0, m.days - 1)))), all, null));
       }
     }
-    const foot = plain('', h('td.hv-name', 'Worth, at each crop’s own price'), h('td.hv-total', money(rows.reduce((n, r) => n + r.worth, 0))), c => { const v = rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0); return v >= 1 ? money(v) : ''; });
+    const foot = plain('', h('td.hv-name', model().personal > 0 ? 'Worth of what is grown to sell' : 'Worth, at each crop’s own price'), h('td.hv-total', money(rows.reduce((n, r) => n + r.worth, 0))), c => { const v = rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0); return v >= 1 ? money(v) : ''; });
     return h('div.hv-scroll', { id: 'hvScroll' }, h('table.hv', { id: 'hvTable' }, h('thead', head), h('tbody', body), h('tfoot', foot)));
   }
   /** A crop the planner sorted wrongly is moved by hand, and stays moved. */
@@ -178,7 +191,7 @@
   function render() {
     if (!App.state.ready || App.state.view !== 'harvest') { dirty = true; return; }
     dirty = false;
-    const m = model(), host = $('hvWrap'), keepTop = host.parentElement.scrollTop, keepLeft = $('hvScroll') ? $('hvScroll').scrollLeft : null, wk = thisWeek(m);
+    const everything = model(), marked = everything.personal, m = shownModel(), host = $('hvWrap'), keepTop = host.parentElement.scrollTop, keepLeft = $('hvScroll') ? $('hvScroll').scrollLeft : null, wk = thisWeek(m);
     const needle = query.trim().toLowerCase();
     const rows = m.rows.filter(r => r.total > 0 && (group === 'all' || r.group === group) && (!needle || r.name.toLowerCase().includes(needle) || r.varieties.some(v => v.name.toLowerCase().includes(needle))));
     const cols = columns(m);
@@ -201,9 +214,12 @@
         h('div.seg', { role: 'group', 'aria-label': 'Show by' }, seg('day', 'Days'), seg('week', 'Weeks'), seg('month', 'Months')),
         m.keeps ? h('div.seg.hv-series', { role: 'group', 'aria-label': 'What to count', title: 'Some crops keep after picking. To sell: what is there to sell each week, drawn down over the weeks it keeps. Picked: what comes out of the ground.' },
           ['days', 'picked'].map(value => h('button', { type: 'button', 'aria-pressed': String(series === value), dataset: { hvSeries: value }, onclick: () => { series = value; render(); } }, value === 'days' ? 'To sell' : 'Picked'))) : null,
+        marked ? h('div.seg.hv-use', { id: 'hvUse', role: 'group', 'aria-label': 'Grown for', title: 'Everything that is picked, only what is grown to sell, or only what is marked for personal use. Worth and the list to send count what is grown to sell.' },
+          USES.map(([value, label]) => h('button', { type: 'button', 'aria-pressed': String(m.use === value), dataset: { hvUse: value }, onclick: () => { use = value; render(); } }, label))) : null,
         h('div.sd-filters', { role: 'group', 'aria-label': 'Which kinds' }, chip('all', 'All', m.rows.filter(r => r.total > 0).length), F.GROUPS.map(([g, short]) => chip(g, short, m.rows.filter(r => r.total > 0 && r.group === g).length))),
         h('span.grow'), search),
       !m.rows.some(r => r.total > 0) ? h('p.hv-empty', 'Nothing in this plan has a harvest to forecast yet.') : !rows.length ? h('p.hv-empty', 'No crop matches.') : table(m, cols, rows),
+      marked ? h('p.hv-note', { id: 'hvOwnNote' }, `${num(marked)} planting${marked === 1 ? ' is' : 's are'} marked for personal use. ${marked === 1 ? 'It is' : 'They are'} picked and counted like any other, ${m.use === 'commercial' ? 'and left out of this page while it shows Commercial' : m.use === 'personal' ? 'and this page shows only those' : 'so the quantities here include them'}; worth, and “A list to send…”, count only what is grown to sell.`) : null,
       noYield.length ? h('p.hv-note.warn', `${num(noYield.length)} planting${noYield.length === 1 ? ' has' : 's have'} no yield figure for the crop, so nothing is forecast for ${noYield.length === 1 ? 'it' : 'them'}: ${[...new Set(noYield.map(u => u.r.c.name))].slice(0, 6).join(', ')}.`) : null,
       h('p.hv-note', 'A planting’s yield is what it is counted by (plants, bed-feet, trays) × the yield each × the share that is sold. The yield, the unit, the price and how the harvest comes in are each crop’s line under Assumptions, “Yield and price”; a planting with a figure of its own keeps it. A live tray is counted whole on the Monday it is due. Days to harvest are the same in every month, so an early or late planting is as good here as a midsummer one: read the ends of the season with that in mind.'));
     host.parentElement.scrollTop = keepTop;
@@ -217,5 +233,5 @@
   function init() {
     App.on('plan', render); App.on('view', render); App.on('date', () => { if (App.state.view === 'harvest') render(); });
   }
-  root.LRFHarvestView = { init, render, model, get dirty() { return dirty; }, series: () => series };
+  root.LRFHarvestView = { init, render, model, get dirty() { return dirty; }, series: () => series, use: () => (model().personal ? use : 'all'), setUse(value) { if (USES.some(u => u[0] === value)) { use = value; render(); } } };
 })(window);
