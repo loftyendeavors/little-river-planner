@@ -333,7 +333,7 @@
         }
         i = j + 1;
       }
-      body.append(rowEl('div.tl-row.tl-pool.tl-strip', { dataset: { bed: bed.id, pool: '' }, title: 'Trays standing on the benches each week. Planned from weekly demand on the Trays view.' },
+      body.append(rowEl('div.tl-row.tl-pool.tl-strip', { dataset: { bed: bed.id, pool: '' }, title: 'Trays standing on the benches each week. Planned from weekly demand under Live trays, in the Nursery view.' },
         h('div.tl-label', h('b', 'Live trays'), h('small', items.length ? `${plural(crops, 'crop')} · most ${num(peak)} at once` : 'no weekly demand yet')), lane, true));
       if (!opened) continue;
       // the benches are not one place, so each tray crop gets a row: each bar is a batch from sowing to ready, labelled with its trays
@@ -343,7 +343,7 @@
       for (const cropId of names) {
         const list = byCrop.get(cropId), lanes = lanesFor(list), row = laneEl(lanes);
         for (const item of list) { const el = plantingBar(item, item.lane, true); if (el) row.append(el); }
-        body.append(rowEl('div.tl-row.tl-pool', { dataset: { bed: bed.id, pool: cropId }, title: 'Planned from weekly demand on the Trays view' },
+        body.append(rowEl('div.tl-row.tl-pool', { dataset: { bed: bed.id, pool: cropId }, title: 'Planned from weekly demand under Live trays, in the Nursery view' },
           h('div.tl-label', h('b', root.LRFTrays.short((eng.crop(cropId) || {}).name) || 'Trays'), h('small', `${num(list.reduce((n, x) => n + x.r.len, 0))} trays`)), row, true));
       }
     }
@@ -587,7 +587,7 @@
       if (row && row.dataset.wait !== undefined) return;
       if (barEl && barEl.dataset.first) { const id = barEl.dataset.first; reveal(id); App.select({ type: 'planting', id }); requestAnimationFrame(() => bringIntoView(id)); return; }
       if (!row) return;
-      if (row.dataset.pool !== undefined) { App.setView('trays'); return; }
+      if (row.dataset.pool !== undefined) { if (root.LRFTraysView && root.LRFTraysView.open) root.LRFTraysView.open('live'); else App.setView('trays'); return; }
       if (!row.dataset.bed) { const fold = row.dataset.fold; if (fold && e.target.closest('.tl-label')) flip(prefs.open, fold)(); return; }
       const spot = targetAt(e.clientX, e.clientY);
       if (App.state.armed && spot) { App.place(App.state.armed, spot.bedId, spot.date); return; }

@@ -2,7 +2,7 @@
 
 A crop planner that works on a map of the farm. Drag crops onto beds, move plantings, share beds, and keep one list of the assumptions the plan rests on.
 
-This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.31 at the time of writing).
+This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.32 at the time of writing).
 
 ## Using it
 
@@ -12,9 +12,27 @@ This repository holds the app only. It contains no plan, no farm photo and no fa
 4. If the plan stored in a browser ever cannot be opened, the strip says so. What is stored is kept exactly as it is, and nothing is saved over it until you bring a plan in or choose to carry on; **Download what is stored** gives it to you as a file.
 5. When the site has been updated, the planner says so and offers **Reload**. Until it is reloaded it goes on running the version it opened with.
 
+## Where things are
+
+The top bar has seven views in three groups.
+
+| Group | View | What it is for |
+|---|---|---|
+| The plan, and what it gives | **Map** | Where each crop goes: drag crops onto beds, move and share them |
+| | **Timeline** | When each crop goes in and comes out, with the openings between |
+| | **Harvest** | What the plan gives week by week, a list to send, and planning a crop to a weekly amount |
+| Running the season | **Tasks** | The week's work, nursery and field, ticked as it is done |
+| | **Nursery** | Bench room, live trays, supplies, and the benches themselves |
+| | **Seeds** | Varieties, seed stock and orders |
+| The figures underneath | **Assumptions** | Days to harvest, yield and price, crop by crop |
+
+- **Backup**, at the right, holds saving, the plan folder, Cloud sync, Snapshots and photos.
+- **To place** and **To settle**, beside it, count plantings that have no bed yet and places where ground is booked twice or a planting is longer than its bed. They show only when there is something to count; a click goes to the list.
+- There is no settings page. A fact is changed where its effect shows: a bed on the map, a bench under Nursery, Set-up, a crop's figures on the Assumptions list.
+
 ## Reading a variety from a supplier's page
 
-In **Seeds**, choose **Add from a supplier page**. Pasting the page works anywhere, with no connection. Reading from a link needs the fetch service in `worker/`: put its address and key under **Link reader…** and use **Test connection**. Both are kept in that browser only, never in the plan or a backup.
+In **Seeds**, choose **Add from a link** and paste the address of the supplier's product page. On a device that is on Cloud sync the link is read through the sync service, with nothing more to set up (the service must be version 2: paste `worker/lrf-plan-sync.js` into the Worker again if the planner says it is older). Without Cloud sync, pasting the page itself works anywhere, with no connection; or set up the fetch service in `worker/` under **Use a fetch service of your own instead…**, inside the importer. Its address and key are kept in that browser only, never in the plan or a backup.
 
 ## How it looks
 
@@ -73,13 +91,16 @@ On the plan's own map, a crop keeps the same pots or crates for as long as it st
 
 - **Order sheet…**, beside the filters in Seeds, opens what is short today: what the plan still has to sow, less seed on hand and on order, set out by supplier in each supplier's own sizes at the least cost, with a subtotal for each and a total. It is right on whatever day it is opened, so it serves the main order and a top-up later. Type an amount on a line to buy more or less than the shortfall; add a variety that is not short; copy, print or download the sheet. **Mark as ordered** puts a supplier's lines into seed stock as on order, in the amounts shown, in one step: they stop counting as short, and "order arrived" in the list later turns each into seed on hand. Where ground is booked twice, seed for both plantings is counted, and the sheet says so.
 
-## Sowing
+## Tasks
 
-- **Sowing** lists everything sown from seed, a week at a time, as the acts they are: a batch of plug trays filled for several beds, rockwool for the towers, the week's live trays, a variety drilled into its beds.
+- **Tasks** lists the week's work as the acts it is made of, in two halves. **Nursery** is the raising of the plant: a batch of plug trays filled for several beds, rockwool for the towers, the week's live trays, potting up, hardening off. **Field** is planting, wherever the plant goes (beds, tunnels, greenhouses, towers, crates; bulbs, canes and bought-in plants with the transplants), seed sown in the ground, and crates moved out.
+- **Everything, Nursery, Field**, beside the week, shows both halves or one. The title, the tiles, the earlier tasks not recorded and the printed sheet follow it, so the nursery's list can be printed on its own. The choice is remembered in that browser, with how far ahead is listed: the week, two weeks or four.
 - Transplants are sown the way v7 works them out: the plants wanted, plus the buffer, divided by germination, rounded up to whole rows of the plug tray. Plantings of one variety with one schedule are rounded once, as one batch.
-- Varieties of one crop sown the same day share trays, each in whole rows: the list says how many trays the lot takes, draws each tray row by row, and tells each variety its rows. (v7 gives every variety trays of its own; the bench section can count that way instead.)
+- Varieties of one crop sown the same day share trays, each in whole rows: the list says how many trays the lot takes, draws each tray row by row, and tells each variety its rows. (v7 gives every variety trays of its own; Nursery, Set-up can count that way instead.)
+- Tick what was done and record it in one step, on the day it was done. Each planting is dated, and what a sowing or a planting used comes off stock. A transplant sown or hardened off late goes out as many days later: the bar says what would move before anything is recorded, and it can be declined. Work done early moves nothing. One Undo takes the whole step back, and a recorded task can be taken back.
 - A day after today is a plan, not a record: choosing one moves the ticked sowings to that day. Nothing is marked sown and no seed leaves stock.
-- Tick the lines that were sown and record them in one step. Each planting is dated and its seed comes off the lots on hand, exactly as recording one planting does. One Undo takes the whole step back.
+- One line under the list says what stands on the benches that week, and leads to Bench room in the Nursery.
+- On a phone the planner is this view and nothing else.
 
 ## Openings, series and plantings to place
 
@@ -96,33 +117,35 @@ There is no page for these: they open where you are.
 
 ## Yield and price
 
-**Assumptions** has two tables. **Days to harvest** is the first. **Yield and price** is the second, opened with the buttons under the heading:
+**Assumptions** has two tables. **Days to harvest** is the first: each row says where its days are counted from (transplanting, seeding in trays, or direct seeding). **Yield and price** is the second, opened with the buttons under the heading:
 
 - **Sold by** is the unit a crop is counted and sold in (each, bunch, lb, pint, quart, clamshell, head, stem). The yield and the price are in that unit; one unit is never turned into another. A variety can have its own unit and its own price: open the crop's row.
-- **Picked** says how the harvest comes in. *Over the days*: the yield is a total, picked evenly over the harvest days (held, and taken as it is wanted). *Each week*: the yield is one week's picking, so a longer harvest gives more. *All at once*: the whole total is counted the day the crop is ready. Switching between a total and a weekly figure turns the yields already typed into the other, over the crop's harvest days. **Comes to** shows the total and the weekly figure side by side.
+- **Picked** says how the harvest comes in. *Gradually*: the yield is one week's picking, so a longer harvest gives more. *Clear*: the yield is a total, all of it counted the day the crop is ready. *On demand*: the yield is a total, held and taken evenly over the harvest days. Switching between a total and a weekly figure turns the yields already typed into the other, over the crop's harvest days. **Comes to** shows the total and the weekly figure side by side.
 - **Days** is how long the crop is picked, and so how long its ground is held. A crop picked to the end of the season says "season"; a number typed there picks it for that many days instead.
 - **Yield** is from one plant or one bed-foot (the row says which), in each growing condition the farm has: field, unheated tunnel, heated greenhouse, towers.
 - **Sold %** is the part of what is picked that is good enough to sell. **Keeps wk** is how many weeks the crop keeps after picking: what is picked is then counted as there to sell evenly over those weeks, and the Harvest view gains **To sell** and **Picked**. **Turnover** is the days a crop's ground is held after its last harvest; where it settles ground that was booked twice, the planner says how many.
 - Grey is what the plan uses now, from the crop's own record. A figure typed is used by every planting that has none of its own, is one step, and is said with what it does to the season's worth; clearing a cell goes back to grey. A yield that is still a new crop's starting value ("1 each"), and a crop with no price, are marked in the row and counted above the table.
-- A planting with a yield, harvest days or turnover of its own keeps it. **Review…**, above either table, lists those plantings in groups, with the old planner's copies of crop values beside them, and says for each what letting it go would change: dates, yield, the season's worth, ground booked twice. Where the list can take a group's figure so that nothing changes, that is what is suggested. Nothing changes until Apply; the plan as it stood is kept as a snapshot first, and one undo takes the step back. A tower cycle's single harvest day and a tray batch's figures are left alone.
+- A planting with a yield, harvest days or turnover of its own keeps it. Above either table, **Move onto the list what changes nothing…** works out which of those plantings can follow the list with no date, yield, ground or dollar changing, says what it found, and asks once. **See what differs…** lists the rest in groups, crop by crop, and says for each what letting it go would change: dates, yield, the season's worth, ground booked twice. Nothing changes until Apply; the plan as it stood is kept as a snapshot first, and one undo takes the step back. A tower cycle's single harvest day and a tray batch's figures are left alone.
 
 ## Harvest forecast
 
 - **Harvest** shows what the plan is expected to give by day, week or month: vegetables, microgreen trays and flower stems, a row to a crop, each counted in the unit it is sold in, coming in as the crop's line under Assumptions says (evenly over its harvest days, a week at a time, or all at once). A planting's yield is what it is counted by (plants, bed-feet, trays) × the crop's yield each × its marketable share, spread evenly over the days it is picked. A live tray is counted whole on the Monday it is due.
 - The tiles give the week at a glance: crops ready, what they are worth at each crop's own price, trays and stems.
 - Click a figure to see which plantings it comes from. A crop sorted under the wrong heading can be moved between vegetables and flowers.
+- **Plan to a weekly amount…**, at the head of the page, opens the series tool asked from the harvest end: so much of a crop wanted each week between two days, and the planner says how many plantings, when and how large, less what the plan already gives. **plan…** on a crop's row (it shows when the row is pointed at) opens it on that crop; so does the window a figure opens.
 - **A list to send** makes a plain-text availability list for a week, four weeks or the season, to copy into an email, print, or download as a spreadsheet. Quantities are rounded down, never up. Prices appear only if asked for.
 - Days to harvest are the same in every month, and no "summer gap" is taken out of a crop's yield: what is planted to be picked in July counts in July.
 
-## Live trays, benches and supplies
+## The Nursery
 
-- **Trays** holds the weekly demand for whole trays sold live: trays a week for spring, summer and fall, days to grow and price for each crop. Every batch is sown that many days before the Monday it is due. The records are v7's own, so v7 reads a plan edited here.
-- A batch that has been sown stays as it was recorded. Changes to the demand reach the batches not yet sown.
+**Nursery** holds everything raised on a bench, in four tabs. A visit opens on Bench room.
+
+- **Bench room** shows, week by week, the tray spaces wanted against what the benches hold, with a line and a chart for each kind of bench that has room: heated greenhouse, unheated greenhouse, outside. Live trays, seedling trays, tower seedlings and potted seedlings stand under heat. From the day hardening off starts (so many days before planting out, or the day recorded in Tasks), seedlings stand on the unheated benches as far as those have room, then outside, and what fits on neither stays under heat. A crop listed under **Grown on without heat** stands on the unheated benches between its two days of the year, once its trays have had their days under heat to come up; tower seedlings stay under heat. It is shown, never enforced. The tiles give the fullest day, the planning week, hardening off at its most, and what is to do in the nursery that week, with the way to that list in Tasks.
+- **Live trays** holds the weekly demand for whole trays sold live: trays a week for spring, summer and fall, days to grow and price for each crop. Every batch is sown that many days before the Monday it is due; the same batches are listed week by week under the demand. The records are v7's own, so v7 reads a plan edited here. A batch that has been sown stays as it was recorded; changes to the demand reach the batches not yet sown.
 - **How a tray is sown** is said per crop in the demand table: in cells (cells a tray × seeds a cell, and its seed is then counted in seeds) or in an open tray (grams a tray, counted by weight). A tray crop with no weight on record is taken as sown in cells until you say otherwise. No figure is assumed: a crop sown in cells counts no seed until both figures are there.
-- **Bench room** shows, week by week, the tray spaces wanted against what the benches hold, with a chart for each kind of bench that has room: heated greenhouse, unheated greenhouse, outside. Live trays, seedling trays, tower seedlings and potted seedlings stand under heat. From the day hardening off starts (so many days before planting out, or the day recorded on the Week view), seedlings stand on the unheated benches as far as those have room, then outside, and what fits on neither stays under heat. A crop listed under **Grown on without heat** stands on the unheated benches between its two days of the year, once its trays have had their days under heat to come up; tower seedlings stay under heat. It is shown, never enforced. Crates sheltered under heat are counted as standing on the floor unless you say otherwise.
-- **Benches…** in that section opens the benches in place: name, house, kind, width and length, whether the bench is in use, and its place in the list. A bench holds its area × the share that takes trays ÷ one 10 × 20 tray, unless you type what it holds. Every change is one step, says what it does to the room, and can be undone. The days of hardening off and the crops grown on without heat are set there too; neither moves a sowing, planting or harvest day.
+- **Supplies** lists the plug trays of each kind (at the most in use on one day, since they come back), the open trays under rockwool, the trays that leave as live trays, rockwool sheets and pots, each less what you say is on hand. Potting mix is added up only for the kinds you give a figure for (dry quarts one tray or pot takes); the others are named, never guessed.
+- **Set-up** is always open, in three parts under a line of the room the benches give. **Benches**: name, house, kind, width and length, whether the bench is in use, and its place in the list; a bench holds its area × the share that takes trays ÷ one 10 × 20 tray, unless you type what it holds. **Hardening off and growing on**: the days of hardening off, and the crops grown on without heat. **How trays and crates are counted**: whether varieties of one crop share trays, and whether sheltered crates stand on the floor or the benches. Every change is one step, says what it does to the room, and can be undone; none moves a sowing, planting or harvest day.
 - Tower crops sown the same day share rockwool sheets, whatever the crop. A sheet is 98 cells, 14 rows of 7, and rides in one open 10 × 20 tray with drainage holes. (v7 counted a tower sowing in the crop's plug tray.)
-- **Supplies for the season** lists the plug trays of each kind (at the most in use on one day, since they come back), the open trays under rockwool, the trays that leave as live trays, rockwool sheets and pots, each less what you say is on hand. Potting mix is added up only for the kinds you give a figure for (dry quarts one tray or pot takes); the others are named, never guessed.
 
 ## Saving to a file
 
@@ -181,14 +204,14 @@ Sync works from the planner's web address, in any current browser. The single of
 | `js/mapedit.js` | Editing the layout: picking, moving, sizing, turning, copying, adding and removing spaces, a new garden drawn as a block, tidying, pots and crates, measuring and the photo's scale. |
 | `js/guide.js` | Crop defaults checked against Johnny's Selected Seeds and the New England Vegetable Management Guide. |
 | `js/seeds.js`, `js/seedlib.js` | The seed library: one list of varieties with what the plan needs of each, seed stock, vendor sizes, sowing records, a photo gallery, the crops, a detail panel, and the importer. |
-| `js/sowing.js`, `js/sowview.js` | Practical sowing (plug trays, whole rows, batches shared by plantings), carried over from v7's own model, and the weekly sowing list. |
+| `js/sowing.js`, `js/week.js`, `js/sowview.js` | Practical sowing (plug trays, whole rows, batches shared by plantings), carried over from v7's own model; the tasks of a planting and what recording one moves; and the Tasks view, nursery and field. |
 | `js/succession.js` | Planning ahead, as pure functions: a series of plantings, openings and what fits them, and plantings that have no bed yet (where one would land, how a bed could be shared). All obey the guard rails and the season. |
 | `js/ahead.js`, `js/series.js` | The same, opened in place: an opening in the details panel; the series tool with its ghost bars; the "To place" list, its count in the header, and the question a held bed asks. |
 | `js/timeline.js` | The season timeline: filters, summaries that open, one continuous scale. |
 | `js/forecast.js`, `js/harvestview.js` | The harvest forecast: yield by crop and day, the three kinds it is sold as, and the lists that go to a chef. |
-| `js/trays.js`, `js/traysview.js` | Weekly live-tray demand and the batches it produces, in v7's own record format. |
+| `js/trays.js`, `js/traysview.js` | Weekly live-tray demand and the batches it produces, in v7's own record format; and the Nursery view with its four tabs. |
 | `js/nursery.js` | The nursery, with no page: bench records and their edits, the room on each kind of bench through a season, and what the season uses (trays, rockwool, pots, mix). |
-| `js/bench.js` | The bench section: a chart for each kind of bench, the benches edited in place, and supplies for the season. |
+| `js/bench.js` | What the Nursery draws of the benches: Bench room (a line and a chart for each kind of bench), Set-up (the benches, hardening off and growing on, how trays are counted), Supplies, and the one line Tasks shows. |
 | `js/folder.js` | The plan kept as a file in a folder the user chose: written as it changes, daily history, and the rule that it never writes over a plan it did not put there. |
 | `js/sync.js` | Cloud sync: what to send, what to open, and when to stop and ask. It talks to the Worker in `worker/lrf-plan-sync.js`. |
 | `js/snapshots.js` | Snapshots of the whole plan, kept in the browser's database. |

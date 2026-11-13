@@ -138,7 +138,7 @@
         d.waiting ? fig('to place', d.waiting, 'Waiting plantings that carry their own days') : null, fig('tray batches', s.trays, 'Tray batches take their days from the tray plan, which is their own list. They are left alone.'),
         hv.cycles ? fig('tower cycles', hv.cycles, 'A tower cycle’s single harvest day and no turnover are what make it a cycle. They are left alone.') : null),
       h('p.au-line', { id: 'asAuditLine' }, !d.own ? 'Every planting follows this list for its days to harvest.' : `${num(d.own)} of ${num(s.plantings - s.trays)} plantings in beds, towers and crates keep their own days. ${d.agree ? `${num(d.agree)} carry the number the list already gives; ` : ''}${num(d.differ)} carry a different one.`),
-      h('p.au-line', { id: 'asHarvestLine' }, !later ? 'Every planting follows this list for its yield, harvest days and turnover.' : `${num(hv.yield)} keep their own yield, ${num(hv.window)} their own harvest days and ${num(hv.turnover)} their own turnover days${hv.copy ? `; ${num(hv.copy)} carry the old planner’s copy of crop values` : ''}. “Review…” shows what letting each go would change, before anything does.`),
+      h('p.au-line', { id: 'asHarvestLine' }, !later ? 'Every planting follows this list for its yield, harvest days and turnover.' : `${num(hv.yield)} keep their own yield, ${num(hv.window)} their own harvest days and ${num(hv.turnover)} their own turnover days${hv.copy ? `; ${num(hv.copy)} carry the old planner’s copy of crop values` : ''}. “See what differs…” shows what letting each go would change, before anything does.`),
       s.guessed.plantings ? h('p.au-line.au-warn', { id: 'asGuessLine' }, `${plural(s.guessed.plantings, 'planting')} count${s.guessed.plantings === 1 ? 's' : ''} from a start guessed from the wording of a supplier’s page: ${s.guessed.crops.map(id => (App.state.engine.crop(id) || {}).name).filter(Boolean).join(', ')}. Setting “Days counted from” for the crop settles it.`) : null,
       h('p.au-fine', `Spacing set on ${num(s.later.spacing)} stays with the planting: beds differ.${d.recorded + hv.recorded ? ` ${plural(d.recorded + hv.recorded, 'planting')} with recorded work keep${d.recorded + hv.recorded === 1 ? 's' : ''} ${d.recorded + hv.recorded === 1 ? 'its' : 'their'} figures.` : ''}`)));
   }
@@ -381,7 +381,7 @@
           h('span.as-nc', h('b', c.name),
             loose ? h('small.as-guess', { title: 'This yield is the starting value a new crop is given, or there is none. Type the real one.' }, hc.cells[main].fallback == null ? 'no yield' : 'yield not checked') : null,
             hc.open.price && hc.price.mine == null ? h('small.as-guess', { title: 'No price is set, so this crop adds nothing to what the season is worth.' }, 'no price') : null,
-            ownY.get(c.id) ? h('small', { title: `${ownY.get(c.id)} planting${ownY.get(c.id) === 1 ? ' carries its' : 's carry their'} own yield and ${ownY.get(c.id) === 1 ? 'does' : 'do'} not follow this row. “Review…” above lets them follow it.` }, `${ownY.get(c.id)} own`) : null))),
+            ownY.get(c.id) ? h('small', { title: `${ownY.get(c.id)} planting${ownY.get(c.id) === 1 ? ' carries its' : 's carry their'} own yield and ${ownY.get(c.id) === 1 ? 'does' : 'do'} not follow this row. “See what differs…” above lets them follow it.` }, `${ownY.get(c.id)} own`) : null))),
         unitCell,
         figCell({ cls: '.ah-price', key: `price|${c.id}`, mine: hc.price.mine, fallback: hc.price.fallback, open: hc.open.price, label: `${c.name}: price`, tip: hc.price.mine != null ? `Your price for one ${unit === 'each' ? 'of them' : unit}. Clear it to go back to ${fig(hc.price.fallback)}.` : `From the crop’s record: $${fig(hc.price.fallback)} for one ${unit === 'each' ? 'of them' : unit}.`,
           save: n => App.setSell(c.id, { price: n }, n == null ? `${c.name}: price back to $${fig(hc.price.fallback)}` : `${c.name}: $${fig(n)}${unit === 'each' ? ' each' : ' a ' + unit}`) }),
@@ -425,7 +425,7 @@
   }
   const HEAD = {
     days: ['Days to first harvest', 'Each row says where its days start, and its numbers count from there. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; a variety with its own figure keeps it, and a planting with no variety uses the crop row.'],
-    harvest: ['Yield and price', 'What each crop is sold by and for, how it is picked, and what it yields from a plant or a bed-foot in each growing condition. A yield is a total over the harvest days, or a week’s picking where “Picked” says each week. Grey is what the plan uses now; type over it to make it yours. A planting with a figure of its own keeps it until “Review…” lets it go.']
+    harvest: ['Yield and price', 'What each crop is sold by and for, how it is picked, and what it yields from a plant or a bed-foot in each growing condition. A yield is a total over the harvest days, or a week’s picking where “Picked” says Gradually. Grey is what the plan uses now; type over it to make it yours. A planting with a figure of its own keeps it until “See what differs…” lets it go.']
   };
   function chrome() {
     const harvest = ui.mode === 'harvest';
@@ -454,7 +454,7 @@
     places(); auditNote(); chrome(); countLine(plan);
     if (ui.mode === 'harvest') { $('asHints').hidden = true; harvestTable(eng, plan, q, list); refocus(); return; }
     const body = clear($('asBody')), crops = eng.crops().filter(c => !c.micro);
-    const useCell = (n, pinned) => h('td.as-use', n ? String(n) : '', pinned ? h('span', { title: `${pinned} of them carry their own days to harvest and do not follow this row. “Review…” above lets them follow it.` }, ` · ${pinned} own`) : null);
+    const useCell = (n, pinned) => h('td.as-use', n ? String(n) : '', pinned ? h('span', { title: `${pinned} of them carry their own days to harvest and do not follow this row. “See what differs…” above lets them follow it.` }, ` · ${pinned} own`) : null);
     // The condition a crop is mostly grown in: the one its "from seed" figure is worked out for.
     const mainEnv = (m, row, or) => { const best = m ? [...m.entries()].sort((a, b) => b[1] - a[1])[0][0] : null; return best && row[best].source !== 'none' ? best : or || eng.ENVS.find(e => row[e].source !== 'none') || 'field'; };
     let shown = 0, mineCount = 0, hints = 0;

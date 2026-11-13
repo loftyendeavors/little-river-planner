@@ -1,12 +1,16 @@
 /* Little River Farm Planner — the benches: their room week by week, the benches themselves, and what a season uses.
  *
+ * Drawn in the Nursery view, each in its own place: room() on Bench room, setup() on Set-up, supplies() on Supplies.
+ * line() is the one line another view shows of it, with the way to the Nursery.
+ *
  * Seedling trays, tower seedlings, potted seedlings and live trays stand under heat; from the day they start
  * hardening off, seedlings stand on the unheated benches and then outside, where there is a bench for them; and a crop
  * said to be grown on without heat stands on the unheated benches in its season. Each kind of bench with room or with
  * anything on it gets a chart: one column a week, stacked by what stands there, at that kind's fullest day.
  * The load is shown, never enforced: nothing here moves a planting.
  *
- * The benches are edited in place, in the section that draws them. Every change is one step and can be undone.
+ * The benches are edited on the Set-up tab, always open, with the room they give in a line above them.
+ * Every change is one step and can be undone.
  */
 (function (root) {
   'use strict';
@@ -18,7 +22,7 @@
   const POOL_WORD = { heated: 'under heat', unheated: 'on unheated benches', outside: 'outside' };
   const dayName = date => UI.dayLong(date).replace(/, \d{4}$/, '');
   const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many || one + 's'}`;
-  let tipTimer = null, editing = false, refocus = null, newHouse = null;
+  let tipTimer = null, refocus = null, newHouse = null;
 
   const cache = new WeakMap();
   /** The season on the benches (LRFNursery.season), worked out once per plan state, with the kinds of thing that stand there. */
@@ -123,7 +127,17 @@
     UI.toast(room ? `${label} · ${room}` : label, { label: 'Undo', run: App.undo });
     return done;
   }
-  function editor(fig) {
+  /** One figure for the whole nursery: typed, committed on change, put back if it makes no sense. */
+  function option(id, value, label, unit, f, what, lo, hi) {
+    const input = h('input.tr-n', { id, type: 'number', min: lo, max: hi, step: 1, value, 'aria-label': label, inputMode: 'numeric' });
+    input.addEventListener('focus', () => input.select());
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); else if (e.key === 'Escape') { input.value = value; input.blur(); } });
+    input.addEventListener('change', () => { if (+input.value === value && input.value.trim() !== '') return; if (!change(what(input.value), n => N.setOptions(n, { [f]: input.value.trim() === '' ? NaN : +input.value }), ['', id])) input.value = value; });
+    input.dataset.f = id;
+    return h('label.bn-opt', h('span', label), input, h('small', unit));
+  }
+  /** The benches as a table: name, house, kind, size, what each holds, whether it is in use, its place in the list. */
+  function benchesBox(fig) {
     const nursery = App.state.plan.nursery || {}, benches = fig.benches, shared = N.sharedNames(benches.filter(b => b.active)), areas = (nursery.benchAreas || []).filter(a => a && a.id);
     const packing = Math.round(+nursery.packing > 0 ? +nursery.packing : 85);
     const field = (b, f, input) => { input.dataset.f = f; return input; };
@@ -173,15 +187,16 @@
         h('td.bn-tools', move(-1, 'up', '↑'), move(1, 'down', '↓'),
           h('button.tr-x', { type: 'button', 'aria-label': `Remove ${b.name}`, title: `Remove ${b.name}`, dataset: { f: 'remove' }, onclick: () => change(`${b.name} removed`, n => N.removeBench(n, b.id), null) }, '×'))));
     });
-    const option = (id, value, label, unit, f, what, lo, hi) => {
-      const input = h('input.tr-n', { id, type: 'number', min: lo, max: hi, step: 1, value, 'aria-label': label, inputMode: 'numeric' });
-      input.addEventListener('focus', () => input.select());
-      input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); else if (e.key === 'Escape') { input.value = value; input.blur(); } });
-      input.addEventListener('change', () => { if (+input.value === value && input.value.trim() !== '') return; if (!change(what(input.value), n => N.setOptions(n, { [f]: input.value.trim() === '' ? NaN : +input.value }), ['', id])) input.value = value; });
-      input.dataset.f = id;
-      return h('label.bn-opt', h('span', label), input, h('small', unit));
-    };
-    // crops grown on without heat: a line a crop, with its season and the days it has under heat first
+    return h('div.bn-edit', { id: 'bnEditor', role: 'group', 'aria-label': 'The benches' },
+      h('div.bn-edit-head', h('h3', 'Benches'), h('p', `A bench holds its area × ${num(packing)}% ÷ one 10 × 20 tray, unless you say what it holds.`)),
+      benches.length ? h('div.tr-scroll', h('table.as.bn-benches', h('thead', h('tr', h('th', 'Bench'), h('th', 'House'), h('th', 'Kind'), h('th', 'Wide, ft'), h('th', 'Long, ft'), h('th', { title: 'Trays the bench takes. Empty: what its area gives.' }, 'Holds'), h('th', { title: 'A bench out of use holds nothing' }, 'In use'), h('th', ''))), body))
+        : h('p.bn-note', 'No benches yet. Add the first: its size can be changed afterwards.'),
+      h('div.bn-edit-foot',
+        h('button.btn', { type: 'button', id: 'bnAdd', onclick: () => { const done = change('Bench added', n => N.addBench(n, { uid: App.uid }), null); if (done && done.bench) { refocus = [done.bench.id, 'name']; App.emit('nursery'); } } }, '+ Add a bench'),
+        option('bnPacking', packing, 'Share of a bench that takes trays', '%', 'packing', v => `${v}% of a bench takes trays`, 30, 100)));
+  }
+  /** How long seedlings harden off, and the crops grown on without heat: a line a crop, with its season and the days it has under heat first. */
+  function rulesBox(fig) {
     const eng = App.state.engine, year = App.planYear(), rules = eng.coolRules(), cropName = id => { const c = eng.crop(id); return c ? c.name : 'A crop no longer in the library'; };
     const said = () => { const c = figures().cool; return c.most > 0.05 ? `up to ${num(c.most, 1)} tray spaces on the unheated benches (${dayName(c.on)})` : 'nothing of it is in the nursery on those days'; };
     const raised = new Map();
@@ -203,48 +218,69 @@
     const coolBox = h('div.bn-cool', { id: 'bnCool' }, h('div.bn-edit-head', h('h4', 'Grown on without heat'), h('p', 'Between its two days a crop’s plug trays and pots stand on the unheated benches, once they have had their days under heat to come up. Tower seedlings stay under heat.')),
       rules.length ? h('table.as.bn-benches.bn-cool-table', h('thead', h('tr', h('th', 'Crop'), h('th', 'From'), h('th', 'Through'), h('th', { title: 'Days from sowing that the trays stay under heat, to germinate' }, 'Days under heat first'), h('th', ''))), coolBody) : null,
       h('div.bn-edit-foot', pick, h('button.btn', { type: 'button', id: 'bnCoolAdd', onclick: addCool }, '+ Add a crop')));
-    const close = () => { editing = false; newHouse = null; refocus = ['', 'bnEdit']; App.emit('nursery'); };
-    const box = h('div.bn-edit', { id: 'bnEditor', role: 'group', 'aria-label': 'The benches' },
-      h('div.bn-edit-head', h('h4', 'Benches'), h('p', `A bench holds its area × ${num(packing)}% ÷ one 10 × 20 tray, unless you say what it holds.`),
-        h('button.icon-btn', { type: 'button', id: 'bnEditClose', 'aria-label': 'Close the benches', title: 'Close (Esc)', onclick: close }, '×')),
-      benches.length ? h('div.tr-scroll', h('table.as.bn-benches', h('thead', h('tr', h('th', 'Bench'), h('th', 'House'), h('th', 'Kind'), h('th', 'Wide, ft'), h('th', 'Long, ft'), h('th', { title: 'Trays the bench takes. Empty: what its area gives.' }, 'Holds'), h('th', { title: 'A bench out of use holds nothing' }, 'In use'), h('th', ''))), body))
-        : h('p.bn-note', 'No benches yet. Add the first: its size can be changed afterwards.'),
-      h('div.bn-edit-foot',
-        h('button.btn', { type: 'button', id: 'bnAdd', onclick: () => { const done = change('Bench added', n => N.addBench(n, { uid: App.uid }), null); if (done && done.bench) { refocus = [done.bench.id, 'name']; App.emit('nursery'); } } }, '+ Add a bench'),
-        option('bnPacking', packing, 'Share of a bench that takes trays', '%', 'packing', v => `${v}% of a bench takes trays`, 30, 100),
-        option('bnHarden', fig.hardenDays, 'Hardening off', 'days before planting out', 'harden', v => `Hardening off starts ${v} days before planting out`, 0, 21)),
+    return h('div.bn-edit.bn-rules', { id: 'bnRules', role: 'group', 'aria-label': 'Hardening off and growing on' },
+      h('div.bn-edit-head', h('h3', 'Hardening off and growing on'), h('p', 'Neither moves a sowing, planting or harvest day. They say where trays stand, and when the task to harden off falls.')),
+      h('div.bn-edit-foot', option('bnHarden', fig.hardenDays, 'Hardening off', 'days before planting out', 'harden', v => `Hardening off starts ${v} days before planting out`, 0, 21)),
       coolBox);
-    box.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
-    return box;
   }
-
-  /** The whole section: a line for each kind of bench, the charts, the benches when they are open, and where the crates stand. */
-  function section(title = 'Bench room') {
-    const fig = figures(), eng = App.state.engine, apart = eng.shareTrays === false, SHEET = root.LRFSowing.ROCKWOOL_SHEET;
-    const lines = fig.shown.map(k => poolLine(fig, k)), harden = fig.weeks.length ? hardenLine(fig) : null;
-    const charts = fig.weeks.length ? fig.shown.map(kind => { const tip = h('div.bn-tip', { hidden: true, role: 'status' }); return h('div.bn-pool', { dataset: { pool: kind } }, fig.shown.length > 1 ? h('h4', N.kindName(kind)) : null, h('div.bn-chart-wrap', chart(fig, kind, tip), tip)); }) : [];
-    const areas = new Map();
-    for (const b of fig.benches) { if (!b.active) continue; const key = b.area || 'In no house', row = areas.get(key) || { benches: 0, cap: 0 }; row.benches++; row.cap += b.cap; areas.set(key, row); }
+  /** How trays and crates are counted: two choices that change what the room and the sowing lists add up to. */
+  function countBox(fig) {
+    const eng = App.state.engine, apart = eng.shareTrays === false, SHEET = root.LRFSowing.ROCKWOOL_SHEET;
     const crates = fig.onBenches
       ? ['Sheltered crates are counted as standing on the benches, the way v7 counts them. ', h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', null, 'Sheltered crates stand on the floor') }, 'They stand on the floor')]
       : fig.floorMost ? [`Up to ${num(fig.floorMost)} are sheltered under heat${fig.floorUntil ? ` until ${day(fig.floorUntil)}` : ''}. They stand on the floor and take no bench room. `, h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', 'bench', 'Count sheltered crates on the benches') }, 'Count them on the benches instead')] : null;
     const sharing = eng.sowingBatches().length ? [apart ? 'Every variety is counted in trays of its own, the way v7 counts them. ' : `Varieties of one crop sown the same day share trays, each in whole rows. Tower crops sown the same day share rockwool sheets (${SHEET.cells} cells, ${SHEET.rows} rows of ${SHEET.columns}), whatever the crop. `,
       h('button.linkish', { type: 'button', onclick: () => App.setOwn('trays', apart ? null : 'variety', apart ? 'Varieties of one crop share trays' : 'Every variety in trays of its own') }, apart ? 'Let varieties of one crop share trays' : 'Count every variety in trays of its own')] : null;
-    const open = h('button.btn.small', { type: 'button', id: 'bnEdit', 'aria-expanded': String(editing), 'aria-controls': 'bnEditor', dataset: { f: 'bnEdit' }, onclick: () => { editing = !editing; newHouse = null; refocus = editing ? null : ['', 'bnEdit']; App.emit('nursery'); } }, editing ? 'Close the benches' : fig.benches.length ? 'Benches…' : 'Add benches…');
-    const node = h('section.bn', h('div.bn-head', h('h3', title), open),
-      lines.length || harden ? h('ul.bn-pools', lines, harden) : h('p.bn-note', 'Nothing in this plan stands on a bench.'),
-      editing ? editor(fig) : null,
-      fig.weeks.length ? h('div.bn-legend', { 'aria-label': 'What the colours stand for' }, fig.kinds.map(([k, label]) => h('span', h('i', { 'data-kind': k }), label))) : null,
-      charts,
+    if (!crates && !sharing) return null;
+    return h('div.bn-edit.bn-counting', { id: 'bnCount', role: 'group', 'aria-label': 'How trays and crates are counted' },
+      h('div.bn-edit-head', h('h3', 'How trays and crates are counted')),
       h('dl.bn-facts',
         crates ? [h('dt', 'Sheltered crates'), h('dd.bn-crates', crates)] : null,
-        sharing ? [h('dt', 'Shared trays'), h('dd.bn-share', sharing)] : null,
-        areas.size ? [h('dt', 'Where the room is'), h('dd.bn-where', [...areas].map(([name, a]) => h('span', h('b', name), ` ${plural(a.benches, 'bench', 'benches')}, ${num(a.cap)} tray spaces`)))] : null));
-    if (refocus) {
-      const [id, f] = refocus; refocus = null;
-      requestAnimationFrame(() => { const el = id ? node.querySelector(`tr[data-bench="${id}"] [data-f="${f}"]`) : node.querySelector(`[data-f="${f}"]`); if (el && !el.disabled) el.focus({ preventScroll: !id }); });
-    }
+        sharing ? [h('dt', 'Shared trays'), h('dd.bn-share', sharing)] : null));
+  }
+
+  /** What each kind of bench reads as over the season, and hardening off: a line each. */
+  function poolLines(fig) {
+    const lines = fig.shown.map(k => poolLine(fig, k)), harden = fig.weeks.length ? hardenLine(fig) : null;
+    return lines.length || harden ? h('ul.bn-pools', lines, harden) : h('p.bn-note', 'Nothing in this plan stands on a bench.');
+  }
+  /** Put the cursor back where a change was made, once the section has been drawn again. */
+  function comeBack(node) {
+    if (!refocus) return node;
+    const [id, f] = refocus; refocus = null;
+    requestAnimationFrame(() => { const el = id ? node.querySelector(`tr[data-bench="${id}"] [data-f="${f}"]`) : node.querySelector(`[data-f="${f}"]`); if (el && !el.disabled) el.focus({ preventScroll: !id }); });
     return node;
+  }
+  const toSetup = () => { if (root.LRFTraysView) root.LRFTraysView.open('setup'); };
+  /** Bench room: a line for each kind of bench, a chart for each, and where the room is. The benches are changed on Set-up. */
+  function room() {
+    const fig = figures(), used = fig.benches.filter(b => b.active);
+    const charts = fig.weeks.length ? fig.shown.map(kind => { const tip = h('div.bn-tip', { hidden: true, role: 'status' }); return h('div.bn-pool', { dataset: { pool: kind } }, fig.shown.length > 1 ? h('h4', N.kindName(kind)) : null, h('div.bn-chart-wrap', chart(fig, kind, tip), tip)); }) : [];
+    const areas = new Map();
+    for (const b of used) { const key = b.area || 'In no house', row = areas.get(key) || { benches: 0, cap: 0 }; row.benches++; row.cap += b.cap; areas.set(key, row); }
+    return h('section.bn', { id: 'bnRoom' },
+      h('div.bn-head', h('h3', 'Through the season'),
+        h('span.bn-count', used.length ? `${plural(used.length, 'bench', 'benches')} · ${num(used.reduce((n, b) => n + b.cap, 0))} tray spaces` : 'no bench listed'),
+        h('button.btn.small', { type: 'button', id: 'bnEdit', title: 'The benches, hardening off and what is grown on without heat are on the Set-up tab', onclick: toSetup }, fig.benches.length ? 'Edit benches and rules' : 'Add benches')),
+      poolLines(fig),
+      fig.weeks.length ? h('div.bn-legend', { 'aria-label': 'What the colours stand for' }, fig.kinds.map(([k, label]) => h('span', h('i', { 'data-kind': k }), label))) : null,
+      charts,
+      areas.size ? h('dl.bn-facts', h('dt', 'Where the room is'), h('dd.bn-where', [...areas].map(([name, a]) => h('span', h('b', name), ` ${plural(a.benches, 'bench', 'benches')}, ${num(a.cap)} tray spaces`)))) : null);
+  }
+  /** Set-up: the room these benches give, then the benches, then the rules for what stands where, each always open. */
+  function setup() {
+    const fig = figures();
+    return comeBack(h('section.bn.bn-setup', { id: 'bnSetup' },
+      h('div.bn-head', h('h3', 'The room these give')),
+      poolLines(fig), benchesBox(fig), rulesBox(fig), countBox(fig)));
+  }
+  /** One line for a view that is about something else: what stands on the benches in the planning week, and the way to the Nursery. */
+  function line() {
+    const fig = figures(), now = T.monday(E.d2s(App.state.date)), wk = fig.weeks.find(w => w.week === now);
+    const parts = fig.shown.map(kind => { const p = wk && wk.pools ? wk.pools[kind] : null; return p && (p.used > 1e-9 || p.cap) ? { kind, used: p.used, cap: p.cap, over: p.cap > 0 && p.over > 0.05 } : null; }).filter(Boolean);
+    return h('p.bn-line', { id: 'bnLine', dataset: { state: parts.some(x => x.over) ? 'over' : '' } }, h('b', 'On the benches this week'),
+      parts.length ? parts.map(x => h('span', { dataset: { pool: x.kind } }, `${N.kindName(x.kind)} ${x.cap ? `${num(x.used, 0)} of ${num(x.cap)}` : `${num(x.used, 0)} tray spaces`}${x.over ? ' ▲' : ''}`)) : h('span', 'nothing'),
+      h('button.linkish', { type: 'button', id: 'bnLineGo', onclick: () => { if (root.LRFTraysView) root.LRFTraysView.open('room'); } }, 'Bench room, in Nursery'));
   }
 
   // ── what the season uses, less what is on the shelf ──
@@ -283,5 +319,6 @@
       h('div.tr-scroll', h('table.as.bn-supplies', h('thead', h('tr', h('th', 'Supply'), h('th', 'Needed'), h('th', 'Counted as'), h('th', 'On hand'), h('th', 'To buy'), h('th', { title: 'Dry quarts of potting mix one tray or pot takes' }, 'Mix each, qt'), h('th', 'Mix, qt'))), body)));
   }
 
-  root.LRFBench = { figures, section, supplies, KINDS, get editing() { return editing; }, openEditor(on = true) { editing = !!on; App.emit('nursery'); } };
+  // openEditor is kept for what was written against the old toggle: the benches are the Set-up tab now, and shutting them is going back to Bench room.
+  root.LRFBench = { figures, room, setup, line, supplies, KINDS, openEditor(on = true) { if (root.LRFTraysView) root.LRFTraysView.open(on ? 'setup' : 'room'); } };
 })(window);

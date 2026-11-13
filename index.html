@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.30+map1">
+<meta name="lrf-build" content="0.32">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -21,16 +21,19 @@
     <span class="brand-sub">Farm planner <b id="seasonYear"></b></span>
   </div>
   <nav class="views" aria-label="Views">
-    <button type="button" data-view-btn="map" aria-pressed="true">Map</button>
-    <button type="button" data-view-btn="timeline" aria-pressed="false">Timeline</button>
-    <button type="button" data-view-btn="sow" aria-pressed="false">Tasks</button>
-    <button type="button" data-view-btn="trays" aria-pressed="false">Trays</button>
-    <button type="button" data-view-btn="harvest" aria-pressed="false">Harvest</button>
-    <button type="button" data-view-btn="assume" aria-pressed="false">Assumptions</button>
-    <button type="button" data-view-btn="seeds" aria-pressed="false">Seeds</button>
+    <button type="button" data-view-btn="map" aria-pressed="true" title="The plan on the farm: where each crop goes">Map</button>
+    <button type="button" data-view-btn="timeline" aria-pressed="false" title="The plan through the season: when each crop goes in and comes out">Timeline</button>
+    <button type="button" data-view-btn="harvest" aria-pressed="false" title="What the plan gives, week by week">Harvest</button>
+    <i class="views-sep" aria-hidden="true"></i>
+    <button type="button" data-view-btn="sow" aria-pressed="false" title="The week’s work, nursery and field, ticked as it is done">Tasks</button>
+    <button type="button" data-view-btn="trays" aria-pressed="false" title="Bench room, live trays, supplies and the benches themselves">Nursery</button>
+    <button type="button" data-view-btn="seeds" aria-pressed="false" title="Varieties, seed stock and orders">Seeds</button>
+    <i class="views-sep" aria-hidden="true"></i>
+    <button type="button" data-view-btn="assume" aria-pressed="false" title="The figures the plan rests on, crop by crop">Assumptions</button>
   </nav>
   <div class="top-actions">
     <button type="button" class="wait-badge" id="waitBadge" hidden></button>
+    <button type="button" class="settle-badge" id="settleBadge" hidden></button>
     <button type="button" class="btn wk-full" id="wkFull" title="The whole planner. It is made for a computer screen: on a phone the map and the tables do not fit.">Full planner</button>
     <button type="button" class="icon-btn" id="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶</button>
     <button type="button" class="icon-btn" id="redoBtn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>↷</button>
