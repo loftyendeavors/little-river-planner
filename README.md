@@ -2,7 +2,7 @@
 
 A crop planner that works on a map of the farm. Drag crops onto beds, move plantings, share beds, and keep one list of the assumptions the plan rests on.
 
-This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.32 at the time of writing).
+This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.33 at the time of writing).
 
 ## Using it
 
@@ -54,6 +54,10 @@ A bar names its crop first, then its variety ("Carrot · Early Orange"), with a 
 ## A bed's size
 
 Click a bed on the map and its panel shows width, length and area (a tower its sites, a bench its tray spaces). They are for reading: nothing in that panel changes them. A size is changed in one place, **Edit layout** on the map, and **Edit the layout…** under the figures goes there with that bed picked. Hovering a bed shows the same figures.
+
+**Changes in the right-hand panel apply as you make them.** There is no Save to press: a field is taken the moment it is left, and each change is one Undo. The line under the panel's heading says so, and for a few seconds after a change it says **Saved**, what changed and when, with its Undo. A change the guard rails refuse says **Not changed**, and why, in the same place. If the click that leaves a field also closes the panel, the same is said once at the foot of the page. Edit layout's panel has the same line.
+
+**Personal use or commercial.** A planting is grown to sell unless it is marked for personal use: **Grown for** in a planting's panel, or, for a whole bed or a whole garden, in Edit layout (a bed's panel shows it and links there). A planting follows its bed and a bed its garden, until one says otherwise; a bed that is part personal is a bed where one planting says otherwise. A personal planting is sown, grown, picked and counted like any other: seed, tasks, bench room and supplies do not change. It is left out of revenue (the season's worth, and every dollar figure on Harvest) and out of **A list to send**. Once anything is marked, Harvest offers Everything, Commercial and Personal use, and says in its headline figures which it is counting. It is a flag, not a share: **Sold %** under Yield and price stays the one percentage. Marking says at the time how many plantings it takes out of revenue and what the season's worth goes from and to.
 
 ## Editing the layout
 

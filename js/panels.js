@@ -132,7 +132,7 @@
     if (!last || last.kind !== 'saved' || last.at !== lastSeen || last.at === saidAway || !lastSel || lastSel === selKey() || Date.now() - last.at > 1500) return;
     saidAway = last.at;
     const host = $('toast');
-    if (host && host.classList.contains('show')) return;   // something is already being said about it
+    if (host && host.classList.contains('show') && host.textContent.includes(last.label)) return;   // it is already being said
     toast(`Saved · ${last.label}`, last.canUndo ? { label: 'Undo', run: App.undo } : undefined);
   }
   const resaid = () => { for (const el of document.querySelectorAll('.insp-saved')) fillSaved(el); };
