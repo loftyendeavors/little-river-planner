@@ -60,7 +60,7 @@
   function sownCell(crop, name, own) {
     const how = App.state.engine.liveSow(crop), live = (crop.liveSow && typeof crop.liveSow === 'object' ? crop.liveSow : {});
     const pick = h('select.tr-how', { 'aria-label': `${name}, how a tray is sown`, disabled: !own, title: own ? 'In cells: seed is counted in seeds. Open tray: seed is counted by weight.' : 'This crop comes with the planner' },
-      h('option', { value: 'open', selected: how.how === 'open' }, 'Open tray'), h('option', { value: 'cells', selected: how.how === 'cells' }, 'In cells'));
+      h('option', { value: 'cells', selected: how.how === 'cells' }, 'In cells'), h('option', { value: 'open', selected: how.how === 'open' }, 'Open tray'));
     pick.addEventListener('change', () => setSown(crop, { how: pick.value }));
     const figures = how.how === 'cells'
       ? [numberCell(live.cells == null ? null : live.cells, { min: 1, max: 1000, label: `${name}, cells a tray`, disabled: !own, placeholder: 'cells', onset: v => setSown(crop, { cells: v }) }), h('i', '×'),
