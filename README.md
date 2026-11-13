@@ -57,7 +57,7 @@ Click a bed on the map and its panel shows width, length and area (a tower its s
 
 ## Editing the layout
 
-**Edit layout**, the first of the map's tools, turns the map from a plan into a drawing of the ground. The crop library gives way to a list of the gardens, the details panel to the size and place of what is picked, and plantings are shown faintly: they stay with their beds, and nothing here plans a crop. **Done**, or Escape with nothing picked, goes back. Going to another view goes back too.
+**Edit layout**, the first of the map's tools, turns the map from a plan into a drawing of the ground. The crop library gives way to a list of the gardens, the details panel to the size and place of what is picked, and plantings are shown faintly: they stay with their beds, and nothing here plans a crop. **Done**, or Escape with nothing picked, goes back. Going to another view goes back too, and so does a press on either count in the header (to place, to settle), so that the list it opens can be seen.
 
 - **Pick.** Click a bed; Shift-click picks more; Shift-drag picks a box; a garden's name on the map, or its line in the list, picks all of it; a double click on a bed picks its garden.
 - **Move.** Drag what is picked. It lines up with spaces lying the same way and takes the path the row beside it already keeps, with guide lines and the path in feet; Ctrl moves freely. Alt-drag leaves it where it is and sets down a copy (a whole garden copied is a new garden). The arrow keys nudge half a foot (Shift 5 ft, Alt a tenth), and a run of presses is one Undo; they do not move the planning date while the layout is being edited.

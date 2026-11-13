@@ -562,6 +562,18 @@ def run(page, width):
     js("LRFApp.setView('timeline')"); page.wait_for_timeout(120)
     check(tag + 'going to another view ends the editing', not js('LRFMapEdit.on()') and js("!document.body.dataset.layout"))
     js("LRFApp.setView('map')"); page.wait_for_timeout(120)
+    # The header's two counts open a list in a side panel, and in the mode those panels are the layout's own. A press on either leaves the
+    # layout first, so the list is there to see. Pressed from the page's own script, so it is tried whether or not this plan has anything to count.
+    shown = "(sel => { const e = document.querySelector(sel); return !!e && getComputedStyle(e).display !== 'none' && e.getClientRects().length > 0; })"
+    for count, panel, what in (('settleBadge', '#inspectorBody', 'to settle'), ('waitBadge', '.library > :not(#layoutSide)', 'to place')):
+        js("LRFMapEdit.open({})"); page.wait_for_timeout(150)
+        during = js("({ on: LRFMapEdit.on(), there: !!document.getElementById('%s'), panel: %s(%s) })" % (count, shown, json.dumps(panel)))
+        js("(() => { const e = document.getElementById('%s'); if (e) e.click(); })()" % count); page.wait_for_timeout(250)
+        after = js("({ on: LRFMapEdit.on(), layout: !!document.body.dataset.layout, panel: %s(%s), view: LRFApp.state.view, list: (() => { const e = document.getElementById('toSettle'); return !!e && e.getClientRects().length > 0; })(), n: window.LRFPanels && LRFPanels.settleCount ? LRFPanels.settleCount() : null })" % (shown, json.dumps(panel)))
+        ok = during['on'] and during['there'] and not during['panel'] and not after['on'] and not after['layout'] and after['panel'] and after['view'] == 'map'
+        if count == 'settleBadge': ok = ok and (after['list'] or not after['n'])
+        check(tag + 'while the layout is edited, a press on the header’s count %s leaves the layout, and the list it opens is there to see' % what, ok, {'during': during, 'after': after})
+    js("LRFApp.select(null)"); page.wait_for_timeout(100)
     check(tag + 'no error on the page', not errors, errors[:3])
     return errors
 

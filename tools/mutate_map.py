@@ -86,6 +86,8 @@ PAGE = [
     ('a length can be typed in the bed’s panel again', 'js/panels.js', "h('div.stats.dims', { id: 'bedDims', 'aria-label': 'Size of this space' }, dims),", "h('div.stats.dims', { id: 'bedDims', 'aria-label': 'Size of this space' }, dims), soil ? h('input', { type: 'number', id: 'fBedL', value: bed.l, onchange: e => App.updateBeds([bed.id], { l: +e.target.value }, 'Change length') }) : null,", 'holds nothing that changes it'),
     ('“Change this bed’s size…” is back beside the link', 'js/panels.js', "onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit the layout…')));", "onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit the layout…'), h('button.link', { type: 'button', id: 'bedSizeEdit' }, 'Change this bed’s size…')));", 'holds nothing that changes it'),
     ('the link opens the mode with nothing picked', 'js/panels.js', "onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit the layout…')));", "onclick: () => root.LRFMapEdit.open({}) }, 'Edit the layout…')));", 'opens the mode with that bed picked'),
+    ('the header’s counts open their lists behind the layout', 'js/mapedit.js', "count.addEventListener('click', () => { if (S.on) close(); }, true);", "count.addEventListener('click', () => {}, true);", 'count to settle leaves the layout'),
+    ('only the count to settle leaves the layout', 'js/mapedit.js', "for (const id of ['waitBadge', 'settleBadge']) { const count = $(id);", "for (const id of ['settleBadge']) { const count = $(id);", 'count to place leaves the layout'),
     ('another view leaves the mode on', 'js/mapedit.js', "App.on('view', () => { if (S.on && App.state.view !== 'map') close(); });", "", 'another view ends the editing'),
 ]
 
