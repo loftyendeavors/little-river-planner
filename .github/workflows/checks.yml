@@ -40,6 +40,8 @@ jobs:
       - name: Work folder
         run: sh tests/setup.sh
       - name: Run
+        env:
+          LRF_SHOTS: ${{ runner.temp }}/shots     # the pictures the checks take: a place that can be kept with the run
         run: sh tests/run.sh ${{ matrix.part }} 2>&1 | tee "$RUNNER_TEMP/part.log"   # kept outside the repository: the site serves every file at its root
       - name: Verdict
         run: python3 -I tests/verdict.py "$RUNNER_TEMP/part.log" ${{ matrix.part }} "$RUNNER_TEMP/ran/ran-${{ matrix.part }}.json"
@@ -56,7 +58,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: screens
-          path: ${{ github.workspace }}/../lrf-work/shots/screens
+          path: ${{ runner.temp }}/shots/screens
           if-no-files-found: ignore
           retention-days: 14
       - name: Keep the pictures of a part that failed
@@ -64,7 +66,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: shots-${{ matrix.part }}
-          path: ${{ github.workspace }}/../lrf-work/shots
+          path: ${{ runner.temp }}/shots
           if-no-files-found: ignore
           retention-days: 7
   all:
