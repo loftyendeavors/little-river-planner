@@ -1,7 +1,7 @@
 /* Little River Farm Planner — the variety page reader, for the browser.
  *
- * variety-link.mjs beside this file is v7's reader, unchanged. It was written to run on v7's own
- * server, where it fetched supplier pages itself. A web page may not do that, so here it is handed
+ * variety-link.mjs beside this file is the reader. It is written to run on a server, where it
+ * fetches supplier pages itself. A web page may not do that, so here it is handed
  * a fetcher that asks the grower's fetch service (worker/lrf-variety-fetch.js) for the page instead.
  * Reading pasted page text or HTML needs no service and no connection.
  *
@@ -50,7 +50,7 @@ async function ask(service, target, { image = false, signal, fetchImpl } = {}) {
   throw new LinkError(SERVICE_WORDS[response.status] || said || `The fetch service answered with an error (HTTP ${response.status}).`, response.status === 404 ? 404 : 422);
 }
 /**
- * A stand-in for fetch that v7's reader can use. The service follows redirects itself and reports where it ended up;
+ * A stand-in for fetch that the reader can use. The service follows redirects itself and reports where it ended up;
  * that is passed on as one redirect so the reader records the page's real address.
  */
 function viaService(service, fetchImpl) {
@@ -69,7 +69,7 @@ function viaService(service, fetchImpl) {
 /**
  * The supplier's own sentence saying where its days to maturity are counted from, and what it settles.
  *
- * v7's reader decides the starting point from every "Days to maturity" value on the page together. Johnny's prints a
+ * The reader decides the starting point from every "Days to maturity" value on the page together. Johnny's prints a
  * general note under that label on every product ("...from seeding date... If a transplanted crop: ...from transplant
  * date"), which names both, so the reader reports "unspecified" unless the page's own sentence is exactly "From
  * transplanting." This reads the page's own sentence instead and leaves the general note out.
@@ -116,7 +116,7 @@ function maturityStatement(data) {
 }
 
 /**
- * Two corrections to what v7's reader returns, each recorded in `refined` so the review screen can say so.
+ * Two corrections to what the reader returns, each recorded in `refined` so the review screen can say so.
  *  - Days: the reader treats every value under "Days to maturity" as a day count. A sentence there such as
  *    "From direct seeding; subtract about 14 days if transplanting" then reads as 14 days, conflicts with the
  *    real figure, and the reader gives up. Here a value that is nothing but a day count wins over sentences.
