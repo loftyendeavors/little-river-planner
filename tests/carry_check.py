@@ -47,7 +47,12 @@ with sync_playwright() as pw:
     page.wait_for_function("window.LRFApp && LRFApp.state.ready", timeout=20000)
     page.wait_for_timeout(600)
     load(False)
-    first = js("({plantings: S.plan.plantings.length, from: S.plan.liveTrayPlans[0].from, own: Object.keys(S.plan.lrfNext).sort(), backup: S.plan.lrfNext.backup, toast: document.querySelector('#toast span').textContent})")
+    first = js("({plantings: S.plan.plantings.length, from: ((S.plan.liveTrayPlans || [])[0] || {}).from, own: Object.keys(S.plan.lrfNext).sort(), backup: S.plan.lrfNext.backup, toast: document.querySelector('#toast span').textContent})")
+    # What the lines below are about is found in the backup, and said by name when it is not there: a backup says when it was made, and
+    # the Monday rule needs a tray demand whose first day is not a Monday (and has a Monday before its last day) to have anything to move.
+    opens = js("(f => ({ from: f || null, monday: f ? T.mondayOnOrAfter(f) : null, through: ((S.plan.liveTrayPlans || [])[0] || {}).through || null }))(((S.plan.liveTrayPlans || [])[0] || {}).from)")
+    check("the backup says when it was made", bool(first["backup"]), first["backup"])
+    check("the backup has a tray demand that opens mid-week, for the Monday rule to move", bool(opens["from"]) and opens["monday"] != opens["from"] and opens["monday"] <= (opens["through"] or ""), opens)
     check("a first load brings the backup as it is: nothing to carry, mid-week opening and all", first["plantings"] > 600 and "facts" not in first["own"] and "trayStart" not in first["own"] and first["backup"] and "Kept" not in first["toast"], first)
 
     # establish things here: an assumption, a seed rate, a garden's conditions, a bed's length, crates on benches, trays on Mondays
