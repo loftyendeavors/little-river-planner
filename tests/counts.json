@@ -1,6 +1,6 @@
 {
  "node": {
-  "what the build changed": 17,
+  "what the build changed": 18,
   "the made-up farm": 7,
   "rockwool": 13,
   "step1, backup": 35,
@@ -18,6 +18,8 @@
   "waiting, compact": 54,
   "stepF, backup": 74,
   "stepF, compact": 74,
+  "look-a, backup": 15,
+  "look-a, compact": 15,
   "rails": 31,
   "assume": 12,
   "map geometry": 81,
@@ -26,7 +28,10 @@
   "sync service": 112,
   "sync client": 63
  },
- "build": 64,
+ "build": {
+  "offline": 1,
+  "sync client, built site": 63
+ },
  "app1": 254,
  "app2": 407,
  "app3": 563,
