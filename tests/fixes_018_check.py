@@ -85,11 +85,15 @@ with sync_playwright() as pw:
         if (runs.length === 1 && circles === 1 && !wedges) out.one++; else if (runs.length > 1 && wedges === runs.length && !circles) out.pie++; else if (runs.length) out.bad.push([bed.bed, runs.length, circles, wedges]); }
       return out; })()""")
     check('a tower with one crop is one colour; with several it is a pie, a slice for each', towers['one'] + towers['pie'] > 10 and not towers['bad'], towers)
-    legend = js("""(() => { const eng = LRFApp.state.engine, counts = {}; document.getElementById('legendMore').click();
-      for (const bed of LRFApp.state.plan.beds) { if (bed.active === false || eng.isPool(bed) || !document.querySelector('#mapBeds [data-bed="' + bed.id + '"]')) continue; for (const id of new Set(LRFMap.seasonOf(eng, bed).map(x => x.c.id))) counts[eng.crop(id).name] = (counts[eng.crop(id).name] || 0) + 1; }
-      const chips = {}; for (const c of document.querySelectorAll('#mapLegend .legend-chip')) chips[c.querySelector('span').textContent] = +c.querySelector('b').textContent; document.getElementById('legendMore').click();
-      return { counts, chips }; })()""")
-    check('the line under the map lists every crop of the season with the number of spaces it is grown in', len(legend['chips']) > 20 and legend['chips'] == legend['counts'], {'chips': len(legend['chips']), 'counts': len(legend['counts'])})
+    legend = js("""(() => { const eng = LRFApp.state.engine, beds = {}, sum = {}; document.getElementById('legendMore').click();
+      for (const bed of LRFApp.state.plan.beds) { if (bed.active === false || eng.isPool(bed) || !document.querySelector('#mapBeds [data-bed="' + bed.id + '"]')) continue;
+        for (const id of new Set(LRFMap.seasonOf(eng, bed).map(x => x.c.id))) { const g = eng.colorGroup(eng.crop(id)).name; (beds[g] = beds[g] || new Set()).add(bed.id); sum[g] = (sum[g] || 0) + 1; } }
+      const counts = {}; for (const g in beds) counts[g] = beds[g].size;
+      const chips = {}; for (const c of document.querySelectorAll('#mapLegend .legend-chip.group')) chips[c.querySelector('span').textContent] = +c.querySelector('b').textContent;
+      const colours = [...document.querySelectorAll('#mapLegend .legend-chip.group')].every(c => { const g = eng.lib.colorGroups.groups.find(x => x.id === c.dataset.group); const el = document.createElement('i'); el.style.background = g ? g.color : ''; return g && c.querySelector('i').style.background === el.style.background; });
+      document.getElementById('legendMore').click();
+      return { counts, chips, colours, twice: Object.keys(sum).filter(g => sum[g] > counts[g]).length, crops: document.querySelectorAll('#mapLegend .legend-chip.crop').length }; })()""")
+    check('the line under the map is the key to its colours: every group of the season, in its colour, with the number of spaces that grow it, a space counted once however many of the group\u2019s crops it grows', len(legend['chips']) >= 8 and legend['chips'] == legend['counts'] and legend['colours'] and legend['twice'] >= 3 and legend['crops'] == 0, legend)
     # hovering a band tells the whole story of that bed; clicking selects the bed
     spot = js("""(() => { const eng = LRFApp.state.engine, s = document.getElementById('map').getBoundingClientRect(); for (const g of document.querySelectorAll('#mapBeds [data-bed]')) { const bed = eng.bedOf(g.dataset.bed), runs = LRFMap.seasonOf(eng, bed); if (!eng.isSoilBed(bed) || runs.length < 2) continue; LRFMap.fitGarden(bed.gardenId);
         const r = g.querySelector('rect.bed-fill.season').getBoundingClientRect(); return { bed: bed.id, label: LRFApp.bedLabel(bed), crops: runs.map(x => x.c.name), x: r.left + r.width / 2, y: r.top + r.height / 2 }; } })()""")
@@ -115,10 +119,20 @@ with sync_playwright() as pw:
     js("LRFApp.setDate(new Date(LRFApp.planYear(), 9, 1))")
     page.wait_for_timeout(150)
     check('moving the planning date changes nothing in this view', js("window.__band.isConnected") and js(DRAWN) == got)
-    # one crop on its own
-    one = js("""(() => { document.getElementById('legendMore').click(); const chip = [...document.querySelectorAll('#mapLegend .legend-chip')].find(c => +c.querySelector('b').textContent >= 2 && +c.querySelector('b').textContent <= 12); const name = chip.querySelector('span').textContent, n = +chip.querySelector('b').textContent; chip.click();
-      const out = { name, n, clear: document.querySelectorAll('#mapBeds .bed:not(.dim).is-planted').length, dim: document.querySelectorAll('#mapBeds .bed.dim').length }; document.querySelector('#mapLegend .legend-chip.on').click(); document.getElementById('legendMore').click(); return out; })()""")
-    check('clicking a crop in that line shows only the spaces that grow it at some time this season', one['clear'] == one['n'] and one['dim'] > 20, one)
+    # one group on its own, then one crop of it
+    one = js("""(() => { const eng = LRFApp.state.engine, q = s => document.querySelectorAll(s).length; document.getElementById('legendMore').click();
+      const chip = [...document.querySelectorAll('#mapLegend .legend-chip.group')].find(c => +c.querySelector('b').textContent >= 3 && +c.querySelector('b').textContent <= 40), name = chip.querySelector('span').textContent, n = +chip.querySelector('b').textContent, group = chip.dataset.group; chip.click();
+      const out = { name, n, clear: q('#mapBeds .bed:not(.dim).is-planted'), dim: q('#mapBeds .bed.dim'), first: document.querySelector('#mapLegend .legend-chip').dataset.group === group };
+      const crops = [...document.querySelectorAll('#mapLegend .legend-chip.crop')]; out.crops = crops.map(c => c.querySelector('span').textContent);
+      out.belong = crops.length > 0 && crops.every(c => eng.colorGroup(eng.crop(c.dataset.crop)).id === group);
+      if (!crops.length) { document.querySelector('#mapLegend .legend-chip.group.on').click(); document.getElementById('legendMore').click(); return out; }   // nothing listed: the lines below say so, and the map is left as it was
+      const crop = crops[crops.length - 1]; out.m = +crop.querySelector('b').textContent; out.crop = crop.dataset.crop; crop.click();
+      out.clearCrop = q('#mapBeds .bed:not(.dim).is-planted'); out.grows = [...document.querySelectorAll('#mapBeds .bed:not(.dim).is-planted')].every(g => LRFMap.seasonOf(eng, eng.bedOf(g.dataset.bed)).some(x => x.c.id === out.crop));
+      document.querySelector('#mapLegend .legend-chip.crop.on').click(); out.back = q('#mapBeds .bed:not(.dim).is-planted');
+      document.querySelector('#mapLegend .legend-chip.group.on').click(); out.after = { dim: q('#mapBeds .bed.dim'), crops: q('#mapLegend .legend-chip.crop'), on: q('#mapLegend .legend-chip.on') };
+      document.getElementById('legendMore').click(); return out; })()""")
+    check('clicking a group in that line shows only the spaces that grow it at some time this season, and lists its crops beside it', one['clear'] == one['n'] and one['dim'] > 20 and one['first'] and one['belong'], one)
+    check('clicking one of those crops shows only the spaces that grow that crop; clicking it again shows the group, and the group again shows everything', one.get('m') is not None and one.get('clearCrop') == one['m'] and one['m'] <= one['n'] and one.get('grows') and one.get('back') == one['n'] and one.get('after') == {'dim': 0, 'crops': 0, 'on': 0}, one)
     # a crop can still be dragged onto a bed from here: it goes in on the planning date
     js("LRFApp.setDate(new Date(LRFApp.planYear(), 5, 15)); LRFMap.fit()")
     page.wait_for_timeout(300)

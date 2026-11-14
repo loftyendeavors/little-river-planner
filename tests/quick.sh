@@ -33,6 +33,8 @@ node $T/waiting_test.cjs $APP $PLAN | last
 node $T/waiting_test.cjs $APP $SHIP | last
 node $T/stepF_test.cjs $APP $PLAN $OLD | last
 node $T/stepF_test.cjs $APP $SHIP $OLD | last
+node $T/look_a_test.cjs $APP $PLAN | last
+node $T/look_a_test.cjs $APP $SHIP | last
 node $T/rails_test.cjs $APP $PLAN | python3 -I -c "import json,sys; d=json.load(sys.stdin); print(json.dumps({'passed': d['passed'], 'of': d['checks'], 'failed': d['failed'], 'name': 'rails'}))"
 node $T/assume_test.cjs $APP $PLAN | python3 -I -c "import json,sys; d=json.load(sys.stdin); print(json.dumps({'passed': d['passed'], 'of': d['checks'], 'failed': d['failed'], 'name': 'assume'}))"
 node $REPO/tools/mapgeo_test.cjs | last

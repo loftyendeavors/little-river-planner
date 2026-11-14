@@ -54,7 +54,7 @@ with sync_playwright() as pw:
     key0 = js("return A.contentKey()")
     order0 = js("return { p: S.plan.plantings.map(p => p.id).join(','), b: S.plan.beds.map(b => b.id).join(','), g: S.plan.gardens.map(g => g.id).join(',') }")
     start = js("return { n: S.plan.plantings.length, undo: S.undo.length, marked: F.build(eng).personal, label: txt('buildNote') }")
-    check("a plan is open, nothing is marked for personal use and there is nothing to undo; the build says 0.39", start["n"] > 300 and start["undo"] == 0 and start["marked"] == 0 and "0.39" in start["label"], start)
+    check("a plan is open, nothing is marked for personal use and there is nothing to undo; the build says its own label", start["n"] > 300 and start["undo"] == 0 and start["marked"] == 0 and (os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)") in start["label"], start)
 
     # ── subjects ──
     sub = js("""const inBed = new Map(); for (const p of S.plan.plantings) if (priced(p)) (inBed.get(p.bedId) || inBed.set(p.bedId, []).get(p.bedId)).push(p);

@@ -24,7 +24,10 @@ def alone(cmd, timeout, env=None, cwd=None):
         except OSError: pass
     return out, err
 FAULTS = [
- ('a space is counted twice for a crop that returns to it', 'js/map.js', "      for (const id of new Set(runs.map(x => x.c.id))) counts.set(id, (counts.get(id) || 0) + 1);", "      for (const id of runs.map(x => x.c.id)) counts.set(id, (counts.get(id) || 0) + 1);"),
+ ('a space is counted twice for a group when it grows two of its crops', 'js/map.js', "      for (const bedId of beds) row.beds.add(bedId);   // a space counts once for a group, however many of its crops it grows", "      for (const bedId of beds) row.beds.add(bedId + '|' + id);"),
+ ('a click on a group in the line under the map shows nothing alone', 'js/map.js', "!highlightGroup || crops.some(c => App.state.engine.colorGroup(c).id === highlightGroup);", "true;"),
+ ('a click on a crop of the group shown alone still shows the whole group', 'js/map.js', "highlightCrop ? crops.some(c => c.id === highlightCrop) : ", ""),
+ ('the crops of the group shown alone are not listed', 'js/map.js', "      if (on) for (const { c, n: m } of crops) {", "      if (false) for (const { c, n: m } of crops) {"),
  ('the first crop is at the bed\'s own starting end, wherever that points', 'js/map.js', "flip = -Math.sin(turn) + Math.cos(turn) > 0;", "flip = false;"),
  ('every band is the same size', 'js/map.js', "    for (const run of runs) run.part = run.weight / total;", "    for (const run of runs) run.part = 1 / runs.length;"),
  ('the season view is drawn again for every day', 'js/map.js', "    App.on('date', () => { if (!wholeSeason) paint(); });", "    App.on('date', paint);"),
