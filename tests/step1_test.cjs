@@ -1,5 +1,5 @@
 // Step 1 (preview 0.16): 98-cell rockwool sheets, what "To settle" may list, the tray space's name, a seed lot from one line.
-// node step1_test.cjs <app-dir> <plan.json: a v7 backup's or the shipped compact one>      (absolute paths)
+// node step1_test.cjs <app-dir> <plan.json: a backup's or the shipped compact one>      (absolute paths)
 const path = require('path'), fs = require('fs');
 const [APP, PLAN] = process.argv.slice(2);
 global.window = global;
@@ -13,17 +13,17 @@ const clone = x => JSON.parse(JSON.stringify(x));
 let n = 0; const uid = () => 'test-' + (++n);
 
 // ── rockwool: a sheet is 98 cells, 14 rows of 7 ──
-const eng = E.create(core, Lib), v7 = E.create(core, Lib, { multipliers: true });
+const eng = E.create(core, Lib), compat = E.create(core, Lib, { multipliers: true });
 const tower = e => e.plan.plantings.map(p => ({ p, r: e.calc(p) })).filter(x => x.r && x.r.tw && x.r.sowing && !x.r.sowing.error);
-const T = tower(eng), V = tower(v7);
+const T = tower(eng), V = tower(compat);
 check('the sheet itself: 98 cells, 14 rows of 7, on a 10 × 20 footprint', Sow.ROCKWOOL_SHEET.cells === 98 && Sow.ROCKWOOL_SHEET.rows === 14 && Sow.ROCKWOOL_SHEET.columns === 7 && Sow.ROCKWOOL_SHEET.widthIn === 10 && Sow.ROCKWOOL_SHEET.lengthIn === 20);
 check('every tower sowing is in a 98-cell sheet', T.length > 0 && T.every(x => x.r.sowing.tray.cells === 98 && x.r.sowing.tray.rows === 14 && x.r.sowing.tray.columns === 7 && x.r.sowing.medium === 'rockwool'), { sowings: T.length });
 check('each batch fills whole rows of 7', T.every(x => x.r.sowing.batch.cells % 7 === 0 && x.r.sowing.batch.mode === 'row'));
 const lots = e => { const seen = new Map(); for (const x of tower(e)) { const g = x.r.sowing.trayGroup, key = g ? g.id : x.r.sowing.batchId; if (!seen.has(key)) seen.set(key, g ? { cells: g.cells, trays: g.trays, per: g.tray.cells, carriers: g.carriers } : { cells: x.r.sowing.batch.cells, trays: x.r.sowing.batch.trays, per: x.r.sowing.batch.tray.cells, carriers: null }); } return [...seen.values()]; };
-const LA = lots(eng), LV = lots(v7);
+const LA = lots(eng), LV = lots(compat);
 check('sheets are counted whole: cells ÷ 98, rounded up, one open tray under each', LA.every(g => g.per === 98 && g.trays === Math.ceil(g.cells / 98) && (g.carriers == null || g.carriers === g.trays)), { lots: LA.length, sheets: LA.reduce((a, g) => a + g.trays, 0) });
-check('no plug tray planting changed: only tower sowings are in sheets', eng.plan.plantings.every(p => { const r = eng.calc(p), q = v7.calc(v7.plan.plantings.find(x => x.id === p.id)); return !r || r.tw || !r.sowing || r.sowing.error || !q || !q.sowing || r.sowing.tray.cells === q.sowing.tray.cells; }));
-check('counted v7’s way, a tower sowing is still in its crop’s own tray', V.length === T.length && V.every(x => x.r.sowing.tray.cells === (+x.r.c.tray || 72) && x.r.sowing.tray.cells !== 98));
+check('no plug tray planting changed: only tower sowings are in sheets', eng.plan.plantings.every(p => { const r = eng.calc(p), q = compat.calc(compat.plan.plantings.find(x => x.id === p.id)); return !r || r.tw || !r.sowing || r.sowing.error || !q || !q.sowing || r.sowing.tray.cells === q.sowing.tray.cells; }));
+check('counted in the compatibility mode, a tower sowing is still in its crop’s own tray', V.length === T.length && V.every(x => x.r.sowing.tray.cells === (+x.r.c.tray || 72) && x.r.sowing.tray.cells !== 98));
 // a tray named for the crop, or for the planting, still wins over the sheet
 const tp = T[0].p, cropId = T[0].r.c.id;
 const own = c => ({ ...core, crops: [...(core.crops || []).filter(x => x.id !== cropId), { ...(core.crops || []).find(x => x.id === cropId) || Lib.crops.find(x => x.id === cropId) || { id: cropId }, ...c }] });
@@ -32,7 +32,7 @@ check('a tray named on the crop wins over the sheet', rn.sowing.tray.cells === 2
 const onP = E.create({ ...core, plantings: core.plantings.map(p => p.id === tp.id ? { ...p, trayId: 'tray-72' } : p) }, Lib), rp = onP.calc(onP.plan.plantings.find(p => p.id === tp.id));
 check('a tray named on the planting wins over the sheet', rp.sowing.tray.cells === 72, { cells: rp.sowing.tray.cells });
 const sum = (list, f) => list.reduce((a, x) => a + f(x), 0);
-const figures = { sowings: T.length, cells: { v7: sum(V, x => x.r.sowing.cells), now: sum(T, x => x.r.sowing.cells) }, seeds: { v7: sum(V, x => x.r.sowing.seeds), now: sum(T, x => x.r.sowing.seeds) }, sheets: { v7: sum(LV, g => g.trays), now: sum(LA, g => g.trays) } };
+const figures = { sowings: T.length, cells: { compat: sum(V, x => x.r.sowing.cells), now: sum(T, x => x.r.sowing.cells) }, seeds: { compat: sum(V, x => x.r.sowing.seeds), now: sum(T, x => x.r.sowing.seeds) }, sheets: { compat: sum(LV, g => g.trays), now: sum(LA, g => g.trays) } };
 
 // ── "To settle": bench room is a load, never a fault ──
 const todo = Rails.cleanup(eng);
@@ -62,7 +62,7 @@ if (soil) { const short = E.create({ ...core, beds: core.beds.map(b => b.id === 
 // ── the tray space's name ──
 check('new name and old', Trays.POOL_NAME === 'Heated greenhouse benches' && Trays.POOL_NAME_V7 === 'Shared heated space');
 const g7 = { id: 'g1', name: 'Shared heated space', liveTrayPool: true, type: 'greenhouse' };
-check('v7’s record is renamed, and nothing else on it changes', JSON.stringify(Trays.poolRenamed(g7)) === JSON.stringify({ ...g7, name: 'Heated greenhouse benches' }));
+check('a record under the former name is renamed, and nothing else on it changes', JSON.stringify(Trays.poolRenamed(g7)) === JSON.stringify({ ...g7, name: 'Heated greenhouse benches' }));
 check('a name the grower gave it is left alone; so is a garden that only shares the name', Trays.poolRenamed({ ...g7, name: 'Prop house' }) === null && Trays.poolRenamed({ id: 'g2', name: 'Shared heated space' }) === null && Trays.poolRenamed({ ...g7, name: 'Heated greenhouse benches' }) === null);
 const demand = (core.liveTrayPlans || [])[0];
 if (demand) {
@@ -72,7 +72,7 @@ if (demand) {
   const g = made.gardens.find(x => x.liveTrayPool === true);
   check('a tray space made here is named Heated greenhouse benches', !!g && g.name === 'Heated greenhouse benches' && made.beds.some(b => b.liveTrayPool === true && b.gardenId === g.id), g && { name: g.name });
   const again = Trays.apply(core, demand, { uid, now: '2026-11-11T12:00:00.000Z', crop: x => eng.crop(x), records: {}, keepRecorded: true }).plan;
-  check('saving demand on a plan that has v7’s record does not make a second space', again.gardens.filter(x => x.liveTrayPool === true).length === 1 && again.beds.filter(x => x.liveTrayPool === true).length === 1);
+  check('saving demand on a plan that has the record under its former name does not make a second space', again.gardens.filter(x => x.liveTrayPool === true).length === 1 && again.beds.filter(x => x.liveTrayPool === true).length === 1);
 }
 
 // ── a seed lot from one line ──
@@ -82,7 +82,7 @@ const v1 = liveV.find(v => v.supplier) || liveV[0];
 const q1 = SL.quickLot(core, inv0, { varietyId: v1.id, vendor: '', year: '2026', quantity: '500', unit: 'seeds', status: 'usable' }, ctx());
 check('a lot for a variety in the library: 500 seeds on hand, packed for 2026, the variety’s own vendor when none is typed', q1.added === null && q1.lot.key === 'v:' + v1.id && q1.lot.quantity === 500 && q1.lot.unit === 'seeds' && q1.lot.status === 'usable' && q1.lot.usable === true && q1.lot.year === 2026 && q1.lot.supplier === (v1.supplier || '') && q1.inventory.lots.length === inv0.lots.length + 1, { supplier: q1.lot.supplier });
 check('the stock that was passed in is not changed', JSON.stringify(inv0) === frozen);
-check('the change is logged as v7 logs an added lot', (() => { const a = q1.inventory.adjustments[q1.inventory.adjustments.length - 1]; return a && a.kind === 'add' && a.lotId === q1.lot.id && a.before === null && a.after.quantity === 500; })());
+check('the change is logged as an added lot', (() => { const a = q1.inventory.adjustments[q1.inventory.adjustments.length - 1]; return a && a.kind === 'add' && a.lotId === q1.lot.id && a.before === null && a.after.quantity === 500; })());
 check('it counts as on hand', (SL.stock(q1.inventory)['v:' + v1.id + '|seeds'] || {}).onHand === ((SL.stock(inv0)['v:' + v1.id + '|seeds'] || {}).onHand || 0) + 500);
 const q2 = SL.quickLot(core, inv0, { varietyId: v1.id, vendor: 'Fedco Seeds', year: '', quantity: 250, unit: 'seeds', status: 'ordered' }, ctx());
 check('ordered, a typed vendor, no year', q2.lot.status === 'ordered' && q2.lot.usable === false && q2.lot.supplier === 'Fedco Seeds' && q2.lot.year === null && (SL.stock(q2.inventory)['v:' + v1.id + '|seeds'] || {}).onOrder >= 250);

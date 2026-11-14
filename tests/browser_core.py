@@ -1,7 +1,7 @@
 """The map and timeline as a grower uses them, in headless Chrome, on whatever plan the app ships with.
 
 A shorter successor to browser_test.py: the same drags and drops, with every expected count read
-from the plan itself, so it does not have to be rewritten each time a newer v7 backup is loaded.
+from the plan itself, so it does not have to be rewritten each time a newer backup is loaded.
 usage: python3 -I browser_core.py <app-dir-or-html-file> <shots-dir> [device|file]
 """
 import functools

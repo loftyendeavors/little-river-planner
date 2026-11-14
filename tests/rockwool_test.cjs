@@ -41,9 +41,9 @@ for (const it of bench.items) if (it.kind === 'rockwool') { const key = it.r.sow
 const expect = [...woolLots.values()].reduce((n, x) => n + Math.ceil(x - 1e-9), 0);
 check('open trays in use that day are the sheets on the bench, counted whole', use.carriers === expect && use.carriers >= g.trays && near(bench.rockwool, sum([...woolLots.values()], x => x)), { carriers: use.carriers, expect, bench: bench.rockwool });
 check('trays in use lists plug trays by kind and never a fraction', use.plug.every(x => Number.isInteger(x.n) && x.n > 0 && x.name) && Number.isInteger(use.carriers) && use.flats === use.carriers + use.live, use.plug.slice(0, 3));
-// counted v7's way, crops never share
+// counted in the engine's compatibility mode, crops never share
 const apart = E.create({ ...plan2, lrfNext: { ...(plan2.lrfNext || {}), trays: 'variety' } }, Lib);
-check('counted v7’s way, nothing shares', lotsOf(apart).length === 0 && apart.shareTrays === false);
+check('counted in the compatibility mode, nothing shares', lotsOf(apart).length === 0 && apart.shareTrays === false);
 // a plug tray is still shared only by varieties of one crop
 const plugLots = [...new Set(eng.plan.plantings.map(p => { const r = eng.calc(p); return r && r.sowing && r.sowing.trayGroup; }).filter(x => x && x.medium !== 'rockwool'))];
 check('plug trays are still shared only by varieties of one crop', plugLots.length > 0 && plugLots.every(x => x.crops === 1 && x.carriers === 0), { lots: plugLots.length });

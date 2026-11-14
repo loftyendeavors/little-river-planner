@@ -445,7 +445,8 @@ const inventory = { v: 1, lots, adjustments, legacyImported: {}, performanceNote
 fs.mkdirSync(OUT, { recursive: true });
 const write = (name, value) => fs.writeFileSync(path.join(OUT, name), typeof value === 'string' ? value : JSON.stringify(value));
 write('layout.json', JSON.stringify({ map: MAP, blocks, beds: farm.beds.filter(b => b.px).map(b => ({ garden: b.gardenId, type: b.type, w: b.w, l: b.l, x: b.px.x, y: b.px.y, rot: b.px.rot, count: b.count || 0 })),
-  scale: Object.fromEntries(gardens.map(g => [g.id, g.mapScale || 1])), varieties: farm.varieties.filter(v => !v.deleted).map((v, i) => ({ id: v.id, color: eng.cropColor(eng.crop(v.cropId)), n: i })) }, null, 1));
+  scale: Object.fromEntries(gardens.map(g => [g.id, g.mapScale || 1])), // a picture for every variety but a few: a real seed list always has some without, and photo_keep_check.py adds one to such a variety
+  varieties: farm.varieties.filter(v => !v.deleted).map((v, i) => ({ id: v.id, color: eng.cropColor(eng.crop(v.cropId)), n: i })).filter(x => x.n % 15 !== 7) }, null, 1));
 const photoFile = path.join(OUT, 'farm-map.jpg');
 if (!fs.existsSync(photoFile)) { console.log(JSON.stringify({ wrote: 'layout.json', next: 'python3 -I make_pictures.py <out dir>, then run this again' })); process.exit(0); }
 const sha = crypto.createHash('sha256').update(fs.readFileSync(photoFile)).digest('hex');
@@ -460,4 +461,4 @@ write('inventory.json', inventory); write('packs.json', packs);
 const made = '2026-11-14T12:00:00.000Z';
 write('plan-info.json', JSON.stringify({ backup: made, counts: IO.summary(farm), mapImage: { src: 'data/farm-map.jpg', sha256: sha }, inventory: 'data/inventory.json', thumbs: 'data/thumbs.json', packs: 'data/packs.json',
   corrections: [], keep: { trayStart: 'monday' } }, null, 1));
-console.log(JSON.stringify({ ...IO.summary(farm), kinds, bookedTwice: pairs.size, longerThanBed: over, lots: lots.length, packs: Object.keys(packs).length, varietiesWithPhoto: farm.varieties.filter(v => !v.deleted).length, photo: sha.slice(0, 12) }));
+console.log(JSON.stringify({ ...IO.summary(farm), kinds, bookedTwice: pairs.size, longerThanBed: over, lots: lots.length, packs: Object.keys(packs).length,  photo: sha.slice(0, 12) }));

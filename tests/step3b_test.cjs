@@ -1,6 +1,6 @@
 // Step 3b (preview 0.23): yield, units, prices, harvest patterns, storage and turnover on the list; the audit of the same
 // figures kept on plantings; the seed order sheet.
-// node step3b_test.cjs <app-dir> <plan.json: a v7 backup's or the shipped compact one> [dir of the 0.22 js, to prove the build moves nothing by itself]
+// node step3b_test.cjs <app-dir> <plan.json: a backup's or the shipped compact one> [dir of the 0.22 js, to prove the build moves nothing by itself]
 const path = require('path'), fs = require('fs');
 const [APP, PLAN, OLD] = process.argv.slice(2);
 const results = [], fail = [];
@@ -61,8 +61,8 @@ FIG.subject = { crop: crop.name, env, harvestDays: r0.harvestDays, per: y0.per, 
     check('a variety sold in another unit is forecast in a row of its own: units are never added together', keys.includes('pint') && (!sister || keys.includes('clamshell')));
   } else check('the subject has a variety to test variety lines with', false);
   check('nonsense on a line is ignored, not used', (() => { const x = listed({ sell: { [sub.cropId]: { unit: '  ', price: -3, pattern: 'sometimes', days: 0, keep: 'x', share: 140, turnover: -1 } } }).sellRule(sub.cropId); return Object.values(x).every(v => v == null); })());
-  const legacy = E.create({ ...core, assumptions: { v: 1, crops: {}, varieties: {}, sell: { [sub.cropId]: { unit: 'clamshell', price: 9.5, days: 3, turnover: 0, share: 10 } } } }, Lib, { multipliers: true }), plainLegacy = E.create(core, Lib, { multipliers: true });
-  check('the v7 parity mode ignores the lines altogether', dates(legacy, sub) === dates(plainLegacy, sub) && near(units(legacy, sub), units(plainLegacy, sub)) && legacy.yieldOf(legacy.planting(sub.id)).unit === plainLegacy.yieldOf(plainLegacy.planting(sub.id)).unit);
+  const compat = E.create({ ...core, assumptions: { v: 1, crops: {}, varieties: {}, sell: { [sub.cropId]: { unit: 'clamshell', price: 9.5, days: 3, turnover: 0, share: 10 } } } }, Lib, { multipliers: true }), plainCompat = E.create(core, Lib, { multipliers: true });
+  check('the compatibility mode ignores the lines altogether', dates(compat, sub) === dates(plainCompat, sub) && near(units(compat, sub), units(plainCompat, sub)) && compat.yieldOf(compat.planting(sub.id)).unit === plainCompat.yieldOf(plainCompat.planting(sub.id)).unit);
 }
 
 // ── yield from the list, by growing condition ──
@@ -261,7 +261,7 @@ const after = A.apply(core, step.ops), e2 = E.create(after, Lib);
     check('a planting with recorded work is not offered, and is counted as held', stR.rows.every(r => !r.ids.includes(p.id)) && stR.held >= 1 && A.survey(E.create(rec, Lib), Lib).harvest.recorded === 1);
   }
 }
-// the old planner's copies
+// copied values
 {
   const copies = later.filter(r => r.kind === 'copy'), same = copies.find(r => r.same), differ = copies.filter(r => !r.same);
   if (same) {

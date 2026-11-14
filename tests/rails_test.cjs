@@ -15,7 +15,7 @@ const state = eng => { let over = 0; const pairs = new Set(); for (const p of en
 const bedNamed = (eng, garden, bed) => eng.plan.beds.find(b => eng.gardenOf(b).name === garden && String(b.bed) === String(bed));
 const D = E.s2d;
 
-// 1 ── what came in with the v7 plan
+// 1 ── what the plan arrives with
 let eng = E.create(core, Lib);
 const start = state(eng), todo = R.cleanup(eng);
 check('the plan arrives with over-long plantings and colliding pairs, none of them on the shared benches', start.over >= 1 && start.pairs >= 8 && todo.long.every(x => !eng.isPool(x.r.b)) && todo.groups.every(g => !eng.isPool(g.bed)), start);

@@ -191,13 +191,13 @@ check('and, apart from them, the beds with nothing planned all year, by garden',
 check('asked from August it lists no opening that has closed by then', rmLate.openings.length > 0 && rmLate.openings.length < rm.openings.length && rmLate.openings.every(x => x.opening.to >= E.s2d(`${year}-08-01`)));
 check('a crop that is not in the library has no room listed', S.room(eng, 'no-such-crop').openings.length === 0);
 
-// ── keeping the list: files, the folder, a newer v7 backup ──
+// ── keeping the list: files, the folder, a newer backup ──
 const joined = IO.join(withList, { v: 1, rest: {}, varieties: {} });
-check('the file v7 reads has the plan’s plantings and nothing of the waiting list in them', joined.plantings.length === core.plantings.length && !joined.lrfNext && !JSON.stringify(joined.plantings).includes(mixed[0].id));
+check('the downloaded file has the plan’s plantings and nothing of the waiting list in them', joined.plantings.length === core.plantings.length && !joined.lrfNext && !JSON.stringify(joined.plantings).includes(mixed[0].id));
 const parts = Store.toParts(withList, {}), back = Store.fromParts(parts.parts, parts.buckets);
 check('the browser’s own copy keeps the list through a save and a load', JSON.stringify(S.waiting(back)) === JSON.stringify(mixed) && back.plantings.length === core.plantings.length);
 const carried = IO.carry(withList, JSON.parse(JSON.stringify(core)));
-check('a newer v7 backup loaded over the plan does not lose what was waiting, and says so', JSON.stringify(carried.keep.waiting) === JSON.stringify(mixed) && carried.notes.some(n => /waiting|to place|not placed/i.test(n)), carried.notes);
+check('a newer backup loaded over the plan does not lose what was waiting, and says so', JSON.stringify(carried.keep.waiting) === JSON.stringify(mixed) && carried.notes.some(n => /waiting|to place|not placed/i.test(n)), carried.notes);
 check('with nothing waiting there is nothing to carry or to say', !IO.carry(core, JSON.parse(JSON.stringify(core))).keep.waiting && !IO.carry(core, JSON.parse(JSON.stringify(core))).notes.some(n => /waiting|to place|not placed/i.test(n)));
 
 finish();

@@ -1,5 +1,5 @@
 // Step 3a (preview 0.22): where a crop's days start, and the audit of figures kept on plantings.
-// node step3a_test.cjs <app-dir> <plan.json: a v7 backup's or the shipped compact one> [dir of the 0.21 js, to prove the build moves nothing by itself]
+// node step3a_test.cjs <app-dir> <plan.json: a backup's or the shipped compact one> [dir of the 0.21 js, to prove the build moves nothing by itself]
 const path = require('path'), fs = require('fs');
 const [APP, PLAN, OLD] = process.argv.slice(2);
 const results = [], fail = [];
@@ -52,7 +52,7 @@ if (open) {
   check('set to transplanting: the printed days stand', days(withStarts({ [c.id]: { from: 'transplant' } }), open) === printed && timing(withStarts({ [c.id]: { from: 'transplant' } }), open).basisBy === 'crop');
   check('a rule for another crop changes nothing here', days(withStarts({ 'no-such-crop': { from: 'seed' } }), open) === printed);
   check('a rule the planner does not know is no rule', days(withStarts({ [c.id]: { from: 'moon' } }), open) === printed && !withStarts({ [c.id]: { from: 'moon' } }).startRule(c.id).set);
-  check('v7’s own arithmetic ignores the rule', E.create({ ...core, assumptions: { v: 1, crops: {}, varieties: {}, starts: { [c.id]: { from: 'seed' } } } }, Lib, { multipliers: true }).effective(open).dtm === E.create(core, Lib, { multipliers: true }).effective(open).dtm);
+  check('the compatibility mode ignores the rule', E.create({ ...core, assumptions: { v: 1, crops: {}, varieties: {}, starts: { [c.id]: { from: 'seed' } } } }, Lib, { multipliers: true }).effective(open).dtm === E.create(core, Lib, { multipliers: true }).effective(open).dtm);
   // the variety's own word beats the crop's rule
   const say = basis => E.create({ ...core, varieties: core.varieties.map(v => v.id === open.varietyId ? { ...v, catalogMaturityBasis: basis, catalogSourceChoice: v.catalogSourceChoice || 'url' } : v), assumptions: { v: 1, crops: {}, varieties: {}, starts: { [c.id]: { from: 'seed' } } } }, Lib);
   check('a variety that says “transplanting” keeps it under a crop set to sowing', days(say('transplant'), open) === printed && timing(say('transplant'), open).basisBy === 'variety');
