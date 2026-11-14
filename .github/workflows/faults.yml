@@ -1,0 +1,102 @@
+# The deliberate faults: each puts one fault into a copy of the app and requires that a named line of a check fails. They prove
+# that the checks can fail. Not run on every push: several hundred faults, most of them a minute or more each in a browser, cut
+# into pieces that run side by side. Run by hand (Actions, "Faults", "Run workflow"), or, for a build that is not merged yet,
+# by pushing its commit to a branch named faults/<anything>. "All faults caught" is the one result to read.
+# The same thing on your own computer: sh tests/setup.sh, then sh tests/faults.sh list and sh tests/faults.sh <set> [mode].
+name: Faults
+on:
+  push:
+    branches: ['faults/**']
+  workflow_dispatch:
+    inputs:
+      sets:
+        description: "The sets to run, with spaces between them (sh tests/faults.sh list names them), or: all"
+        required: false
+        default: all
+permissions:
+  contents: read
+jobs:
+  pieces:
+    name: What to run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.cut.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: One job for each set and mode, the slow modes cut into pieces
+        id: cut
+        env:
+          SETS: ${{ inputs.sets }}
+        run: |
+          sh tests/faults.sh list | tee list.txt
+          python3 -I - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json, math, os, sys
+          # A fast mode (node, worker: seconds a fault) is one job. A mode in a browser is cut so that a piece stays under 25
+          # minutes: 12 faults to a piece where a fault takes about a minute, fewer where the script's own head says it takes
+          # longer or where the check is run whole for every fault. Each piece also runs its check once with no fault in it.
+          FAST = ('node', 'worker')
+          PIECE = {'f018': 8, 'step2a': 8, 'step3a': 8, 'step3b': 8, 'step5a': 4, 'step5b': 5, 'sup': 8, 'sync': 2, 'season': 8, 'map': 6}
+          want = (os.environ.get('SETS') or 'all').replace(',', ' ').split()
+          sets, jobs = [], []
+          for line in open('list.txt', encoding='utf-8'):
+              words = line.split()
+              if len(words) < 3 or len(words) % 2 == 0: sys.exit('a line of the list that cannot be read: ' + line)
+              name = words[0]; sets.append(name)
+              if 'all' not in want and name not in want: continue
+              for mode, n in zip(words[1::2], map(int, words[2::2])):
+                  if mode in FAST: jobs.append({'set': name, 'mode': mode, 'from': 0, 'to': n, 'part': ''}); continue
+                  pieces = math.ceil(n / PIECE.get(name, 12)); size = math.ceil(n / pieces)
+                  for a in range(0, n, size): jobs.append({'set': name, 'mode': mode, 'from': a, 'to': min(n, a + size), 'part': '%d to %d of %d' % (a + 1, min(n, a + size), n) if pieces > 1 else ''})
+          unknown = [w for w in want if w != 'all' and w not in sets]
+          if unknown or not jobs: sys.exit('no such set: %s. The sets are: %s' % (' '.join(unknown) or '(none asked for)', ' '.join(sets)))
+          print('%d jobs, %d faults' % (len(jobs), sum(j['to'] - j['from'] for j in jobs)), file=sys.stderr)
+          print('matrix=' + json.dumps(jobs))
+          EOF
+  faults:
+    name: ${{ matrix.set }} ${{ matrix.mode }} ${{ matrix.part }}
+    needs: pieces
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.pieces.outputs.matrix) }}
+    env:
+      LRF_WORK: ${{ github.workspace }}/../lrf-work
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the build before is read from history
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tools
+        run: |
+          pip install --quiet playwright pillow
+          google-chrome --version
+      - name: Work folder
+        run: sh tests/setup.sh
+      - name: Run
+        env:
+          FROM: ${{ matrix.from }}
+          TO: ${{ matrix.to }}
+        run: sh tests/faults.sh ${{ matrix.set }} ${{ matrix.mode }} 2>&1 | tee faults.log
+      - name: Verdict
+        run: |
+          tail -n 1 faults.log | python3 -I -c "
+          import json, sys
+          d = json.loads(sys.stdin.read())
+          print('%d faults, %d caught; missed: %s; broken: %s' % (d['faults'], d['caught'], d['missed'], d['broken']))
+          sys.exit(0 if d['faults'] > 0 and d['caught'] == d['faults'] and not d['missed'] and not d['broken'] else 1)"
+  all:
+    name: All faults caught
+    if: always()
+    needs: [pieces, faults]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Every piece caught every fault
+        run: test "${{ needs.pieces.result }}" = "success" && test "${{ needs.faults.result }}" = "success"

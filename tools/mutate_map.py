@@ -1,16 +1,37 @@
 """Deliberate faults in the map build, each of which a named check has to catch.
 
-usage: python3 -I mutate_map.py <app-dir> <scratch-dir> <tests-dir> [node | page] [words...]
+usage: python3 -I mutate_map.py <app-dir> <scratch-dir> <tests-dir> [node | page | list] [words...]
   node: faults in js/mapgeo.js, caught by mapgeo_test.cjs (seconds each)
-  page: faults in map.js, mapedit.js, app.js, panels.js and the style sheet, caught by map_check.py (about a minute each).
-        FROM=0 TO=5 runs a slice of them. The page run ends each fault with pkill google-chrome: run it alone.
+  page: faults in map.js, mapedit.js, rails.js, app.js, panels.js and the style sheet, caught by map_check.py (about a minute each).
+  list: how many faults there are of each kind, and nothing else.
+  FROM=0 TO=5 runs a part of them.
 A fault that no named line catches is a hole in the checks, and is reported as MISSED.
 """
-import json, os, shutil, subprocess, sys
+import json, os, shutil, signal, subprocess, sys, time
 
 app, scratch, tests = [os.path.abspath(a) for a in sys.argv[1:4]]
 mode = sys.argv[4] if len(sys.argv) > 4 else 'node'
 words = [w.lower() for w in sys.argv[5:]]
+
+
+def alone(cmd, timeout, env=None, cwd=None):
+    """Runs one check in a process group of its own. When it is done or out of time, that group is stopped, and so is whatever it
+    started and left behind (known by a mark put in its environment): its own browsers and services, and nobody else's."""
+    mark = 'LRF_FAULT_RUN=%d.%d' % (os.getpid(), time.time_ns())
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=cwd, env={**(env or os.environ), **dict([mark.split('=')])}, start_new_session=True)
+    try: out, err = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGTERM)   # the browser's driver closes its browsers when it is asked to stop
+        try: out, err = p.communicate(timeout=10)
+        except subprocess.TimeoutExpired: os.killpg(p.pid, signal.SIGKILL); out, err = p.communicate()
+        out += '\ntimed out'
+    try: os.killpg(p.pid, signal.SIGKILL)
+    except OSError: pass
+    for pid in [x for x in (os.listdir('/proc') if os.path.isdir('/proc') else []) if x.isdigit()]:
+        try:
+            if mark.encode() in open('/proc/%s/environ' % pid, 'rb').read().split(b'\0'): os.kill(int(pid), signal.SIGKILL)
+        except OSError: pass
+    return out, err
 
 NODE = [
     ('a quarter turn is not taken as the same line', 'return Math.min(d, 90 - d); };', 'return d; };', 'quarter turn still lies'),
@@ -71,6 +92,7 @@ PAGE = [
     ('a copy keeps the name it was copied from', 'js/mapedit.js', "name = Geo.nextNames(taken, 1, String(bed.bed))[0]; taken.push(name);", "taken.push(name);", 'sets down a copy'),
     ('Alt-drag moves the bed itself', 'js/mapedit.js', "const done = d.copy ? copyTo(d.ids, d.after) : change(", "const done = false ? copyTo(d.ids, d.after) : change(", 'sets down a copy'),
     ('a bed with plantings can be removed', 'js/mapedit.js', "const held = beds.map(b => ({ b, n: eng().plantingsIn(b.id).length })).filter(x => x.n);", "const held = [];", 'holds plantings cannot be removed'),
+    ('nothing is too long for its bed', 'js/rails.js', "if (t1.over && !t0.over) return { kind: 'too-long', p: now, r: t1.r };", "", 'cannot be made shorter than what is planted'),
     ('the next bed is set on top of the last', 'js/mapedit.js', "const at = Geo.nextInRow(lined, typical().pathFt * k),", "const at = { x: lined[lined.length - 1].x + 400, y: lined[lined.length - 1].y, rot: lined[lined.length - 1].rot },", 'one step past the end of the row'),
     ('a block over taken ground can be made', 'js/mapedit.js', "disabled: !made.beds.length || !!made.on, onclick: createGarden }", "disabled: !made.beds.length, onclick: createGarden }", 'cannot be made'),
     ('a new garden’s beds are not numbered', 'js/mapedit.js', "bed: String(i + 1), gardenId: garden.id, type: 'IG'", "bed: '1', gardenId: garden.id, type: 'IG'", 'creates the garden and its beds'),
@@ -92,49 +114,59 @@ PAGE = [
 ]
 
 
+def unfaulted(names, ran):
+    """What the check does with no fault in it, which is looked at first. A line that fails then can catch nothing, and a check that gives no result can catch nothing at all."""
+    if not ran: print('with no fault in it the check gives no result: nothing can be shown to be caught', flush=True); return None
+    if names: print('with no fault in it the check already fails, so these lines catch nothing: ' + '; '.join(names)[:700], flush=True)
+    return set(names)
+
+
 def run_node():
     work = os.path.join(scratch, 'mut-node'); shutil.rmtree(work, ignore_errors=True); os.makedirs(work)
     src = open(os.path.join(app, 'js', 'mapgeo.js'), encoding='utf-8').read()
-    caught = missed = 0
-    for name, find, repl, want in NODE:
-        if words and not any(w in name.lower() for w in words): continue
-        if src.count(find) != 1:
-            print('NOT APPLIED', name, src.count(find)); missed += 1; continue
-        open(os.path.join(work, 'mapgeo.js'), 'w', encoding='utf-8').write(src.replace(find, repl))
+    faults = [f for f in NODE if not words or any(w in f[0].lower() for w in words)]
+    faults = faults[int(os.environ.get('FROM', 0)):int(os.environ.get('TO', len(NODE)))]
+    caught, missed, broken = [], [], []
+    for name, find, repl, want in ([(None, '', '', '')] if faults else []) + faults:
+        if name is not None and src.count(find) != 1:
+            print('BROKEN ', name, '| the text to change is there', src.count(find), 'times', flush=True); broken.append(name); continue
+        open(os.path.join(work, 'mapgeo.js'), 'w', encoding='utf-8').write(src.replace(find, repl) if name is not None else src)
         out = subprocess.run(['node', os.path.join(tests, 'mapgeo_test.cjs'), work], capture_output=True, text=True).stdout
         try:
             failed = [f['name'] for f in json.loads(out[out.rfind('{"passed"'):])['failed']]
         except Exception:
             failed = ['(the test did not report)']
-        hit = [f for f in failed if want in f]
-        if hit: caught += 1; print('caught ', name, '→', hit[0][:90])
-        else: missed += 1; print('MISSED ', name, '| failed instead:', failed[:3])
-    print(json.dumps({'faults': caught + missed, 'caught': caught, 'missed': missed}))
+        if name is None: already = unfaulted([f for f in failed if f != 'the test ran to its end' and not f.startswith('(the test did not')], not any(f == 'the test ran to its end' or f.startswith('(the test did not') for f in failed)); continue
+        hit = [f for f in failed if want in f and already is not None and f not in already]
+        if hit: caught.append(name); print('caught ', name, '→', hit[0][:90], flush=True)
+        else: missed.append(name); print('MISSED ', name, '| failed instead:', failed[:3], flush=True)
+    print(json.dumps({'mode': mode, 'faults': len(faults), 'caught': len(caught), 'missed': missed, 'broken': broken}))
 
 
 def run_page():
     lo, hi = int(os.environ.get('FROM', 0)), int(os.environ.get('TO', len(PAGE)))
-    caught = missed = 0
-    for name, file, find, repl, want in PAGE[lo:hi]:
-        if words and not any(w in name.lower() for w in words): continue
+    faults = [f for f in PAGE[lo:hi] if not words or any(w in f[0].lower() for w in words)]
+    caught, missed, broken = [], [], []
+    for name, file, find, repl, want in ([(None, '', '', '', '')] if faults else []) + faults:
         work = os.path.join(scratch, 'mut-page'); shutil.rmtree(work, ignore_errors=True)
         shutil.copytree(app, work, ignore=shutil.ignore_patterns('data'))
         os.symlink(os.path.join(app, 'data'), os.path.join(work, 'data'))
-        path = os.path.join(work, file); src = open(path, encoding='utf-8').read()
-        if src.count(find) != 1:
-            print('NOT APPLIED', name, src.count(find)); missed += 1; sys.stdout.flush(); continue
-        open(path, 'w', encoding='utf-8').write(src.replace(find, repl))
-        out = subprocess.run(['python3', '-I', os.path.join(tests, 'map_check.py'), work, os.path.join(scratch, 'mut-shots')], capture_output=True, text=True).stdout
-        subprocess.run(['pkill', '-f', 'google-chrome'], capture_output=True)
+        if name is not None:
+            path = os.path.join(work, file); src = open(path, encoding='utf-8').read()
+            if src.count(find) != 1:
+                print('BROKEN ', name, '| the text to change is there', src.count(find), 'times', flush=True); broken.append(name); continue
+            open(path, 'w', encoding='utf-8').write(src.replace(find, repl))
+        out = alone([sys.executable, '-I', os.path.join(tests, 'map_check.py'), work, os.path.join(scratch, 'mut-shots')], 900)[0]
         try:
             failed = json.loads(out[out.rfind('{"passed"'):])['failed']
         except Exception:
             failed = ['(the check did not report)']
-        hit = [f for f in failed if want in f]
-        if hit: caught += 1; print('caught ', name, '→', hit[0][:100])
-        else: missed += 1; print('MISSED ', name, '| failed instead:', [f[:80] for f in failed[:3]])
-        sys.stdout.flush()
-    print(json.dumps({'faults': caught + missed, 'caught': caught, 'missed': missed}))
+        if name is None: already = unfaulted([f for f in failed if not f.startswith('(the check did not')], failed != ['(the check did not report)']); continue
+        hit = [f for f in failed if want in f and already is not None and f not in already]
+        if hit: caught.append(name); print('caught ', name, '→', hit[0][:100], flush=True)
+        else: missed.append(name); print('MISSED ', name, '| failed instead:', [f[:80] for f in failed[:3]], flush=True)
+    print(json.dumps({'mode': mode, 'faults': len(faults), 'caught': len(caught), 'missed': missed, 'broken': broken}))
 
 
-run_node() if mode == 'node' else run_page()
+if mode == 'list': print(json.dumps({'node': len(NODE), 'page': len(PAGE)}))
+else: run_node() if mode == 'node' else run_page()

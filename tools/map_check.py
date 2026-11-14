@@ -235,7 +235,9 @@ def run(page, width):
     z = js('LRFMap.zoom()')
 
     # a planting cannot be picked up while the ground is being edited
-    fill = js("""(() => { const el = document.querySelector('#mapBeds [data-planting]'); if (!el) return null; const r = el.getBoundingClientRect(), m = document.getElementById('map').getBoundingClientRect(); return r.left > m.left && r.right < m.right && r.top > m.top + 50 && r.bottom < m.bottom - 60 ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()""")
+    # the first planting drawn that is in view, wherever on the map this plan's first planting happens to lie
+    fill = js("""(() => { const m = document.getElementById('map').getBoundingClientRect(); for (const el of document.querySelectorAll('#mapBeds [data-planting]')) { const r = el.getBoundingClientRect(); if (r.left > m.left && r.right < m.right && r.top > m.top + 50 && r.bottom < m.bottom - 60) return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; } return null; })()""")
+    check(tag + 'a planting drawn in view was found to press on', bool(fill))
     if fill:
         page.mouse.move(fill['x'], fill['y']); page.mouse.down(); page.mouse.move(fill['x'] + 3, fill['y'] + 2)
         ghost = js("!!document.querySelector('.drag-ghost')"); page.mouse.up(); page.wait_for_timeout(80)
@@ -319,8 +321,11 @@ def run(page, width):
     check(tag + 'dragged back near its neighbours’ length it takes theirs, and says whose', js("LRFApp.state.engine.bedOf('%s').l" % last) == row['l'] and 'same as' in seen, [js("LRFApp.state.engine.bedOf('%s').l" % last), seen])
     page.keyboard.press('Control+z'); page.wait_for_timeout(100); page.keyboard.press('Control+z'); page.wait_for_timeout(100)
     check(tag + 'and two Undos put it back', js('LRFApp.contentKey()') == key0)
-    # shorter than what is planted in it: the planner's own rule refuses
-    full = js("""(() => { const e = LRFApp.state.engine; for (const id of LRFMap.spaces()) { const b = e.bedOf(id); if (!e.isSoilBed(b) || b.l < 12) continue; if (e.plantingsIn(id).some(p => { const r = e.calc(p); return r && r.len >= b.l - 0.01; })) return id; } return null; })()""")
+    # shorter than what is planted in it: the planner's own rule refuses. The subject is a bed with a planting of a stated length that
+    # reaches the bed's end and fits it today. (A planting with no length of its own takes whatever its bed measures, so no bed is too
+    # short for it; and one that already runs past the end is trouble the plan came with, which the rule lets stay.)
+    full = js("""(() => { const e = LRFApp.state.engine; for (const id of LRFMap.spaces()) { const b = e.bedOf(id); if (!e.isSoilBed(b) || b.l < 12) continue; if (e.plantingsIn(id).some(p => { const r = e.calc(p); return r && +p.ft > 0 && r.len >= b.l - 0.01 && !e.overflow(p, r); })) return id; } return null; })()""")
+    check(tag + 'a bed with a planting of a stated length that reaches its end was found to shorten', bool(full), full)
     if full:
         js("LRFMapEdit.pick(['%s']); LRFMapEdit.resize('l', LRFApp.state.engine.bedOf('%s').l - 5)" % (full, full)); page.wait_for_timeout(120)
         check(tag + 'a bed cannot be made shorter than what is planted in it', js('LRFApp.contentKey()') == key0 and 'run past the end' in js('T.toast()'), js('T.toast()'))
