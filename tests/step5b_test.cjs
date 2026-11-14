@@ -191,6 +191,10 @@ if (micro.length) {
   const sheets = [...lots.values()].reduce((n, x) => n + Math.ceil(x - 1e-9), 0);
   check('rockwool is counted in whole sheets, one lot of tower seedlings at a time, over the season', sheets > 0 && row('rockwool').need === sheets && row('rockwool').fills === 0 && row('open-holes').need === carriers && carriers > 0, { sheets, row: row('rockwool') });
   check('everything is to buy while nothing is on the shelf, and mix starts from round figures that are not his (0.33)', sup.rows.every(r => r.have === 0 && r.buy === r.need && !r.mixOwn) && sup.mix.own === 0 && sup.mix.of === sup.rows.filter(r => r.fills > 0).length && sup.mix.counted + sup.mix.missing.length === sup.mix.of);
+  // a container the planner has no round figure for waits for a figure: nothing is guessed, and the total says what it leaves out
+  const bare = sup.rows.filter(r => r.fills > 0 && r.mixDefault == null);
+  check('the plan fills a container the planner has no round figure of mix for', bare.length > 0, sup.rows.filter(r => r.fills > 0).map(r => r.id));
+  check('such a container takes no mix until a figure is typed, and is named as missing from the total', bare.every(r => r.mixEach == null && r.mixCuFt == null && r.perBag == null) && sup.mix.missing.length === bare.length && bare.every(r => sup.mix.missing.includes(r.name)), { bare: bare.map(r => [r.id, r.mixEach]), missing: sup.mix.missing });
   const some = sup.rows.find(r => r.fills > 0), other = sup.rows.find(r => r.fills > 0 && r.id !== some.id);
   let own = N.setSupply(null, 'have', some.id, String(Math.max(1, some.need - 3)));
   own = N.setSupply(own, 'mix', some.id, '3.5'); own = N.setSupply(own, 'have', 'mix', '40');
