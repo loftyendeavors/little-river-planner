@@ -76,12 +76,12 @@ with sync_playwright() as pw:
     check("clearing it goes back to the round figure", ok and b["own"] is False and b["each"] == each["round"] and abs(b["need"] - m0["need"]) < 1e-9, b)
     undo(); undo()
     check("two undos put everything back", js("return A.contentKey()") == key0)
-    crate = js("const r = sup().rows.find(r => r.crates); return r ? { id: r.id, cuft: r.mixCuFt, fills: r.fills, need: r.need } : null")
+    crate = js("const r = sup().rows.find(r => r.crates); return r ? { id: r.id, name: r.name, cuft: r.mixCuFt, fills: r.fills, need: r.need } : null")
     check("there is a crate row to look at", bool(crate))
     if crate:
         ok = typed(f'#bnSupplies tr[data-supply="{crate["id"]}"] [data-f=mix]', "0")
         c = js(f"const r = sup().rows.find(r => r.id === '{crate['id']}'), m = sup().mix; return {{ each: r.mixEach, cuft: r.mixCuFt, need: m.need, bags: m.bags, crates: m.crates, missing: m.missing }}")
-        check("a crate said to take no mix is counted at nothing, and is not listed as wanting a figure", ok and c["each"] == 0 and c["cuft"] == 0 and abs(c["need"] - (m0["need"] - crate["cuft"])) < 1e-6 and c["bags"] < m0["bags"] and not c["missing"], c)
+        check("a crate said to take no mix is counted at nothing, and is not listed as wanting a figure", ok and c["each"] == 0 and c["cuft"] == 0 and abs(c["need"] - (m0["need"] - crate["cuft"])) < 1e-6 and c["bags"] < m0["bags"] and c["missing"] == m0["missing"] and crate.get("name") not in c["missing"], c)   # the list of what waits for a figure is as it was: the crate is not on it
         undo()
     ok = typed('#bnSupplies tr[data-supply="mix"] [data-f=have]', "10")
     d = js("const m = sup().mix; return { have: m.have, buy: m.buy, bags: m.bags, own: (S.plan.lrfNext || {}).supplies, cell: row('mix').cells[4].textContent }")
