@@ -7,6 +7,7 @@ usage: python3 -I mixed_check.py <app-dir-or-built-site> <shots-dir> [backup.zip
 """
 import functools, http.server, json, os, sys, threading
 from pathlib import Path
+LABEL = os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)"   # the build's label, as tests/env.sh reads it from the page's own script
 from playwright.sync_api import sync_playwright
 target, shots = Path(sys.argv[1]), Path(sys.argv[2]); shots.mkdir(parents=True, exist_ok=True)
 backup = sys.argv[3] if len(sys.argv) > 3 else None
@@ -54,7 +55,7 @@ with sync_playwright() as pw:
     key0 = js("return A.contentKey()")
     order0 = js("return S.plan.plantings.map(p => p.id).join(',')")
     start = js("return { n: S.plan.plantings.length, undo: S.undo.length, label: txt('buildNote'), waiting: A.waiting().length, settle: LRFPanels.settleCount() }")
-    check("a plan is open with nothing to undo; the build says 0.39", start["n"] > 300 and start["undo"] == 0 and "0.39" in start["label"], start)
+    check("a plan is open with nothing to undo; the build says its label", start["n"] > 300 and start["undo"] == 0 and LABEL in start["label"], start)
     sub = js("""for (const b of S.plan.beds) { if (!eng.isSoilBed(b) || !(eng.capOf(b) >= 30) || b.active === false || eng.plantingsIn(b.id).length !== 1) continue;   // alone in its bed for the whole season: the lines below count everything the bed holds
         for (const p of eng.plantingsIn(b.id)) { const r = eng.calc(p); if (!r || p.bedLayout || p.ft > 0 || r.partial || !p.varietyId || R.fixed(eng, { p }) || eng.varietiesOf(p.cropId).length < 5 || r.rows !== 2) continue;
           if (eng.holders(b, eng.occupancyFrom(p, r), eng.occupancyThrough(p, r), p.id).length) continue;

@@ -4,6 +4,7 @@ usage: python3 -I cleanup_check.py <app-dir-or-built-site> <shots-dir> [backup.z
 """
 import functools, http.server, json, os, sys, threading
 from pathlib import Path
+LABEL = os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)"   # the build's label, as tests/env.sh reads it from the page's own script
 from playwright.sync_api import sync_playwright
 target, shots = Path(sys.argv[1]), Path(sys.argv[2]); shots.mkdir(parents=True, exist_ok=True)
 backup = sys.argv[3] if len(sys.argv) > 3 else None
@@ -62,7 +63,7 @@ with sync_playwright() as pw:
         if got is None or len(got): named[where] = got
 
     start = js("return { n: S.plan.plantings.length, label: ($('buildNote') || {}).textContent || '', sample: A.isSample(), key: A.contentKey(), undo: S.undo.length };") or {}
-    check("a plan is open and the build says “Preview 0.39”", start.get("n", 0) > 300 and start.get("label", "").startswith("Preview 0.39 ·") and not start.get("sample"), start)
+    check("a plan is open and the build says “Preview” and its label", start.get("n", 0) > 300 and start.get("label", "").startswith("Preview " + LABEL + " ·") and not start.get("sample"), start)
     js("A.setDate(E.s2d('2027-06-15')); return 1;"); wait(400)
 
     # ── the Backup menu ──
