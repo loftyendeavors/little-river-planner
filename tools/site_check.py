@@ -25,7 +25,7 @@ with sync_playwright() as pw:
     ready = lambda: (page.wait_for_function("window.LRFApp && LRFApp.state.ready", timeout=20000), page.wait_for_timeout(700))
     js = lambda expr: page.evaluate(f"(() => {{ const A = LRFApp, S = A.state; return {expr}; }})()")
     page.goto(url); ready()
-    out["first"] = js("({sample: A.isSample(), plantings: S.plan.plantings.length, welcome: !!document.querySelector('.welcome'), strip: !document.getElementById('firstRun').hidden && /No plan of yours is in this browser/.test(document.getElementById('firstRun').textContent), fonts: [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family).sort().join(','), manifest: !!document.querySelector('link[rel=manifest]'), privateData: /Seapuit|Osterville/i.test(document.documentElement.innerHTML)})")
+    out["first"] = js("({sample: A.isSample(), plantings: S.plan.plantings.length, welcome: !!document.querySelector('.welcome'), strip: !document.getElementById('firstRun').hidden && /No plan of yours is in this browser/.test(document.getElementById('firstRun').textContent), fonts: [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family).sort().join(','), manifest: !!document.querySelector('link[rel=manifest]')})")
     page.set_input_files("#importFile", backup)
     page.wait_for_timeout(3500)
     try: page.wait_for_function("LRFThumbs.count() >= 100 && /Saved/.test(document.getElementById('saveState').textContent)", timeout=90000)   # variety photos are read after the plan is shown

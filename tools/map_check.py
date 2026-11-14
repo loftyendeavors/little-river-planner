@@ -235,7 +235,9 @@ def run(page, width):
     z = js('LRFMap.zoom()')
 
     # a planting cannot be picked up while the ground is being edited
-    fill = js("""(() => { const el = document.querySelector('#mapBeds [data-planting]'); if (!el) return null; const r = el.getBoundingClientRect(), m = document.getElementById('map').getBoundingClientRect(); return r.left > m.left && r.right < m.right && r.top > m.top + 50 && r.bottom < m.bottom - 60 ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()""")
+    # the first planting drawn that is in view, wherever on the map this plan's first planting happens to lie
+    fill = js("""(() => { const m = document.getElementById('map').getBoundingClientRect(); for (const el of document.querySelectorAll('#mapBeds [data-planting]')) { const r = el.getBoundingClientRect(); if (r.left > m.left && r.right < m.right && r.top > m.top + 50 && r.bottom < m.bottom - 60) return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; } return null; })()""")
+    check(tag + 'a planting drawn in view was found to press on', bool(fill))
     if fill:
         page.mouse.move(fill['x'], fill['y']); page.mouse.down(); page.mouse.move(fill['x'] + 3, fill['y'] + 2)
         ghost = js("!!document.querySelector('.drag-ghost')"); page.mouse.up(); page.wait_for_timeout(80)
@@ -319,8 +321,11 @@ def run(page, width):
     check(tag + 'dragged back near its neighbours’ length it takes theirs, and says whose', js("LRFApp.state.engine.bedOf('%s').l" % last) == row['l'] and 'same as' in seen, [js("LRFApp.state.engine.bedOf('%s').l" % last), seen])
     page.keyboard.press('Control+z'); page.wait_for_timeout(100); page.keyboard.press('Control+z'); page.wait_for_timeout(100)
     check(tag + 'and two Undos put it back', js('LRFApp.contentKey()') == key0)
-    # shorter than what is planted in it: the planner's own rule refuses
-    full = js("""(() => { const e = LRFApp.state.engine; for (const id of LRFMap.spaces()) { const b = e.bedOf(id); if (!e.isSoilBed(b) || b.l < 12) continue; if (e.plantingsIn(id).some(p => { const r = e.calc(p); return r && r.len >= b.l - 0.01; })) return id; } return null; })()""")
+    # shorter than what is planted in it: the planner's own rule refuses. The subject is a bed with a planting of a stated length that
+    # reaches the bed's end and fits it today. (A planting with no length of its own takes whatever its bed measures, so no bed is too
+    # short for it; and one that already runs past the end is trouble the plan came with, which the rule lets stay.)
+    full = js("""(() => { const e = LRFApp.state.engine; for (const id of LRFMap.spaces()) { const b = e.bedOf(id); if (!e.isSoilBed(b) || b.l < 12) continue; if (e.plantingsIn(id).some(p => { const r = e.calc(p); return r && +p.ft > 0 && r.len >= b.l - 0.01 && !e.overflow(p, r); })) return id; } return null; })()""")
+    check(tag + 'a bed with a planting of a stated length that reaches its end was found to shorten', bool(full), full)
     if full:
         js("LRFMapEdit.pick(['%s']); LRFMapEdit.resize('l', LRFApp.state.engine.bedOf('%s').l - 5)" % (full, full)); page.wait_for_timeout(120)
         check(tag + 'a bed cannot be made shorter than what is planted in it', js('LRFApp.contentKey()') == key0 and 'run past the end' in js('T.toast()'), js('T.toast()'))
@@ -384,9 +389,10 @@ def run(page, width):
     js("LRFMapEdit.pick(['%s'])" % last); page.wait_for_timeout(60)
     page.click('#leAdd'); page.wait_for_timeout(150)
     added = js("""(() => { const P = LRFApp.state.plan, id = LRFMapEdit.picked()[0], nb = P.beds.find(b => b.id === id), G = LRFMapGeo, s = id && LRFMap.shapeOf(id), prev = LRFMap.shapeOf('%s'), before = LRFMap.shapeOf('%s');
-      return { n: P.beds.length, toast: T.toast(), step: s ? [s.x - prev.x, s.y - prev.y] : null, pitch: [prev.x - before.x, prev.y - before.y], l: nb && nb.l, name: nb && nb.bed }; })()""" % (last, ids[-2]))
+      const want = { ...prev, x: prev.x + prev.x - before.x, y: prev.y + prev.y - before.y }, free = !LRFMap.spaces().some(i => i !== id && i !== '%s' && G.overlaps(want, LRFMap.shapeOf(i)));   // is the place one step on open ground?
+      return { n: P.beds.length, toast: T.toast(), step: s ? [s.x - prev.x, s.y - prev.y] : null, pitch: [prev.x - before.x, prev.y - before.y], l: nb && nb.l, name: nb && nb.bed, free }; })()""" % (last, ids[-2], last))
     if added['n'] == n_beds0:
-        check(tag + '“Add the next one” adds a bed past the end of the row (here there was no room, and it said so)', 'No room' in added['toast'], added)
+        check(tag + '“Add the next one” adds a bed past the end of the row (here there was no room, and it said so)', 'No room' in added['toast'] and not added['free'], added)   # "no room" is right only where the place one step on is taken
     else:
         check(tag + '“Add the next one” sets a bed one step past the end of the row: the step the row keeps, the same size, the next number',
               abs(added['step'][0] - added['pitch'][0]) < 0.02 and abs(added['step'][1] - added['pitch'][1]) < 0.02 and added['l'] == row['l'] and int(added['name']) == len(ids) + 1 or int(added['name']) > 0 and abs(added['step'][0] - added['pitch'][0]) < 0.02, added)
@@ -396,10 +402,11 @@ def run(page, width):
     # ───────────── a new garden ─────────────
     js("LRFMapEdit.pick([]); LRFMap.fit()"); page.wait_for_timeout(200)
     page.click('#leNew'); page.wait_for_timeout(80)
-    # open ground: a block of about 60 x 90 ft that lies on nothing
+    # open ground: a block of about 60 x 90 ft that lies on nothing, with room beside it for what is done to it below (paths
+    # typed twice as wide push the last bed some 12 ft further on, and the page rightly refuses a move onto another bed)
     spot = js("""(() => { const G = LRFMapGeo, M = LRFMap, k = 1 / M.feetPerPx(), r = document.getElementById('map').getBoundingClientRect(), still = M.spaces().map(id => M.shapeOf(id));
       for (let x = r.left + 60; x < r.right - 60 - 60 * k * M.zoom(); x += 23) for (let y = r.top + 90; y < r.bottom - 150 - 90 * k * M.zoom(); y += 19) {
-        const [wx, wy] = M.toWorld(x, y), W = 60 * k, L = 90 * k, blk = { x: wx + W / 2, y: wy + L / 2, rot: 0, W: W * 1.25, L: L * 1.25 };
+        const [wx, wy] = M.toWorld(x, y), W = 60 * k, L = 90 * k, blk = { x: wx + W * 0.65, y: wy + L / 2, rot: 0, W: W * 1.6, L: L * 1.25 };
         if (!still.some(s => G.overlaps(blk, s))) return { x, y, x2: x + W * M.zoom(), y2: y + L * M.zoom() }; }
       return null; })()""")
     if not spot:

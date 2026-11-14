@@ -1,0 +1,26 @@
+{
+ "backup": "2026-11-14T12:00:00.000Z",
+ "counts": {
+  "gardens": 17,
+  "beds": 125,
+  "plantings": 623,
+  "varieties": 147,
+  "year": 2027
+ },
+ "mapImage": {
+  "src": "data/farm-map.jpg",
+  "sha256": "93f469ab64ca0686fcb4fb5e370f861c9d34375bd9626e9d6f48a669a35fe412"
+ },
+ "inventory": "data/inventory.json",
+ "thumbs": "data/thumbs.json",
+ "packs": "data/packs.json",
+ "corrections": [
+  {
+   "rule": "traysOpenMonday",
+   "result": "Corner Bistro · 2027 live trays: opens 2027-05-03, not 2027-05-01; 156 batches -> 152"
+  }
+ ],
+ "keep": {
+  "trayStart": "monday"
+ }
+}
