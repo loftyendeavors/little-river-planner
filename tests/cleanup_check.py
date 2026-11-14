@@ -169,8 +169,8 @@ with sync_playwright() as pw:
         look("the review window, by crop")
         page.keyboard.press("Escape"); wait(300)
     else:
-        check("the review window is read both ways: by kind of figure, then by crop", True)
-        check("the review window names no “old copy”: a copied figure is a “Copied value”", True)
+        check("the review window is read both ways: by kind of figure, then by crop", False, "the review window did not open: the plan has no planting that differs from the list, so nothing was read")
+        check("the review window names no “old copy”: a copied figure is a “Copied value”", False, "the review window did not open")
 
     # ── the Backup windows ──
     js("A.setView('map'); void LRFBackupUI.openSnaps(); return 1;"); wait(700); look("Snapshots"); page.keyboard.press("Escape"); wait(300)

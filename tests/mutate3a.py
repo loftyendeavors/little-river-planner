@@ -55,7 +55,7 @@ NODE = [
  ('double bookings already in the plan are counted as new', 'js/audit.js', "fresh = [...after].filter(k => !old.has(k)).map(k => k.split('|')),", "fresh = [...after].map(k => k.split('|')),"),
  ('a waiting planting is never let go', 'js/audit.js', "after: list.map(w => let_go.has(w.id) ? freed(w) : w) });", "after: list });"),
  ('a waiting planting follows the list whatever its twin does', 'js/audit.js', "r.choice = twin && twin.choice !== 'keep' ? 'follow' : 'keep';", "r.choice = 'follow';"),
- ('using the crop’s nursery weeks throws away the whole old copy', 'js/audit.js', "    const g = p.growingDefaults, crop = { ...g.crop };\n    delete crop.gh;\n    return { ...p, growingDefaults: { ...g, crop } };", "    const q = { ...p }; delete q.growingDefaults; return q;"),
+ ('using the crop’s nursery weeks throws away everything that was copied', 'js/audit.js', "    const g = p.growingDefaults, crop = { ...g.crop };\n    delete crop.gh;\n    return { ...p, growingDefaults: { ...g, crop } };", "    const q = { ...p }; delete q.growingDefaults; return q;"),
  ('“take” is carried out for a row that cannot give its number', 'js/audit.js', "const choice = pick(r) === 'take' && !r.take ? 'keep' : pick(r), later =", "const choice = pick(r), later ="),
  ('the suggestion lets go a group whose dates would move', 'js/audit.js', "delete r.shifts;\n      r.choice = r.agrees ? 'follow' : r.take ? 'take' : 'keep';", "delete r.shifts;\n      r.choice = r.agrees || !r.take ? 'follow' : 'take';"),
  ('the preview misses dates that move', 'js/audit.js', "if (first || last || sow) moves.push({ id: p.id, first, last, sow });", "if (first > 0) moves.push({ id: p.id, first, last, sow });"),

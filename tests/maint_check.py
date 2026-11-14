@@ -13,6 +13,7 @@ The rules under test:
     on the page is saved over it until he brings a plan in or says to carry on, and it can be downloaded as it stands;
   - with a plan open, none of this shows.
 """
+import re
 import http.server, json, os, socketserver, sys, threading, functools
 from playwright.sync_api import sync_playwright
 
@@ -121,7 +122,7 @@ with sync_playwright() as pw:
         check('a browser with nothing stored opens on the sample', first['sample'] and first['n'] < 50, first)
         check('and says so across the page: no plan of yours is in this browser, and a plan does not follow you between browsers', 'No plan of yours is in this browser' in first['text'] and 'does not follow you' in first['text'] and 'still there' in first['text'], first['text'])
         check('with both ways to bring one in: a backup file, the plan folder', first['load'] and first['folder'], first)
-        check('the notice in the details panel says the same, says which files load and names no other planner', 'No plan in this browser' in (first['welcome'] or '') and '.zip or .json' in first['welcome'] and 'v7' not in first['welcome'] and first['welcomeFolder'], first['welcome'])
+        check('the notice in the details panel says the same, says which files load and names no other planner', 'No plan in this browser' in (first['welcome'] or '') and '.zip or .json' in first['welcome'] and not re.search(r'\bv\d', first['welcome']) and first['welcomeFolder'], first['welcome'])
         check('the indicator reads "Sample plan"', first['status'] == 'Sample plan', first['status'])
         seen = {}
         for view in VIEWS:

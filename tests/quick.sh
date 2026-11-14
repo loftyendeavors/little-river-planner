@@ -7,7 +7,16 @@ last() { tail -1; }   # the whole line: the verdict reads its end
 node $T/what_changed.cjs $REPO $W/old $SCRATCH | last
 # the farm kept in the repository is what its generator writes
 rm -rf $W/farm-again && mkdir -p $W/farm-again && cp $FARM/farm-map.jpg $W/farm-again/ && node $T/farm/make_farm.cjs $REPO/js $W/farm-again > /dev/null 2>&1
-python3 -I -c "import json,sys,os,filecmp; a,b=sys.argv[1:3]; names=['plan.json','backup-plan.json','inventory.json','packs.json','plan-info.json','layout.json']; bad=[n for n in names if not (os.path.exists(os.path.join(b,n)) and filecmp.cmp(os.path.join(a,n),os.path.join(b,n),shallow=False))]; print(json.dumps({'passed': len(names)-len(bad), 'of': len(names), 'failed': ['tests/farm/data/%s is what make_farm.cjs writes' % n for n in bad], 'name': 'the made-up farm'}))" $FARM $W/farm-again
+python3 -I $T/farm/make_pictures.py $W/farm-again > /dev/null 2>&1   # the pictures are compared by which varieties have one, not byte for byte: a newer drawing library may pack a picture differently
+python3 -I - $FARM $W/farm-again <<'PY'
+import json, sys, os, filecmp
+a, b = sys.argv[1:3]; names = ['plan.json', 'backup-plan.json', 'inventory.json', 'packs.json', 'plan-info.json', 'layout.json']
+bad = ['tests/farm/data/%s is what make_farm.cjs writes' % n for n in names if not (os.path.exists(os.path.join(b, n)) and filecmp.cmp(os.path.join(a, n), os.path.join(b, n), shallow=False))]
+try: same = sorted(json.load(open(os.path.join(a, 'thumbs.json')))) == sorted(json.load(open(os.path.join(b, 'thumbs.json'))))
+except Exception: same = False
+if not same: bad.append('tests/farm/data/thumbs.json has a picture for the varieties make_pictures.py draws one for, and no other')
+print(json.dumps({'passed': len(names) + 1 - len(bad), 'of': len(names) + 1, 'failed': bad, 'name': 'the made-up farm'}))
+PY
 node $T/rockwool_test.cjs $APP $PLAN | last
 node $T/step1_test.cjs $APP $PLAN | last
 node $T/step1_test.cjs $APP $SHIP | last

@@ -56,7 +56,12 @@ if (wordsOnly.length) {
 // the rest of what a browser is served
 const walk = (root, rel) => { const at = path.join(root, rel); if (!fs.existsSync(at)) return []; return fs.statSync(at).isDirectory() ? fs.readdirSync(at).sort().flatMap(f => walk(root, path.join(rel, f))) : [rel]; };
 const PAGE = ['index.html', 'sw.js', 'manifest.webmanifest', 'css', 'fonts', 'icons'];
-const now = PAGE.flatMap(x => walk(NOW, x)), was = PAGE.flatMap(x => walk(OLD, x));
+// under js/, whatever is not one of the scripts compared above: a folder, a file of another kind
+const beside = root => walk(root, 'js').filter(f => !(path.dirname(f) === 'js' && f.endsWith('.js')));
+// and at the root of the site, anything that is not known to stand there: the site serves every file it holds
+const ROOT = [...PAGE, 'js', 'tests', 'tools', 'worker', 'README.md', 'node_modules'];
+const strange = fs.readdirSync(NOW).filter(f => !f.startsWith('.') && !ROOT.includes(f)).flatMap(f => walk(NOW, f));
+const now = [...PAGE.flatMap(x => walk(NOW, x)), ...beside(NOW), ...strange], was = [...PAGE.flatMap(x => walk(OLD, x)), ...beside(OLD)];
 const bytes = (root, f) => fs.readFileSync(path.join(root, f));
 const pageDiffer = [...new Set([...now, ...was])].filter(f => !now.includes(f) || !was.includes(f) || !bytes(NOW, f).equals(bytes(OLD, f))).map(f => f.split(path.sep).join('/'));
 check('every other file a browser is served is the build before’s, unless the build names it', was.length > 0 && pageDiffer.every(f => named('page').includes(f)), pageDiffer.filter(f => !named('page').includes(f)));

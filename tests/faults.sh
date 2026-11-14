@@ -1,6 +1,6 @@
 #!/bin/sh
-# The deliberate faults: each puts one fault into a copy of the app and requires that a named line of a check fails. They prove
-# that the checks can fail. One way in for all of them:
+# The deliberate faults: each puts one fault into a copy of the app and requires that the check then fails where it passed before
+# (three sets name the line that has to fail: changed, cleanup, map). They prove that the checks can fail. One way in for all of them:
 #   sh tests/faults.sh <set> [mode] [words…]      FROM=0 TO=12 in front runs a part; WIDTH= and DARK= reach the page checks
 #   sh tests/faults.sh list                        every set, its modes and the number of faults in each
 # With no mode a set runs its first one, which is its fast one where it has one (node, worker: seconds a fault; the page modes

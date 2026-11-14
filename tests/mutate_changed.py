@@ -23,6 +23,9 @@ def unread(js, said, free): said.clear(); said["unreadable"] = True
 def styles(js, said, free): f = js.parent / "css" / "app.css"; f.write_text(f.read_text(encoding="utf-8") + "\n/* one rule more */\n", encoding="utf-8")
 def page(js, said, free): f = js.parent / "index.html"; f.write_text(f.read_text(encoding="utf-8") + "\n<!-- one line more -->\n", encoding="utf-8")
 def other(js, said, free): said["base"] = "0000000"
+def under(js, said, free): (js / "more").mkdir(); (js / "more" / "extra.js").write_text("window.extra = 1;\n", encoding="utf-8")
+def kind(js, said, free): (js / "extra.mjs").write_text("export const extra = 1;\n", encoding="utf-8")
+def root(js, said, free): (js.parent / "other.html").write_text("<!doctype html><title>another page</title>\n", encoding="utf-8")
 
 FAULTS = [
  # (name, what is done, words of the line that must fail)
@@ -34,6 +37,9 @@ FAULTS = [
  ("the style sheet is changed and the build does not name it", styles, "every other file a browser is served"),
  ("the page is changed and the build does not name it", page, "every other file a browser is served"),
  ("what the build says of itself was written for another build", other, "was written for this build"),
+ ("a script is put in a folder under js/ and the build does not name it", under, "every other file a browser is served"),
+ ("a file of another kind is put beside the scripts and the build does not name it", kind, "every other file a browser is served"),
+ ("another page is put at the root of the site and the build does not name it", root, "every other file a browser is served"),
 ]
 if mode == "list": print(json.dumps({"node": len(FAULTS)})); sys.exit(0)
 

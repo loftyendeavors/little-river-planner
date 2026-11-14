@@ -75,7 +75,8 @@ changes a check or the part of the planner a check covers.
 
 `farm/make_farm.cjs` writes "Example Farm" from a fixed seed: the same farm, byte for byte, every time. `farm/make_pictures.py`
 draws its picture from above and a small picture for each variety. `farm/make_backup.py` packs it as a backup file. The
-results are kept in `farm/data/`, so running the checks needs none of the three.
+results are kept in `farm/data/`. `setup.sh` packs the backup afresh from them, and `quick.sh` writes the farm again to show
+that nothing but the generator made it.
 
 It has one of every kind of thing the planner knows: field beds and raised beds, a tunnel, greenhouse beds, two lines of
 towers, crates and pots, live trays on heated benches, cane berries, bulbs, beds shared lengthwise and by rows, plantings
@@ -120,7 +121,8 @@ The same proof can be run on a real plan, on the computer that holds it: `node t
 ## Deliberate faults
 
 A check that cannot fail proves nothing. Each `mutate*.py` puts one fault at a time into a copy of the app (a rule dropped,
-a word changed back, a figure off by one) and requires that a named line of a check fails.
+a word changed back, a figure off by one) and requires that the check then fails where it passed before. Three sets (`changed`,
+`cleanup`, `map`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
 
 ```
 sh tests/faults.sh list             # every set, its modes, how many faults
@@ -143,7 +145,7 @@ piece of the planner runs the faults of the checks that cover it before it asks 
    node tools/build_site.cjs $LRF_WORK/app $LRF_WORK/scratch/node_modules/@fontsource-variable . "0.40"
    ```
    The last argument is the label the page shows in its Backup menu. It is written in one place, `js/main.js`
-   ("Preview 0.40 ·"); the checks read it from there. **Read the next free label from `main` at the moment of the merge.**
+   (today "Preview 0.39 ·"); the checks read it from there. **Read the next free label from `main` at the moment of the merge.**
    A new script is added to the app folder's `index.html` in load order (`tools/app_folder.cjs` and `tools/README.md` say
    how the two pages relate). `README.md` is kept by hand.
 3. **Say what the build changes** in `tests/this-build.json`, with the commit of `main` it was cut from as its `base`.

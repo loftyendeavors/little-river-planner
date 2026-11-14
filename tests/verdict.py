@@ -43,7 +43,7 @@ def names_of(text):
         return None
 for line in text.splitlines():
     s = line.strip()
-    if 'NO RESULT' in s or s.startswith('unknown ') or 'Traceback (most recent call last)' in s or re.match(r'^Node\.js v\d', s) or re.match(r'^\w*Error: ', s):
+    if 'NO RESULT' in s or s.startswith('unknown ') or 'Traceback (most recent call last)' in s or re.match(r'^Node\.js v\d', s) or re.match(r'^\w*Error: ', s) or re.search(r'Segmentation fault|^Killed\b|: (command )?not found\b|No such file or directory', s):
         bad.append(s[:300])   # a check that stopped: whatever it printed before that is not a result
         continue
     i = s.find('{"passed"')
@@ -54,7 +54,7 @@ for line in text.splitlines():
             d = None
         if d is None:   # a long line cut short: read the two counts
             m = re.search(r'"passed":\s*(\d+),\s*"of":\s*(\d+)', s)
-            d = {'passed': int(m.group(1)), 'of': int(m.group(2))} if m else None
+            d = {'passed': int(m.group(1)), 'of': int(m.group(2)), 'finished': False if re.search(r'"finished":\s*false', s) else None, 'failed': not re.search(r'"failed":\s*\[\s*\]', s) and '"failed"' in s} if m else None
         if d and isinstance(d.get('of'), int):
             checks += d['of']; passed += d.get('passed') or 0
             if d.get('passed') != d['of'] or d['of'] == 0 or d.get('finished') is False or d.get('failed'):
@@ -67,7 +67,9 @@ for line in text.splitlines():
         a, b = int(m.group(2)), int(m.group(3))
         checks += b; passed += a
         label, names = m.group(1).strip(), names_of(m.group(4).strip()) if m.group(4) and m.group(4).startswith(' [') else None
-        if names is None:
+        if b == 0:
+            bad.append(s[:400])   # a check that ran no line has shown nothing
+        elif names is None:
             if a != b:
                 bad.append(s[:400])
         elif a + len(names) != b or (names and not forgiven(label, names)):   # every line short of the count is named, and every name is a known fault
@@ -76,9 +78,11 @@ for line in text.splitlines():
             forgiven(label, names)   # says so when a known fault of this check no longer fails
         continue
 want = COUNTS.get(part) if part else None
-if part and want is None:
+if not part:
+    bad.append('no part was named, so the number of lines was compared with nothing: python3 -I tests/verdict.py <log> <part>')
+elif want is None:
     bad.append('tests/counts.json has no count for the part “%s”' % part)
-elif part and want != checks:
+elif want != checks:
     bad.append('the part “%s” ran %d lines and tests/counts.json says %d: if lines were added or taken out on purpose, write the new count there' % (part, checks, want))
 if checks == 0:
     bad.append('no result at all')
