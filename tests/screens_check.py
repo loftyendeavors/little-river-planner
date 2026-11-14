@@ -87,6 +87,9 @@ def take(pw_browser, url, width, height, wanted):
             page.wait_for_function("LRFApp.state.plan.plantings.length > 600 && !LRFApp.isSample()", timeout=60000); page.wait_for_timeout(6000)
         page.add_style_tag(content=STILL)
         page.evaluate("async () => { await Promise.all([...document.fonts].map(f => f.load().catch(() => null))); await document.fonts.ready; }")
+        # Then everything is drawn again from the plan as it stands. The map measures a garden's name when it draws it: a name
+        # drawn before its typeface was in stays squeezed until the map next draws, about one load in forty on this computer.
+        page.evaluate("LRFApp.emit('plan')"); page.wait_for_timeout(1500)
     except Exception as e:
         errors.append(f"{url} at {width}: the page did not open: {str(e)[:200]}"); ctx.close(); return out
     for name, how, shown, *settle in SCREENS:
