@@ -62,7 +62,7 @@ with sync_playwright() as pw:
         if got is None or len(got): named[where] = got
 
     start = js("return { n: S.plan.plantings.length, label: ($('buildNote') || {}).textContent || '', sample: A.isSample(), key: A.contentKey(), undo: S.undo.length };") or {}
-    check("a plan is open and the build says “Preview 0.39”", start.get("n", 0) > 300 and start.get("label", "").startswith("Preview 0.39 ·") and not start.get("sample"), start)
+    check("a plan is open and the build says “Preview” and its own label", start.get("n", 0) > 300 and start.get("label", "").startswith("Preview %s ·" % (os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)")) and not start.get("sample"), start)
     js("A.setDate(E.s2d('2027-06-15')); return 1;"); wait(400)
 
     # ── the Backup menu ──

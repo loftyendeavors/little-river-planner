@@ -97,7 +97,7 @@ with sync_playwright() as pw:
 
     start = js("return { n: S.plan.plantings.length, undo: S.undo.length, label: txt('buildNote'), dates: FD.read(eng), sample: A.isSample() }")
     year = start["dates"]["year"]; D = start["dates"]["dates"]
-    check("a plan is open, there is nothing to undo, and the build says 0.39", start["n"] > 300 and start["undo"] == 0 and "0.39" in start["label"] and not start["sample"], start)
+    check("a plan is open, there is nothing to undo, and the build says its own label", start["n"] > 300 and start["undo"] == 0 and (os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)") in start["label"] and not start["sample"], start)
     snap0 = js("return snap()"); frost0 = js("return frost()")
     def md(key, n): return page.evaluate("([y, md, n]) => LRFEngine.d2s(LRFEngine.addDays(LRFEngine.s2d(y + '-' + md), n)).slice(5)", [year, D[key], n])
     def word(m): return page.evaluate("m => LRFFarmDates.word(m)", m)

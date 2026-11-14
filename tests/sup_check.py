@@ -37,7 +37,7 @@ with sync_playwright() as pw:
         page.fill(sel, value); page.locator(sel).blur(); wait(); return True
     def undo(): js("A.undo();"); wait()
 
-    check("the build says it is preview 0.39", "0.39" in (js("return ($('buildNote') || {}).textContent || ''") or ""))
+    check("the build says its own label", (os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)") in (js("return ($('buildNote') || {}).textContent || ''") or ""))
     key0 = js("return A.contentKey()")
     js("A.setView('trays'); LRFTraysView.setTab('supplies');"); wait(500)
     check("Supplies is drawn, on the Nursery's own tab", js("return !!$('bnSupplies') && LRFTraysView.tab() === 'supplies'"))

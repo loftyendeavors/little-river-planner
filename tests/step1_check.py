@@ -117,7 +117,7 @@ with sync_playwright() as pw:
     # ═══ A. the app with its own data: names, labels, the one-line lot, wording, the garden ═══
     server_a, url_a = serve(app)
     ctx, page, errors = new_page(browser, url_a)
-    check('the build says 0.39', '0.39' in page.evaluate("document.getElementById('buildNote').textContent"))
+    check('the build says its own label', (os.environ.get('LRF_LABEL') or '(LRF_LABEL is not set)') in page.evaluate("document.getElementById('buildNote').textContent"))
     seen = {}
     for name in ('map', 'timeline', 'sow', 'trays', 'harvest', 'assume', 'seeds'):
         view(page, name)

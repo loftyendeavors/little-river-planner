@@ -11,7 +11,7 @@ from playwright.sync_api import sync_playwright
 target, shots = Path(sys.argv[1]), Path(sys.argv[2]); shots.mkdir(parents=True, exist_ok=True)
 backup = sys.argv[3] if len(sys.argv) > 3 else None
 WIDTH = int(os.environ.get("WIDTH", "1280")); DARK = os.environ.get("DARK") == "1"; STOP = os.environ.get("STOP_AT_FAIL") == "1"
-LABEL = "0.39"
+LABEL = os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)"   # the build's label, as tests/env.sh reads it from the page's own script
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Quiet, directory=str(target)))
@@ -54,7 +54,7 @@ with sync_playwright() as pw:
     def shot(name): page.screenshot(path=str(shots / f"{name}-{WIDTH}.png"))
     key0 = js("return A.contentKey()")
     start = js("return { n: S.plan.plantings.length, undo: S.undo.length, label: txt('buildNote'), view: S.view, fn: typeof A.asksToShare }")
-    check(f"a plan is open on the map with nothing to undo; the build says {LABEL}", start["n"] > 300 and start["undo"] == 0 and LABEL in start["label"] and start["view"] == "map", start)
+    check("a plan is open on the map with nothing to undo; the build says its own label", start["n"] > 300 and start["undo"] == 0 and LABEL in start["label"] and start["view"] == "map", start)
 
     # ══ who is asked, said by the planner itself ══
     who = js("""if (typeof A.asksToShare !== 'function') return { map: null, timeline: {}, harvest: {} }; const on = v => { A.setView(v); return { lib: A.asksToShare({ cropId: 'x' }), variety: A.asksToShare({ cropId: 'x', varietyId: 'y' }), moved: A.asksToShare({ plantingId: 'p' }), copied: A.asksToShare({ plantingId: 'p', copy: true }), waiting: A.asksToShare({ waitingId: 'w' }) }; };
