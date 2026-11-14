@@ -75,18 +75,29 @@ jobs:
     needs: part
     runs-on: ubuntu-24.04
     steps:
+      - name: Every part passed
+        run: test "${{ needs.part.result }}" = "success"
+      # bookkeeping, after the verdict and unable to change it: what every check ran, as tests/counts.json would hold it
       - uses: actions/checkout@v4
+        if: always()
+        continue-on-error: true
       - uses: actions/download-artifact@v4
+        if: always()
+        continue-on-error: true
         with:
           pattern: ran-*
           path: ran
           merge-multiple: true
       - name: What every check ran, as tests/counts.json would hold it
+        if: always()
+        continue-on-error: true
+        shell: bash
         run: python3 -I tests/counts.py ran | tee counts.json
       - uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
         with:
           name: counts
           path: counts.json
+          if-no-files-found: ignore
           retention-days: 7
-      - name: Every part passed
-        run: test "${{ needs.part.result }}" = "success"

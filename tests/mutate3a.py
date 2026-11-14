@@ -59,7 +59,7 @@ NODE = [
  ('using the crop’s nursery weeks throws away everything that was copied', 'js/audit.js', "    const g = p.growingDefaults, crop = { ...g.crop };\n    delete crop.gh;\n    return { ...p, growingDefaults: { ...g, crop } };", "    const q = { ...p }; delete q.growingDefaults; return q;"),
  ('“take” is carried out for a row that cannot give its number', 'js/audit.js', "const choice = pick(r) === 'take' && !r.take ? 'keep' : pick(r), later =", "const choice = pick(r), later ="),
  ('the suggestion lets go a group whose dates would move', 'js/audit.js', "delete r.shifts;\n      r.choice = r.stays ? 'keep' : r.agrees ? 'follow' : r.take ? 'take' : 'keep';", "delete r.shifts;\n      r.choice = r.agrees || !r.take ? 'follow' : 'take';"),
- ('a row the list agrees with today is let go though a line taken beside it would move it', 'js/audit.js', "r.stays = true; r.listDays = new Set(", "r.listDays = new Set("),
+ ('a row the list agrees with today is let go though a line taken beside it would move it', 'js/audit.js', "for (const r of list) r.stays = r.agrees && taking.length > 0 && moves(r);", "for (const r of list) r.stays = false;"),
  ('the preview misses dates that move', 'js/audit.js', "if (first || last || sow) moves.push({ id: p.id, first, last, sow });", "if (first > 0) moves.push({ id: p.id, first, last, sow });"),
  ('plantings on a guessed start are not counted', 'js/audit.js', "t.activeMode === 'catalog' && t.basisBy === 'guess'; });", "t.activeMode === 'catalog' && t.basisBy === 'never'; });"),
  ('plantings that agree with the list are not counted as agreeing', 'js/audit.js', "for (const p of o.days) if (same(eng.calc(p), bare.calc(bare.planting(p.id)))) agree++;", "for (const p of o.days) if (false) agree++;"),

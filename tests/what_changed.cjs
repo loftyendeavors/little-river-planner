@@ -52,7 +52,7 @@ check('no script is gone that the build does not name', gone.every(f => named('r
 const differ = a.filter(f => b.includes(f) && read(JS, f) !== read(JS0, f));
 const unnamed = differ.filter(f => !named('words').includes(f) && !named('code').includes(f));
 check('every script the build does not name is the file of the build before, byte for byte', b.length > 0 && unnamed.length === 0, unnamed);
-const wordsOnly = differ.filter(f => named('words').includes(f));
+const wordsOnly = differ.filter(f => named('words').includes(f)), notWords = [];
 if (wordsOnly.length) {
   let acorn = null;
   try { acorn = require(path.join(MODS, 'node_modules/acorn')); } catch (error) { check('the parser is there (npm i acorn in the scratch folder)', false, String(error.message)); }
@@ -65,9 +65,11 @@ if (wordsOnly.length) {
   for (const f of wordsOnly) {
     let same = false, why = null;
     try { same = !!acorn && shape(read(JS, f)) === shape(read(JS0, f)); } catch (error) { why = String(error.message); }
-    check(`${f}: only the text inside its strings differs from the build before`, same, why);
+    if (!same) notWords.push(why ? `${f}: ${why}` : f);
   }
 }
+// one line whatever the number of scripts, so that this check runs as many lines for one build as for the next
+check('in every script named under “words”, only the text inside its strings differs from the build before', notWords.length === 0, notWords);
 // the rest of what a browser is served
 const walk = (root, rel) => { const at = path.join(root, rel); if (!fs.existsSync(at)) return []; return fs.statSync(at).isDirectory() ? fs.readdirSync(at).sort().flatMap(f => walk(root, path.join(rel, f))) : [rel]; };
 const PAGE = ['index.html', 'sw.js', 'manifest.webmanifest', 'css', 'fonts', 'icons'];

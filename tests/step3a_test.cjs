@@ -15,6 +15,7 @@ const raw = JSON.parse(fs.readFileSync(PLAN, 'utf8')), core = raw.format ? IO.un
 const clone = x => JSON.parse(JSON.stringify(x)), FIG = global.FIG = {};
 const eng = E.create(core, Lib);
 const sameDay = (a, b) => (a == null && b == null) || (a != null && b != null && +a === +b);
+const SHUFFLES = 6;
 const sameCalc = (a, b) => !!a && !!b && sameDay(a.first, b.first) && sameDay(a.last, b.last) && sameDay(a.sow, b.sow);
 const withStarts = (starts, extra) => E.create({ ...core, assumptions: { v: 1, crops: {}, varieties: {}, ...(extra || {}), starts } }, Lib);
 const withPlan = change => E.create({ ...core, ...change }, Lib);
@@ -150,6 +151,20 @@ check('suggested: follow where the list already gives the number, take where it 
     check('so what is suggested for such a pair moves no date', pv2.moves.length === 0 && plan2.plantings.every(p => sameCalc(eng2.calc(p), pv2.engine.calc(pv2.engine.planting(p.id)))), pv2.moves.slice(0, 3));
     check('and letting that planting follow the list is shown to move it', !!rowA && A.preview(plan2, Lib, A.build(plan2, s2.rows, { [rowA.key]: 'follow' }).ops, eng2).moves.some(m => m.id === one.id));
   }
+}
+// whatever figures the plantings carry, what is suggested moves no date: the plan with its figures shuffled several ways
+{
+  let seed = 20261114; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const able = P.filter(p => !isTray(p) && !isDone(p) && eng.calc(p) && eng.envOf(eng.bedOf(p.bedId))), bad = [], sizes = [];
+  for (let k = 0; k < SHUFFLES; k++) {
+    const pick = new Map(able.filter(() => rnd() < 0.3).map(p => [p.id, Math.max(1, eng.effective(p).dtm + [0, 0, 5, 9, -4][Math.floor(rnd() * 5)])]));
+    const planK = { ...core, plantings: P.map(p => pick.has(p.id) ? { ...p, dtm: pick.get(p.id), timingMode: 'manual' } : p) };
+    const engK = E.create(planK, Lib), sK = study3a(planK, Lib), pvK = A.preview(planK, Lib, A.build(planK, sK.rows, {}).ops, engK);
+    sizes.push({ rows: sK.rows.length, take: sK.rows.filter(r => r.choice === 'take').length, stays: sK.rows.filter(r => r.stays).length });
+    if (pvK.moves.length) bad.push({ shuffle: k, moved: pvK.moves.length, first: pvK.moves[0] });
+  }
+  FIG.shuffles = sizes;
+  check('whatever figures the plantings carry, what is suggested moves no date (the plan with its figures shuffled ' + SHUFFLES + ' ways)', sizes.length === SHUFFLES && sizes.every(s => s.take > 0) && bad.length === 0, bad.slice(0, 3));
 }
 if (pinnedOpen.length) {
   const step = A.build(core, st.rows, {}), pv = A.preview(core, Lib, step.ops, eng), after = A.apply(core, step.ops), e2 = pv.engine;

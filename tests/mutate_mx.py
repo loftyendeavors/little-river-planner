@@ -1,7 +1,7 @@
 """Deliberate faults for previews 0.35 and 0.36 (the bed panel build, stage c: mixed beds): each is put into a copy, and a named check must fail.
 usage: python3 -I mutate_mx.py <app> <scratch> <tests-dir> [page | list] [words…]     env FROM=, TO= to run a part
 page: against mixed_check.py (about a minute each). list: how many faults there are, and nothing else.
-(The node mode ran mixed_test.cjs, the proof of one past build. That proof is retired, tests/what_changed.cjs with tests/this-build.json does its work, and the mode is taken out.)
+(The node mode ran mixed_test.cjs, the proof of one past build. That proof is retired, tests/what_changed.cjs with the build’s file under tests/builds does its work, and the mode is taken out.)
 """
 import json, os, shutil, signal, subprocess, sys, time
 from pathlib import Path

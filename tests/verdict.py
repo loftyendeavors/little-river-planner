@@ -28,9 +28,9 @@ except FileNotFoundError:
 checks = passed = 0
 bad = []
 ran, slot = [], None   # [name, lines] for each result in the order it came; slot is the last result b.sh has not yet signed
-def count(name, lines):
+def count(name, lines, own=False):
     global slot
-    ran.append([name or '(a result with no name)', lines]); slot = len(ran) - 1
+    ran.append([name or '(a result with no name)', lines]); slot = None if own else len(ran) - 1   # a result that says its own name ("named", in env.sh) keeps it
 try:
     KNOWN = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'known-faults.json'), encoding='utf-8'))
 except FileNotFoundError:
@@ -72,7 +72,7 @@ for line in text.splitlines():
             d = {'check': (re.search(r'"check":\s*"([^"]*)"', s) or [None, None])[1], 'passed': int(m.group(1)), 'of': int(m.group(2)), 'finished': False if re.search(r'"finished":\s*false', s) else None, 'failed': not re.search(r'"failed":\s*\[\s*\]', s) and '"failed"' in s} if m else None
         if d and isinstance(d.get('of'), int):
             checks += d['of']; passed += d.get('passed') or 0
-            count(d.get('check') or d.get('name') or s[:i].strip(), d['of'])
+            count(d.get('check') or d.get('name') or s[:i].strip(), d['of'], own=bool(d.get('check')))
             if d.get('passed') != d['of'] or d['of'] == 0 or d.get('finished') is False or d.get('failed'):
                 bad.append(s[:400])
             continue

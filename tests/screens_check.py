@@ -4,22 +4,29 @@ is seen without anyone having to look for it.
 usage: python3 -I screens_check.py <the built site> <the build before, as setup.sh unpacked it> <backup.zip> <shots-dir> <the repository>
 
 Both builds are served side by side, load the same made-up farm on the same pretended day, and are photographed screen by
-screen. A screen that looks different fails its line, unless the build names it under "screens" in its file under tests/builds
-(tests/README.md, "What a build changed"): then it has to look different, so the list cannot be longer than the truth.
-This build is photographed twice, and a screen that differs between those two takes fails too: a picture that does not hold
-still can prove nothing. The pictures of every screen that differs are kept in the shots folder: before, now, and the two side by
-side with what changed boxed in red.
+screen, each of them twice. A screen that looks different fails its line, unless the build names it under "screens" in its
+file under tests/builds (tests/README.md, "What a build changed"): then it has to look different at one width at least, so
+the list cannot be longer than the truth. The pictures of every screen that differs are kept in the shots folder: before, now,
+and the two side by side with what changed boxed in red.
+
+Two takes of one build are not the same picture to the last pixel: the edge of a rounded corner or of a curve comes out a
+few levels lighter or darker from one take to the next. So each build is photographed twice, and what differs between two
+takes of the same build is set aside, with the pixels round it, before the two builds are compared. Where a great deal
+differs between two takes (a clock, something still loading) the screen fails as not holding still, since such a picture can
+prove nothing.
 
 What this cannot see: anything that needs a click or a drag to appear (a panel, a menu, a window), what lies below the first
-screenful, a change of colour too slight to see (under 5 levels in 255), a change of fewer than nine pixels, and whether a
-change is an improvement. It answers one question: did this screen change, yes or no.
+screenful, a change of colour too slight to see (under 5 levels in 255), a change of fewer than nine pixels, a change that
+falls wholly on the few pixels that do not hold still, and whether a change is an improvement. It answers one question: did
+this screen change, yes or no.
 """
 import functools, http.server, io, json, os, sys, threading
 from pathlib import Path
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 from playwright.sync_api import sync_playwright
 now_dir, old_dir, backup, shots, repo = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4]), Path(sys.argv[5])
 shots.mkdir(parents=True, exist_ok=True)
+for stale in list(shots.glob("*.png")) + list(shots.glob("changed.json")): stale.unlink()   # what is kept is this run's and nothing older
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 def serve(folder):
@@ -42,20 +49,22 @@ for f in sorted((repo / "tests" / "builds").glob("*.json")):
     try: named.update(json.loads(f.read_text(encoding="utf-8")).get("screens") or [])
     except Exception as e: errors.append(f"{f.name}: {e}")
 
-# The screens, by the name a build uses for them, and how each is opened. The pretended day is in the middle of the season,
-# so that the map has crops in the ground and Tasks has a week of work.
+# The screens, by the name a build uses for them: how each is opened, and how to tell that it is the one on show. The pretended
+# day is in the middle of the season, so that the map has crops in the ground and Tasks has a week of work.
+VIEW = "document.body.dataset.view"
+MODE = "(document.querySelector('.view-assume') || { dataset: {} }).dataset.mode"
 SCREENS = [
-    ("map", "A.setView('map'); A.select(null);"),
-    ("timeline", "A.setView('timeline');"),
-    ("forecast", "A.setView('harvest');"),
-    ("tasks", "A.setView('sow');"),
-    ("nursery-bench-room", "A.setView('trays'); LRFTraysView.setTab('room');"),
-    ("nursery-live-trays", "A.setView('trays'); LRFTraysView.setTab('live');"),
-    ("nursery-supplies", "A.setView('trays'); LRFTraysView.setTab('supplies');"),
-    ("nursery-set-up", "A.setView('trays'); LRFTraysView.setTab('setup');"),
-    ("seeds", "A.setView('seeds');"),
-    ("assumptions-days", "A.setView('assume'); const d = document.querySelector('[data-as-mode=days]'); if (d) d.click();"),
-    ("assumptions-yield", "A.setView('assume'); const y = document.querySelector('[data-as-mode=harvest]'); if (y) y.click();"),
+    ("map", "A.setView('map'); A.select(null);", f"{VIEW} === 'map'"),
+    ("timeline", "A.setView('timeline');", f"{VIEW} === 'timeline'"),
+    ("forecast", "A.setView('harvest');", f"{VIEW} === 'harvest'"),
+    ("tasks", "A.setView('sow');", f"{VIEW} === 'sow'"),
+    ("nursery-bench-room", "A.setView('trays'); LRFTraysView.setTab('room');", f"{VIEW} === 'trays' && LRFTraysView.tab() === 'room'"),
+    ("nursery-live-trays", "A.setView('trays'); LRFTraysView.setTab('live');", f"{VIEW} === 'trays' && LRFTraysView.tab() === 'live'"),
+    ("nursery-supplies", "A.setView('trays'); LRFTraysView.setTab('supplies');", f"{VIEW} === 'trays' && LRFTraysView.tab() === 'supplies'"),
+    ("nursery-set-up", "A.setView('trays'); LRFTraysView.setTab('setup');", f"{VIEW} === 'trays' && LRFTraysView.tab() === 'setup'"),
+    ("seeds", "A.setView('seeds');", f"{VIEW} === 'seeds'"),
+    ("assumptions-days", "A.setView('assume'); document.querySelector('[data-as-mode=days]').click();", f"{VIEW} === 'assume' && {MODE} !== 'harvest'"),
+    ("assumptions-yield", "A.setView('assume'); document.querySelector('[data-as-mode=harvest]').click();", f"{VIEW} === 'assume' && {MODE} === 'harvest'"),
 ]
 SIZES = [(1707, 960, [s[0] for s in SCREENS]), (3440, 1300, [s[0] for s in SCREENS]), (390, 800, ["tasks"])]   # a laptop, a wide desktop, a phone (which shows Tasks and nothing else)
 unknown = sorted(named - {s[0] for s in SCREENS})
@@ -65,7 +74,7 @@ FAKE = "(() => { const R = Date, off = new R(2027, 5, 9, 10).getTime() - R.now()
 STILL = "*, *::before, *::after { transition: none !important; animation: none !important; caret-color: transparent !important; scroll-behavior: auto !important; }"
 
 def take(pw_browser, url, width, height, wanted):
-    """Every wanted screen of one build at one size: {name: PNG bytes}, or {} with a reason in errors."""
+    """Every wanted screen of one build at one size: {name: PNG bytes}. A screen that did not open is left out, with why in errors."""
     out = {}
     ctx = pw_browser.new_context(viewport={"width": width, "height": height}, color_scheme="light", device_scale_factor=1)
     page = ctx.new_page(); page.add_init_script(FAKE)
@@ -77,10 +86,14 @@ def take(pw_browser, url, width, height, wanted):
             if page.locator("dialog[open] .btn.primary").count(): page.locator("dialog[open] .btn.primary").click()
             page.wait_for_function("LRFApp.state.plan.plantings.length > 600 && !LRFApp.isSample()", timeout=60000); page.wait_for_timeout(6000)
         page.add_style_tag(content=STILL)
-        for name, how in SCREENS:
-            if name not in wanted: continue
+    except Exception as e:
+        errors.append(f"{url} at {width}: the page did not open: {str(e)[:200]}"); ctx.close(); return out
+    for name, how, shown in SCREENS:
+        if name not in wanted: continue
+        try:   # one screen that fails to open does not take the others with it
             page.evaluate("(() => { const A = LRFApp; " + how + " })()")
             page.wait_for_timeout(1200)
+            if not page.evaluate("(() => " + shown + ")()"): errors.append(f"{name} at {width}: another screen is on show"); continue
             # pictures and typefaces in, toasts gone, nothing left to draw
             page.evaluate("""async () => {
                 await document.fonts.ready;
@@ -91,25 +104,26 @@ def take(pw_browser, url, width, height, wanted):
             }""")
             page.mouse.move(0, 0)
             out[name] = page.screenshot(full_page=False, animations="disabled", caret="hide")
-    except Exception as e:
-        errors.append(f"{url} at {width}: {str(e)[:200]}")
+        except Exception as e:
+            errors.append(f"{name} at {width}: {str(e)[:200]}")
     ctx.close()
     return out
 
-NOISE = 8
-def differs(a, b):
-    """None when two pictures are the same; else how many pixels differ and the box they lie in."""
-    x, y = Image.open(io.BytesIO(a)).convert("RGB"), Image.open(io.BytesIO(b)).convert("RGB")
-    if x.size != y.size: return {"pixels": -1, "box": None, "sizes": [x.size, y.size]}
-    r, g, b_ = ImageChops.difference(x, y).split()
-    # a pixel differs when one of its three colours is off by more than 4 in 255: the edge of a rounded corner comes out a
-    # level lighter or darker from one take to the next, which no eye can see and no layout causes
-    far = ImageChops.lighter(ImageChops.lighter(r, g), b_).point(lambda v: 255 if v > 4 else 0)
-    box, n = far.getbbox(), far.histogram()[255]
-    # and two pictures differ when more than 8 pixels do: on a screen of four million, a pixel or two of a photograph scaled to
-    # fit comes out differently from one take to the next (seen on GitHub: one pixel of the map at 3440 wide)
-    if not box or n <= NOISE: return None
-    return {"pixels": n, "box": list(box)}
+LEVELS, NOISE, SHAKE = 4, 8, 150
+def far(a, b):
+    """Where two pictures of one size differ by more than LEVELS in 255 in one of their three colours: white there, black elsewhere."""
+    r, g, b_ = ImageChops.difference(a, b).split()
+    return ImageChops.lighter(ImageChops.lighter(r, g), b_).point(lambda v: 255 if v > LEVELS else 0)
+count = lambda mask: mask.histogram()[255]
+def compare(was, now):
+    """was and now are two takes each. Returns ("same" | "differs" | "shakes", detail)."""
+    a1, a2, b1, b2 = [Image.open(io.BytesIO(x)).convert("RGB") for x in (*was, *now)]
+    if len({a1.size, a2.size, b1.size, b2.size}) > 1: return "differs", {"sizes": [a1.size, b1.size]}
+    own = ImageChops.lighter(far(a1, a2), far(b1, b2))   # what does not hold still between two takes of one build
+    if count(own) > SHAKE: return "shakes", {"two takes of one build differ, so nothing can be said": {"pixels": count(own), "box": list(own.getbbox())}}
+    seen = ImageChops.multiply(far(a1, b1), ImageChops.invert(own.filter(ImageFilter.MaxFilter(5))))   # with those pixels, and the two round each, set aside
+    if count(seen) <= NOISE: return "same", None
+    return "differs", {"pixels": count(seen), "box": list(seen.getbbox())}
 def keep(name, width, a, b, box):
     x, y = Image.open(io.BytesIO(a)).convert("RGB"), Image.open(io.BytesIO(b)).convert("RGB")
     x.save(shots / f"{name}-{width}-before.png"); y.save(shots / f"{name}-{width}-now.png")
@@ -120,21 +134,20 @@ def keep(name, width, a, b, box):
     side.save(shots / f"{name}-{width}-side-by-side.png")
 
 with sync_playwright() as pw:
-    browser = pw.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox", "--font-render-hinting=none", "--disable-lcd-text"])
+    browser = pw.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox", "--font-render-hinting=none", "--disable-lcd-text", "--num-raster-threads=1"])
     url_now, url_old = serve(now_dir), serve(old_dir)
     check("the build names only screens this check knows", not unknown, unknown)
     changed, got = [], {}
     for width, height, wanted in SIZES:
-        was, now, again = take(browser, url_old, width, height, wanted), take(browser, url_now, width, height, wanted), take(browser, url_now, width, height, wanted)
+        was = [take(browser, url_old, width, height, wanted) for _ in (1, 2)]
+        now = [take(browser, url_now, width, height, wanted) for _ in (1, 2)]
         for name in wanted:
-            if name not in was or name not in now or name not in again: got[(name, width)] = ("none", "no picture was taken: " + "; ".join(errors[-2:])); continue
-            shake = differs(now[name], again[name])
-            if shake:
-                (shots / f"{name}-{width}-take-1.png").write_bytes(now[name]); (shots / f"{name}-{width}-take-2.png").write_bytes(again[name])
-                got[(name, width)] = ("shakes", {"the same build photographed twice gave two pictures, so nothing can be said": shake}); continue
-            diff = differs(was[name], now[name])
-            if diff: keep(name, width, was[name], now[name], diff.get("box")); changed.append(f"{name} at {width}")
-            got[(name, width)] = ("differs" if diff else "same", diff)
+            if any(name not in t for t in was + now): got[(name, width)] = ("none", "no picture was taken: " + "; ".join(e for e in errors if name in e or "did not open" in e)[-400:]); continue
+            state, detail = compare([t[name] for t in was], [t[name] for t in now])
+            if state == "shakes":
+                for i, t in enumerate(was + now): (shots / f"{name}-{width}-{'before' if i < 2 else 'now'}-take-{i % 2 + 1}.png").write_bytes(t[name])
+            if state == "differs": keep(name, width, was[0][name], now[0][name], detail.get("box")); changed.append(f"{name} at {width}")
+            got[(name, width)] = (state, detail)
     # A screen the build does not name looks the same at every width. One it names looks different at one width at least.
     for (name, width), (state, detail) in got.items():
         if name in named:

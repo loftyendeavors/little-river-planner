@@ -24,7 +24,12 @@ def gone(js, said, free): (js / free).unlink()
 def unread(js, said, free): said.clear(); said["unreadable"] = True
 # a build may itself name the style sheet or the page: then the fault goes into a served file it does not name
 def styles(js, said, free): f = js.parent / "css" / ("app.css" if "css/app.css" not in (said.get("page") or []) else "one-more.css"); f.write_text((f.read_text(encoding="utf-8") if f.exists() else "") + "\n/* one rule more */\n", encoding="utf-8")
-def page(js, said, free): f = js.parent / next(n for n in ("index.html", "sw.js", "manifest.webmanifest") if n not in (said.get("page") or [])); f.write_text(f.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+def page(js, said, free):
+    name = next((n for n in ("index.html", "sw.js", "manifest.webmanifest") if n not in (said.get("page") or [])), None)
+    f = js.parent / (name or "icons/one-more.txt"); f.write_text((f.read_text(encoding="utf-8") if f.exists() else "") + "\n", encoding="utf-8")
+def spoke(js, said, free):   # a file an earlier build left names a script, in the build before and now alike, and this build changes that script without naming it
+    for root in (js.parent, scratch / "changed-before"): (root / "tests" / "builds" / EARLIER).write_text(json.dumps({"build": "an earlier build", "code": [free]}), encoding="utf-8")
+    (js / free).write_text((js / free).read_text(encoding="utf-8") + "\n;void 0;\n", encoding="utf-8")
 def second(js, said, free): (js.parent / "tests" / "builds" / "one-more.json").write_text(json.dumps({"build": "another", "code": [free]}), encoding="utf-8"); (js / free).write_text((js / free).read_text(encoding="utf-8") + "\n;void 0;\n", encoding="utf-8")
 def rewrote(js, said, free): (js.parent / "tests" / "builds" / EARLIER).write_text(json.dumps({"build": "an earlier build, rewritten", "code": [free]}), encoding="utf-8")
 def under(js, said, free): (js / "more").mkdir(); (js / "more" / "extra.js").write_text("window.extra = 1;\n", encoding="utf-8")
@@ -42,6 +47,7 @@ FAULTS = [
  ("the page is changed and the build does not name it", page, "every other file a browser is served"),
  ("a second file under tests/builds speaks for the build, and names a script it changes", second, "one file of its own"),
  ("a file an earlier build left under tests/builds is written again", rewrote, "as they left them"),
+ ("a file an earlier build left names a script this build changes, and this build does not", spoke, "byte for byte"),
  ("a script is put in a folder under js/ and the build does not name it", under, "every other file a browser is served"),
  ("a file of another kind is put beside the scripts and the build does not name it", kind, "every other file a browser is served"),
  ("another page is put at the root of the site and the build does not name it", root, "every other file a browser is served"),

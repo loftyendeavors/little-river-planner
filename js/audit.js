@@ -138,20 +138,28 @@
         if (off.every(d => Number.isFinite(d) && d === off[0]) && off[0] !== 0 && !c.tuned) { c.typed += off[0]; c.tuned = true; } else if (c.level === 'crop' && r.varietyId) { c.level = 'variety'; c.typed = r.days; c.tuned = false; } else c.dead = true;
       }
     }
-    for (const c of cand) if (c.ok) c.row.take = { level: c.level, id: c.level === 'crop' ? c.row.cropId : c.row.varietyId, env: c.row.env, typed: c.typed };
-    // A row that carries what the list gives today is not let go where a line taken above would change what the list gives it:
-    // one variety with two figures on its plantings, one of them the crop's own. Let go, it would move. It stays as it is.
-    if (cand.some(c => c.ok)) {
+    // What is suggested has to move nothing when it is taken as a whole, so the lines are tried together once more, as they
+    // would be written. One line of the list holds one number: where two rows would write two numbers on one line, the row
+    // with more plantings has it. A row whose own plantings would then move keeps its figures. And a row that carries what
+    // the list gives today is not let go where a line taken beside it changes what the list gives it (one variety with two
+    // figures on its plantings, one of them the crop's own): let go, it would move. It stays as it is.
+    const lineOf = c => [c.level, c.level === 'crop' ? c.row.cropId : c.row.varietyId, c.row.env].join('|');
+    for (let round = 0; round < 8; round++) {
+      const taking = cand.filter(c => c.ok);
+      const wins = new Map();
+      for (const c of taking) { const k = lineOf(c), w = wins.get(k); if (!w || c.row.ids.length > w.row.ids.length) wins.set(k, c); }
+      const lost = taking.filter(c => wins.get(lineOf(c)) !== c && wins.get(lineOf(c)).typed !== c.typed);
+      if (lost.length) { for (const c of lost) c.ok = false; continue; }
       const next = clone(plan.assumptions) || { v: 1, crops: {}, varieties: {} };
-      for (const c of cand) if (c.ok) entry(next, c.level, c.level === 'crop' ? c.row.cropId : c.row.varietyId, c.row.env, c.typed);
+      for (const c of taking) entry(next, c.level, c.level === 'crop' ? c.row.cropId : c.row.varietyId, c.row.env, c.typed);
       const sim = E.create({ ...plan, assumptions: next, plantings: plan.plantings.map(p => ids.has(p.id) ? freed(p) : p) }, Lib);
-      for (const r of list) {
-        if (!r.agrees) continue;
-        const then = r.ids.map(id => ({ a: eng.calc(eng.planting(id)), b: sim.calc(sim.planting(id)), e: sim.effective(sim.planting(id)) }));
-        if (then.every(x => same(x.a, x.b))) continue;
-        r.stays = true; r.listDays = new Set(then.map(x => x.e ? x.e.dtm : NaN).filter(Number.isFinite));
-      }
+      const moves = r => !r.ids.every(id => same(eng.calc(eng.planting(id)), sim.calc(sim.planting(id))));
+      const moved = taking.filter(c => moves(c.row));
+      if (moved.length) { for (const c of moved) c.ok = false; continue; }
+      for (const r of list) r.stays = r.agrees && taking.length > 0 && moves(r);
+      break;
     }
+    for (const c of cand) c.row.take = c.ok ? { level: c.level, id: c.level === 'crop' ? c.row.cropId : c.row.varietyId, env: c.row.env, typed: c.typed } : null;
     for (const r of list) {
       r.listDays = [...r.listDays].sort((a, b) => a - b); r.shift = [Math.min(...r.shifts), Math.max(...r.shifts)]; delete r.shifts;
       r.choice = r.stays ? 'keep' : r.agrees ? 'follow' : r.take ? 'take' : 'keep';

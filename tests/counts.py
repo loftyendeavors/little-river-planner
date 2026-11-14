@@ -6,6 +6,11 @@
 tests/verdict.py writes a ran-<part>.json when it is given a third argument. On GitHub every part keeps its own, and the last
 job ("All checks") prints them put together and keeps the result as "counts": a build that added or took out lines copies its
 checks' new numbers from there. A part that was not run keeps the counts it had.
+
+The file is laid out for two builds made side by side: one check a line, in the order of their names, with a line left empty
+between two. Two builds that change two different checks then change two different places of the file, and git puts the two
+together by itself. Two builds that change the same check both write its line, and so do two that each add a check whose name
+falls in the same gap: whichever merges second writes that line again from its own run.
 """
 import glob, json, os, sys
 here = os.path.dirname(os.path.abspath(__file__))
@@ -20,7 +25,11 @@ for f in sorted(glob.glob(os.path.join(sys.argv[1], 'ran-*.json'))):
 if not ran:
     sys.exit('no ran-<part>.json in %s' % sys.argv[1])
 out = {part: ran.get(part, have.get(part)) for part in ORDER + sorted(p for p in {**have, **ran} if p not in ORDER) if part in ran or part in have}
-text = json.dumps(out, ensure_ascii=False, indent=1) + '\n'
+def lay(counts):
+    if not isinstance(counts, dict): return json.dumps(counts)
+    return '{\n\n' + ',\n\n'.join('  %s: %d' % (json.dumps(k, ensure_ascii=False), counts[k]) for k in sorted(counts)) + '\n\n }'
+text = '{\n' + ',\n'.join(' %s: %s' % (json.dumps(p), lay(c)) for p, c in out.items()) + '\n}\n'
+json.loads(text)
 if len(sys.argv) > 2 and sys.argv[2] == 'write':
     open(os.path.join(here, 'counts.json'), 'w', encoding='utf-8').write(text)
     print('tests/counts.json written: %s' % ', '.join('%s %d' % (p, sum(c.values())) for p, c in out.items() if isinstance(c, dict)))

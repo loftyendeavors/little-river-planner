@@ -346,7 +346,7 @@
     }
     /**
      * Printed catalog days converted to days from the field date.
-     * When the variety states no starting point,
+     * When the variety does not say where its days are counted from,
      * the supplier page text is searched for "from sowing" / "from transplant"
      * and the match decides. That guess can be wrong (a page that says "weeks
      * from sowing to transplant" reads as a seed clock), so the result records
@@ -491,7 +491,7 @@
     }
     /**
      * One cell of the list: days to harvest for a crop (or one of its varieties) in one growing condition.
-     * `fallback` is what the planner uses when the grower has set nothing, before any month adjustment.
+     * `fallback` is what the planner uses when the grower has set nothing.
      */
     function timingFor(cropId, varietyId, env) {
       const bed = (S.beds || []).find(b => b.active !== false && envOf(b) === env && !isRack(b) && !isCt(b)) || (S.beds || []).find(b => b.active !== false && envOf(b) === env);

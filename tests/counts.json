@@ -1,184 +1,347 @@
 {
  "node": {
-  "what the build changed": 18,
-  "the made-up farm": 7,
-  "rockwool": 13,
-  "step1, backup": 35,
-  "step1, compact": 35,
-  "step3a, backup": 75,
-  "step3a, compact": 75,
-  "step3b, backup": 98,
-  "step3b, compact": 96,
-  "step5a, backup": 57,
-  "step5a, compact": 57,
-  "step5b, backup": 70,
-  "step5b, compact": 70,
-  "succession": 31,
-  "waiting, backup": 54,
-  "waiting, compact": 54,
-  "stepF, backup": 74,
-  "stepF, compact": 74,
-  "look-a, backup": 15,
-  "look-a, compact": 15,
-  "rails": 31,
+
   "assume": 12,
-  "map geometry": 81,
-  "page reader": 29,
+
   "fetch service": 26,
+
+  "look-a, backup": 15,
+
+  "look-a, compact": 15,
+
+  "map geometry": 81,
+
+  "page reader": 29,
+
+  "rails": 31,
+
+  "rockwool": 13,
+
+  "step1, backup": 35,
+
+  "step1, compact": 35,
+
+  "step3a, backup": 75,
+
+  "step3a, compact": 75,
+
+  "step3b, backup": 98,
+
+  "step3b, compact": 96,
+
+  "step5a, backup": 57,
+
+  "step5a, compact": 57,
+
+  "step5b, backup": 70,
+
+  "step5b, compact": 70,
+
+  "stepF, backup": 74,
+
+  "stepF, compact": 74,
+
+  "succession": 31,
+
+  "sync client": 63,
+
   "sync service": 112,
-  "sync client": 63
+
+  "the made-up farm": 7,
+
+  "waiting, backup": 54,
+
+  "waiting, compact": 54,
+
+  "what the build changed": 18
+
  },
  "build": {
+
   "offline": 1,
+
   "sync client, built site": 63
+
  },
  "app1": {
+
   "ahead": 49,
+
   "core": 20,
-  "sowing": 24,
-  "trays": 31,
-  "step1": 66,
+
   "folder": 14,
-  "step2a": 50
+
+  "sowing": 24,
+
+  "step1": 66,
+
+  "step2a": 50,
+
+  "trays": 31
+
  },
  "app2": {
+
   "f018": 30,
-  "step2b": 105,
+
   "maint": 55,
-  "sync": 87,
+
+  "step2b": 105,
+
   "step3a": 64,
-  "step3b": 67
+
+  "step3b": 67,
+
+  "sync": 87
+
  },
  "app3": {
-  "wide": 28,
-  "step5a": 65,
-  "step5b": 63,
-  "stepF": 47,
-  "plain": 47,
-  "r1": 66,
-  "bedpanel": 59,
-  "mixed": 61,
-  "season": 54,
-  "photo": 13,
+
   "ask": 33,
+
+  "bedpanel": 59,
+
   "cleanup": 27,
-  "look": 32
+
+  "look": 32,
+
+  "mixed": 61,
+
+  "photo": 13,
+
+  "plain": 47,
+
+  "r1": 66,
+
+  "season": 54,
+
+  "step5a": 65,
+
+  "step5b": 63,
+
+  "stepF": 47,
+
+  "wide": 28
+
  },
  "app4": {
-  "mapgeo": 81,
+
   "map": 348,
+
   "map-views": 62,
+
+  "mapgeo": 81,
+
   "r1 @1480": 66
+
  },
  "new": {
-  "sup": 25,
+
   "importer": 30,
-  "sup @1480": 25,
+
   "importer @1480": 30,
-  "sup @3440": 25,
+
   "importer @3440": 30,
-  "sup-site": 25,
+
   "importer-site": 30,
-  "sup-site @1480": 25,
-  "importer-site @1480": 30
+
+  "importer-site @1480": 30,
+
+  "sup": 25,
+
+  "sup @1480": 25,
+
+  "sup @3440": 25,
+
+  "sup-site": 25,
+
+  "sup-site @1480": 25
+
  },
  "off": {
+
   "ahead-off": 49,
+
   "core-off": 20,
-  "sowing-off": 24,
-  "trays-off": 31,
-  "step2a-off": 50,
+
   "f018-off": 30,
+
+  "map-off": 87,
+
+  "sowing-off": 24,
+
+  "step2a-off": 50,
+
   "step2b-off": 105,
-  "map-off": 87
+
+  "trays-off": 31
+
  },
  "site1": {
+
   "carry": 9,
+
   "site": 3,
+
   "step3a-site": 64,
+
   "step3b-site": 67,
-  "wide-site": 28,
-  "step5a-site": 65
+
+  "step5a-site": 65,
+
+  "wide-site": 28
+
  },
  "site2": {
-  "step5b-site": 63,
-  "stepF-site": 47,
+
   "plain-site": 47,
+
   "r1-site": 66,
+
+  "step5b-site": 63,
+
+  "stepF-site": 47,
+
   "sync-site": 87,
+
   "tour": 4
+
  },
  "site3": {
+
   "map-site": 348,
+
   "map-views-site": 22
+
  },
  "site4": {
-  "step3a-site @1480 dark": 64,
-  "step3b-site @1480 dark": 67,
+
+  "r1-site @1480": 66,
+
   "step3a-site @1480": 64,
+
+  "step3a-site @1480 dark": 64,
+
   "step3b-site @1480": 67,
+
+  "step3b-site @1480 dark": 67,
+
   "step5a-site @1480": 65,
+
   "step5b-site @1480": 63,
-  "stepF-site @1480": 47,
-  "r1-site @1480": 66
+
+  "stepF-site @1480": 47
+
  },
  "site5": {
-  "step3a-site dark": 64,
-  "step3b-site dark": 67,
-  "step5a-site dark": 65,
-  "step5b-site dark": 63,
-  "stepF-site dark": 47,
+
+  "r1-site @3440": 66,
+
   "r1-site dark": 66,
+
+  "step3a-site dark": 64,
+
+  "step3b-site dark": 67,
+
+  "step5a-site dark": 65,
+
+  "step5b-site dark": 63,
+
   "stepF-site @3440": 47,
-  "r1-site @3440": 66
+
+  "stepF-site dark": 47
+
  },
  "site6": {
-  "bedpanel-site": 59,
-  "bedpanel-site @1707": 59,
-  "bedpanel-site @3440": 59,
+
   "bedpanel @1707": 59,
+
+  "bedpanel-site": 59,
+
+  "bedpanel-site @1707": 59,
+
+  "bedpanel-site @3440": 59,
+
   "look-site": 32,
+
   "look-site @1707": 32,
+
   "look-site @3440": 32
+
  },
  "site7": {
-  "mixed-site": 63,
-  "mixed-site @1707": 63,
-  "mixed-site @3440": 63,
+
   "mixed @1707": 61,
-  "mixed @3440": 61
+
+  "mixed @3440": 61,
+
+  "mixed-site": 63,
+
+  "mixed-site @1707": 63,
+
+  "mixed-site @3440": 63
+
  },
  "site8": {
-  "season-site": 54,
+
   "photo-site": 13,
+
   "season @1480": 54,
-  "season-site @1480": 54,
+
   "season @1707": 54,
-  "season-site @1707": 54,
+
   "season @3440": 54,
+
+  "season-site": 54,
+
+  "season-site @1480": 54,
+
+  "season-site @1707": 54,
+
   "season-site @3440": 54,
+
   "season-site dark": 54
+
  },
  "site9": {
-  "ask-site": 33,
+
   "ask @1480": 33,
-  "ask-site @1480": 33,
+
   "ask @1707": 33,
-  "ask-site @1707": 33,
+
   "ask @3440": 33,
+
+  "ask-site": 33,
+
+  "ask-site @1480": 33,
+
+  "ask-site @1707": 33,
+
   "ask-site @3440": 33,
+
   "ask-site dark": 33
+
  },
  "site10": {
-  "cleanup-site": 27,
+
   "cleanup @1480": 27,
-  "cleanup-site @1480": 27,
+
   "cleanup @1707": 27,
-  "cleanup-site @1707": 27,
+
   "cleanup @3440": 27,
+
+  "cleanup-site": 27,
+
+  "cleanup-site @1480": 27,
+
+  "cleanup-site @1707": 27,
+
   "cleanup-site @3440": 27
+
  },
  "screens": {
+
   "screens": 24
+
  }
 }

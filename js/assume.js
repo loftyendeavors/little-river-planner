@@ -45,10 +45,9 @@
   function cell(kind, id, env, t, name) {
     if (t.source === 'none') return h('td.as-cell.none', { title: `Nothing on the farm is ${LABEL[env].toLowerCase()} yet` }, '—');
     const why = { library: 'Planner default, not yet checked against a guide', guide: t.guide ? `${t.guide.sources.map(x => `${x.name} gives ${x.range[0]} to ${x.range[1]} days from ${x.basis}`).join('. ')}${t.guide.kept ? '' : `. The planner had ${t.guide.was}`}` : '', supplier: `The supplier prints ${t.printed} days${t.basis && t.basis !== 'unspecified' ? ' from ' + (FROM[t.basis] || t.basis) : ''} for this variety`, variety: 'Kept on the variety', crop: 'Same as the crop', 'crop-mine': 'Your number for the crop' }[t.source];
-    const swings = t.swing && (t.swing[0] < 0.999 || t.swing[1] > 1.001) && t.source !== 'crop-mine';
     // What the number comes to in the bed, when the row's days start somewhere else.
     const turned = t.off ? ` Counted from ${FROM[t.start]}: ${t.start === 'seed' ? `less ${t.off} nursery days` : `${t.off} days less as a transplant`}, ${t.bed} in the bed.` : '';
-    const tip = t.mine ? `Your number${t.off ? '' : ', used as it is'}.${turned} Clear it to go back to ${t.fallback}.` : `${why}: ${t.fallback} days.${turned}${swings ? ` The planner then stretches it by month, from ${Math.round(t.fallback * t.swing[0])} to ${Math.round(t.fallback * t.swing[1])} days. A number you type is used as it is.` : ''}`;
+    const tip = t.mine ? `Your number${t.off ? '' : ', used as it is'}.${turned} Clear it to go back to ${t.fallback}.` : `${why}: ${t.fallback} days.${turned}`;
     const where = `${name}, ${LABEL[env].toLowerCase()}`;
     const input = h('input', { type: 'number', min: 1, max: 730, step: 1, value: t.mine || '', placeholder: t.fallback, title: tip, 'aria-label': `${where}: days to harvest`, dataset: { key: `${kind}|${id}|${env}` },
       onchange: async e => {
@@ -215,7 +214,7 @@
     const lists = r => r.kind === 'weeks' ? `${num(r.listWeeks, 1)} wk` : r.kind === 'days' ? (r.listDays.length > 1 ? `${r.listDays[0]}–${r.listDays[r.listDays.length - 1]}` : String(r.listDays[0])) : r.kind === 'yield' ? range(r.list.slice().sort((a, b) => a - b), fig) : r.kind === 'window' ? r.list.map(windowWord).join(', ') : r.kind === 'turn' ? range(r.list.slice().sort((a, b) => a - b), x => `${x} d`) : r.kind === 'copy' && !r.same ? copyValue(r.field, r.now) : '';
     const later = r => r.kind === 'copy' ? (r.same ? [['follow', 'Let them go'], ['keep', 'Keep the copies']] : [['follow', `Use the crop’s ${copyValue(r.field, r.now)}`], ['keep', 'Keep the copy']])
       : [r.take ? ['take', `${DO.take} ${fig(r.take.typed)}${r.kind === 'yield' ? (weeklyOf(r) ? ' a week' : '') : ' d'}`] : null, ['follow', r.agrees ? 'Follow the list' : `${DO.follow} ${lists(r)}`], ['keep', DO.keep]];
-    const options = r => LATER.includes(r.kind) ? later(r) : r.kind === 'days' ? [r.take ? ['take', `${DO.take} ${r.take.typed}${r.take.typed !== r.days ? ` (${r.days} in the bed)` : ''}`] : null, ['follow', r.agrees && !r.stays ? 'Follow the list' : `${DO.follow} ${r.listDays.length > 1 ? r.listDays[0] + '–' + r.listDays[r.listDays.length - 1] : r.listDays[0]}`], ['keep', DO.keep]]
+    const options = r => LATER.includes(r.kind) ? later(r) : r.kind === 'days' ? [r.take ? ['take', `${DO.take} ${r.take.typed}${r.take.typed !== r.days ? ` (${r.days} in the bed)` : ''}`] : null, ['follow', r.agrees ? 'Follow the list' : `${DO.follow} ${r.listDays.length > 1 ? r.listDays[0] + '–' + r.listDays[r.listDays.length - 1] : r.listDays[0]}`], ['keep', DO.keep]]
       : r.kind === 'weeks' ? [['follow', `Use the crop’s ${num(r.listWeeks, 1)} wk`], ['keep', DO.keep]] : [['follow', 'Follow the list'], ['keep', DO.keep]];
     const effects = new Map();
     const draw = () => {

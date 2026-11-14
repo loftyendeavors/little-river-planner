@@ -69,7 +69,7 @@ function viaService(service, fetchImpl) {
 /**
  * The supplier's own sentence saying where its days to maturity are counted from, and what it settles.
  *
- * The reader decides the starting point from every "Days to maturity" value on the page together. Johnny's prints a
+ * The reader decides where the days are counted from by every "Days to maturity" value on the page together. Johnny's prints a
  * general note under that label on every product ("...from seeding date... If a transplanted crop: ...from transplant
  * date"), which names both, so the reader reports "unspecified" unless the page's own sentence is exactly "From
  * transplanting." This reads the page's own sentence instead and leaves the general note out.
