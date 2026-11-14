@@ -258,23 +258,33 @@ with sync_playwright() as pw:
     page.screenshot(path=os.path.join(shots, 'zoom-weeks.png'))
 
     # ── F. hold and drag empty chart to move it; a plain click still chooses ──
-    spot = js("""(() => { const s = document.getElementById('tlScroll').getBoundingClientRect(); const rows = [...document.querySelectorAll('.tl-row[data-bed]:not(.tl-pool)')].filter(r => { const b = r.getBoundingClientRect(); return b.top > s.top + 60 && b.bottom < s.bottom - 200 && !r.querySelector('.tl-bar, .tl-open'); });
-      const r = rows[0].getBoundingClientRect(); return { x: s.left + 148 + 300, y: r.top + r.height / 2, bed: rows[0].dataset.bed }; })()""")
-    before = js("({ left: document.getElementById('tlScroll').scrollLeft, top: document.getElementById('tlScroll').scrollTop, sel: LRFApp.state.sel, date: LRFEngine.d2s(LRFApp.state.date) })")
-    page.mouse.move(spot['x'], spot['y']); page.mouse.down(); page.mouse.move(spot['x'] - 130, spot['y'] - 90, steps=6)
-    held = js("document.getElementById('tlScroll').classList.contains('panning')")
-    page.mouse.up()
-    page.wait_for_timeout(120)
-    after = js("({ left: document.getElementById('tlScroll').scrollLeft, top: document.getElementById('tlScroll').scrollTop, sel: LRFApp.state.sel, date: LRFEngine.d2s(LRFApp.state.date), panning: document.getElementById('tlScroll').classList.contains('panning') })")
-    check('holding and dragging empty chart moves it both ways, and chooses nothing', held and not after['panning'] and abs(after['left'] - before['left'] - 130) < 2 and abs(after['top'] - before['top'] - 90) < 2 and after['sel'] == before['sel'] and after['date'] == before['date'], [before, after])
-    js("document.getElementById('tlScroll').scrollTop = %d; document.getElementById('tlScroll').scrollLeft = %d" % (before['top'], before['left']))
-    page.wait_for_timeout(80)
-    page.mouse.click(spot['x'], spot['y'])
+    # a bed with nothing in it, standing in the upper part of the window: one that is there already, or else the first that can be
+    # scrolled there (the plan need not have one on its first screen)
+    FREE = """const sc = document.getElementById('tlScroll'), s = sc.getBoundingClientRect(), fits = r => { const b = r.getBoundingClientRect(); return b.top > s.top + 60 && b.bottom < s.bottom - 200; };
+      const free = [...document.querySelectorAll('.tl-row[data-bed]:not(.tl-pool)')].filter(r => !r.querySelector('.tl-bar, .tl-open'));"""
+    top0 = js("document.getElementById('tlScroll').scrollTop")
+    js("(() => { " + FREE + " if (free.some(fits)) return; for (const r of free) { sc.scrollTop += Math.round(r.getBoundingClientRect().top - s.top - 120); if (fits(r) && sc.scrollTop + 90 <= sc.scrollHeight - sc.clientHeight) return; } sc.scrollTop = %d; })()" % top0)
     page.wait_for_timeout(150)
-    picked = js("({ sel: LRFApp.state.sel, date: LRFEngine.d2s(LRFApp.state.date), want: LRFEngine.d2s(LRFEngine.addDays(new Date(LRFApp.planYear(), 0, 1), Math.floor((%f - document.querySelector('.tl-row[data-bed=\"%s\"] .tl-lane').getBoundingClientRect().left) / LRFTimeline.scale()))) })" % (spot['x'], spot['bed']))
-    check('a plain click there still selects the bed and sets the date under the pointer', picked['sel'] and picked['sel']['type'] == 'bed' and picked['sel']['id'] == spot['bed'] and picked['date'] == picked['want'], picked)
-    marks = js("(() => { const m = () => [...document.querySelectorAll('#tlBody .sel')].map(e => e.className.split(' ')[0] + ':' + (e.dataset.bed || e.dataset.planting || e.dataset.opening || '')); const a = m(); const p = LRFApp.state.engine.plantingsIn(document.querySelector('.tl-bar[data-planting]').closest('.tl-row').dataset.bed)[0]; const stamp = document.getElementById('tlBody').firstChild; LRFApp.select({ type: 'planting', id: document.querySelector('.tl-bar[data-planting]').dataset.planting }); const b = m(); LRFApp.select(null); return { bed: a, planting: b, none: m(), same: stamp === document.getElementById('tlBody').firstChild && stamp.isConnected }; })()")
-    check('what is selected is marked without the chart being drawn again', marks['bed'] == ['tl-row:' + spot['bed']] and len(marks['planting']) == 1 and marks['planting'][0].startswith('tl-bar:') and marks['none'] == [] and marks['same'], marks)
+    spot = js("(() => { " + FREE + " const row = free.find(fits); if (!row) return null; const r = row.getBoundingClientRect(); return { x: s.left + 148 + 300, y: r.top + r.height / 2, bed: row.dataset.bed, beds: free.length }; })()")
+    check('the plan has a bed with nothing in it, to hold and drag the empty chart of', spot, spot)
+    if spot:
+        before = js("({ left: document.getElementById('tlScroll').scrollLeft, top: document.getElementById('tlScroll').scrollTop, sel: LRFApp.state.sel, date: LRFEngine.d2s(LRFApp.state.date) })")
+        page.mouse.move(spot['x'], spot['y']); page.mouse.down(); page.mouse.move(spot['x'] - 130, spot['y'] - 90, steps=6)
+        held = js("document.getElementById('tlScroll').classList.contains('panning')")
+        page.mouse.up()
+        page.wait_for_timeout(120)
+        after = js("({ left: document.getElementById('tlScroll').scrollLeft, top: document.getElementById('tlScroll').scrollTop, sel: LRFApp.state.sel, date: LRFEngine.d2s(LRFApp.state.date), panning: document.getElementById('tlScroll').classList.contains('panning') })")
+        check('holding and dragging empty chart moves it both ways, and chooses nothing', held and not after['panning'] and abs(after['left'] - before['left'] - 130) < 2 and abs(after['top'] - before['top'] - 90) < 2 and after['sel'] == before['sel'] and after['date'] == before['date'], [before, after])
+        js("document.getElementById('tlScroll').scrollTop = %d; document.getElementById('tlScroll').scrollLeft = %d" % (before['top'], before['left']))
+        page.wait_for_timeout(80)
+        page.mouse.click(spot['x'], spot['y'])
+        page.wait_for_timeout(150)
+        picked = js("({ sel: LRFApp.state.sel, date: LRFEngine.d2s(LRFApp.state.date), want: LRFEngine.d2s(LRFEngine.addDays(new Date(LRFApp.planYear(), 0, 1), Math.floor((%f - document.querySelector('.tl-row[data-bed=\"%s\"] .tl-lane').getBoundingClientRect().left) / LRFTimeline.scale()))) })" % (spot['x'], spot['bed']))
+        check('a plain click there still selects the bed and sets the date under the pointer', picked['sel'] and picked['sel']['type'] == 'bed' and picked['sel']['id'] == spot['bed'] and picked['date'] == picked['want'], picked)
+        marks = js("(() => { const m = () => [...document.querySelectorAll('#tlBody .sel')].map(e => e.className.split(' ')[0] + ':' + (e.dataset.bed || e.dataset.planting || e.dataset.opening || '')); const a = m(); const p = LRFApp.state.engine.plantingsIn(document.querySelector('.tl-bar[data-planting]').closest('.tl-row').dataset.bed)[0]; const stamp = document.getElementById('tlBody').firstChild; LRFApp.select({ type: 'planting', id: document.querySelector('.tl-bar[data-planting]').dataset.planting }); const b = m(); LRFApp.select(null); return { bed: a, planting: b, none: m(), same: stamp === document.getElementById('tlBody').firstChild && stamp.isConnected }; })()")
+        check('what is selected is marked without the chart being drawn again', marks['bed'] == ['tl-row:' + spot['bed']] and len(marks['planting']) == 1 and marks['planting'][0].startswith('tl-bar:') and marks['none'] == [] and marks['same'], marks)
+    js("document.getElementById('tlScroll').scrollTop = %d" % top0)
+    page.wait_for_timeout(80)
     js("LRFApp.setDate(new Date(LRFApp.planYear(), 5, 15))")
 
     # ── G. nothing is cut off and everything stands on its days, at any scale ──

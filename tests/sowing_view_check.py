@@ -115,12 +115,19 @@ with sync_playwright() as pw:
     check("varieties of one crop that share trays get one row saying how many trays, with each tray drawn row by row and each line told its rows",
           grp and grp["trays"] < grp["apart"] and f"share {grp['trays']} tray" in grp["head"] and grp["drawn"] == grp["trays"] and grp["cells"] == grp["trays"] * grp["per"] and grp["filled"] == grp["rows"] and all(t.startswith("tray ") for t in grp["slots"]) and grp["tile"] == str(grp["want"]), grp)
 
-    # rockwool for the towers: each line counts its sheets and the open trays they ride in
-    wool = js("""const f = V.figures(), l = f.list.find(x => x.kind === 'rockwool' && x.state === 'open' && !x.group);
-      if (!l) return null; A.setDate(E.s2d(l.week));
-      const cell = document.querySelector('table.sw tr[data-line="' + l.key + '"] td.sw-how span');
-      return { text: cell ? cell.textContent : '', sheets: l.batch.trays };""")
-    check("a tower sowing says how many rockwool sheets, and that each rides in an open 1020 tray", wool and f"{wool['sheets']} sheet" in wool["text"] and "open 1020 tray" in wool["text"], wool)
+    # rockwool for the towers: a sowing alone on its sheets counts them, and the open trays they ride in, on its own line; sowings
+    # that share sheets have them counted once, on the row above, and each line is told its sheet and rows. Whichever the plan has
+    # is looked at, and both where it has both.
+    wool = js("""const f = V.figures(), open = f.list.filter(x => x.kind === 'rockwool' && x.state === 'open'), lone = open.find(x => !x.group), shared = open.find(x => x.group && x.groupLines.length > 1), out = { lone: null, shared: null };
+      const how = l => [...document.querySelectorAll('table.sw tr[data-line]')].filter(r => r.dataset.line === l.key).map(r => r.querySelector('td.sw-how'))[0], text = e => e ? e.textContent : '';
+      if (lone) { A.setDate(E.s2d(lone.week)); out.lone = { text: text(how(lone) && how(lone).querySelector('span')), sheets: lone.batch.trays, week: lone.week }; }
+      if (shared) { A.setDate(E.s2d(shared.week)); const g = shared.group, head = [...document.querySelectorAll('table.sw tr.sw-group')].find(r => r.dataset.group === shared.groupLines[0].key);
+        out.shared = { text: text(head && head.querySelector('b')), sheets: g.trays, sowings: shared.groupLines.length, own: text(how(shared) && how(shared).querySelector('small')), week: shared.week }; }
+      return out;""")
+    check("the plan has a tower sowing still to do, alone on its sheets or sharing them", wool["lone"] or wool["shared"], wool)
+    check("a tower sowing says how many rockwool sheets, and that each rides in an open 1020 tray", (wool["lone"] or wool["shared"])
+          and (not wool["lone"] or (f"{wool['lone']['sheets']} sheet" in wool["lone"]["text"] and "open 1020 tray" in wool["lone"]["text"]))
+          and (not wool["shared"] or (f"{wool['shared']['sowings']} sowings share {wool['shared']['sheets']} sheet" in wool["shared"]["text"] and f"on {wool['shared']['sheets']} open 1020 tray" in wool["shared"]["text"] and wool["shared"]["own"].startswith("sheet "))), wool)
     js("A.setDate(E.s2d('WEEK0'))"); page.wait_for_timeout(300)
 
     # a day after today is a plan, not a record

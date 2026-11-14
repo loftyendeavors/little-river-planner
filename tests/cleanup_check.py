@@ -126,12 +126,17 @@ with sync_playwright() as pw:
 
     # ── Seeds ──
     js("A.setView('seeds'); return 1;"); wait(1200); look("Seeds, the list")
-    page.click("#sdBody tr[data-variety]"); wait(700)
+    # the first variety listed that does not say where its days are counted from. Its panel is opened by a click on its name: the
+    # middle of a row can be one of the row's own boxes (a variety with supplier's days has “days counted from” there), and a click on a box opens nothing
+    quiet = js("const row = [...document.querySelectorAll('#sdBody tr[data-variety]')].find(r => ((eng.variety(r.dataset.variety) || {}).catalogMaturityBasis || 'unspecified') === 'unspecified'); return row ? row.dataset.variety : null;")
+    if quiet: page.click(f'#sdBody tr[data-variety="{quiet}"] .as-vname'); wait(700)
+    opened = js(f"const row = document.querySelector('#sdBody tr[data-variety=\"{quiet}\"]'), p = $('sdPanel'); return {{ marked: !!row && row.classList.contains('sel'), panel: !!p && p.offsetWidth > 0 && !!p.querySelector('form') }};") or {}
+    check("the Seeds list has a variety that does not say where its days are counted from, and a click on its name opens its panel", quiet and opened.get("marked") and opened.get("panel"), [quiet, opened])
     panel = js("""const s = [...document.querySelectorAll('#sdPanel select')].find(s => s.querySelector('option[value=unspecified]') && s.querySelector('option[value=transplant]'));
       if (!s) return null; const o = s.querySelector('option[value=unspecified]'), cs = getComputedStyle(s), c = document.createElement('canvas').getContext('2d'); c.font = cs.font;
       const heads = [...document.querySelectorAll('#sdPanel h3')].filter(h => h.offsetWidth).map(h => getComputedStyle(h).fontFamily.split(',')[0].replace(/"/g, '').trim());
-      return { word: o.textContent, text: Math.ceil(c.measureText(o.textContent).width), room: Math.floor(s.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)), heads, mono: getComputedStyle(document.documentElement).getPropertyValue('--mono').split(',')[0].replace(/"/g, '').trim() };""") or {}
-    check("a variety's “Days counted from” opens on “As the crop”, and the words fit their box", panel.get("word") == "As the crop" and panel.get("text", 999) <= panel.get("room", 0), panel)
+      return { word: o.textContent, shown: s.selectedOptions[0] === o, text: Math.ceil(c.measureText(o.textContent).width), room: Math.floor(s.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)), heads, mono: getComputedStyle(document.documentElement).getPropertyValue('--mono').split(',')[0].replace(/"/g, '').trim() };""") or {}
+    check("a variety's “Days counted from” opens on “As the crop”, and the words fit their box", panel.get("word") == "As the crop" and panel.get("shown") and panel.get("text", 999) <= panel.get("room", 0), panel)
     check("the headings in a variety's panel are set like every other panel's", len(panel.get("heads") or []) >= 3 and all(h == panel.get("mono") for h in panel["heads"]), panel.get("heads"))
     look("Seeds, a variety's panel")
     js("LRFSeeds.openOrder(); return 1;"); wait(700); look("the order sheet"); page.keyboard.press("Escape"); wait(200)

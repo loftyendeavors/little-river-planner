@@ -86,7 +86,13 @@ with sync_playwright() as pw:
         page.wait_for_selector('#ovSeries'); page.click('#ovSeries'); page.wait_for_selector('#srForm')
         check('"plan a series" opens the tool in the details panel: no page of its own, no sheet over the page', st()['sel'] == 'series' and st()['view'] == 'map' and ev("!document.querySelector('dialog[open]') && !!document.querySelector('#inspectorBody #srForm') && !document.querySelector('#ahSheet')"))
         setv('#srCrop', radish)
-        ev("""() => { for (const box of document.querySelectorAll('#srGardens input')) { const want = /Front Field/.test(box.parentElement.textContent); if (box.checked !== want) box.click(); } }""")
+        # a garden of the plan that takes the whole series, none left to place: the first of the tool's own choices that does
+        garden = ev("""cropId => { const eng = LRFApp.state.engine, ids = [...document.querySelectorAll('#srGardens input')].map(box => box.value);
+          return ids.find(id => { const r = LRFSuccession.series(eng, { cropId, gardenIds: [id], place: 'gardens', basis: 'planting', from: LRFApp.planYear() + '-08-01', every: 10, count: 5, unit: 'whole', amount: 1 }); return !r.error && r.plantings.length >= 3 && !r.held.length; }) || null; }""", radish)
+        for _ in range(40):   # one box at a time: each click draws the boxes again, and a box no longer on the page tells nobody it was clicked
+            if not ev("""garden => { const box = [...document.querySelectorAll('#srGardens input')].find(b => b.checked !== (b.value === garden)); if (box) box.click(); return !!box; }""", garden): break
+            page.wait_for_timeout(60)
+        check('the plan has a garden that takes a series of radishes from the first of August, a bed each, with none left to place', garden and ev("LRFSeries.state.P.gardenIds") == [garden], garden)
         page.wait_for_timeout(150)
         setv('#srFrom', '%d-08-01' % year); setv('#srEvery', '10'); setv('#srCount', '5'); setv('#srAmount', '1')
         page.wait_for_selector('#srWaves')
@@ -228,7 +234,7 @@ with sync_playwright() as pw:
             a = centre(src) if isinstance(src, str) else src
             page.mouse.move(a['x'], a['y']); page.mouse.down(); page.mouse.move(a['x'] + 8, a['y'] + 8, steps=3); page.wait_for_timeout(60)
             start = ev("(() => { const g = document.querySelector('.drag-ghost .drag-hint'); return g ? g.textContent : ''; })()")
-            b = centre(dst) if isinstance(dst, str) else dst
+            b = dst() if callable(dst) else centre(dst) if isinstance(dst, str) else dst
             page.mouse.move(b['x'], b['y'], steps=8); page.wait_for_timeout(180)
             seen = ev("(() => { const g = document.querySelector('.drag-ghost'); return g ? { state: g.dataset.state, hint: g.querySelector('.drag-hint').textContent, label: g.querySelector('b').textContent } : null; })()")
             if hold: hold()
@@ -257,11 +263,17 @@ with sync_playwright() as pw:
         ev("LRFApp.setView('timeline'); LRFTimeline.setFilter('field')"); page.wait_for_timeout(500)
         w3 = ev("LRFApp.waiting()[2]")
         ev("document.getElementById('tlScroll').scrollTop = 0"); page.wait_for_timeout(200)
-        # a free bed whose row can be seen together with the row they wait on
-        row = ev("""(id) => { const A = LRFApp, eng = A.state.engine, w = A.waitingOne(id), v = document.getElementById('tlScroll').getBoundingClientRect(); for (const h of LRFSuccession.homes(eng, w)) { const el = document.querySelector('#tlBody .tl-row[data-bed="' + h.bed.id + '"]'); if (!el) continue; const r = el.getBoundingClientRect(); if (r.top > v.top + 60 && r.bottom < v.bottom - 10) return h.bed.id; } return null; }""", w3['id'])
-        lane = ev("(sel) => { const r = document.querySelector(sel).getBoundingClientRect(); return { y: r.top + r.height / 2 }; }", '#tlBody .tl-row[data-bed="%s"] .tl-lane' % row)
+        # a free bed whose row can be seen together with the row they wait on; or, on a plan whose free beds are all further down than
+        # the window is tall, the first free bed with a row at all: the wheel brings that row up while the bar is held
+        SEEN = "(r, v) => r.top > v.top + 60 && r.bottom < v.bottom - 10"
+        row = ev("""(id) => { const A = LRFApp, eng = A.state.engine, w = A.waitingOne(id), v = document.getElementById('tlScroll').getBoundingClientRect(), seen = %s; let first = null; for (const h of LRFSuccession.homes(eng, w)) { const el = document.querySelector('#tlBody .tl-row[data-bed="' + h.bed.id + '"]'); if (!el) continue; first = first || h.bed.id; if (seen(el.getBoundingClientRect(), v)) return h.bed.id; } return first; }""" % SEEN, w3['id'])
+        check('one that waits has a free bed with a row on the timeline, to be dropped on', row is not None, w3)
         scroll = ev("(() => { const r = document.getElementById('tlScroll').getBoundingClientRect(); return { left: r.left, right: r.right }; })()")
-        far = {'x': scroll['left'] + 148 + 40, 'y': lane['y']}   # far from its own day: February, at this scale
+        def far():   # far from its own day: February, at this scale
+            down = ev("(sel) => { const r = document.querySelector(sel).getBoundingClientRect(), v = document.getElementById('tlScroll').getBoundingClientRect(); return (%s)(r, v) ? 0 : Math.round(r.top - v.top - 120); }" % SEEN, '#tlBody .tl-row[data-bed="%s"]' % row)
+            if down: page.mouse.wheel(0, down); page.wait_for_timeout(300)
+            lane = ev("(sel) => { const r = document.querySelector(sel).getBoundingClientRect(); return { y: r.top + r.height / 2 }; }", '#tlBody .tl-row[data-bed="%s"] .tl-lane' % row)
+            return {'x': scroll['left'] + 148 + 40, 'y': lane['y']}
         src = ev("(sel) => { const r = document.querySelector(sel).getBoundingClientRect(); return { x: r.left + Math.min(10, r.width / 2), y: r.top + r.height / 2 }; }", '#tlBody .tl-bar[data-waiting="%s"]' % w3['id'])
         tl = {}
         def ghost_at():
@@ -272,7 +284,7 @@ with sync_playwright() as pw:
         check('picked up from its row on the timeline and dropped on a bed’s row, far from its own day, it goes into that bed on its own date', p3 is not None and p3['bed'] == row and p3['date'] == w3['date'], [p3, row, w3['date'], seen])
         check('the outline of where it would land is drawn at its own date, not under the pointer', tl.get('shown') and tl.get('row') == row and abs(tl.get('left', 0) - own_x) < 3, [tl, own_x])
         undo_to(u0)
-        ev("LRFTimeline.setFilter('all')"); page.wait_for_timeout(300)
+        ev("document.getElementById('tlScroll').scrollTop = 0; LRFTimeline.setFilter('all')"); page.wait_for_timeout(300)
 
         # ── a bed that is held: how to share it ──
         share = ev("""() => { const A = LRFApp, eng = A.state.engine, S = LRFSuccession, w = A.waiting()[0], out = { w: w.id };

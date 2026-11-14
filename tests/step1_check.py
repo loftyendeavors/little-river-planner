@@ -8,7 +8,8 @@ usage: python3 -I step1_check.py <app-dir> <backup-dir> <backup.zip> <shots-dir>
 <backup.zip>  the same backup as the .zip v7 makes
 No network is used: supplier addresses are answered here, some with pictures and some refusing, as real suppliers do.
 """
-import base64, functools, http.server, json, os, shutil, socketserver, sys, tempfile, threading
+import base64, functools, http.server, json, os, re, shutil, socketserver, sys, tempfile, threading
+from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
 
 app, backup, backup_zip, shots = sys.argv[1:5]
@@ -42,7 +43,14 @@ plan_file = os.path.join(backup, 'plan.json')
 plan = json.load(open(plan_file, encoding='utf-8'))
 all_photos = [v for v in plan['varieties'] if v.get('photo')]                                     # 151: every record with a photo, removed varieties too
 with_photo = [v for v in all_photos if v.get('active', True) and not v.get('deleted')]            # the ones in the library now
-johnny = [v for v in with_photo if 'johnnyseeds.com' in (v['photo'].get('sourceUrl') or '')]
+# Where a picture came from, as the app reads a photo record: its sourceUrl, else its url, when that is an https address.
+source = lambda v: next((u for u in (v['photo'].get('sourceUrl'), v['photo'].get('url')) if isinstance(u, str) and re.match(r'https://\S+$', u, re.I)), '') if isinstance(v['photo'], dict) else ''
+host = lambda url: urlsplit(url).hostname or ''
+hosts = sorted({host(source(v)) for v in with_photo if source(v)})
+OPEN = hosts[0] if hosts else ''   # the supplier that hands its pictures to any page: the first of the plan's suppliers by address. Every other refuses.
+hands_over = lambda url: (OPEN and host(url) == OPEN) or 'johnnyseeds.com' in url   # and the site whose page is read from a link further down
+handed = [v for v in with_photo if source(v) and hands_over(source(v))]
+refused = [v for v in with_photo if source(v) and not hands_over(source(v))]   # shown from their supplier's address, and not to be had by a page
 map_sha = plan['map']['imageFile']['sha256']
 farm_photo = os.path.join(backup, 'files', map_sha)
 thumbs_file = os.path.join(app, 'data', 'thumbs.json')
@@ -56,7 +64,7 @@ asked = {'fetched': 0, 'refused': 0, 'shown': 0}
 
 
 def suppliers(route):
-    """Johnny's hands its pictures to any page (a site with open sharing); every other supplier's answer can be shown in an <img> but not read by a page."""
+    """One supplier hands its pictures to any page (a site with open sharing); every other supplier's answer can be shown in an <img> but not read by a page."""
     url, kind = route.request.url, route.request.resource_type
     if url.startswith('http://127.0.0.1'):
         return route.continue_()
@@ -65,7 +73,7 @@ def suppliers(route):
         return route.fulfill(status=200, content_type='image/jpeg', body=JPEG)
     if kind not in ('fetch', 'xhr'):
         return route.abort()   # web fonts and the like: there is no network here
-    if 'johnnyseeds.com' in url:
+    if hands_over(url):
         asked['fetched'] += 1
         return route.fulfill(status=200, content_type='image/jpeg', headers={'Access-Control-Allow-Origin': '*'}, body=JPEG)
     asked['refused'] += 1
@@ -350,8 +358,12 @@ with sync_playwright() as pw:
     # the garden retyped: one choice on the Assumptions view, shown before it lands, one undo
     view(page, 'assume')
     page.evaluate("document.querySelector('#asPlaces') && (document.querySelector('#asPlaces').open = true)")
-    garden = page.evaluate("(() => { const g = LRFApp.state.plan.gardens.find(x => /Glass GH Garden \\(East\\)/.test(x.name)); return g ? { id: g.id, name: g.name, type: g.type } : null; })()")
-    if garden and garden['type'] == 'greenhouse':
+    # a garden of the plan typed as a greenhouse, whose conditions can be chosen (beds, not towers or living trays) and which has plantings: the first as the list shows them
+    garden = page.evaluate("""(() => { const eng = LRFApp.state.engine, plan = LRFApp.state.plan, offered = new Set([...document.querySelectorAll('#asPlacesBody select')].map(s => s.getAttribute('aria-label')));
+      const g = [...plan.gardens].sort((a, b) => String(a.name).localeCompare(String(b.name))).find(g => g.type === 'greenhouse' && g.active !== false && offered.has('Growing conditions in ' + g.name) && plan.beds.some(b => b.gardenId === g.id && b.active !== false && eng.plantingsIn(b.id).length));
+      return g ? { id: g.id, name: g.name, type: g.type } : null; })()""")
+    check('the plan has a garden typed as a greenhouse, with plantings in it, to retype', garden is not None, garden)
+    if garden:
         page.evaluate("(() => { for (const d of document.querySelectorAll('details')) d.open = true; })()")
         sel = 'select[aria-label="Growing conditions in %s"]' % garden['name']
         page.select_option(sel, 'field')
@@ -365,8 +377,6 @@ with sync_playwright() as pw:
         page.evaluate('LRFApp.undo()')
         page.wait_for_timeout(300)
         check('and one Undo puts it back', page.evaluate("LRFApp.state.plan.gardens.find(x => x.id === '%s').type" % garden['id']) == 'greenhouse')
-    else:
-        check('the plan that ships has the Glass GH garden typed as a greenhouse, to retype', False, garden)
     check('A: no errors on the page', not errors, errors[:3])
     ctx.close()
 
@@ -378,13 +388,15 @@ with sync_playwright() as pw:
     page.wait_for_function("!LRFApp.isSample() && LRFApp.state.plan.plantings.length > 100", timeout=60000)
     said = toast(page)
     check('loading a plan-only file says so, and what did not come with it', 'holds the plan only' in said and 'no farm photo' in said and 'variety photo' in said, said)
-    page.wait_for_function("LRFThumbs.count() >= %d && !LRFApp.photoGaps().working" % len(johnny), timeout=120000)
+    check('the plan’s pictures name where they came from, at two suppliers or more: one to hand its pictures over, the rest to refuse', len(handed) >= 1 and len(refused) >= 1, {'suppliers': hosts, 'handed': len(handed), 'refused': len(refused), 'photos': len(with_photo)})
+    page.wait_for_function("LRFThumbs.count() >= %d && !LRFApp.photoGaps().working" % len(handed), timeout=120000)
     page.wait_for_timeout(600)
     gaps = page.evaluate('LRFApp.photoGaps()')
     kept = page.evaluate('LRFThumbs.count()')
-    check('pictures a supplier hands over are fetched and kept by themselves (%d of %d here)' % (len(johnny), len(with_photo)), kept == len(johnny) and gaps['varieties'] == len(with_photo) - len(johnny) and asked['fetched'] == len(johnny), {'kept': kept, 'gaps': gaps, 'asked': asked})
+    check('pictures a supplier hands over are fetched and kept by themselves (%d of %d here)' % (len(handed), len(with_photo)), kept == len(handed) >= 1 and gaps['varieties'] == len(with_photo) - len(handed) and asked['fetched'] == len(handed), {'kept': kept, 'gaps': gaps, 'asked': asked})
     far = page.evaluate("LRFApp.state.plan.varieties.filter(v => v.photo && !LRFThumbs.get(v.id) && LRFThumbs.remoteOf(v.id)).length")
-    check('the rest are shown from the supplier’s own address meanwhile', far == len(with_photo) - len(johnny) and gaps['shown'] == far, {'far': far})
+    # "the rest": every picture with an address that was not handed over. (A photo record with no address has nowhere to be shown from.)
+    check('the rest are shown from the supplier’s own address meanwhile', far == len(refused) >= 1 and gaps['shown'] == far, {'far': far, 'refused': len(refused)})
     view(page, 'seeds')
     page.click('[data-sd-tab="gallery"]')
     page.wait_for_timeout(1200)
@@ -401,7 +413,7 @@ with sync_playwright() as pw:
     again = dict(asked)
     page.evaluate('LRFApp.rebuildThumbs()')
     page.wait_for_timeout(800)
-    check('a picture that could not be had is not asked for again on every visit', missed == len(with_photo) - len(johnny) and asked['refused'] == again['refused'] == missed and asked['fetched'] == again['fetched'], {'missed': missed, 'before': again, 'after': asked})
+    check('a picture that could not be had is not asked for again on every visit', missed == len(refused) >= 1 and asked['refused'] == again['refused'] == missed and asked['fetched'] == again['fetched'], {'missed': missed, 'before': again, 'after': asked})
 
     # the farm photo and the thumbnails, added from files: the plan is not replaced
     count0 = page.evaluate('LRFApp.state.plan.plantings.length')
@@ -413,7 +425,7 @@ with sync_playwright() as pw:
     now = page.evaluate("({ plantings: LRFApp.state.plan.plantings.length, thumbs: LRFThumbs.count(), gaps: LRFApp.photoGaps(), mapInfo: (LRFApp.state.plan.lrfNext || {}).mapImage, ref: LRFApp.state.plan.map.imageFile.sha256, card: !!document.getElementById('photoGaps'), href: document.getElementById('mapPhoto').getAttribute('href') || '', w: document.getElementById('mapPhoto').getAttribute('width') })")
     check('Add photos takes the farm photo and the thumbnails: every variety with a photo has one kept, the photo is on the map, the plan is the same plan', now['plantings'] == count0 and now['thumbs'] == len(all_photos) and not now['gaps']['map'] and now['gaps']['varieties'] == 0 and not now['card'] and now['href'].startswith('blob:') and str(now['w']) == str(plan['map']['imgW']), {k: now[k] for k in ('plantings', 'thumbs', 'gaps', 'card', 'w')})
     check('it is recognised as the photo the plan was drawn on', now['mapInfo'] and now['mapInfo']['sha256'] == now['ref'] and 'not the same file' not in said and 'farm photo is set' in said, said)
-    check('a picture fetched earlier is not written over by the file’s', ('%d variety photos added' % (len(all_photos) - len(johnny))) in said, said)
+    check('a picture fetched earlier is not written over by the file’s', ('%d variety photos added' % (len(all_photos) - len(handed))) in said, said)
     page.screenshot(path=os.path.join(shots, 'map-with-photo-1480.png'))
     view(page, 'seeds')
     page.click('[data-sd-tab="gallery"]')
