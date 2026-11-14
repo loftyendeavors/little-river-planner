@@ -2,7 +2,7 @@
 
 usage: python3 -I mutate_map.py <app-dir> <scratch-dir> <tests-dir> [node | page] [words...]
   node: faults in js/mapgeo.js, caught by mapgeo_test.cjs (seconds each)
-  page: faults in map.js, mapedit.js, app.js, panels.js and the style sheet, caught by map_check.py (about a minute each).
+  page: faults in map.js, mapedit.js, rails.js, app.js, panels.js and the style sheet, caught by map_check.py (about a minute each).
         FROM=0 TO=5 runs a slice of them. The page run ends each fault with pkill google-chrome: run it alone.
 A fault that no named line catches is a hole in the checks, and is reported as MISSED.
 """
@@ -71,6 +71,7 @@ PAGE = [
     ('a copy keeps the name it was copied from', 'js/mapedit.js', "name = Geo.nextNames(taken, 1, String(bed.bed))[0]; taken.push(name);", "taken.push(name);", 'sets down a copy'),
     ('Alt-drag moves the bed itself', 'js/mapedit.js', "const done = d.copy ? copyTo(d.ids, d.after) : change(", "const done = false ? copyTo(d.ids, d.after) : change(", 'sets down a copy'),
     ('a bed with plantings can be removed', 'js/mapedit.js', "const held = beds.map(b => ({ b, n: eng().plantingsIn(b.id).length })).filter(x => x.n);", "const held = [];", 'holds plantings cannot be removed'),
+    ('nothing is too long for its bed', 'js/rails.js', "if (t1.over && !t0.over) return { kind: 'too-long', p: now, r: t1.r };", "", 'cannot be made shorter than what is planted'),
     ('the next bed is set on top of the last', 'js/mapedit.js', "const at = Geo.nextInRow(lined, typical().pathFt * k),", "const at = { x: lined[lined.length - 1].x + 400, y: lined[lined.length - 1].y, rot: lined[lined.length - 1].rot },", 'one step past the end of the row'),
     ('a block over taken ground can be made', 'js/mapedit.js', "disabled: !made.beds.length || !!made.on, onclick: createGarden }", "disabled: !made.beds.length, onclick: createGarden }", 'cannot be made'),
     ('a new garden’s beds are not numbered', 'js/mapedit.js', "bed: String(i + 1), gardenId: garden.id, type: 'IG'", "bed: '1', gardenId: garden.id, type: 'IG'", 'creates the garden and its beds'),

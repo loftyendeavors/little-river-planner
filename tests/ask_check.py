@@ -95,11 +95,12 @@ with sync_playwright() as pw:
 
     # ══ a bed that is being mixed: the library splits it again, a planting from elsewhere does not ══
     # a bed is split through the planner's own function, what could trade into it is counted, and it is undone: the first bed with both kinds of mover is the one tried
+    # the one that can trade is one the bed is held against on its own date: where the bed has room beside what stands in it, a planting moved in takes the room, and no trade is offered
     mix = js("""let tries = 0; const freeNow = p => { const e = S.engine, r = e.calc(p); return !!r && e.isSoilBed(r.b) && !r.partial && !p.bedLayout && !(p.ft > 0) && !R.fixed(e, { p }); };
       for (const b of soil) { if (!(eng.capOf(b) >= 30)) continue; for (const p of eng.plantingsIn(b.id)) { if (!free(p) || !p.varietyId) continue; const others = eng.varietiesOf(p.cropId).map(v => v.id).filter(id => id !== p.varietyId); if (others.length < 2) continue;
           const t = { bedId: b.id, date: E.s2d(p.date) }, pay = { cropId: p.cropId, varietyId: others[0] }, sh = R.share(eng, pay, t); if (!sh || !sh.length) continue; if (++tries > 14) return null;
           A.setDate(E.s2d(p.date)); if (!A.applyShare(pay, sh, 'length')) continue; const e2 = S.engine; let trader = null, mover = null;
-          for (const q of S.plan.plantings) { if (q.bedId === b.id || !freeNow(q)) continue; const tt = { bedId: b.id, date: E.s2d(q.date) }; if (R.swap(e2, { plantingId: q.id }, tt)) trader = trader || q; else if (!mover && R.propose(e2, { plantingId: q.id }, tt).why === 'held') mover = q; if (trader && mover) break; }
+          for (const q of S.plan.plantings) { if (q.bedId === b.id || !freeNow(q)) continue; const tt = { bedId: b.id, date: E.s2d(q.date) }; const can = R.swap(e2, { plantingId: q.id }, tt), pr = can && !trader || !can && !mover ? R.propose(e2, { plantingId: q.id }, tt) : null; if (!pr) continue; if (can) { if (pr.state === 'blocked' && pr.why === 'held') trader = q; } else if (pr.why === 'held') mover = q; if (trader && mover) break; }
           A.endMixing(); A.undo();
           if (trader && mover) return { bedId: b.id, id: p.id, date: p.date, crop: p.cropId, others, mover: mover.id, moverDate: mover.date, moverBed: mover.bedId, trader: trader.id, traderDate: trader.date, tries }; break; } } return null;""")
     wait(300)
