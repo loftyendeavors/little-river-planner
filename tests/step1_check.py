@@ -4,8 +4,8 @@ the garden retyped, and pictures: kept across a plan-only load, added to an open
 usage: python3 -I step1_check.py <app-dir> <backup-dir> <backup.zip> <shots-dir> [photo-pack.json]
 
 <app-dir>     the app folder with its data/ (plan, thumbnails, farm photo)
-<backup-dir>  a complete v7 backup unpacked: plan.json, files/<sha256>
-<backup.zip>  the same backup as the .zip v7 makes
+<backup-dir>  a complete backup unpacked: plan.json, files/<sha256>
+<backup.zip>  the same backup as one .zip
 No network is used: supplier addresses are answered here, some with pictures and some refusing, as real suppliers do.
 """
 import base64, functools, http.server, json, os, re, shutil, socketserver, sys, tempfile, threading

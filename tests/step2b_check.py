@@ -191,7 +191,7 @@ with sync_playwright() as pw:
         saved = os.path.join(shots, 'plan-with-waiting.json'); dl.value.save_as(saved)
         data = json.load(open(saved, encoding='utf-8'))
         keep = (data.get('lrfNextKeep') or {}).get('keep') or {}
-        check('a backup file holds them apart from the plantings v7 reads', len(data['plantings']) == s0['n'] and len(keep.get('waiting') or []) == 4 and all('bedId' not in w for w in keep['waiting']) and 'lrfNext' not in data, [len(data['plantings']), len(keep.get('waiting') or [])])
+        check('a backup file holds them apart from the plan’s plantings', len(data['plantings']) == s0['n'] and len(keep.get('waiting') or []) == 4 and all('bedId' not in w for w in keep['waiting']) and 'lrfNext' not in data, [len(data['plantings']), len(keep.get('waiting') or [])])
         ids = ev("LRFApp.waiting().map(w => w.id)")
         ev("LRFApp.removeWaiting(LRFApp.waiting().slice(0, 3).map(w => w.id))"); page.wait_for_timeout(200)
         check('three removed in one step: one is left', st()['w'] == 1 and 'to place' in ev("document.getElementById('waitBadge').textContent"))

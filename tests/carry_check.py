@@ -1,4 +1,4 @@
-"""Loading a newer v7 backup over a plan that has things established here: what is kept, and that the page says so.
+"""Loading a newer backup over a plan that has things established here: what is kept, and that the page says so.
 usage: python3 -I carry_check.py <site-dir> <backup.zip> <shots-dir>
 """
 import functools, http.server, json, sys, threading
@@ -84,7 +84,7 @@ with sync_playwright() as pw:
     page.wait_for_timeout(800)
     again = js(f"({{seedG: S.plan.crops.find(c => c.id === '{made['crop']}').seedG, crates: S.plan.lrfNext.crates, list: !!(S.plan.assumptions && S.plan.assumptions.crops.carrot)}})")
     check("and it is all there after a reload", again["seedG"] == 14 and again["crates"] == "bench" and again["list"], again)
-    # a backup downloaded from here carries none of this app's own record, and v7's fields as changed
+    # a backup downloaded from here carries none of this app's own record, and the plan's own fields as changed
     exported = page.evaluate("""(async () => { const A = LRFApp, IO = LRFPlanIO; const plan = IO.join(A.state.plan, { v: 1, rest: {}, varieties: {} }); return { own: 'lrfNext' in plan, list: !!plan.assumptions, from: plan.liveTrayPlans[0].from }; })()""")
     check("a backup made here does not carry this app's own record", not exported["own"] and exported["list"] and exported["from"] == made["from"], exported)
     browser.close()
