@@ -915,16 +915,20 @@
    * Check a drop without changing anything: used for live feedback while dragging.
    * target: { bedId, date, along?, across? }. Returns the proposal plus `text` to show.
    */
+  /** Whether a drop on held ground asks to split or replace: only what comes from the library, and only on the map. */
+  const asksToShare = payload => !!payload && !payload.plantingId && !payload.waitingId && state.view === 'map';
   function preview(payload, target) {
     const eng = state.engine, bed = eng.bedOf(target.bedId);
     if (payload.waitingId) return previewWaiting(payload.waitingId, target);
     let res = Rails.propose(eng, payload, target);
     // A trade is only offered where the grower can see it coming: while dragging.
     const mixingHere = !!state.mixing && state.mixing.bedId === target.bedId;
-    if (res.state === 'blocked' && res.why === 'held' && payload.plantingId && !target.noSwap && !mixingHere) res = Rails.swap(eng, payload, target) || res;
-    // Ground that is held can be shared, or what holds it replaced: the drop asks which (shareDrop). A pass over every bed
-    // while something is in the air only asks whether the question would arise; the bed under the pointer gets the ways worked out.
-    if (res.state === 'blocked' && res.why === 'held' && !target.noSwap && bed && eng.isSoilBed(bed)) {
+    if (res.state === 'blocked' && res.why === 'held' && payload.plantingId && !target.noSwap) res = Rails.swap(eng, payload, target) || res;
+    // Ground that is held can be shared, or what holds it replaced: the drop asks which (shareDrop). Only a crop or a variety brought
+    // from the library onto the map asks (asksToShare). A planting that is moved, on the map or on the timeline, trades places where
+    // it can and is otherwise refused: two plantings brought up against each other are not offered a share of one bed. A pass over
+    // every bed while something is in the air only asks whether the question would arise; the bed under the pointer gets the ways worked out.
+    if (res.state === 'blocked' && res.why === 'held' && asksToShare(payload) && !target.noSwap && bed && eng.isSoilBed(bed)) {
       const sh = sharing(eng, payload, target);
       if (sh && (target.survey ? !sh.no.replace : sh.length || sh.rows || sh.replace)) res = { ...res, state: 'split', share: sh };
       else if (sh && sh.no.replace && sh.no.replace.who) res = { ...res, fixedBy: sh.no.replace };
@@ -1816,7 +1820,7 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, lastChange, refuse, setUse, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV,
+    commit, undo, redo, lastChange, refuse, setUse, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
