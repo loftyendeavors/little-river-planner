@@ -1,0 +1,30 @@
+{
+ "build": "The checks build, part 2: the engine counts one way; the review window's suggestion moves nothing; the sample is a made-up layout; comments say what the code does.",
+ "words": [
+  "app.js",
+  "nursery.js",
+  "panels.js",
+  "reader.js",
+  "seedlib.js",
+  "seeds.js",
+  "sowing.js",
+  "store.js",
+  "week.js"
+ ],
+ "code": [
+  "engine.js",
+  "audit.js",
+  "assume.js",
+  "library.js",
+  "planio.js",
+  "main.js",
+  "trays.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "index.html",
+  "sw.js"
+ ],
+ "screens": []
+}

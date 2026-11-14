@@ -205,8 +205,8 @@
       ['market-east-1', 'lettuce_head', at(4, 20)], ['market-east-2', 'lettuce_head', at(5, 4)], ['market-east-3', 'lettuce_head', at(5, 18)],
       ['market-east-5', 'carrot', at(4, 22)], ['market-east-6', 'beet', at(4, 22)], ['market-west-1', 'kale', at(4, 26)],
       ['market-west-2', 'onion', at(4, 19)], ['market-west-4', 'bean_bush', at(5, 24)], ['long-field-1', 'potato', at(4, 24)],
-      ['long-field-2', 'winter_squash', at(5, 28)], ['tomato-house-1', 'tomato', at(4, 12)], ['cucumber-house-1', 'cucumber', at(4, 26)],
-      ['tomato-house-2', 'pepper', at(4, 28)], ['towers-1', 'lettuce_head', at(4, 15)], ['towers-2', 'basil', at(5, 10)]
+      ['long-field-2', 'winter_squash', at(5, 28)], ['east-house-1', 'tomato', at(4, 12)], ['west-house-1', 'cucumber', at(4, 26)],
+      ['east-house-2', 'pepper', at(4, 28)], ['tower-line-1', 'lettuce_head', at(4, 15)], ['tower-line-2', 'basil', at(5, 10)]
     ];
     return {
       v: 3, gardens: JSON.parse(JSON.stringify(lib.sampleGardens)), beds: JSON.parse(JSON.stringify(lib.sampleBeds)),

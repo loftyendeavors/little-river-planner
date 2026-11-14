@@ -6,7 +6,7 @@
  *
  *   survey()   how many plantings carry which figure of their own (cheap; shown on the Assumptions view)
  *   study()    the plantings that keep their own days, nursery weeks, yield, harvest days or turnover days,
- *              or a copy of the crop's values from the old planner, as rows to decide on
+ *              or a copy of the crop's values kept on the planting, as rows to decide on
  *   build()    the one step that carries out a set of decisions
  *   preview()  what that step moves, and which double bookings it would start
  *
@@ -178,11 +178,11 @@
     return { rows: [...list.sort(order), ...[...weeks.values()].sort(order), ...[...wait.values()].sort(order), ...more.rows.sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || bySize(a, b))], held: new Set([...o.held.map(p => p.id), ...more.held]).size };
   }
 
-  // ───────────────────────── yield, harvest days, turnover, and the old planner's copies ─────────────────────────
+  // ───────────────────────── yield, harvest days, turnover, and copied crop values ─────────────────────────
   const KINDS = ['days', 'weeks', 'wait', 'yield', 'window', 'turn', 'copy'];
   const cycle = p => !!(p.towerCycle && p.towerCycle.v === 1);
   const ownYield = p => has(p, 'yield'), ownWindow = p => has(p, 'hw') || p.harvestMode === 'season' || p.harvestMode === 'window', ownTurn = p => has(p, 'turnover');
-  /** Crop values the old planner copied onto a planting that bear on its harvest. The rest are facts about that planting (a bulb, a bought plant, its spacing). */
+  /** Crop values copied onto a planting that bear on its harvest. The rest are facts about that planting (a bulb, a bought plant, its spacing). */
   const COPY = ['yield', 'price', 'mk', 'hw', 'harvestMode', 'yieldDays', 'harvestUntil', 'baseUnit', 'yBasis'];
   const frozen = p => { const g = p.growingDefaults; return g && g.v === 1 && g.cropId === p.cropId && g.crop && typeof g.crop === 'object' && !Array.isArray(g.crop) ? g.crop : null; };
   const copied = p => { const c = frozen(p); return c ? COPY.filter(k => c[k] && typeof c[k] === 'object') : []; };
@@ -290,7 +290,7 @@
       }
       for (const r of rows.values()) { r.list = [...r.list].filter(x => x != null); r.varieties = [...new Set(r.varieties.values())].filter(Boolean); r.choice = r.agrees ? 'follow' : r.take ? 'take' : 'keep'; out.push(r); }
     }
-    // The old planner's copies of crop values. A copy that says what the crop says now changes nothing and is let go in one row;
+    // Copies of crop values kept on plantings. A copy that says what the crop says now changes nothing and is let go in one row;
     // one that says something else is a row of its own, let go where that changes nothing for its plantings and kept otherwise.
     const sameIds = {}, differ = new Map();
     for (const p of open) {

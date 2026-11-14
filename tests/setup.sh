@@ -27,7 +27,8 @@ fi
 PAGE="js css index.html sw.js manifest.webmanifest fonts icons"      # everything a browser is served
 rm -rf "$W/old"; mkdir -p "$W/old"
 if git -C "$REPO" rev-parse -q --verify "$BASE^{commit}" > /dev/null 2>&1; then
-  git -C "$REPO" archive "$BASE" $PAGE | tar -x -C "$W/old"
+  # with it, what earlier builds said of themselves (tests/builds), where the build before has any: the file this build adds is its own
+  git -C "$REPO" archive "$BASE" $PAGE $(git -C "$REPO" ls-tree -d --name-only "$BASE" tests/builds) | tar -x -C "$W/old"
   git -C "$REPO" rev-parse "$BASE" > "$W/old/BASE"
   echo "build before: $BASE ($(git -C "$REPO" rev-parse --short "$BASE"))"
 else
