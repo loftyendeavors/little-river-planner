@@ -1,5 +1,6 @@
-"""Deliberate faults in step 2b (the series tool, ghost bars, plantings to place), one at a time. Each must be caught by a named line of
-waiting_test.cjs (the faults in the pure logic: quick) or of step2b_check.py (the faults in the page: about a minute each, stopped at the first line that fails).
+"""Deliberate faults in step 2b (the series tool, ghost bars, plantings to place), one at a time. Each must be caught by a line of
+waiting_test.cjs (the faults in the pure logic: quick) or of step2b_check.py (the faults in the page: about a minute each, stopped at the first line that fails)
+that passes with no fault in it: any such line counts, and a check that stops with no line failed catches nothing.
 usage: python3 -I mutate2b.py <app-dir> <scratch-dir> <waiting_test.cjs> <step2b_check.py> <plan.json> [node | page | list] [words…]     env FROM=, TO= to run a part
 list: how many faults there are of each kind, and nothing else."""
 import json, os, shutil, signal, subprocess, sys, time

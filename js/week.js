@@ -15,7 +15,7 @@
  *   Week.takeBack(engine, inventory, p, kind, ctx)        -> the planting with that job cleared (and put back)
  *
  * Sowing itself is recorded by the seed library (LRFSeedLib.recordSowing), which takes the seed off stock; this
- * file calls it and adds the push. The records are v7's own (done, workflow.history).
+ * file calls it and adds the push. The records are the planting's done and workflow.history.
  */
 (function (root, factory) {
   const node = typeof module === 'object' && module.exports;

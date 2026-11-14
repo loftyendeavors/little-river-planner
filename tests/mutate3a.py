@@ -1,4 +1,5 @@
-"""Deliberate faults in step 3a (0.22), one at a time. Each must be caught by a named line.
+"""Deliberate faults in step 3a (0.22), one at a time. Each must be caught by a line
+that passes with no fault in it: any such line counts, and a check that stops with no line failed catches nothing.
 usage: python3 -I mutate3a.py <app-dir> <scratch-dir> <tests-dir> <plan.json> [node | page | list] [words…]     env FROM=, TO= to run a part
   node  faults in the engine, the audit and the plan file, against step3a_test.cjs (a few seconds each)
   page  faults in the page, against step3a_check.py (one to three minutes each: it stops at the first line that fails)

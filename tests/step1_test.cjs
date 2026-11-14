@@ -60,7 +60,7 @@ const soil = core.beds.find(b => eng.isSoilBed(b) && eng.plantingsIn(b.id).lengt
 if (soil) { const short = E.create({ ...core, beds: core.beds.map(b => b.id === soil.id ? { ...b, l: 1 } : b) }, Lib); check('a planting longer than its soil bed is still listed', Rails.cleanup(short).long.some(x => x.r.b.id === soil.id)); }
 
 // ── the tray space's name ──
-check('new name and old', Trays.POOL_NAME === 'Heated greenhouse benches' && Trays.POOL_NAME_V7 === 'Shared heated space');
+check('new name and old', Trays.POOL_NAME === 'Heated greenhouse benches' && Trays.POOL_NAME_BEFORE === 'Shared heated space');
 const g7 = { id: 'g1', name: 'Shared heated space', liveTrayPool: true, type: 'greenhouse' };
 check('a record under the former name is renamed, and nothing else on it changes', JSON.stringify(Trays.poolRenamed(g7)) === JSON.stringify({ ...g7, name: 'Heated greenhouse benches' }));
 check('a name the grower gave it is left alone; so is a garden that only shares the name', Trays.poolRenamed({ ...g7, name: 'Prop house' }) === null && Trays.poolRenamed({ id: 'g2', name: 'Shared heated space' }) === null && Trays.poolRenamed({ ...g7, name: 'Heated greenhouse benches' }) === null);

@@ -39,7 +39,7 @@
       for (const item of list) groups[hash(item && item.id) % n].push(item);
       groups.forEach((group, i) => { parts[`${key}-${pad2(i)}`] = JSON.stringify(group); });
       buckets[key] = n;
-      // Record order separately: buckets scramble it and v7 lists are order-sensitive.
+      // Record order separately: buckets scramble it and the plan's lists are order-sensitive.
       parts[`${key}-order`] = JSON.stringify(list.map(item => item && item.id));
     }
     for (const key of CHUNKED) {

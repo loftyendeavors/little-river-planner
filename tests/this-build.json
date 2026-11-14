@@ -1,8 +1,8 @@
 {
- "build": "The checks build, part 1: the checks on a made-up farm, in the repository, run on every push. Nothing on the page.",
- "base": "7c0e98d",
- "words": [],
- "code": [],
+ "build": "words sweep (a piece of the checks build, part 2)",
+ "base": "de5a1d2",
+ "words": ["app.js", "nursery.js", "panels.js", "planio.js", "reader.js", "seedlib.js", "seeds.js", "sowing.js", "store.js", "week.js"],
+ "code": ["trays.js"],
  "added": [],
  "removed": [],
  "page": []
