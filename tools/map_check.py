@@ -235,7 +235,9 @@ def run(page, width):
     z = js('LRFMap.zoom()')
 
     # a planting cannot be picked up while the ground is being edited
-    fill = js("""(() => { const el = document.querySelector('#mapBeds [data-planting]'); if (!el) return null; const r = el.getBoundingClientRect(), m = document.getElementById('map').getBoundingClientRect(); return r.left > m.left && r.right < m.right && r.top > m.top + 50 && r.bottom < m.bottom - 60 ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()""")
+    # the first planting drawn that is in view, wherever on the map this plan's first planting happens to lie
+    fill = js("""(() => { const m = document.getElementById('map').getBoundingClientRect(); for (const el of document.querySelectorAll('#mapBeds [data-planting]')) { const r = el.getBoundingClientRect(); if (r.left > m.left && r.right < m.right && r.top > m.top + 50 && r.bottom < m.bottom - 60) return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; } return null; })()""")
+    check(tag + 'a planting drawn in view was found to press on', bool(fill))
     if fill:
         page.mouse.move(fill['x'], fill['y']); page.mouse.down(); page.mouse.move(fill['x'] + 3, fill['y'] + 2)
         ghost = js("!!document.querySelector('.drag-ghost')"); page.mouse.up(); page.wait_for_timeout(80)
