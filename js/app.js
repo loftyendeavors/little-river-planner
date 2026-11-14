@@ -1111,8 +1111,10 @@
     if (res.no) { toast({ recorded: `${cropLabel(res.who)} is already recorded as sown or planted: its ground is not changed.`, standing: `${cropLabel(res.who)} stands for years: its ground is not changed.`, rows: 'The rows of this bed do not divide evenly among them.', short: 'A share would come to under a foot.' }[res.no] || 'They cannot be given equal shares as they stand.'); return false; }
     if (!res.ops.length) { toast('They already have equal shares.'); return false; }
     const was = worthOf(eng);
+    const twice = Rails.cleanup(eng).groups.length;
     if (!commit(`Equal shares in ${bedLabel(bed)}`, res.ops)) return false;
-    toast(`Equal shares in ${bedLabel(bed)} · ${worthSaid(was, worthOf(state.engine))}`, { label: 'Undo', run: undo });
+    const settled = twice - Rails.cleanup(state.engine).groups.length;   // where they were booked into the same ground, sharing it settles that
+    toast(`Equal shares in ${bedLabel(bed)}${settled > 0 ? ' · that ground is no longer booked twice' : ''} · ${worthSaid(was, worthOf(state.engine))}`, { label: 'Undo', run: undo });
     return true;
   }
   /**

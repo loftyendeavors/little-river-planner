@@ -1909,7 +1909,7 @@ body.phone .wk-scope button { padding: 8px 6px; font-size: 13.5px; }
 .mix-pick-says.bad { color: var(--bad); }
 .mix-pick label small { color: var(--muted); }
 
-/* ── "Season…": the farm's dates (0.36) ── */
+/* ── "Season…": the farm's dates (0.37) ── */
 .season.stacked.tight .season-peak span:last-child { display: none; }
 .season.stacked.bare .season-peak { visibility: hidden; }
 .dialog.bk.fd { width: min(760px, calc(100vw - 32px)); }
