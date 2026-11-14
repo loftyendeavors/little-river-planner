@@ -6,8 +6,9 @@
 //
 // First run: writes layout.json (where every bed lies, for the picture) and stops if farm-map.jpg is not there yet.
 // Then:      python3 -I tests/farm/make_pictures.py <out dir>     (draws farm-map.jpg and thumbs.json; needs Pillow)
-// Then run this again: it writes plan.json (the compact plan the app folder ships), backup-plan.json (the same plan as a
-// full backup file), inventory.json, packs.json and plan-info.json.
+// Then run this again: it writes plan.json (the compact plan the app folder ships), backup-plan.json (the same farm as a full
+// backup's plan: with the tray demand as it was typed, the day the backup was made and each variety's price list),
+// inventory.json, packs.json and plan-info.json.
 //
 // The farm has one of every kind of thing the planner knows: field beds, raised beds, a tunnel, greenhouse beds, two rows
 // of towers, crates and pots, live trays on the heated benches, cane berries, bulbs, beds shared lengthwise and by rows,
@@ -85,7 +86,7 @@ const overlays = [
   { id: 'tomato_cherry', gh: 8, yield: 4, rowsPerBed: 2, inRow: 16 },
   { id: 'radish', rowsPerBed: 6, price: 3 },
   { id: 'kale', rowsPerBed: 3 },
-  { id: 'onion', rowsPerBed: 4, yield: 0.4 }
+  { id: 'onion', rowsPerBed: 4, yield: 0.4, tray: 288 }   // sown in 288s: a tray the planner has no round figure of mix for, so Supplies has a row that waits for one (step5b_test.cjs)
 ];
 const crops = [...overlays, ...Object.values(C), ...Object.values(M)];
 settings.cropTypeList = { v: 1, added: [...Object.values(C), ...Object.values(M)].map(c => c.id).concat(['radish', 'tomato_cherry', 'mg_arugula', 'mg_basil']), removed: ['little_gem'], deleted: [] };
@@ -300,7 +301,9 @@ put(B.kitchen[2], md(4, 27), 'fennel', { rowsPerBed: 3, ...withV('fennel') });
 then(B.kitchen[2], md(7, 30), 'kale', { ft: 20, rowsPerBed: '3', inRow: '12', ...withV('kale') });
 put(B.kitchen[3], md(5, 4), C.celeriac.id, withV(C.celeriac.id));
 split(B.kitchen[4], md(4, 27), [['parsley', 0, 2, 24, 0, { growingDefaults: { v: 1, cropId: 'parsley', crop: {} } }], ['parsley', 2, 1, 24]], 3, 8, 12);
-put(B.kitchen[5], md(5, 18), 'eggplant_asian', { inRow: 16, growingDefaults: { v: 1, cropId: 'eggplant_asian', crop: {} }, ...withV('eggplant_asian') });
+// six nursery weeks kept on the planting where the crop says eight: a line of the review (step3a_test.cjs). The crop's varieties
+// say no weeks of their own, or theirs would stand over both.
+put(B.kitchen[5], md(5, 18), 'eggplant_asian', { inRow: 16, growingDefaults: { v: 1, cropId: 'eggplant_asian', crop: { gh: { present: true, value: 6 } } }, ...withV('eggplant_asian') });
 season(B.kitchen[6], 2); season(B.kitchen[7], 9);
 chance('berry rows');
 // Berry Rows: cane berries that stand for years, and two beds of annuals beside them
@@ -465,7 +468,8 @@ farm.plantings = back.plantings; farm.beds = back.beds;   // one order of fields
 write('plan.json', compact);
 const made = '2026-11-14T12:00:00.000Z';
 // a backup says when it was made, and holds the tray demand as it was typed
-write('backup-plan.json', IO.join({ ...farm, plantings: asTyped.plantings, liveTrayPlans: asTyped.liveTrayPlans }, { v: 1, rest: { backup: { exportedAt: made } }, varieties: {} }));
+// and each variety's price list, which the compact plan leaves to packs.json: the order sheet's costs are checked on it (step3b_test.cjs)
+write('backup-plan.json', IO.join({ ...farm, plantings: asTyped.plantings, liveTrayPlans: asTyped.liveTrayPlans, varieties: farm.varieties.map(v => packs[v.id] ? { ...v, supplierPacks: packs[v.id] } : v) }, { v: 1, rest: { backup: { exportedAt: made } }, varieties: {} }));
 write('inventory.json', inventory); write('packs.json', packs);
 write('plan-info.json', JSON.stringify({ backup: made, counts: IO.summary(farm), mapImage: { src: 'data/farm-map.jpg', sha256: sha }, inventory: 'data/inventory.json', thumbs: 'data/thumbs.json', packs: 'data/packs.json',
   corrections: [{ rule: 'traysOpenMonday', result: trayNote }], keep: { trayStart: 'monday' } }, null, 1));

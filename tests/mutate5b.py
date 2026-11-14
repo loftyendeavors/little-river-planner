@@ -1,6 +1,8 @@
 """Deliberate faults for step 5b: each is put into a copy of the app, and a named check must fail.
 usage: python3 -I mutate5b.py <app> <scratch> <tests-dir> <plan.json> [node | page | list] [words…]     env FROM=, TO= to run a part
 node: every fault against step5b_test.cjs (a minute or two; give OLD=<dir of the previous js> so a fault that moves a figure by itself is caught). page: faults against step5b_check.py (a few minutes each). list: how many faults there are of each kind, and nothing else.
+Four faults were taken out when the checks moved into the repository: the code each one changed is gone, by design
+(plug trays are counted over the season, and the benches are edited on a page of their own, not in a window).
 """
 import json, os, shutil, signal, subprocess, sys, time
 from pathlib import Path
@@ -68,7 +70,6 @@ NODE = [
  ("the days of hardening off may be a fraction", "js/nursery.js", "if (!Number.isInteger(d) || d < 0 || d > 21) throw", "if (d < 0 || d > 21) throw"),
  ("the fullest day of a kind of bench is the first day", "js/nursery.js", "if (!was || p.used - p.cap > was.used - was.cap || (p.used - p.cap === was.used - was.cap && p.used > was.used)) week.pools[k]", "if (!was) week.pools[k]"),
  ('hardening left under cover forgets the unheated benches', 'js/nursery.js', 'const inside = row.hardenIn;', 'const inside = row.harden - row.pools.outside.used;'),
- ("plug trays are counted over the season, not at once", "js/nursery.js", "const need = Math.max(t.atOnce, 0) + t.sold;", "const need = t.filled + t.sold;"),
  ('live trays in cells are still counted as open trays', 'js/nursery.js', "if (how.how === 'cells' && how.cells > 0) liveCells.set(how.cells, (liveCells.get(how.cells) || 0) + it.n); else if (how.how === 'cells') liveUnsaid += it.n; else liveOpen += it.n;", 'liveOpen += it.n;'),
  ('a tray whose cells are not said is counted as an open tray', 'js/nursery.js', "else if (how.how === 'cells') liveUnsaid += it.n; else liveOpen += it.n;", 'else liveOpen += it.n;'),
  ('a day that is not a day is taken for the grown-on list', 'js/nursery.js', 'if (!m || +m[1] < 1 || +m[1] > 12 || +m[2] < 1 || +m[2] > new Date(2028, +m[1], 0).getDate()) throw', 'if (!m) throw'),
@@ -80,7 +81,6 @@ NODE = [
  ("the shelf is not taken off", "js/nursery.js", "const h = Number(have[id]) > 0 ? Math.floor(Number(have[id])) : 0, buy = Math.max(0, need - h);", "const h = Number(have[id]) > 0 ? Math.floor(Number(have[id])) : 0, buy = need;"),
  ("to buy goes below nothing", "js/nursery.js", "const h = Number(have[id]) > 0 ? Math.floor(Number(have[id])) : 0, buy = Math.max(0, need - h);", "const h = Number(have[id]) > 0 ? Math.floor(Number(have[id])) : 0, buy = need - h;"),
  ("mix is guessed for a tray with no figure", "js/nursery.js", "MIX_EACH[id] != null ? MIX_EACH[id] : null, each =", "MIX_EACH[id] != null ? MIX_EACH[id] : 3, each ="),
- ("mix counts trays in use, not trays filled", "js/nursery.js", "[t.atOnce ? { n: t.atOnce, text: 'in use at once, at the most', on: t.on } : null, t.sold ? { n: t.sold, text: 'go out as live trays' } : null, t.filled ? { n: t.filled, text: 'filled over the season', aside: true } : null], t.filled + t.sold);", "[t.atOnce ? { n: t.atOnce, text: 'in use at once, at the most', on: t.on } : null, t.sold ? { n: t.sold, text: 'go out as live trays' } : null, t.filled ? { n: t.filled, text: 'filled over the season', aside: true } : null], t.atOnce + t.sold);"),
  ("a cubic foot is thirty quarts", "js/nursery.js", "const DRY_QT_PER_CUFT = 1728 / 67.200625;", "const DRY_QT_PER_CUFT = 1728 / 57.75;"),
  ("other years' plantings are counted in supplies", "js/nursery.js", "      if (String(it.p.date).slice(0, 4) !== text) continue;\n", ""),
  ("a cleared figure is kept as nothing", "js/nursery.js", "delete next[group][key]; if (!Object.keys(next[group]).length) delete next[group]; };", "delete next[group][key]; };"),
@@ -93,9 +93,7 @@ NODE = [
  ("the heated room moved by itself", "js/engine.js", "const benchEstimate = sp => Math.floor(nonNegative(sp.w) * nonNegative(sp.l) * benchPacking() / TRAY_FT2);", "const benchEstimate = sp => Math.ceil(nonNegative(sp.w) * nonNegative(sp.l) * benchPacking() / TRAY_FT2);"),
 ]
 PAGE = [
- ("the editor forgets it is open after a change", "js/bench.js", "      editing ? editor(fig) : null,", "      editing && !App.state.undo.length ? editor(fig) : null,"),
  ("a change to the benches says nothing of the room", "js/bench.js", "UI.toast(room ? `${label} · ${room}` : label, { label: 'Undo', run: App.undo });", "UI.toast(label, { label: 'Undo', run: App.undo });"),
- ("Escape does not close the benches", "js/bench.js", "box.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); close(); } });", ""),
  ("only the heated benches are drawn", "js/bench.js", "const charts = fig.weeks.length ? fig.shown.map(kind =>", "const charts = fig.weeks.length ? fig.shown.slice(0, 1).map(kind =>"),
  ("the Week view does not redraw the benches", "js/sowview.js", "App.on('plan', render); App.on('view', render); App.on('nursery', render);", "App.on('plan', render); App.on('view', render);"),
  ("the Seeds list is built whole on every change", "js/seeds.js", "      if (was && was.sig === sig && same(was)) { drawn.kept++; return was.nodes; }", ""),

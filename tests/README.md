@@ -62,8 +62,9 @@ python3 -I tests/verdict.py log    # exit 0: every line passed
 `.github/workflows/checks.yml` runs every part on every push, on every branch, side by side: about twelve minutes. The result
 named **All checks** is the one to require before a merge. The pictures a failed part took are kept with the run for a week.
 
-`.github/workflows/faults.yml` runs the deliberate faults. It is started by hand, from the Actions page: it is slow, and it
-is for the build that changes a check or the part of the planner a check covers.
+`.github/workflows/faults.yml` runs the deliberate faults, in some eighty pieces side by side. It is not run on every push:
+it is started by hand from the Actions page, or, for a build not yet merged, by pushing its commit to a branch named
+`faults/<anything>`. It is for the build that changes a check or the part of the planner a check covers.
 
 ## The made-up farm
 

@@ -3,6 +3,7 @@
 name: Checks
 on:
   push:
+    branches-ignore: ['faults/**']    # such a branch is pushed only to run the deliberate faults (faults.yml)
   workflow_dispatch:
 permissions:
   contents: read

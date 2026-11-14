@@ -1,9 +1,12 @@
 # The deliberate faults: each puts one fault into a copy of the app and requires that a named line of a check fails. They prove
-# that the checks can fail. Run by hand only (Actions, "Faults", "Run workflow"): several hundred faults, most of them a minute
-# or more each in a browser, so they are cut into pieces that run side by side. "All faults caught" is the one result to read.
+# that the checks can fail. Not run on every push: several hundred faults, most of them a minute or more each in a browser, cut
+# into pieces that run side by side. Run by hand (Actions, "Faults", "Run workflow"), or, for a build that is not merged yet,
+# by pushing its commit to a branch named faults/<anything>. "All faults caught" is the one result to read.
 # The same thing on your own computer: sh tests/setup.sh, then sh tests/faults.sh list and sh tests/faults.sh <set> [mode].
 name: Faults
 on:
+  push:
+    branches: ['faults/**']
   workflow_dispatch:
     inputs:
       sets:
