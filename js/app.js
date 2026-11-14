@@ -24,7 +24,7 @@
 
   let store = null;
   const rebuild = () => { state.engine = E.create(state.plan, Lib); };
-  /** What this app keeps beside a plan that v7 knows nothing of. It travels in a plan file's own note (see withOwn). */
+  /** What this app keeps beside a plan, apart from the plan's own records. It travels in a plan file's own note (see withOwn). */
   const OWN_KEYS = ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting', 'supplies'];
   /**
    * A fingerprint of what the plan says: the same for the same plan, whenever and wherever it was opened. The app's own
@@ -101,7 +101,7 @@
   }
   /**
    * A change made here to a crop, variety, garden or bed is a statement about the farm. It is noted beside the plan,
-   * in the same step, so that loading a newer v7 backup does not quietly take it back (see IO.carry).
+   * in the same step, so that loading a newer full backup does not quietly take it back (see IO.carry).
    */
   function noted(ops) {
     const lists = { crop: 'crops', variety: 'varieties', garden: 'gardens', bed: 'beds' }, was = (state.plan.lrfNext || {}).facts || null;
@@ -364,7 +364,7 @@
     toast(`${label} · ${moved}${fresh}${worth}`, { label: 'Undo', run: undo });
     return view;
   }
-  /** Say what kind of place a garden is. Its house factor and frost setting follow, as they did in v7. */
+  /** Say what kind of place a garden is. Its house factor and frost setting follow. */
   function setGardenType(gardenId, type) {
     const before = state.plan.gardens.find(g => g.id === gardenId), preset = Lib.gardenTypes[type];
     if (!before || !preset || before.type === type) return Promise.resolve(false);
@@ -385,7 +385,7 @@
     try { kept = text ? JSON.parse(text) : null; } catch (_) { kept = null; }
     return (state.extras = kept && kept.varieties ? kept : emptyExtras());
   }
-  /** The page record last kept for a variety: from this app, or from the v7 backup it came in with. */
+  /** The page record last kept for a variety: from this app, or from the full backup it came in with. */
   async function varietyRecord(id) {
     const extras = await loadExtras();
     if (extras.varieties[id]) return extras.varieties[id];
@@ -417,7 +417,7 @@
   }
   const saveThumbs = async () => { try { return store.backend === 'memory' ? false : await store.saveBlob('thumbs', JSON.stringify(state.keptThumbs)); } catch (_) { return false; } };
 
-  // A variety's photo record says where its picture came from (v7 writes one; so does the importer here). Where the small photo
+  // A variety's photo record says where its picture came from (a full backup has one; the importer here writes one). Where the small photo
   // itself is not kept in this browser, the app goes and gets it: through the grower's fetch service when that is set up, else
   // straight from the supplier when the supplier allows it. Until then the picture is shown from the supplier's site while online.
   const liveVariety = v => !!v && v.active !== false && !v.deleted;
@@ -495,7 +495,7 @@
     folderSoon();
     return kept;
   }
-  /** Make thumbnails from the variety photos inside a v7 backup zip. */
+  /** Make thumbnails from the variety photos inside a full backup's zip file. */
   async function importPhotos(parsed, where) {
     const out = {}, zip = parsed.zip, Zip = root.LRFZip;
     const list = zip ? (parsed.plan.varieties || []).filter(v => v && v.photo && v.photo.sha256 && zip.entries.get('files/' + v.photo.sha256)) : [];
@@ -590,7 +590,7 @@
     if (out.map || out.added) folderSoon();
     return out;
   }
-  // Seed stock. A plan loaded from a v7 backup carries its lots and their change log. A plan saved before stock
+  // Seed stock. A plan loaded from a full backup carries its lots and their change log. A plan saved before stock
   // could be edited here does not, so its records are fetched once from where they were set aside (the page's own
   // copy, or the stored backup records) and join the plan with the first change made to them.
   const SL = root.LRFSeedLib;
@@ -613,7 +613,7 @@
     return commit(label, [{ kind: 'inventory', before: state.plan.seedInventory || null, after }], { unchecked: true });
   }
 
-  // Vendor size lists. A plan loaded from a v7 backup carries each variety's own list. The plan that ships with this
+  // Vendor size lists. A plan loaded from a full backup carries each variety's own list. The plan that ships with this
   // page is the compact copy and does not, so its lists ship beside it and are read when the page opens.
   async function loadPacks() {
     state.packsBase = {};
@@ -787,7 +787,7 @@
 
   // ───────────────────────── live trays ─────────────────────────
   const Trays = root.LRFTrays;
-  /** Harvest and pick records live in the part of a v7 backup this app does not edit; a batch with any is history and stays as it is. */
+  /** Harvest and pick records are among the records a full backup carries that the planner does not edit; a batch with any is history and stays as it is. */
   async function trayRecords() {
     try { const attic = await loadAttic(); return { harvests: attic.rest.harvests, fieldRecords: attic.rest.fieldRecords }; } catch (_) { return {}; }
   }
@@ -810,13 +810,13 @@
     try { next = Trays.remove(farm, id, records, { keepRecorded: true }); } catch (error) { toast(error.message); return false; }
     return commit(`Delete ${plan.name}`, Trays.ops(farm, next), { unchecked: true });
   }
-  /** A plan saved by an earlier preview kept v7's demand plans with the records it does not edit. Bring them into the plan. */
+  /** A plan saved by an earlier preview kept its demand plans with the records the planner does not edit. Bring them into the plan. */
   async function adoptTrayPlans() {
     if (Array.isArray(state.plan.liveTrayPlans) || !state.plan.plantings.some(p => p.liveTray)) return;
     try { const attic = await loadAttic(), kept = attic.rest.liveTrayPlans; if (Array.isArray(kept) && kept.length) { adopt({ ...state.plan, liveTrayPlans: kept }); } } catch (_) { /* the batches are still shown; the demand table says the plan record is missing */ }
   }
 
-  /** One of this app's own settings (kept beside the plan, never written into a v7 backup), as a step that can be undone. */
+  /** One of this app's own settings (kept beside the plan, outside the plan's own records), as a step that can be undone. */
   function setOwn(key, value, label) {
     const before = (state.plan.lrfNext || {})[key];
     if ((before == null ? null : before) === (value == null ? null : value)) return false;
@@ -1243,9 +1243,9 @@
   }
 
   /**
-   * Names this app has since changed, put right on a plan as it is opened. v7 called the stand-in space live trays are filed
-   * under "Shared heated space"; here it is the heated greenhouse benches. Every plan opened or loaded passes through here, so
-   * a v7 backup loaded later is renamed too, with nothing to remember.
+   * Names this app has since changed, put right on a plan as it is opened. The stand-in space live trays are filed under may
+   * still be named "Shared heated space"; here it is the heated greenhouse benches. Every plan opened or loaded passes through
+   * here, so a full backup loaded later is renamed too, with nothing to remember.
    */
   function tidy(plan) {
     let changed = false;
@@ -1327,7 +1327,7 @@
   async function importBackup(file, extra = {}) {
     let parsed;
     try { parsed = await readBackupFile(file); IO.assertPlan(parsed.plan); } catch (error) { toast(`That file could not be read: ${error.message}`); return false; }
-    // A file this app saved says what was settled here (v7 knows none of it); a v7 backup has no such note.
+    // A file this app saved carries a note of what was settled here; any other full backup has no such note.
     const own = parsed.plan.lrfNextKeep && typeof parsed.plan.lrfNextKeep === 'object' ? parsed.plan.lrfNextKeep : null;
     delete parsed.plan.lrfNextKeep;
     const ownKeep = {};
@@ -1422,7 +1422,7 @@
   // Where the browser allows it, the plan is also kept as a file in a folder the user chose, written a moment after every change.
   const Folder = root.LRFFolder;
   let folderTimer = 0, statusNow = null, thumbsRev = 0;
-  /** The app's own record, added to a plan file so that opening the file here again loses nothing v7 does not know. */
+  /** The app's own record, added to a plan file so that opening the file here again loses nothing the app keeps beside the plan. */
   function withOwn(plan, savedAt, source = state.plan) {
     const mine = source.lrfNext || {}, keep = {};
     for (const key of OWN_KEYS) if (mine[key] != null) keep[key] = mine[key];
@@ -1432,7 +1432,7 @@
   /** The whole plan as a file's text: what Backup downloads, what the folder, a snapshot and the cloud each hold. `plan` is taken as it stands at the call. */
   async function planText(plan = state.plan) {
     let attic = null;
-    try { attic = await loadAttic(); } catch (_) { attic = emptyAttic(); }   // the plan is saved even when the records v7 keeps beside it are out of reach
+    try { attic = await loadAttic(); } catch (_) { attic = emptyAttic(); }   // the plan is saved even when the records the planner does not edit are out of reach
     const extras = await loadExtras(), savedAt = new Date().toISOString();
     return { text: JSON.stringify(withOwn(IO.join(plan, { ...attic, varieties: { ...(attic.varieties || {}), ...extras.varieties } }), savedAt, plan)), savedAt };
   }
@@ -1754,7 +1754,7 @@
     state.bundled = await bundledInfo;
     if (saved) {
       state.plan = saved;
-      // The plan saved here wins. When this copy of the page was built from a later v7 backup, say so instead of opening the older plan silently.
+      // The plan saved here wins. When this copy of the page was built from a later full backup, say so instead of opening the older plan silently.
       const mine = saved.lrfNext || {}, held = String(mine.backup || mine.importedAt || mine.startedAt || '');
       if (state.bundled && state.bundled.backup && !mine.sample && String(state.bundled.backup) > held && mine.passedOver !== state.bundled.backup) state.newer = { backup: state.bundled.backup, held: mine.backup || null, counts: state.bundled.counts || null };
     } else {

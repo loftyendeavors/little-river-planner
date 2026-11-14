@@ -1,13 +1,11 @@
 /* Little River Farm Planner — live trays: weekly demand turned into sowing batches.
  *
- * The records are v7's own, so either planner reads what the other saved: a demand plan in
- * `liveTrayPlans` (crops, days to ready, price, trays a week in spring, summer and fall), and one
- * ordinary planting per crop per week, filed under the heated greenhouse benches. The schedule and
- * the way a saved plan is turned into plantings follow v7.16.172's live-trays module line for line;
- * tests/trays_test.cjs runs the two side by side.
+ * The records are the plan's own: a demand plan in `liveTrayPlans` (crops, days to ready, price,
+ * trays a week in spring, summer and fall), and one ordinary planting per crop per week, filed
+ * under the heated greenhouse benches.
  *
- * One rule of v7's is not kept by the app: v7 refuses to change a plan once any batch has work recorded.
- * With `keepRecorded`, such batches stay exactly as they are and the rest follow the demand.
+ * A demand plan with work recorded on any batch is changed only with `keepRecorded`:
+ * such batches then stay exactly as they are and the rest follow the demand.
  *
  * Nothing here touches the page. Functions take a plan and return a new one.
  */
@@ -78,10 +76,10 @@
     }
     return { plan: p, batches, weeks, trays: sum(batches, b => b.trays), revenue: sum(batches, b => b.revenue), firstSow: batches.map(b => b.sow).sort()[0] || null };
   }
-  // The stand-in garden live trays are filed under. v7 named it "Shared heated space"; the grower calls it the heated greenhouse benches.
-  const POOL_NAME = 'Heated greenhouse benches', POOL_NAME_V7 = 'Shared heated space';
+  // The stand-in garden live trays are filed under: the grower calls it the heated greenhouse benches. A plan may still hold it under the name it had before.
+  const POOL_NAME = 'Heated greenhouse benches', POOL_NAME_BEFORE = 'Shared heated space';
   /** That garden's record under its present name, or null when there is nothing to rename. A name the grower gave it himself is left alone. */
-  const poolRenamed = g => (g && g.liveTrayPool === true && g.name === POOL_NAME_V7 ? { ...g, name: POOL_NAME } : null);
+  const poolRenamed = g => (g && g.liveTrayPool === true && g.name === POOL_NAME_BEFORE ? { ...g, name: POOL_NAME } : null);
   /** Has work been recorded on this batch? Such a batch is history and is never regenerated or removed with its plan. */
   function locked(plan, p, records) {
     const harvests = (records && records.harvests) || plan.harvests, picks = ((records && records.fieldRecords) || plan.fieldRecords || {}).picks;
@@ -123,9 +121,9 @@
         liveTray: { ...((original && original.liveTray) || {}), planId: plan.id, key: b.key, ready: b.ready, week: b.week, rowId: b.rowId } };
       p.growingDefaults = { v: 1, cropId: p.cropId, crop: { mk: { present: true, value: 1 }, baseUnit: { present: true, value: 'tray' }, yBasis: { present: true, value: 'tray' }, gh: { present: true, value: 0 } } };
       if (plan.customerId) p.customerId = plan.customerId; else delete p.customerId;
-      // Not in v7: a batch's sowing day can be set by hand on the Sowing view. It holds while it falls before the day the batch is due.
+      // A batch's sowing day can be set by hand on the Sowing view. It holds while it falls before the day the batch is due.
       if (p.sowOn && p.sowOn < b.ready) { p.date = p.sowOn; p.dtm = Math.round((date(b.ready) - date(p.sowOn)) / 86400000); } else delete p.sowOn;
-      // Not in v7: a crop row may name the variety its trays are sown with, so that sowing them draws that variety's seed.
+      // A crop row may name the variety its trays are sown with, so that sowing them draws that variety's seed.
       const row = plan.rows.find(r => r.id === b.rowId);
       if (row && 'varietyId' in row) { if (row.varietyId) p.varietyId = row.varietyId; else delete p.varietyId; }
       return p;
@@ -196,5 +194,5 @@
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  return { POOL_NAME, POOL_NAME_V7, poolRenamed, draft, validate, schedule, locked, apply, remove, ops, batches, weeks, byCrop, monday, mondayOnOrAfter, add, short, norm, SEASONS };
+  return { POOL_NAME, POOL_NAME_BEFORE, poolRenamed, draft, validate, schedule, locked, apply, remove, ops, batches, weeks, byCrop, monday, mondayOnOrAfter, add, short, norm, SEASONS };
 });

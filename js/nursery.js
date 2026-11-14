@@ -1,6 +1,6 @@
 /* Little River Farm Planner — the nursery: its benches, the room on each kind of bench, and what a season uses up.
  *
- * Benches are v7's own records (`plan.nursery.spaces`, with the houses they stand in under `benchAreas`), so the
+ * Benches are the plan's own records (`plan.nursery.spaces`, with the houses they stand in under `benchAreas`), so the
  * benches that came in with a backup are the ones edited here. Two things are added to a bench: a third kind,
  * `unheated`, and `holds`, the grower's own count of the trays a bench takes, which beats the estimate from its area.
  *
@@ -49,7 +49,7 @@
   }
   /**
    * Change a bench. change may hold name, kind, w, l (feet), holds (a whole number of trays, or '' for the estimate),
-   * active, and areaId ('' for no house). What is not named stays as it is, and so does everything v7 keeps on the record.
+   * active, and areaId ('' for no house). What is not named stays as it is, and so does everything else on the record.
    */
   function setBench(nursery, id, change) {
     const n = open(nursery), sp = n.spaces.find(x => x && x.id === id);

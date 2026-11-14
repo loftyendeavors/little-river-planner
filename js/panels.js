@@ -152,7 +152,7 @@
   const longSets = todo => { const sets = new Map(); for (const x of todo.long) { const key = `${x.r.b.gardenId}|${x.want}|${x.cap}`; (sets.get(key) || sets.set(key, []).get(key)).push(x); } return sets; };
   /** How many things wait under To settle: the number its heading says. */
   function settleCount(eng = App.state.engine) { const todo = cleanupOf(eng); return todo.count ? longSets(todo).size + todo.groups.length : 0; }
-  /** This copy of the page was built from a later v7 backup than the plan saved in this browser. */
+  /** This copy of the page was built from a later full backup than the plan saved in this browser. */
   function renderNewer(host) {
     const n = App.state.newer;
     if (!n) return;

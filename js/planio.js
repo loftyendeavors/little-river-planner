@@ -1,7 +1,7 @@
 /* Little River Farm Planner — plan import / export.
  *
  * The working plan ("core") is what the planning screens read and write.
- * Everything else a v7 backup carries — harvest logs, seed inventory, soil
+ * Everything else a full backup carries — harvest logs, seed inventory, soil
  * tests, weather, the long supplier page captures on each variety — is kept
  * untouched in the "attic" and stitched back on export, so nothing a later
  * module needs is lost while those screens do not exist yet.
@@ -25,7 +25,7 @@
     for (const key of REQUIRED_LISTS) if (!Array.isArray(plan[key])) throw new Error(`This file is not a farm plan: "${key}" is missing.`);
   }
 
-  /** v7 plan.json -> { core, attic }. The input object is not modified. */
+  /** A full backup's plan.json -> { core, attic }. The input object is not modified. */
   function split(plan) {
     assertPlan(plan);
     const core = {}, attic = { v: 1, rest: {}, varieties: {} };
@@ -50,7 +50,7 @@
     return { core, attic };
   }
 
-  /** { core, attic } -> a plan the v7 app can restore. */
+  /** { core, attic } -> a full backup's plan.json. */
   function join(core, attic) {
     const plan = { ...((attic && attic.rest) || {}) };
     for (const [key, value] of Object.entries(core)) if (key !== 'lrfNext') plan[key] = value; // lrfNext is this app's own bookkeeping
@@ -124,10 +124,10 @@
     return core;
   }
 
-  // ── what was established here, carried onto a newer v7 backup ──
+  // ── what was established here, carried onto a newer full backup ──
   // The plan itself (plantings, tray demand, seed stock) comes from the backup. What was said here about the farm does not have
   // to be said again: the assumptions list, this app's own settings, and changes made here to a crop, variety, garden or bed.
-  // A change is put back only while the backup still holds the value it was changed from; where v7 has moved on, v7's value stands.
+  // A change is put back only while the backup still holds the value it was changed from; where the backup has moved on, the backup's value stands.
   const FACT_LISTS = ['crops', 'varieties', 'gardens', 'beds'];
   const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
   const figures = a => a ? ['crops', 'varieties'].reduce((n, k) => n + Object.values(a[k] || {}).reduce((m, envs) => m + Object.keys(envs || {}).length, 0), 0) + Object.keys(a.starts || {}).length + Object.keys(a.sell || {}).length + Object.keys(a.sellV || {}).length : 0;
@@ -164,9 +164,9 @@
     if (!prev || mine.sample) return { plan, keep, notes, gone: [] };
     if (figures(prev.assumptions) && !figures(next.assumptions)) { plan.assumptions = prev.assumptions; const n = figures(prev.assumptions); notes.push(`your assumptions list (${n} figure${n === 1 ? '' : 's'})`); }
     for (const key of ['crates', 'trayStart', 'trays', 'groups', 'supplies']) if (mine[key]) keep[key] = mine[key];
-    // Benches changed here are a statement about the farm that no v7 backup holds: they stay as they were set.
+    // Benches changed here are a statement about the farm: they stay as they were set, whatever the backup holds.
     if (prev.nursery && prev.nursery.lrfEdited === true) { plan.nursery = prev.nursery; notes.push('your benches'); }
-    // Plantings waiting to be placed were made here and are in no v7 backup: they stay, still waiting.
+    // Plantings waiting to be placed were made here and are not among a backup's plantings: they stay, still waiting.
     if (Array.isArray(mine.waiting) && mine.waiting.length) { keep.waiting = mine.waiting; notes.push(`${mine.waiting.length} planting${mine.waiting.length === 1 ? '' : 's'} waiting to be placed`); }
     const facts = {}, changed = [];
     for (const list of FACT_LISTS) {
@@ -183,7 +183,7 @@
         let applied = false;
         for (const [field, value] of Object.entries(fact.set || {})) {
           if (same(record[field], value)) continue;                                // the backup already says so
-          if (!same(record[field], (fact.was || {})[field])) continue;             // v7 has changed it since: v7's value stands
+          if (!same(record[field], (fact.was || {})[field])) continue;             // the backup has changed it since: the backup's value stands
           if (value === null) delete record[field]; else record[field] = value;
           set[field] = value; was[field] = fact.was[field]; applied = true;
         }
