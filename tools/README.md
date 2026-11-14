@@ -2,6 +2,8 @@
 
 Scripts that produce this site from the planner's working copy. They are not part of the app and nothing loads them.
 
+The checks that need a plan to look at run on the made-up farm in `tests/farm`; `tests/README.md` says how everything is run, here and on GitHub, and how a build is made. The paths below are set for you by `tests/setup.sh` and `tests/b.sh`.
+
 - `build_site.cjs` — writes `index.html`, `css/`, `js/`, `fonts/`, `manifest.webmanifest` and `sw.js` into this folder from the app's source. Run after `make_icons.py` has made `icons/`. It stops when the app folder lacks a script this site already serves: that means the app folder was put together before another piece of work added the script, and building from it would take that work off the site. Copy `js/` and `css/app.css` from the repo into the app folder, put your own changes back on top, and build again; `--drop` as a last argument removes a script on purpose. It stops too when the app folder holds a script its own `index.html` does not load: the app's `index.html` is kept apart from this repo and can be the stale part. Add the missing `<script>` lines in the order this repo's `index.html` has them.
 - `app_folder.cjs` — the other way round: makes the app folder's code (the scripts, the stylesheet and the page as they stand before `build_site.cjs`) from this repository. `node tools/app_folder.cjs <this folder> <app folder>`. It writes no data. Building the site from what it writes gives this folder's own `index.html` back, line for line.
 - `site_check.py` — opens the built site in headless Chrome: empty start, loading a backup, reload, opening with no connection, and with the network still off: stock typed in, vendor sizes shown, a sowing recorded.
