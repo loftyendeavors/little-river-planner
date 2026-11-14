@@ -135,6 +135,7 @@ V('scallion', 2); V('leek', 2); V('chard', 2); V('celery', 1);
 for (const v of varieties.filter((_, i) => i % 13 === 5).slice(0, 9)) v.deleted = true;
 const lettuceTimed = byCrop.lettuce_head[3]; lettuceTimed.dtm = 48; lettuceTimed.timingMode = 'manual';
 const vOf = (cropId, i = null) => { const list = (byCrop[cropId] || []).filter(v => !v.deleted); return list.length ? (i == null ? pick(list) : list[i % list.length]) : null; };
+V('cilantro', 2);   // grown on the towers and nowhere else: a crop raised in trays that the list of crops moved off the heat must not offer
 
 chance('ground');
 // ── the ground ──
@@ -348,16 +349,16 @@ chance('tunnel');
 // The tunnel: snack cucumbers early and late, two rounds of vining cucumbers, and spinach before basil
 put(B.tunnel[0], md(5, 6), 'cucumber', { growingDefaults: { v: 1, cropId: 'cucumber', crop: {} }, yield: 9, ...withV('cucumber') });
 then(B.tunnel[0], md(7, 22), 'cucumber', { growingDefaults: { v: 1, cropId: 'cucumber', crop: {} }, yield: 9, ...withV('cucumber') });
-put(B.tunnel[1], md(4, 9), C.miniCuke.id, { inRow: 10, growingDefaults: { v: 1, cropId: C.miniCuke.id, crop: { inRow: { present: true, value: 12 }, price: { present: true, value: 1.5 }, mk: { present: true, value: 0.85 } } }, ...withV(C.miniCuke.id) });
+put(B.tunnel[1], md(4, 9), C.miniCuke.id, { inRow: 10, growingDefaults: { v: 1, cropId: C.miniCuke.id, crop: { inRow: { present: true, value: 12 }, price: { present: true, value: 1.5 }, mk: { present: true, value: 0.85 }, hw: { present: true, value: 35 } } }, ...withV(C.miniCuke.id) });   // its copy says what the crop says of harvest days, and something else of price and share
 then(B.tunnel[1], md(8, 30), C.miniCuke.id, { ft: 40, rowsPerBed: '2', inRow: '10', ...withV(C.miniCuke.id) });
 put(B.tunnel[2], md(4, 16), 'spinach', withV('spinach')); then(B.tunnel[2], md(6, 20), 'basil', withV('basil'));
 chance('towers');
-// Towers: a cycle every thirty days, head lettuce in most, basil in three. Eight towers side by side turn over on the same day.
+// Towers: a cycle every thirty days, head lettuce in most, basil in three, cilantro in three (and cilantro nowhere else). Eight towers side by side turn over on the same day.
 // The first two are planted alike all season (one bar in the bank's row on the timeline: step2a_check.py gives one of them
 // another variety), and one tower turns over two days after its neighbours, so its sowings have a rockwool sheet to themselves
 // (sowing_view_check.py reads both wordings: a sowing alone on its sheets, and sowings that share them).
 [...B.tower1, ...B.tower2].forEach((b, i) => {
-  const basil = i % 9 === 4, cropId = basil ? 'basil' : 'lettuce_head', like = i === 1 ? 0 : i, v = vOf(cropId, like);
+  const basil = i % 9 === 4, cropId = basil ? 'basil' : i % 9 === 7 ? 'cilantro' : 'lettuce_head', like = i === 1 ? 0 : i, v = vOf(cropId, like);
   for (let date = add(md(4, 19), Math.floor((i % 16) / 8) * 7 + Math.floor(i / 16) * 14 + (i === 30 ? 2 : 0)), k = 0; date <= md(10, 25) && k < 7; date = add(date, 30), k++)
     put(b, date, cropId, { dtm: 30, hw: 1, harvestMode: 'window', turnover: 0, timingMode: 'manual', towerCycle: { v: 1, days: 30, replantSameDay: true },
       ...(basil ? { growingDefaults: { v: 1, cropId, crop: { rowsPerBed: { present: false } } } } : {}), varietyId: (k % 3 === 2 ? vOf(cropId, like + k) : v).id });

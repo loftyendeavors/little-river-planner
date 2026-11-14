@@ -110,7 +110,14 @@ for name, rel, a, b in ([(None, None, None, None)] if faults else []) + faults:
     if mode == 'node':
         run = subprocess.run(['node', os.path.join(tests, 'step3a_test.cjs'), work, plan], capture_output=True, text=True); out, err = run.stdout, run.stderr
     else:
-        out, err = alone([sys.executable, '-I', os.path.join(tests, 'step3a_check.py'), work, os.path.join(scratch, 'mutant-shots')], 900, env={**os.environ, 'STOP_AT_FAIL': '1'})
+        seen = set()   # with no fault in it the check is run until it stops at nothing new: every line that fails by itself is then known, and none of them stops a faulted run short of the lines the fault is meant for
+        while True:
+            out, err = alone([sys.executable, '-I', os.path.join(tests, 'step3a_check.py'), work, os.path.join(scratch, 'mutant-shots')], 900, env={**os.environ, 'STOP_AT_FAIL': '1', 'GO_ON_AT': json.dumps(sorted(seen if name is None else already or []))})
+            if name is not None: break
+            try: more = {str(n.get('name')) if isinstance(n, dict) else str(n) for n in json.loads(out.strip().split('\n')[-1]).get('failed') or []} - seen
+            except Exception: break
+            if not more or len(seen) > 20: break
+            seen |= more
     try: tail = json.loads(out.strip().split('\n')[-1])
     except Exception: tail = {'failed': [], 'crash': (err or out)[-300:]}
     named = [str(n.get('name')) if isinstance(n, dict) else str(n) for n in tail.get('failed') or []]; named = [n for n in named if 'ran to its end' not in n]   # a check that only stops has named no line: that is not a catch

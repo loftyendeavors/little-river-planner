@@ -31,7 +31,7 @@ def check(name, ok, detail=None):
         failed.append(name)
     if os.environ.get('LIVE') == '1':
         print(results[-1], flush=True)
-    if not ok and os.environ.get('STOP_AT_FAIL') == '1':
+    if not ok and os.environ.get('STOP_AT_FAIL') == '1' and name not in json.loads(os.environ.get('GO_ON_AT') or '[]'):   # GO_ON_AT: lines that fail with no fault put in, which are no reason to stop before the lines a fault is meant for
         print('\n'.join(results)); print(json.dumps({'passed': len(results) - len(failed), 'of': len(results), 'failed': failed}), flush=True)
         os._exit(0)
 

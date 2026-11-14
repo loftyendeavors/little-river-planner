@@ -95,7 +95,8 @@ NODE = [
 PAGE = [
  ("a change to the benches says nothing of the room", "js/bench.js", "UI.toast(room ? `${label} · ${room}` : label, { label: 'Undo', run: App.undo });", "UI.toast(label, { label: 'Undo', run: App.undo });"),
  ("only the heated benches are drawn", "js/bench.js", "const charts = fig.weeks.length ? fig.shown.map(kind =>", "const charts = fig.weeks.length ? fig.shown.slice(0, 1).map(kind =>"),
- ("the Week view does not redraw the benches", "js/sowview.js", "App.on('plan', render); App.on('view', render); App.on('nursery', render);", "App.on('plan', render); App.on('view', render);"),
+ # Not a fault any more: "the Week view does not redraw the benches" (the page not listening for a change to the nursery). A change to the
+ # benches is a step of the plan, and the Tasks page redraws on every step of the plan, so taking that listener out changes nothing there.
  ("the Seeds list is built whole on every change", "js/seeds.js", "      if (was && was.sig === sig && same(was)) { drawn.kept++; return was.nodes; }", ""),
  ("a row of the Seeds list is kept though its variety changed", "js/seeds.js", "was => was.v === v, () => rowOf(v, flat), { v });", "() => true, () => rowOf(v, flat), { v });"),
  ("supplies ignore the shelf on the page", "js/bench.js", "sup = N.supplies(eng, App.planYear(), (App.state.plan.lrfNext || {}).supplies || null, fig);", "sup = N.supplies(eng, App.planYear(), null, fig);"),

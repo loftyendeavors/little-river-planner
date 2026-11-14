@@ -264,6 +264,7 @@ const after = A.apply(core, step.ops), e2 = E.create(after, Lib);
 // copied values
 {
   const copies = later.filter(r => r.kind === 'copy'), same = copies.find(r => r.same), differ = copies.filter(r => !r.same);
+  check('a subject is found: a copied value that says what the crop says, on a planting whose copy holds more than that', !!same && same.ids.some(id => Object.keys(eng.planting(id).growingDefaults.crop).length > same.fields[id].length));
   if (same) {
     const s = A.build(core, [same], null), out = A.apply(core, s.ops), e3 = E.create(out, Lib);
     check('letting go copies that say what the crop says changes nothing', core.plantings.every(p => A.alike(A.figure(eng, p), A.figure(e3, e3.planting(p.id)))) && same.ids.every(id => same.fields[id].every(k => !(k in e3.planting(id).growingDefaults.crop))));
