@@ -11,8 +11,8 @@ still can prove nothing. The pictures of every screen that differs are kept in t
 side with what changed boxed in red.
 
 What this cannot see: anything that needs a click or a drag to appear (a panel, a menu, a window), what lies below the first
-screenful, a change of colour too slight to see (under 5 levels in 255), and whether a change is an improvement. It answers one
-question: did this screen change, yes or no.
+screenful, a change of colour too slight to see (under 5 levels in 255), a change of fewer than nine pixels, and whether a
+change is an improvement. It answers one question: did this screen change, yes or no.
 """
 import functools, http.server, io, json, os, sys, threading
 from pathlib import Path
@@ -96,6 +96,7 @@ def take(pw_browser, url, width, height, wanted):
     ctx.close()
     return out
 
+NOISE = 8
 def differs(a, b):
     """None when two pictures are the same; else how many pixels differ and the box they lie in."""
     x, y = Image.open(io.BytesIO(a)).convert("RGB"), Image.open(io.BytesIO(b)).convert("RGB")
@@ -104,9 +105,11 @@ def differs(a, b):
     # a pixel differs when one of its three colours is off by more than 4 in 255: the edge of a rounded corner comes out a
     # level lighter or darker from one take to the next, which no eye can see and no layout causes
     far = ImageChops.lighter(ImageChops.lighter(r, g), b_).point(lambda v: 255 if v > 4 else 0)
-    box = far.getbbox()
-    if not box: return None
-    return {"pixels": far.histogram()[255], "box": list(box)}
+    box, n = far.getbbox(), far.histogram()[255]
+    # and two pictures differ when more than 8 pixels do: on a screen of four million, a pixel or two of a photograph scaled to
+    # fit comes out differently from one take to the next (seen on GitHub: one pixel of the map at 3440 wide)
+    if not box or n <= NOISE: return None
+    return {"pixels": n, "box": list(box)}
 def keep(name, width, a, b, box):
     x, y = Image.open(io.BytesIO(a)).convert("RGB"), Image.open(io.BytesIO(b)).convert("RGB")
     x.save(shots / f"{name}-{width}-before.png"); y.save(shots / f"{name}-{width}-now.png")

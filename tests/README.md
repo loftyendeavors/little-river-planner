@@ -128,7 +128,9 @@ A change to the farm changes what every check sees. Run them all after it.
    unless the build's file names it under `screens` (`"screens": ["map", "tasks"]`; the names are in the check): then it has
    to look different at one width at least. This build is photographed twice, and a screen whose two takes differ fails,
    since a picture that does not hold still proves nothing. It sees the first screenful of each screen as it opens: not a
-   panel, a menu or a window, not what a click or a drag brings up, and not whether a change is for the better.
+   panel, a menu or a window, not what a click or a drag brings up, not a change of fewer than nine pixels or of a colour by
+   less than 5 levels in 255 (that much comes and goes between two takes of one build), and not whether a change is for the
+   better.
 
 A build that is meant to change a figure says which, shows it on the page before anything moves, and has a check of its
 own that the figure changes there and nowhere else.
