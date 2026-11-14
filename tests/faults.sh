@@ -12,7 +12,7 @@
 #   {"set": "step5a", "mode": "node", "faults": 30, "caught": 30, "missed": [], "broken": []}
 # The exit status is 0 only when every fault was caught.
 . "$(dirname "$0")/env.sh"
-SETS="step1 f018 step2a step2b step3a step3b step5a step5b stepF plain r1 sup sync maint bedpanel mixed season ask cleanup map changed screens"
+SETS="step1 f018 step2a step2b step3a step3b step5a step5b stepF plain r1 sup sync maint bedpanel mixed season ask cleanup look map changed screens"
 # the script of a set and what it is given; F is the folder its copies are made in
 script() {
   case $1 in
@@ -35,6 +35,7 @@ script() {
     season) SCRIPT=$T/mutate_season.py; ARGS="$APP $F $T $REPO" ;;
     ask) SCRIPT=$T/mutate_ask.py; ARGS="$APP $F $T" ;;
     cleanup) SCRIPT=$T/mutate_cleanup.py; ARGS="$APP $F $T" ;;
+    look) SCRIPT=$T/mutate_look.py; ARGS="$APP $F $T $PLAN" ;;
     map) SCRIPT=$REPO/tools/mutate_map.py; ARGS="$APP $F $REPO/tools" ;;
     changed) SCRIPT=$T/mutate_changed.py; ARGS="$REPO $F $T $W/old $SCRATCH" ;;
     screens) SCRIPT=$T/mutate_screens.py; ARGS="$REPO $F $T $W/old $ZIP" ;;

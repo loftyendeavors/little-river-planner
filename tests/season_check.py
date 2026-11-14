@@ -4,7 +4,6 @@ usage: python3 -I season_check.py <app-dir-or-built-site> <shots-dir> [backup.zi
 """
 import functools, http.server, json, os, sys, threading
 from pathlib import Path
-LABEL = os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)"   # the build's label, as tests/env.sh reads it from the page's own script
 from playwright.sync_api import sync_playwright
 target, shots = Path(sys.argv[1]), Path(sys.argv[2]); shots.mkdir(parents=True, exist_ok=True)
 backup = sys.argv[3] if len(sys.argv) > 3 else None
@@ -98,7 +97,7 @@ with sync_playwright() as pw:
 
     start = js("return { n: S.plan.plantings.length, undo: S.undo.length, label: txt('buildNote'), dates: FD.read(eng), sample: A.isSample() }")
     year = start["dates"]["year"]; D = start["dates"]["dates"]
-    check("a plan is open, there is nothing to undo, and the build says its label", start["n"] > 300 and start["undo"] == 0 and LABEL in start["label"] and not start["sample"], start)
+    check("a plan is open, there is nothing to undo, and the build says its own label", start["n"] > 300 and start["undo"] == 0 and (os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)") in start["label"] and not start["sample"], start)
     snap0 = js("return snap()"); frost0 = js("return frost()")
     def md(key, n): return page.evaluate("([y, md, n]) => LRFEngine.d2s(LRFEngine.addDays(LRFEngine.s2d(y + '-' + md), n)).slice(5)", [year, D[key], n])
     def word(m): return page.evaluate("m => LRFFarmDates.word(m)", m)

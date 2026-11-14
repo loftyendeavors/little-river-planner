@@ -54,7 +54,7 @@ with sync_playwright() as pw:
     def shot(name): page.screenshot(path=str(shots / f"{name}-{WIDTH}.png"))
     key0 = js("return A.contentKey()")
     start = js("return { n: S.plan.plantings.length, undo: S.undo.length, label: txt('buildNote'), view: S.view, fn: typeof A.asksToShare }")
-    check(f"a plan is open on the map with nothing to undo; the build says its label", start["n"] > 300 and start["undo"] == 0 and LABEL in start["label"] and start["view"] == "map", start)
+    check("a plan is open on the map with nothing to undo; the build says its own label", start["n"] > 300 and start["undo"] == 0 and LABEL in start["label"] and start["view"] == "map", start)
 
     # ══ who is asked, said by the planner itself ══
     who = js("""if (typeof A.asksToShare !== 'function') return { map: null, timeline: {}, harvest: {} }; const on = v => { A.setView(v); return { lib: A.asksToShare({ cropId: 'x' }), variety: A.asksToShare({ cropId: 'x', varietyId: 'y' }), moved: A.asksToShare({ plantingId: 'p' }), copied: A.asksToShare({ plantingId: 'p', copy: true }), waiting: A.asksToShare({ waitingId: 'w' }) }; };

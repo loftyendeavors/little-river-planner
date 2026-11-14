@@ -2,6 +2,7 @@
  "build": "The checks build, part 2: the engine counts one way; the review window's suggestion moves nothing; the sample is a made-up layout; comments say what the code does.",
  "words": [
   "app.js",
+  "main.js",
   "nursery.js",
   "panels.js",
   "reader.js",
@@ -17,7 +18,6 @@
   "assume.js",
   "library.js",
   "planio.js",
-  "main.js",
   "trays.js"
  ],
  "added": [],

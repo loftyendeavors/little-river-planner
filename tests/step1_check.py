@@ -10,7 +10,6 @@ No network is used: supplier addresses are answered here, some with pictures and
 """
 import base64, functools, http.server, json, os, re, shutil, socketserver, sys, tempfile, threading
 from urllib.parse import urlsplit
-LABEL = os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)"   # the build's label, as tests/env.sh reads it from the page's own script
 from playwright.sync_api import sync_playwright
 
 app, backup, backup_zip, shots = sys.argv[1:5]
@@ -118,7 +117,7 @@ with sync_playwright() as pw:
     # ═══ A. the app with its own data: names, labels, the one-line lot, wording, the garden ═══
     server_a, url_a = serve(app)
     ctx, page, errors = new_page(browser, url_a)
-    check('the build says its label', LABEL in page.evaluate("document.getElementById('buildNote').textContent"))
+    check('the build says its own label', (os.environ.get('LRF_LABEL') or '(LRF_LABEL is not set)') in page.evaluate("document.getElementById('buildNote').textContent"))
     seen = {}
     for name in ('map', 'timeline', 'sow', 'trays', 'harvest', 'assume', 'seeds'):
         view(page, name)

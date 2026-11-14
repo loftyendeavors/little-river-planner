@@ -178,10 +178,10 @@ piece of the planner runs the faults of the checks that cover it before it asks 
    ```
    export LRF_WORK=/tmp/lrf-work
    sh tests/setup.sh                                                                  # the app folder, from the repository
-   node tools/build_site.cjs $LRF_WORK/app $LRF_WORK/scratch/node_modules/@fontsource-variable . "0.40"
+   node tools/build_site.cjs $LRF_WORK/app $LRF_WORK/scratch/node_modules/@fontsource-variable . "0.41"
    ```
    The last argument is the label the page shows in its Backup menu. It is written in one place, `js/main.js`
-   ("Preview 0.40 ·" and so on); the checks read it from there (`LRF_LABEL`, in `env.sh`). A build that changes nothing a
+   ("Preview 0.41 ·" and so on); the checks read it from there (`LRF_LABEL`, in `env.sh`). A build that changes nothing a
    browser is served keeps the label. **Read the next free label from `main` at the moment of the merge.**
    A new script is added to the app folder's `index.html` in load order (`tools/app_folder.cjs` and `tools/README.md` say
    how the two pages relate). `README.md` is kept by hand.

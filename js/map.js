@@ -27,7 +27,7 @@
   const view = { x: 0, y: 0, z: 1, home: 1, fitted: false, moved: false };   // moved: the grower has panned or zoomed since the farm was last fitted
   const beds = new Map();       // bedId -> { bed, geo, g, base, fills, tag, parts, status, drop }
   const gardenSize = new Map(); // gardenId -> number of spaces drawn
-  let layers = { photo: true, labels: true }, highlightCrop = null, feetPerPx = 0.1, raf = 0, spaceDown = false;
+  let layers = { photo: true, labels: true }, highlightCrop = null, highlightGroup = null, feetPerPx = 0.1, raf = 0, spaceDown = false;
   // While the layout is being edited this map only moves the view: picking, dragging and hover cards are the editor's.
   let locked = false;
   const watchers = [];
@@ -140,7 +140,13 @@
   // ── what stands where on the planning date ──
   /** A planting's rectangle in the bed's own drawing space. */
   const boxOf = (geo, f) => { const k = geo.L / geo.ft, a1 = Math.min(f.a1, geo.ft); return { x: geo.W * (f.x0 - 0.5), y: geo.L / 2 - a1 * k, w: geo.W * (f.x1 - f.x0), h: Math.max(0, a1 - f.a0) * k }; };
-  const tint = hex => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || ''); if (!m) return hex; const to = [244, 241, 230]; return '#' + [1, 2, 3].map((i, n) => Math.round(parseInt(m[i], 16) * 0.58 + to[n] * 0.42).toString(16).padStart(2, '0')).join(''); };
+  // a colour made deeper: every part of it brought toward black by the share k
+  const shade = (hex, k) => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || ''); return m ? '#' + [1, 2, 3].map(i => Math.round(parseInt(m[i], 16) * (1 - k)).toString(16).padStart(2, '0')).join('') : hex; };
+  const PICK = 0.3, ROWS = 0.22;   // a bed being picked is this much deeper than one still growing; row lines this much deeper than their bed
+  // which spaces grow each crop: a space counts once for a crop, however many plantings of it it holds
+  const tally = (counts, cropId, bedId) => { let set = counts.get(cropId); if (!set) counts.set(cropId, set = new Set()); set.add(bedId); };
+  // with one group, or one crop of it, shown alone: does a bed that grows these crops stay clear?
+  const shownAlone = crops => highlightCrop ? crops.some(c => c.id === highlightCrop) : !highlightGroup || crops.some(c => App.state.engine.colorGroup(c).id === highlightGroup);
 
   // ── pots and crates: a crop keeps its containers ──
   // Which containers of a group each planting stands in is worked out for the whole season at once (Geo.seats): first in,
@@ -232,7 +238,7 @@
       const holdsSel = !!selPlanting && runs.some(x => x.list.some(p => p.id === selPlanting));
       // where the bed's own starting end points on the page: down or right means the bands run from the other end
       const turn = (geo.rot || 0) * Math.PI / 180, flip = -Math.sin(turn) + Math.cos(turn) > 0;
-      for (const id of new Set(runs.map(x => x.c.id))) counts.set(id, (counts.get(id) || 0) + 1);   // a space counts once for a crop, however often it returns
+      for (const run of runs) tally(counts, run.c.id, bed.id);   // a space counts once for a crop, however often it returns
       let at = 0;
       runs.forEach((run, k) => {
         const color = eng.cropColor(run.c), attrs = { fill: color, class: 'bed-fill pick season', 'data-crop': run.c.id }, name = run.c.name, a0 = at, a1 = k === runs.length - 1 ? 1 : at + run.part;
@@ -264,14 +270,14 @@
       }
       item.planted = runs.length > 0;
       g.setAttribute('class', ['bed', geo.shape === 'circle' ? 'tower' : geo.shape === 'cells' ? 'pots' : '', runs.length ? 'is-planted' : 'is-empty',
-        highlightCrop && !runs.some(x => x.c.id === highlightCrop) ? 'dim' : '', sel && ((sel.type === 'bed' && sel.id === bed.id) || (sel.type === 'opening' && sel.bedId === bed.id)) ? 'sel' : '', holdsSel ? 'has-sel' : '', item.drop || ''].filter(Boolean).join(' '));
+        shownAlone(runs.map(x => x.c)) ? '' : 'dim', sel && ((sel.type === 'bed' && sel.id === bed.id) || (sel.type === 'opening' && sel.bedId === bed.id)) ? 'sel' : '', holdsSel ? 'has-sel' : '', item.drop || ''].filter(Boolean).join(' '));
     }
     paintLegend(counts);
     paintHandles();
     scheduleLabels();
   }
   function setWholeSeason(on) {
-    wholeSeason = !!on; highlightCrop = null;
+    wholeSeason = !!on; highlightCrop = highlightGroup = null;
     $('mapSeasonToggle').setAttribute('aria-pressed', String(wholeSeason));
     $('mapView').classList.toggle('whole-season', wholeSeason);
     $('mapBar').querySelector('.bar-title').textContent = wholeSeason ? 'Through the season' : 'In the ground';
@@ -291,9 +297,9 @@
       let used = 0, picking = false, holdsSel = false;
       for (const r of here) {
         const color = eng.cropColor(r.c), ripe = r.first <= date && date <= r.last, id = r.planting.id, name = r.c.vname || r.c.name;
-        const attrs = { fill: ripe ? color : tint(color), 'data-planting': id, class: `bed-fill ${ripe ? 'pick' : 'grow'}${id === selPlanting ? ' sel' : ''}` };
+        const fill = ripe ? shade(color, PICK) : color, attrs = { fill, 'data-planting': id, class: `bed-fill ${ripe ? 'pick' : 'grow'}${id === selPlanting ? ' sel' : ''}` };
         picking = picking || ripe; holdsSel = holdsSel || id === selPlanting;
-        counts.set(r.c.id, (counts.get(r.c.id) || 0) + 1);
+        tally(counts, r.c.id, bed.id);
         if (r.tw) {   // a tower is held whole
           fills.append(geo.shape === 'circle' ? s('circle', { ...attrs, r: geo.W / 2 }) : s('rect', { ...attrs, x: -geo.W / 2, y: -geo.L / 2, width: geo.W, height: geo.L }));
           item.parts.push({ id, name, short: String(bed.bed), w: geo.W, l: geo.L, cx: 0, cy: 0, along: false }); break;
@@ -322,7 +328,7 @@
         fills.append(s('rect', { ...attrs, x: b.x, y: b.y, width: b.w, height: b.h }));
         // Rows, as they run down the bed.
         const rows = geo.ft && r.rows >= 1 && r.rows <= 16 ? r.rows : 0;
-        if (rows) { let d = ''; for (let i = 0; i < rows; i++) { const x = b.x + (i + 0.5) / rows * b.w; d += `M${x} ${b.y}V${b.y + b.h}`; } fills.append(s('path.bed-rows', { d, stroke: ripe ? tint(color) : color })); }
+        if (rows) { let d = ''; for (let i = 0; i < rows; i++) { const x = b.x + (i + 0.5) / rows * b.w; d += `M${x} ${b.y}V${b.y + b.h}`; } fills.append(s('path.bed-rows', { d, stroke: shade(fill, ROWS) })); }
         item.parts.push({ id, name, w: b.w, l: b.h, cx: b.x + b.w / 2, cy: b.y + b.h / 2, along: b.h >= b.w, f });
       }
       // Names are drawn after the fills so they sit on top.
@@ -334,7 +340,7 @@
       const planted = here.length > 0;
       item.planted = planted;
       g.setAttribute('class', ['bed', geo.shape === 'circle' ? 'tower' : geo.shape === 'cells' ? 'pots' : '', planted ? 'is-planted' : status.resting ? 'is-resting' : 'is-empty', picking ? 'is-picking' : '',
-        highlightCrop && !here.some(r => r.c.id === highlightCrop) ? 'dim' : '', sel && ((sel.type === 'bed' && sel.id === bed.id) || (sel.type === 'opening' && sel.bedId === bed.id)) ? 'sel' : '', holdsSel ? 'has-sel' : '',
+        shownAlone(here.map(r => r.c)) ? '' : 'dim', sel && ((sel.type === 'bed' && sel.id === bed.id) || (sel.type === 'opening' && sel.bedId === bed.id)) ? 'sel' : '', holdsSel ? 'has-sel' : '',
         willPlant.has(bed.id) ? 'will-plant' : '', named.has(bed.id) ? 'named' : '', item.drop || ''].filter(Boolean).join(' '));
     }
     paintLegend(counts);
@@ -342,20 +348,40 @@
     scheduleLabels();
   }
   /**
-   * The crops in the ground, most beds first, as one quiet line. What does not fit
-   * waits behind "+n"; the crop being shown on its own is always kept in view.
+   * The key to the map's colours: the groups of crops in the ground, most spaces first, as one quiet line. A click on a
+   * group shows it alone and lists its crops beside it; a click on one of those shows that crop alone. What does not fit
+   * waits behind "+n". The group shown alone stays in the line when nothing of it is in the ground, so it can be let go.
    */
   let legendOpen = false;
   function paintLegend(counts) {
-    const eng = App.state.engine, host = clear($('mapLegend'));
-    const rows = [...counts].map(([id, n]) => ({ c: eng.crop(id), n })).filter(x => x.c).sort((a, b) => (b.c.id === highlightCrop) - (a.c.id === highlightCrop) || b.n - a.n);
+    const eng = App.state.engine, host = clear($('mapLegend')), groups = new Map();
+    const rowOf = g => { let row = groups.get(g.id); if (!row) groups.set(g.id, row = { g, beds: new Set(), crops: [] }); return row; };
+    for (const [id, beds] of counts) {
+      const c = eng.crop(id);
+      if (!c) continue;
+      const row = rowOf(eng.colorGroup(c));
+      for (const bedId of beds) row.beds.add(bedId);   // a space counts once for a group, however many of its crops it grows
+      row.crops.push({ c, n: beds.size });
+    }
+    if (highlightGroup && !groups.has(highlightGroup)) { const g = ((eng.lib.colorGroups || {}).groups || []).find(x => x.id === highlightGroup); if (g) rowOf(g); else highlightGroup = highlightCrop = null; }
+    const rows = [...groups.values()].sort((a, b) => (b.g.id === highlightGroup) - (a.g.id === highlightGroup) || b.beds.size - a.beds.size || a.g.name.localeCompare(b.g.name));
     $('mapBar').classList.toggle('empty', !rows.length);
     if (!rows.length) { host.append(h('span.legend-empty', wholeSeason ? 'Nothing planted this season' : 'Nothing on this date')); fitLegend(); return; }
-    for (const { c, n } of rows) {
-      const on = highlightCrop === c.id;
-      host.append(h('button.legend-chip' + (on ? '.on' : ''), { type: 'button', 'aria-pressed': String(on), title: on ? `Showing only ${c.name}. Click to show everything.` : `${c.name}: ${n} space${n === 1 ? '' : 's'}${wholeSeason ? ' this season' : ''}. Click to show only this crop.`,
-        onclick: () => { highlightCrop = on ? null : c.id; paint(); } },
-        h('i', { style: { background: eng.cropColor(c) } }), h('span', c.name), h('b', n)));
+    const spaces = n => `${n} space${n === 1 ? '' : 's'}${wholeSeason ? ' this season' : ''}`;
+    for (const { g, beds, crops } of rows) {
+      const on = highlightGroup === g.id, n = beds.size;
+      crops.sort((a, b) => b.n - a.n || a.c.name.localeCompare(b.c.name));
+      host.append(h('button.legend-chip.group' + (on ? '.on' : ''), { type: 'button', dataset: { group: g.id }, 'aria-pressed': String(on),
+        title: on ? `Showing only ${g.name}. Click to show everything.` : `${g.name}: ${spaces(n)}. ${crops.map(x => `${x.c.name} ${x.n}`).join(', ')}. Click to show only these.`,
+        onclick: () => { highlightGroup = on ? null : g.id; highlightCrop = null; paint(); } },
+        h('i', { style: { background: g.color } }), h('span', g.name), h('b', n)));
+      if (on) for (const { c, n: m } of crops) {
+        const one = highlightCrop === c.id;
+        host.append(h('button.legend-chip.crop' + (one ? '.on' : ''), { type: 'button', dataset: { crop: c.id }, 'aria-pressed': String(one),
+          title: one ? `Showing only ${c.name}. Click to show all of ${g.name}.` : `${c.name}: ${spaces(m)}. Click to show only this crop.`,
+          onclick: () => { highlightCrop = one ? null : c.id; paint(); } },
+          h('span', c.name), h('b', m)));
+      }
     }
     fitLegend();
   }
@@ -363,12 +389,12 @@
     const host = $('mapLegend'), more = $('legendMore'), bar = $('mapBar'), chips = [...host.querySelectorAll('.legend-chip')];
     for (const chip of chips) chip.hidden = false;
     bar.classList.toggle('open', legendOpen && chips.length > 0);
-    more.hidden = !chips.length; more.textContent = legendOpen ? 'Less' : '+00'; more.setAttribute('aria-expanded', String(legendOpen));
+    more.hidden = !chips.length; more.textContent = legendOpen ? 'Less' : '+00'; more.title = ''; more.setAttribute('aria-expanded', String(legendOpen));
     if (legendOpen || !chips.length) return;
     const room = host.clientWidth;
     let hidden = 0;
     for (const chip of chips) { if (chip.offsetLeft + chip.offsetWidth > room + 1) { chip.hidden = true; hidden++; } }
-    more.hidden = !hidden; more.textContent = `+${hidden}`; more.title = `${hidden} more crop${hidden === 1 ? '' : 's'}`;
+    more.textContent = hidden ? `+${hidden}` : 'Key'; more.title = hidden ? `${hidden} more, and how beds are drawn` : 'How beds are drawn';
   }
 
   // ── the selected planting: an outline and two ends to drag ──

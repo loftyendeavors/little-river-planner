@@ -4,7 +4,6 @@ usage: python3 -I sup_check.py <app-dir-or-built-site> <shots-dir> [backup.zip] 
 """
 import functools, http.server, json, os, sys, threading
 from pathlib import Path
-LABEL = os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)"   # the build's label, as tests/env.sh reads it from the page's own script
 from playwright.sync_api import sync_playwright
 target, shots = Path(sys.argv[1]), Path(sys.argv[2]); shots.mkdir(parents=True, exist_ok=True)
 backup = sys.argv[3] if len(sys.argv) > 3 else None
@@ -38,7 +37,7 @@ with sync_playwright() as pw:
         page.fill(sel, value); page.locator(sel).blur(); wait(); return True
     def undo(): js("A.undo();"); wait()
 
-    check("the build says its label", LABEL in (js("return ($('buildNote') || {}).textContent || ''") or ""))
+    check("the build says its own label", (os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)") in (js("return ($('buildNote') || {}).textContent || ''") or ""))
     key0 = js("return A.contentKey()")
     js("A.setView('trays'); LRFTraysView.setTab('supplies');"); wait(500)
     check("Supplies is drawn, on the Nursery's own tab", js("return !!$('bnSupplies') && LRFTraysView.tab() === 'supplies'"))

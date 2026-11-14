@@ -135,7 +135,7 @@ with sync_playwright() as pw:
         n0 = A.evaluate("LRFApp.state.plan.plantings.length")
         A.set_input_files('#photosFile', PHOTO); A.wait_for_timeout(1500)
         first = A.evaluate("({ sync: LRFApp.syncInfo(), save: document.getElementById('saveState').textContent, stored: localStorage.getItem('lrf-next:sync'), strip: document.getElementById('syncStrip').hidden, label: document.getElementById('buildNote').textContent })")
-        check('with no cloud set up, nothing about it shows but two lines in the Backup menu', first['sync']['status'] == 'off' and not first['sync']['configured'] and first['stored'] is None and first['strip'] and 'cloud' not in first['save'].lower() and '0.39' in first['label'], first)
+        check('with no cloud set up, nothing about it shows but two lines in the Backup menu', first['sync']['status'] == 'off' and not first['sync']['configured'] and first['stored'] is None and first['strip'] and 'cloud' not in first['save'].lower() and (os.environ.get('LRF_LABEL') or '(LRF_LABEL is not set)') in first['label'], first)
         A.click('#dataBtn'); A.wait_for_timeout(150)
         menu = A.evaluate("({ sync: document.getElementById('syncBtn').innerText, snap: document.getElementById('snapBtn').innerText, shown: !document.getElementById('syncBtn').hidden && !document.getElementById('snapBtn').hidden, fits: [...document.querySelectorAll('#dataMenu button')].every(b => b.scrollWidth <= b.clientWidth + 1) })")
         check('the Backup menu offers Cloud sync and Snapshots', menu['shown'] and 'Cloud sync' in menu['sync'] and 'Snapshots' in menu['snap'] and menu['fits'], menu)
