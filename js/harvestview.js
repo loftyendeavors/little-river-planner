@@ -203,7 +203,7 @@
     UI.add(clear(host),
       // what the page is, and beside it the two things done from it: plan more of a crop, send what is there
       h('header.as-head.hv-head', h('div.hv-head-text', h('p.eyebrow', `Harvest forecast · ${App.state.plan.settings.farm || 'Farm'} · ${m.year}`), h('h2', 'What is ready, and when'),
-        h('p', 'Every planting’s expected yield, added up by crop, as each crop’s line on the Assumptions list says it comes in: evenly over the days it is picked, a week at a time, or all at once. Each crop is counted in the unit it is sold in. Click a figure to see which plantings it comes from.')),
+        h('p', 'Every planting’s expected yield, added up by crop, as each crop’s line on the Assumptions list says it is picked: gradually (a week’s picking each week), clear (all of it the day it is ready) or on demand (evenly over its harvest days). Each crop is counted in the unit it is sold in. Click a figure to see which plantings it comes from.')),
         h('div.hv-head-acts',
           root.LRFSeries ? h('button.btn', { type: 'button', id: 'hvPlanBar', title: 'Say how much of a crop is wanted each week between two days: the planner says how many plantings, when and how large. It opens beside the timeline.', onclick: () => App.openAhead({ mode: 'series', by: 'harvest' }) }, 'Plan to a weekly amount…') : null,
           h('button.btn.primary', { type: 'button', id: 'hvShareBtn', onclick: share }, 'A list to send…'))),
@@ -226,7 +226,10 @@
     const scroller = $('hvScroll');
     if (scroller) {
       if (keepLeft != null && render.lastGrain === grain) scroller.scrollLeft = keepLeft;
-      else { const now = scroller.querySelector('thead th.now'); if (now) scroller.scrollLeft = Math.max(0, now.offsetLeft - 320 - 3 * now.offsetWidth); }
+      else {   // the week in hand, three columns in, with a whole column against the crop names: never half of one
+        const now = scroller.querySelector('thead th.now');
+        if (now) { let first = now; for (let i = 0; i < 3 && first.previousElementSibling && first.previousElementSibling.dataset.col; i++) first = first.previousElementSibling; const edge = scroller.querySelector('thead .hv-total').getBoundingClientRect().right; scroller.scrollLeft = Math.max(0, scroller.scrollLeft + first.getBoundingClientRect().left - edge); }
+      }
     }
     render.lastGrain = grain;
   }

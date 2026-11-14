@@ -45,7 +45,7 @@
     }
     const frost = App.state.engine.frostDates(year);
     for (const [d, label] of [[frost.last, 'last frost'], [frost.first, 'first frost']]) {
-      if (E.validDate(d)) marks.append(h('span.season-frost' + (label === 'last frost' ? '.before' : ''), { dataset: { side: label === 'last frost' ? 'before' : 'after' }, style: { left: pct(d) + '%' }, title: `${label}: ${UI.day(d)}` }, h('i'), label));
+      if (E.validDate(d)) marks.append(h('span.season-frost' + (label === 'last frost' ? '.before' : ''), { dataset: { side: label === 'last frost' ? 'before' : 'after' }, style: { left: pct(d) + '%' }, title: `${label}: ${UI.day(d)}` }, h('i'), h('b', label)));
     }
     const peak = series.reduce((a, p) => p.share > a.share ? p : a, { share: 0 });
     // in three parts, so a narrow strip can drop the middle and keep "Peak 94%" over "week of Jun 18"

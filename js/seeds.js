@@ -13,7 +13,7 @@
   const ui = { tab: 'list', query: '', filter: 'all', sort: 'crop', closed: new Set(), sel: null, rev: 0, panelKey: '', stock: null, sowOpen: null, dirty: true };
   const ENV_LABEL = { field: 'Field', tunnel: 'Unheated tunnel', heated: 'Heated greenhouse', tower: 'Towers' };
   const BASIS_TEXT = { seed: 'seeding', direct: 'direct seeding', transplant: 'transplanting', unspecified: 'not stated' };
-  const BASIS_OPTIONS = [['unspecified', 'Not stated: as the crop'], ['seed', 'Seeding, in the nursery'], ['direct', 'Direct seeding, in place'], ['transplant', 'Transplanting into the bed']];
+  const BASIS_OPTIONS = [['unspecified', 'As the crop'], ['seed', 'Seeding, in the nursery'], ['direct', 'Direct seeding, in place'], ['transplant', 'Transplanting into the bed']];
   const BASIS_SHORT = [['unspecified', 'as the crop'], ['seed', 'seeding'], ['direct', 'direct seeding'], ['transplant', 'transplanting']];
   const STAGE_OPTIONS = [['unspecified', 'Not stated'], ['mature', 'Mature'], ['baby', 'Baby'], ['flower', 'First flower or cut']];
   const NEW_CROP = '__new_crop__', NEW_VARIETY = '__new__';
@@ -102,7 +102,7 @@
     return { step: 'page', fallback: true, text: (msg ? msg.split(/(?<=\.)\s/)[0] : 'The page could not be read.') + only };
   }
   function openImporter(startURL, startCropId) {
-    const d = openDialog('Add a variety from a supplier page', 'Nothing is saved until you have looked it over.');
+    const d = openDialog('Add a variety from a link', 'Nothing is saved until you have looked it over.');
     let busy = false;
     const how = linkHow();
     const url = inp('url', startURL || '', { type: 'text', inputMode: 'url', placeholder: 'https://… the page for one variety', spellcheck: false });
@@ -181,7 +181,7 @@
       refresh();
     }, 'small'));
     const start = data.start || { basis: 'unspecified', statement: '' };
-    add(startNote, start.statement ? h('span', `${start.source || 'Supplier page'}: “${start.statement}”`) : h('span', 'The page does not say where its days start.'),
+    add(startNote, start.statement ? h('span', `${start.source || 'Supplier page'}: “${start.statement}”`) : h('span', 'The page does not say what its days are counted from.'),
       start.conditional ? h('b', ' It gives a rule per use, so choose.') : null);
     const photo = data.images && data.images[0] ? h('img.sd-photo', { src: data.images[0].url, alt: '', referrerPolicy: 'no-referrer', loading: 'lazy', onerror: e => { const note = e.target.nextElementSibling; if (note && note.classList.contains('sd-photo-note')) note.remove(); e.target.remove(); } }) : null;
 
@@ -312,7 +312,7 @@
       const w = record.webImport || {}, s = Reader.maturityStatement({ url: v.url, sourceText: record.catalogSourceText || w.sourceText || '', specifications: w.specifications || [] });
       const printed = w.evidence && w.evidence.maturity && w.evidence.maturity.value ? String(w.evidence.maturity.value).slice(0, 120) : '';
       const said = SL.startOf(s.basis, s.statement);
-      add(clear(evidence), printed ? h('span', `The page printed: “${printed}”. `) : null, s.statement ? h('span', `${s.source}: “${s.statement}”`) : h('span', 'Its saved page does not say where the days start.'),
+      add(clear(evidence), printed ? h('span', `The page printed: “${printed}”. `) : null, s.statement ? h('span', `${s.source}: “${s.statement}”`) : h('span', 'Its saved page does not say what the days are counted from.'),
         said !== 'unspecified' && said !== val(form, 'basis') ? button(`Set to ${BASIS_TEXT[said]}`, () => { form.elements.basis.value = said; refresh(); }, 'small') : null);
     }).catch(() => {});
 
@@ -726,7 +726,7 @@
           h('button.sd-addlot', { type: 'button', title: lotRow.varietyId === v.id ? 'Close without adding a lot' : `Add a seed lot of ${v.name}: a line opens under this row`, 'aria-label': `Add a seed lot of ${v.name}`, 'aria-expanded': String(lotRow.varietyId === v.id), onclick: () => openLotRow(v) }, '+ lot'))),
         sup: () => h('td.sd-sup', supplierShort(v) || (v.source === 'Farm entry' ? 'By hand' : ''), site ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer', title: `${v.sku ? v.sku + ' · ' : ''}open the page on ${site}` }, ' ↗') : null),
         days: () => h('td.sd-num.sd-days', daysText(v) || '—', stage ? h('small', stage) : null),
-        from: () => v.catalogDtm ? h('td.sd-from' + (basis === 'unspecified' ? '.sd-open' : ''), sel('from', BASIS_SHORT, basis, { 'aria-label': `${v.name}: days start at`, onchange: async e => {
+        from: () => v.catalogDtm ? h('td.sd-from' + (basis === 'unspecified' ? '.sd-open' : ''), sel('from', BASIS_SHORT, basis, { 'aria-label': `${v.name}: days counted from`, onchange: async e => {
           const value = e.target.value;
           if (!(await App.revise(`${v.name}: days counted from ${BASIS_TEXT[value]}`, [{ kind: 'variety', before: v, after: { ...v, catalogMaturityBasis: value, catalogSourceChoice: v.catalogSourceChoice || 'url' } }]))) schedule();
         } })) : h('td.sd-from', v.dtm > 0 ? h('small', 'the day it goes in') : ''),
