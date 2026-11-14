@@ -55,7 +55,7 @@ with sync_playwright() as pw:
     order0 = js("return S.plan.plantings.map(p => p.id).join(',')")
     start = js("return { n: S.plan.plantings.length, undo: S.undo.length, label: txt('buildNote'), waiting: A.waiting().length, settle: LRFPanels.settleCount() }")
     check("a plan is open with nothing to undo; the build says 0.39", start["n"] > 300 and start["undo"] == 0 and "0.39" in start["label"], start)
-    sub = js("""for (const b of S.plan.beds) { if (!eng.isSoilBed(b) || !(eng.capOf(b) >= 30) || b.active === false) continue;
+    sub = js("""for (const b of S.plan.beds) { if (!eng.isSoilBed(b) || !(eng.capOf(b) >= 30) || b.active === false || eng.plantingsIn(b.id).length !== 1) continue;   // alone in its bed for the whole season: the lines below count everything the bed holds
         for (const p of eng.plantingsIn(b.id)) { const r = eng.calc(p); if (!r || p.bedLayout || p.ft > 0 || r.partial || !p.varietyId || R.fixed(eng, { p }) || eng.varietiesOf(p.cropId).length < 5 || r.rows !== 2) continue;
           if (eng.holders(b, eng.occupancyFrom(p, r), eng.occupancyThrough(p, r), p.id).length) continue;
           const other = S.plan.beds.find(o => o.gardenId === b.gardenId && o.id !== b.id && eng.isSoilBed(o));

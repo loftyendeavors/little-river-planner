@@ -401,10 +401,11 @@ def run(page, width):
     # ───────────── a new garden ─────────────
     js("LRFMapEdit.pick([]); LRFMap.fit()"); page.wait_for_timeout(200)
     page.click('#leNew'); page.wait_for_timeout(80)
-    # open ground: a block of about 60 x 90 ft that lies on nothing
+    # open ground: a block of about 60 x 90 ft that lies on nothing, with room beside it for what is done to it below (paths
+    # typed twice as wide push the last bed some 12 ft further on, and the page rightly refuses a move onto another bed)
     spot = js("""(() => { const G = LRFMapGeo, M = LRFMap, k = 1 / M.feetPerPx(), r = document.getElementById('map').getBoundingClientRect(), still = M.spaces().map(id => M.shapeOf(id));
       for (let x = r.left + 60; x < r.right - 60 - 60 * k * M.zoom(); x += 23) for (let y = r.top + 90; y < r.bottom - 150 - 90 * k * M.zoom(); y += 19) {
-        const [wx, wy] = M.toWorld(x, y), W = 60 * k, L = 90 * k, blk = { x: wx + W / 2, y: wy + L / 2, rot: 0, W: W * 1.25, L: L * 1.25 };
+        const [wx, wy] = M.toWorld(x, y), W = 60 * k, L = 90 * k, blk = { x: wx + W * 0.65, y: wy + L / 2, rot: 0, W: W * 1.6, L: L * 1.25 };
         if (!still.some(s => G.overlaps(blk, s))) return { x, y, x2: x + W * M.zoom(), y2: y + L * M.zoom() }; }
       return null; })()""")
     if not spot:

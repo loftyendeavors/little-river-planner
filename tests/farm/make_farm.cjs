@@ -293,6 +293,10 @@ for (const [bed, cropId] of [[B.east[7], 'bean_bush'], [B.south[12], 'beet']]) {
   }
   if (!plantings.some(p => p.bedId === bed.id)) throw Error('no day puts ' + cropId + ' out of the ground in the last week of July');
 }
+// Seed sown in the ground in the first week of May, in a bed with nothing else in it: that week's field work is then of two
+// kinds, sowing and planting out, which is what the Tasks page is checked on. Its length is typed, and is the bed's: the one
+// planting of a stated length that reaches the end of its bed and fits it, which is what Edit layout refuses to cut into.
+put(B.south[13], md(5, 4), 'radish', { ft: B.south[13].l, ...withV('radish') });
 chance('kitchen garden');
 // Kitchen Garden: celeriac, bush tomatoes, leeks, parsley shared by rows
 put(B.kitchen[0], md(5, 28), C.bushTomato.id, { inRow: 20, rowsPerBed: 1, growingDefaults: { v: 1, cropId: C.bushTomato.id, crop: { rowsPerBed: { present: false } } }, ...withV(C.bushTomato.id) });
