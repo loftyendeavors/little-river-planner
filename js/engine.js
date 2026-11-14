@@ -129,12 +129,21 @@
     const isCoverCrop = c => !!c && (/^cover_/.test(String(c.id || '')) || String(c.family || '').trim().toLowerCase() === 'cover crop');
     const isPerennial = c => !!c && (typeof c.perennial === 'boolean' ? c.perennial : /perennial|raspberry|blackberry/i.test(c.name || ''));
 
+    // The colour of a crop is the colour of its group: ten groups a grower would name, far enough apart to be told at a
+    // glance, with the microgreens and whatever belongs to none of them beside. Flowers and microgreens are the groups the
+    // forecast keeps (forecast.js, groupOf: what the plan says of the crop, then its unit, then its name); every other
+    // crop goes by its plant family. A colour given to the crop itself still wins.
+    function colorGroup(c) {
+      const look = lib.colorGroups || {}, groups = look.groups || [], by = id => groups.find(g => g.id === id) || { id: 'other', name: 'Other crops', color: '#7c8279' };
+      if (!c) return by('other');
+      const F = typeof LRFForecast === 'object' && LRFForecast ? LRFForecast : typeof require === 'function' ? require('./forecast.js') : null;
+      const kind = F ? F.groupOf(c, recordUnit(c), (plan.lrfNext || {}).groups) : c.micro ? 'micro' : 'produce';
+      return by(kind === 'micro' ? 'micro' : kind === 'flower' ? 'flowers' : (look.byFamily || {})[c.family] || 'other');
+    }
     function cropColor(c) {
       if (!c) return '#9a9d94';
       if (c.color) return c.color;
-      const [h, s] = hexToHsl(lib.familyColors[c.family] || '#8a8f7a'), k = hashStr(c.id);
-      if (c.family === 'Cover crop') return hslToHex(h, 22, 68);
-      return hslToHex((h + ((k % 7) - 3) * 7 + 360) % 360, clamp(s * 0.85 + (((k >> 4) % 3) - 1) * 8, 32, 58), clamp(63 + (((k >> 8) % 5) - 2) * 4, 54, 72));
+      return colorGroup(c).color;
     }
 
     // ── growing spaces: soil beds, towers, living-tray benches, containers ──
@@ -1234,7 +1243,7 @@
 
     return {
       plan: S, settings, lib,
-      crops: () => cropList, crop, variety, cropColor, isCoverCrop, isPerennial,
+      crops: () => cropList, crop, variety, cropColor, colorGroup, isCoverCrop, isPerennial,
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
       heatedTraySpaces, benchRoom, coolRules, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,

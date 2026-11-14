@@ -14,7 +14,7 @@ for part in ${@:-node build app1 app2 app3 app4 new off site1 site2 site3 site4 
       sh $T/b.sh offline; (cd $REPO && node tools/sync_client_test.mjs $REPO/js 2>&1 | tail -1 | sed 's/^/sync client, built site /') ;;
     app1) sh $T/b.sh ahead core sowing trays step1 folder step2a ;;
     app2) sh $T/b.sh f018 step2b maint sync step3a step3b ;;
-    app3) sh $T/b.sh wide step5a step5b stepF plain r1 bedpanel mixed season photo ask cleanup ;;
+    app3) sh $T/b.sh wide step5a step5b stepF plain r1 bedpanel mixed season photo ask cleanup look ;;
     app4) sh $T/b.sh mapgeo; WIDTHS=${WIDTHS:-1280,1480,1707,3440} sh $T/b.sh map; sh $T/b.sh map-views; WIDTH=1480 sh $T/b.sh r1 ;;
     new) sh $T/b.sh sup importer; WIDTH=1480 sh $T/b.sh sup importer; WIDTH=3440 sh $T/b.sh sup importer; sh $T/b.sh sup-site importer-site; WIDTH=1480 sh $T/b.sh sup-site importer-site ;;
     off) sh $T/b.sh offline ahead-off core-off sowing-off trays-off step2a-off f018-off step2b-off map-off ;;
@@ -23,7 +23,7 @@ for part in ${@:-node build app1 app2 app3 app4 new off site1 site2 site3 site4 
     site3) WIDTHS=${WIDTHS:-1280,1480,1707,3440} sh $T/b.sh map-site; sh $T/b.sh map-views-site ;;
     site4) DARK=1 WIDTH=1480 sh $T/b.sh step3a-site step3b-site; WIDTH=1480 sh $T/b.sh step3a-site step3b-site step5a-site step5b-site stepF-site r1-site ;;
     site5) DARK=1 sh $T/b.sh step3a-site step3b-site step5a-site step5b-site stepF-site r1-site; WIDTH=3440 sh $T/b.sh stepF-site r1-site ;;
-    site6) sh $T/b.sh bedpanel-site; WIDTH=1707 sh $T/b.sh bedpanel-site; WIDTH=3440 sh $T/b.sh bedpanel-site; WIDTH=1707 sh $T/b.sh bedpanel ;;
+    site6) sh $T/b.sh bedpanel-site; WIDTH=1707 sh $T/b.sh bedpanel-site; WIDTH=3440 sh $T/b.sh bedpanel-site; WIDTH=1707 sh $T/b.sh bedpanel; sh $T/b.sh look-site; WIDTH=1707 sh $T/b.sh look-site; WIDTH=3440 sh $T/b.sh look-site ;;
     site7) sh $T/b.sh mixed-site; WIDTH=1707 sh $T/b.sh mixed-site; WIDTH=3440 sh $T/b.sh mixed-site; WIDTH=1707 sh $T/b.sh mixed; WIDTH=3440 sh $T/b.sh mixed ;;
     site8) sh $T/b.sh season-site photo-site; WIDTH=1480 sh $T/b.sh season season-site; WIDTH=1707 sh $T/b.sh season season-site; WIDTH=3440 sh $T/b.sh season season-site; DARK=1 sh $T/b.sh season-site ;;
     site9) sh $T/b.sh ask-site; WIDTH=1480 sh $T/b.sh ask ask-site; WIDTH=1707 sh $T/b.sh ask ask-site; WIDTH=3440 sh $T/b.sh ask ask-site; DARK=1 sh $T/b.sh ask-site ;;
