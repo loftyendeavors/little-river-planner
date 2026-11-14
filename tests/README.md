@@ -39,8 +39,8 @@ the checks use the Chrome at `/usr/bin/google-chrome`).
 ```
 sh tests/setup.sh                  # once, and again after anything in the repository changes
 sh tests/run.sh node               # the fast checks
-sh tests/run.sh app1 | tee log     # one part of the browser checks
-python3 -I tests/verdict.py log app1    # exit 0: every line passed, and the part ran as many lines as counts.json says
+sh tests/run.sh app1 | tee /tmp/part.log     # one part of the browser checks; the log is kept outside the repository's folder
+python3 -I tests/verdict.py /tmp/part.log app1    # exit 0: every line passed, and the part ran as many lines as counts.json says
 ```
 
 - The work folder is `/tmp/lrf-work` unless `LRF_WORK` says otherwise. It can be thrown away.

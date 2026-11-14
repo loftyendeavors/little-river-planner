@@ -1,6 +1,8 @@
 """Reads what tests/run.sh printed and says whether every check passed.
 
-    sh tests/run.sh node | tee log; python3 -I tests/verdict.py log node       (exit 0: all passed; 1: not)
+    sh tests/run.sh node | tee /tmp/part.log; python3 -I tests/verdict.py /tmp/part.log node       (exit 0: all passed; 1: not)
+
+Keep the log out of the repository's folder: the site serves every file at its root, and what_changed.cjs fails on one it does not know.
 
 A line counts when it holds a result: JSON with "passed" and "of", or "<name> N of M […]" as b.sh prints them, or
 "N of M passed" as the service tests print them. A check that printed no result at all ("NO RESULT", "unknown") fails too:

@@ -3,7 +3,7 @@
     python3 -I tests/farm/make_pictures.py <dir holding layout.json, written by make_farm.cjs>
 
 Drawn, not photographed: grass, a lane, a pond, trees, and soil or a roof under each block of beds, where layout.json says the
-blocks lie. Needs Pillow. The results are kept in the repository, so nothing that runs the checks needs Pillow.
+blocks lie. Needs Pillow, and so does the quick run, which draws the pictures again to see that every variety meant to have one has one.
 """
 import base64, io, json, math, random, sys
 from pathlib import Path
