@@ -188,6 +188,7 @@
   function open(focus = {}) {
     if (App.state.view !== 'map') App.setView('map');
     if (!S.on) {
+      if (App.endMixing) App.endMixing();   // a bed that was being mixed is done with when the layout opens
       App.arm(null); App.select(null);
       if (M.wholeSeason()) M.wholeSeason(false);
       S.on = true; S.picked = []; S.tool = null; S.draft = null; S.tape = null;

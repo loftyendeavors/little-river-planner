@@ -6,6 +6,9 @@
  *   propose()  where a dropped crop or a moved planting would land in a space
  *   refusal()  why an edit is not allowed, or null when it is
  *   stretch()  dragging an end of a planting along its bed
+ *   slide()    the same, where the end lies against a neighbour: the line between the two moves
+ *   share()    a drop onto a bed that is held: how it could be split, and what replacing would do
+ *   equalize() the plantings that stand together in a bed, given equal shares again
  *   cleanup()  overlaps that came in with an older plan, with ways to settle each
  *
  * Nothing here warns. An edit either fits or it does not happen.
@@ -248,6 +251,247 @@
     return { bedLayout: layout, startFt: null, ft: len, rowsPerBed: total, inRow: r.inRow, rowSp: r.rowSp };
   }
 
+  // ─────────────────────── sharing a bed that is held ───────────────────────
+  // A planting in a soil bed covers so many feet along it and a share of its rows across (engine.footprint), and any number of
+  // them can stand in one bed. What follows makes such beds: nothing here changes a plan. Each way is worked out on a copy,
+  // checked against the guard rails, and handed back as edits for the app to make in one step. No date is ever moved.
+  const wholeWidth = f => !f || !f.rows || (f.x0 <= EPS && f.x1 >= 1 - EPS);
+  const put = (record, change) => { const after = { ...record }; for (const [key, value] of Object.entries(change)) { if (value === undefined || value === null || value === '') delete after[key]; else after[key] = value; } return after; };
+  const recorded = p => !!p && ((!!p.done && typeof p.done === 'object' && Object.keys(p.done).length > 0) || (!!p.workflow && Array.isArray(p.workflow.seedUse) && p.workflow.seedUse.length > 0) || p.established === true);
+  /** Why something that holds ground cannot be asked to give any up, or to leave: 'rest' | 'recorded' | 'standing' | 'tray' | ''. */
+  function fixed(eng, o) {
+    if (o.rest) return 'rest';
+    if (recorded(o.p)) return 'recorded';
+    if (eng.standKey(o.p)) return 'standing';
+    if (o.p.liveTray) return 'tray';
+    return '';
+  }
+  /**
+   * A planting laid on feet [a0, a1) of its bed, with the rows it has. Lengths are kept exact, not rounded: a bed in three is
+   * three thirds, so that each share comes to the same number of plants. A plant count pinned on a share is let go with its old length.
+   */
+  function laid(p, a0, a1, L) {
+    const len = a1 - a0, after = { ...p };
+    if (p.bedLayout) { const layout = { ...p.bedLayout, startFt: Math.max(0, a0) }; delete layout.plantCount; after.bedLayout = layout; after.ft = len; delete after.startFt; return after; }
+    if (len >= L - EPS) { delete after.ft; delete after.startFt; return after; }
+    after.ft = len;
+    if (a0 > EPS) after.startFt = a0; else delete after.startFt;
+    return after;
+  }
+  const spanOf = (o, L) => [o.rect.a0, Math.min(o.rect.a1, L)];
+  /** The edits, tried on a copy: null when the guard rails would refuse them. Otherwise the copy's engine and what each planting comes to. */
+  function tried(eng, ops, L) {
+    const gone = new Set(ops.filter(op => op.before).map(op => op.before.id)), added = ops.filter(op => op.after).map(op => op.after);
+    const trial = E.create({ ...eng.plan, plantings: [...eng.plan.plantings.filter(q => !gone.has(q.id)), ...added] }, eng.lib, PROBE);
+    if (refusal(eng, trial, added.map(q => q.id))) return null;
+    const shares = [];
+    for (const op of ops) {
+      if (!op.after) continue;
+      const r1 = trial.calc(op.after), r0 = op.before && eng.planting(op.before.id) ? eng.calc(op.before) : null, f1 = r1 && trial.footprint(op.after, r1);
+      if (!r1) return null;
+      shares.push({ p: op.after, isNew: !r0, was: r0 ? { len: r0.physicalLength, plants: r0.plants } : null,
+        now: { len: r1.physicalLength, plants: r1.plants, a0: f1 ? f1.a0 : 0, a1: f1 ? Math.min(f1.a1, L) : r1.physicalLength, rows: f1 && f1.rows && f1.rows.count < f1.rows.total ? { count: f1.rows.count, total: f1.rows.total } : null } });
+    }
+    return { trial, shares };
+  }
+  /** Equal lanes along a bed: every holder the full width, all one length, each starting on a multiple of it. Returns how many lanes, or 0. */
+  function lanesAlong(others, L) {
+    if (!others.length || !others.every(o => wholeWidth(o.rect))) return 0;
+    const len = spanOf(others[0], L)[1] - spanOf(others[0], L)[0], m = Math.round(L / len);
+    if (!(len > 0) || m < 1 || Math.abs(m * len - L) > 1e-4) return 0;
+    for (const o of others) { const [a0, a1] = spanOf(o, L), i = a0 / len; if (Math.abs(a1 - a0 - len) > 1e-4 || Math.abs(i - Math.round(i)) > 1e-4) return 0; }
+    return m;
+  }
+  /** Equal lanes across a bed: every holder the same run of feet, the same count of rows of one grid, each starting on a multiple of it. { m, T, c, a0, a1 } or null. */
+  function lanesAcross(others, L) {
+    if (!others.length) return null;
+    const rowsOf = o => o.rect.rows ? o.rect.rows : { start: 0, count: o.r.rows, total: o.r.rows }, first = rowsOf(others[0]), T = first.total, c = first.count, [a0, a1] = spanOf(others[0], L);
+    if (!Number.isInteger(T) || T < 2 || T > 12 || !Number.isInteger(c) || c < 1 || T % c) return null;
+    for (const o of others) { const x = rowsOf(o), [b0, b1] = spanOf(o, L); if (x.total !== T || x.count !== c || x.start % c || Math.abs(b0 - a0) > 1e-4 || Math.abs(b1 - a1) > 1e-4) return null; }
+    return { m: T / c, T, c, a0, a1, rowsOf };
+  }
+  /**
+   * A drop onto a soil bed where ground is held on those days. payload and target are propose()'s; options.source is the
+   * planting dropped when it is not in the plan (one waiting to be placed), options.by ('length' | 'rows' | 'replace') works out one
+   * way only, and options.quick none: it then says only who holds the bed and whether any of them is fixed (`no`).
+   * Returns null where the question does not arise (not a soil bed, or nothing holds it then). Otherwise
+   *   { bed, holders, from, through, base, length, rows, replace, no: { length?, rows?, replace? } }
+   * holders: everything that holds any of the bed at any time while the newcomer would be in the ground.
+   * A way: { ops, p, r, shares: [{ p, isNew, was, now }], equal? } — `p` is the newcomer as it would be planted.
+   * length: where the bed is in equal full-width shares, all of them close up and the newcomer takes an equal share at the end;
+   *         otherwise the share the drop points at (or the longest) gives up its second half.
+   * rows:   where the bed is in equal runs of rows and the rows divide by one more, each gives up rows for an equal run.
+   * replace: every holder leaves the bed, as `waiting` records (the app sends them to wait), and the newcomer goes in as propose() says.
+   * no[way]: why a way is not offered: 'recorded' | 'standing' | 'tray' | 'rest' | 'rows' | 'short' | 'crowded' | 'fit', with `who` where a planting is the reason.
+   */
+  function share(eng, payload, target, options = {}) {
+    const bed = eng.bedOf(target.bedId), source = options.source || (payload.plantingId ? eng.planting(payload.plantingId) : null);
+    if (!bed || bed.active === false || !eng.isSoilBed(bed) || (payload.plantingId && !source)) return null;
+    const base = baseDraft(eng, payload, source, bed.id, target.date), crop = eng.crop(base.cropId);
+    if (!crop || crop.micro) return null;
+    const probe = plain(base), r0 = eng.evaluate(probe);
+    if (!r0) return null;
+    const from = eng.occupancyFrom(probe, r0), through = eng.occupancyThrough(probe, r0), L = eng.capOf(bed);
+    const others = eng.holders(bed, from, through, base.id).slice().sort((a, b) => (a.rect.a0 - b.rect.a0) || (a.rect.x0 - b.rect.x0) || (a.from - b.from));
+    if (!others.length) return null;
+    const out = { bed, holders: others, from, through, base: probe, length: null, rows: null, replace: null, no: {} };
+    const stuck = others.map(o => ({ o, why: fixed(eng, o) })).find(x => x.why);
+    if (stuck) { for (const way of ['length', 'rows', 'replace']) out.no[way] = { why: stuck.why, who: stuck.o.p || null }; return out; }
+    if (options.quick) return out;   // only whether the question arises: no way is worked out
+    const before = source && !payload.copy && eng.planting(source.id) ? source : null;
+    const finish = (ops, p, extra = {}) => { const t = tried(eng, ops, L); if (!t) return null; return { ops, p, r: t.trial.calc(p), shares: t.shares, ...extra }; };
+
+    // ── along the bed ──
+    if (!options.by || options.by === 'length') {
+      const m = lanesAlong(others, L), ops = [];
+      let mine = null, why = '';
+      if (m) {
+        const len = L / m;
+        if (L / (m + 1) < MIN_FT - EPS) why = 'short';
+        else {
+          for (const o of others) { const i = Math.round(o.rect.a0 / len); ops.push({ before: o.p, after: laid(o.p, L * i / (m + 1), L * (i + 1) / (m + 1), L) }); }
+          mine = [L * m / (m + 1), L];
+        }
+      } else {
+        // not in equal shares (he has sized them): the share pointed at, or the longest, gives up its second half
+        const able = others.filter(o => wholeWidth(o.rect)), at = target.along;
+        const host = (at != null && able.find(o => at >= o.rect.a0 - EPS && at <= Math.min(o.rect.a1, L) + EPS)) || able.slice().sort((a, b) => (spanOf(b, L)[1] - spanOf(b, L)[0]) - (spanOf(a, L)[1] - spanOf(a, L)[0]))[0];
+        if (!host) why = 'rows';
+        else {
+          const [h0, h1] = spanOf(host, L), mid = (h0 + h1) / 2;
+          if (mid - h0 < MIN_FT - EPS) why = 'short';
+          else {
+            for (const o of others) {
+              const [a0, a1] = spanOf(o, L);
+              if (a1 <= mid + EPS || a0 >= h1 - EPS) continue;                    // clear of the feet given up
+              if (a0 >= mid - EPS || !wholeWidth(o.rect)) { why = 'crowded'; break; }   // it lies in them, or holds rows across them
+              if (mid - a0 < MIN_FT - EPS) { why = 'short'; break; }
+              ops.push({ before: o.p, after: laid(o.p, a0, mid, L) });
+            }
+            if (!why) mine = [mid, h1];
+          }
+        }
+      }
+      if (mine) {
+        const p = { ...probe, ft: mine[1] - mine[0], startFt: mine[0] };
+        out.length = finish([...ops, { before, after: p }], p, { equal: !!m, each: mine[1] - mine[0] });
+        if (!out.length) out.no.length = { why: 'fit' };
+      } else out.no.length = { why };
+    }
+
+    // ── across the bed ──
+    if (!options.by || options.by === 'rows') {
+      const g = lanesAcross(others, L);
+      if (!g || (g.T % (g.m + 1))) out.no.rows = { why: 'rows' };
+      else {
+        const c = g.T / (g.m + 1), gid = (others.map(o => o.p.bedLayout && o.p.bedLayout.groupId).find(Boolean)) || `split:${newId()}`, ops = [];
+        let ok = true;
+        for (const o of others) {
+          const change = rowsChange(eng, o.p, (g.rowsOf(o).start / g.c) * c, c, g.T);
+          if (!change) { ok = false; break; }
+          const after = put(o.p, change);
+          if (after.bedLayout) after.bedLayout = { ...after.bedLayout, groupId: gid };
+          ops.push({ before: o.p, after });
+        }
+        const p = { ...probe, ft: g.a1 - g.a0, rowsPerBed: g.T, inRow: r0.inRow, rowSp: r0.rowSp, bedLayout: { v: 1, groupId: gid, rowStart: g.m * c, rowCount: c, startFt: g.a0 } };
+        out.rows = ok ? finish([...ops, { before, after: p }], p, { equal: true, each: c, total: g.T }) : null;
+        if (!out.rows) out.no.rows = { why: 'fit' };
+      }
+    }
+
+    // ── in their place ──
+    if (!options.by || options.by === 'replace') {
+      const leaving = new Set(others.map(o => o.p.id));
+      const without = E.create({ ...eng.plan, plantings: eng.plan.plantings.filter(q => !leaving.has(q.id)) }, eng.lib, PROBE);
+      const got = propose(without, payload, target, { source });
+      if (got.state === 'blocked' || !got.p) out.no.replace = { why: 'fit' };
+      else {
+        const ops = [...others.map(o => ({ before: o.p, after: null })), { before, after: got.p }];
+        const t = tried(eng, ops, L);
+        if (!t) out.no.replace = { why: 'fit' };
+        else out.replace = { ops, p: got.p, r: t.trial.calc(got.p), shares: t.shares, waiting: others.map(o => {
+          // what goes to wait: the planting with its date and its choices, less the ground it stood on. The length it had is the length it asks for.
+          const w = { ...o.p }, asked = !o.p.bedLayout && +o.p.ft > 0 && o.r.physicalLength < L - EPS ? +o.p.ft : null;
+          for (const key of ['bedId', 'ft', 'startFt', 'bedLayout', 'trays', 'shelter', 'out', 'seat']) delete w[key];
+          if (asked) w.ft = asked;
+          w.wait = { why: 'Another crop took its bed', from: bed.id };
+          return w;
+        }) };
+      }
+    }
+    return out;
+  }
+  /**
+   * The plantings that stand together in a soil bed with this one (their days overlap its days), itself first in bed order:
+   * [{ p, r, rect }], or [] where it stands alone. The ones a share would be divided among.
+   */
+  function mates(eng, p) {
+    const r = p && eng.calc(p);
+    if (!r || !eng.isSoilBed(r.b)) return [];
+    const others = eng.holders(r.b, eng.occupancyFrom(p, r), eng.occupancyThrough(p, r), p.id).filter(o => !o.rest);
+    if (!others.length) return [];
+    return [{ p, r, rect: eng.footprint(p, r) }, ...others].sort((a, b) => (a.rect.a0 - b.rect.a0) || (a.rect.x0 - b.rect.x0));
+  }
+  /**
+   * Equal shares for the plantings that stand together in a bed, and for any that are to join them. ids: plantings of the plan, all
+   * in one soil bed. options.extra: plantings not in the plan yet (the same bed, any dates), which take the last shares.
+   * options.by: 'length' (each the full width, laid end to end in the order they lie) or 'rows' (each a run of rows over the same
+   * feet, where the rows divide evenly); left out, it is whichever way they are shared now, and the length where they are not.
+   * Returns { ops, by, shares, each, total? } or { no: why, who? }. Shares that are already equal give { ops: [] }.
+   */
+  function equalize(eng, ids, options = {}) {
+    const list = ids.map(id => eng.planting(id)).filter(Boolean).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r && eng.isSoilBed(x.r.b)).map(x => ({ ...x, rect: eng.footprint(x.p, x.r) }));
+    const extra = (options.extra || []).map(d => ({ d: plain(d), r: eng.evaluate(plain(d)) }));
+    if (!list.length || list.length + extra.length < 2 || list.some(x => x.r.b.id !== list[0].r.b.id) || extra.some(x => !x.r || x.d.bedId !== list[0].r.b.id)) return { no: 'alone' };
+    const stuck = list.find(x => fixed(eng, x));
+    if (stuck) return { no: fixed(eng, stuck), who: stuck.p };
+    const L = list[0].r.cap, n = list.length + extra.length, ops = [], apart = list.some(x => !wholeWidth(x.rect));
+    const by = options.by || (apart ? 'rows' : 'length');
+    let each, total;
+    if (by === 'length') {
+      if (apart) return { no: 'rows' };
+      if (L / n < MIN_FT - EPS) return { no: 'short' };
+      each = L / n;
+      list.sort((a, b) => a.rect.a0 - b.rect.a0).forEach((x, i) => { const after = laid(x.p, L * i / n, L * (i + 1) / n, L); if (JSON.stringify(after) !== JSON.stringify(x.p)) ops.push({ before: x.p, after }); });
+      extra.forEach((x, k) => { const i = list.length + k; ops.push({ before: null, after: { ...x.d, ft: L / n, startFt: L * i / n } }); });
+    } else {
+      const rowsOf = x => x.rect.rows ? x.rect.rows.total : x.r.rows, T = rowsOf(list[0]), [a0, a1] = spanOf(list[0], L);
+      if (!Number.isInteger(T) || T < 2 || T > 12 || T % n || list.some(x => rowsOf(x) !== T || Math.abs(spanOf(x, L)[0] - a0) > 1e-4 || Math.abs(spanOf(x, L)[1] - a1) > 1e-4)) return { no: 'rows' };
+      const c = T / n, gid = list.map(x => x.p.bedLayout && x.p.bedLayout.groupId).find(Boolean) || `split:${newId()}`;
+      each = c; total = T;
+      list.sort((a, b) => a.rect.x0 - b.rect.x0).forEach((x, i) => {
+        const change = rowsChange(eng, x.p, i * c, c, T), after = change && put(x.p, change);
+        if (after && after.bedLayout) after.bedLayout = { ...after.bedLayout, groupId: gid };
+        if (after && JSON.stringify(after) !== JSON.stringify(x.p)) ops.push({ before: x.p, after });
+      });
+      extra.forEach((x, k) => { const i = list.length + k; ops.push({ before: null, after: { ...x.d, ft: a1 - a0, rowsPerBed: T, inRow: x.r.inRow, rowSp: x.r.rowSp, bedLayout: { v: 1, groupId: gid, rowStart: i * c, rowCount: c, startFt: a0 } } }); });
+    }
+    if (!ops.length) return { ops, by, shares: [], each, total };
+    const t = tried(eng, ops, L);
+    return t ? { ops, by, shares: t.shares, each, total } : { no: 'fit' };
+  }
+  /**
+   * Dragging an end of a planting where it lies against a neighbour. Pulled back, the end gives up feet as stretch() has it.
+   * Pushed on, the line between the two moves: this one grows and the neighbour gives up the feet, down to its last foot.
+   * Returns what stretch() returns; where the line moved, `ops` are the two edits (one step) and `other` is the neighbour.
+   */
+  function slide(eng, p, edge, ft) {
+    const res = stretch(eng, p, edge, ft);
+    if (!res) return null;
+    const r = eng.calc(p), f = eng.footprint(p, r), L = r.cap, end = Math.min(f.a1, L), want = snap(ft);
+    if (!wholeWidth(f) || (edge === 'end' ? want <= res.hi + EPS : want >= res.lo - EPS)) return res;
+    const beside = eng.holders(r.b, eng.occupancyFrom(p, r), eng.occupancyThrough(p, r), p.id).filter(o => !o.rest && wholeWidth(o.rect));
+    const touching = beside.filter(o => Math.abs((edge === 'end' ? o.rect.a0 : Math.min(o.rect.a1, L)) - (edge === 'end' ? res.hi : res.lo)) < 0.01);
+    if (touching.length !== 1 || fixed(eng, touching[0]) || recorded(p)) return res;
+    const o = touching[0], [g0, g1] = spanOf(o, L);
+    if (g1 - g0 < 2 * MIN_FT - EPS) return res;
+    const line = edge === 'end' ? clamp(want, f.a0 + MIN_FT, g1 - MIN_FT) : clamp(want, g0 + MIN_FT, end - MIN_FT);
+    const mine = edge === 'end' ? [f.a0, line] : [line, end], theirs = edge === 'end' ? [line, g1] : [g0, line];
+    const ops = [{ before: p, after: laid(p, mine[0], mine[1], L) }, { before: o.p, after: laid(o.p, theirs[0], theirs[1], L) }];
+    if (!tried(eng, ops, L)) return res;
+    return { ...res, a0: mine[0], a1: mine[1], len: mine[1] - mine[0], change: null, ops, other: { p: o.p, len: theirs[1] - theirs[0] }, same: false };
+  }
+
   // ───────────────────────── one-time cleanup ─────────────────────────
   /**
    * Overlaps and over-long plantings already in the plan.
@@ -337,5 +581,5 @@
     });
   }
 
-  return { propose, swap, refusal, stretch, rowsChange, cleanup, trimOps, freeRects, sharedDays, MIN_FT };
+  return { propose, swap, refusal, stretch, slide, share, mates, equalize, fixed, rowsChange, cleanup, trimOps, freeRects, sharedDays, MIN_FT };
 });

@@ -1881,3 +1881,30 @@ body.phone .wk-scope button { padding: 8px 6px; font-size: 13.5px; }
 #fUse { width: 100%; }
 .hv-use { flex: none; }
 .hv-use button { white-space: nowrap; padding: 5px 12px; }
+
+/* ── mixed beds: the question a drop onto a held bed asks, at the bed (app.js askShare), and the bed being mixed (map.js) ── */
+.share-ask { position: fixed; z-index: 60; width: min(390px, calc(100vw - 16px)); background: var(--raised); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 12px 12px 10px; display: grid; gap: 8px; font-size: 13px; }
+.share-ask .close { position: absolute; right: 6px; top: 6px; }
+.share-ask-head { margin: 0 30px 0 0; display: grid; gap: 2px; }
+.share-ask-head small { color: var(--muted); font-size: 12px; }
+.share-ask .fix-actions { display: grid; gap: 6px; }
+.share-ask .help { margin: 0; }
+.bed[data-mixing] .bed-edge { stroke: var(--flag); stroke-width: 2px; }
+.mix-pill { bottom: 14px; }
+/* several varieties ticked in a planting's panel, and who it shares its bed with */
+.mix-pick { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: grid; gap: 6px; background: var(--raised); }
+.mix-pick > b { font-size: 12px; }
+.mix-pick label { display: flex; gap: 8px; align-items: center; font-size: 13px; min-width: 0; }
+.mix-pick label input { width: 16px; height: 16px; flex: none; }
+.mix-pick label span { min-width: 0; overflow-wrap: anywhere; }
+.mix-pick-list { display: grid; gap: 5px; max-height: 232px; overflow: auto; }
+.mix-pick-says { margin: 2px 0 0; font-size: 12.5px; }
+.mix-pick-acts { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.mix-pick .seg { width: 100%; }
+.mix-mates { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; }
+.mix-mates li { display: flex; gap: 8px; justify-content: space-between; align-items: baseline; }
+.mix-mates li button { text-align: left; min-width: 0; overflow-wrap: anywhere; }
+.mix-mates li span { color: var(--muted); white-space: nowrap; font: 500 12px var(--mono); }
+.insp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.mix-pick-says.bad { color: var(--bad); }
+.mix-pick label small { color: var(--muted); }
