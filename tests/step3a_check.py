@@ -220,6 +220,26 @@ with sync_playwright() as pw:
             shot('offers-taken')
             undo()
             check('one undo takes them all back', ev("LRFApp.contentKey()") == key0 and ev(DATES) == dates0)
+        # The question has two rules. Ground booked twice is always asked about, whatever was pressed; and the one button for all asks
+        # even where no ground is booked twice, because several lines change at once. The second rule is reached here by first taking,
+        # one by one, each offer that books ground twice by itself; the button is then pressed for the rest.
+        depth0, one_by_one = ev("LRFApp.state.undo.length"), 0
+        for c in offers['chips']:
+            if not ev("!!document.querySelector('#asBody .as-hint[data-hint=\"%s\"]')" % c['id']): continue
+            page.click('#asBody .as-hint[data-hint="%s"]' % c['id']); settle()
+            q = asking()
+            if q and 'booked into the same ground' in q['body']: answer(True); one_by_one += 1   # it stays taken, so it is no longer among the rest
+            elif q: answer(False)
+            elif ev("LRFApp.state.undo.length") > depth0 + one_by_one: undo()   # taken without a question: put it back among the rest
+        depth1, rest = ev("LRFApp.state.undo.length"), ev("document.querySelectorAll('#asBody .as-hint').length")
+        if ev("!!document.getElementById('asHintsAll')"): page.click('#asHintsAll'); settle(900)
+        calm = asking()
+        check('a subject is found: offers that move plantings and book no ground twice (%d left, %d taken one by one first)' % (rest, one_by_one), rest >= 2 and calm is not None and 'booked into the same ground' not in calm['body'], [rest, one_by_one, calm])
+        check('the one button asks then too, since several lines change at once: it says what moves, crop by crop, and that no ground ends up booked twice', calm is not None and 'No ground ends up booked twice' in calm['body'] and 'planting' in calm['body'] and calm['moves'] > 0, calm)
+        if calm: answer(False)
+        check('Cancel there changes nothing', ev("LRFApp.state.undo.length") == depth1)
+        while ev("LRFApp.state.undo.length") > depth0: undo()
+        check('and with the offers taken one by one undone, the plan is exactly as it was', ev("LRFApp.contentKey()") == key0 and ev(DATES) == dates0)
 
     # ── the summary above the table ──
     sv = ev("LRFApp.auditSurvey()")
