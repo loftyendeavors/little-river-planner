@@ -158,11 +158,11 @@
     if (!n) return;
     const when = t => { const d = new Date(t); return Number.isFinite(+d) ? `${UI.MONTHS[d.getMonth()]} ${d.getDate()}` : 'an earlier date'; };
     const switchPlan = async () => {
-      const ok = await UI.confirm({ title: 'Switch to the newer plan?', body: `The plan open here is replaced by your v7 backup of ${when(n.backup)}. Anything changed here since the older plan was loaded (stock counts, recorded sowings, plantings moved) is lost; use Backup first if you want a copy. Your v7 planner is not touched.`, confirmLabel: 'Switch plan', danger: true });
+      const ok = await UI.confirm({ title: 'Switch to the newer plan?', body: `The plan open here is replaced by the plan of ${when(n.backup)} that came with this copy. Anything changed here since the older plan was loaded (stock counts, recorded sowings, plantings moved) is lost; use Backup first if you want a copy.`, confirmLabel: 'Switch plan', danger: true });
       if (ok) App.useBundled();
     };
     add(host, h('section.insp-section.newer', h('h3', 'A newer plan came with this copy'),
-      h('p.help', `This copy of the planner was built from your v7 backup of ${when(n.backup)}${n.counts && n.counts.plantings ? `, ${num(n.counts.plantings)} plantings` : ''}. The plan open now is the one this browser already held${n.held ? `, from ${when(n.held)}` : ''}.`),
+      h('p.help', `This copy of the planner came with your plan of ${when(n.backup)}${n.counts && n.counts.plantings ? `, ${num(n.counts.plantings)} plantings` : ''}. The plan open now is the one this browser already held${n.held ? `, from ${when(n.held)}` : ''}.`),
       h('div.newer-actions', h('button.btn.primary', { type: 'button', onclick: switchPlan }, `Use the ${when(n.backup)} plan`), h('button.btn', { type: 'button', onclick: () => App.keepMine() }, 'Keep this one'))));
   }
   /** One over-long set in plain words: "28 plantings are 22 ft long, but the beds in the north field are 20 ft." */
@@ -241,11 +241,11 @@
       add(host, h('section.welcome',
         h('p.eyebrow', 'No plan in this browser'), h('h2', 'Load your plan'),
         h('p', 'This is a sample layout so the page is not empty. A plan stays in the browser it was made in, so one made on another computer or in another browser is not here until you bring it.'),
-        h('p', 'Load a backup downloaded from this planner, or the complete backup (.zip) from your v7 planner, and your gardens, beds, plantings, varieties and map photo appear here.'),
+        h('p', 'Load a backup (.zip or .json), and your gardens, beds, plantings, varieties and map photo appear here.'),
         h('div.welcome-actions',
           h('button.btn.primary', { type: 'button', onclick: () => $('importFile').click() }, 'Load a backup…'),
           App.folder().supported ? h('button.btn', { type: 'button', id: 'welcomeFolder', onclick: () => App.openMyFolder() }, 'Open my plan folder…') : null),
-        h('p.help', 'You can also drop the file anywhere on this page. The file and your v7 planner are not changed.')));
+        h('p.help', 'You can also drop the file anywhere on this page. The file itself is not changed.')));
     }
     const ground = stat(`In the ground ${day(date)}`, inGround());
     ground.id = 'statGround';
@@ -550,7 +550,7 @@
     };
     const split = f && f.rows && f.rows.count < f.rows.total, totalRows = f ? (f.rows ? f.rows.total : r.rows) : 0;
     const whereText = !f ? null : r.partial || split ? `Feet ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} of ${num(r.cap, 1)}. Drag its ends on the map to change them.` : 'Whole bed. Shorten it here, or drag its ends on the map, to share the bed.';
-    const dtmSource = timing.activeMode === 'catalog' ? `From the supplier's ${timing.printed}-day figure${timing.conversion === 'seed-minus-nursery' ? `, less ${timing.nurseryDays} nursery days` : timing.conversion === 'direct-less' ? `, which is for seed sown in place: ${timing.off} days less as a transplant` : ''}.${timing.basisBy === 'guess' ? ' Where those days start is a guess from the wording of the supplier’s page: set it on the Assumptions list.' : ''}`
+    const dtmSource = timing.activeMode === 'catalog' ? `From the supplier's ${timing.printed}-day figure${timing.conversion === 'seed-minus-nursery' ? `, less ${timing.nurseryDays} nursery days` : timing.conversion === 'direct-less' ? `, which is for seed sown in place: ${timing.off} days less as a transplant` : ''}.${timing.basisBy === 'guess' ? ' What those days are counted from is a guess from the wording of the supplier’s page: set it on the Assumptions list.' : ''}`
       : p.dtm > 0 ? 'Pinned: this planting keeps its own days. Clear the field and it follows the assumptions list.' : v && v.dtm > 0 ? 'Your figure for this variety.' : 'Crop default. Set your own on the Assumptions list.';
     // Whom it is grown for: a flag, which follows the bed (and the bed its garden) until it is set here.
     const F = root.LRFForecast, use = F.useOf(eng, p), bedUse = F.useOfBed(eng, bed);

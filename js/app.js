@@ -572,7 +572,7 @@
         if (root.LRFZip.isZip(bytes)) { const found = await zipPictures(bytes); if (found.map) await mapFrom(found.map, pictureType(found.map) || 'image/jpeg', false); tally(await addThumbs(found.thumbs)); continue; }
         let data;
         try { data = JSON.parse(new TextDecoder().decode(bytes)); } catch (_) { throw new Error('is not a picture, a photo file or a backup'); }
-        if (data && Array.isArray(data.plantings)) throw new Error('is a plan, not photos. To open it, use Backup, Load a v7 backup');
+        if (data && Array.isArray(data.plantings)) throw new Error('is a plan, not photos. To open it, use Backup, Load a backup');
         if (data && data.format === 'lrf-photos-1') { if (data.map && data.map.data) { const b = fromBase64(data.map.data); await mapFrom(b, pictureType(b) || data.map.mime || 'image/jpeg', false); } tally(await addThumbs(data.thumbs)); continue; }
         if (!data || typeof data !== 'object' || !Object.values(data).some(isThumb)) throw new Error('holds no photos');
         tally(await addThumbs(data));
@@ -1258,8 +1258,8 @@
   async function loadAttic() {
     if (state.attic) return state.attic;
     const source = (state.plan.lrfNext && state.plan.lrfNext.attic) || 'none';
-    if (source === 'cloud') { const text = await store.loadBlob('attic'); if (text) return (state.attic = JSON.parse(text)); throw new Error('The stored backup records are missing. Load the v7 backup again before exporting.'); }
-    if (source === 'session') throw new Error('The records this app does not edit yet were only held for the session they were loaded in. Load the v7 backup again before exporting.');
+    if (source === 'cloud') { const text = await store.loadBlob('attic'); if (text) return (state.attic = JSON.parse(text)); throw new Error('The stored backup records are missing. Load the backup again before downloading one.'); }
+    if (source === 'session') throw new Error('Some records that came with the backup were only held for the session they were loaded in. Load the backup again before downloading one.');
     return (state.attic = emptyAttic());
   }
   async function exportBackup() {
@@ -1269,7 +1269,7 @@
       const filename = `little-river-plan-${planYear()}-${E.d2s(new Date())}.json`;
       const downloads = root.claude && root.claude.use ? await root.claude.use('downloads') : null;
       const planOnly = !(state.plan.lrfNext && state.plan.lrfNext.attic === 'cloud');
-      const done = planOnly ? 'Plan file saved. It holds the plan only, not v7’s seed inventory, supplier pages or photos.' : 'Backup saved. The v7 planner can restore this file.';
+      const done = planOnly ? 'Plan file saved. It holds the plan only: not the saved supplier pages or the photos.' : 'Backup saved.';
       const noted = () => adopt({ ...state.plan, lrfNext: { ...(state.plan.lrfNext || {}), lastExport: new Date().toISOString() } }, state.engine);
       if (downloads) { await downloads.save({ filename, data: new Blob([text], { type: 'application/json' }) }); noted(); toast(done); return; }
       const url = URL.createObjectURL(new Blob([text], { type: 'application/json' })), a = h('a', { href: url, download: filename });
@@ -1352,7 +1352,7 @@
     } else if (replacing && !extra.asked) {
       const ok = await UI.confirm({
         title: 'Replace the plan in this app?',
-        body: `The backup holds ${info.plantings} plantings in ${info.beds} growing spaces across ${info.gardens} gardens for ${info.year || 'an unknown year'}. Plantings, tray demand and seed stock are replaced by the backup’s, including what was changed here. ${kept.length ? `Kept from this copy: ${kept.join('; ')}. ` : ''}${leftBehind ? `The ${leftBehind} planting${leftBehind === 1 ? '' : 's'} still to place here ${leftBehind === 1 ? 'is' : 'are'} not in that file and will be gone. ` : ''}${carried.gone.length ? `${carried.gone.length} variet${carried.gone.length === 1 ? 'y' : 'ies'} here ${carried.gone.length === 1 ? 'is' : 'are'} not in the backup and will be gone (${carried.gone.slice(0, 3).join(', ')}${carried.gone.length > 3 ? '…' : ''}). ` : ''}Your v7 planner and its data are not touched.`,
+        body: `The backup holds ${info.plantings} plantings in ${info.beds} growing spaces across ${info.gardens} gardens for ${info.year || 'an unknown year'}. Plantings, tray demand and seed stock are replaced by the backup’s, including what was changed here. ${kept.length ? `Kept from this copy: ${kept.join('; ')}. ` : ''}${leftBehind ? `The ${leftBehind} planting${leftBehind === 1 ? '' : 's'} still to place here ${leftBehind === 1 ? 'is' : 'are'} not in that file and will be gone. ` : ''}${carried.gone.length ? `${carried.gone.length} variet${carried.gone.length === 1 ? 'y' : 'ies'} here ${carried.gone.length === 1 ? 'is' : 'are'} not in the backup and will be gone (${carried.gone.slice(0, 3).join(', ')}${carried.gone.length > 3 ? '…' : ''}). ` : ''}The backup file itself is not changed.`,
         confirmLabel: 'Replace plan', danger: true
       });
       if (!ok) return false;

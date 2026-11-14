@@ -227,9 +227,9 @@
   function countBox(fig) {
     const eng = App.state.engine, apart = eng.shareTrays === false, SHEET = root.LRFSowing.ROCKWOOL_SHEET;
     const crates = fig.onBenches
-      ? ['Sheltered crates are counted as standing on the benches, the way v7 counts them. ', h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', null, 'Sheltered crates stand on the floor') }, 'They stand on the floor')]
+      ? ['Sheltered crates are counted as standing on the benches. ', h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', null, 'Sheltered crates stand on the floor') }, 'They stand on the floor')]
       : fig.floorMost ? [`Up to ${num(fig.floorMost)} are sheltered under heat${fig.floorUntil ? ` until ${day(fig.floorUntil)}` : ''}. They stand on the floor and take no bench room. `, h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', 'bench', 'Count sheltered crates on the benches') }, 'Count them on the benches instead')] : null;
-    const sharing = eng.sowingBatches().length ? [apart ? 'Every variety is counted in trays of its own, the way v7 counts them. ' : `Varieties of one crop sown the same day share trays, each in whole rows. Tower crops sown the same day share rockwool sheets (${SHEET.cells} cells, ${SHEET.rows} rows of ${SHEET.columns}), whatever the crop. `,
+    const sharing = eng.sowingBatches().length ? [apart ? 'Every variety is counted in trays of its own. ' : `Varieties of one crop sown the same day share trays, each in whole rows. Tower crops sown the same day share rockwool sheets (${SHEET.cells} cells, ${SHEET.rows} rows of ${SHEET.columns}), whatever the crop. `,
       h('button.linkish', { type: 'button', onclick: () => App.setOwn('trays', apart ? null : 'variety', apart ? 'Varieties of one crop share trays' : 'Every variety in trays of its own') }, apart ? 'Let varieties of one crop share trays' : 'Count every variety in trays of its own')] : null;
     if (!crates && !sharing) return null;
     return h('div.bn-edit.bn-counting', { id: 'bnCount', role: 'group', 'aria-label': 'How trays and crates are counted' },

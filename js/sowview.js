@@ -487,7 +487,7 @@
         framed || phone ? null : h('button.btn', { type: 'button', id: 'wkPrint', title: `${scoped ? `The ${scopeName}’s tasks` : 'This week'} as a sheet to carry: a box for each task and a place for the day it was done`, onclick: () => printWeek(fig, now, span) }, scoped ? `Print the ${scopeName} sheet` : span === 1 ? 'Print the week' : `Print the ${num(span)} weeks`)),
       chips.length > 2 ? h('div.sd-filters.wk-kinds', { id: 'wkKinds', role: 'group', 'aria-label': 'Which kind of task to list' }, chips.map(([id, label]) => h('button.chip', { type: 'button', dataset: { kind: id }, 'aria-pressed': String(ui.filter === id), onclick: () => { ui.filter = id; render(); } }, label))) : null,
       late ? h('details.sw-earlier', { open: ui.earlier, ontoggle: e => { if (e.target.open !== ui.earlier) { ui.earlier = e.target.open; render(); } } },
-        h('summary', h('b', `${plural(late, 'earlier task')}${where} ${late === 1 ? 'is' : 'are'} not recorded`), h('span', ' Planned before this week. Record them here on the day they were done, or leave them: nothing is assumed done.')),
+        h('summary', h('b', `${plural(late, 'earlier task')}${where} ${late === 1 ? 'is' : 'are'} not recorded.`), h('span', ' Planned before this week. Record them here on the day they were done, or leave them: nothing is assumed done.')),
         ui.earlier ? halves(earlier, earlierJobs, stock, true) : null) : null,
       anything ? halves(week, weekJobs, stock, span > 1) : h('p.empty.sw-none', span === 1 ? `Nothing is planned${where} for the week of ${day(d(now))}.` : `Nothing is planned${where} from ${day(d(now))} to ${day(d(until))}.`),
       selected.length ? h('div.sw-record', { role: 'region', 'aria-label': 'Record what is ticked' },

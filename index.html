@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.38">
+<meta name="lrf-build" content="0.39">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -45,8 +45,8 @@
         <div id="folderMenu"></div>
         <button type="button" id="syncBtn"><b>Cloud sync…</b><small id="syncNote">Keep a copy off this computer, for a second computer or a phone</small></button>
         <button type="button" id="snapBtn"><b>Snapshots…</b><small>Go back to the plan as it was</small></button>
-        <button type="button" id="exportBtn"><b>Download a backup</b><small>A plan file the v7 planner can restore</small></button>
-        <button type="button" id="importBtn"><b>Load a v7 backup…</b><small>Replace this plan with a .zip or .json backup</small></button>
+        <button type="button" id="exportBtn"><b>Download a backup</b><small>The plan as one file, to keep somewhere safe or load again</small></button>
+        <button type="button" id="importBtn"><b>Load a backup…</b><small>Replace this plan with a .zip or .json backup</small></button>
         <input type="file" id="importFile" accept=".zip,.json,application/zip,application/json" hidden>
         <button type="button" id="photosBtn"><b>Add photos…</b><small>The farm photo or variety photos for this plan. The plan is not replaced.</small></button>
         <input type="file" id="photosFile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.json,.zip,application/json,application/zip" multiple hidden>
@@ -152,7 +152,7 @@
         <header class="as-head">
           <p class="eyebrow">One list the whole plan rests on</p>
           <h2 id="asTitle">Days to first harvest</h2>
-          <p id="asLead">Each row says where its days start, and its numbers count from there. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; a variety with its own figure keeps it, and a planting with no variety uses the crop row.</p>
+          <p id="asLead">Each row says what its days are counted from, and its numbers count from there. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; a variety with its own figure keeps it, and a planting with no variety uses the crop row.</p>
         </header>
         <div class="seg as-mode" role="group" aria-label="Which half of the list">
           <button type="button" data-as-mode="days" aria-pressed="true">Days to harvest</button>

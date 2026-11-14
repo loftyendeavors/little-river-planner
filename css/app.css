@@ -50,6 +50,7 @@
 html, body { height: 100%; margin: 0; }
 body { background: var(--paper); color: var(--ink); font: 14px/1.4 var(--body); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; -webkit-font-smoothing: antialiased; }
 button, input, select { font: inherit; color: inherit; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); }   /* ticks in the page's own ink, not the browser's blue */
 button { cursor: pointer; }
 h2, h3, p, ul, ol { margin: 0; padding: 0; }
 ul, ol { list-style: none; }
@@ -308,6 +309,7 @@ body.le-dragging #map, body.le-dragging #map * { cursor: grabbing !important; }
 .season-month { position: absolute; bottom: 0; font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; padding-left: 3px; border-left: 1px solid var(--line); height: 100%; display: flex; align-items: flex-end; }
 .season-frost { position: absolute; top: 0; bottom: 16px; font: 500 10px var(--mono); color: var(--frost); white-space: nowrap; padding-left: 4px; }
 .season-frost i { position: absolute; left: 0; top: 0; bottom: 0; border-left: 1.5px dashed var(--frost); }
+.season-frost b { font-weight: inherit; background: var(--surface); padding: 0 2px; }   /* the month lines pass behind the words, not through them */
 .season-cursor { position: absolute; top: -4px; bottom: 12px; width: 3px; margin-left: -1.5px; background: var(--flag); border-radius: 2px; pointer-events: none; }
 .season-cursor::after { content: ""; position: absolute; left: 50%; top: -5px; width: 11px; height: 11px; border-radius: 50%; background: var(--flag); transform: translateX(-50%); }
 #dateRange { position: absolute; inset: -6px 0 0 0; width: 100%; height: calc(100% + 6px); margin: 0; opacity: 0; cursor: ew-resize; }
@@ -421,8 +423,9 @@ button.as-more:hover { background: var(--paper); color: var(--ink); }
 .spec { color: var(--ink-2); font-family: var(--mono); font-size: 12px; }
 .link { border: 0; background: none; padding: 0; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; text-align: left; justify-self: start; }
 .icon-btn.close { position: absolute; top: 10px; right: 10px; border: 0; background: none; font-size: 22px; color: var(--muted); }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 1px; background: var(--line-soft); border-bottom: 1px solid var(--line-soft); }
-.stat { background: var(--surface); padding: 9px 12px; display: grid; gap: 1px; }
+/* a row of figures: when the last line is not full, the figures on it share what is left, so no grey block shows */
+.stats { display: flex; flex-wrap: wrap; gap: 1px; background: var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.stat { flex: 1 1 92px; min-width: 0; background: var(--surface); padding: 9px 12px; display: grid; gap: 1px; }
 .stat span { font-size: 11.5px; color: var(--muted); }
 .stat b { font: 600 13.5px var(--mono); font-variant-numeric: tabular-nums; }
 .insp-section { padding: 12px 14px; border-bottom: 1px solid var(--line-soft); display: grid; gap: 9px; }
@@ -548,7 +551,7 @@ table.sd th { text-align: left; }
 .dlg-status { min-height: 20px; margin-top: 10px; font-weight: 600; font-size: 13.5px; }
 .dlg-status[data-kind="bad"] { color: var(--bad); }
 .dlg-status[data-kind="good"] { color: var(--good); }
-.sd-review h3 { font: 700 13px var(--body); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 16px 0 8px; }
+.sd-review h3 { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin: 16px 0 8px; }
 .sd-review h3:first-child { margin-top: 0; }
 .sd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px 12px; }
 .sd-newcrop { margin-top: 10px; padding: 10px; border: 1px dashed var(--line); border-radius: var(--radius); }
@@ -687,7 +690,7 @@ table.sd td { overflow: hidden; text-overflow: ellipsis; }
 .sd-panel .sd-evidence { font-size: 12.5px; color: var(--ink-2); margin: 8px 0; }
 .sd-panel .sd-plan { font-size: 13px; font-weight: 600; margin: 8px 0 0; padding: 8px 10px; background: var(--paper); border-radius: var(--radius); }
 .sd-panel .dialog-actions { position: sticky; bottom: -40px; background: var(--raised); padding: 10px 0 12px; margin-top: 12px; border-top: 1px solid var(--line-soft); flex-wrap: wrap; }
-.sd-h { font: 700 13px var(--body); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 18px 0 8px; }
+.sd-h { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin: 18px 0 8px; }
 .sd-pls { display: grid; gap: 4px; }
 .sd-pl { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; text-align: left; border: 1px solid var(--line-soft); background: var(--surface); border-radius: 7px; padding: 6px 9px; font-size: 13px; }
 .sd-pl:hover { border-color: var(--ink-2); }
@@ -1154,7 +1157,7 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 @media (max-width: 1360px) { .ql-label { display: none; } #qlVendor { flex-basis: 128px; width: 128px; } }
 
 /* a space's measurements, to read at a glance */
-.stats.dims { grid-template-columns: repeat(3, 1fr); }
+.stats.dims { display: grid; grid-template-columns: repeat(3, 1fr); }
 .stats.dims .stat b { font: 600 17px var(--mono); letter-spacing: -0.01em; white-space: nowrap; }
 .stats.dims .stat span { white-space: nowrap; }
 .stats.dims .stat:only-child { grid-column: 1 / -1; }
@@ -1172,8 +1175,6 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 .sd-addlot:hover { border-color: var(--ink-2); color: var(--ink); }
 .sd-pl span em { font-style: normal; font-weight: 600; color: var(--ink); }
 
-/* a row of figures that does not fill its last line: the last figure takes the rest, so no grey block shows */
-.stats > .stat:last-child { grid-column-end: -1; }
 
 /* ── the timeline, 0.17: filters, one continuous scale, summaries that open ──
    Every position is a count of days times --ppd (pixels per day), so a change of scale moves nothing but that number. */

@@ -176,7 +176,7 @@
         dateCell(plan.fall, 'Fall from', v => save(plan, { fall: v }, 'Fall start')),
         dateCell(plan.through, 'Last week of', v => save(plan, { through: v }, 'Last week')),
         h('span.tr-addwrap', pick, h('datalist', { id: listId }, known.map(c => h('option', { value: T.short(c.name) }, ownIds.has(c.id) ? 'your crop' : 'built-in'))), h('button.btn', { type: 'button', onclick: addCrop }, 'Add crop'))),
-      opensMidWeek && doubled ? h('p.tr-callout', h('span', `This plan opens on ${dayName(d(plan.from))}, mid-week. As v7 schedules it, ${num(doubled)} trays are ready that day and a full week again on ${dayName(d(nextMonday))}.`),
+      opensMidWeek && doubled ? h('p.tr-callout', h('span', `This plan opens on ${dayName(d(plan.from))}, mid-week. As it stands, ${num(doubled)} trays are ready that day and a full week again on ${dayName(d(nextMonday))}.`),
         h('button.btn.small', { type: 'button', onclick: async () => { const moved = await App.traysToMonday(); if (moved.length) UI.toast(`Opens ${dayName(d(moved[0].to))}. Newer backups loaded here are opened on a Monday too.`, { label: 'Undo', run: App.undo }); } }, `Open on ${dayName(d(nextMonday))}`)) : null,
       h('p.tr-note', `${model ? num(model.weeks.length) : '—'} active weeks. Trays are ready on Mondays and sown that many days before.${sown ? ` ${num(sown)} batch${sown === 1 ? ' is' : 'es are'} already sown and stay${sown === 1 ? 's' : ''} as recorded; changes reach the rest.` : ''}`));
   }
@@ -240,7 +240,7 @@
       stat('Expected', money(fig.revenue), 'if every tray sells at its price'),
       stat('Seed for the season', fig.seeds ? `${num(fig.seeds)} seeds` : fig.seedG ? weight(fig.seedG) : '—', (fig.seeds && fig.seedG ? `and ${weight(fig.seedG)} by weight · ` : '') + (!fig.crops.length ? '' : fig.unrated === fig.crops.length ? 'no seed figure set yet' : fig.unrated ? `${num(fig.crops.length - fig.unrated)} of ${num(fig.crops.length)} crops counted so far` : 'every crop counted')),
       stat(`Week of ${day(d(now))}`, `${num(week.sow)} to sow`, `${num(week.ready)} ready · ${money(week.revenue)}`)),
-    orphans ? h('p.tr-callout', `${num(orphans)} tray batches belong to a demand plan whose record is missing. They are shown below but cannot be changed from here. Loading the v7 backup again restores the record.`) : null,
+    orphans ? h('p.tr-callout', `${num(orphans)} tray batches belong to a demand plan whose record is missing. They are shown below but cannot be changed from here. Loading the backup again restores the record.`) : null,
     list.length ? list.map(p => planSection(p, fig)) : emptyState(),
     list.length ? h('p.tr-more', h('button.btn', { type: 'button', onclick: () => { const year = App.planYear(), n = list.length + 1, first = T.draft(year); App.saveTrays('Weekly demand plan added', { ...first, from: T.mondayOnOrAfter(first.from), name: `${year} live trays ${n}`, rows: [{ id: App.uid(), name: 'New crop', days: 21, price: 0, spring: 0, summer: 0, fall: 0 }] }); } }, '+ Another demand plan'),
       h('small', 'One plan holds one set of weekly numbers. A second customer is a second plan.')) : null,
