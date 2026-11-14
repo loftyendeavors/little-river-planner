@@ -394,7 +394,7 @@
           homes.length > shown.length ? h('button.ah-more', { type: 'button', id: 'wtMore', onclick: () => { W.all = true; redraw(); } }, `+${num(homes.length - shown.length)} more`) : null,
           h('p.help', 'Click one to place it there, or drag it onto any bed. A bed that holds one other crop then can be shared: drop it there to choose how.')]
           : h('p.note.sr-none', { id: 'wtNoHome' }, 'No space is free for all of its days, in season. Drag it onto a bed to share one, or change its date.'),
-        wait.why ? h('p.help', { id: 'wtWhy' }, `Why it waits: ${wait.why.charAt(0).toLowerCase()}${wait.why.slice(1)} in the ${wait.beds ? 'beds' : 'gardens'} it was sent to.`) : null),
+        wait.why ? h('p.help', { id: 'wtWhy' }, wait.from ? `Why it waits: ${wait.why.charAt(0).toLowerCase()}${wait.why.slice(1)}${eng.bedOf(wait.from) ? ` (${App.bedLabel(eng.bedOf(wait.from))})` : ''}. It keeps its date.` : `Why it waits: ${wait.why.charAt(0).toLowerCase()}${wait.why.slice(1)} in the ${wait.beds ? 'beds' : 'gardens'} it was sent to.`) : null),
       h('div.insp-actions.wt-actions', h('button.btn.danger', { type: 'button', id: 'wtRemove', onclick: () => App.removeWaiting([w.id]) }, 'Remove'),
         mates.length > 1 ? h('button.linkish', { type: 'button', id: 'wtRemoveAll', onclick: () => App.removeWaiting(mates.map(q => q.id), `Remove ${plural(mates.length, 'planting')} of a series, not yet placed`) }, `Remove all ${num(mates.length)} of this series still to place`) : null));
     return true;

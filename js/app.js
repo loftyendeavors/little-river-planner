@@ -13,6 +13,7 @@
     plan: null, engine: null, attic: null, extras: null, inventoryBase: null, inventoryAsked: null, packsBase: {}, keptThumbs: {}, bundled: null, mapImageUrl: '',
     date: new Date(), view: 'map', sel: null, armed: null,
     undo: [], redo: [], ready: false,
+    mixing: null,   // the bed varieties are being dropped into one after another: { bedId, by: 'length' | 'rows' } (see shareDrop)
     last: null   // the last change taken or refused: { kind: 'saved' | 'refused', label | text, at, step }, read by the panel's "Saved" line
   };
   const listeners = {};
@@ -919,9 +920,21 @@
     if (payload.waitingId) return previewWaiting(payload.waitingId, target);
     let res = Rails.propose(eng, payload, target);
     // A trade is only offered where the grower can see it coming: while dragging.
-    if (res.state === 'blocked' && res.why === 'held' && payload.plantingId && !target.noSwap) res = Rails.swap(eng, payload, target) || res;
+    const mixingHere = !!state.mixing && state.mixing.bedId === target.bedId;
+    if (res.state === 'blocked' && res.why === 'held' && payload.plantingId && !target.noSwap && !mixingHere) res = Rails.swap(eng, payload, target) || res;
+    // Ground that is held can be shared, or what holds it replaced: the drop asks which (shareDrop). A pass over every bed
+    // while something is in the air only asks whether the question would arise; the bed under the pointer gets the ways worked out.
+    if (res.state === 'blocked' && res.why === 'held' && !target.noSwap && bed && eng.isSoilBed(bed)) {
+      const sh = sharing(eng, payload, target);
+      if (sh && (target.survey ? !sh.no.replace : sh.length || sh.rows || sh.replace)) res = { ...res, state: 'split', share: sh };
+      else if (sh && sh.no.replace && sh.no.replace.who) res = { ...res, fixedBy: sh.no.replace };
+    }
     const unit = bed ? eng.capUnit(bed) : 'ft', r = res.r, harvest = r ? `harvest ${span(r.first, r.last)}` : '';
-    if (res.state === 'swap') res.text = `Trade places with ${names(res.traded.map(q => cropLabel(q)))}`;
+    if (res.state === 'split') {
+      const way = mixingHere && res.share[state.mixing.by];
+      res.text = way ? (state.mixing.by === 'rows' ? `Splits the rows again: ${UI.num(way.each)} of ${UI.num(way.total)} each` : `Splits again: ${UI.num(way.each, 1)} ft each`) : `${heldText(res)} · drop to ${res.share.length || res.share.rows || target.survey ? 'split or replace' : 'replace'}`;
+    } else if (res.fixedBy) res.text = `${heldText(res)}, and ${{ recorded: 'it is already recorded as sown or planted', standing: 'it stands for years', tray: 'it follows weekly demand' }[res.fixedBy.why] || 'it cannot give up ground'}`;
+    else if (res.state === 'swap') res.text = `Trade places with ${names(res.traded.map(q => cropLabel(q)))}`;
     else if (res.state === 'ok') res.text = payload.plantingId ? `${payload.copy ? 'Copy' : 'Move'} here · ${harvest}` : `${day(r.field)} · ${harvest}`;
     else if (res.state === 'partial') {
       const rows = res.rect && res.rect.rows && res.rect.rows.count < res.rect.rows.total ? `${res.rect.rows.count} of ${res.rect.rows.total} rows · ` : '';
@@ -1004,9 +1017,171 @@
   }
 
   const sameSpot = (a, b) => a.bedId === b.bedId && a.date === b.date && (a.ft || 0) === (b.ft || 0) && (a.trays || 0) === (b.trays || 0) && (a.startFt || 0) === (b.startFt || 0) && JSON.stringify(a.bedLayout || null) === JSON.stringify(b.bedLayout || null);
+  // ── a bed that is held: split it, or replace what is there ──
+  let sharedMemo = { eng: null, key: '', value: null };
+  /** Rails.share for a drop, remembered while the pointer stays on the same foot of the same bed. */
+  function sharing(eng, payload, target) {
+    const key = `${target.survey ? 'q' : 'f'}|${target.bedId}|${+target.date}|${JSON.stringify(payload)}|${target.along == null ? '' : Math.round(target.along)}`;
+    if (sharedMemo.eng !== eng || sharedMemo.key !== key) sharedMemo = { eng, key, value: Rails.share(eng, payload, target, target.survey ? { quick: true } : {}) };
+    return sharedMemo.value;
+  }
+  function setMixing(next) {
+    const was = state.mixing;
+    if ((was && was.bedId) === (next && next.bedId) && (was && was.by) === (next && next.by)) return;
+    state.mixing = next; emit('mixing');
+  }
+  const worthOf = eng => root.LRFForecast.build(eng).rows.reduce((n, r) => n + r.worth, 0);
+  const worthSaid = (was, now) => Math.abs(now - was) >= 0.5 ? `the season’s worth goes from ${dollars(was)} to ${dollars(now)}` : `the season’s worth stays ${dollars(now)}`;
+  const plantsSaid = x => `${cropLabel(x.p)} goes from ${UI.num(x.was.plants)} plant${x.was.plants === 1 ? '' : 's'} to ${UI.num(x.now.plants)}`;
+  /** What each way would do, in a line, said before it is chosen. */
+  function shareLines(sh, payload) {
+    const eng = state.engine, what = cropLabel(sh.base), bed = sh.bed, cap = eng.capOf(bed), out = {};
+    const held = way => way.shares.filter(x => !x.isNew && x.was && x.was.plants !== x.now.plants), counts = way => { const list = held(way); return list.length ? ` ${plantsSaid(list[0])}${list.length > 1 ? `, and ${list.length - 1} more likewise` : ''}.` : ''; };
+    if (sh.length) {
+      const w = sh.length, n = w.shares.length, mine = w.shares.find(x => x.isNew) || w.shares[w.shares.length - 1];
+      out.length = w.equal ? `${n === 2 ? `${cropLabel(w.shares.find(x => x !== mine).p)} and ${what} take` : `All ${n} take`} ${UI.num(w.each, 1)} ft each of ${UI.num(cap, 1)}.${counts(w)}`
+        : `${held(w).length ? cropLabel(held(w)[0].p) : 'The share it is dropped on'} keeps ${UI.num(held(w).length ? held(w)[0].now.len : w.each, 1)} ft and ${what} takes ${UI.num(w.each, 1)}.${counts(w)}`;
+    }
+    if (sh.rows) { const w = sh.rows, n = w.shares.length; out.rows = `${n === 2 ? `${cropLabel(w.shares.find(x => !x.isNew).p)} keeps ${UI.num(w.each)} of ${UI.num(w.total)} rows and ${what} takes ${UI.num(w.each)}` : `All ${n} take ${UI.num(w.each)} of ${UI.num(w.total)} rows each`}.${counts(w)}`; }
+    if (sh.replace) { const gone = sh.holders.map(o => cropLabel(o.p)), one = gone.length === 1; out.replace = `${what} takes ${sh.replace.r && sh.replace.r.partial ? 'the ground' : 'the bed'}. ${names(gone)} ${one ? 'leaves it and waits' : 'leave it and wait'} under To place, with ${one ? 'its date' : 'their dates'}.`; }
+    return out;
+  }
+  let asking = null;
+  /** The question, asked at the bed: split the length, split the rows, or replace. Resolves to the way chosen, or null. Nothing changes until one is. */
+  function askShare(sh, payload) {
+    if (asking) asking(null);
+    return new Promise(resolve => {
+      const eng = state.engine, bed = sh.bed, lines = shareLines(sh, payload), first = sh.holders.slice().sort((a, b) => a.from - b.from)[0], n = sh.holders.length;
+      const done = value => { if (asking !== done) return; asking = null; root.removeEventListener('keydown', onKey, true); root.removeEventListener('pointerdown', onAway, true); box.remove(); resolve(value); };
+      const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); done(null); } };
+      const onAway = e => { if (!box.contains(e.target)) done(null); };
+      const way = (id, title, line) => line ? h('button.fix-btn', { type: 'button', dataset: { way: id }, onclick: () => done(id) }, h('b', title), h('small', line)) : null;
+      const through = Math.max(...sh.holders.map(o => +o.through)), until = Number.isFinite(through) ? `to ${day(new Date(through))}` : 'for the rest of the season';
+      const not = [['length', 'the length'], ['rows', 'the rows']].filter(([id]) => !sh[id] && sh.no[id] && !['rows'].includes(sh.no[id].why)).map(([id, word]) => `${word} cannot be split here (${{ short: 'a share would be under a foot', crowded: 'another crop lies in the feet that would be given up', fit: 'it would not fit' }[sh.no[id].why] || 'it would not fit'})`);
+      const box = h('div.share-ask', { id: 'shareAsk', role: 'dialog', 'aria-label': `${bedLabel(bed)} is held` },
+        h('button.icon-btn.close', { type: 'button', id: 'shareAskClose', 'aria-label': 'Close', title: 'Close. Nothing is planted.', onclick: () => done(null) }, '×'),
+        h('p.share-ask-head', h('b', `${bedLabel(bed)} is held by ${n === 1 ? cropLabel(first.p) : `${cropLabel(first.p)} and ${n - 1} more`}`), h('small', `${day(first.r.field)} ${until}. No date changes, whichever you choose.`)),
+        h('div.fix-actions', way('length', 'Split the length', lines.length), way('rows', 'Split the rows', lines.rows), way('replace', 'Replace', lines.replace)),
+        not.length ? h('p.help', { id: 'shareAskNot' }, `${not.join('; ').replace(/^./, c => c.toUpperCase())}.`) : null,
+        sh.length || sh.rows ? h('p.help', 'After a split, the next variety dropped on this bed splits it again without asking, until you press Done.') : null);
+      document.body.append(box);
+      // beside the bed where it is drawn; in the middle of the page where it is not (a drop on the Timeline)
+      const el = state.view === 'map' ? document.querySelector(`#mapBeds [data-bed="${CSS.escape(bed.id)}"]`) : null, at = el ? el.getBoundingClientRect() : null, w = box.offsetWidth, hgt = box.offsetHeight, vw = root.innerWidth, vh = root.innerHeight;
+      const left = at ? (at.right + 14 + w <= vw - 8 ? at.right + 14 : at.left - 14 - w >= 8 ? at.left - 14 - w : Math.max(8, vw - w - 8)) : (vw - w) / 2, top = at ? Math.min(Math.max(60, at.top), Math.max(60, vh - hgt - 8)) : Math.max(60, (vh - hgt) / 3);
+      box.style.left = `${Math.round(left)}px`; box.style.top = `${Math.round(top)}px`;
+      asking = done;
+      root.addEventListener('keydown', onKey, true);
+      setTimeout(() => { if (asking === done) root.addEventListener('pointerdown', onAway, true); }, 0);
+      const firstBtn = box.querySelector('.fix-btn'); if (firstBtn) firstBtn.focus();
+    });
+  }
+  /** Make the split or the replacement, in one step, and say what it did. */
+  function applyShare(payload, sh, by) {
+    const eng = state.engine, way = sh[by], bed = sh.bed;
+    if (!way) return null;
+    const ops = way.ops.slice(), what = cropLabel(way.p), where = bedLabel(bed);
+    if (by === 'replace') ops.push(waitingOp([...waiting(), ...way.waiting]));
+    const gone = sh.holders.map(o => cropLabel(o.p));
+    const label = by === 'replace' ? `Replace ${names(gone)} with ${what}` : `Split ${where} for ${what}`;
+    const was = worthOf(eng);
+    if (!commit(label, ops)) return null;
+    const now = worthOf(state.engine), n = way.shares.length;
+    setMixing(by === 'replace' ? null : { bedId: bed.id, by });
+    select({ type: 'planting', id: way.p.id });
+    toast(by === 'replace' ? `${what} took ${where} · ${names(gone)} ${gone.length === 1 ? 'waits' : 'wait'} under To place · ${worthSaid(was, now)}`
+      : `${what} → ${where} · ${by === 'rows' ? `${UI.num(way.each)} of ${UI.num(way.total)} rows` : `${UI.num(way.each, 1)} ft`}${way.equal && n > 2 ? `, as each of the ${n} has` : ''} · ${worthSaid(was, now)}`, { label: 'Undo', run: undo });
+    return state.engine.planting(way.p.id);
+  }
+  /** A drop onto ground that is held: asked once a bed, then split the same way again for as long as that bed is being mixed. */
+  async function shareDrop(payload, target, result) {
+    const eng = state.engine, sh = result.share.length || result.share.rows || result.share.replace ? result.share : Rails.share(eng, payload, target);
+    let by = state.mixing && state.mixing.bedId === target.bedId && sh[state.mixing.by] ? state.mixing.by : null;
+    if (!by) {
+      by = await askShare(sh, payload);
+      if (!by) return null;
+      if (state.engine !== eng) { toast('The plan changed meanwhile. Nothing was planted.'); return null; }
+    }
+    return applyShare(payload, sh, by);
+  }
+  /** Equal shares again for the plantings that stand together with this one. */
+  function equalShares(plantingId) {
+    const eng = state.engine, p = eng.planting(plantingId), group = p ? Rails.mates(eng, p) : [];
+    if (group.length < 2) return false;
+    const res = Rails.equalize(eng, group.map(x => x.p.id)), bed = eng.bedOf(p.bedId);
+    if (res.no) { toast({ recorded: `${cropLabel(res.who)} is already recorded as sown or planted: its ground is not changed.`, standing: `${cropLabel(res.who)} stands for years: its ground is not changed.`, rows: 'The rows of this bed do not divide evenly among them.', short: 'A share would come to under a foot.' }[res.no] || 'They cannot be given equal shares as they stand.'); return false; }
+    if (!res.ops.length) { toast('They already have equal shares.'); return false; }
+    const was = worthOf(eng);
+    if (!commit(`Equal shares in ${bedLabel(bed)}`, res.ops)) return false;
+    toast(`Equal shares in ${bedLabel(bed)} · ${worthSaid(was, worthOf(state.engine))}`, { label: 'Undo', run: undo });
+    return true;
+  }
+  /**
+   * Several varieties in the bed a planting stands in: each variety named becomes a planting of its own beside it, with its date
+   * and its choices, and the bed is shared again in equal parts among all that stand in it together (Rails.equalize).
+   * Worked out here without changing anything.
+   * Returns { ops, added, n, bed, by, len, plants: [was, now] } or { no: the reason in words }.
+   */
+  function planVarieties(plantingId, varietyIds, by = 'length') {
+    const eng = state.engine, p0 = eng.planting(plantingId), bed = p0 && eng.bedOf(p0.bedId);
+    if (!p0 || !bed || !eng.isSoilBed(bed)) return { no: 'Only a bed in the ground can be divided this way.' };
+    if (!varietyIds.length) return { no: 'Tick the varieties to add.' };
+    // each variety is a copy of the planting: its date and its choices, another variety, no record of work, and ground of its own
+    const drafts = varietyIds.map(varietyId => { const d = { ...p0, id: uid(), varietyId }; for (const key of ['variety', 'done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'sowOn', 'seat', 'ft', 'startFt', 'bedLayout']) delete d[key]; return d; });
+    const group = Rails.mates(eng, p0), res = Rails.equalize(eng, group.length ? group.map(x => x.p.id) : [p0.id], { extra: drafts, by });
+    if (res.no) return { no: res.who ? `${cropLabel(res.who)} cannot give up ground: it ${{ recorded: 'is already recorded as sown or planted', standing: 'stands for years', tray: 'follows weekly demand' }[res.no] || 'is held'}.`
+      : res.no === 'rows' ? (by === 'rows' ? 'The rows of this bed do not divide evenly among that many, or the bed is already shared along its length.' : 'This bed is shared by rows: choose By rows.')
+        : res.no === 'short' ? 'A share would come to under a foot.' : 'They would not fit beside what else is planted in this bed on those days.' };
+    const mine = res.shares.find(x => x.p.id === plantingId), r0 = eng.calc(p0);
+    return { ops: res.ops, added: drafts.map(d => d.id), n: (group.length || 1) + drafts.length, bed, by, len: mine ? mine.now.len : r0.physicalLength, rows: by === 'rows' ? { count: res.each, total: res.total } : null, plants: [r0.plants, mine ? mine.now.plants : r0.plants] };
+  }
+  /** Make it so, in one step. Returns the ids of the plantings added, or null. */
+  function addVarieties(plantingId, varietyIds, by = 'length') {
+    const plan = planVarieties(plantingId, varietyIds, by);
+    if (plan.no) { toast(plan.no); return null; }
+    const was = worthOf(state.engine);
+    if (!commit(`Divide ${bedLabel(plan.bed)} among ${plan.n} varieties`, plan.ops)) return null;
+    toast(`${bedLabel(plan.bed)}: ${plan.n} plantings, ${by === 'rows' ? `${UI.num(plan.rows.count)} of ${UI.num(plan.rows.total)} rows each` : `${UI.num(plan.len, 1)} ft each`} · ${worthSaid(was, worthOf(state.engine))}`, { label: 'Undo', run: undo });
+    return plan.added;
+  }
+  /** A planting taken out of its bed and sent to wait under To place, with its date; those it stood with share its ground again. One step. */
+  function sendToWait(plantingId, options = {}) {
+    const eng = state.engine, p = eng.planting(plantingId), r = p && eng.calc(p), bed = r && r.b;
+    if (!p || !r || eng.isPool(bed)) return false;
+    const stuck = Rails.fixed(eng, { p });
+    if (stuck) { toast(`${cropLabel(p)} ${{ recorded: 'is already recorded as sown or planted', standing: 'stands for years', tray: 'follows weekly demand' }[stuck]}: it stays where it is.`); return false; }
+    const w = { ...p }, asked = !p.bedLayout && +p.ft > 0 && r.physicalLength < r.cap - 1e-6 ? +p.ft : null;
+    for (const key of ['bedId', 'ft', 'startFt', 'bedLayout', 'trays', 'shelter', 'out', 'seat']) delete w[key];
+    if (asked) w.ft = asked;
+    w.wait = { why: options.why || 'It was taken out of its bed', from: bed.id };
+    const ops = [{ before: p, after: null }];
+    // the ones it stood with take up its ground: two or more in equal shares; one alone, the whole bed again where it held the full width
+    const others = eng.isSoilBed(bed) ? Rails.mates(eng, p).filter(x => x.p.id !== p.id) : [];
+    if (others.length) {
+      const without = E.create({ ...eng.plan, plantings: eng.plan.plantings.filter(q => q.id !== p.id) }, Lib);
+      if (others.length >= 2) { const res = Rails.equalize(without, others.map(x => x.p.id)); if (res.ops) ops.push(...res.ops); }
+      else {
+        const q = others[0].p, f = others[0].rect;
+        if (!q.bedLayout && (!f.rows || f.rows.count === f.rows.total) && !Rails.fixed(eng, others[0])) {
+          const whole = { ...q }; delete whole.ft; delete whole.startFt;
+          if (!Rails.refusal(without, E.create({ ...without.plan, plantings: without.plan.plantings.map(x => x.id === q.id ? whole : x) }, Lib), [q.id])) ops.push({ before: q, after: whole });
+        }
+      }
+    }
+    ops.push(waitingOp([...waiting(), w]));
+    const was = worthOf(eng);
+    if (!commit(`Send ${cropLabel(p)} to wait`, ops)) return false;
+    toast(`${cropLabel(p)} left ${bedLabel(bed)} and waits under To place · ${worthSaid(was, worthOf(state.engine))}`, { label: 'Undo', run: undo });
+    return true;
+  }
+  // a bed stops being mixed when something outside it is selected, when another view is shown, or on Escape
+  on('sel', () => { const m = state.mixing, sel = state.sel; if (!m || !sel) return; const inBed = sel.type === 'planting' ? (state.engine.planting(sel.id) || {}).bedId === m.bedId : sel.type === 'bed' && sel.id === m.bedId; if (!inBed) setMixing(null); });
+  on('view', () => { if (state.mixing && state.view !== 'map') setMixing(null); });
+  root.addEventListener('keydown', e => { if (e.key === 'Escape' && state.mixing && !asking && !(root.LRFDrag && root.LRFDrag.active()) && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '')) setMixing(null); });
   function place(payload, bedId, date, aim = {}) {
     if (payload.waitingId) { placeWaiting(payload.waitingId, bedId, aim); return null; }   // it may ask how to share the bed first
     const result = preview(payload, { bedId, date, ...aim }), bed = state.engine.bedOf(bedId);
+    if (state.mixing && state.mixing.bedId !== bedId) setMixing(null);   // a drop somewhere else ends the mixing of a bed
+    if (result.state === 'split') { shareDrop(payload, { bedId, date, ...aim }, result); return null; }   // it asks first, unless this bed is being mixed
     if (result.state === 'blocked') { toast(bed && result.why === 'held' ? `${bedLabel(bed)}: ${result.text.charAt(0).toLowerCase()}${result.text.slice(1)}` : result.text); return null; }
     const p = result.p, before = payload.plantingId && !payload.copy ? state.engine.planting(payload.plantingId) : null;
     if (before && sameSpot(before, p)) return null;
@@ -1121,22 +1296,26 @@
     const ref = state.plan && state.plan.map && state.plan.map.imageFile, shipped = state.bundled && state.bundled.mapImage;
     return shipped && ref && ref.sha256 === shipped.sha256 ? shipped.src : '';
   }
+  /** What kind of picture some bytes are, read from their first few. */
+  const mimeOf = b => b && b[0] === 0x89 && b[1] === 0x50 ? 'image/png' : b && b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45 ? 'image/webp' : b && b[0] === 0x47 && b[1] === 0x49 ? 'image/gif' : 'image/jpeg';
   async function restoreMapImage() {
-    const plan = state.plan, info = plan.lrfNext && plan.lrfNext.mapImage, ref = plan.map && plan.map.imageFile;
-    if (store.backend === 'memory' || (!info && (isSample() || !(ref && ref.sha256)))) return;
+    let info = state.plan.lrfNext && state.plan.lrfNext.mapImage;
+    if (store.backend === 'memory') return;
     try {
       const text = await store.loadBlob('mapimage');
       if (!text) return;
       const bytes = fromBase64(text);
-      if (info) { showMapImage(bytes, info.mime); emit('plan'); return; }
-      // The plan has no note of a farm photo, and a photo is kept in this browser all the same: a plan opened from the cloud
-      // with new variety photos used to drop the note and leave the map bare on every load after. When what is kept is the
-      // very photo this plan was drawn on, it is shown and the note is written back. Any other picture is left alone.
-      const hash = await digest(bytes);
-      if (!hash || hash !== ref.sha256 || state.plan !== plan || (plan.lrfNext && plan.lrfNext.mapImage)) return;
-      const mime = pictureType(bytes) || 'image/jpeg';
-      plan.lrfNext = { ...(plan.lrfNext || {}), mapImage: { mime, sha256: hash } };
-      showMapImage(bytes, mime); store.save(plan); emit('plan');
+      if (!info) {
+        // The plan has lost its note of the photo while the photo itself is still kept here (a plan opened from the cloud once
+        // dropped it). Where the bytes are the very picture this plan was drawn on, the note is written again; any other picture is left alone.
+        const ref = state.plan.map && state.plan.map.imageFile, hash = ref && ref.sha256 ? await digest(bytes) : null;
+        if (!hash || hash !== ref.sha256) return;
+        info = { mime: mimeOf(bytes), sha256: hash };
+        state.plan = { ...state.plan, lrfNext: { ...(state.plan.lrfNext || {}), mapImage: info } };
+        rebuild();
+        store.save(state.plan);
+      }
+      showMapImage(bytes, info.mime); emit('plan');
     } catch (_) { /* the plan is still usable without its photo */ }
   }
   async function importBackup(file, extra = {}) {
@@ -1180,8 +1359,8 @@
     const planOnly = !parsed.zip && !extra.thumbs, was = replacing ? state.plan : null, wasInfo = (was && was.lrfNext) || {}, sameRef = (a, b) => !!(a && b && a.sha256 && a.sha256 === b.sha256);
     const keptIds = new Set(core.varieties.map(v => v.id)), carriedThumbs = {};
     if (planOnly && was) for (const [id, uri] of Object.entries(Thumbs.all())) if (keptIds.has(id)) carriedThumbs[id] = uri;
-    // The farm photo is kept on its own terms, whether or not small photos came with the plan: a plan opened from the cloud
-    // after another device added variety photos brings those and no farm photo, and the one shown here is still the right one.
+    // The farm photo is kept on its own terms, whether or not variety photos came with the plan: a plan opened from the cloud
+    // brings only the photos that changed there, and new variety photos must not cost the browser its farm photo.
     const keepMap = !parsed.zip && !parsed.image && !!wasInfo.mapImage && !!state.mapImageUrl && sameRef(core.map && core.map.imageFile, was && was.map && was.map.imageFile);
     core.lrfNext = { attic: cloud ? 'cloud' : 'session', importedAt: new Date().toISOString(), from: file.name, backup: (parsed.plan.backup && parsed.plan.backup.exportedAt) || parsed.plan._localUpdatedAt || null, ...carried.keep, ...ownKeep, ...(keepMap ? { mapImage: wasInfo.mapImage } : {}) };
     core = tidy(core);
@@ -1635,7 +1814,7 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, lastChange, refuse, setUse, farmDates, farmDatesPreview, setFarmDates, updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV,
+    commit, undo, redo, lastChange, refuse, setUse, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
