@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.36">
+<meta name="lrf-build" content="0.37">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -223,6 +223,7 @@
         <button type="button" class="icon-btn" id="dateNext" aria-label="Forward one week">›</button>
         <input type="date" id="datePick" aria-label="Pick the planning date">
         <button type="button" class="tool-btn" id="datePlay" aria-pressed="false">Play season</button>
+        <button type="button" class="tool-btn" id="seasonEdit" title="The frost dates, and the days field planting starts and ends: see what a change would do, then set them">Season…</button>
       </div>
       <div class="season-track">
         <svg id="seasonChart" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"></svg>
@@ -257,6 +258,7 @@
 <script src="js/forecast.js"></script>
 <script src="js/succession.js"></script>
 <script src="js/audit.js"></script>
+<script src="js/farmdates.js"></script>
 <script src="js/store.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/thumbs.js"></script>

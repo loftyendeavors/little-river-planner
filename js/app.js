@@ -337,6 +337,33 @@
     toast(`${label} · ${moved}${worth}`, { label: 'Undo', run: undo });
     return { ...step, ...view };
   }
+
+  // ───────────────────────── the farm's dates ─────────────────────────
+  // The frost dates and the days that bound planting in open ground (js/farmdates.js). A change writes the plan's settings and
+  // touches no planting; what it does to the plan as it stands is worked out first, in the window that changes them (js/season.js).
+  const FD = root.LRFFarmDates;
+  const farmTools = { trouble: (eng, p, r) => root.LRFSuccession.seasonTrouble(eng, p, r), worth: eng => root.LRFForecast.build(eng).rows.reduce((n, r) => n + r.worth, 0) };
+  const farmDates = () => FD.read(state.engine);
+  /** What these dates would do, with nothing changed: the dates that differ, why they cannot stand if they cannot, and what moves. */
+  function farmDatesPreview(dates) {
+    const errors = FD.check(dates), changed = errors.length ? {} : FD.changed(state.engine, dates);
+    if (errors.length || !Object.keys(changed).length) return { errors, changed, idle: true, same: true };
+    const settings = FD.settingsWith(state.engine, dates), engine = E.create({ ...state.plan, settings }, Lib);
+    return { errors, changed, settings, engine, ...FD.compare(state.engine, engine, farmTools) };
+  }
+  /** Set the farm's dates: one step, one undo. Only dates that make no season are refused; what moves is said at the time. */
+  function setFarmDates(dates) {
+    const view = farmDatesPreview(dates), keys = Object.keys(view.changed);
+    if (view.errors.length) return refuse(view.errors[0].text);
+    if (!keys.length) return false;
+    const label = keys.length === 1 ? `Set ${FD.FIELDS.find(f => f.key === keys[0]).short} to ${FD.word(view.changed[keys[0]])}` : `Change ${keys.length} of the farm’s dates`;
+    if (!commit(label, [{ kind: 'settings', before: state.plan.settings, after: view.settings }], { unchecked: true })) return false;
+    const n = view.harvest.length, moved = n ? `${n} planting${n === 1 ? '’s harvest ends' : 's’ harvests end'} on another day` : 'no planting’s dates change';
+    const fresh = view.ground.fresh.length ? ` · ${view.ground.fresh.length} new pair${view.ground.fresh.length === 1 ? '' : 's'} booked into the same ground, under “To settle”` : '';
+    const worth = Math.abs(view.worth[1] - view.worth[0]) >= 0.5 ? ` · the season’s worth goes from ${dollars(view.worth[0])} to ${dollars(view.worth[1])}` : '';
+    toast(`${label} · ${moved}${fresh}${worth}`, { label: 'Undo', run: undo });
+    return view;
+  }
   /** Say what kind of place a garden is. Its house factor and frost setting follow, as they did in v7. */
   function setGardenType(gardenId, type) {
     const before = state.plan.gardens.find(g => g.id === gardenId), preset = Lib.gardenTypes[type];
@@ -1789,7 +1816,7 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, lastChange, refuse, setUse, shareDrop, applyShare, askShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV,
+    commit, undo, redo, lastChange, refuse, setUse, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),

@@ -2,7 +2,7 @@
 
 A crop planner that works on a map of the farm. Drag crops onto beds, move plantings, share beds, and keep one list of the assumptions the plan rests on.
 
-This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.36 at the time of writing).
+This repository holds the app only. It contains no plan, no farm photo and no farm records. The page's Backup menu says which preview is running (0.37 at the time of writing).
 
 ## Using it
 
@@ -28,7 +28,7 @@ The top bar has seven views in three groups.
 
 - **Backup**, at the right, holds saving, the plan folder, Cloud sync, Snapshots and photos.
 - **To place** and **To settle**, beside it, count plantings that have no bed yet and places where ground is booked twice or a planting is longer than its bed. They show only when there is something to count; a click goes to the list.
-- There is no settings page. A fact is changed where its effect shows: a bed on the map, a bench under Nursery, Set-up, a crop's figures on the Assumptions list.
+- There is no settings page. A fact is changed where its effect shows: a bed on the map, a bench under Nursery, Set-up, a crop's figures on the Assumptions list, the frost dates and the field-season dates under **Season…** on the season bar.
 
 ## Reading a variety from a supplier's page
 
@@ -37,6 +37,17 @@ In **Seeds**, choose **Add from a link** and paste the address of the supplier's
 ## How it looks
 
 The planner is light, whatever the computer's own setting says. On a wide screen the farm photo is settled so that no empty strip shows beside it while its other side runs off the screen (on a screen wider than the photo it sits in the middle), and the Harvest table sits in the middle of the page. The map's scale, top left, is a label over a ruler exactly as long as the distance it names, on a small plate with an edge all round.
+
+## The season's dates
+
+**Season…**, on the season bar under the Map and the Timeline, opens the five days of the year the plan is worked out from.
+
+- **Last spring frost** and **First fall frost.** A frost-tender crop is not offered ground open to frost before the first of them, and its harvest ends at the second. A tunnel that still freezes counts both with its own days of protection added. Crates and towers kept under cover move out on the last spring frost unless they have a day of their own.
+- **Cool-season crops, from**, **Warm-season crops, from** and **Outdoor planting ends.** The first and the last day the planner offers a crop a place in open ground. A crop with a field day of its own keeps it.
+
+Change a date and the window says what that would do to the plan as it stands, before anything is changed: the harvests that would end on another day, crop by crop; the yields that would change, and the season's worth before and after; ground that would be booked twice, told apart from what is booked twice already; and the plantings that would stand outside the new dates. Those stay where they are. The planner moves nothing and flags nothing; it only stops offering such places.
+
+**Apply** writes the dates and nothing else, as one step with one Undo. No planting is touched, so setting a date back puts everything back. Dates that make no season (a first fall frost before the last spring frost, outdoor planting that ends before it starts) are refused in words.
 
 ## Reading the timeline
 
