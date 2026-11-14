@@ -13,17 +13,16 @@ const clone = x => JSON.parse(JSON.stringify(x));
 let n = 0; const uid = () => 'test-' + (++n);
 
 // ── rockwool: a sheet is 98 cells, 14 rows of 7 ──
-const eng = E.create(core, Lib), compat = E.create(core, Lib, { multipliers: true });
+const eng = E.create(core, Lib);
 const tower = e => e.plan.plantings.map(p => ({ p, r: e.calc(p) })).filter(x => x.r && x.r.tw && x.r.sowing && !x.r.sowing.error);
-const T = tower(eng), V = tower(compat);
+const T = tower(eng);
 check('the sheet itself: 98 cells, 14 rows of 7, on a 10 × 20 footprint', Sow.ROCKWOOL_SHEET.cells === 98 && Sow.ROCKWOOL_SHEET.rows === 14 && Sow.ROCKWOOL_SHEET.columns === 7 && Sow.ROCKWOOL_SHEET.widthIn === 10 && Sow.ROCKWOOL_SHEET.lengthIn === 20);
 check('every tower sowing is in a 98-cell sheet', T.length > 0 && T.every(x => x.r.sowing.tray.cells === 98 && x.r.sowing.tray.rows === 14 && x.r.sowing.tray.columns === 7 && x.r.sowing.medium === 'rockwool'), { sowings: T.length });
 check('each batch fills whole rows of 7', T.every(x => x.r.sowing.batch.cells % 7 === 0 && x.r.sowing.batch.mode === 'row'));
 const lots = e => { const seen = new Map(); for (const x of tower(e)) { const g = x.r.sowing.trayGroup, key = g ? g.id : x.r.sowing.batchId; if (!seen.has(key)) seen.set(key, g ? { cells: g.cells, trays: g.trays, per: g.tray.cells, carriers: g.carriers } : { cells: x.r.sowing.batch.cells, trays: x.r.sowing.batch.trays, per: x.r.sowing.batch.tray.cells, carriers: null }); } return [...seen.values()]; };
-const LA = lots(eng), LV = lots(compat);
+const LA = lots(eng);
 check('sheets are counted whole: cells ÷ 98, rounded up, one open tray under each', LA.every(g => g.per === 98 && g.trays === Math.ceil(g.cells / 98) && (g.carriers == null || g.carriers === g.trays)), { lots: LA.length, sheets: LA.reduce((a, g) => a + g.trays, 0) });
-check('no plug tray planting changed: only tower sowings are in sheets', eng.plan.plantings.every(p => { const r = eng.calc(p), q = compat.calc(compat.plan.plantings.find(x => x.id === p.id)); return !r || r.tw || !r.sowing || r.sowing.error || !q || !q.sowing || r.sowing.tray.cells === q.sowing.tray.cells; }));
-check('counted in the compatibility mode, a tower sowing is still in its crop’s own tray', V.length === T.length && V.every(x => x.r.sowing.tray.cells === (+x.r.c.tray || 72) && x.r.sowing.tray.cells !== 98));
+check('only tower sowings are in sheets: no other planting is sown in rockwool', eng.plan.plantings.some(p => { const r = eng.calc(p); return r && !r.tw && r.sowing && !r.sowing.error; }) && eng.plan.plantings.every(p => { const r = eng.calc(p); return !r || r.tw || !r.sowing || r.sowing.error || (r.sowing.medium !== 'rockwool' && r.sowing.tray !== Sow.ROCKWOOL_SHEET); }));
 // a tray named for the crop, or for the planting, still wins over the sheet
 const tp = T[0].p, cropId = T[0].r.c.id;
 const own = c => ({ ...core, crops: [...(core.crops || []).filter(x => x.id !== cropId), { ...(core.crops || []).find(x => x.id === cropId) || Lib.crops.find(x => x.id === cropId) || { id: cropId }, ...c }] });
@@ -32,7 +31,7 @@ check('a tray named on the crop wins over the sheet', rn.sowing.tray.cells === 2
 const onP = E.create({ ...core, plantings: core.plantings.map(p => p.id === tp.id ? { ...p, trayId: 'tray-72' } : p) }, Lib), rp = onP.calc(onP.plan.plantings.find(p => p.id === tp.id));
 check('a tray named on the planting wins over the sheet', rp.sowing.tray.cells === 72, { cells: rp.sowing.tray.cells });
 const sum = (list, f) => list.reduce((a, x) => a + f(x), 0);
-const figures = { sowings: T.length, cells: { compat: sum(V, x => x.r.sowing.cells), now: sum(T, x => x.r.sowing.cells) }, seeds: { compat: sum(V, x => x.r.sowing.seeds), now: sum(T, x => x.r.sowing.seeds) }, sheets: { compat: sum(LV, g => g.trays), now: sum(LA, g => g.trays) } };
+const figures = { sowings: T.length, cells: sum(T, x => x.r.sowing.cells), seeds: sum(T, x => x.r.sowing.seeds), sheets: sum(LA, g => g.trays) };
 
 // ── "To settle": bench room is a load, never a fault ──
 const todo = Rails.cleanup(eng);

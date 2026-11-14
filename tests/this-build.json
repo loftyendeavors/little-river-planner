@@ -1,9 +1,9 @@
 {
- "build": "The checks build, part 1: the checks on a made-up farm, in the repository, run on every push. Nothing on the page.",
- "base": "7c0e98d",
+ "build": "The checks build, part 2: the engine counts one way; the review window's suggestion moves nothing; the sample is a made-up layout.",
+ "base": "de5a1d2",
  "words": [],
- "code": [],
+ "code": ["engine.js", "audit.js", "assume.js", "library.js", "planio.js", "main.js"],
  "added": [],
  "removed": [],
- "page": []
+ "page": ["index.html", "sw.js"]
 }

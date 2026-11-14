@@ -31,7 +31,7 @@
   const recorded = p => !!p.done && E.DONE_KINDS.some(k => typeof p.done[k] === 'string' && p.done[k] !== '');
   /** The planting with its own days taken off. "Manual" goes with them: it only ever meant "use my number". */
   const freed = p => { const q = { ...p }; delete q.dtm; if (q.timingMode === 'manual') delete q.timingMode; return q; };
-  /** The nursery weeks v7 froze on a planting, when it froze any. */
+  /** The nursery weeks frozen on a planting, when any are. */
   const frozenWeeks = p => { const g = p.growingDefaults, x = g && g.v === 1 && g.cropId === p.cropId && g.crop && g.crop.gh; return x && x.present === true && Number.isFinite(+x.value) ? +x.value : null; };
   function thawed(p) {
     const g = p.growingDefaults, crop = { ...g.crop };
@@ -139,11 +139,24 @@
       }
     }
     for (const c of cand) if (c.ok) c.row.take = { level: c.level, id: c.level === 'crop' ? c.row.cropId : c.row.varietyId, env: c.row.env, typed: c.typed };
+    // A row that carries what the list gives today is not let go where a line taken above would change what the list gives it:
+    // one variety with two figures on its plantings, one of them the crop's own. Let go, it would move. It stays as it is.
+    if (cand.some(c => c.ok)) {
+      const next = clone(plan.assumptions) || { v: 1, crops: {}, varieties: {} };
+      for (const c of cand) if (c.ok) entry(next, c.level, c.level === 'crop' ? c.row.cropId : c.row.varietyId, c.row.env, c.typed);
+      const sim = E.create({ ...plan, assumptions: next, plantings: plan.plantings.map(p => ids.has(p.id) ? freed(p) : p) }, Lib);
+      for (const r of list) {
+        if (!r.agrees) continue;
+        const then = r.ids.map(id => ({ a: eng.calc(eng.planting(id)), b: sim.calc(sim.planting(id)), e: sim.effective(sim.planting(id)) }));
+        if (then.every(x => same(x.a, x.b))) continue;
+        r.stays = true; r.listDays = new Set(then.map(x => x.e ? x.e.dtm : NaN).filter(Number.isFinite));
+      }
+    }
     for (const r of list) {
       r.listDays = [...r.listDays].sort((a, b) => a - b); r.shift = [Math.min(...r.shifts), Math.max(...r.shifts)]; delete r.shifts;
-      r.choice = r.agrees ? 'follow' : r.take ? 'take' : 'keep';
+      r.choice = r.stays ? 'keep' : r.agrees ? 'follow' : r.take ? 'take' : 'keep';
     }
-    // Nursery weeks frozen on the planting by v7, where the crop now says something else.
+    // Nursery weeks frozen on the planting, where the crop now says something else.
     const weeks = new Map();
     for (const p of o.weeks) {
       const c = eng.crop(p.cropId), bed = eng.bedOf(p.bedId), was = frozenWeeks(p);

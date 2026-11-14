@@ -30,7 +30,6 @@ NODE = [
  ('a variety’s own unit is ignored', 'js/engine.js', "String((v && v.cropId === c.id && sellVRule(v.id).unit) || sellRule(c.id).unit || recordUnit(c));", "String(sellRule(c.id).unit || recordUnit(c));"),
  ('the crop’s price beats the variety’s', 'js/engine.js', "return mine != null ? mine : crops != null ? crops : nonNegative(c.price);", "return crops != null ? crops : mine != null ? mine : nonNegative(c.price);"),
  ('the list’s price beats a planting’s own', 'js/engine.js', "      if (p && p.price != null && p.price !== '') return nonNegative(p.price);\n", ""),
- ('the arithmetic with multipliers listens to the crop lines', 'js/engine.js', "const x = (!legacy && S.assumptions && S.assumptions.sell && S.assumptions.sell[cropId]) || {}, share", "const x = (S.assumptions && S.assumptions.sell && S.assumptions.sell[cropId]) || {}, share"),
  ('a sold share over a hundred is used', 'js/engine.js', "share: share != null && share <= 100 ? share : null,", "share,"),
  ('an unknown pattern is used', 'js/engine.js', "pattern: PATTERNS.includes(x.pattern) ? x.pattern : null,", "pattern: x.pattern || null,"),
  ('the list’s harvest days override a planting’s own', 'js/engine.js', "if (days == null || ownHarvest(p)) return e;", "if (days == null) return e;"),

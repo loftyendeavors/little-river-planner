@@ -9,7 +9,6 @@ app, scratch, tests, plan = [Path(x).resolve() for x in sys.argv[1:5]]
 mode = sys.argv[5] if len(sys.argv) > 5 else "node"; words = [w.lower() for w in sys.argv[6:]]
 NODE = [
  ('sheet back to 128 cells', 'js/sowing.js', 'cells: 98, rows: 14, columns: 7, widthIn: 10, lengthIn: 20, active: true, template: true, sheet: true', 'cells: 128, rows: 16, columns: 8, widthIn: 10, lengthIn: 20, active: true, template: true, sheet: true'),
- ('the sheet is also used when counting with the multipliers', 'js/engine.js', 'const sheet = legacy ? null : Sow && Sow.ROCKWOOL_SHEET;', 'const sheet = Sow && Sow.ROCKWOOL_SHEET;'),
  ('a named tray no longer wins', 'js/sowing.js', '    if (selected) {', '    if (selected && !(tower && sheet)) {'),
  ('stand-in benches are held to their count again', 'js/engine.js', 'const unbounded = (p, b) => isPool(b) || (isRack(b) && (!(capOf(b) > 0) || !!(p && p.liveTray)));', 'const unbounded = (p, b) => isPool(b);'),
  ('tray batches on a counted bench are listed', 'js/engine.js', '(!(capOf(b) > 0) || !!(p && p.liveTray))', '(!(capOf(b) > 0))'),

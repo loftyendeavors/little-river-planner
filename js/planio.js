@@ -198,15 +198,15 @@
     return { plan, keep, notes, gone };
   }
 
-  /** What the page shows before a real plan is loaded: the stock layout with a few example plantings. */
+  /** What the page shows before a plan is loaded: a made-up layout with a few example plantings. */
   function sample(lib) {
     const year = new Date().getFullYear() + 1, at = (m, d) => `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const examples = [
-      ['front-field-south-1', 'lettuce_head', at(4, 20)], ['front-field-south-2', 'lettuce_head', at(5, 4)], ['front-field-south-3', 'lettuce_head', at(5, 18)],
-      ['front-field-south-5', 'carrot', at(4, 22)], ['front-field-south-6', 'beet', at(4, 22)], ['front-field-north-1', 'kale', at(4, 26)],
-      ['front-field-north-2', 'onion', at(4, 19)], ['front-field-north-4', 'bean_bush', at(5, 24)], ['hill-garden-1', 'potato', at(4, 24)],
-      ['hill-garden-2', 'winter_squash', at(5, 28)], ['production-house-a-1', 'tomato', at(4, 12)], ['production-house-a-2', 'cucumber', at(4, 26)],
-      ['production-house-b-1', 'pepper', at(4, 28)], ['towers-1', 'lettuce_head', at(4, 15)], ['towers-2', 'basil', at(5, 10)]
+      ['market-east-1', 'lettuce_head', at(4, 20)], ['market-east-2', 'lettuce_head', at(5, 4)], ['market-east-3', 'lettuce_head', at(5, 18)],
+      ['market-east-5', 'carrot', at(4, 22)], ['market-east-6', 'beet', at(4, 22)], ['market-west-1', 'kale', at(4, 26)],
+      ['market-west-2', 'onion', at(4, 19)], ['market-west-4', 'bean_bush', at(5, 24)], ['long-field-1', 'potato', at(4, 24)],
+      ['long-field-2', 'winter_squash', at(5, 28)], ['tomato-house-1', 'tomato', at(4, 12)], ['cucumber-house-1', 'cucumber', at(4, 26)],
+      ['tomato-house-2', 'pepper', at(4, 28)], ['towers-1', 'lettuce_head', at(4, 15)], ['towers-2', 'basil', at(5, 10)]
     ];
     return {
       v: 3, gardens: JSON.parse(JSON.stringify(lib.sampleGardens)), beds: JSON.parse(JSON.stringify(lib.sampleBeds)),
