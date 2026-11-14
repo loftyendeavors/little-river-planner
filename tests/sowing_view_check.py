@@ -24,13 +24,20 @@ with sync_playwright() as pw:
     ctx = browser.new_context(viewport={"width": 1280, "height": 800}); page = ctx.new_page()
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("console", lambda m: errors.append(m.text) if m.type == "error" and "fonts.g" not in m.text and "ERR_" not in m.text else None)
-    js = lambda body: page.evaluate("(() => { " + PRE + " " + body + " })()")
+    WEEK = [""]   # the week the check works in: found on the plan, below. "WEEK0" in a script stands for it.
+    js = lambda body: page.evaluate("(() => { " + PRE + " " + body.replace("WEEK0", WEEK[0]) + " })()")
     ready = lambda: (page.wait_for_function("window.LRFApp && LRFApp.state.ready"), page.wait_for_timeout(700))
     page.goto(url); ready()
     page.click('[data-view-btn="sow"]'); page.wait_for_timeout(400)
-    js("A.setDate(E.s2d('2027-03-22'))"); page.wait_for_timeout(300)
+    # a week with what the check needs: a batch several plantings share, another line beside it, varieties of one crop that
+    # share trays, and sowings before it that are not recorded
+    WEEK[0] = js("""const f = V.figures(), weeks = [...new Set(f.list.map(l => l.week))].sort();
+      return weeks.find(w => { const week = f.list.filter(l => l.week === w), shared = week.find(l => l.members.length > 1);
+        return shared && week.some(l => l !== shared) && week.some(l => l.group && l.state === 'open') && f.list.some(l => l.week < w && l.state !== 'done'); }) || '';""")
+    check("the plan has a week with a shared batch, another line, varieties sharing trays, and sowings before it", bool(WEEK[0]), WEEK[0])
+    js("A.setDate(E.s2d('WEEK0'))"); page.wait_for_timeout(300)
 
-    first = js("""const f = V.figures(), now = '2027-03-22', week = f.list.filter(l => l.week === now);
+    first = js("""const f = V.figures(), now = 'WEEK0', week = f.list.filter(l => l.week === now);
       const conserved = f.list.filter(l => l.batch && (l.kind === 'plugs' || l.kind === 'rockwool')).every(l => l.batch.seeds === l.members.reduce((n, m) => n + m.r.seeds, 0) && l.batch.cells === l.members.reduce((n, m) => n + m.r.cells, 0));
       const ids = f.list.flatMap(l => l.members.map(m => m.p.id));
       const seedPlantings = S.plan.plantings.filter(p => { const s = SL.sowing(S.engine, p); return s && (s.unit === 'seeds' || s.unit === 'g') && String(p.date).slice(0, 4) === String(A.planYear()) && s.r.b.active !== false && s.r.g.active !== false; }).length;
@@ -43,7 +50,7 @@ with sync_playwright() as pw:
     check("earlier sowings not recorded are counted (with the other jobs, since 0.26), folded away", first["earlier"] > 0 and f"{first['earlier'] + first['earlierJobs']:,} earlier task" in (first["summary"] or ""), first)
 
     # tick a shared batch and one more line, and record them together
-    pick = js("""const f = V.figures(), week = f.list.filter(l => l.week === '2027-03-22'), shared = week.find(l => l.members.length > 1), other = week.find(l => l !== shared);
+    pick = js("""const f = V.figures(), week = f.list.filter(l => l.week === 'WEEK0'), shared = week.find(l => l.members.length > 1), other = week.find(l => l !== shared);
       return { shared: shared && { key: shared.key, n: shared.members.length, ids: shared.members.map(m => m.p.id), estimate: shared.estimate, name: shared.name }, other: other && { key: other.key, ids: other.members.map(m => m.p.id), estimate: other.estimate },
         undo: S.undo.length, snapshot: JSON.stringify([S.plan.plantings, S.plan.seedInventory || null]).length };""")
     row = lambda key: page.locator(f'table.sw tbody tr[data-line={json.dumps(key)}]')
@@ -99,12 +106,12 @@ with sync_playwright() as pw:
     js("document.querySelector('.sw-record .btn:not(.primary)').click()"); page.wait_for_timeout(200)
 
     # varieties of one crop sharing trays: one row above them says so and draws the trays
-    js("A.setDate(E.s2d('2027-03-22'))"); page.wait_for_timeout(300)
-    grp = js("""const f = V.figures(), lines = f.list.filter(l => l.week === '2027-03-22' && l.group && l.state === 'open'), g = lines.length ? lines[0].group : null, mine = g ? lines.filter(l => l.group === g) : [];
+    js("A.setDate(E.s2d('WEEK0'))"); page.wait_for_timeout(300)
+    grp = js("""const f = V.figures(), lines = f.list.filter(l => l.week === 'WEEK0' && l.group && l.state === 'open'), g = lines.length ? lines[0].group : null, mine = g ? lines.filter(l => l.group === g) : [];
       const head = document.querySelector('.view-sow > .sw-wrap > .wk-half > .sw-kind table.sw tr.sw-group');
       return g ? { trays: g.trays, per: g.tray.rows, rows: mine.reduce((n, l) => n + l.batch.rowsSown, 0), lines: mine.length, apart: g.apart, head: head ? head.textContent : '', drawn: head ? head.querySelectorAll('.sw-tray').length : 0,
         cells: head ? head.querySelectorAll('.sw-tray i').length : 0, filled: head ? head.querySelectorAll('.sw-tray i[data-k]').length : 0, slots: mine.map(l => document.querySelector('table.sw tr[data-line="' + l.key + '"] td.sw-how small').textContent),
-        tile: document.querySelectorAll('.sw-stats .tr-stat strong')[2].textContent, want: Math.round(f.list.filter(l => l.week === '2027-03-22').reduce((n, l) => n + l.trays, 0)) } : null;""")
+        tile: document.querySelectorAll('.sw-stats .tr-stat strong')[2].textContent, want: Math.round(f.list.filter(l => l.week === 'WEEK0').reduce((n, l) => n + l.trays, 0)) } : null;""")
     check("varieties of one crop that share trays get one row saying how many trays, with each tray drawn row by row and each line told its rows",
           grp and grp["trays"] < grp["apart"] and f"share {grp['trays']} tray" in grp["head"] and grp["drawn"] == grp["trays"] and grp["cells"] == grp["trays"] * grp["per"] and grp["filled"] == grp["rows"] and all(t.startswith("tray ") for t in grp["slots"]) and grp["tile"] == str(grp["want"]), grp)
 
@@ -114,7 +121,7 @@ with sync_playwright() as pw:
       const cell = document.querySelector('table.sw tr[data-line="' + l.key + '"] td.sw-how span');
       return { text: cell ? cell.textContent : '', sheets: l.batch.trays };""")
     check("a tower sowing says how many rockwool sheets, and that each rides in an open 1020 tray", wool and f"{wool['sheets']} sheet" in wool["text"] and "open 1020 tray" in wool["text"], wool)
-    js("A.setDate(E.s2d('2027-03-22'))"); page.wait_for_timeout(300)
+    js("A.setDate(E.s2d('WEEK0'))"); page.wait_for_timeout(300)
 
     # a day after today is a plan, not a record
     plan = js("""const f = V.figures(), open = f.list.filter(l => l.state === 'open' && !l.set), tp = open.find(l => l.kind === 'plugs' && l.members.length > 1 && l.week >= '2027-04-05'), live = open.find(l => l.kind === 'live' && l.week === (tp && tp.week));

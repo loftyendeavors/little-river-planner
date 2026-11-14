@@ -32,7 +32,7 @@ jobs:
           python-version: "3.12"
       - name: Tools
         run: |
-          pip install --quiet playwright
+          pip install --quiet playwright pillow
           google-chrome --version
       - name: Work folder
         run: sh tests/setup.sh

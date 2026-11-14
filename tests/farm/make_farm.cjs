@@ -12,6 +12,7 @@
 // The farm has one of every kind of thing the planner knows: field beds, raised beds, a tunnel, greenhouse beds, two rows
 // of towers, crates and pots, live trays on the heated benches, cane berries, bulbs, beds shared lengthwise and by rows,
 // plantings that carry figures of their own, ground booked twice and plantings longer than their bed.
+// There are more than 600 plantings: the page checks take that as the sign that a whole plan is open.
 // A check that needs something the farm lacks adds it here, not in a private file.
 const path = require('path'), fs = require('fs'), crypto = require('crypto');
 const [JS, OUT] = process.argv.slice(2);
@@ -24,6 +25,8 @@ const YEAR = 2027;
 
 // ── a fixed source of chance ──
 let seed = 20270114;
+/** Each part of the farm draws from a run of its own, named for it: adding to one part leaves the others as they were. */
+const chance = name => { seed = parseInt(crypto.createHash('sha256').update('example farm: ' + name).digest('hex').slice(0, 8), 16) | 0; };
 const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 const int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
 const pick = list => list[Math.floor(rnd() * list.length)];
@@ -51,6 +54,7 @@ const customers = [
   { id: 'c-farm-stand', name: 'Farm Stand', kind: 'retail', share: 30, prices: {} }
 ];
 
+chance('crops');
 // ── crops: the planner's own, with this farm's changes, and a few of the farm's own ──
 const own = (name, o) => ({ id: 'c_' + uid(), name, family: 'Aster', method: 'TP', inRow: 12, rowSp: 12, seedsFt: 0, gh: 4, tray: 72, spc: 1, dtm: 60, hw: 21, n: 2.5, p: 2, k: 2.5,
   yBasis: 'plant', yield: 1, baseUnit: 'each', mk: 0.9, price: 2, seed1000: 10, tower: false, frostTender: false, rockwoolDays: 0, towerDays: 0, ...o });
@@ -92,6 +96,7 @@ const cropUnits = {
   [C.shallot.id]: { base: 'lb', units: [['lb', 1], ['case of 12', 12]] }
 };
 
+chance('varieties');
 // ── varieties: made-up names, a made-up supplier's figures ──
 const WORDS_A = ['Amber', 'Brindle', 'Cinder', 'Dapple', 'Ember', 'Fallow', 'Gable', 'Harbor', 'Indigo', 'Juniper', 'Kestrel', 'Lantern', 'Meadow', 'Nettle', 'Orchard', 'Pewter', 'Quill', 'Russet', 'Sable', 'Thistle', 'Umber', 'Velvet', 'Willow', 'Yarrow', 'Zephyr', 'Marsh', 'Copper', 'Flint'];
 const WORDS_B = ['Bell', 'Crown', 'Drift', 'Field', 'Glow', 'Heart', 'Jewel', 'King', 'Lace', 'Moon', 'Pearl', 'Queen', 'Rose', 'Star', 'Tide', 'Wing', 'Spire', 'Brook', 'Dawn', 'Frost', 'Gold', 'Sprite'];
@@ -132,6 +137,7 @@ for (const v of varieties.filter((_, i) => i % 13 === 5).slice(0, 9)) v.deleted 
 const lettuceTimed = byCrop.lettuce_head[3]; lettuceTimed.dtm = 48; lettuceTimed.timingMode = 'manual';
 const vOf = (cropId, i = null) => { const list = (byCrop[cropId] || []).filter(v => !v.deleted); return list.length ? (i == null ? pick(list) : list[i % list.length]) : null; };
 
+chance('ground');
 // ── the ground ──
 // The picture is 2400 × 1200 pixels at a quarter of a foot to the pixel: 600 ft by 300 ft.
 const MAP = { ftPerPx: 0.25, imgW: 2400, imgH: 1200, towerShape: 'circle', towerGap: 0 };
@@ -189,8 +195,8 @@ B.shade = block(G.shade, { x: 440, y: 225, turn: 82, n: 6, w: 3.5, l: 24, path: 
 B.houseA = block(G.houseA, { x: 80, y: 215, n: 4, w: 4, l: 40, path: 2, type: 'IG' });
 B.houseB = block(G.houseB, { x: 130, y: 215, n: 3, w: 4, l: 40, path: 2, type: 'IG' });
 B.tunnel = block(G.tunnel, { x: 190, y: 220, n: 2, w: 5, l: 40, path: 3, type: 'IG', slugged: false });
-B.tower1 = block(G.tower1, { x: 270, y: 190, turn: 84, n: 14, w: 3, l: 3, path: 1, type: '42 Site', orient: 'EW', slugged: false });
-B.tower2 = block(G.tower2, { x: 270, y: 205, turn: 84, n: 14, w: 3, l: 3, path: 1, type: '42 Site', orient: 'EW', slugged: false });
+B.tower1 = block(G.tower1, { x: 270, y: 190, turn: 84, n: 16, w: 3, l: 3, path: 1, type: '42 Site', orient: 'EW', slugged: false });
+B.tower2 = block(G.tower2, { x: 270, y: 205, turn: 84, n: 16, w: 3, l: 3, path: 1, type: '42 Site', orient: 'EW', slugged: false });
 B.crates = block(G.crates, { x: 300, y: 255, turn: 86, n: 2, w: 0, l: 0, path: 30, type: 'CT', orient: 'EW', slugged: false, names: ['Flower Crates', 'Herb Crates'], extra: i => ({ ct: 'ct_crate', count: i ? 24 : 110 }) });
 B.fresh = block(G.fresh, { x: 545, y: 95, n: 8, w: 3.5, l: 25, type: 'RB' });   // broken this year, nothing in it yet
 const potNames = ['Cane pots A', 'Cane pots B', 'Cane pots C', 'Trellis pots'];
@@ -201,12 +207,14 @@ G.kitchen.mapLayout = { pathFt: 2.5, endGapFt: 4, columns: 4, locked: true, bedI
 G.flower.mapLayout = { pathFt: 3, endGapFt: 3, columns: 5, locked: true, bedIds: B.flower.map(b => b.id), appliedAt: '2026-10-20T15:05:00.000Z' };
 G.east.bedOrder = { v: 1, ids: B.east.map(b => b.id) };
 
+chance('nursery');
 // ── the nursery: two houses of benches, all under heat ──
 const areaA = 'bench-area-' + uid(), areaB = 'bench-area-' + uid();
 const nursery = { packing: 85, benchAreas: [{ id: areaA, name: 'Seedling House', w: 15, l: 35 }, { id: areaB, name: 'House A, east end', w: 26, l: 48 }], spaces: [] };
 [[4, 3], [3, 6], [3, 4], [3, 4], [3, 4], [3, 4], [4, 12], [4, 12], [3, 6], [3, 6], [3, 6], [3, 6], [4, 12], [4, 12], [4, 12], [4, 12]].forEach(([w, l], i) => nursery.spaces.push(
   { id: 'nursery-bench-' + uid(), name: 'Bench ' + (i + 1), w, l, kind: 'heated', active: true, from: '', to: '', benchLayout: { areaId: i < 8 ? areaA : areaB, x: (i % 4) * 5, y: Math.floor((i % 8) / 4) * 14, rotated: i === 0 } }));
 
+chance('plantings');
 // ── plantings ──
 const plantings = [];
 const libCrop = id => crops.find(c => c.id === id && c.name) || Lib.crops.find(c => c.id === id);
@@ -247,6 +255,7 @@ function season(bed, startOffset, { lists = [COOL, WARM, FALL], share = null, dr
     if (n > 5) break;
   }
 }
+chance('north field');
 B.north.forEach((b, i) => {
   if (i < 6) {
     // six beds of head lettuce, a planting every ten days, half a bed at a time
@@ -258,7 +267,9 @@ B.north.forEach((b, i) => {
     }
   } else season(b, (i - 6) * 4, { dress: (cropId, n) => n === 1 && cropId === 'carrot' ? { rowsPerBed: '4', inRow: '1', growingDefaults: { v: 1, cropId, crop: { mk: { present: true, value: 1 } } } } : {} });
 });
+chance('south field');
 B.south.forEach((b, i) => i < 12 && season(b, i * 3 % 17, { dress: (cropId, n) => n === 0 && i % 4 === 0 ? { growingDefaults: { v: 1, cropId, crop: {} } } : {} }));
+chance('long rows');
 // Long Rows: two beds shared by rows, one of onions with a yield of its own, one of shallots
 const split = (bed, date, pairs, rowsPerBed, inRow, rowSp, groupId = 'split:' + uid()) => pairs.forEach(([cropId, rowStart, rowCount, ft, startFt, extra], k) => {
   const v = vOf(cropId, k);
@@ -271,7 +282,18 @@ put(B.long[2], md(4, 20), 'onion', { growingDefaults: { v: 1, cropId: 'onion', c
 then(B.long[2], md(8, 20), 'kale', { ft: 50, rowsPerBed: '3', inRow: '12', ...withV('kale') });
 put(B.long[3], md(4, 22), C.shallot.id, { inRow: 16, ...withV(C.shallot.id) });
 then(B.long[3], md(8, 16), 'cabbage', { inRow: 16, rowsPerBed: 2, ...withV('cabbage') });
+chance('east strip');
 B.east.forEach((b, i) => i < 7 && season(b, i * 5 % 19));
+// Two beds that come free in the last week of July and stay free: a series sent to the field gardens on two days a fortnight
+// apart finds ground on the second day that was not there on the first.
+for (const [bed, cropId] of [[B.east[7], 'bean_bush'], [B.south[12], 'beet']]) {
+  for (let date = md(4, 20); date < md(7, 1); date = add(date, 1)) {
+    const p = { id: 'x', bedId: bed.id, date, cropId, ...withV(cropId) }, out = through(p);
+    if (out >= md(7, 23) && out <= md(7, 30)) { plantings.push(p); break; }
+  }
+  if (!plantings.some(p => p.bedId === bed.id)) throw Error('no day puts ' + cropId + ' out of the ground in the last week of July');
+}
+chance('kitchen garden');
 // Kitchen Garden: celeriac, bush tomatoes, fennel, parsley shared by rows
 put(B.kitchen[0], md(5, 25), C.bushTomato.id, { inRow: 24, rowsPerBed: 1, growingDefaults: { v: 1, cropId: C.bushTomato.id, crop: { rowsPerBed: { present: false } } }, ...withV(C.bushTomato.id) });
 put(B.kitchen[1], md(5, 25), C.bushTomato.id, { rowsPerBed: 1, growingDefaults: { v: 1, cropId: C.bushTomato.id, crop: { rowsPerBed: { present: false } } }, yield: 12, ...withV(C.bushTomato.id) });
@@ -281,6 +303,7 @@ put(B.kitchen[3], md(5, 4), C.celeriac.id, withV(C.celeriac.id));
 split(B.kitchen[4], md(4, 27), [['parsley', 0, 2, 24, 0, { growingDefaults: { v: 1, cropId: 'parsley', crop: {} } }], ['parsley', 2, 1, 24]], 3, 8, 12);
 put(B.kitchen[5], md(5, 18), 'eggplant_asian', { inRow: 16, growingDefaults: { v: 1, cropId: 'eggplant_asian', crop: {} }, ...withV('eggplant_asian') });
 season(B.kitchen[6], 2); season(B.kitchen[7], 9);
+chance('berry rows');
 // Berry Rows: cane berries that stand for years, and two beds of annuals beside them
 put(B.berry[0], md(4, 12), 'raspberry', { variety: byCrop.raspberry[0].name, growingDefaults: { v: 1, cropId: 'raspberry', crop: { rowsPerBed: { present: false } } }, yield: 0.75, yieldBasis: 'plant', varietyId: byCrop.raspberry[0].id });
 put(B.berry[1], md(4, 12), 'raspberry', { inRow: 32, varietyId: byCrop.raspberry[1].id });
@@ -288,6 +311,7 @@ put(B.berry[2], md(4, 12), 'blackberry', { growingDefaults: { v: 1, cropId: 'bla
 put(B.berry[3], md(4, 27), 'cabbage', { inRow: 16, rowsPerBed: 2, ...withV('cabbage') });
 then(B.berry[3], md(8, 5), 'kale', { ft: 50, rowsPerBed: '3', inRow: '12', ...withV('kale') });
 put(B.berry[4], md(5, 18), 'pepper', { inRow: 16, growingDefaults: { v: 1, cropId: 'pepper', crop: {} }, ...withV('pepper') });
+chance('flower block');
 // Flower Block: dahlias from tubers, and cut flowers from plugs
 B.flower.forEach((b, i) => {
   if (i < 4) put(b, md(5, 11), 'dahlia', { inRow: 16, rowsPerBed: 2, growingDefaults: { v: 1, cropId: 'dahlia', crop: { rowsPerBed: { present: false }, inRow: { present: true, value: 18 } } }, ...(i < 3 ? { varietyId: byCrop.dahlia[i].id } : {}) });
@@ -297,12 +321,14 @@ B.flower.forEach((b, i) => {
   else if (i === 8) { put(b, md(5, 11), C.statice.id, withV(C.statice.id)); }
   else { put(b, md(4, 27), 'snapdragon', withV('snapdragon')); then(b, md(8, 10), 'stock', withV('stock')); }
 });
+chance('shade house');
 // Shade House: beds shared by rows, and pak choi with no checked yield
 split(B.shade[0], md(4, 12), [[C.yarrow.id, 0, 1, 10], [C.statice.id, 1, 1, 10], [C.yarrow.id, 2, 2, 10]], 4, 12, 12);
 put(B.shade[1], md(4, 27), C.pakChoi.id, withV(C.pakChoi.id)); then(B.shade[1], md(7, 1), C.pakChoi.id, withV(C.pakChoi.id));
 put(B.shade[2], md(4, 27), 'lettuce_head', withV('lettuce_head')); then(B.shade[2], md(7, 12), 'basil', withV('basil'));
 split(B.shade[3], md(4, 27), [['parsley', 0, 2, 24, 0, { growingDefaults: { v: 1, cropId: 'parsley', crop: {} } }], ['basil', 2, 1, 24]], 3, 8, 12);
 put(B.shade[4], md(5, 4), 'chard', withV('chard')); put(B.shade[5], md(5, 4), 'celery', withV('celery'));
+chance('houses');
 // House A and House B: tomatoes, peppers and cucumbers with yields of their own
 split(B.houseA[0], md(5, 15), [['tomato', 0, 2, 20, 0, { growingDefaults: { v: 1, cropId: 'tomato', crop: { inRow: { present: true, value: 24 }, rowsPerBed: { present: false }, price: { present: true, value: 3.5 } } }, yield: 15 }], ['tomato', 0, 2, 20, 20, { yield: 15 }]], 2, 16, 48);
 put(B.houseA[1], md(4, 1), 'tomato', { inRow: 16, rowsPerBed: 2, growingDefaults: { v: 1, cropId: 'tomato', crop: { inRow: { present: true, value: 24 }, rowsPerBed: { present: false }, price: { present: true, value: 3.5 } } }, yield: 15, ...withV('tomato') });
@@ -312,18 +338,21 @@ put(B.houseB[0], md(4, 1), 'cucumber', { growingDefaults: { v: 1, cropId: 'cucum
 then(B.houseB[0], md(7, 20), 'cucumber', { variety: byCrop.cucumber[1].name, growingDefaults: { v: 1, cropId: 'cucumber', crop: {} }, yield: 12, varietyId: byCrop.cucumber[1].id });
 put(B.houseB[1], md(4, 1), 'pepper', { inRow: 16, growingDefaults: { v: 1, cropId: 'pepper', crop: {} }, yield: 4.5, ...withV('pepper') });
 put(B.houseB[2], md(4, 8), 'basil', withV('basil')); then(B.houseB[2], md(7, 26), 'basil', withV('basil'));
+chance('tunnel');
 // The tunnel: mini cucumbers early and late, and two rounds of vining cucumbers
 put(B.tunnel[0], md(5, 4), 'cucumber', { growingDefaults: { v: 1, cropId: 'cucumber', crop: {} }, yield: 12, ...withV('cucumber') });
 then(B.tunnel[0], md(7, 20), 'cucumber', { growingDefaults: { v: 1, cropId: 'cucumber', crop: {} }, yield: 12, ...withV('cucumber') });
 put(B.tunnel[1], md(4, 6), C.miniCuke.id, { inRow: 3, growingDefaults: { v: 1, cropId: C.miniCuke.id, crop: { inRow: { present: true, value: 12 }, price: { present: true, value: 2 }, mk: { present: true, value: 0.9 } } }, ...withV(C.miniCuke.id) });
 then(B.tunnel[1], md(9, 8), C.miniCuke.id, { ft: 40, rowsPerBed: '5', inRow: '3', ...withV(C.miniCuke.id) });
-// Towers: a cycle every four weeks, head lettuce in most, basil in three. Seven towers side by side turn over on the same day.
+chance('towers');
+// Towers: a cycle every four weeks, head lettuce in most, basil in three. Eight towers side by side turn over on the same day.
 [...B.tower1, ...B.tower2].forEach((b, i) => {
   const basil = i % 9 === 4, cropId = basil ? 'basil' : 'lettuce_head', v = vOf(cropId, i);
-  for (let date = add(md(4, 22), Math.floor((i % 14) / 7) * 7 + Math.floor(i / 14) * 14), k = 0; date <= md(9, 30) && k < 6; date = add(date, 28), k++)
+  for (let date = add(md(4, 22), Math.floor((i % 16) / 8) * 7 + Math.floor(i / 16) * 14), k = 0; date <= md(10, 12) && k < 7; date = add(date, 28), k++)
     put(b, date, cropId, { dtm: 28, hw: 1, harvestMode: 'window', turnover: 0, timingMode: 'manual', towerCycle: { v: 1, days: 28, replantSameDay: true },
       ...(basil ? { growingDefaults: { v: 1, cropId, crop: { rowsPerBed: { present: false } } } } : {}), varietyId: (k % 3 === 2 ? vOf(cropId, i + k) : v).id });
 });
+chance('crates');
 // Crates: bulbs and cut flowers set out month by month, the first rounds started under cover and moved out
 const crate = B.crates[0], herbCrate = B.crates[1];
 const crateNote = (month, n, per, what) => `${month} crates: ${n} crate(s), ${per} ${what} to a crate. A planning estimate, to be checked against the first round.`;
@@ -340,13 +369,16 @@ const crateNote = (month, n, per, what) => `${month} crates: ${n} crate(s), ${pe
   if (round >= 2) for (let k = 0; k < 3; k++) put(crate, date, 'sunflower', { ft: k ? 1 : 2, perC: 24, harvestMode: 'window', hw: 7, turnover: 7, yield: 1, yieldBasis: 'plant', timingMode: 'manual', dtm: 50, shelter: null, note: crateNote(month, k ? 1 : 2, 24, 'seeds'), varietyId: vOf('sunflower', k).id });
   if (round >= 2 && round <= 4) put(crate, date, 'stock', { ft: 1, perC: 24, harvestMode: 'window', hw: 14, turnover: 7, yield: 1, yieldBasis: 'plant', timingMode: 'manual', dtm: 48, shelter: null, note: crateNote(month, 1, 24, 'plants'), varietyId: vOf('stock', round).id });
 });
-put(herbCrate, md(5, 3), 'basil', { ft: 6, perC: 6, ...withV('basil') }); put(herbCrate, md(5, 3), 'parsley', { ft: 6, perC: 6, ...withV('parsley') });
+// Herb crates: a few crates of each, set out afresh every month
+[md(5, 3), md(6, 7), md(7, 5), md(8, 2), md(9, 6)].forEach((date, round) => { for (const [cropId, n] of [['basil', 2], ['parsley', 1], ['chard', 1], ['scallion', 1], ['lettuce_head', 2], ['spinach', 1]]) put(herbCrate, date, cropId, { ft: n, perC: 6, hw: 21, harvestMode: 'window', turnover: 3, ...withV(cropId) }); });
+chance('pots');
 // Pots: cane berries, one group on a trellis
 put(B.pots[0], md(4, 12), 'raspberry', { growingDefaults: { v: 1, cropId: 'raspberry', crop: { rowsPerBed: { present: false } } }, yield: 0.75, varietyId: byCrop.raspberry[2].id });
 put(B.pots[1], md(4, 12), 'raspberry', { growingDefaults: { v: 1, cropId: 'raspberry', crop: { rowsPerBed: { present: false } } }, yield: 2 });
 put(B.pots[2], md(4, 12), 'raspberry', { perC: 1, lrfTrellis: { v: 1, type: 'vertical' }, growingDefaults: { v: 1, cropId: 'raspberry', crop: { rowsPerBed: { present: false } } }, yield: 0.75, varietyId: byCrop.raspberry[3].id });
 put(B.pots[3], md(4, 12), 'blackberry', { perC: 1, varietyId: byCrop.blackberry[1].id });
 
+chance('booked twice');
 // Ground booked twice: a second crop put in before the first is out, mostly by a week or so of turnover
 const taken = new Set();
 const firstOf = bed => plantings.find(p => p.bedId === bed.id && !p.bedLayout && !('ft' in p));
@@ -355,9 +387,11 @@ const firstOf = bed => plantings.find(p => p.bedId === bed.id && !p.bedLayout &&
   const end = through(first), cropId = ['radish', 'lettuce_head', 'spinach', 'beet'][i % 4];
   put(b, add(end, -int(3, 9)), cropId, withV(cropId));
 });
+chance('too long');
 // Plantings longer than their bed
 [B.north[7], B.south[2], B.south[9], B.east[4], B.east[5], B.north[9], B.kitchen[3]].forEach((b, i) => { const p = plantings.find(x => x.bedId === b.id && !x.bedLayout); if (p) p.ft = b.l + 6 + i * 2; });
 
+chance('live trays');
 // ── live trays for a restaurant, every week from May to Thanksgiving ──
 let farm = { v: 3, gardens, crops, customers, cropUnits, salesMix: {}, containers, nursery,
   planningPreferences: { v: 1, gardenOrder: [G.north.id, G.south.id, G.east.id], sowWeekday: null, minBatch: 1, checkNursery: true, labor: { weeklyHours: null, otherHours: 0, byCrop: {} }, mode: 'beds', dateBasis: 'planting', bedsPerSuccession: 3, every: 10 },
@@ -376,6 +410,7 @@ let over = 0; const pairs = new Set();
 for (const p of farm.plantings) { const r = eng.calc(p); if (eng.overflow(p, r)) over++; for (const o of eng.conflicts(p, r)) pairs.add([p.id, o.p ? o.p.id : 'rest'].sort().join('|')); }
 const kinds = {}; for (const p of farm.plantings) { const k = eng.calc(p).kind; kinds[k] = (kinds[k] || 0) + 1; }
 
+chance('seed');
 // ── seed on hand and on order, and what the supplier sells it in ──
 const lots = [], adjustments = [], receipts = [], packs = {};
 const live = farm.varieties.filter(v => !v.deleted && !v.stub);

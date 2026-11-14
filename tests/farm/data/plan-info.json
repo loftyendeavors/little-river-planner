@@ -2,14 +2,14 @@
  "backup": "2026-11-14T12:00:00.000Z",
  "counts": {
   "gardens": 17,
-  "beds": 121,
-  "plantings": 570,
+  "beds": 125,
+  "plantings": 633,
   "varieties": 145,
   "year": 2027
  },
  "mapImage": {
   "src": "data/farm-map.jpg",
-  "sha256": "d6a40a7d22461ca1d2c5064af798e11c773bce7a185dc3848f1786ffb5a5a1ba"
+  "sha256": "d20a614940e7b955faf191961dddc064953390e475556a56512487c7471dd95e"
  },
  "inventory": "data/inventory.json",
  "thumbs": "data/thumbs.json",

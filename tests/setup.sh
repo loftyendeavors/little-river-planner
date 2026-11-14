@@ -3,7 +3,8 @@
 #   sh tests/setup.sh [commit of the build before]
 # With no argument the build before is where this branch left main; on main itself, the commit before; with script changes
 # not yet committed on main's own commit, that commit. LRF_BASE says it outright.
-# Needs: node 22, npm, python3 with playwright (pip install playwright; no browser download: Chrome at /usr/bin/google-chrome), git.
+# Needs: node 22, npm, git, and python3 with playwright and pillow (pip install playwright pillow; no browser download: the
+# checks use Chrome at /usr/bin/google-chrome).
 set -e
 . "$(dirname "$0")/env.sh"
 mkdir -p "$W" "$APP/data" "$W/backup" "$W/old" "$SCRATCH" "$S"
