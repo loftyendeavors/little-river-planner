@@ -720,7 +720,6 @@
   }
   function init() {
     const svg = $('map');
-    App.on('mixing', drawMixing); App.on('plan', drawMixing); App.on('date', drawMixing); App.on('view', drawMixing);
     svg.addEventListener('pointerdown', onDown);
     svg.addEventListener('pointermove', onMove);
     svg.addEventListener('pointerup', onUp);
@@ -744,6 +743,8 @@
     $('legendMore').addEventListener('click', () => { legendOpen = !legendOpen; fitLegend(); });
     App.on('plan', () => { $('mapSample').hidden = !App.isSample(); });
     App.on('plan', build);
+    // after the map is built again, not before: building draws every bed afresh, and the bed being mixed must keep its outline
+    App.on('plan', drawMixing); App.on('mixing', drawMixing); App.on('date', drawMixing); App.on('view', drawMixing);
     App.on('date', () => { if (!wholeSeason) paint(); });   // the whole season does not depend on the day
     // what the series tool would plant is marked while it is open; drawn when the map is next looked at, if it is not on the page now
     let ghostsStale = false;

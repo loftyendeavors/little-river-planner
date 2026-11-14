@@ -506,6 +506,12 @@
     const mates = Rails.mates(eng, p);
     if (mates.length < 2) return null;
     const size = x => x.rect && x.rect.rows && x.rect.rows.count < x.rect.rows.total ? `${num(x.rect.rows.count)} of ${num(x.rect.rows.total)} rows` : `${num(x.r.physicalLength, 1)} ft`;
+    // Standing together is not always sharing: where their ground crosses, the bed is booked twice (it waits under To settle).
+    // That is said as what it is, and equal shares are offered as one more way to settle it, not as a tidy-up.
+    const twice = eng.conflicts(p, eng.calc(p)).some(o => !o.rest);
+    if (twice) return h('div.field', { id: 'fMatesField', dataset: { twice: '1' } }, h('span', `Booked into the same ground in ${App.bedLabel(eng.bedOf(p.bedId))}`),
+      h('ul.mix-mates', { id: 'fMates' }, mates.map(x => h('li', { dataset: { mate: x.p.id } }, x.p.id === p.id ? h('b', `${App.cropLabel(x.p)} (this one)`) : h('button.link', { type: 'button', onclick: () => App.select({ type: 'planting', id: x.p.id }) }, App.cropLabel(x.p)), h('span', size(x))))),
+      h('small', 'They are in the ground on the same days. ', h('button.linkish', { type: 'button', id: 'fEqual', title: 'Each takes an equal share of the bed, so the ground is no longer booked twice. Plant counts follow the feet; no date changes. The fixes by date are under To settle.', onclick: () => App.equalShares(p.id) }, 'Share the bed between them'), ', or settle it by date under To settle.'));
     return h('div.field', { id: 'fMatesField' }, h('span', `Shares ${App.bedLabel(eng.bedOf(p.bedId))} with`),
       h('ul.mix-mates', { id: 'fMates' }, mates.map(x => h('li', { dataset: { mate: x.p.id } }, x.p.id === p.id ? h('b', `${App.cropLabel(x.p)} (this one)`) : h('button.link', { type: 'button', onclick: () => App.select({ type: 'planting', id: x.p.id }) }, App.cropLabel(x.p)), h('span', size(x))))),
       h('small', h('button.linkish', { type: 'button', id: 'fEqual', onclick: () => App.equalShares(p.id) }, 'Make them equal'), ' · on the map, push an end into its neighbour to move the line between them.'));
