@@ -3,10 +3,11 @@
 Scripts that produce this site from the planner's working copy. They are not part of the app and nothing loads them.
 
 - `build_site.cjs` — writes `index.html`, `css/`, `js/`, `fonts/`, `manifest.webmanifest` and `sw.js` into this folder from the app's source. Run after `make_icons.py` has made `icons/`. It stops when the app folder lacks a script this site already serves: that means the app folder was put together before another piece of work added the script, and building from it would take that work off the site. Copy `js/` and `css/app.css` from the repo into the app folder, put your own changes back on top, and build again; `--drop` as a last argument removes a script on purpose. It stops too when the app folder holds a script its own `index.html` does not load: the app's `index.html` is kept apart from this repo and can be the stale part. Add the missing `<script>` lines in the order this repo's `index.html` has them.
+- `app_folder.cjs` — the other way round: makes the app folder's code (the scripts, the stylesheet and the page as they stand before `build_site.cjs`) from this repository. `node tools/app_folder.cjs <this folder> <app folder>`. It writes no data. Building the site from what it writes gives this folder's own `index.html` back, line for line.
 - `site_check.py` — opens the built site in headless Chrome: empty start, loading a backup, reload, opening with no connection, and with the network still off: stock typed in, vendor sizes shown, a sowing recorded.
 - `build_offline.cjs` — packs the app into one self-contained HTML file.
 - `make_icons.py` — draws the app icons.
-- `build_reader.cjs` — bundles `reader/` (v7's page reader, unchanged, plus the wrapper that sends its requests through the fetch service) and the htmlparser2 package into `js/reader.js`. Needs a folder with `esbuild` and `htmlparser2` installed.
+- `build_reader.cjs` — bundles `reader/` (the page reader, plus the wrapper that sends its requests through the fetch service) and the htmlparser2 package into `js/reader.js`. Needs a folder with `esbuild` and `htmlparser2` installed.
 - `reader_test.mjs` — the reader, its fetcher and the Worker's own code together, with supplier sites stubbed out.
 - `worker_test.mjs` — the fetch service on its own.
 - `sync_worker_test.mjs` — the plan sync service on its own, against a stand-in bucket: who is answered, signing in, conditional writes, daily copies, snapshots, and the count of wrong passphrases (a burst of guesses included).
