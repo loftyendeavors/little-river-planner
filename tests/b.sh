@@ -49,7 +49,7 @@ for n in "$@"; do
     map) WIDTHS=${WIDTHS:-1280,1480,1707,3440} python3 -I $REPO/tools/map_check.py $APP $S/map 2>&1 | tally map ;;
     map-views) WIDTHS=${WIDTHS:-1280,1707,3440} python3 -I $REPO/tools/map_views_check.py $APP $S/map-views 2>&1 | tally map-and-every-other-view ;;
     mapgeo) node $REPO/tools/mapgeo_test.cjs 2>&1 | tally map-geometry ;;
-    offline) node $REPO/tools/build_offline.cjs $APP $FONTS $OFF "$LRF_LABEL" | tail -1 | cut -c1-300 ;;
+    offline) node $REPO/tools/build_offline.cjs $APP $FONTS $OFF "$LRF_LABEL" > $W/offline.out 2>&1 || echo "offline NO RESULT $(tail -2 $W/offline.out | cut -c1-300)"; tail -1 $W/offline.out | cut -c1-300 ;;
     ahead-off) python3 -I $T/ahead_check.py $OFF $S/ahead-off 2>&1 | tally ahead-offline ;;
     core-off) python3 -I $T/browser_core.py $OFF $S/core-off file 2>&1 | tally core-offline ;;
     sowing-off) python3 -I $T/sowing_view_check.py $OFF $S/sow-off 2>&1 | tally sowing-offline ;;
@@ -59,7 +59,10 @@ for n in "$@"; do
     step2b-off) python3 -I $T/step2b_check.py $OFF $S/step2b-off 2>&1 | tally step2b-offline ;;
     map-off) rm -rf $W/offline-as-site && mkdir -p $W/offline-as-site && cp $OFF $W/offline-as-site/index.html && WIDTHS=${WIDTHS:-1480} python3 -I $REPO/tools/map_check.py $W/offline-as-site $S/map-off 2>&1 | tally map-offline ;;
     carry) python3 -I $T/carry_check.py $SITE $ZIP $S/carry 2>&1 | tally carry ;;
-    site) python3 -I $REPO/tools/site_check.py $SITE $ZIP $S/site.png 2>&1 | tail -3 | cut -c1-500 ;;
+    site) python3 -I $REPO/tools/site_check.py $SITE $ZIP $S/site.png 2>&1 | tail -1 | python3 -I -c "import json,sys; t=sys.stdin.read()
+try:
+    d=json.loads(t); bad=[k for k,v in d.items() if (v != 0 if k == 'errors' else v is not True)]; print('site', len(d)-len(bad), 'of', len(d), bad)
+except Exception: print('site NO RESULT', t[-300:])" ;;
     step3a-site) python3 -I $T/step3a_check.py $SITE $S/step3a-site $ZIP 2>&1 | tally step3a-built-site ;;
     step3b-site) python3 -I $T/step3b_check.py $SITE $S/step3b-site $ZIP 2>&1 | tally step3b-built-site ;;
     wide-site) python3 -I $T/wide_check.py $SITE $S/wide-site $ZIP 2>&1 | tally wide-and-light-built-site ;;

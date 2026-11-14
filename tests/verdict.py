@@ -64,11 +64,5 @@ for line in text.splitlines():
         elif not forgiven(label, names) and a != b:
             bad.append(s[:400])
         continue
-    m = re.search(r'ok: (\d+)/(\d+)', s)   # site_check and the tour
-    if m:
-        a, b = int(m.group(1)), int(m.group(2))
-        checks += b; passed += a
-        if a != b:
-            bad.append(s[:400])
 print(json.dumps({'checks': checks, 'passed': passed, 'known': known, 'notPassed': bad}, ensure_ascii=False, indent=1))
 sys.exit(0 if not bad and checks >= need else 1)
