@@ -1,0 +1,58 @@
+# Every check, on every push, on a made-up farm (tests/farm). The parts run side by side; "All checks" is the one result to
+# require before a merge. How to run the same thing on your own computer: tests/README.md.
+name: Checks
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  part:
+    name: ${{ matrix.part }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [node, build, app1, app2, app3, app4, new, "off", site1, site2, site3, site4, site5, site6, site7, site8, site9, site10]
+    env:
+      LRF_WORK: ${{ github.workspace }}/../lrf-work
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the build before is read from history
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tools
+        run: |
+          pip install --quiet playwright
+          google-chrome --version
+      - name: Work folder
+        run: sh tests/setup.sh
+      - name: Run
+        run: sh tests/run.sh ${{ matrix.part }} 2>&1 | tee part.log
+      - name: Verdict
+        run: python3 -I tests/verdict.py part.log
+      - name: Keep the pictures of a part that failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shots-${{ matrix.part }}
+          path: ${{ github.workspace }}/../lrf-work/shots
+          if-no-files-found: ignore
+          retention-days: 7
+  all:
+    name: All checks
+    if: always()
+    needs: part
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Every part passed
+        run: test "${{ needs.part.result }}" = "success"

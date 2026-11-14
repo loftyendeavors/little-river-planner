@@ -1,0 +1,2073 @@
+{
+ "map": {
+  "ftPerPx": 0.25,
+  "imgW": 2400,
+  "imgH": 1200,
+  "towerShape": "circle",
+  "towerGap": 0
+ },
+ "blocks": [
+  {
+   "garden": "g-north-field",
+   "name": "North Field",
+   "type": "field",
+   "x": 120,
+   "y": 50,
+   "turn": 0,
+   "w": 81.35000000000001,
+   "l": 30.200000000000003
+  },
+  {
+   "garden": "g-south-field",
+   "name": "South Field",
+   "type": "field",
+   "x": 120,
+   "y": 105,
+   "turn": 0,
+   "w": 74.5,
+   "l": 26
+  },
+  {
+   "garden": "g-long-rows",
+   "name": "Long Rows",
+   "type": "field",
+   "x": 250,
+   "y": 75,
+   "turn": 4,
+   "w": 28,
+   "l": 86
+  },
+  {
+   "garden": "g-east-strip",
+   "name": "East Strip",
+   "type": "field",
+   "x": 345,
+   "y": 45,
+   "turn": 90,
+   "w": 40.5,
+   "l": 41
+  },
+  {
+   "garden": "g-kitchen-garden",
+   "name": "Kitchen Garden",
+   "type": "field",
+   "x": 345,
+   "y": 120,
+   "turn": 8,
+   "w": 27.5,
+   "l": 58
+  },
+  {
+   "garden": "g-berry-rows",
+   "name": "Berry Rows",
+   "type": "field",
+   "x": 450,
+   "y": 70,
+   "turn": 0,
+   "w": 50,
+   "l": 56
+  },
+  {
+   "garden": "g-flower-block",
+   "name": "Flower Block",
+   "type": "field",
+   "x": 520,
+   "y": 150,
+   "turn": 86,
+   "w": 33,
+   "l": 69
+  },
+  {
+   "garden": "g-shade-house",
+   "name": "Shade House",
+   "type": "greenhouse",
+   "x": 440,
+   "y": 225,
+   "turn": 82,
+   "w": 34.5,
+   "l": 30
+  },
+  {
+   "garden": "g-house-a",
+   "name": "House A",
+   "type": "greenhouse",
+   "x": 80,
+   "y": 215,
+   "turn": 0,
+   "w": 28,
+   "l": 46
+  },
+  {
+   "garden": "g-house-b",
+   "name": "House B",
+   "type": "greenhouse",
+   "x": 130,
+   "y": 215,
+   "turn": 0,
+   "w": 22,
+   "l": 46
+  },
+  {
+   "garden": "g-tunnel",
+   "name": "Caterpillar Tunnel",
+   "type": "tunnel",
+   "x": 190,
+   "y": 220,
+   "turn": 0,
+   "w": 19,
+   "l": 46
+  },
+  {
+   "garden": "g-tower-row-1",
+   "name": "Tower Row 1",
+   "type": "greenhouse",
+   "x": 270,
+   "y": 190,
+   "turn": 84,
+   "w": 42.300000000000004,
+   "l": 7.98
+  },
+  {
+   "garden": "g-tower-row-2",
+   "name": "Tower Row 2",
+   "type": "greenhouse",
+   "x": 270,
+   "y": 205,
+   "turn": 84,
+   "w": 42.300000000000004,
+   "l": 7.98
+  },
+  {
+   "garden": "g-crate-yard",
+   "name": "Crate Yard",
+   "type": "field",
+   "x": 300,
+   "y": 255,
+   "turn": 86,
+   "w": 45,
+   "l": 6
+  },
+  {
+   "garden": "g-new-ground",
+   "name": "New Ground",
+   "type": "field",
+   "x": 545,
+   "y": 95,
+   "turn": 0,
+   "w": 44.5,
+   "l": 31
+  },
+  {
+   "garden": "g-potted-berries",
+   "name": "Potted Berries",
+   "type": "field",
+   "x": 540,
+   "y": 255,
+   "turn": 82,
+   "w": 39.599999999999994,
+   "l": 6
+  }
+ ],
+ "beds": [
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 337,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 359,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 381,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 403,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 425,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 447,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 469,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 491,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 513,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 535,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 557,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 579,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 601,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-north-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 22,
+   "x": 623,
+   "y": 200,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 350,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 370,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 390,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 410,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 430,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 450,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 470,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 490,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 510,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 530,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 550,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 570,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 590,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-south-field",
+   "type": "RB",
+   "w": 3.5,
+   "l": 20,
+   "x": 610,
+   "y": 420,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-long-rows",
+   "type": "IG",
+   "w": 4,
+   "l": 80,
+   "x": 964.088,
+   "y": 297.489,
+   "rot": 4,
+   "count": 0
+  },
+  {
+   "garden": "g-long-rows",
+   "type": "IG",
+   "w": 4,
+   "l": 80,
+   "x": 988.029,
+   "y": 299.163,
+   "rot": 4,
+   "count": 0
+  },
+  {
+   "garden": "g-long-rows",
+   "type": "IG",
+   "w": 4,
+   "l": 80,
+   "x": 1011.971,
+   "y": 300.837,
+   "rot": 4,
+   "count": 0
+  },
+  {
+   "garden": "g-long-rows",
+   "type": "IG",
+   "w": 4,
+   "l": 80,
+   "x": 1035.912,
+   "y": 302.511,
+   "rot": 4,
+   "count": 0
+  },
+  {
+   "garden": "g-east-strip",
+   "type": "RB",
+   "w": 3,
+   "l": 35,
+   "x": 1380,
+   "y": 117,
+   "rot": 90,
+   "count": 0
+  },
+  {
+   "garden": "g-east-strip",
+   "type": "RB",
+   "w": 3,
+   "l": 35,
+   "x": 1380,
+   "y": 135,
+   "rot": 90,
+   "count": 0
+  },
+  {
+   "garden": "g-east-strip",
+   "type": "RB",
+   "w": 3,
+   "l": 35,
+   "x": 1380,
+   "y": 153,
+   "rot": 90,
+   "count": 0
+  },
+  {
+   "garden": "g-east-strip",
+   "type": "RB",
+   "w": 3,
+   "l": 35,
+   "x": 1380,
+   "y": 171,
+   "rot": 90,
+   "count": 0
+  },
+  {
+   "garden": "g-east-strip",
+   "type": "RB",
+   "w": 3,
+   "l": 35,
+   "x": 1380,
+   "y": 189,
+   "rot": 90,
+   "count": 0
+  },
+  {
+   "garden": "g-east-strip",
+   "type": "RB",
+   "w": 3,
+   "l": 35,
+   "x": 1380,
+   "y": 207,
+   "rot": 90,
+   "count": 0
+  },
+  {
+   "garden": "g-east-strip",
+   "type": "RB",
+   "w": 3,
+   "l": 35,
+   "x": 1380,
+   "y": 225,
+   "rot": 90,
+   "count": 0
+  },
+  {
+   "garden": "g-east-strip",
+   "type": "RB",
+   "w": 3,
+   "l": 35,
+   "x": 1380,
+   "y": 243,
+   "rot": 90,
+   "count": 0
+  },
+  {
+   "garden": "g-kitchen-garden",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1352.144,
+   "y": 419.535,
+   "rot": 8,
+   "count": 0
+  },
+  {
+   "garden": "g-kitchen-garden",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1375.91,
+   "y": 422.875,
+   "rot": 8,
+   "count": 0
+  },
+  {
+   "garden": "g-kitchen-garden",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1399.677,
+   "y": 426.215,
+   "rot": 8,
+   "count": 0
+  },
+  {
+   "garden": "g-kitchen-garden",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1423.443,
+   "y": 429.555,
+   "rot": 8,
+   "count": 0
+  },
+  {
+   "garden": "g-kitchen-garden",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1336.557,
+   "y": 530.445,
+   "rot": 8,
+   "count": 0
+  },
+  {
+   "garden": "g-kitchen-garden",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1360.323,
+   "y": 533.785,
+   "rot": 8,
+   "count": 0
+  },
+  {
+   "garden": "g-kitchen-garden",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1384.09,
+   "y": 537.125,
+   "rot": 8,
+   "count": 0
+  },
+  {
+   "garden": "g-kitchen-garden",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1407.856,
+   "y": 540.465,
+   "rot": 8,
+   "count": 0
+  },
+  {
+   "garden": "g-berry-rows",
+   "type": "SE",
+   "w": 4,
+   "l": 50,
+   "x": 1720,
+   "y": 280,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-berry-rows",
+   "type": "SE",
+   "w": 4,
+   "l": 50,
+   "x": 1760,
+   "y": 280,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-berry-rows",
+   "type": "SE",
+   "w": 4,
+   "l": 50,
+   "x": 1800,
+   "y": 280,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-berry-rows",
+   "type": "SE",
+   "w": 4,
+   "l": 50,
+   "x": 1840,
+   "y": 280,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-berry-rows",
+   "type": "SE",
+   "w": 4,
+   "l": 50,
+   "x": 1880,
+   "y": 280,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-flower-block",
+   "type": "RB",
+   "w": 3,
+   "l": 30,
+   "x": 2142.491,
+   "y": 547.513,
+   "rot": 86,
+   "count": 0
+  },
+  {
+   "garden": "g-flower-block",
+   "type": "RB",
+   "w": 3,
+   "l": 30,
+   "x": 2144.165,
+   "y": 571.455,
+   "rot": 86,
+   "count": 0
+  },
+  {
+   "garden": "g-flower-block",
+   "type": "RB",
+   "w": 3,
+   "l": 30,
+   "x": 2145.839,
+   "y": 595.396,
+   "rot": 86,
+   "count": 0
+  },
+  {
+   "garden": "g-flower-block",
+   "type": "RB",
+   "w": 3,
+   "l": 30,
+   "x": 2147.513,
+   "y": 619.338,
+   "rot": 86,
+   "count": 0
+  },
+  {
+   "garden": "g-flower-block",
+   "type": "RB",
+   "w": 3,
+   "l": 30,
+   "x": 2149.188,
+   "y": 643.279,
+   "rot": 86,
+   "count": 0
+  },
+  {
+   "garden": "g-flower-block",
+   "type": "RB",
+   "w": 3,
+   "l": 30,
+   "x": 2010.812,
+   "y": 556.721,
+   "rot": 86,
+   "count": 0
+  },
+  {
+   "garden": "g-flower-block",
+   "type": "RB",
+   "w": 3,
+   "l": 30,
+   "x": 2012.487,
+   "y": 580.662,
+   "rot": 86,
+   "count": 0
+  },
+  {
+   "garden": "g-flower-block",
+   "type": "RB",
+   "w": 3,
+   "l": 30,
+   "x": 2014.161,
+   "y": 604.604,
+   "rot": 86,
+   "count": 0
+  },
+  {
+   "garden": "g-flower-block",
+   "type": "RB",
+   "w": 3,
+   "l": 30,
+   "x": 2015.835,
+   "y": 628.545,
+   "rot": 86,
+   "count": 0
+  },
+  {
+   "garden": "g-flower-block",
+   "type": "RB",
+   "w": 3,
+   "l": 30,
+   "x": 2017.509,
+   "y": 652.487,
+   "rot": 86,
+   "count": 0
+  },
+  {
+   "garden": "g-shade-house",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1753.041,
+   "y": 850.487,
+   "rot": 82,
+   "count": 0
+  },
+  {
+   "garden": "g-shade-house",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1755.825,
+   "y": 870.292,
+   "rot": 82,
+   "count": 0
+  },
+  {
+   "garden": "g-shade-house",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1758.608,
+   "y": 890.097,
+   "rot": 82,
+   "count": 0
+  },
+  {
+   "garden": "g-shade-house",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1761.392,
+   "y": 909.903,
+   "rot": 82,
+   "count": 0
+  },
+  {
+   "garden": "g-shade-house",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1764.175,
+   "y": 929.708,
+   "rot": 82,
+   "count": 0
+  },
+  {
+   "garden": "g-shade-house",
+   "type": "SE",
+   "w": 3.5,
+   "l": 24,
+   "x": 1766.959,
+   "y": 949.513,
+   "rot": 82,
+   "count": 0
+  },
+  {
+   "garden": "g-house-a",
+   "type": "IG",
+   "w": 4,
+   "l": 40,
+   "x": 284,
+   "y": 860,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-house-a",
+   "type": "IG",
+   "w": 4,
+   "l": 40,
+   "x": 308,
+   "y": 860,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-house-a",
+   "type": "IG",
+   "w": 4,
+   "l": 40,
+   "x": 332,
+   "y": 860,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-house-a",
+   "type": "IG",
+   "w": 4,
+   "l": 40,
+   "x": 356,
+   "y": 860,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-house-b",
+   "type": "IG",
+   "w": 4,
+   "l": 40,
+   "x": 496,
+   "y": 860,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-house-b",
+   "type": "IG",
+   "w": 4,
+   "l": 40,
+   "x": 520,
+   "y": 860,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-house-b",
+   "type": "IG",
+   "w": 4,
+   "l": 40,
+   "x": 544,
+   "y": 860,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-tunnel",
+   "type": "IG",
+   "w": 5,
+   "l": 40,
+   "x": 744,
+   "y": 880,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-tunnel",
+   "type": "IG",
+   "w": 5,
+   "l": 40,
+   "x": 776,
+   "y": 880,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1072.825,
+   "y": 691.736,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1073.929,
+   "y": 702.238,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1075.033,
+   "y": 712.74,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1076.137,
+   "y": 723.242,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1077.24,
+   "y": 733.745,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1078.344,
+   "y": 744.247,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1079.448,
+   "y": 754.749,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1080.552,
+   "y": 765.251,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1081.656,
+   "y": 775.753,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1082.76,
+   "y": 786.255,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1083.863,
+   "y": 796.758,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1084.967,
+   "y": 807.26,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1086.071,
+   "y": 817.762,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-1",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1087.175,
+   "y": 828.264,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1072.825,
+   "y": 751.736,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1073.929,
+   "y": 762.238,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1075.033,
+   "y": 772.74,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1076.137,
+   "y": 783.242,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1077.24,
+   "y": 793.745,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1078.344,
+   "y": 804.247,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1079.448,
+   "y": 814.749,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1080.552,
+   "y": 825.251,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1081.656,
+   "y": 835.753,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1082.76,
+   "y": 846.255,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1083.863,
+   "y": 856.758,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1084.967,
+   "y": 867.26,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1086.071,
+   "y": 877.762,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-tower-row-2",
+   "type": "42 Site",
+   "w": 3,
+   "l": 3,
+   "x": 1087.175,
+   "y": 888.264,
+   "rot": 84,
+   "count": 0
+  },
+  {
+   "garden": "g-crate-yard",
+   "type": "CT",
+   "w": 0,
+   "l": 0,
+   "x": 1194.559,
+   "y": 942.19,
+   "rot": 86,
+   "count": 110
+  },
+  {
+   "garden": "g-crate-yard",
+   "type": "CT",
+   "w": 0,
+   "l": 0,
+   "x": 1205.441,
+   "y": 1097.81,
+   "rot": 86,
+   "count": 24
+  },
+  {
+   "garden": "g-new-ground",
+   "type": "RB",
+   "w": 3.5,
+   "l": 25,
+   "x": 2110,
+   "y": 380,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-new-ground",
+   "type": "RB",
+   "w": 3.5,
+   "l": 25,
+   "x": 2130,
+   "y": 380,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-new-ground",
+   "type": "RB",
+   "w": 3.5,
+   "l": 25,
+   "x": 2150,
+   "y": 380,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-new-ground",
+   "type": "RB",
+   "w": 3.5,
+   "l": 25,
+   "x": 2170,
+   "y": 380,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-new-ground",
+   "type": "RB",
+   "w": 3.5,
+   "l": 25,
+   "x": 2190,
+   "y": 380,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-new-ground",
+   "type": "RB",
+   "w": 3.5,
+   "l": 25,
+   "x": 2210,
+   "y": 380,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-new-ground",
+   "type": "RB",
+   "w": 3.5,
+   "l": 25,
+   "x": 2230,
+   "y": 380,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-new-ground",
+   "type": "RB",
+   "w": 3.5,
+   "l": 25,
+   "x": 2250,
+   "y": 380,
+   "rot": 0,
+   "count": 0
+  },
+  {
+   "garden": "g-potted-berries",
+   "type": "CT",
+   "w": 0,
+   "l": 0,
+   "x": 2150.648,
+   "y": 953.454,
+   "rot": 82,
+   "count": 18
+  },
+  {
+   "garden": "g-potted-berries",
+   "type": "CT",
+   "w": 0,
+   "l": 0,
+   "x": 2156.883,
+   "y": 997.818,
+   "rot": 82,
+   "count": 25
+  },
+  {
+   "garden": "g-potted-berries",
+   "type": "CT",
+   "w": 0,
+   "l": 0,
+   "x": 2163.117,
+   "y": 1042.182,
+   "rot": 82,
+   "count": 25
+  },
+  {
+   "garden": "g-potted-berries",
+   "type": "CT",
+   "w": 0,
+   "l": 0,
+   "x": 2169.352,
+   "y": 1086.546,
+   "rot": 82,
+   "count": 24
+  }
+ ],
+ "scale": {
+  "g-long-rows": 1,
+  "g-north-field": 1.1,
+  "g-south-field": 1,
+  "g-east-strip": 1,
+  "g-kitchen-garden": 1,
+  "g-berry-rows": 1,
+  "g-flower-block": 1,
+  "g-shade-house": 1,
+  "g-house-a": 1,
+  "g-house-b": 1,
+  "g-tunnel": 1,
+  "g-tower-row-1": 0.66,
+  "g-tower-row-2": 0.66,
+  "g-crate-yard": 1.3,
+  "g-new-ground": 1,
+  "g-potted-berries": 1.4
+ },
+ "varieties": [
+  {
+   "id": "v_named_2clu2u",
+   "color": "#ccab8a",
+   "n": 0
+  },
+  {
+   "id": "v_named_w09sv8",
+   "color": "#ccab8a",
+   "n": 1
+  },
+  {
+   "id": "v_named_i5ak6g",
+   "color": "#ccab8a",
+   "n": 2
+  },
+  {
+   "id": "v_named_qyg9zv",
+   "color": "#ccab8a",
+   "n": 3
+  },
+  {
+   "id": "v_named_mycerl",
+   "color": "#ccab8a",
+   "n": 4
+  },
+  {
+   "id": "v_url_90b0d76e-b526-45c0-a291-03657c998e44",
+   "color": "#ccab8a",
+   "n": 5
+  },
+  {
+   "id": "v_named_h4nu9m",
+   "color": "#ccab8a",
+   "n": 6
+  },
+  {
+   "id": "v_named_cs0d9p",
+   "color": "#ccab8a",
+   "n": 7
+  },
+  {
+   "id": "v_url_6e8ef098-0f03-4a12-a3f8-203e5cda013c",
+   "color": "#ccab8a",
+   "n": 8
+  },
+  {
+   "id": "v_named_z9z0ww",
+   "color": "#ccab8a",
+   "n": 9
+  },
+  {
+   "id": "v_url_f2da8308-2e15-494b-89be-a448723e8231",
+   "color": "#ccab8a",
+   "n": 10
+  },
+  {
+   "id": "v_named_5b958n",
+   "color": "#ccab8a",
+   "n": 11
+  },
+  {
+   "id": "v_named_4wr403",
+   "color": "#ccab8a",
+   "n": 12
+  },
+  {
+   "id": "v_named_9tmqs5",
+   "color": "#d7a193",
+   "n": 13
+  },
+  {
+   "id": "v_url_1896aab1-89df-4b06-b397-b830f52c726f",
+   "color": "#d7a193",
+   "n": 14
+  },
+  {
+   "id": "v_url_38f78bb3-16e7-41fd-8e61-835316eeeafa",
+   "color": "#d7a193",
+   "n": 15
+  },
+  {
+   "id": "v_url_648e56b9-653f-4a54-8b9e-ed9ae26bc9c7",
+   "color": "#d7a193",
+   "n": 16
+  },
+  {
+   "id": "v_url_5f977cc3-8649-4123-84ac-4471add276d5",
+   "color": "#d7a193",
+   "n": 17
+  },
+  {
+   "id": "v_named_qftq86",
+   "color": "#d7a193",
+   "n": 18
+  },
+  {
+   "id": "v_url_b0268b10-5f09-4bbd-8ac9-1d43cd6ff47f",
+   "color": "#d7a193",
+   "n": 19
+  },
+  {
+   "id": "v_url_912c5d75-724c-4999-ba1c-6f433320b9c9",
+   "color": "#c08454",
+   "n": 20
+  },
+  {
+   "id": "v_named_dby29v",
+   "color": "#c08454",
+   "n": 21
+  },
+  {
+   "id": "v_url_93148751-c6fe-4ff6-9813-4c074d0e24ca",
+   "color": "#c08454",
+   "n": 22
+  },
+  {
+   "id": "v_url_ef8e5795-cb2f-4ed5-a50a-671702770bad",
+   "color": "#c08454",
+   "n": 23
+  },
+  {
+   "id": "v_url_3f666554-d46e-4939-a1d4-ba4cb1a878d7",
+   "color": "#cf4a5c",
+   "n": 24
+  },
+  {
+   "id": "v_named_491juh",
+   "color": "#cf4a5c",
+   "n": 25
+  },
+  {
+   "id": "v_named_ec6lw6",
+   "color": "#cf4a5c",
+   "n": 26
+  },
+  {
+   "id": "v_url_b25e75dc-9147-4ac8-98d4-9c30cfac3380",
+   "color": "#c05456",
+   "n": 27
+  },
+  {
+   "id": "v_url_d7f07826-e7c6-422a-99e5-500285753767",
+   "color": "#c05456",
+   "n": 28
+  },
+  {
+   "id": "v_named_ve3bhf",
+   "color": "#c05456",
+   "n": 29
+  },
+  {
+   "id": "v_named_mjudxa",
+   "color": "#b65d5f",
+   "n": 30
+  },
+  {
+   "id": "v_url_70ad3808-10b4-43f4-9264-bafde839b0b1",
+   "color": "#b65d5f",
+   "n": 31
+  },
+  {
+   "id": "v_url_bb544608-a584-4efd-926c-ce84749702b3",
+   "color": "#88a9cd",
+   "n": 32
+  },
+  {
+   "id": "v_url_db64200e-0a2b-46ed-b031-01cacaea9566",
+   "color": "#88a9cd",
+   "n": 33
+  },
+  {
+   "id": "v_url_504693e5-6729-4e42-95de-02583fa2613d",
+   "color": "#88a9cd",
+   "n": 34
+  },
+  {
+   "id": "v_named_hme3tf",
+   "color": "#88a9cd",
+   "n": 35
+  },
+  {
+   "id": "v_named_zzyhmb",
+   "color": "#5a87ba",
+   "n": 36
+  },
+  {
+   "id": "v_url_14265db8-16b5-4e50-9056-83e25912871c",
+   "color": "#5a87ba",
+   "n": 37
+  },
+  {
+   "id": "v_named_b40mgb",
+   "color": "#6bd6d1",
+   "n": 38
+  },
+  {
+   "id": "v_named_dfekxn",
+   "color": "#6bd6d1",
+   "n": 39
+  },
+  {
+   "id": "v_named_k5wkqa",
+   "color": "#a0af64",
+   "n": 40
+  },
+  {
+   "id": "v_named_mw5ncj",
+   "color": "#a0af64",
+   "n": 41
+  },
+  {
+   "id": "v_named_saxkvg",
+   "color": "#a0af64",
+   "n": 42
+  },
+  {
+   "id": "v_named_w3sfw4",
+   "color": "#75b882",
+   "n": 43
+  },
+  {
+   "id": "v_named_0vmo3c",
+   "color": "#75b882",
+   "n": 44
+  },
+  {
+   "id": "v_url_d66e4a80-f0b2-4180-a2d7-79dc3aaff846",
+   "color": "#75b882",
+   "n": 45
+  },
+  {
+   "id": "v_url_8339c6c0-4a86-4619-9117-ea1369130784",
+   "color": "#75b882",
+   "n": 46
+  },
+  {
+   "id": "v_url_c1571b80-b05f-41a4-9fb6-32014feff3c7",
+   "color": "#bc765c",
+   "n": 47
+  },
+  {
+   "id": "v_named_ecfmh7",
+   "color": "#bc765c",
+   "n": 48
+  },
+  {
+   "id": "v_url_863e0a87-b4b1-49ee-8bc2-db1fbdeaa6a3",
+   "color": "#bc765c",
+   "n": 49
+  },
+  {
+   "id": "v_url_8ffe039b-0453-4f6c-8808-4af6c674d0c9",
+   "color": "#82bf9c",
+   "n": 50
+  },
+  {
+   "id": "v_named_i3br6i",
+   "color": "#82bf9c",
+   "n": 51
+  },
+  {
+   "id": "v_url_72e1f78e-af3b-4066-bb71-9e98a0037908",
+   "color": "#82bf9c",
+   "n": 52
+  },
+  {
+   "id": "v_named_s6fnf6",
+   "color": "#68af64",
+   "n": 53
+  },
+  {
+   "id": "v_named_0iens5",
+   "color": "#68af64",
+   "n": 54
+  },
+  {
+   "id": "v_named_17gfhi",
+   "color": "#68b17e",
+   "n": 55
+  },
+  {
+   "id": "v_url_d6d4351a-7d43-45a3-8cee-2375ec7d0eab",
+   "color": "#68b17e",
+   "n": 56
+  },
+  {
+   "id": "v_url_8b4bb548-1091-46d5-8f50-d3c787873109",
+   "color": "#afa464",
+   "n": 57
+  },
+  {
+   "id": "v_url_815964fd-2dbd-4d54-9d59-c64a18e5087d",
+   "color": "#afa464",
+   "n": 58
+  },
+  {
+   "id": "v_named_uczp96",
+   "color": "#a375b8",
+   "n": 59
+  },
+  {
+   "id": "v_named_yr87jt",
+   "color": "#a375b8",
+   "n": 60
+  },
+  {
+   "id": "v_url_53ed9486-6f9e-4ffb-80b5-b8e4779c7610",
+   "color": "#a375b8",
+   "n": 61
+  },
+  {
+   "id": "v_named_g84kw5",
+   "color": "#9a68b1",
+   "n": 62
+  },
+  {
+   "id": "v_named_vp41sy",
+   "color": "#9a68b1",
+   "n": 63
+  },
+  {
+   "id": "v_named_hujmgs",
+   "color": "#c16158",
+   "n": 64
+  },
+  {
+   "id": "v_named_p0pc1r",
+   "color": "#c16158",
+   "n": 65
+  },
+  {
+   "id": "v_named_ikuj2c",
+   "color": "#aecd9d",
+   "n": 66
+  },
+  {
+   "id": "v_named_t6q4r9",
+   "color": "#aecd9d",
+   "n": 67
+  },
+  {
+   "id": "v_url_f5db2e38-e714-426d-bd48-33cb6817f7e6",
+   "color": "#aecd9d",
+   "n": 68
+  },
+  {
+   "id": "v_named_3fgerm",
+   "color": "#6484af",
+   "n": 69
+  },
+  {
+   "id": "v_url_78700244-acc1-42ea-bcea-226458713029",
+   "color": "#6484af",
+   "n": 70
+  },
+  {
+   "id": "v_url_d5484df0-3c24-432f-ab0e-cb4c0be2b682",
+   "color": "#6484af",
+   "n": 71
+  },
+  {
+   "id": "v_url_fa73e6bc-6760-47e4-9525-74ca54eed6b3",
+   "color": "#6484af",
+   "n": 72
+  },
+  {
+   "id": "v_url_f280a04f-6c12-4ed2-a66c-3a9f1a82316c",
+   "color": "#abb168",
+   "n": 73
+  },
+  {
+   "id": "v_named_m0qk59",
+   "color": "#abb168",
+   "n": 74
+  },
+  {
+   "id": "v_named_48bxfp",
+   "color": "#bb7359",
+   "n": 75
+  },
+  {
+   "id": "v_url_44203ba0-15d9-4686-9297-6fd78d59c17c",
+   "color": "#bb7359",
+   "n": 76
+  },
+  {
+   "id": "v_url_9f6e64c1-a30a-4805-bddc-8eb142f476cf",
+   "color": "#6681b2",
+   "n": 77
+  },
+  {
+   "id": "v_named_q7r9kh",
+   "color": "#64af69",
+   "n": 78
+  },
+  {
+   "id": "v_url_52917713-79f1-4fb0-839d-360a5dec572c",
+   "color": "#64af69",
+   "n": 79
+  },
+  {
+   "id": "v_url_48879f11-b1dc-4964-8c27-8810358c1099",
+   "color": "#73b267",
+   "n": 80
+  },
+  {
+   "id": "v_url_0452de64-8d57-4063-8f11-b340c2bddc1c",
+   "color": "#73b267",
+   "n": 81
+  },
+  {
+   "id": "v_named_n21cdo",
+   "color": "#afa464",
+   "n": 82
+  },
+  {
+   "id": "v_url_b9e6a7c1-a55f-491c-b2b8-9a82c9026bb5",
+   "color": "#d2d098",
+   "n": 83
+  },
+  {
+   "id": "v_named_n3gz6r",
+   "color": "#d2d098",
+   "n": 84
+  },
+  {
+   "id": "v_named_zxyww0",
+   "color": "#d2d098",
+   "n": 85
+  },
+  {
+   "id": "v_named_q5d74s",
+   "color": "#d2d098",
+   "n": 86
+  },
+  {
+   "id": "v_named_9kts6r",
+   "color": "#af8164",
+   "n": 87
+  },
+  {
+   "id": "v_named_fg5tea",
+   "color": "#af8164",
+   "n": 88
+  },
+  {
+   "id": "v_named_p97c6a",
+   "color": "#90b1c6",
+   "n": 89
+  },
+  {
+   "id": "v_named_0jv5ce",
+   "color": "#90b1c6",
+   "n": 90
+  },
+  {
+   "id": "v_named_yj6ipe",
+   "color": "#90b1c6",
+   "n": 91
+  },
+  {
+   "id": "v_named_ttxsiw",
+   "color": "#64af69",
+   "n": 92
+  },
+  {
+   "id": "v_named_e33ou3",
+   "color": "#64af69",
+   "n": 93
+  },
+  {
+   "id": "v_named_mmuecs",
+   "color": "#d5ad6c",
+   "n": 94
+  },
+  {
+   "id": "v_url_fbcba52c-d0f0-4943-914a-5492a6c5b8ad",
+   "color": "#d5ad6c",
+   "n": 95
+  },
+  {
+   "id": "v_named_vla4wj",
+   "color": "#d5ad6c",
+   "n": 96
+  },
+  {
+   "id": "v_named_pz2a11",
+   "color": "#c0aa6d",
+   "n": 97
+  },
+  {
+   "id": "v_named_shzred",
+   "color": "#c0aa6d",
+   "n": 98
+  },
+  {
+   "id": "v_named_9tnh90",
+   "color": "#c0aa6d",
+   "n": 99
+  },
+  {
+   "id": "v_named_gktkon",
+   "color": "#c0aa6d",
+   "n": 100
+  },
+  {
+   "id": "v_named_3muodn",
+   "color": "#c0aa6d",
+   "n": 101
+  },
+  {
+   "id": "v_named_9dv4uc",
+   "color": "#d2c398",
+   "n": 102
+  },
+  {
+   "id": "v_named_1sr3bp",
+   "color": "#d2c398",
+   "n": 103
+  },
+  {
+   "id": "v_url_88d9d8b4-e6c3-4483-96d3-fa4d5be1d732",
+   "color": "#afaf64",
+   "n": 104
+  },
+  {
+   "id": "v_url_8cef0692-22e2-49a8-8380-b152bd30b10a",
+   "color": "#afaf64",
+   "n": 105
+  },
+  {
+   "id": "v_named_5upu37",
+   "color": "#d76a6f",
+   "n": 106
+  },
+  {
+   "id": "v_named_4iqd50",
+   "color": "#d76a6f",
+   "n": 107
+  },
+  {
+   "id": "v_named_sqr0v7",
+   "color": "#d76a6f",
+   "n": 108
+  },
+  {
+   "id": "v_named_ck67ld",
+   "color": "#d76a6f",
+   "n": 109
+  },
+  {
+   "id": "v_named_y58ycj",
+   "color": "#bd5c77",
+   "n": 110
+  },
+  {
+   "id": "v_named_7v41ym",
+   "color": "#bd5c77",
+   "n": 111
+  },
+  {
+   "id": "v_named_zdnyz4",
+   "color": "#83af64",
+   "n": 112
+  },
+  {
+   "id": "v_url_c496117c-5112-481a-8164-9cb648c3fbe9",
+   "color": "#83af64",
+   "n": 113
+  },
+  {
+   "id": "v_url_5410a8bf-bc53-4cc2-be67-6145bd7f3432",
+   "color": "#83af64",
+   "n": 114
+  },
+  {
+   "id": "v_url_2274961e-28b7-4b2a-a00b-3c97ce21e86f",
+   "color": "#83af64",
+   "n": 115
+  },
+  {
+   "id": "v_url_4ce31677-3381-4ead-b410-de432381ebc9",
+   "color": "#83af64",
+   "n": 116
+  },
+  {
+   "id": "v_url_bcac3d04-2d8f-4ad5-9560-3584b1e79e25",
+   "color": "#afaf64",
+   "n": 117
+  },
+  {
+   "id": "v_named_4vfw82",
+   "color": "#afaf64",
+   "n": 118
+  },
+  {
+   "id": "v_url_c055764a-ccec-4e7e-9c08-bb145e1791bd",
+   "color": "#afaf64",
+   "n": 119
+  },
+  {
+   "id": "v_url_fe30f6dc-a329-4cca-810a-6103138203fd",
+   "color": "#8caf64",
+   "n": 120
+  },
+  {
+   "id": "v_url_d7794ff6-2f3d-4434-9430-3537cd932905",
+   "color": "#8caf64",
+   "n": 121
+  },
+  {
+   "id": "v_url_47d3f16b-1444-498c-9077-5e2e4a2e7f94",
+   "color": "#8caf64",
+   "n": 122
+  },
+  {
+   "id": "v_named_3a8ood",
+   "color": "#64af72",
+   "n": 123
+  },
+  {
+   "id": "v_named_ml6lpj",
+   "color": "#64af8d",
+   "n": 124
+  },
+  {
+   "id": "v_named_ebk8vv",
+   "color": "#64af7b",
+   "n": 125
+  },
+  {
+   "id": "v_url_e3667f24-6311-4514-8b53-d3c1908d34ad",
+   "color": "#68af64",
+   "n": 126
+  },
+  {
+   "id": "v_url_3f7af096-45bf-40ba-93aa-993c2056a4c1",
+   "color": "#9dcda6",
+   "n": 127
+  },
+  {
+   "id": "v_url_16a70bf2-605d-4c1c-8713-465976e293b0",
+   "color": "#9dcdac",
+   "n": 128
+  },
+  {
+   "id": "v_url_0a780787-9f21-433a-82c3-0d0be8d072fa",
+   "color": "#8c75b8",
+   "n": 129
+  },
+  {
+   "id": "v_named_eojicb",
+   "color": "#8c75b8",
+   "n": 130
+  },
+  {
+   "id": "v_url_188bfc62-4d5f-4091-b308-d9819fff7129",
+   "color": "#9e7fc2",
+   "n": 131
+  },
+  {
+   "id": "v_named_na99mj",
+   "color": "#9e7fc2",
+   "n": 132
+  },
+  {
+   "id": "v_named_0n40va",
+   "color": "#c8a179",
+   "n": 133
+  },
+  {
+   "id": "v_url_6b59f2bf-2f0d-4158-974e-2e4d6aac712c",
+   "color": "#c8a179",
+   "n": 134
+  },
+  {
+   "id": "v_url_ae189c9c-1016-42b4-a942-17073653569f",
+   "color": "#a9af64",
+   "n": 135
+  }
+ ]
+}
