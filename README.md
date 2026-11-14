@@ -2,7 +2,7 @@
 
 A crop planner that works on a map of the farm. Drag crops onto beds, move plantings, share beds, and keep one list of the assumptions the plan rests on.
 
-This repository holds the app and its checks. It contains no grower's plan, farm photo or farm records: the checks run on a made-up farm (`tests/farm`), and `tests/README.md` says how they are run and how a build is made. The page's Backup menu says which preview is running (0.39 at the time of writing).
+This repository holds the app and its checks. It contains no plan, no farm photo and no farm records: the checks run on a made-up farm (`tests/farm`), and `tests/README.md` says how they are run and how a build is made. The page's Backup menu says which preview is running (0.39 at the time of writing).
 
 ## Using it
 

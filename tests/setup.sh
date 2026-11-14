@@ -7,7 +7,7 @@
 # checks use Chrome at /usr/bin/google-chrome).
 set -e
 . "$(dirname "$0")/env.sh"
-mkdir -p "$W" "$APP/data" "$W/backup" "$W/old" "$SCRATCH" "$S"
+mkdir -p "$W" "$APP/data" "$W/backup" "$SCRATCH" "$S"
 
 # 1. the app folder: the code as it stands in the repository, and the made-up farm as its data
 node "$REPO/tools/app_folder.cjs" "$REPO" "$APP" > /dev/null
@@ -24,13 +24,16 @@ if [ -z "$BASE" ]; then
   elif git -C "$REPO" diff --quiet HEAD -- js; then BASE=HEAD~1                                  # on main itself: the commit before
   else BASE=HEAD; fi                                                                             # scripts changed and not committed yet
 fi
+PAGE="js css index.html sw.js manifest.webmanifest fonts icons"      # everything a browser is served
+rm -rf "$W/old"; mkdir -p "$W/old"
 if git -C "$REPO" rev-parse -q --verify "$BASE^{commit}" > /dev/null 2>&1; then
-  rm -rf "$W/old/js"; git -C "$REPO" archive "$BASE" js | tar -x -C "$W/old"
+  git -C "$REPO" archive "$BASE" $PAGE | tar -x -C "$W/old"
+  git -C "$REPO" rev-parse "$BASE" > "$W/old/BASE"
   echo "build before: $BASE ($(git -C "$REPO" rev-parse --short "$BASE"))"
 else
-  # no history to read (a shallow copy): the build is compared with itself, and the run says so
-  rm -rf "$W/old/js"; cp -r "$REPO/js" "$W/old/js"
-  echo "build before: NOT FOUND ($BASE). Compared with itself: fetch more history to prove that nothing moved."
+  # no history to read (a shallow copy): there is nothing to compare with. what_changed.cjs fails a line that says so.
+  echo none > "$W/old/BASE"
+  echo "build before: NOT FOUND ($BASE). Fetch more history: nothing can be proven about what this build changes."
 fi
 
 # 4. typefaces for the built site, and the parser that compares two scripts

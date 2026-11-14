@@ -125,6 +125,8 @@ with sync_playwright() as pw:
         out.shared = { text: text(head && head.querySelector('b')), sheets: g.trays, sowings: shared.groupLines.length, own: text(how(shared) && how(shared).querySelector('small')), week: shared.week }; }
       return out;""")
     check("the plan has a tower sowing still to do, alone on its sheets or sharing them", wool["lone"] or wool["shared"], wool)
+    check("the plan has a tower sowing alone on its sheets", bool(wool["lone"]), wool)
+    check("the plan has tower sowings that share sheets", bool(wool["shared"]), wool)
     check("a tower sowing says how many rockwool sheets, and that each rides in an open 1020 tray", (wool["lone"] or wool["shared"])
           and (not wool["lone"] or (f"{wool['lone']['sheets']} sheet" in wool["lone"]["text"] and "open 1020 tray" in wool["lone"]["text"]))
           and (not wool["shared"] or (f"{wool['shared']['sowings']} sowings share {wool['shared']['sheets']} sheet" in wool["shared"]["text"] and f"on {wool['shared']['sheets']} open 1020 tray" in wool["shared"]["text"] and wool["shared"]["own"].startswith("sheet "))), wool)

@@ -1,7 +1,7 @@
 [
  {
   "check": "step3a",
-  "line": "nothing in the window is clipped",
+  "line": "“Seeding in trays” fits its “Days counted from” box",
   "fault": "On the Assumptions list, “Seeding in trays” is cut off in its “Days counted from” box: the box is 118 px wide and the words and the arrow need 122. Seen on any row set to it.",
   "found": "2026-11-14, when the checks moved onto the made-up farm"
  }

@@ -201,7 +201,13 @@ with sync_playwright() as pw:
     radish = page.evaluate("""(() => { const eng = LRFApp.state.engine, c = eng.crops().find(x => /^Radish$/.test(x.name)) || eng.crops().find(x => /radish/i.test(x.name)); return c.id; })()""")
     setv('#srCrop', radish)
     year = page.evaluate('LRFApp.planYear()')
-    page.evaluate("""() => { for (const box of document.querySelectorAll('#srGardens input')) { const want = /Front Field/.test(box.parentElement.textContent); if (box.checked !== want) box.click(); } }""")
+    # a garden of the plan that takes the whole series, none left to place: the first of the tool's own choices that does
+    garden = page.evaluate("""cropId => { const eng = LRFApp.state.engine, ids = [...document.querySelectorAll('#srGardens input')].map(box => box.value);
+      return ids.find(id => { const r = LRFSuccession.series(eng, { cropId, gardenIds: [id], place: 'gardens', basis: 'planting', from: LRFApp.planYear() + '-08-01', every: 10, count: 5, unit: 'whole', amount: 1 }); return !r.error && r.plantings.length >= 3 && !r.held.length; }) || null; }""", radish)
+    for _ in range(40):   # one box at a time: each click draws the boxes again
+        if not page.evaluate("""garden => { const box = [...document.querySelectorAll('#srGardens input')].find(b => b.checked !== (b.value === garden)); if (box) box.click(); return !!box; }""", garden): break
+        page.wait_for_timeout(60)
+    check('the plan has a garden that takes a series of radishes from the first of August, and it alone is ticked', bool(garden) and page.evaluate("LRFSeries.state.P.gardenIds") == [garden], garden)
     page.wait_for_timeout(150)
     setv('#srFrom', '%d-08-01' % year); setv('#srEvery', '10'); setv('#srCount', '5'); setv('#srAmount', '1')
     page.wait_for_selector('#srWaves')

@@ -3,13 +3,13 @@
  "counts": {
   "gardens": 17,
   "beds": 125,
-  "plantings": 633,
+  "plantings": 622,
   "varieties": 145,
   "year": 2027
  },
  "mapImage": {
   "src": "data/farm-map.jpg",
-  "sha256": "d20a614940e7b955faf191961dddc064953390e475556a56512487c7471dd95e"
+  "sha256": "93f469ab64ca0686fcb4fb5e370f861c9d34375bd9626e9d6f48a669a35fe412"
  },
  "inventory": "data/inventory.json",
  "thumbs": "data/thumbs.json",
@@ -17,7 +17,7 @@
  "corrections": [
   {
    "rule": "traysOpenMonday",
-   "result": "Corner Bistro · 2027 live trays: opens 2027-05-03, not 2027-05-01; 176 batches -> 170"
+   "result": "Corner Bistro · 2027 live trays: opens 2027-05-03, not 2027-05-01; 156 batches -> 152"
   }
  ],
  "keep": {

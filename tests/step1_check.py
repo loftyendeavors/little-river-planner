@@ -41,7 +41,7 @@ for name in ('index.html', 'js', 'css'):
     (shutil.copytree if os.path.isdir(src) else shutil.copy)(src, os.path.join(bare, name))
 plan_file = os.path.join(backup, 'plan.json')
 plan = json.load(open(plan_file, encoding='utf-8'))
-all_photos = [v for v in plan['varieties'] if v.get('photo')]                                     # 151: every record with a photo, removed varieties too
+all_photos = [v for v in plan['varieties'] if v.get('photo')]                                     # every record with a photo, removed varieties too
 with_photo = [v for v in all_photos if v.get('active', True) and not v.get('deleted')]            # the ones in the library now
 # Where a picture came from, as the app reads a photo record: its sourceUrl, else its url, when that is an https address.
 source = lambda v: next((u for u in (v['photo'].get('sourceUrl'), v['photo'].get('url')) if isinstance(u, str) and re.match(r'https://\S+$', u, re.I)), '') if isinstance(v['photo'], dict) else ''

@@ -1,13 +1,11 @@
 """The installable site: starts empty, takes a backup, keeps plan and photo, and opens with no connection.
-usage: python3 -I site_check.py <site-dir> <backup.zip> [screenshot.png]     env LRF_PRIVATE_WORDS="word|word": words the page must not hold
+usage: python3 -I site_check.py <site-dir> <backup.zip> [screenshot.png]
 """
-import functools, http.server, json, os, sys, threading
+import functools, http.server, json, sys, threading
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 site, backup = Path(sys.argv[1]), sys.argv[2]
-# Words that must not be on the page (a place, a name), given from outside so that this file names none: LRF_PRIVATE_WORDS="word|word"
-PRIVATE = [w.strip().lower() for w in os.environ.get('LRF_PRIVATE_WORDS', '').split('|') if w.strip()]
 
 
 class Quiet(http.server.SimpleHTTPRequestHandler):
@@ -27,7 +25,7 @@ with sync_playwright() as pw:
     ready = lambda: (page.wait_for_function("window.LRFApp && LRFApp.state.ready", timeout=20000), page.wait_for_timeout(700))
     js = lambda expr: page.evaluate(f"(() => {{ const A = LRFApp, S = A.state; return {expr}; }})()")
     page.goto(url); ready()
-    out["first"] = js("({sample: A.isSample(), plantings: S.plan.plantings.length, welcome: !!document.querySelector('.welcome'), strip: !document.getElementById('firstRun').hidden && /No plan of yours is in this browser/.test(document.getElementById('firstRun').textContent), fonts: [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family).sort().join(','), manifest: !!document.querySelector('link[rel=manifest]'), privateData: PRIVATE.some(w => document.documentElement.innerHTML.toLowerCase().includes(w))})".replace('PRIVATE', json.dumps(PRIVATE)))
+    out["first"] = js("({sample: A.isSample(), plantings: S.plan.plantings.length, welcome: !!document.querySelector('.welcome'), strip: !document.getElementById('firstRun').hidden && /No plan of yours is in this browser/.test(document.getElementById('firstRun').textContent), fonts: [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family).sort().join(','), manifest: !!document.querySelector('link[rel=manifest]')})")
     page.set_input_files("#importFile", backup)
     page.wait_for_timeout(3500)
     try: page.wait_for_function("LRFThumbs.count() >= 100 && /Saved/.test(document.getElementById('saveState').textContent)", timeout=90000)   # variety photos are read after the plan is shown

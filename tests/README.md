@@ -1,7 +1,6 @@
 # The checks, and how a build is made
 
-Everything here runs on a made-up farm. No grower's plan, photo or records are in this repository, and none is needed to
-check a build.
+Everything here runs on a made-up farm. No grower's plan is needed to check a build, and none is kept in this folder.
 
 - [What is here](#what-is-here)
 - [Running the checks](#running-the-checks)
@@ -20,7 +19,7 @@ check a build.
 | `run.sh` | Everything, in parts. `sh tests/run.sh` runs them all in order; `sh tests/run.sh node app1` runs two |
 | `quick.sh` | The fast checks: no browser, a minute or two in all. It is the part called `node` |
 | `b.sh` | Browser checks by name: `sh tests/b.sh sowing step2a`, `WIDTH=1480 sh tests/b.sh r1`, `DARK=1 sh tests/b.sh step3a-site` |
-| `verdict.py` | Reads what `run.sh` printed and says whether every line passed |
+| `verdict.py`, `counts.json`, `known-faults.json` | Reads what `run.sh` printed and says whether every line passed, whether each part ran the number of lines written down for it, and which failing lines are faults already written down |
 | `faults.sh` | The deliberate faults: `sh tests/faults.sh list` |
 | `env.sh` | Where everything is. Read by the others; nothing in it is tied to one computer |
 | `this-build.json`, `what_changed.cjs` | What the build in hand changes in the page's scripts, and the check that holds it to that |
@@ -41,7 +40,7 @@ the checks use the Chrome at `/usr/bin/google-chrome`).
 sh tests/setup.sh                  # once, and again after anything in the repository changes
 sh tests/run.sh node               # the fast checks
 sh tests/run.sh app1 | tee log     # one part of the browser checks
-python3 -I tests/verdict.py log    # exit 0: every line passed
+python3 -I tests/verdict.py log app1    # exit 0: every line passed, and the part ran as many lines as counts.json says
 ```
 
 - The work folder is `/tmp/lrf-work` unless `LRF_WORK` says otherwise. It can be thrown away.
@@ -54,17 +53,23 @@ python3 -I tests/verdict.py log    # exit 0: every line passed
 - The parts: `node`, `build` (builds the site into the repository and fails if that changes a file: the site kept here must be
   what the code builds to), `app1` to `app4` and `new` (the app folder), `off` (the offline file), `site1` to `site10` (the
   built site, the other window widths, a computer set to dark).
-- On a small computer the whole run is about an hour, and a check that measures timing can stumble while something else is
-  running. Run it again alone before believing it. On GitHub the parts run side by side.
+- On a small computer the whole run takes an hour or more, and a check that measures timing can stumble while something else
+  is running. Run it again alone before believing it. On GitHub the parts run side by side.
+- **`counts.json` holds the number of lines each part runs.** A part that runs another number fails. That is how a check that
+  stopped early, or a block of lines skipped because the plan had no subject for it, is seen. A build that adds or removes
+  lines writes the new counts (the verdict of each part says the number it ran).
+- **`known-faults.json` holds faults of the planner that a check has found and that are not yet mended**, each with the one
+  line that fails for it, by its exact name. Such a line does not fail the run. The day it passes, the run fails until the
+  entry is taken out.
 
 ## On GitHub
 
-`.github/workflows/checks.yml` runs every part on every push, on every branch, side by side: about twelve minutes. The result
-named **All checks** is the one to require before a merge. The pictures a failed part took are kept with the run for a week.
+`.github/workflows/checks.yml` runs every part on every push, side by side: about eight minutes. The result named
+**All checks** is the one a merge waits for. The pictures a failed part took are kept with the run for a week.
 
 `.github/workflows/faults.yml` runs the deliberate faults, in some eighty pieces side by side. It is not run on every push:
-it is started by hand from the Actions page, or, for a build not yet merged, by pushing its commit to a branch named
-`faults/<anything>`. It is for the build that changes a check or the part of the planner a check covers.
+it is started by hand from the Actions page ("Faults", "Run workflow", and the branch to run it on). It is for the build that
+changes a check or the part of the planner a check covers.
 
 ## The made-up farm
 
@@ -97,11 +102,14 @@ A change to the farm changes what every check sees. Run them all after it.
    farm with this build's scripts and with the scripts of the build before, and compare: every date, the ground it holds,
    its yield, the forecast day for day. `setup.sh` takes the build before from git: where the branch left `main`, or on
    `main` itself the commit before.
-2. **The scripts.** `this-build.json` names the scripts a build changes: under `words` those in which only the text inside
-   strings differs, under `code` those whose program differs, and `added` and `removed`. `what_changed.cjs` holds the build
-   to it: a script named nowhere must be the build before's file byte for byte, and a script under `words` must be the same
-   program once its strings are set aside (both are parsed and compared). So a build that says it changes only words is
-   shown to, and a reviewer reads one short file to see what a build touches. **Empty the lists when a build has merged.**
+2. **The files.** `this-build.json` names what a build changes in what a browser is served: under `words` the scripts in
+   which only the text inside strings differs, under `code` those whose program differs, `added` and `removed`, and under
+   `page` any other served file (`index.html`, `sw.js`, the style sheet, a typeface, an icon). `what_changed.cjs` holds
+   the build to it: a file named nowhere must be the build before's byte for byte, and a script under `words` must be the
+   same program once its strings are set aside (both are parsed and compared). `base` is the commit the build was cut
+   from, and must be the build the run compares with, so a file left over from another build cannot speak for this one.
+   A reviewer reads one short file to see what a build touches. A script under `words` can still change any text,
+   a date written as text among them: the figures in 1 are what answer for those.
 
 A build that is meant to change a figure says which, shows it on the page before anything moves, and has a check of its
 own that the figure changes there and nowhere else.
@@ -130,6 +138,7 @@ piece of the planner runs the faults of the checks that cover it before it asks 
 2. **The code** is edited where it is served from: `js/`, `css/app.css`. `index.html`, `sw.js`, `fonts/` and the manifest are
    written by `tools/build_site.cjs` from the app folder, so after any change:
    ```
+   export LRF_WORK=/tmp/lrf-work
    sh tests/setup.sh                                                                  # the app folder, from the repository
    node tools/build_site.cjs $LRF_WORK/app $LRF_WORK/scratch/node_modules/@fontsource-variable . "0.40"
    ```
@@ -137,14 +146,16 @@ piece of the planner runs the faults of the checks that cover it before it asks 
    ("Preview 0.40 ·"); the checks read it from there. **Read the next free label from `main` at the moment of the merge.**
    A new script is added to the app folder's `index.html` in load order (`tools/app_folder.cjs` and `tools/README.md` say
    how the two pages relate). `README.md` is kept by hand.
-3. **Say what the build changes** in `tests/this-build.json`.
+3. **Say what the build changes** in `tests/this-build.json`, with the commit of `main` it was cut from as its `base`.
 4. **Checks.** Add the build's own; a new screen gets a line in `cleanup_check.py`, which reads every screen for words that
-   do not belong on it. Push: GitHub runs everything. Run the deliberate faults for what was touched.
+   do not belong on it. Push: GitHub runs everything. Write the new counts into `counts.json`. Run the deliberate faults for
+   what was touched.
 5. **Nothing private.** No plan, photo, garden or variety name, address, email or service address goes into this
    repository. Search the lines the build adds before asking for a merge.
-6. **Take `main` in** before the merge if it has moved, and let the checks run again on the two together.
-7. **Merge**, then confirm that the Pages run for the merge succeeded. A push to `main` is a release: the site is served
-   from it.
+6. **Take `main` in** before the merge if it has moved, set `base` to the new `main`, and let the checks run again on the two
+   together.
+7. **Merge** as one commit (squash) or as a merge commit, never by rebase: on `main` the build before is the commit before.
+   Then confirm that the Pages run for the merge succeeded. A push to `main` is a release: the site is served from it.
 
 ## Writing a check
 
@@ -152,7 +163,8 @@ What has gone wrong before, so that it does not again.
 
 - **A check finds its subject on the plan it is given** and names nothing from any plan: not a date, a bed, a crop's place
   in a list. Where it needs a week with a shared batch, it looks for one (see `WEEK0` in `sowing_view_check.py`).
-- **A check that finds no subject fails a named line.** It never skips in silence.
+- **A check that finds no subject fails a named line.** The older checks do not all do this yet: some skip a block of lines
+  when the plan has no subject for it. `counts.json` is what shows it meanwhile, as a part that ran fewer lines.
 - **A fault should fail a named line, not stop the check.** In a Node check, register the report on `process.on('exit')`
   first and set a flag on the last line. In a page check, test that a thing is there before acting on it.
 - **A bound loose enough to pass the fault it is there for is no check.** After writing a check, put the fault in.

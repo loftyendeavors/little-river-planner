@@ -62,7 +62,10 @@ CLIPPED = """(() => { const bad = [];
   for (const el of document.querySelectorAll('#asBody .as-nc, #asBody .as-startbox, #asBody .as-start select, #asBody .as-less, #asBody .as-less input, #asBody .as-cell input, #asBody .as-seed b')) { if (!el.getClientRects().length) continue; const td = el.closest('td').getBoundingClientRect(), r = el.getBoundingClientRect();
     if (r.right > td.right + 0.6 || r.left < td.left - 0.6) bad.push(['spills', (el.textContent || el.value || el.className).slice(0, 40), Math.round(r.right), Math.round(td.right)]); }
   const view = document.getElementById('assumeView'), table = document.querySelector('table.as'), wrap = document.querySelector('.view-assume .as-wrap');
-  return { bad: bad.slice(0, 6), count: bad.length, sideways: view.scrollWidth > view.clientWidth + 1, tableWider: table.getBoundingClientRect().right > wrap.getBoundingClientRect().right - parseFloat(getComputedStyle(wrap).paddingRight) + 1 }; })()"""
+  // one fault is known and written down (tests/known-faults.json): “Seeding in trays” is wider than its “Days counted from” box. It is
+  // counted apart, under `trays`, so that the line it fails is its own and nothing else clipped can hide behind it.
+  const trays = bad.filter(b => b[0] === 'select' && b[1] === 'Seeding in trays').length, rest = bad.filter(b => !(b[0] === 'select' && b[1] === 'Seeding in trays'));
+  return { bad: rest.slice(0, 6), count: rest.length, trays, sideways: view.scrollWidth > view.clientWidth + 1, tableWider: table.getBoundingClientRect().right > wrap.getBoundingClientRect().right - parseFloat(getComputedStyle(wrap).paddingRight) + 1 }; })()"""
 
 with sync_playwright() as pw:
     browser = pw.chromium.launch(executable_path='/usr/bin/google-chrome', args=['--no-sandbox'])
@@ -134,7 +137,7 @@ with sync_playwright() as pw:
       if (chip && !changes) out.idle.push(c.name); if (!chip && changes) out.missing.push(c.name); } return out; })()""")
     check('and only where taking it would change how the crop is counted', not wanted['idle'] and not wanted['missing'], wanted)
     fit = ev(CLIPPED)
-    check('nothing in the list is clipped, and it does not scroll sideways at %d' % WIDTH, fit['count'] == 0 and not fit['sideways'] and not fit['tableWider'], fit)
+    check('nothing in the list is clipped, and it does not scroll sideways at %d' % WIDTH, fit['count'] == 0 and fit['trays'] == 0 and not fit['sideways'] and not fit['tableWider'], fit)
     shot('list')
 
     subj = ev(SUBJECT)
@@ -154,7 +157,7 @@ with sync_playwright() as pw:
         d = ev("({ days: %s, less: (() => { const el = document.querySelector('%s'); return el ? { value: el.value, placeholder: el.placeholder } : null; })() })" % (days, less.replace("'", "\\'")))
         check('set to Direct seeding: 14 days come off, and the 14 is there to change', d['days'] == subj['printed'] - 14 and d['less'] == {'value': '', 'placeholder': '14'}, d)
         fit_direct = ev(CLIPPED)
-        check('with the days-less box showing, nothing is clipped or spills into the next column', fit_direct['count'] == 0 and not fit_direct['sideways'], fit_direct)
+        check('with the days-less box showing, nothing is clipped or spills into the next column', fit_direct['count'] == 0 and fit_direct['trays'] == 0 and not fit_direct['sideways'], fit_direct)
         shot('direct')
         page.fill(less, '10'); page.press(less, 'Tab'); settle()
         if asking(): answer(True)
@@ -249,6 +252,7 @@ with sync_playwright() as pw:
         check('every row it would let go says no date moves', all('no date moves' in d['effect'] for d, s in zip(dlg['rows'], study['rows']) if s['choice'] != 'keep' and s['kind'] in ('days', 'weeks')) and all('nothing changes' in d['effect'] for d, s in zip(dlg['rows'], study['rows']) if s['choice'] != 'keep' and s['kind'] in ('yield', 'window', 'turn', 'copy')) and all(d['effect'] == 'stays as it is' for d, s in zip(dlg['rows'], study['rows']) if s['choice'] == 'keep'), [d['effect'] for d in dlg['rows']][:6])
         fit = ev(CLIPPED)
         check('nothing in the window is clipped', fit['count'] == 0, fit)
+        check('“Seeding in trays” fits its “Days counted from” box', fit['trays'] == 0, fit)
         shot('review')
         mover = next((s for s in study['rows'] if s['kind'] == 'days' and s['take']), None)
         if mover:

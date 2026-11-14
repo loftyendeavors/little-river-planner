@@ -21,6 +21,8 @@ jobs:
         part: [node, build, app1, app2, app3, app4, new, "off", site1, site2, site3, site4, site5, site6, site7, site8, site9, site10]
     env:
       LRF_WORK: ${{ github.workspace }}/../lrf-work
+      # on main the build before is what main was before this push; on a branch setup.sh finds where the branch left main
+      LRF_BASE: ${{ github.ref == 'refs/heads/main' && github.event.before || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,7 +42,7 @@ jobs:
       - name: Run
         run: sh tests/run.sh ${{ matrix.part }} 2>&1 | tee part.log
       - name: Verdict
-        run: python3 -I tests/verdict.py part.log
+        run: python3 -I tests/verdict.py part.log ${{ matrix.part }}
       - name: Keep the pictures of a part that failed
         if: failure()
         uses: actions/upload-artifact@v4

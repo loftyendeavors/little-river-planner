@@ -36,7 +36,7 @@ script() {
     ask) SCRIPT=$T/mutate_ask.py; ARGS="$APP $F $T" ;;
     cleanup) SCRIPT=$T/mutate_cleanup.py; ARGS="$APP $F $T" ;;
     map) SCRIPT=$REPO/tools/mutate_map.py; ARGS="$APP $F $REPO/tools" ;;
-    changed) SCRIPT=$T/mutate_changed.py; ARGS="$REPO/js $F $T $OLD $SCRATCH" ;;
+    changed) SCRIPT=$T/mutate_changed.py; ARGS="$REPO $F $T $W/old $SCRATCH" ;;
     *) return 1 ;;
   esac
 }
