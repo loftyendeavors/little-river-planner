@@ -63,7 +63,8 @@ python3 -I tests/verdict.py /tmp/part.log app1    # exit 0: every line passed, a
   numbers for the checks it changed and no others: `python3 -I tests/verdict.py <log> <part> /tmp/ran/ran-<part>.json`, then
   `python3 -I tests/counts.py /tmp/ran write`. On GitHub the last job prints the whole file as the run would have it.
 - A check's name there is the one it is run by: for a browser check the name given to `b.sh`, with ` @1480` for another width
-  and ` dark` for a computer set to dark; for a fast check the name `quick.sh` gives it with `named`.
+  and ` dark` for a computer set to dark; for a fast check, and for the two of the `build` part, the name it is given with
+  `named` in `quick.sh` and `run.sh`.
 - **`known-faults.json` holds faults of the planner that a check has found and that are not yet mended**, each with the one
   line that fails for it, by its exact name. Such a line does not fail the run. The day it passes, the run fails until the
   entry is taken out.
@@ -106,7 +107,7 @@ A change to the farm changes what every check sees. Run them all after it.
 
 ## What a build changed
 
-"This build moves no date, yield, price, seed count or bench figure by itself" is proven in two ways.
+"This build moves no date, yield, price, seed count or bench figure by itself" is proven in two ways, and a third says whether it changed how a screen looks.
 
 1. **The figures.** `step3a_test`, `step3b_test`, `step5a_test`, `step5b_test` and `stepF_test` work out every planting of the
    farm with this build's scripts and with the scripts of the build before, and compare: every date, the ground it holds,
@@ -117,7 +118,7 @@ A change to the farm changes what every check sees. Run them all after it.
    comment, differs, under `code` those whose program differs, `added` and `removed`, and under `page` any other served file
    (`index.html`, `sw.js`, `css/app.css`, a typeface, an icon). `what_changed.cjs` holds the build to it: a file named nowhere
    must be the build before's byte for byte, and a script under `words` must be the same program once its strings are set
-   aside (both are parsed and compared). **Which file is this build's is written nowhere: it is the one the build before does
+   aside (both are parsed and compared; one line answers for all of them, so the check runs as many lines for every build). **Which file is this build's is written nowhere: it is the one the build before does
    not have.** So a file another build left cannot speak for this one, no build writes a file another build writes, and
    the files of earlier builds stay as a record (the check fails if one is changed). A reviewer reads one short file to see
    what a build touches. A script under `words` can still change any text, a date written as text among them: the figures
@@ -126,11 +127,12 @@ A change to the farm changes what every check sees. Run them all after it.
    Nursery's four tabs, Seeds, the Assumptions list's two halves) on the built site and on the build before, with the same
    farm on the same pretended day, at 1707 and 3440 wide, and Tasks at a phone's 390. A screen that looks different fails,
    unless the build's file names it under `screens` (`"screens": ["map", "tasks"]`; the names are in the check): then it has
-   to look different at one width at least. This build is photographed twice, and a screen whose two takes differ fails,
-   since a picture that does not hold still proves nothing. It sees the first screenful of each screen as it opens: not a
-   panel, a menu or a window, not what a click or a drag brings up, not a change of fewer than nine pixels or of a colour by
-   less than 5 levels in 255 (that much comes and goes between two takes of one build), and not whether a change is for the
-   better.
+   to look different at one width at least. Each build is photographed twice: the few pixels that differ between two takes
+   of one build (the edge of a rounded corner, the end of a curve) are set aside with the pixels round them, and a screen
+   where a great deal differs between two takes fails as not holding still. It sees the first screenful of each screen as
+   it opens: not a panel, a menu or a window, not what a click or a drag brings up, not a change of fewer than nine pixels
+   or of a colour by less than 5 levels in 255, and not whether a change is for the better. It is new: if it fails where
+   nothing changed, that is a fault of the check, to be mended there and not worked round.
 
 A build that is meant to change a figure says which, shows it on the page before anything moves, and has a check of its
 own that the figure changes there and nowhere else.
@@ -140,12 +142,16 @@ The same proof can be run on a real plan, on the computer that holds it: `node t
 
 ## Two builds side by side
 
-Two builds made at once on two branches collide only where they change the same thing. What each writes of its own:
+Two builds made at once on two branches collide where they change the same thing, and in the few places listed here.
+What each writes of its own:
 
 - its file under `tests/builds/`, which no other build writes;
-- in `tests/counts.json`, the lines of the checks it changed. Two builds that change the same check both write that line:
-  whichever merges second takes `main` in, runs the checks, and writes the number the two give together;
-- its faults and checks.
+- in `tests/counts.json`, the lines of the checks it changed. The file is laid out so that git puts two builds' lines
+  together by itself (one check a line, a line left empty between two). It cannot where both change the same check, or each
+  adds a check whose name falls in the same gap, or one of them touches the last check of a part: then whichever merges
+  second takes `main` in, runs the checks, and writes those lines from the run of the two together (`tests/counts.py`);
+- its faults and checks. A list that every build adds a word to (`SETS` in `faults.sh`, a part's line in `run.sh`) is one
+  line, so two builds that each add a check to the same part settle that line by hand, keeping both.
 
 What every build writes, so that the second to merge has to do again after taking `main` in:
 
@@ -159,8 +165,8 @@ Then let the checks run again on the two together: the merge waits for them.
 ## Deliberate faults
 
 A check that cannot fail proves nothing. Each `mutate*.py` puts one fault at a time into a copy of the app (a rule dropped,
-a word changed back, a figure off by one) and requires that the check then fails where it passed before. Four sets (`changed`,
-`cleanup`, `map`, `screens`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
+a word changed back, a figure off by one) and requires that the check then fails where it passed before. Five sets (`changed`,
+`cleanup`, `look`, `map`, `screens`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
 
 ```
 sh tests/faults.sh list             # every set, its modes, how many faults
@@ -191,8 +197,9 @@ piece of the planner runs the faults of the checks that cover it before it asks 
    files, and the screens that will look different ("What a build changed"). Leave the files already there alone.
 4. **Checks.** Add the build's own; a new screen gets a line in `cleanup_check.py`, which reads every screen for words that
    do not belong on it, and an entry in `screens_check.py`. Push: GitHub runs everything. Write the new numbers of the
-   checks the build changed into `counts.json` (the run's "counts" has them). Look at the run's "screens": every picture
-   there is a screen the build changed. Run the deliberate faults for what was touched.
+   checks the build changed into `counts.json` (the run's "counts" has them). Look at the run's "screens": a picture named
+   before, now or side-by-side is a screen the build changed (a picture named take is a screen that did not hold still).
+   Run the deliberate faults for what was touched.
 5. **Nothing private.** No plan, photo, garden or variety name, address, email or service address goes into this
    repository. Search the lines the build adds before asking for a merge.
 6. **Take `main` in** before the merge if it has moved ("Two builds side by side" says what to do again), and let the checks

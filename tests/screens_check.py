@@ -54,7 +54,7 @@ for f in sorted((repo / "tests" / "builds").glob("*.json")):
 VIEW = "document.body.dataset.view"
 MODE = "(document.querySelector('.view-assume') || { dataset: {} }).dataset.mode"
 SCREENS = [
-    ("map", "A.setView('map'); A.select(null);", f"{VIEW} === 'map'"),
+    ("map", "A.setView('map'); A.select(null);", f"{VIEW} === 'map'", "LRFMap.fit();"),   # fitted to its frame once everything round it has settled: fitted earlier, it can sit a fraction of a pixel off
     ("timeline", "A.setView('timeline');", f"{VIEW} === 'timeline'"),
     ("forecast", "A.setView('harvest');", f"{VIEW} === 'harvest'"),
     ("tasks", "A.setView('sow');", f"{VIEW} === 'sow'"),
@@ -86,9 +86,10 @@ def take(pw_browser, url, width, height, wanted):
             if page.locator("dialog[open] .btn.primary").count(): page.locator("dialog[open] .btn.primary").click()
             page.wait_for_function("LRFApp.state.plan.plantings.length > 600 && !LRFApp.isSample()", timeout=60000); page.wait_for_timeout(6000)
         page.add_style_tag(content=STILL)
+        page.evaluate("async () => { await Promise.all([...document.fonts].map(f => f.load().catch(() => null))); await document.fonts.ready; }")
     except Exception as e:
         errors.append(f"{url} at {width}: the page did not open: {str(e)[:200]}"); ctx.close(); return out
-    for name, how, shown in SCREENS:
+    for name, how, shown, *settle in SCREENS:
         if name not in wanted: continue
         try:   # one screen that fails to open does not take the others with it
             page.evaluate("(() => { const A = LRFApp; " + how + " })()")
@@ -96,13 +97,16 @@ def take(pw_browser, url, width, height, wanted):
             if not page.evaluate("(() => " + shown + ")()"): errors.append(f"{name} at {width}: another screen is on show"); continue
             # pictures and typefaces in, toasts gone, nothing left to draw
             page.evaluate("""async () => {
+                // every typeface the page declares, not only those in use so far: a label drawn a moment ago can still be waiting for its own
+                await Promise.all([...document.fonts].map(f => f.load().catch(() => null)));
                 await document.fonts.ready;
                 await Promise.all([...document.images].filter(i => !i.complete).map(i => new Promise(r => { i.onload = i.onerror = r; setTimeout(r, 4000); })));
                 for (const t of document.querySelectorAll('.toast, .toasts > *')) t.remove();
                 if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
                 await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
             }""")
-            page.mouse.move(0, 0)
+            if settle: page.evaluate("(() => { " + settle[0] + " })()"); page.wait_for_timeout(500)
+            page.mouse.move(0, 0); page.wait_for_timeout(100)
             out[name] = page.screenshot(full_page=False, animations="disabled", caret="hide")
         except Exception as e:
             errors.append(f"{name} at {width}: {str(e)[:200]}")

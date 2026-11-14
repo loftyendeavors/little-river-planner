@@ -21,9 +21,9 @@
 
   "step1, compact": 35,
 
-  "step3a, backup": 75,
+  "step3a, backup": 76,
 
-  "step3a, compact": 75,
+  "step3a, compact": 76,
 
   "step3b, backup": 98,
 
@@ -53,7 +53,7 @@
 
   "waiting, compact": 54,
 
-  "what the build changed": 18
+  "what the build changed": 9
 
  },
  "build": {
