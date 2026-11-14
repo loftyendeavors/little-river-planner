@@ -389,9 +389,10 @@ def run(page, width):
     js("LRFMapEdit.pick(['%s'])" % last); page.wait_for_timeout(60)
     page.click('#leAdd'); page.wait_for_timeout(150)
     added = js("""(() => { const P = LRFApp.state.plan, id = LRFMapEdit.picked()[0], nb = P.beds.find(b => b.id === id), G = LRFMapGeo, s = id && LRFMap.shapeOf(id), prev = LRFMap.shapeOf('%s'), before = LRFMap.shapeOf('%s');
-      return { n: P.beds.length, toast: T.toast(), step: s ? [s.x - prev.x, s.y - prev.y] : null, pitch: [prev.x - before.x, prev.y - before.y], l: nb && nb.l, name: nb && nb.bed }; })()""" % (last, ids[-2]))
+      const want = { ...prev, x: prev.x + prev.x - before.x, y: prev.y + prev.y - before.y }, free = !LRFMap.spaces().some(i => i !== id && i !== '%s' && G.overlaps(want, LRFMap.shapeOf(i)));   // is the place one step on open ground?
+      return { n: P.beds.length, toast: T.toast(), step: s ? [s.x - prev.x, s.y - prev.y] : null, pitch: [prev.x - before.x, prev.y - before.y], l: nb && nb.l, name: nb && nb.bed, free }; })()""" % (last, ids[-2], last))
     if added['n'] == n_beds0:
-        check(tag + '“Add the next one” adds a bed past the end of the row (here there was no room, and it said so)', 'No room' in added['toast'], added)
+        check(tag + '“Add the next one” adds a bed past the end of the row (here there was no room, and it said so)', 'No room' in added['toast'] and not added['free'], added)   # "no room" is right only where the place one step on is taken
     else:
         check(tag + '“Add the next one” sets a bed one step past the end of the row: the step the row keeps, the same size, the next number',
               abs(added['step'][0] - added['pitch'][0]) < 0.02 and abs(added['step'][1] - added['pitch'][1]) < 0.02 and added['l'] == row['l'] and int(added['name']) == len(ids) + 1 or int(added['name']) > 0 and abs(added['step'][0] - added['pitch'][0]) < 0.02, added)
