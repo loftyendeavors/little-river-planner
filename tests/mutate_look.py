@@ -1,12 +1,12 @@
 """Deliberate faults for preview 0.40 (the look and controls, stage A: the map's look): each puts one fault into a copy of the
 app folder, and a named line of look_a_test.cjs (node) or look_a_check.py (page) must fail.
-usage: python3 -I mutate_look.py <app-dir> <scratch-dir> <tests-dir> <plan.json> <dir of the build before's js> <dir holding node_modules/acorn> [node | page | list] [words…]
+usage: python3 -I mutate_look.py <app-dir> <scratch-dir> <tests-dir> <plan.json> [node | page | list] [words…]
 env: FROM=, TO= to run a part. node: seconds a fault. page: about a minute a fault. list: how many faults there are, and nothing else.
 """
 import json, os, shutil, signal, subprocess, sys, time
 from pathlib import Path
-app, scratch, tests, plan, old, mods = [Path(x) for x in sys.argv[1:7]]
-mode = sys.argv[7] if len(sys.argv) > 7 else 'node'; pick = [w.lower() for w in sys.argv[8:]]
+app, scratch, tests, plan = [Path(x) for x in sys.argv[1:5]]
+mode = sys.argv[5] if len(sys.argv) > 5 else 'node'; pick = [w.lower() for w in sys.argv[6:]]
 def alone(cmd, timeout, env=None, cwd=None):
     """Runs one check in a process group of its own. When it is done or out of time, that group is stopped, and so is whatever it
     started and left behind (known by a mark put in its environment): its own browsers and services, and nobody else's."""
@@ -28,8 +28,6 @@ def alone(cmd, timeout, env=None, cwd=None):
 
 # (what goes wrong, file, now, with the fault in, a word of the line that must fail)
 NODE = [
-  ("a figure of the engine is changed outside the colour", 'js/engine.js', "const isPerennial = c => !!c && (", "const isPerennial = c => !c && (", 'engine.js: with cropColor'),
-  ("a figure of the library is changed", 'js/library.js', '"germ": 85,', '"germ": 86,', 'library.js: with the colour groups'),
   ("two groups are nearly one colour", 'js/library.js', '{"id": "herbs", "name": "Herbs", "color": "#32459b"}', '{"id": "herbs", "name": "Herbs", "color": "#7046b0"}', 'plainly different'),
   ("a group is told from the others by ordinary sight only", 'js/library.js', '{"id": "brassicas", "name": "Brassicas", "color": "#2a8a57"}', '{"id": "brassicas", "name": "Brassicas", "color": "#966340"}', 'colour-blind'),
   ("a bed being picked is hardly deeper", 'js/map.js', "const PICK = 0.3,", "const PICK = 0.08,", 'can be told from one growing'),
@@ -90,7 +88,7 @@ def result(out):
     try: return json.loads(out[i:]) if i >= 0 else {'failed': ['NO RESULT'], 'of': 0}
     except Exception: return {'failed': ['NO RESULT'], 'of': 0}
 def run(dst):
-    if mode == 'node': return result(alone(['node', str(tests / 'look_a_test.cjs'), str(dst), str(plan), str(old), str(mods)], 120)[0])
+    if mode == 'node': return result(alone(['node', str(tests / 'look_a_test.cjs'), str(dst), str(plan)], 120)[0])
     return result(alone([sys.executable, '-I', str(tests / 'look_a_check.py'), str(dst), str(scratch / 'fault-shots')], 420)[0])
 def unfaulted(names, ran):
     """What the check does with no fault in it, which is looked at first. A line that fails then can catch nothing, and a check that gives no result can catch nothing at all."""

@@ -35,7 +35,7 @@ script() {
     season) SCRIPT=$T/mutate_season.py; ARGS="$APP $F $T $REPO" ;;
     ask) SCRIPT=$T/mutate_ask.py; ARGS="$APP $F $T" ;;
     cleanup) SCRIPT=$T/mutate_cleanup.py; ARGS="$APP $F $T" ;;
-    look) SCRIPT=$T/mutate_look.py; ARGS="$APP $F $T $PLAN $OLD $SCRATCH" ;;
+    look) SCRIPT=$T/mutate_look.py; ARGS="$APP $F $T $PLAN" ;;
     map) SCRIPT=$REPO/tools/mutate_map.py; ARGS="$APP $F $REPO/tools" ;;
     changed) SCRIPT=$T/mutate_changed.py; ARGS="$REPO $F $T $W/old $SCRATCH" ;;
     *) return 1 ;;

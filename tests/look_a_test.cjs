@@ -1,11 +1,14 @@
-// The map's look (preview 0.40): a crop takes the colour of its group. What can be proven without a browser:
-//   - the engine and the library are the build before's programs except where the build says (cropColor, colorGroup; the
-//     library's colorGroups), so nothing that works out a date, a count, a yield or a price was touched;
+// The map's look (preview 0.40): a crop takes the colour of its group. What can be proven without a browser, and stays true
+// of every build after it:
 //   - the colours can be told apart, by ordinary sight and by red-green colour-blind sight, growing and being picked;
 //   - every crop of the farm falls in a group, by the rule the build states.
-// node look_a_test.cjs <app-dir> <plan.json: a backup's or the shipped compact one> <dir of the build before's js> <dir holding node_modules/acorn>
+// (That the build touched nothing in engine.js and library.js but cropColor, colorGroup and the colour groups was proven
+// once, on the build itself, by comparing the two programs with those set aside. That proof belongs to one build and would
+// fail the next one that changes the engine, so it is not kept here; that no figure moves is proven on every build by the
+// checks that are given the build before's scripts: tests/quick.sh.)
+// node look_a_test.cjs <app-dir> <plan.json: a backup's or the shipped compact one>
 const path = require('path'), fs = require('fs');
-const [APP, PLAN, OLD, MODS] = process.argv.slice(2);
+const [APP, PLAN] = process.argv.slice(2);
 const results = [], fail = [];
 let finished = false, stopped = '';
 process.on('uncaughtException', e => { stopped = String(e && e.stack || e).split('\n').slice(0, 3).join(' | '); process.exit(1); });
@@ -20,29 +23,7 @@ const raw = JSON.parse(fs.readFileSync(PLAN, 'utf8')), core = raw.format ? IO.un
 const clone = x => JSON.parse(JSON.stringify(x));
 const eng = E.create(core, Lib);
 
-// ── 1. what the build changed in the two scripts that hold figures ──
-{
-  let acorn = null;
-  try { acorn = require(path.join(MODS, 'node_modules/acorn')); } catch (error) { check('the parser is there (npm i acorn in the scratch folder)', false, String(error.message)); }
-  // a script as its program, with the named functions, and the named entries of any list of properties, set aside
-  const shape = (text, functions, keys) => {
-    const tree = acorn.parse(text, { ecmaVersion: 'latest', sourceType: 'script' });
-    const keyOf = p => p && p.type === 'Property' && p.key ? (p.key.name !== undefined ? p.key.name : p.key.value) : null;
-    const prune = node => {
-      if (Array.isArray(node)) { for (let i = node.length - 1; i >= 0; i--) { const n = node[i]; if (n && n.type === 'FunctionDeclaration' && functions.includes(n.id.name)) node.splice(i, 1); else if (keys.includes(keyOf(n))) node.splice(i, 1); else prune(n); } return; }
-      if (node && typeof node === 'object') for (const k of Object.keys(node)) prune(node[k]);
-    };
-    prune(tree);
-    return JSON.stringify(tree, (key, value) => (key === 'start' || key === 'end' ? undefined : value));
-  };
-  const same = (file, functions, keys) => { try { return !!acorn && shape(fs.readFileSync(path.join(APP, 'js', file), 'utf8'), functions, keys) === shape(fs.readFileSync(path.join(OLD, file), 'utf8'), functions, keys); } catch (error) { return String(error.message); } };
-  check('engine.js: with cropColor and colorGroup set aside, it is the build before’s program, to the letter', same('engine.js', ['cropColor', 'colorGroup'], ['colorGroup']) === true, same('engine.js', ['cropColor', 'colorGroup'], ['colorGroup']));
-  check('library.js: with the colour groups set aside, it is the build before’s program, to the letter', same('library.js', [], ['colorGroups']) === true, same('library.js', [], ['colorGroups']));
-  // and the comparison can fail: with nothing set aside the two engines differ
-  check('the comparison is not blind: with nothing set aside the two engines are told apart', same('engine.js', [], []) !== true);
-}
-
-// ── 2. the colours ──
+// ── 1. the colours ──
 const look = Lib.colorGroups || {}, groups = look.groups || [];
 const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
 const lin = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
@@ -76,7 +57,7 @@ const deeper = (c, k) => c.map(v => Math.round(v * (1 - k)));
   check('every group stands off an empty bed and off its garden’s plate (25 apart or more)', ground && ground.d >= 25, ground);
 }
 
-// ── 3. which group a crop falls in ──
+// ── 2. which group a crop falls in ──
 {
   const crops = eng.crops(), by = id => groups.find(g => g.id === id);
   const forecast = new Map(F.build(eng).rows.map(r => [r.cropId, r.group]));
