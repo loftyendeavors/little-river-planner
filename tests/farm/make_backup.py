@@ -24,6 +24,10 @@ for v in plan['varieties']:
     data = base64.b64decode(b64)
     sha = hashlib.sha256(data).hexdigest()
     v['photo'] = {**(v.get('photo') if isinstance(v.get('photo'), dict) else {}), 'sha256': sha, 'mime': head[5:].split(';')[0], 'name': v['id'] + '.jpg', 'size': len(data)}
+    # where the picture came from: an address at the supplier's, for a variety that has a supplier's page (one entered by hand has
+    # none). step1_check.py needs these at two suppliers or more: one hands its pictures to the page, the rest refuse.
+    if v.get('url') and not v['photo'].get('sourceUrl'):
+        v['photo']['sourceUrl'] = v['url'].replace('/products/', '/images/') + '.jpg'
     files[sha] = data
 text = json.dumps(plan)
 backup.mkdir(parents=True, exist_ok=True)

@@ -15,8 +15,8 @@
 // There are more than 600 plantings: the page checks take that as the sign that a whole plan is open.
 // A check that needs something the farm lacks adds it here, not in a private file.
 const path = require('path'), fs = require('fs'), crypto = require('crypto');
-const [JS, OUT] = process.argv.slice(2);
-if (!JS || !OUT) { console.error('usage: node make_farm.cjs <js dir> <out dir>'); process.exit(2); }
+if (process.argv.length < 4) { console.error('usage: node make_farm.cjs <js dir> <out dir>'); process.exit(2); }
+const [JS, OUT] = process.argv.slice(2, 4).map(p => path.resolve(p));
 global.window = global;
 const E = require(path.join(JS, 'engine.js')), IO = require(path.join(JS, 'planio.js')), Lib = require(path.join(JS, 'library.js'));
 require(path.join(JS, 'guide.js'));
@@ -35,7 +35,6 @@ const uid = () => `${hex(8)}-${hex(4)}-4${hex(3)}-${'89ab'[Math.floor(rnd() * 4)
 const short = () => Math.floor(rnd() * 36 ** 6).toString(36).padStart(6, '0');
 const D = E.s2d, S = E.d2s, add = (s, n) => S(E.addDays(D(s), n));
 const md = (m, d) => `${YEAR}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-const monday = s => { const d = D(s); return add(s, -((d.getDay() + 6) % 7)); };
 
 // ── the farm's own settings ──
 const settings = {
@@ -346,11 +345,14 @@ put(B.tunnel[1], md(4, 6), C.miniCuke.id, { inRow: 3, growingDefaults: { v: 1, c
 then(B.tunnel[1], md(9, 8), C.miniCuke.id, { ft: 40, rowsPerBed: '5', inRow: '3', ...withV(C.miniCuke.id) });
 chance('towers');
 // Towers: a cycle every four weeks, head lettuce in most, basil in three. Eight towers side by side turn over on the same day.
+// The first two are planted alike all season (one bar in the bank's row on the timeline: step2a_check.py gives one of them
+// another variety), and one tower turns over two days after its neighbours, so its sowings have a rockwool sheet to themselves
+// (sowing_view_check.py reads both wordings: a sowing alone on its sheets, and sowings that share them).
 [...B.tower1, ...B.tower2].forEach((b, i) => {
-  const basil = i % 9 === 4, cropId = basil ? 'basil' : 'lettuce_head', v = vOf(cropId, i);
-  for (let date = add(md(4, 22), Math.floor((i % 16) / 8) * 7 + Math.floor(i / 16) * 14), k = 0; date <= md(10, 12) && k < 7; date = add(date, 28), k++)
+  const basil = i % 9 === 4, cropId = basil ? 'basil' : 'lettuce_head', like = i === 1 ? 0 : i, v = vOf(cropId, like);
+  for (let date = add(md(4, 22), Math.floor((i % 16) / 8) * 7 + Math.floor(i / 16) * 14 + (i === 30 ? 2 : 0)), k = 0; date <= md(10, 12) && k < 7; date = add(date, 28), k++)
     put(b, date, cropId, { dtm: 28, hw: 1, harvestMode: 'window', turnover: 0, timingMode: 'manual', towerCycle: { v: 1, days: 28, replantSameDay: true },
-      ...(basil ? { growingDefaults: { v: 1, cropId, crop: { rowsPerBed: { present: false } } } } : {}), varietyId: (k % 3 === 2 ? vOf(cropId, i + k) : v).id });
+      ...(basil ? { growingDefaults: { v: 1, cropId, crop: { rowsPerBed: { present: false } } } } : {}), varietyId: (k % 3 === 2 ? vOf(cropId, like + k) : v).id });
 });
 chance('crates');
 // Crates: bulbs and cut flowers set out month by month, the first rounds started under cover and moved out
@@ -396,11 +398,16 @@ chance('live trays');
 let farm = { v: 3, gardens, crops, customers, cropUnits, salesMix: {}, containers, nursery,
   planningPreferences: { v: 1, gardenOrder: [G.north.id, G.south.id, G.east.id], sowWeekday: null, minBatch: 1, checkNursery: true, labor: { weeklyHours: null, otherHours: 0, byCrop: {} }, mode: 'beds', dateBasis: 'planting', bedsPerSuccession: 3, every: 10 },
   liveTrayPlans: [], map: MAP, settings, varieties, beds, plantings };
-const demand = { ...Trays.draft(YEAR), name: 'Corner Bistro · 2027 live trays', customerId: 'c-corner-bistro', from: monday(md(5, 3)),
+const demand = { ...Trays.draft(YEAR), name: 'Corner Bistro · 2027 live trays', customerId: 'c-corner-bistro',   // from May 1, a Saturday: the backup opens mid-week, and the app folder's plan has it moved to the Monday (carry_check.py)
   rows: [[M.mizuna, 21, 24, 4, 7, 1], [M.cress, 21, 24, 3, 6, 0], [M.amaranth, 35, 26, 2, 3, 2], [M.shiso, 35, 26, 2, 3, 1], [M.chervil, 35, 26, 2, 3, 1], [M.nasturtium, 35, 26, 1, 2, 2]]
     .map(([c, days, price, spring, summer, fall]) => ({ id: uid(), name: c.name.replace(/^Micro - /, ''), days, price, spring, summer, fall, cropId: c.id })) };
-farm = Trays.apply(farm, demand, { uid, crop: id => crops.find(c => c.id === id), now: '2026-11-01T12:00:00.000Z' }).plan;
-farm.plantings.forEach((p, i) => { p.id = 'p' + String(i + 1).padStart(4, '0'); });
+const trayOptions = { uid, crop: id => crops.find(c => c.id === id), now: '2026-11-01T12:00:00.000Z' };
+const number = plan => { plan.plantings.forEach((p, i) => { p.id = 'p' + String(i + 1).padStart(4, '0'); }); return plan; };
+// The backup has the demand as it was typed, opening on a Saturday. The app folder's plan is the same farm with the planner's
+// own rule applied, as the planner applies it: trays are wanted on Mondays, so the window opens on the Monday on or after.
+const asTyped = number(Trays.apply(farm, demand, trayOptions).plan), typed = asTyped.liveTrayPlans[0];
+farm = number(Trays.apply(asTyped, { ...typed, from: Trays.mondayOnOrAfter(typed.from) }, trayOptions).plan);
+const trayNote = `${typed.name}: opens ${Trays.mondayOnOrAfter(typed.from)}, not ${typed.from}; ${asTyped.plantings.filter(p => p.liveTray).length} batches -> ${farm.plantings.filter(p => p.liveTray).length}`;
 
 // ── what the planner makes of it ──
 const eng = E.create(farm, Lib);
@@ -456,9 +463,10 @@ const canon = x => JSON.stringify(x, (k, v) => v && typeof v === 'object' && !Ar
 if (canon(back.plantings) !== canon(farm.plantings) || canon(back.beds) !== canon(farm.beds)) throw Error('the compact plan does not give the beds and plantings back as they were written');
 farm.plantings = back.plantings; farm.beds = back.beds;   // one order of fields in both files
 write('plan.json', compact);
-write('backup-plan.json', IO.join(farm, { v: 1, rest: {}, varieties: {} }));
-write('inventory.json', inventory); write('packs.json', packs);
 const made = '2026-11-14T12:00:00.000Z';
+// a backup says when it was made, and holds the tray demand as it was typed
+write('backup-plan.json', IO.join({ ...farm, plantings: asTyped.plantings, liveTrayPlans: asTyped.liveTrayPlans }, { v: 1, rest: { backup: { exportedAt: made } }, varieties: {} }));
+write('inventory.json', inventory); write('packs.json', packs);
 write('plan-info.json', JSON.stringify({ backup: made, counts: IO.summary(farm), mapImage: { src: 'data/farm-map.jpg', sha256: sha }, inventory: 'data/inventory.json', thumbs: 'data/thumbs.json', packs: 'data/packs.json',
-  corrections: [], keep: { trayStart: 'monday' } }, null, 1));
+  corrections: [{ rule: 'traysOpenMonday', result: trayNote }], keep: { trayStart: 'monday' } }, null, 1));
 console.log(JSON.stringify({ ...IO.summary(farm), kinds, bookedTwice: pairs.size, longerThanBed: over, lots: lots.length, packs: Object.keys(packs).length,  photo: sha.slice(0, 12) }));

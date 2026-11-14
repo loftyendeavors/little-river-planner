@@ -14,7 +14,12 @@
  "inventory": "data/inventory.json",
  "thumbs": "data/thumbs.json",
  "packs": "data/packs.json",
- "corrections": [],
+ "corrections": [
+  {
+   "rule": "traysOpenMonday",
+   "result": "Corner Bistro · 2027 live trays: opens 2027-05-03, not 2027-05-01; 176 batches -> 170"
+  }
+ ],
  "keep": {
   "trayStart": "monday"
  }
