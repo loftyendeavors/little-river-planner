@@ -39,9 +39,9 @@ jobs:
       - name: Work folder
         run: sh tests/setup.sh
       - name: Run
-        run: sh tests/run.sh ${{ matrix.part }} 2>&1 | tee part.log
+        run: sh tests/run.sh ${{ matrix.part }} 2>&1 | tee "$RUNNER_TEMP/part.log"   # kept outside the repository: the site serves every file at its root
       - name: Verdict
-        run: python3 -I tests/verdict.py part.log ${{ matrix.part }}
+        run: python3 -I tests/verdict.py "$RUNNER_TEMP/part.log" ${{ matrix.part }}
       - name: Keep the pictures of a part that failed
         if: failure()
         uses: actions/upload-artifact@v4
