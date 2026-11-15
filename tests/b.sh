@@ -41,6 +41,7 @@ for n in "$@"; do
     season) python3 -I $T/season_check.py $APP $S/season 2>&1 | tally farm-dates ;;
     season-site) python3 -I $T/season_check.py $SITE $S/season-site $ZIP 2>&1 | tally farm-dates-built-site ;;
     photo) python3 -I $T/photo_keep_check.py $APP $S/photo $REPO 2>&1 | tally farm-photo-two-browsers ;;
+    windows) python3 -I $T/two_windows_check.py $APP $S/two-windows $REPO 2>&1 | tally two-windows ;;
     photo-site) python3 -I $T/photo_keep_check.py $SITE $S/photo-site $REPO $ZIP $PHOTO 2>&1 | tally farm-photo-two-browsers-built-site ;;
     ask) python3 -I $T/ask_check.py $APP $S/ask 2>&1 | tally asked-only-from-the-library ;;
     ask-site) python3 -I $T/ask_check.py $SITE $S/ask-site $ZIP 2>&1 | tally asked-only-from-the-library-built-site ;;

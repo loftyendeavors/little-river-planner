@@ -38,5 +38,6 @@ node $T/look_a_test.cjs $APP $PLAN | named "look-a, backup"
 node $T/look_a_test.cjs $APP $SHIP | named "look-a, compact"
 node $T/rails_test.cjs $APP $PLAN | named "rails"
 node $T/assume_test.cjs $APP $PLAN | named "assume"
+node $T/store_test.cjs $APP | named "store"   # saving with two windows of one browser open: the count beside the plan, the one window that holds it
 node $REPO/tools/mapgeo_test.cjs | named "map geometry"
 (cd $REPO && node tools/reader_test.mjs 2>&1 | named "page reader"; node tools/worker_test.mjs 2>&1 | named "fetch service"; node tools/sync_worker_test.mjs 2>&1 | named "sync service"; node tools/sync_client_test.mjs $APP/js 2>&1 | named "sync client")

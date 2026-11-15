@@ -177,7 +177,15 @@ with sync_playwright() as pw:
     if js("return !!$('syncBtn') && !$('syncBtn').hidden;"):
         js("void LRFBackupUI.openSync(); return 1;"); wait(700); look("Cloud sync"); page.keyboard.press("Escape"); wait(300)
 
-    check("no screen, tooltip or label names the planner's earlier version (%d screens read)" % len(looked), len(looked) >= 28 and not named, named)
+    # ── a second window of the same browser: it only shows the plan, and a strip across the page says so ──
+    second = ctx.new_page(); second.goto(url); second.wait_for_function("window.LRFApp && LRFApp.state.ready"); second.wait_for_timeout(700)
+    try: strip = second.evaluate("(() => { " + PRE + " const s = $('windowStrip'); return { shown: !!s && !s.hidden && /another window/.test(s.innerText), words: sweep() }; })()")
+    except Exception as e: strip = {"shown": False, "words": [str(e)[:200]]}
+    looked.append("A second window")
+    if not strip["shown"] or strip["words"]: named["A second window"] = strip["words"] or ["the strip of a window that only shows the plan is not there to be read"]
+    second.close()
+
+    check("no screen, tooltip or label names the planner's earlier version (%d screens read)" % len(looked), len(looked) >= 29 and not named, named)
     end = js("return { key: A.contentKey(), undo: S.undo.length, n: S.plan.plantings.length };") or {}
     check("looking changed nothing: the same plan, nothing to undo", end.get("key") == start.get("key") and end.get("undo") == 0 and end.get("n") == start.get("n"), [start, end])
     check("no error on the page", not errors, errors[:4])
