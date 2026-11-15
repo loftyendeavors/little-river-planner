@@ -131,7 +131,7 @@
     const grown = gardensFor(eng, crop), pick = grown.find(g => g.planted) || grown[0];
     return pick ? (eng.plan.beds || []).find(b => b.gardenId === pick.garden.id && suits(eng, crop, b)) || null : null;
   }
-  const SPACE_FIELDS = ['bedId', 'ft', 'startFt', 'bedLayout', 'trays', 'shelter', 'out'], RECORD_FIELDS = ['done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'sowOn', 'harvestEnd', 'liveTray', 'seedUses'];
+  const SPACE_FIELDS = ['bedId', 'ft', 'startFt', 'bedLayout', 'trays', 'shelter', 'out'], RECORD_FIELDS = ['done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'sowOn', 'harvestEnd', 'liveTray', 'seedUses', 'tasks'];
   /** A planting of the series that has no bed: the crop, or a copy of the planting the series is modelled on, with its date and why it waits. */
   function heldFor(o, date, k, extra = {}) {
     const base = o.source ? { ...o.source } : { cropId: o.crop.id };

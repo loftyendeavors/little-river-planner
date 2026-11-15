@@ -1,19 +1,23 @@
 /* Little River Farm Planner — the Tasks view (view id "sow": it began as the Sowing view, then the Week view).
  *
- * The week's work, set out as the acts the grower performs, in two halves. Nursery is the raising of the plant:
- * a batch of plug trays filled for several beds, rockwool for the towers, the week's live trays, potting up,
- * hardening off. Field is planting, wherever the plant goes (beds, tunnels, greenhouses, towers, crates; bulbs,
- * canes and bought-in plants with the transplants), seed sown in the ground, and crates moved out. A scope shows
- * both or one, and is remembered. Tick what was done and record it in one step, on the day it was really done:
- * each planting is dated, seed comes off stock, and a transplant sown or hardened off late goes out as many days
- * later (js/week.js).
+ * The work of a day, or of a whole week, as the acts the grower performs, in two lists. Nursery is the raising of the
+ * plant: a batch of plug trays filled for several beds, rockwool for the towers, the week's live trays, potting up,
+ * hardening off. Field is planting, wherever the plant goes (beds, tunnels, greenhouses, towers, crates; bulbs, canes
+ * and bought-in plants with the transplants), seed sown in the ground, and crates moved out.
  *
- * On a phone this view is the whole page: the week, and nothing else. The same list prints as a sheet.
+ * The page opens on today. A week of days across the top says what each day holds; a press shows that day, and any
+ * date written at the top opens a calendar to go to any other. A tick records the task at once, on today; a task that
+ * is late is asked the day it was really done, in a popup calendar that says what each day would move before it is
+ * chosen. A recorded day is a fact: seed comes off stock, and a transplant sown or hardened off late goes out as many
+ * days later (js/week.js). A task can be put off to another day on purpose, skipped, or given a note. Every change
+ * says what it did, with Undo.
+ *
+ * On a phone this view is the whole page, one list at a time. The week prints as a sheet.
  */
 (function (root) {
   'use strict';
-  const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, SL = root.LRFSeedLib, T = root.LRFTrays, Thumbs = root.LRFThumbs, Bench = root.LRFBench, Sow = root.LRFSowing, Week = root.LRFWeek;
-  const { h, clear, add, num, day } = UI;
+  const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, SL = root.LRFSeedLib, T = root.LRFTrays, Thumbs = root.LRFThumbs, Bench = root.LRFBench, Week = root.LRFWeek;
+  const { h, s, clear, add, num, day } = UI;
   const $ = id => document.getElementById(id);
   const d = iso => E.s2d(iso);
   const dayName = date => UI.dayLong(date).replace(/, \d{4}$/, '');
@@ -36,9 +40,8 @@
     ['plant', 'Plant out', 'Transplants going into beds, towers and containers, and what is planted, not sown: bulbs, canes, bought-in plants.'],
     ['move', 'Move out', 'Sheltered containers going out to where they stand for the season.']
   ];
-  const DID = { potup: 'potted up', harden: 'hardened off', plant: 'planted', move: 'moved out' };
-  const ui = { sel: new Set(), qty: new Map(), filter: 'all', earlier: false, date: null, follow: true, span: 1, scope: 'all' };
-  const SPANS = [[1, 'Week'], [2, '2 weeks'], [4, '4 weeks']];
+  // What is on screen: a day (or, with no day, the whole week), the row that is opened, the list a phone shows, the popup.
+  const ui = { day: null, week: null, open: null, shown: {}, tab: 'nursery', scope: 'all', pop: null, busy: false };
   // The two halves of the list. Nursery is the raising of the plant. Field is planting, wherever the plant goes, and seed sown in place.
   const GROUPS = [
     ['nursery', 'Nursery', 'Raising the plant: sowing in trays and rockwool, live trays, potting up, hardening off.', ['plugs', 'rockwool', 'live'], ['potup', 'harden']],
@@ -46,11 +49,10 @@
   ];
   const SCOPES = [['all', 'Everything', 'Nursery and field together'], ['nursery', 'Nursery', GROUPS[0][2]], ['field', 'Field', GROUPS[1][2]]];
   const halfOf = id => (GROUPS.find(g => g[3].includes(id) || g[4].includes(id)) || GROUPS[1])[0];
-  const inScope = id => ui.scope === 'all' || halfOf(id) === ui.scope;
-  // what this browser remembers of the list: which half is shown, and how far ahead
+  // what this browser remembers of the list: which half a phone shows
   const PREF_KEY = 'lrf-next:tasks';
-  try { const kept = JSON.parse(root.localStorage.getItem(PREF_KEY) || 'null'); if (kept && SCOPES.some(x => x[0] === kept.scope)) ui.scope = kept.scope; if (kept && SPANS.some(x => x[0] === kept.span)) ui.span = kept.span; } catch (_) { /* nothing remembered: everything, a week */ }
-  const keepPrefs = () => { try { root.localStorage.setItem(PREF_KEY, JSON.stringify({ scope: ui.scope, span: ui.span })); } catch (_) { /* a browser that keeps nothing still works */ } };
+  try { const kept = JSON.parse(root.localStorage.getItem(PREF_KEY) || 'null'); if (kept && SCOPES.some(x => x[0] === kept.scope)) { ui.scope = kept.scope; if (kept.scope !== 'all') ui.tab = kept.scope; } } catch (_) { /* nothing remembered */ }
+  const keepPrefs = () => { try { root.localStorage.setItem(PREF_KEY, JSON.stringify({ scope: ui.scope })); } catch (_) { /* a browser that keeps nothing still works */ } };
   let dirty = true;
   const isPhone = () => document.body.classList.contains('phone');
   const days = n => `${num(n)} day${n === 1 ? '' : 's'}`;
@@ -93,8 +95,11 @@
     }
     const list = [...lines.values()];
     for (const line of list) {
-      const open = line.members.filter(m => !m.s.done && !m.s.sown), done = line.members.filter(m => m.s.done);
+      const skipOn = m => (!m.s.done && !m.s.sown ? Week.skipOf(m.p, m.s.kind) : null), left = line.members.map(skipOn).filter(Boolean);
+      const open = line.members.filter(m => !m.s.done && !m.s.sown && !skipOn(m)), done = line.members.filter(m => m.s.done);
       line.open = open; line.state = !open.length ? 'done' : open.length === line.members.length ? 'open' : 'part';
+      line.skipped = !open.length && !done.length && left.length ? left.sort().pop() : null;   // the day it was skipped on, when nothing of it was sown
+      line.delayedFrom = open.map(m => { const put = Week.delayOf(m.p, m.s.kind); return put && put.to === line.date ? put.from : null; }).filter(Boolean).sort()[0] || null;
       line.doneOn = done.length ? done.map(m => m.s.done).sort().pop() : null;
       line.name = line.variety ? line.variety.name : T.short(line.crop.name);
       line.sub = line.kind === 'live' ? (line.demand ? line.demand.name : '') : line.variety ? T.short(line.crop.name) : 'no variety chosen';
@@ -142,24 +147,6 @@
     return t1 === t2 ? `${word} ${t1}, ${r1 === r2 ? 'row ' + r1 : `rows ${r1}–${r2}`}` : `${word} ${t1} from row ${r1}, into ${word} ${t2} to row ${r2}`;
   }
   const howNote = line => line.group ? slotText(line) : line.kind === 'plugs' && line.batch && line.batch.medium !== 'pots' ? `${num(line.batch.tray.cells)}-cell tray` : line.kind === 'rockwool' && line.batch ? `${num(line.batch.tray.cells)}-cell sheet` : '';
-  const SLOTS = 5;   // colours that tell varieties apart in a shared tray; beyond them one neutral
-  /** The row above varieties that share trays: how many trays, and each tray drawn row by row. */
-  function groupRow(line) {
-    const g = line.group, list = line.groupLines, per = g.tray.rows, owner = new Array(g.trays * per).fill(null), shown = Math.min(g.trays, 8), wool = g.medium === 'rockwool', Word = wool ? 'Sheet' : 'Tray';
-    const crops = [...new Set(list.map(l => T.short(l.crop.name)))];
-    for (const l of list) for (let k = l.rowsFrom; k < l.rowsTo && k < owner.length; k++) owner[k] = l;
-    const trays = [];
-    for (let t = 0; t < shown; t++) {
-      const mine = owner.slice(t * per, (t + 1) * per), names = [...new Set(mine.filter(Boolean).map(l => l.name))], empty = mine.filter(l => !l).length;
-      trays.push(h('span.sw-tray', { role: 'img', 'aria-label': `${Word} ${t + 1}: ${names.join(', ')}${empty ? `, ${empty} rows empty` : ''}`, title: `${Word} ${t + 1}: ${names.join(', ')}${empty ? ` · ${empty} rows empty` : ''}` },
-        mine.map(l => h('i', l ? { dataset: { k: Math.min(l.slot, SLOTS) } } : {}))));
-    }
-    return h('tr.sw-group', { dataset: { group: line.key } }, h('td'), h('td', { colSpan: 6 }, h('div.sw-group-in',
-      h('b', wool ? `${crops.length > 1 ? crops.join(' and ') : crops[0]}: ${plural(list.length, 'sowing')} share ${plural(g.trays, 'sheet')}, on ${plural(g.carriers || g.trays, 'open 1020 tray')}`
-        : `${T.short(line.crop.name)}: ${plural(list.length, 'variety', 'varieties')} share ${plural(g.trays, 'tray')}`),
-      h('span', `${num(g.cells / g.tray.columns)} rows of ${num(g.tray.columns)} in ${num(g.tray.cells)}-cell ${wool ? 'sheets' : 'trays'}, filled in the order listed`),
-      h('span.sw-trays', trays, g.trays > shown ? h('small', `+${num(g.trays - shown)} more`) : null))));
-  }
   /** Where it is going: the beds a transplant is raised for and the day it goes out, or the beds a direct sowing is in. */
   function placesText(members) {
     const byGarden = new Map();
@@ -189,201 +176,311 @@
     if (line.section === 'move') return `to ${places}`;
     return `${places} · out ${day(new Date(Math.min(...line.members.map(m => +m.r.field))))}`;
   }
-  /** Why a job is not on the day first planned: an earlier job of the same plantings was done late, and pushed it. */
-  function pushNote(line) {
-    if (!line.pushed.length || line.state === 'done') return null;
-    const most = Math.max(...line.pushed.map(f => f.days));
-    return h('small.sw-set', { title: `First planned ${days(most)} earlier. Its seedlings were sown or hardened off late, so the day moved with them. Move the planting to set another day.` }, `${days(most)} later`);
-  }
-  /** What stands in the status column: what was done and when, or what is there to plant. */
-  function jobStatus(line, stock) {
-    if (line.passed) return h('small', 'no day recorded');
-    if (line.state === 'done') {
-      const late = line.late, pushed = line.members.map(m => m.st.pushed).filter(Boolean);
-      // the day it was done is the day the line stands on; here, how that sat against the plan
-      return [h('small.sw-did', { title: `${DID[line.section].charAt(0).toUpperCase() + DID[line.section].slice(1)} ${day(d(line.doneOn))}` }, late > 0 ? `${days(late)} late` : late < 0 ? `${days(-late)} early` : 'on the day'),
-        pushed.length ? h('small', `out ${days(Math.max(...pushed.map(f => f.days)))} later`) : null];
-    }
-    const out = [];
-    if (line.stock) {
-      const row = stock[line.stock.key + '|' + line.stock.stockUnit] || {}, have = row.onHand || 0;
-      out.push(have + 1e-9 >= line.estimate && have ? h('small', `${num(have)} on hand`) : have ? h('small.sw-short', `only ${num(have)} on hand`) : h('small', row.onOrder ? `${num(row.onOrder)} on order` : 'none on hand'));
-    }
-    out.push(pushNote(line));
-    if (line.state === 'part') out.push(h('small', `${num(line.members.length - line.open.length)} of ${num(line.members.length)} recorded`));
+
+  // ── one list of everything: a sowing or another job is a task with its day ──
+  const ACT = { plugs: 'Sow', rockwool: 'Sow', live: 'Sow', direct: 'Direct sow', potup: 'Pot up', harden: 'Harden off', plant: 'Plant out', move: 'Move out' };
+  const PAST = { plugs: 'sown', rockwool: 'sown', live: 'sown', direct: 'sown', potup: 'potted up', harden: 'hardened off', plant: 'planted out', move: 'moved out' };
+  const ORDER = ['plugs', 'rockwool', 'live', 'potup', 'harden', 'direct', 'plant', 'move'];
+  const FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const MONTH = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const plus = (iso, n) => E.d2s(E.addDays(d(iso), n));
+  const diff = (a, b) => E.dayDiff(d(a), d(b));
+  const wd = iso => UI.DAYS[d(iso).getDay()];
+  const shortDay = iso => `${wd(iso)} ${day(d(iso))}`;
+  const cap = text => text.charAt(0).toUpperCase() + text.slice(1);
+  /** A crop as a task names it: without its bracketed kind, and with no capital unless the name has more than one. */
+  const cropWord = name => { const w = T.short(name).replace(/\s*\([^)]*\)\s*$/, '').trim() || T.short(name); return /[A-Z]/.test(w.slice(1)) ? w : w.charAt(0).toLowerCase() + w.slice(1); };
+  const isOpen = t => t.state === 'open' || t.state === 'part';
+  const taskCache = new WeakMap();
+  /**
+   * Every task of the plan's year, in the order it is listed: { key, line, sow, id, half, state, due, on, title, items() }.
+   * `due` is the day the plan has it on. `on` is the day it was done, or skipped. `items()` is what ticking it records.
+   */
+  function tasks() {
+    const eng = App.state.engine;
+    if (taskCache.has(eng)) return taskCache.get(eng);
+    const make = (l, id, sow) => ({ key: l.key, line: l, sow, id, half: halfOf(id), state: l.skipped ? 'skipped' : l.state, due: !sow && l.state === 'done' && l.planned ? l.planned : l.date, on: l.skipped || (l.state === 'done' ? l.doneOn : null),
+      title: `${ACT[id]} ${cropWord(l.crop.name)}`, items: () => l.open.map(m => ({ id: m.p.id, kind: sow ? m.s.kind : l.kind })) });
+    const out = [...figures().list.map(l => make(l, l.kind, true)), ...jobs().filter(l => !l.passed || l.skipped).map(l => make(l, l.section, false))];
+    // by day, then by kind; within a kind the lists' own order stands, which keeps sowings that share trays together
+    out.forEach((t, i) => { t.at = i; });
+    out.sort((a, b) => a.due.localeCompare(b.due) || ORDER.indexOf(a.id) - ORDER.indexOf(b.id) || a.at - b.at);
+    taskCache.set(eng, out);
     return out;
   }
-  /** Whether the seed is there. Only a real shortfall is coloured: seed on order, or none counted yet, is said plainly. */
-  function stockNote(line, stock) {
-    if (line.state === 'done') return null;
-    if (line.kind === 'live' && !App.state.engine.liveSow(line.crop).set) return h('small', 'no seed figure set');
-    const row = stock[line.stockKey + '|' + line.stockUnit] || {}, have = row.onHand || 0, bare = n => amountText(n, line.stockUnit).replace(/ seeds?$/, '');
-    if (have + 1e-9 >= line.estimate && have) return h('small', `${bare(have)} on hand`);
-    if (have) return h('small.sw-short', `only ${bare(have)} on hand`);
-    return h('small', row.onOrder ? `${bare(row.onOrder)} on order` : line.variety || line.kind === 'live' ? 'none on hand' : 'no variety chosen');
+  const byKey = key => tasks().find(t => t.key === key) || null;
+  /** The plantings a task stands for, with the kind of job each one records. */
+  const membersOf = t => t.line.members.map(m => ({ p: m.p, kind: t.sow ? m.s.kind : t.line.kind }));
+  const noteOf = t => { const m = membersOf(t).find(x => Week.noteOf(x.p, x.kind)); return m ? Week.noteOf(m.p, m.kind) : ''; };
+
+  // ── what a row says ──
+  /** The line under a task's name: the variety, how much, where; then anything that sets it apart. It wraps, and is never cut. */
+  function detail(t) {
+    const l = t.line, bits = [];
+    if (t.sow) bits.push(l.kind === 'live' ? [l.variety ? l.name : '', l.sub].filter(Boolean).join(', ') : l.variety ? l.name : 'no variety chosen', howText(l), howNote(l), whereText(l));
+    else { const how = jobHow(l); bits.push(l.variety ? l.name : 'no variety chosen', how[0], how[1], jobWhere(l)); }
+    if (l.state === 'part') bits.push(`${num(l.members.length - l.open.length)} of ${num(l.members.length)} recorded`);
+    if (isOpen(t) && l.delayedFrom) bits.push(`delayed from ${shortDay(l.delayedFrom)}`);
+    else if (isOpen(t) && t.sow && l.set) bits.push('its day set by hand');
+    if (isOpen(t) && !t.sow && l.pushed.length) bits.push(`${days(Math.max(...l.pushed.map(f => f.days)))} later than first planned`);
+    const note = noteOf(t);
+    if (note) bits.push(`“${note}”`);
+    return bits.filter(Boolean).join(' · ');
+  }
+  /** What stands in a task's way: seed, or bulbs, on hand but short of what it takes. Said only when it is so. */
+  function flagText(t, stock) {
+    const l = t.line, key = t.sow ? [l.stockKey, l.stockUnit] : l.stock ? [l.stock.key, l.stock.stockUnit] : null;
+    if (!isOpen(t) || !key || !(l.estimate > 0)) return '';
+    const have = (stock[key[0] + '|' + key[1]] || {}).onHand || 0, bare = n => amountText(n, key[1]).replace(/ seeds?$/, '');
+    return have && have + 1e-9 < l.estimate ? `${key[1] === 'seeds' || key[1] === 'g' ? 'Seed short' : 'Short'}: ${bare(have)} of ${amountText(l.estimate, key[1])}` : '';
+  }
+  const TICK = () => s('svg', { viewBox: '0 0 14 14', 'aria-hidden': 'true' }, s('path', { d: 'M2.5 7.4l3 3 6-6.6' }));
+  const CHEV = () => s('svg.tk-chev', { viewBox: '0 0 14 14', 'aria-hidden': 'true' }, s('path', { d: 'M5 2.5l4.5 4.5L5 11.5' }));
+  const CARET = () => s('svg.tk-caret', { viewBox: '0 0 10 10', 'aria-hidden': 'true' }, s('path', { d: 'M2 3.5l3 3 3-3' }));
+  const WARN = () => s('svg', { viewBox: '0 0 16 16', 'aria-hidden': 'true' }, s('path.a', { d: 'M8 1.5c.52 0 1 .28 1.26.73l5.86 10.2c.5.9-.13 2.02-1.26 2.02H2.14c-1.13 0-1.77-1.12-1.26-2.02l5.86-10.2C7 1.78 7.48 1.5 8 1.5z' }), s('path.b', { d: 'M8 6.1v3.5' }), s('circle.c', { cx: 8, cy: 11.9, r: 0.95 }));
+  const RING = (r, size) => s('svg.tk-ring', { viewBox: `0 0 ${size} ${size}`, 'aria-hidden': 'true' }, s('circle.track', { cx: size / 2, cy: size / 2, r }), s('circle.fill', { cx: size / 2, cy: size / 2, r }));
+  /** A ring filled to a share. It is drawn at the share it last showed and moved to the new one, so a tick is seen to fill it. */
+  const ringShares = new Map();
+  function fillRing(svg, name, share, length) {
+    const fill = svg.querySelector('.fill'), was = ringShares.has(name) ? ringShares.get(name) : share, set = x => { fill.style.strokeDasharray = String(length); fill.style.strokeDashoffset = String(length * (1 - x)); fill.style.opacity = x ? 1 : 0; };
+    ringShares.set(name, share); set(was);
+    if (was !== share) root.requestAnimationFrame(() => root.requestAnimationFrame(() => set(share)));
   }
 
-  // ── recording ──
-  /** What each planting of a line records when the line's total is typed over: the same shares, scaled. */
-  function itemsFor(line) {
-    const open = line.open, typed = ui.qty.get(line.key);
-    if (typed == null || typed === '' || !(Number(typed) >= 0) || round6(Number(typed)) === line.estimate) return open.map(m => ({ id: m.p.id, kind: m.s.kind }));
-    const total = Number(typed), base = line.estimate || open.length, whole = line.stockUnit !== 'g';
-    const shares = open.map(m => (line.estimate ? m.s.estimate : 1) / base * total), out = shares.map(x => whole ? Math.floor(x) : round6(x));
-    if (whole) { let left = Math.round(total - out.reduce((n, x) => n + x, 0)); const order = shares.map((x, i) => [x - Math.floor(x), i]).sort((a, b) => b[0] - a[0]); for (let i = 0; left > 0 && order.length; i++, left--) out[order[i % order.length][1]]++; }
-    return open.map((m, i) => ({ id: m.p.id, kind: m.s.kind, quantity: out[i] }));
+  function rowEl(t, stock, now) {
+    const l = t.line, open = isOpen(t), late = open && t.due < now ? diff(now, t.due) : 0, shown = open && ui.open === t.key, flag = flagText(t, stock);
+    const right = t.state === 'skipped' ? h('span.tk-when.skip', 'Skipped') : !open ? h('span.tk-when', t.on === now ? 'Done' : `Done ${shortDay(t.on)}`)
+      : h('button.tk-put' + (late ? '.late' : ''), { type: 'button', dataset: { act: 'delay' }, title: 'Put it off to another day', 'aria-label': `${late ? `${days(late)} late. ` : ''}Delay ${t.title}, ${l.name}` }, late ? `${days(late)} late` : 'Delay');
+    return h('div.tk-row' + (open ? '' : '.done') + (shown ? '.open' : '') + (ui.pop && ui.pop.key === t.key ? '.pending' : ''), { dataset: { line: t.key, kind: t.id, state: t.state, due: t.due } },
+      h('div.tk-main',
+        h('button.tk-tick', { type: 'button', role: 'checkbox', 'aria-checked': String(!open), 'aria-label': `${t.title}, ${l.name}`, dataset: { act: 'tick' } }, h('i', TICK())),
+        Thumbs.el({ varietyId: l.variety && l.variety.id, cropId: l.crop.id, color: App.state.engine.cropColor(l.crop), label: l.name, size: 42, cls: 'tk-thumb' }),
+        h('button.tk-words', { type: 'button', 'aria-expanded': String(shown), tabIndex: open ? 0 : -1, dataset: { act: 'open' } }, h('span.tk-title', t.title), h('span.tk-sub', detail(t))),
+        right,
+        flag ? h('span.tk-flag', WARN(), flag) : null),
+      h('div.tk-drawer', h('div', shown ? h('div.tk-inner',
+        h('input.tk-note', { type: 'text', placeholder: 'Add a note', maxLength: 400, value: noteOf(t), 'aria-label': `Note for ${t.title}, ${l.name}`, dataset: { note: t.key } }),
+        h('div.tk-acts', h('button.tk-soft', { type: 'button', dataset: { act: 'delay' } }, 'Delay…'), h('button.tk-link', { type: 'button', dataset: { act: 'skip' } }, 'Skip this task'),
+          isPhone() ? null : h('button.tk-link.map', { type: 'button', dataset: { act: 'map' } }, 'Show on the map'))) : null)));
   }
-  /** What is ticked and still open: sowings, and the other jobs. */
-  const ticked = fig => ({ sow: fig.list.filter(l => ui.sel.has(l.key) && l.open.length), jobs: jobs().filter(l => ui.sel.has(l.key) && l.open.length) });
-  const itemsOf = t => [...t.sow.flatMap(itemsFor), ...t.jobs.flatMap(l => l.open.map(m => ({ id: m.p.id, kind: l.kind })))];
+  /** How much a group holds: its tasks, and the trays its sowings fill. */
+  const tally = rows => { const trays = rows.reduce((n, t) => n + (t.sow && isOpen(t) ? Math.ceil(t.line.trays - 1e-9) : 0), 0); return `${num(rows.length)}${trays ? ` · ${plural(trays, 'tray')}` : ''}`; };
+  function group(label, cls, rows, stock, now) {
+    if (!rows.length) return null;
+    return [label ? h('div.tk-sec' + (cls ? '.' + cls : ''), h('span.tk-sec-name', label), h('span.tk-sec-n', tally(rows))) : h('div.tk-lead'), withShares(rows, stock, now)];
+  }
+  /** The line above sowings that share trays: how many trays there are, and how they are filled. Each row then says its own tray and rows. */
+  function shareLine(line) {
+    const g = line.group, list = line.groupLines, wool = g.medium === 'rockwool', crops = [...new Set(list.map(l => T.short(l.crop.name)))];
+    return h('div.tk-share', { dataset: { group: line.key } },
+      h('b', wool ? `${crops.length > 1 ? crops.join(' and ') : crops[0]}: ${plural(list.length, 'sowing')} share ${plural(g.trays, 'sheet')}, on ${plural(g.carriers || g.trays, 'open 1020 tray')}` : `${T.short(line.crop.name)}: ${plural(list.length, 'variety', 'varieties')} share ${plural(g.trays, 'tray')}`),
+      ` · ${num(g.cells / g.tray.columns)} rows of ${num(g.tray.columns)} in ${num(g.tray.cells)}-cell ${wool ? 'sheets' : 'trays'}, filled in the order listed`);
+  }
+  const shares = t => t.sow && isOpen(t) && t.line.group && t.line.groupLines.length > 1 ? t.line.group : null;
+  const withShares = (rows, stock, now) => rows.flatMap((t, i) => (shares(t) && (!i || shares(rows[i - 1]) !== shares(t)) ? [shareLine(t.line), rowEl(t, stock, now)] : [rowEl(t, stock, now)]));
   /**
-   * What recording the ticked lines on that day would move, worked out before anything is recorded: plantings pushed by late
-   * work, and the ground that would then be booked twice. Kept for as long as the plan and the ticks stand.
+   * What is late, oldest first. A long run of it is folded to the most recent few, with one line that opens the rest:
+   * a plan that was not recorded for a while should not bury today under its past.
    */
-  const preCache = new WeakMap();
-  function preview(t, date) {
-    const eng = App.state.engine, items = itemsOf(t), key = [date, ui.follow, ...items.map(i => `${i.id}:${i.kind}`)].join('|'), kept = preCache.get(eng);
-    if (kept && kept.key === key) return kept.value;
-    const value = App.previewWork(items, { date, follow: true }, { impact: ui.follow });
-    preCache.set(eng, { key, value });
-    return value;
+  const LATE_SHOWN = 6, LATE_FOLD = 12;
+  function lateGroup(id, rows, stock, now) {
+    if (rows.length <= LATE_FOLD || ui.shown[id + ':late']) return group('Late', 'late', rows, stock, now);
+    const hidden = rows.length - LATE_SHOWN;
+    return [h('div.tk-sec.late', h('span.tk-sec-name', 'Late'), h('span.tk-sec-n', tally(rows))),
+      h('button.tk-more', { type: 'button', dataset: { act: 'late', half: id } }, `${num(hidden)} more, back to ${shortDay(rows[0].due)}`), withShares(rows.slice(hidden), stock, now)];
   }
-  const movedText = moved => { if (!moved.length) return ''; const lo = Math.min(...moved.map(m => m.days)), hi = Math.max(...moved.map(m => m.days)); return `${plural(moved.length, 'planting')} ${moved.length === 1 ? 'goes' : 'go'} out ${lo === hi ? days(hi) : `${num(lo)} to ${days(hi)}`} later`; };
-  function record(fig) {
-    const t = ticked(fig), lines = [...t.sow, ...t.jobs], date = ui.date || App.today();
-    if (!lines.length) return;
-    const done = App.recordWork(itemsOf(t), { date, follow: ui.follow });
+  const dayLabel = (k, now) => k === plus(now, 1) ? ['Tomorrow ', h('i', shortDay(k))] : [`${FULL[d(k).getDay()]} `, h('i', day(d(k)))];
+
+  // ── what is on screen: one day, or a whole week ──
+  /** The tasks on screen for one half, or for both: still to do, and done. Today, and this week, also hold whatever is late. */
+  function onScreen(half) {
+    const all = tasks().filter(t => !half || t.half === half), now = App.today(), a = ui.week, end = plus(a, 6), cur = T.monday(now);
+    if (ui.day) return { open: all.filter(t => isOpen(t) && (ui.day === now ? t.due <= now : ui.day > now && t.due === ui.day)), done: all.filter(t => t.on === ui.day) };
+    return { open: all.filter(t => isOpen(t) && (a === cur ? t.due <= end : a > cur && t.due >= a && t.due <= end)), done: all.filter(t => t.on && t.on >= a && t.on <= end) };
+  }
+  const live = () => { const now = App.today(); return ui.day ? ui.day === now : ui.week === T.monday(now); };
+  const later = () => { const now = App.today(); return ui.day ? ui.day > now : ui.week > T.monday(now); };
+  const fold = (id, done, label, stock, now) => done.length ? [h('button.tk-fold', { type: 'button', 'aria-expanded': String(!!ui.shown[id]), dataset: { act: 'fold', half: id } }, `${label} `, h('b', num(done.length)), CHEV()),
+    h('div.tk-fold-body' + (ui.shown[id] ? '' : '.shut'), h('div', done.map(t => rowEl(t, stock, now))))] : null;
+  /** The next task still to do after today, said where a list has nothing left. */
+  function nextLine(id, now) {
+    const next = tasks().find(t => t.half === id && isOpen(t) && t.due > now);
+    return next ? h('button.tk-next', { type: 'button', dataset: { act: 'go', day: next.due } }, `Next: ${next.title.charAt(0).toLowerCase() + next.title.slice(1)}, ${next.due === plus(now, 1) ? 'tomorrow' : shortDay(next.due)}`) : null;
+  }
+  const finished = (name, words, id, now) => h('div.tk-finished', h('span', TICK()), h('strong', `${name} is done for ${words}`), nextLine(id, now));
+  function dayBody(id, name, stock, now) {
+    const k = ui.day, s = onScreen(id);
+    if (k === now) return [s.open.length ? [lateGroup(id, s.open.filter(t => t.due < now), stock, now), group('Today', '', s.open.filter(t => t.due === now), stock, now)]
+      : s.done.length ? finished(name, 'today', id, now) : h('div.tk-empty', h('p', 'Nothing is planned for today.'), nextLine(id, now)), fold(id, s.done, 'Completed today', stock, now)];
+    if (k > now) return s.open.length || s.done.length ? [group('', '', s.open, stock, now), fold(id, s.done, 'Already done', stock, now)] : h('div.tk-empty', h('p', 'Nothing is planned.'));
+    const missed = tasks().filter(t => t.half === id && isOpen(t) && t.due === k).length;
+    return [s.done.length ? group('', '', s.done, stock, now) : h('div.tk-empty', h('p', 'Nothing was recorded.')),
+      missed ? h('p.tk-missed', `${plural(missed, 'task')} of that day ${missed === 1 ? 'was' : 'were'} not done, and ${missed === 1 ? 'is' : 'are'} on today’s list.`) : null];
+  }
+  /** A whole week, a day at a time: the same rows under a line for each day. */
+  function weekBody(id, name, stock, now) {
+    const a = ui.week, cur = T.monday(now), s = onScreen(id), out = [];
+    if (a < cur) {
+      for (let i = 0; i < 7; i++) { const k = plus(a, i); out.push(group(dayLabel(k, now), '', s.done.filter(t => t.on === k), stock, now)); }
+      return out.some(Boolean) ? out : h('div.tk-empty', h('p', 'Nothing was recorded.'));
+    }
+    if (a === cur) out.push(lateGroup(id, s.open.filter(t => t.due < now), stock, now), group('Today', '', s.open.filter(t => t.due === now), stock, now));
+    for (let i = 0; i < 7; i++) { const k = plus(a, i); if (k > now) out.push(group(dayLabel(k, now), '', s.open.filter(t => t.due === k), stock, now)); }
+    return [out.some(Boolean) ? out : a === cur && s.done.length ? finished(name, 'the week', id, now) : h('div.tk-empty', h('p', 'Nothing is planned.')), a === cur ? fold(id, s.done, 'Completed this week', stock, now) : null];
+  }
+
+  // ── the message after a change: what was recorded, and what it moved ──
+  const where = ids => new Map(ids.map(id => { const eng = App.state.engine, p = eng.planting(id), r = p && eng.calc(p); return [id, r ? { out: r.rack ? null : E.d2s(r.planned), first: E.validDate(r.first) ? E.d2s(r.first) : null } : {}]; }));
+  /** What moved between two readings of the same plantings: the day they go out, and their first harvest. */
+  function movedText(before, kindIsOut) {
+    const after = where([...before.keys()]), pairs = name => { const set = new Set(); for (const [id, was] of before) { const now = after.get(id) || {}; if (was[name] && now[name] && was[name] !== now[name]) set.add(`${was[name]}|${now[name]}`); } return [...set].map(x => x.split('|')); };
+    const say = (word, list) => !list.length ? '' : list.length === 1 ? `${word} ${day(d(list[0][0]))} → ${day(d(list[0][1]))}` : `${word} moves for ${plural(list.length, 'planting')}`;
+    return [kindIsOut ? '' : say('planting out', pairs('out')), say('first harvest', pairs('first'))].filter(Boolean);
+  }
+  const stockUnitOf = t => t.sow ? t.line.stockUnit : t.line.stock ? t.line.stock.stockUnit : null;
+  /** Record a task as done on a day, and say what that did. */
+  function finishTick(t, date) {
+    const items = t.items(), now = App.today(), before = where(items.map(i => i.id)), off = diff(date, t.due), unit = stockUnitOf(t);
+    const done = App.recordWork(items, { date, follow: true });
     if (!done) return;
-    for (const l of lines) { ui.sel.delete(l.key); ui.qty.delete(l.key); }
-    const stocked = [...t.sow.map(l => l.stockUnit), ...t.jobs.filter(l => l.stock).map(l => l.stock.stockUnit)], units = [...new Set(stocked)], unit = units.length === 1 ? units[0] : null, n = done.done.length;
-    UI.toast(`${plural(lines.length, t.jobs.length ? 'task' : 'sowing')} recorded ${day(d(date))}${n !== lines.length ? ` for ${plural(n, 'planting')}` : ''}`
-      + (unit ? ` · ${done.used ? amountText(done.used, unit) + ' off stock' : 'nothing off stock'}${done.untracked ? ` · ${amountText(done.untracked, unit)} not from a counted lot` : ''}` : done.used || done.untracked ? ' · seed taken off stock where there was any' : '')
-      + (done.moved.length ? ` · ${movedText(done.moved)}` : '')
-      + (done.held ? ` · ${plural(done.held, 'planting')} would have left ${App.planYear()} and stayed where ${done.held === 1 ? 'it was' : 'they were'}` : '')
-      + (done.failed.length ? ` · ${plural(done.failed.length, 'planting')} left as it was: ${done.failed[0].why}` : '')
-      + (done.overlaps ? ` · ${done.overlaps === 1 ? 'one planting now overlaps another' : done.overlaps + ' plantings now overlap others'}: see To settle` : '')
-      + (done.planOfRecord ? ' · the plan as it stood is kept under Snapshots as the plan of record' : ''), { label: 'Undo', run: App.undo });
-  }
-  /** A day after today cannot be a record. It sets when the ticked sowings are planned for. */
-  function planFor(fig) {
-    const lines = fig.list.filter(l => ui.sel.has(l.key) && l.open.length), date = ui.date;
-    if (!lines.length) return;
-    const done = App.planSowings(lines.flatMap(l => l.open.map(m => m.p.id)), date);
-    if (!done) return;
-    ui.sel.clear(); ui.qty.clear(); ui.date = App.today();
-    render();   // the lines are still open, so nothing else takes the ticks away
-    UI.toast(`${plural(lines.length, 'sowing')} planned for ${dayName(d(date))} · nothing marked sown${done.skipped.length ? ` · ${plural(done.skipped.length, 'planting')} left where it was: ${done.skipped[0].why}` : ''}`, { label: 'Undo', run: App.undo });
-  }
-  function putBack(line) {
-    const done = App.planSowings(line.open.map(m => m.p.id), null);
-    if (done) UI.toast(`${line.name}: back on the day the plan works out`, { label: 'Undo', run: App.undo });
+    const moved = movedText(before, t.id === 'plant' || t.id === 'direct');
+    UI.toast([`${cap(cropWord(t.line.crop.name))} ${PAST[t.id]}${date === now ? (off ? ' today' : '') : ` ${shortDay(date)}`}${off > 0 ? `, ${days(off)} late` : off < 0 ? `, ${days(-off)} early` : ''}`,
+      unit ? (done.used ? `${amountText(done.used, unit)} off stock` : 'nothing off stock') + (done.untracked ? ` · ${amountText(done.untracked, unit)} not from a counted lot` : '') : '',
+      ...moved, off && !moved.length ? 'nothing else moves' : '',
+      done.held ? `${plural(done.held, 'planting')} would have left ${App.planYear()} and stayed where ${done.held === 1 ? 'it was' : 'they were'}` : '',
+      done.failed.length ? `${plural(done.failed.length, 'planting')} left as it was: ${done.failed[0].why}` : '',
+      done.overlaps ? `${done.overlaps === 1 ? 'one planting now overlaps another' : done.overlaps + ' plantings now overlap others'}: see To settle` : '',
+      done.planOfRecord ? 'the plan as it stood is kept under Snapshots as the plan of record' : ''].filter(Boolean).join(' · '), { label: 'Undo', run: App.undo });
   }
   const backText = done => (done.restored ? ` · ${plural(done.restored, 'planting')} back on the day first planned` : '');
-  function takeBack(line) {
-    const done = App.takeBackSowings(line.members.filter(m => m.s.done).map(m => m.p.id));
-    if (done) UI.toast(`${line.name}: sowing taken back${done.returned ? ` · ${amountText(done.returned, line.stockUnit)} returned to stock` : ''}${done.lost ? ` · ${amountText(done.lost, line.stockUnit)} could not go back: that lot is gone` : ''}${backText(done)}`, { label: 'Undo', run: App.undo });
+  /** Untick a done task: its day is cleared, and what it took or pushed goes back. A skipped task comes back onto the list. */
+  function takeBack(t) {
+    const l = t.line, unit = stockUnitOf(t);
+    if (t.state === 'skipped') { if (App.skipWork(membersOf(t).filter(m => Week.skipOf(m.p, m.kind)).map(m => ({ id: m.p.id, kind: m.kind })), null)) UI.toast(`${t.title} is back on the list`, { label: 'Undo', run: App.undo }); return; }
+    const done = t.sow ? App.takeBackSowings(l.members.filter(m => m.s.done).map(m => m.p.id)) : App.takeBackWork(l.members.filter(m => m.st.done).map(m => ({ id: m.p.id, kind: l.kind })));
+    if (done) UI.toast(`${t.title} taken back${done.returned && unit ? ` · ${amountText(done.returned, unit)} returned to stock` : ''}${done.lost && unit ? ` · ${amountText(done.lost, unit)} could not go back: that lot is gone` : ''}${backText(done)}`, { label: 'Undo', run: App.undo });
   }
-  function takeBackJob(line) {
-    const done = App.takeBackWork(line.members.filter(m => m.st.done).map(m => ({ id: m.p.id, kind: line.kind })));
-    const unit = line.stock ? line.stock.stockUnit : null;
-    if (done) UI.toast(`${line.name}: ${Week.NAME[line.kind].toLowerCase()} taken back${done.returned && unit ? ` · ${amountText(done.returned, unit)} returned to stock` : ''}${done.lost && unit ? ` · ${amountText(done.lost, unit)} could not go back: that lot is gone` : ''}${backText(done)}`, { label: 'Undo', run: App.undo });
+  /** Put a task off to a day, on purpose, and say what moved with it. */
+  function delayTo(t, date) {
+    const items = t.items(), before = where(items.map(i => i.id)), off = diff(date, t.due), done = App.delayWork(items, date);
+    if (!done) return;
+    const moved = movedText(before, t.id === 'plant' || t.id === 'direct');
+    UI.toast([`${t.title} ${off > 0 ? 'put off to' : 'brought forward to'} ${date === App.today() ? 'today' : shortDay(date)}`, ...moved, moved.length ? '' : 'nothing else moves',
+      done.failed.length ? `${plural(done.failed.length, 'planting')} left where it was: ${done.failed[0].why}` : '',
+      done.overlaps ? `${done.overlaps === 1 ? 'one planting now overlaps another' : done.overlaps + ' plantings now overlap others'}: see To settle` : ''].filter(Boolean).join(' · '), { label: 'Undo', run: App.undo });
   }
-
-  // ── drawing ──
-  const stat = (label, value, note, cls) => h('div.tr-stat' + (cls ? '.' + cls : ''), h('span', label), h('strong', value), note ? h('small', note) : null);
-  function lineRow(line, stock, withWeek) {
-    const eng = App.state.engine, open = line.state !== 'done', on = ui.sel.has(line.key), color = eng.cropColor(line.crop);
-    const pick = open ? h('input', { type: 'checkbox', checked: on, 'aria-label': `${line.name}: sown`, onchange: e => { if (e.target.checked) ui.sel.add(line.key); else { ui.sel.delete(line.key); ui.qty.delete(line.key); } render(); } }) : h('span.sw-tick', { title: 'Recorded' }, '✓');
-    const seed = open && on
-      ? h('input.tr-n.sw-qty', { type: 'number', min: 0, step: line.stockUnit === 'g' ? 'any' : 1, value: ui.qty.has(line.key) ? ui.qty.get(line.key) : line.estimate, 'aria-label': `${line.name}: ${line.unit === 'g' ? 'grams of seed' : 'seeds'} used`, title: 'What was used, if it differs from the plan', onclick: e => e.stopPropagation(),
-        onchange: e => { ui.qty.set(line.key, e.target.value); } })
-      : h('b', line.amount ? amountText(open ? line.estimate : line.amount, line.unit) : '—');
-    const first = line.members[0];
-    return h('tr' + (on ? '.on' : '') + (open ? '' : '.done'), { dataset: { line: line.key, kind: line.kind, state: line.state }, onclick: e => { if (!open || e.target.closest('input, button, a')) return; if (on) { ui.sel.delete(line.key); ui.qty.delete(line.key); } else ui.sel.add(line.key); render(); } },
-      h('td.sw-pick', pick),
-      h('td.sw-when', h('b', withWeek ? day(d(line.date)) : UI.DAYS[d(line.date).getDay()]), h('small', withWeek ? UI.DAYS[d(line.date).getDay()] : day(d(line.date))), line.set && open ? h('small.sw-set', { title: 'This day was set here, not worked out from the planting date' }, 'your day') : null),
-      h('td.sw-what', h('div.sd-cell', Thumbs.el({ varietyId: line.variety && line.variety.id, cropId: line.crop.id, color, label: line.name, size: 34 }), h('span.sd-name', h('b', line.name), line.sub ? h('small', line.sub) : null))),
-      h('td.sw-how', h('span', line.group ? h('i.sw-key', { dataset: { k: Math.min(line.slot, SLOTS) } }) : null, howText(line)), howNote(line) ? h('small', howNote(line)) : null),
-      h('td.sw-seed', seed, stockNote(line, stock), !open && line.doneOn ? h('small', `sown ${day(d(line.doneOn))}`) : line.state === 'part' ? h('small', `${num(line.members.length - line.open.length)} of ${num(line.members.length)} recorded`) : null,
-        (() => { const f = line.members.map(m => Week.pushed(m.p, 'sow')).filter(Boolean); return f.length ? h('small.sw-pushed', `${days(Math.max(...f.map(x => x.days)))} late: out as much later`) : null; })()),
-      h('td.sw-where', h('button.linkish', { type: 'button', title: 'Show on the map', onclick: () => showOnMap(first) }, whereText(line)),
-        line.members.length > 1 && line.kind !== 'live' ? h('small', ` ${plural(line.members.length, 'planting')}`) : null),
-      h('td.sw-act', !open && line.members.some(m => m.s.done) ? h('button.link', { type: 'button', onclick: () => takeBack(line) }, 'Take back')
-        : open && line.set ? h('button.link', { type: 'button', title: 'Back to the day the plan works out', onclick: () => putBack(line) }, 'Plan’s day') : null));
+  function skipTask(t) {
+    ui.open = null;
+    if (App.skipWork(t.items(), App.today())) UI.toast(`${t.title} skipped · the plan is unchanged`, { label: 'Undo', run: App.undo });
   }
-  /** A line's place on the map. On a phone the page is the week and nothing else, so the words stay words. */
-  function showOnMap(m) { if (isPhone()) return; App.setView('map'); App.setDate(m.r.field); App.select({ type: 'planting', id: m.p.id }); }
-  function jobRow(line, stock, withWeek) {
-    const eng = App.state.engine, open = line.state !== 'done', on = ui.sel.has(line.key), color = eng.cropColor(line.crop), how = jobHow(line), first = line.members[0], when = d(line.date);
-    const flip = () => { if (on) ui.sel.delete(line.key); else ui.sel.add(line.key); render(); };
-    const pick = open ? h('input', { type: 'checkbox', checked: on, 'aria-label': `${line.name}: ${DID[line.section]}`, onchange: flip }) : line.passed ? h('span.sw-tick.none', { title: 'Later work is recorded for it, so it is not waiting; no day was recorded for this task' }, '–') : h('span.sw-tick', { title: 'Recorded' }, '✓');
-    return h('tr' + (on ? '.on' : '') + (open ? '' : '.done'), { dataset: { line: line.key, kind: line.section, state: line.passed ? 'passed' : line.state }, onclick: e => { if (!open || e.target.closest('input, button, a')) return; flip(); } },
-      h('td.sw-pick', pick),
-      h('td.sw-when', h('b', withWeek ? day(when) : UI.DAYS[when.getDay()]), h('small', withWeek ? UI.DAYS[when.getDay()] : day(when))),
-      h('td.sw-what', h('div.sd-cell', Thumbs.el({ varietyId: line.variety && line.variety.id, cropId: line.crop.id, color, label: line.name, size: 34 }), h('span.sd-name', h('b', line.name), line.sub ? h('small', line.sub) : null))),
-      h('td.sw-how', h('span', how[0]), how[1] ? h('small', how[1]) : null),
-      h('td.sw-seed', jobStatus(line, stock)),
-      h('td.sw-where', h('button.linkish', { type: 'button', title: 'Show on the map', onclick: () => showOnMap(first) }, jobWhere(line)),
-        line.members.length > 1 ? h('small', ` ${plural(line.members.length, 'planting')}`) : null),
-      h('td.sw-act', line.members.some(m => m.st.done) ? h('button.link', { type: 'button', onclick: () => takeBackJob(line) }, 'Take back') : null));
+  const calm = () => !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  /** A tick: at once when the task is not late, with the row struck through and folded away first; a late task is asked its day. */
+  function tick(t, row) {
+    if (ui.busy) return;
+    if (!isOpen(t)) { takeBack(t); return; }
+    const now = App.today();
+    if (t.due < now) { openPop('done', t); return; }
+    strike(row, () => finishTick(t, now));
   }
-  function jobTable(lines, stock, withWeek) {
-    const openKeys = lines.filter(l => l.state !== 'done').map(l => l.key), all = openKeys.length > 0 && openKeys.every(k => ui.sel.has(k));
-    return h('div.tr-scroll', h('table.as.sw.wk',
-      h('thead', h('tr',
-        h('th.sw-pick', openKeys.length ? h('input', { type: 'checkbox', checked: all, 'aria-label': 'All of these', title: 'All of these', onchange: e => { for (const k of openKeys) { if (e.target.checked) ui.sel.add(k); else ui.sel.delete(k); } render(); } }) : null),
-        h('th.sw-when', withWeek ? 'Planned' : 'Day'), h('th.sw-what', 'What'), h('th.sw-how', 'How much'), h('th.sw-seed'), h('th.sw-where', lines[0] && lines[0].section === 'plant' ? 'Where' : lines[0] && lines[0].section === 'move' ? 'Where to' : 'For'), h('th.sw-act'))),
-      h('tbody', lines.map(l => jobRow(l, stock, withWeek)))));
-  }
-  /** Pot up, harden off, plant out, move out: a section each, when the week has any. */
-  function jobSections(lines, stock, withWeek) {
-    const out = [];
-    for (const [id, title, about] of JOBS) {
-      if (ui.filter !== 'all' && ui.filter !== id) continue;
-      const mine = lines.filter(l => l.section === id);
-      if (!mine.length) continue;
-      const open = mine.filter(l => l.state !== 'done').length, plantings = mine.reduce((n, l) => n + l.members.length, 0);
-      out.push(h('section.wk-kind', { dataset: { kind: id } },
-        h('div.sw-kind-head', h('h4', title), h('span', [open === mine.length ? plural(mine.length, 'task') : `${num(mine.length - open)} of ${plural(mine.length, 'task')} recorded`, plantings !== mine.length ? plural(plantings, 'planting') : ''].filter(Boolean).join(' · ')), h('small', about)),
-        jobTable(mine, stock, withWeek)));
-    }
-    return out;
-  }
-  function table(lines, stock, withWeek) {
-    const openKeys = lines.filter(l => l.state !== 'done').map(l => l.key), all = openKeys.length > 0 && openKeys.every(k => ui.sel.has(k));
-    return h('div.tr-scroll', h('table.as.sw',
-      h('thead', h('tr',
-        h('th.sw-pick', openKeys.length ? h('input', { type: 'checkbox', checked: all, 'aria-label': 'All of these', title: 'All of these', onchange: e => { for (const k of openKeys) { if (e.target.checked) ui.sel.add(k); else { ui.sel.delete(k); ui.qty.delete(k); } } render(); } }) : null),
-        h('th.sw-when', withWeek ? 'Planned' : 'Day'), h('th.sw-what', 'What'), h('th.sw-how', 'How much'), h('th.sw-seed', 'Seed'), h('th.sw-where', 'For'), h('th.sw-act'))),
-      h('tbody', lines.flatMap((l, i) => l.group && l.groupLines.length > 1 && (i === 0 || lines[i - 1].group !== l.group) ? [groupRow(l), lineRow(l, stock, withWeek)] : [lineRow(l, stock, withWeek)]))));
-  }
-  function sections(lines, stock, withWeek) {
-    const out = [];
-    for (const [kind, title, about] of KINDS) {
-      if (ui.filter !== 'all' && ui.filter !== kind) continue;
-      const mine = lines.filter(l => l.kind === kind);
-      if (!mine.length) continue;
-      const seeds = mine.filter(l => l.unit === 'seeds').reduce((n, l) => n + l.amount, 0), grams = mine.filter(l => l.unit === 'g').reduce((n, l) => n + l.amount, 0), trays = mine.reduce((n, l) => n + l.trays, 0);
-      out.push(h('section.sw-kind', { dataset: { kind } },
-        h('div.sw-kind-head', h('h4', title), h('span', [plural(mine.length, 'sowing'), trays ? plural(trays, 'tray') : '', seeds ? amountText(seeds, 'seeds') : '', grams ? amountText(grams, 'g') + ' of seed' : ''].filter(Boolean).join(' · ')), h('small', about)),
-        table(mine, stock, withWeek)));
-    }
-    return out;
+  function strike(row, then) {
+    ui.open = null;
+    if (!row || calm()) { then(); return; }
+    ui.busy = true; row.classList.remove('open', 'pending'); row.classList.add('ticking');
+    root.setTimeout(() => { row.style.height = row.offsetHeight + 'px'; void row.offsetHeight; row.style.height = '0px'; row.style.opacity = '0'; root.setTimeout(() => { ui.busy = false; then(); }, 300); }, 480);
   }
 
-  /** One stretch of the list in its halves, nursery first: each under a heading when both are shown, bare when one was asked for. */
-  function halves(sown, other, stock, withWeek) {
-    const out = [];
-    for (const [id, title, about, kinds, jobKinds] of GROUPS) {
-      if (ui.scope !== 'all' && ui.scope !== id) continue;
-      const mine = sown.filter(l => kinds.includes(l.kind)), mineJobs = other.filter(l => jobKinds.includes(l.section)), parts = [...sections(mine, stock, withWeek), ...jobSections(mineJobs, stock, withWeek)];
-      if (!parts.length) continue;
-      const all = [...mine, ...mineJobs], open = all.filter(l => l.state !== 'done').length;
-      out.push(h('div.wk-half', { dataset: { half: id } },
-        ui.scope === 'all' ? h('div.wk-half-head', h('h3', title), h('span', open === all.length ? plural(all.length, 'task') : `${num(all.length - open)} of ${plural(all.length, 'task')} recorded`), h('small', about)) : null,
-        parts));
+  // ── the popup calendar: the one place a day is chosen (when it was done, what to put it off to, which day to look at) ──
+  const rowOf = key => [...document.querySelectorAll('#swWrap .tk-row')].find(r => r.dataset.line === key) || null;
+  function openPop(mode, t, anchor) {
+    const now = App.today(), year = App.planYear(), first = `${year}-01-01`, last = `${year}-12-31`;
+    const at = mode === 'go' ? (ui.day || ui.week) : mode === 'delay' ? (t.due > now ? t.due : now) : now, view = d(at < first && mode === 'delay' ? first : at);
+    ui.pop = { mode, key: t ? t.key : null, y: view.getFullYear(), m: view.getMonth(), anchor: anchor || null,
+      lo: mode === 'go' ? '0000-01-01' : mode === 'delay' ? (now > first ? now : first) : plus(t.due, -120), hi: mode === 'go' ? '9999-12-31' : mode === 'delay' ? last : now };
+    render(); drawPop(); placePop();
+    const go = $('tkPop').querySelector('.tk-quick button, .tk-cell:not([disabled])');
+    if (go) go.focus({ preventScroll: true });
+  }
+  function closePop() { if (!ui.pop) return; ui.pop = null; $('tkPop').hidden = true; $('tkScrim').hidden = true; render(); }
+  /** Beside the list, so the row being answered for stays in view; a day to look at opens under the date that was pressed. */
+  function placePop() {
+    const p = ui.pop, pop = $('tkPop');
+    $('tkScrim').hidden = false; pop.hidden = false; pop.style.left = ''; pop.style.top = '';
+    if (isPhone()) return;
+    const row = p.key ? rowOf(p.key) : null, anchor = (row && row.querySelector(p.mode === 'delay' ? '.tk-put, .tk-soft' : '.tk-tick')) || (p.anchor && $(p.anchor)) || $('tkDate') || $('tkWeek');
+    if (!anchor) return;
+    const r = anchor.getBoundingClientRect(), card = ((row && row.closest('.tk-list')) || anchor).getBoundingClientRect(), w = pop.offsetWidth, ht = pop.offsetHeight, W = root.innerWidth, H = root.innerHeight;
+    let left = null, top;
+    if (row) { if (card.right + 12 + w <= W - 12) left = card.right + 12; else if (card.left - 12 - w >= 12) left = card.left - 12 - w; }
+    if (left != null) top = Math.max(12, Math.min(r.top + r.height / 2 - 100, H - ht - 12));
+    else { left = Math.max(12, Math.min(r.left, W - w - 12)); top = r.bottom + 8; if (top + ht > H - 12) top = Math.max(12, r.top - ht - 8); }
+    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  }
+  /** What a day would mean, said before it is chosen. */
+  function dayHint(k) {
+    const p = ui.pop, now = App.today(), t = p.key ? byKey(p.key) : null, head = h('b', k === now ? 'Today' : shortDay(k));
+    if (p.mode === 'go') { const n = k < now ? tasks().filter(x => x.on === k).length : tasks().filter(x => isOpen(x) && (k === now ? x.due <= now : x.due === k)).length; return [head, ` · ${k < now ? `${num(n)} done` : `${num(n)} ${k === now ? 'to do' : 'planned'}`}`]; }
+    const off = diff(k, t.due);
+    if (p.mode === 'delay') return [head, ` · ${off ? `${days(Math.abs(off))} ${off > 0 ? 'later' : 'sooner'}` : 'where it is now'} · ${t.line.members.some(m => Week.MOVES.includes(t.sow ? m.s.kind : t.line.kind)) ? 'what follows it moves as many days' : 'nothing else moves'}`];
+    const pre = App.previewWork(t.items(), { date: k, follow: true }, { impact: false }), moved = pre.moved || [], pairs = [...new Set(moved.map(m => `${m.from}|${m.to}`))].map(x => x.split('|'));
+    return [head, ` · ${off > 0 ? `${days(off)} late` : off < 0 ? `${days(-off)} early` : 'on its day'} · ${!moved.length ? 'nothing moves' : pairs.length === 1 && pairs[0][1] !== 'null' ? `planting out ${day(d(pairs[0][0]))} → ${day(d(pairs[0][1]))}, and the harvest with it` : `${plural(moved.length, 'planting')} ${moved.length === 1 ? 'goes' : 'go'} out ${days(Math.max(...moved.map(m => m.days)))} later`}`];
+  }
+  function restHint() {
+    const p = ui.pop, t = p.key ? byKey(p.key) : null;
+    if (p.mode === 'go') return ui.day ? 'Pick any day to see what it holds.' : 'Pick any day to see its week.';
+    if (p.mode === 'delay') return 'Pick the day you mean to do it.';
+    return t && (t.id === 'plugs' || t.id === 'rockwool' || t.id === 'harden') ? 'The circled day is when it was due: nothing moves. A later day moves planting out, and the harvest, by as many days.' : 'The circled day is when it was due.';
+  }
+  function drawPop() {
+    const p = ui.pop, pop = $('tkPop'), now = App.today(), t = p.key ? byKey(p.key) : null;
+    if (p.key && !t) { closePop(); return; }
+    const inRange = k => k >= p.lo && k <= p.hi && !(p.mode === 'delay' && k === t.due);
+    const quick = p.mode === 'delay' ? [[plus(now, 1), 'Tomorrow'], [plus(T.monday(now), 7), 'Next week']].find(q => inRange(q[0])) : [now, 'Today'];
+    const first = new Date(p.y, p.m, 1), blanks = (first.getDay() + 6) % 7, n = new Date(p.y, p.m + 1, 0).getDate(), cells = [];
+    const busy = p.mode === 'go' ? new Set(tasks().flatMap(x => (isOpen(x) ? [x.due < now ? now : x.due] : x.on ? [x.on] : []))) : null;
+    for (let b = 0; b < blanks; b++) cells.push(h('i'));
+    for (let i = 1; i <= n; i++) {
+      const k = E.d2s(new Date(p.y, p.m, i)), ok = inRange(k), due = p.mode === 'done' && k === t.due, cur = p.mode === 'delay' && k === t.due;
+      cells.push(h('button.tk-cell' + (k === now ? '.now' : '') + (due ? '.due' : '') + (cur ? '.cur' : '') + (p.mode === 'go' && k === ui.day ? '.sel' : '') + (busy && busy.has(k) ? '.has' : ''),
+        { type: 'button', disabled: !ok, dataset: ok ? { pick: k } : {}, 'aria-label': `${shortDay(k)}${due ? ', the day it was due' : cur ? ', where it is now' : k === now ? ', today' : ''}` }, String(i)));
     }
-    return out;
+    const lastOfPrev = E.d2s(new Date(p.y, p.m, 0)), firstOfNext = E.d2s(new Date(p.y, p.m + 1, 1));
+    clear(pop);
+    add(pop, h('span.tk-grab', { 'aria-hidden': 'true' }),
+      h('div.tk-pophead', h('div', h('strong', p.mode === 'go' ? 'Go to a day' : p.mode === 'delay' ? 'Delay it to' : 'When was it done?'), h('small', t ? `${t.title} · ${t.line.name}` : 'A dot marks a day with tasks')),
+        h('button.tk-x', { type: 'button', 'aria-label': 'Close', dataset: { close: '1' } }, '×')),
+      quick ? h('div.tk-quick', h('button', { type: 'button', dataset: { pick: quick[0] } }, quick[1], h('small', shortDay(quick[0])))) : null,
+      h('div.tk-calhead', h('b', `${MONTH[p.m]} ${p.y}`), h('button', { type: 'button', 'aria-label': 'The month before', disabled: lastOfPrev < p.lo, dataset: { month: '-1' } }, '‹'), h('button', { type: 'button', 'aria-label': 'The month after', disabled: firstOfNext > p.hi, dataset: { month: '1' } }, '›')),
+      h('div.tk-cal', ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(x => h('span', { 'aria-hidden': 'true' }, x)), cells),
+      h('p.tk-hint', { id: 'tkHint' }, restHint()));
+  }
+  function pick(k) {
+    const p = ui.pop, t = p.key ? byKey(p.key) : null, row = p.key ? rowOf(p.key) : null, weekly = !ui.day;
+    ui.pop = null; $('tkPop').hidden = true; $('tkScrim').hidden = true;
+    if (p.mode === 'go') { if (weekly) show(null, T.monday(k)); else viewDay(k); return; }
+    if (!t) { render(); return; }
+    if (p.mode === 'delay') { ui.open = null; delayTo(t, k); render(); return; }
+    if (row) row.classList.remove('pending');
+    strike(row, () => { finishTick(t, k); render(); });
+  }
+
+  // ── which day or week is on screen ──
+  let swapped = false;
+  /** One day on screen, or a whole week (day null). What the lists hold comes in with a small rise when it changes. */
+  function show(dayIso, week) {
+    swapped = ui.day !== dayIso || ui.week !== week;
+    ui.day = dayIso; ui.week = week; ui.open = null;
+    render();
+  }
+  const viewDay = k => show(k, T.monday(k));
+  /** Arriving at another week shows all of it; this week opens on today. */
+  const viewWeek = a => { const now = App.today(); show(a === T.monday(now) ? now : null, a); };
+  function setScope(scope) { if (!SCOPES.some(x => x[0] === scope)) return false; ui.scope = scope; if (scope !== 'all') ui.tab = scope; keepPrefs(); render(); return true; }
+  let arrive = null;
+  /** Go to the list on one of its halves, on the week the planner's date is in: the way in from the Nursery. */
+  function open(scope) {
+    if (scope && SCOPES.some(x => x[0] === scope)) { ui.scope = scope; if (scope !== 'all') ui.tab = scope; keepPrefs(); }
+    const week = T.monday(E.d2s(App.state.date));
+    if (App.state.view !== 'sow') { arrive = week; App.setView('sow'); } else viewWeek(week);
   }
   /** What is still to do in one week, by kind and by half: for a view that points here. */
   function weekCounts(week) {
@@ -391,9 +488,118 @@
     const n = k => other.filter(l => l.section === k).length, tray = sow.filter(l => l.kind !== 'direct').length, direct = sow.length - tray;
     return { sow: tray, direct, potup: n('potup'), harden: n('harden'), plant: n('plant'), move: n('move'), nursery: tray + n('potup') + n('harden'), field: direct + n('plant') + n('move') };
   }
-  function setScope(scope) { if (!SCOPES.some(x => x[0] === scope)) return false; ui.scope = scope; keepPrefs(); render(); return true; }   // a kind chosen in the other half is dropped where the kinds are drawn
-  /** Go to the list on one of its halves: the way in from the Nursery. */
-  function open(scope) { if (scope && SCOPES.some(x => x[0] === scope)) { ui.scope = scope; keepPrefs(); } if (App.state.view !== 'sow') App.setView('sow'); else render(); }
+
+  /** A line's place on the map. On a phone the page is the tasks and nothing else, so there is no way there. */
+  function showOnMap(m) { if (isPhone()) return; App.setView('map'); App.setDate(m.r.field); App.select({ type: 'planting', id: m.p.id }); }
+  const span = (a, names) => { const x = d(a), y = d(plus(a, 6)); return `${names[x.getMonth()]} ${x.getDate()} – ${y.getMonth() === x.getMonth() ? '' : names[y.getMonth()] + ' '}${y.getDate()}`; };
+
+  function render() {
+    if (!App.state.ready || App.state.view !== 'sow') { dirty = true; return; }
+    dirty = false;
+    const host = $('swWrap'), keep = host.parentElement.scrollTop, now = App.today(), phone = isPhone(), stock = App.stockNow(), cur = T.monday(now);
+    if (!ui.week) { ui.day = now; ui.week = cur; }
+    const a = ui.week, k = ui.day, isNow = live(), soon = later(), all = onScreen(), todo = all.open.length, did = all.done.length;
+    if (ui.open && !all.open.some(t => t.key === ui.open)) ui.open = null;
+    // the week's seven cells: what each day holds. Today also holds whatever is late.
+    const openOn = new Map(), doneOn = new Map();
+    let late = 0;
+    for (const t of tasks()) { if (isOpen(t)) { if (t.due < now) late++; else openOn.set(t.due, (openOn.get(t.due) || 0) + 1); } else if (t.on) doneOn.set(t.on, (doneOn.get(t.on) || 0) + 1); }
+    let dayRing = null, dayShare = 0;
+    const cells = [0, 1, 2, 3, 4, 5, 6].map(i => {
+      const x = plus(a, i), dn = doneOn.get(x) || 0, open = x < now ? 0 : (openOn.get(x) || 0) + (x === now ? late : 0), lateHere = x === now ? late : 0;
+      const said = `${FULL[d(x).getDay()]} ${day(d(x))}: ${x < now ? `${num(dn)} done` : `${num(open)} to do${lateHere ? `, ${num(lateHere)} of them late` : ''}${dn ? `, ${num(dn)} done` : ''}`}`;
+      const ring = x === now ? RING(18.5, 42) : null;
+      if (ring) { dayRing = ring; dayShare = open + dn ? dn / (open + dn) : 0; }
+      return h('button.tk-day' + (x === now ? '.now' : '') + (x < now ? '.gone' : ''), { type: 'button', dataset: { act: 'day', day: x }, 'aria-pressed': String(x === k), 'aria-label': said, title: said },
+        h('small', wd(x)), h('span.tk-face', ring, h('b', String(d(x).getDate()))), h('em' + (lateHere ? '.late' : !open && dn ? '.ok' : ''), open ? num(open) : dn ? `✓ ${num(dn)}` : ''));
+    });
+    const dated = k ? d(k) : null, near = k && Math.abs(diff(k, now)) < 2;
+    const title = k ? (k === now ? 'Today' : k === plus(now, 1) ? 'Tomorrow' : k === plus(now, -1) ? 'Yesterday' : FULL[dated.getDay()]) : a === cur ? 'This week' : a === plus(cur, 7) ? 'Next week' : a === plus(cur, -7) ? 'Last week' : `Week of ${day(d(a))}`;
+    const count = isNow ? (todo ? `${num(todo)} to do` : did ? 'all done' : 'nothing to do') : soon ? (todo ? `${num(todo)} planned` : 'nothing planned') : `${num(did)} done`;
+    const lists = GROUPS.map(([id, name]) => {
+      const s = onScreen(id), left = s.open.length, n = s.done.length, ring = isNow && left + n ? RING(10, 26) : null;
+      if (ring) fillRing(ring, id, n / (left + n), 62.83);
+      return h('section.tk-list' + (ui.tab === id ? '' : '.off'), { dataset: { half: id }, 'aria-label': name },
+        h('header', h('h3', name), h('span.tk-count', isNow ? (left + n ? `${num(n)} of ${num(left + n)}` : '') : soon ? (left ? `${num(left)} planned` : '') : (n ? `${num(n)} done` : '')), ring),
+        h('div.tk-body' + (swapped ? '.swap' : ''), k ? dayBody(id, name, stock, now) : weekBody(id, name, stock, now)));
+    });
+    if (dayRing) fillRing(dayRing, 'day', dayShare, 116.24);
+    clear(host);
+    add(host,
+      h('div.tk-top',
+        h('h2', { id: 'wkTitle' }, title),
+        h('span.tk-range', { id: 'tkRange' }, k ? [h('button.tk-date', { type: 'button', id: 'tkDate', 'aria-haspopup': 'dialog', title: 'Go to another day', dataset: { act: 'cal' } }, `${near ? FULL[dated.getDay()] + ', ' : ''}${MONTH[dated.getMonth()]} ${dated.getDate()}${dated.getFullYear() === d(now).getFullYear() ? '' : ', ' + dated.getFullYear()}`, CARET()), ' · '] : null, count),
+        framed || phone ? null : h('button.tk-quiet', { type: 'button', id: 'wkPrint', title: 'The week as a sheet to carry: a box for each task and a place for the day it was done', dataset: { act: 'print' } }, 'Print the week')),
+      h('section.tk-week', { id: 'tkBar', 'aria-label': 'The week' },
+        h('div.tk-wk-head',
+          h('button.tk-wk-date', { type: 'button', id: 'tkWeek', 'aria-haspopup': 'dialog', title: 'Go to another day', dataset: { act: 'cal' } }, h('span.wide', span(a, MONTH)), h('span.slim', span(a, UI.MONTHS)), CARET()),
+          k === now ? null : h('button.tk-today', { type: 'button', id: 'wkToday', dataset: { act: 'today' } }, 'Today'),
+          h('div.tk-mode', { role: 'group', 'aria-label': 'Show a day or the whole week', id: 'tkMode' },
+            h('button', { type: 'button', 'aria-pressed': String(!!k), dataset: { act: 'mode', mode: 'day' } }, 'Day'), h('button', { type: 'button', 'aria-pressed': String(!k), dataset: { act: 'mode', mode: 'week' } }, 'Week')),
+          h('div.tk-step', { role: 'group', 'aria-label': 'Move by a week' },
+            h('button', { type: 'button', 'aria-label': 'Back one week', dataset: { act: 'week', by: '-7' } }, s('svg', { viewBox: '0 0 14 14', 'aria-hidden': 'true' }, s('path', { d: 'M9 2.5L4.5 7 9 11.5' }))),
+            h('button', { type: 'button', 'aria-label': 'Forward one week', dataset: { act: 'week', by: '7' } }, s('svg', { viewBox: '0 0 14 14', 'aria-hidden': 'true' }, s('path', { d: 'M5 2.5L9.5 7 5 11.5' }))))),
+        h('div.tk-days', { id: 'tkDays', role: 'group', 'aria-label': 'Days of the week' }, cells)),
+      h('div.tk-tabs', { role: 'tablist', 'aria-label': 'Lists', id: 'tkTabs' }, GROUPS.map(([id, name]) => {
+        const s = onScreen(id), left = s.open.length, lateHere = isNow && s.open.some(t => t.due < now);
+        return h('button', { type: 'button', role: 'tab', 'aria-selected': String(ui.tab === id), dataset: { act: 'tab', half: id } }, name, h('small' + (lateHere ? '.late' : ''), !isNow && !soon ? `${num(s.done.length)} done` : left ? `${num(left)}${isNow ? ' left' : ''}` : isNow ? 'done' : '0'));
+      })),
+      h('div.tk-lists', { id: 'tkLists' }, lists),
+      phone ? null : Bench.line());
+    swapped = false;
+    host.parentElement.scrollTop = keep;
+    if (ui.pop && !$('tkPop').hidden) placePop();
+  }
+
+  // ── what a press does ──
+  function onClick(e) {
+    const el = e.target.closest('[data-act]');
+    if (!el) return;
+    const act = el.dataset.act, row = el.closest('.tk-row'), t = row ? byKey(row.dataset.line) : null, now = App.today();
+    if (act === 'tick') { if (t) tick(t, row); }
+    else if (act === 'open') { if (t && isOpen(t) && !ui.busy) { ui.open = ui.open === t.key ? null : t.key; render(); } }
+    else if (act === 'delay') { if (t && !ui.busy) openPop('delay', t); }
+    else if (act === 'skip') { if (t && !ui.busy) skipTask(t); }
+    else if (act === 'map') { if (t) showOnMap(t.line.members[0]); }
+    else if (act === 'fold') { const on = !ui.shown[el.dataset.half]; ui.shown[el.dataset.half] = on; el.setAttribute('aria-expanded', String(on)); el.nextElementSibling.classList.toggle('shut', !on); }
+    else if (act === 'late') { ui.shown[el.dataset.half + ':late'] = true; render(); }
+    else if (act === 'go' || act === 'day') viewDay(el.dataset.day);
+    else if (act === 'today') viewDay(now);
+    else if (act === 'week') viewWeek(plus(ui.week, +el.dataset.by));
+    else if (act === 'cal') openPop('go', null, el.id);
+    else if (act === 'tab') { ui.tab = el.dataset.half; ui.scope = ui.tab; keepPrefs(); render(); }
+    else if (act === 'print') printWeek(figures(), ui.week);
+    else if (act === 'mode') {
+      if (el.dataset.mode === 'week') { if (ui.day) show(null, ui.week); return; }
+      if (ui.day) return;
+      if (ui.week === T.monday(now)) { viewDay(now); return; }
+      const busy = tasks().find(x => (isOpen(x) ? x.due : x.on) >= ui.week && (isOpen(x) ? x.due : x.on) <= plus(ui.week, 6));
+      viewDay(busy ? (isOpen(busy) ? busy.due : busy.on) : ui.week);
+    }
+  }
+  /** A note is kept when the box is left, and Enter leaves it. */
+  function onChange(e) {
+    const key = e.target && e.target.dataset && e.target.dataset.note, t = key ? byKey(key) : null;
+    if (t) App.noteWork(membersOf(t).map(m => ({ id: m.p.id, kind: m.kind })), e.target.value);
+  }
+  function onKey(e) {
+    if (App.state.view !== 'sow') return;
+    if (e.key === 'Enter' && e.target && e.target.dataset && e.target.dataset.note) { e.target.blur(); ui.open = null; render(); return; }
+    if (e.key === 'Escape') { if (ui.pop) closePop(); else if (ui.open) { ui.open = null; render(); } return; }
+    if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || ui.pop || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || document.querySelector('dialog[open]') || /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '')) return;
+    const by = e.key === 'ArrowLeft' ? -1 : 1;
+    if (ui.day) viewDay(plus(ui.day, by)); else viewWeek(plus(ui.week, 7 * by));
+  }
+  function onPop(e) {
+    const p = ui.pop;
+    if (!p) return;
+    if (e.target.closest('[data-close]')) { closePop(); return; }
+    const m = e.target.closest('[data-month]');
+    if (m) { const to = new Date(p.y, p.m + (+m.dataset.month), 1); p.y = to.getFullYear(); p.m = to.getMonth(); drawPop(); return; }
+    const cell = e.target.closest('[data-pick]');
+    if (cell) pick(cell.dataset.pick);
+  }
+  const hint = nodes => { const el = $('tkHint'); if (el) { clear(el); add(el, nodes); } };
 
   // ── the printed sheet: the week as a list to carry and tick by hand ──
   const framed = (() => { try { return root.self !== root.top; } catch (_) { return true; } })();
@@ -405,12 +611,11 @@
     const when = l => { const x = d(l.date); return withWeek ? `${day(x)}` : `${UI.DAYS[x.getDay()]} ${x.getDate()}`; };
     const body = [];
     for (const [id, title, , kinds, jobKinds] of GROUPS) {
-      if (ui.scope !== 'all' && ui.scope !== id) continue;
       const rows = [
         ...KINDS.filter(k => kinds.includes(k[0])).map(([kind, name]) => sheetRows(kind === 'direct' ? 'Sow in the ground' : `Sow: ${name.toLowerCase()}`, sow.filter(l => l.kind === kind), l => [when(l), [howText(l), howNote(l), l.amount ? amountText(l.state === 'done' ? l.amount : l.estimate, l.unit) : ''].filter(Boolean).join(' · '), whereText(l)])),
         ...JOBS.filter(k => jobKinds.includes(k[0])).map(([job, name]) => sheetRows(name, other.filter(l => l.section === job && !l.passed), l => [when(l), jobHow(l).filter(Boolean).join(' · '), jobWhere(l)]))].filter(Boolean);
       if (!rows.length) continue;
-      if (ui.scope === 'all') body.push(h('tr.wkp-half', { dataset: { half: id } }, h('th', { colSpan: 6 }, title)));
+      body.push(h('tr.wkp-half', { dataset: { half: id } }, h('th', { colSpan: 6 }, title)));
       body.push(...rows);
     }
     return body.length ? h('table', h('thead', h('tr', h('th'), h('th', withWeek ? 'Planned' : 'Day'), h('th', 'What'), h('th', 'How much'), h('th', 'Where, or for'), h('th', 'Done on'))), h('tbody', body)) : null;
@@ -418,13 +623,13 @@
   /** The week as a sheet of paper: every job with a box to tick and a place to write the day it was done. */
   function sheet(fig, now, span = 1) {
     const until = E.d2s(E.addDays(d(now), 7 * span - 1)), inSpan = l => l.week >= now && l.week <= until;
-    const sown = fig.list.filter(l => inScope(l.kind)), all = jobs().filter(l => inScope(l.section)), week = sown.filter(inSpan), weekJobs = all.filter(inSpan), earlier = sown.filter(l => l.week < now && l.state !== 'done'), earlierJobs = all.filter(l => l.week < now && l.state !== 'done');
-    const last = d(until), half = ui.scope === 'all' ? '' : `${SCOPES.find(x => x[0] === ui.scope)[1]}, `, from = UI.dayLong(d(now)).replace(/^\w+ /, '');
-    return h('div.wkp', { dataset: { scope: ui.scope } },
+    const sown = fig.list.filter(l => !l.skipped), all = jobs().filter(l => !l.skipped), week = sown.filter(inSpan), weekJobs = all.filter(inSpan), earlier = sown.filter(l => l.week < now && l.state !== 'done'), earlierJobs = all.filter(l => l.week < now && l.state !== 'done');
+    const last = d(until), half = '', from = UI.dayLong(d(now)).replace(/^\w+ /, '');
+    return h('div.wkp', { dataset: { scope: 'all' } },
       h('h1', span === 1 ? `${half}${half ? 'week' : 'Week'} of ${from}` : `${half}${num(span)} weeks from ${from}`), h('p.wkp-sub', `Monday ${day(d(now))} to Sunday ${day(last)} · ${plural(week.length + weekJobs.filter(l => !l.passed).length, 'task')} · printed ${day(new Date())}`),
       sheetTable(week, weekJobs, span > 1) || h('p', span === 1 ? 'Nothing is planned for this week.' : 'Nothing is planned for these weeks.'),
-      // the earlier jobs are printed when they are open on the page: what is seen is what is printed
-      ui.earlier && earlier.length + earlierJobs.length ? [h('h2', 'Not recorded from earlier weeks'), sheetTable(earlier, earlierJobs, true)] : null,
+      // what is late is printed with this week, where it is listed: a task is late by today's date, whatever week is looked at
+      now === T.monday(App.today()) && earlier.length + earlierJobs.length ? [h('h2', 'Not recorded from earlier weeks'), sheetTable(earlier, earlierJobs, true)] : null,
       h('p.wkp-foot', 'Tick what was done and write the day. Enter it in the planner afterwards: a task done late moves what comes after it.'));
   }
   function printWeek(fig, now, span = 1) {
@@ -436,76 +641,6 @@
     root.addEventListener('afterprint', done);
     try { root.print(); } catch (_) { UI.toast('Printing is not available in this view.'); }
     setTimeout(done, 1500);
-  }
-
-  function render() {
-    if (!App.state.ready || App.state.view !== 'sow') { dirty = true; return; }
-    dirty = false;
-    const host = $('swWrap'), keep = host.parentElement.scrollTop, fig = figures(), all = jobs(), stock = App.stockNow(), now = T.monday(E.d2s(App.state.date)), today = App.today(), phone = isPhone();
-    // a selection outlives a redraw, but not the line it pointed at
-    const known = new Set([...fig.list, ...all].filter(l => l.state !== 'done').map(l => l.key));
-    for (const k of [...ui.sel]) if (!known.has(k)) { ui.sel.delete(k); ui.qty.delete(k); }
-    if (!ui.date) ui.date = today;
-    const later = ui.date > today;
-    // how far ahead is listed: this week, or the two or four weeks from its Monday (a phone shows the week and nothing else)
-    const span = phone ? 1 : ui.span, until = E.d2s(E.addDays(d(now), 7 * span - 1)), inSpan = l => l.week >= now && l.week <= until, stretch = span === 1 ? `Week of ${day(d(now))}` : `${day(d(now))} – ${day(d(until))}`;
-    // the half of the list that is asked for: everything, the nursery's, or the field's
-    const sown = fig.list.filter(l => inScope(l.kind)), ours = all.filter(l => inScope(l.section)), scoped = ui.scope !== 'all';
-    const week = sown.filter(inSpan), earlier = sown.filter(l => l.week < now && l.state !== 'done'), weekOpen = week.filter(l => l.state !== 'done');
-    const weekJobs = ours.filter(l => inSpan(l) && !l.passed), earlierJobs = ours.filter(l => l.week < now && l.state !== 'done'), jobsOpen = weekJobs.filter(l => l.state !== 'done'), late = earlier.length + earlierJobs.length;
-    const sum = (list, unit) => list.filter(l => l.unit === unit).reduce((n, l) => n + l.amount, 0), trays = week.reduce((n, l) => n + l.trays, 0);
-    const busy = [...new Set([...sown.map(l => l.week), ...ours.filter(l => !l.passed).map(l => l.week)])].sort();
-    const next = busy.find(w => w > until), prev = busy.filter(w => w < now).pop(), step = n => () => App.setDate(E.addDays(d(now), n));
-    const t = ticked(fig), selected = [...t.sow, ...t.jobs], word = t.jobs.length ? 'task' : 'sowing';
-    const kindsInOrder = GROUPS.flatMap(g => [...KINDS.filter(k => g[3].includes(k[0])), ...JOBS.filter(k => g[4].includes(k[0]))]);
-    const chips = [['all', 'All kinds'], ...kindsInOrder.map(k => [k[0], k[1]])].filter(([id]) => id === 'all' || week.some(l => l.kind === id) || weekJobs.some(l => l.section === id) || (ui.earlier && (earlier.some(l => l.kind === id) || earlierJobs.some(l => l.section === id))));
-    if (!chips.some(([id]) => id === ui.filter)) ui.filter = 'all';
-    const anything = week.length + weekJobs.length > 0, nothingAfter = !anything && !next;
-    const pre = selected.length && !later ? preview(t, ui.date) : null;
-    const jobNote = JOBS.map(([id, title]) => { const n = jobsOpen.filter(l => l.section === id).length; return n ? `${title.toLowerCase()} ${num(n)}` : ''; }).filter(Boolean).join(' · ');
-    const seasonJobs = ours.filter(l => !l.passed), seasonDone = sown.filter(l => l.state === 'done').length + seasonJobs.filter(l => l.state === 'done').length, seasonAll = sown.length + seasonJobs.length;
-    const where = ui.scope === 'nursery' ? ' in the nursery' : ui.scope === 'field' ? ' in the field' : '', scopeName = scoped ? SCOPES.find(x => x[0] === ui.scope)[1].toLowerCase() : '';
-    clear(host);
-    add(host,
-      h('header.as-head.wk-head', h('p.eyebrow', `Tasks · ${App.planYear()}`), h('h2', { id: 'wkTitle' }, !scoped ? (span === 1 ? 'This week’s tasks' : `Tasks for ${num(span)} weeks`) : span === 1 ? `This week${where}` : `${num(span)} weeks${where}`),
-        h('p', 'Tick what was done and record it on the day it was done. Seed comes off stock, and a transplant sown or hardened off late goes out as many days later.')),
-      h('div.tr-stats.sw-stats',
-        stat(stretch, week.length ? `${num(weekOpen.length)} to sow` : 'Nothing', week.length ? (week.length - weekOpen.length ? `${num(week.length - weekOpen.length)} of ${num(week.length)} recorded` : plural(week.length, 'sowing') + ' planned') : 'to sow'),
-        stat('Seed this week', sum(week, 'seeds') ? num(sum(week, 'seeds')) : sum(week, 'g') ? amountText(sum(week, 'g'), 'g') : '—', sum(week, 'seeds') ? `seeds${sum(week, 'g') ? ' · ' + amountText(sum(week, 'g'), 'g') + ' for trays' : ''}` : sum(week, 'g') ? 'for live trays' : ''),
-        stat('Trays to fill', trays ? num(trays) : '—', trays ? [['plugs', 'seedling'], ['rockwool', 'tower'], ['live', 'live']].map(([k, w]) => { const n = week.filter(l => l.kind === k).reduce((m, l) => m + l.trays, 0); return n ? `${num(n)} ${w}` : ''; }).filter(Boolean).join(' · ') : ''),
-        stat('Other tasks', weekJobs.length ? `${num(jobsOpen.length)} to do` : 'Nothing', weekJobs.length ? (jobNote || `${plural(weekJobs.length, 'task')} recorded`) : ui.scope === 'nursery' ? 'to pot up or harden off' : ui.scope === 'field' ? 'to plant out or move out' : 'to pot up, harden off or plant', 'wk-other'),
-        stat('Earlier, not recorded', num(late), late ? `since ${day(d([...earlier, ...earlierJobs].map(l => l.date).sort()[0]))}` : 'nothing is waiting', late ? 'wk-late' : ''),
-        stat('This season', `${num(seasonDone)} of ${num(seasonAll)}`, 'tasks recorded')),
-      h('div.sw-bar',
-        h('span.tr-stepper', h('button.icon-btn', { type: 'button', 'aria-label': 'Back one week', onclick: step(-7) }, '‹'), h('b', { id: 'wkStretch' }, stretch), h('button.icon-btn', { type: 'button', 'aria-label': 'Forward one week', onclick: step(7) }, '›')),
-        phone ? null : h('div.seg.wk-span', { role: 'group', 'aria-label': 'How far ahead to list', id: 'wkSpan' }, SPANS.map(([n, label]) => h('button', { type: 'button', dataset: { span: n }, 'aria-pressed': String(ui.span === n), title: n === 1 ? 'This week only' : `This week and the ${n - 1 === 1 ? 'one' : num(n - 1)} after it`, onclick: () => { ui.span = n; keepPrefs(); render(); } }, label))),
-        h('div.seg.wk-scope', { role: 'group', 'aria-label': 'Which half of the list', id: 'wkScope' }, SCOPES.map(([id, label, about]) => h('button', { type: 'button', dataset: { scope: id }, 'aria-pressed': String(ui.scope === id), title: about, onclick: () => setScope(id) }, label))),
-        now !== T.monday(today) && String(App.planYear()) === today.slice(0, 4) ? h('button.btn.small', { type: 'button', id: 'wkToday', onclick: () => App.setDate(d(today)) }, 'This week') : null,
-        !anything && next ? h('button.btn.small', { type: 'button', onclick: () => App.setDate(d(next)) }, `Next work: week of ${day(d(next))}`) : null,
-        nothingAfter && prev ? h('button.btn.small', { type: 'button', onclick: () => App.setDate(d(prev)) }, `Last work: week of ${day(d(prev))}`) : null,
-        h('span.grow'),
-        framed || phone ? null : h('button.btn', { type: 'button', id: 'wkPrint', title: `${scoped ? `The ${scopeName}’s tasks` : 'This week'} as a sheet to carry: a box for each task and a place for the day it was done`, onclick: () => printWeek(fig, now, span) }, scoped ? `Print the ${scopeName} sheet` : span === 1 ? 'Print the week' : `Print the ${num(span)} weeks`)),
-      chips.length > 2 ? h('div.sd-filters.wk-kinds', { id: 'wkKinds', role: 'group', 'aria-label': 'Which kind of task to list' }, chips.map(([id, label]) => h('button.chip', { type: 'button', dataset: { kind: id }, 'aria-pressed': String(ui.filter === id), onclick: () => { ui.filter = id; render(); } }, label))) : null,
-      late ? h('details.sw-earlier', { open: ui.earlier, ontoggle: e => { if (e.target.open !== ui.earlier) { ui.earlier = e.target.open; render(); } } },
-        h('summary', h('b', `${plural(late, 'earlier task')}${where} ${late === 1 ? 'is' : 'are'} not recorded.`), h('span', ' Planned before this week. Record them here on the day they were done, or leave them: nothing is assumed done.')),
-        ui.earlier ? halves(earlier, earlierJobs, stock, true) : null) : null,
-      anything ? halves(week, weekJobs, stock, span > 1) : h('p.empty.sw-none', span === 1 ? `Nothing is planned${where} for the week of ${day(d(now))}.` : `Nothing is planned${where} from ${day(d(now))} to ${day(d(until))}.`),
-      selected.length ? h('div.sw-record', { role: 'region', 'aria-label': 'Record what is ticked' },
-        h('b', `${plural(selected.length, word)} ticked`),
-        h('span', (() => { const s = sum(t.sow, 'seeds'), g = sum(t.sow, 'g'); return [s ? amountText(s, 'seeds') : '', g ? amountText(g, 'g') + ' of seed' : ''].filter(Boolean).join(' · '); })()),
-        h('span.grow'),
-        h('label', h('span', later ? 'Plan for' : t.jobs.length ? 'Done on' : 'Sown on'), h('input', { type: 'date', value: ui.date, 'aria-label': later ? 'Plan for' : t.jobs.length ? 'Done on' : 'Sown on', onchange: e => { ui.date = e.target.value || today; render(); } })),
-        h('button.btn', { type: 'button', onclick: () => { ui.sel.clear(); ui.qty.clear(); render(); } }, 'Clear'),
-        h('button.btn.primary', { type: 'button', id: 'swRecord', disabled: later && !t.sow.length, onclick: () => (later ? planFor(fig) : record(fig)) }, later ? `Plan ${plural(t.sow.length, 'sowing')} for ${dayName(d(ui.date))}` : `Record ${plural(selected.length, word)}`),
-        later ? h('small.sw-later', t.jobs.length ? `A day after today is a plan, not a record. Sowings move to that day; nothing is marked done and no seed leaves stock. ${t.sow.length ? 'The other tasks ticked stay' : 'These tasks stay'} where they are: to plan another day for planting out, move the planting.`
-          : 'A day after today is a plan. Nothing is marked sown and no seed leaves stock: the sowing moves to that day.') : null,
-        pre && pre.moved.length ? h('label.sw-follow', { id: 'wkFollow' },
-          h('input', { type: 'checkbox', checked: ui.follow, onchange: e => { ui.follow = e.target.checked; render(); } }), h('b', 'Later dates follow'),
-          h('span', ui.follow ? `Late by ${(() => { const lo = Math.min(...pre.moved.map(m => m.days)), hi = Math.max(...pre.moved.map(m => m.days)); return lo === hi ? days(hi) : `${num(lo)} to ${days(hi)}`; })()}: ${movedText(pre.moved)}.${pre.overlaps ? ` ${pre.overlaps === 1 ? 'One pair of plantings' : num(pre.overlaps) + ' pairs of plantings'} would then share ground, and wait under To settle.` : ''}`
-            : `${plural(pre.moved.length, 'planting')} ${pre.moved.length === 1 ? 'was' : 'were'} sown or hardened off late and ${pre.moved.length === 1 ? 'keeps the day it goes' : 'keep the days they go'} out.`)) : null,
-        pre && pre.held ? h('small.sw-later', `${plural(pre.held, 'planting')} would be pushed out of ${App.planYear()}, and ${pre.held === 1 ? 'stays' : 'stay'} where ${pre.held === 1 ? 'it is' : 'they are'}.`) : null) : null,
-      phone || ui.scope === 'field' ? null : Bench.line());
-    host.parentElement.scrollTop = keep;
   }
 
   // ── a phone: the week is the whole page ──
@@ -521,12 +656,34 @@
   }
   function leavePhone() { fullHere = true; fitPhone(); }
 
+  let lastView = null, swipe = null;
+  /** Coming to the page from elsewhere: it opens on today, or on the week a link asked for. */
+  function onView() {
+    const view = App.state.view;
+    if (view === 'sow' && lastView !== 'sow' && App.state.ready) {
+      const now = App.today(), week = arrive || T.monday(now);
+      arrive = null; ui.week = week; ui.day = week === T.monday(now) ? now : null; ui.open = null; swapped = false;
+    }
+    if (view !== 'sow' && ui.pop) { ui.pop = null; $('tkPop').hidden = true; $('tkScrim').hidden = true; }
+    lastView = view;
+    render();
+  }
   function init() {
-    App.on('plan', render); App.on('view', render); App.on('nursery', render); App.on('date', () => { if (App.state.view === 'sow') render(); });
+    App.on('plan', render); App.on('view', onView); App.on('nursery', render);
     Thumbs.on(() => { if (App.state.view === 'sow') render(); });
     if (narrow) { narrow.addEventListener('change', fitPhone); App.on('plan', fitPhone); App.on('view', fitPhone); fitPhone(); }
-    const full = $('wkFull');
+    const full = $('wkFull'), host = $('swWrap');
     if (full) full.addEventListener('click', leavePhone);
+    host.addEventListener('click', onClick); host.addEventListener('change', onChange);
+    document.addEventListener('keydown', onKey);
+    // a sideways swipe on the week moves a week
+    host.addEventListener('touchstart', e => { swipe = e.target.closest('.tk-week') ? e.touches[0].clientX : null; }, { passive: true });
+    host.addEventListener('touchend', e => { if (swipe == null) return; const dx = e.changedTouches[0].clientX - swipe; swipe = null; if (Math.abs(dx) > 48) viewWeek(plus(ui.week, dx < 0 ? 7 : -7)); }, { passive: true });
+    document.body.append(h('div.tk-scrim', { id: 'tkScrim', hidden: true, onclick: closePop }), h('div.tk-pop', { id: 'tkPop', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Choose a day', hidden: true, onclick: onPop,
+      onmouseover: e => { const c = e.target.closest('[data-pick]'); if (c && ui.pop) hint(dayHint(c.dataset.pick)); }, onfocusin: e => { const c = e.target.closest('[data-pick]'); if (c && ui.pop) hint(dayHint(c.dataset.pick)); },
+      onmouseout: e => { if (e.target.closest('[data-pick]') && ui.pop) hint(restHint()); } }));
   }
-  root.LRFSowView = { init, render, figures, jobs, weekCounts, setScope, open, scope: () => ui.scope, GROUPS: GROUPS.map(g => ({ id: g[0], name: g[1], sow: g[3], jobs: g[4] })), sheet: () => sheet(figures(), T.monday(E.d2s(App.state.date)), isPhone() ? 1 : ui.span), span: () => ui.span, ticked: () => ticked(figures()), fitPhone, leavePhone, get dirty() { return dirty; }, get follow() { return ui.follow; } };
+  root.LRFSowView = { init, render, figures, jobs, tasks, weekCounts, setScope, open, scope: () => ui.scope, GROUPS: GROUPS.map(g => ({ id: g[0], name: g[1], sow: g[3], jobs: g[4] })),
+    sheet: () => sheet(figures(), ui.week || T.monday(App.today())), show: k => viewDay(k), showWeek: a => show(null, T.monday(a)), where: () => ({ day: ui.day, week: ui.week, tab: ui.tab, open: ui.open, pop: ui.pop ? ui.pop.mode : null }),
+    fitPhone, leavePhone, get dirty() { return dirty; } };
 })(window);
