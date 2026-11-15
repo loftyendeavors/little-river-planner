@@ -161,6 +161,15 @@ const refused = async promise => { try { await promise; return null; } catch (er
   check('a read-only window writes nothing: a queued save, its timer, the page hidden, a save asked for outright', b.text() === text0[0] && b.count() === text0[1] && c.wrote().length === 0 && no !== null && /another window/.test(no), [c.wrote(), no]);
   await a.store.saveNow(plan(5, 'one, again')); a.store.save(plan(6, 'one, queued')); await a.pass(700);
   check('the lock is asked for once in a page that gets it, however often it saves; a page that finds it taken asks ten times over 1.5 s, and then no more', a.asked === 1 && c.asked === 10, [a.asked, c.asked]);
+  // a reload: the page after hears, late, of the last write of the page before it
+  {
+    const br = browser(), first = await open(br, 'before'); await first.store.saveNow(plan(2, 'the last write before the reload')); first.close();
+    const after = await open(br, 'after');
+    for (const key of [COUNT, PLAN]) for (const fn of after.listeners.storage || []) fn({ key, storageArea: after.box.localStorage });
+    check('a page told of a write it has already read is not stopped: the count beside the plan is the one it read', after.store.readOnly === '' && after.plan.word === 'the last write before the reload', [after.store.readOnly]);
+    await after.store.saveNow(plan(3, 'and it saves'));
+    check('and its next save is taken', JSON.parse(br.text()).word === 'and it saves', [br.count()]);
+  }
   // a reload: the page before still holds the lock for a moment as the page after it starts
   {
     const br = browser(), first = await open(br, 'before the reload'); await first.store.saveNow(plan(2, 'saved before the reload'));

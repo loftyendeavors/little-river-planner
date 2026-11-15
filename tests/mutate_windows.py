@@ -31,6 +31,8 @@ def alone(cmd, timeout, env=None, cwd=None):
 
 # (the guard taken out, file, as it is, as the fault has it, words of the line that must fail)
 NODE = [
+  ('a page told of a write it has already read stops all the same: a reload after a change leaves the window read-only', 'js/store.js',
+   " && countNow() !== count) stop('changed'); });", ") stop('changed'); });", 'told of a write it has already read'),
   ('a page that finds the lock taken gives up at once: a reload can leave the one window read-only', 'js/store.js',
    "if (!lock && ++tries < AGAIN) { setTimeout(ask, 150); return undefined; }", "", 'still letting go of the lock'),
   ('the count beside the stored plan is not checked before a write', 'js/store.js',

@@ -80,7 +80,7 @@
 
   function create(onStatus) {
     let db = null, backend = 'memory', rev = 0, saved = {}, buckets = {}, dirty = null, saving = false, unsubscribe = null, failed = false;
-    let timer = null, readOnly = '', count = 0, letGo = null, channel = null, given = null;
+    let timer = null, readOnly = '', count = 0, read = false, letGo = null, channel = null, given = null;
     const status = (state, detail) => onStatus && onStatus({ backend, state, detail: detail || '' });
     /** From here on this window writes nothing. The first reason stands. */
     function stop(why) {
@@ -180,6 +180,7 @@
       if (backend === 'device') {
         count = countNow();   // read before the plan: a write that lands between the two is then seen at this window's next write
         const text = root.localStorage.getItem(DEVICE_KEY);
+        read = true;
         return text ? JSON.parse(text) : null;
       }
       return null;
@@ -280,8 +281,10 @@
       const hidden = () => { if (backend !== 'memory' && dirty && !saving) { clearTimeout(timer); flush(); } };
       root.addEventListener('pagehide', hidden);
       if (root.document && root.document.addEventListener) root.document.addEventListener('visibilitychange', () => { if (root.document.visibilityState === 'hidden') hidden(); });
-      // Another window has written the plan or its count: this one stops at once, before another change is made in it.
-      root.addEventListener('storage', event => { if (backend === 'device' && (event.key === DEVICE_KEY || event.key === COUNT_KEY || event.key === null) && (!event.storageArea || event.storageArea === root.localStorage)) stop('changed'); });
+      // Another window has written the plan or its count: this one stops at once, before another change is made in it. Only a
+      // write this window has not read stops it: a page that is reloaded hears of the last write of the page before it, which
+      // is the very plan it opened with, and a page that has not yet read the plan will read whatever is there.
+      root.addEventListener('storage', event => { if (backend === 'device' && read && (event.key === DEVICE_KEY || event.key === COUNT_KEY || event.key === null) && (!event.storageArea || event.storageArea === root.localStorage) && countNow() !== count) stop('changed'); });
     }
 
     /** Large read-only text (the attic) kept beside the plan, in the cloud only. */
