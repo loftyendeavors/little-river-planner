@@ -69,14 +69,29 @@ jobs:
           path: ${{ runner.temp }}/shots
           if-no-files-found: ignore
           retention-days: 7
+  # The linter reads the scripts and runs none of them: seconds, on every push. Its rules, and how to run it by hand, are in
+  # tools/eslint.config.mjs. The versions are said outright, as the browser's driver is above.
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tools
+        run: npm install --no-save --no-package-lock eslint@9.39.5 @eslint/js@9.39.5 globals@16.5.0
+      - name: Lint
+        run: npx eslint -c tools/eslint.config.mjs js
   all:
     name: All checks
     if: always()
-    needs: part
+    needs: [part, lint]
     runs-on: ubuntu-24.04
     steps:
       - name: Every part passed
-        run: test "${{ needs.part.result }}" = "success"
+        run: test "${{ needs.part.result }}" = "success" && test "${{ needs.lint.result }}" = "success"
       # bookkeeping, after the verdict and unable to change it: what every check ran, as tests/counts.json would hold it
       - uses: actions/checkout@v4
         if: always()
