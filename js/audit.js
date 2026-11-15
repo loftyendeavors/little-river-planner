@@ -148,14 +148,15 @@
       const taking = cand.filter(c => c.ok);
       const wins = new Map();
       for (const c of taking) { const k = lineOf(c), w = wins.get(k); if (!w || c.row.ids.length > w.row.ids.length) wins.set(k, c); }
-      const lost = taking.filter(c => wins.get(lineOf(c)) !== c && wins.get(lineOf(c)).typed !== c.typed);
-      if (lost.length) { for (const c of lost) c.ok = false; continue; }
-      const next = clone(plan.assumptions) || { v: 1, crops: {}, varieties: {} };
-      for (const c of taking) entry(next, c.level, c.level === 'crop' ? c.row.cropId : c.row.varietyId, c.row.env, c.typed);
-      const sim = E.create({ ...plan, assumptions: next, plantings: plan.plantings.map(p => ids.has(p.id) ? freed(p) : p) }, Lib);
-      const moves = r => !r.ids.every(id => same(eng.calc(eng.planting(id)), sim.calc(sim.planting(id))));
-      const moved = taking.filter(c => moves(c.row));
-      if (moved.length) { for (const c of moved) c.ok = false; continue; }
+      let drop = taking.filter(c => wins.get(lineOf(c)) !== c && wins.get(lineOf(c)).typed !== c.typed), moves = () => false;
+      if (!drop.length) {
+        const next = clone(plan.assumptions) || { v: 1, crops: {}, varieties: {} };
+        for (const c of taking) entry(next, c.level, c.level === 'crop' ? c.row.cropId : c.row.varietyId, c.row.env, c.typed);
+        const sim = E.create({ ...plan, assumptions: next, plantings: plan.plantings.map(p => ids.has(p.id) ? freed(p) : p) }, Lib);
+        moves = r => !r.ids.every(id => same(eng.calc(eng.planting(id)), sim.calc(sim.planting(id))));
+        drop = taking.filter(c => moves(c.row));
+      }
+      if (drop.length) { for (const c of drop) c.ok = false; if (round === 7) for (const c of cand) c.ok = false; continue; }   // out of rounds: nothing is taken that was not tried
       for (const r of list) r.stays = r.agrees && taking.length > 0 && moves(r);
       break;
     }

@@ -12,10 +12,11 @@ and the two side by side with what changed boxed in red.
 Two takes of one build are not the same picture to the last pixel: the edge of a rounded corner or of a curve comes out a
 few levels lighter or darker from one take to the next. So each build is photographed twice, and what differs between two
 takes of the same build is set aside, with the pixels round it, before the two builds are compared. And about one take in
-forty draws the names of the gardens on the map in other letter shapes. So a screen that is not plainly the same is
-photographed twice more, and of the four takes of a build the ones that agree are compared: a change is there every time, a
-fluke is not. Where no two takes of a build agree (a clock, something still loading) the screen fails as not holding still,
-since such a picture can prove nothing.
+forty draws the names of the gardens on the map in other letter shapes, more often on a busy computer. So a screen that is
+not plainly the same is photographed twice more, and twice more again if the takes of a build then stand two against two;
+the takes that agree with most of the others are the ones compared. A change is there every time, a fluke is not. Where the
+takes of a build still do not agree (a clock, something still loading) the screen fails as not holding still, since such a
+picture can prove nothing. It follows that a change which shows in fewer than half the takes is not seen.
 
 What this cannot see: anything that needs a click or a drag to appear (a panel, a menu, a window), what lies below the first
 screenful, a change of colour too slight to see (under 5 levels in 255), a change of fewer than nine pixels, a change that
@@ -121,7 +122,7 @@ def far(a, b):
     return ImageChops.lighter(ImageChops.lighter(r, g), b_).point(lambda v: 255 if v > LEVELS else 0)
 count = lambda mask: mask.histogram()[255]
 def settled(takes):
-    """Two takes of one build that agree, out of two or four: [a, b] as pictures, or None when no two can be trusted.
+    """The takes of one build that agree, out of two, four or six, as pictures; or None when no two can be trusted.
     About one take in forty on the computers this was written on draws the names of the gardens on the map in other letter
     shapes (some thousands of pixels; the cause is not known). So where two takes of a build disagree, or the two builds do,
     the screen is photographed twice more, and the takes that agree with most of the others are the ones compared."""
@@ -131,14 +132,16 @@ def settled(takes):
     best = max(range(len(ims)), key=lambda i: sum(agree[i])); group = [j for j in range(len(ims)) if agree[best][j]]
     rest = [j for j in range(len(ims)) if j not in group]
     if len(group) < 2 or (len(group) == len(rest) and all(agree[i][j] for i in rest for j in rest)): return None   # none agree, or two camps of the same size
-    return [ims[group[0]], ims[group[1]]]
+    return [ims[j] for j in group]
 def compare(was, now):
     """was and now are the takes of each build, two or four. Returns ("same" | "differs" | "shakes", detail)."""
     a, b = settled(was), settled(now)
     if a is None or b is None: return "shakes", "the takes of one build do not agree with each other, so nothing can be said (%d of the build before, %d of this one)" % (len(was), len(now))
-    (a1, a2), (b1, b2) = a, b
+    a1, b1 = a[0], b[0]
     if a1.size != b1.size: return "differs", {"sizes": [a1.size, b1.size]}
-    own = ImageChops.lighter(far(a1, a2), far(b1, b2))   # what does not hold still between two takes of one build that agree
+    own = Image.new("L", a1.size, 0)   # what does not hold still among the takes of one build that agree
+    for first, others in ((a1, a[1:]), (b1, b[1:])):
+        for other in others: own = ImageChops.lighter(own, far(first, other))
     seen = ImageChops.multiply(far(a1, b1), ImageChops.invert(own.filter(ImageFilter.MaxFilter(5))))   # with those pixels, and the two round each, set aside
     if count(seen) <= NOISE: return "same", None
     return "differs", {"pixels": count(seen), "box": list(seen.getbbox())}
@@ -164,6 +167,9 @@ with sync_playwright() as pw:
         again = [name for name in wanted if first[name][0] != "same"]
         if again:   # whatever is not plainly the same is photographed twice more: a change is there both times, a fluke is not
             was += [take(browser, url_old, width, height, again) for _ in (1, 2)]; now += [take(browser, url_now, width, height, again) for _ in (1, 2)]
+        tied = [name for name in again if all(len(of(x, name)) >= 2 for x in (was, now)) and compare(of(was, name), of(now, name))[0] == "shakes"]
+        if tied:   # two camps of two: two takes more settle it
+            was += [take(browser, url_old, width, height, tied) for _ in (1, 2)]; now += [take(browser, url_now, width, height, tied) for _ in (1, 2)]
         for name in wanted:
             if name not in again: got[(name, width)] = first[name]; continue
             w, n = of(was, name), of(now, name)

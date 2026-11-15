@@ -152,6 +152,28 @@ check('suggested: follow where the list already gives the number, take where it 
     check('and letting that planting follow the list is shown to move it', !!rowA && A.preview(plan2, Lib, A.build(plan2, s2.rows, { [rowA.key]: 'follow' }).ops, eng2).moves.some(m => m.id === one.id));
   }
 }
+// two varieties of one crop counted from sowing, one of them with no nursery time, every planting of the crop carrying the same
+// number: what each would write on the crop's line differs by the nursery time, and one line of the list holds one number
+{
+  const able = p => !isTray(p) && !isDone(p) && eng.calc(p) && eng.envOf(eng.bedOf(p.bedId)), bare = v => ({ ...v, catalogSourceChoice: undefined, catalogDtm: undefined, catalogDtmMax: undefined, dtm: undefined });
+  let tried = 0; const bad = [];
+  for (const c of eng.crops()) {
+    if (tried >= 6) break;
+    const mine = P.filter(p => p.cropId === c.id);
+    if (eng.startFixed(c) || !mine.length || !mine.every(p => able(p) || isTray(p))) continue;
+    const byEnv = new Map(); for (const p of mine.filter(able)) { const k = eng.envOf(eng.bedOf(p.bedId)); if (p.varietyId && k !== 'tower') byEnv.set(k, (byEnv.get(k) || new Set()).add(p.varietyId)); }
+    const env = [...byEnv].find(([k, vs]) => vs.size >= 2); if (!env) continue;
+    const vb = [...env[1]][0], first = mine.filter(p => p.varietyId === vb), rest = P.filter(p => !first.includes(p));
+    const varieties = core.varieties.map(v => v.id === vb ? { ...bare(v), environmentDefaults: { v: 1, field: { gh: 0 }, greenhouse: { gh: 0 }, tunnel: { gh: 0 } } } : v.cropId === c.id ? bare(v) : v);
+    const planC = { ...core, varieties, assumptions: { v: 1, crops: {}, varieties: {}, starts: { [c.id]: { from: 'seed' } } }, plantings: [...first, ...rest].map(p => p.cropId === c.id && able(p) ? { ...p, dtm: 90, timingMode: 'manual' } : p) };
+    const engC = E.create(planC, Lib), sC = study3a(planC, Lib), pvC = A.preview(planC, Lib, A.build(planC, sC.rows, {}).ops, engC), lines = new Map();
+    for (const r of sC.rows) if (r.kind === 'days' && r.take) { const k = [r.take.level, r.take.id, r.take.env].join('|'); lines.set(k, (lines.get(k) || new Set()).add(r.take.typed)); }
+    tried++;
+    if (pvC.moves.length || [...lines.values()].some(s => s.size > 1)) bad.push({ crop: c.id, moved: pvC.moves.length, twoNumbers: [...lines].filter(([k, s]) => s.size > 1).map(([k]) => k) });
+  }
+  check('a subject is found: crops with two varieties in one growing condition, where the crop may say what its days are counted from', tried >= 3, { tried });
+  check('two varieties that would write two numbers on the crop’s one line do not both write it, and what is suggested moves no date', tried > 0 && bad.length === 0, bad.slice(0, 3));
+}
 // whatever figures the plantings carry, what is suggested moves no date: the plan with its figures shuffled several ways
 {
   let seed = 20261114; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;

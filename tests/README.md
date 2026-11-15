@@ -128,10 +128,13 @@ A change to the farm changes what every check sees. Run them all after it.
    farm on the same pretended day, at 1707 and 3440 wide, and Tasks at a phone's 390. A screen that looks different fails,
    unless the build's file names it under `screens` (`"screens": ["map", "tasks"]`; the names are in the check): then it has
    to look different at one width at least. Each build is photographed twice: the few pixels that differ between two takes
-   of one build (the edge of a rounded corner, the end of a curve) are set aside with the pixels round them, and a screen
-   where a great deal differs between two takes fails as not holding still. It sees the first screenful of each screen as
-   it opens: not a panel, a menu or a window, not what a click or a drag brings up, not a change of fewer than nine pixels
-   or of a colour by less than 5 levels in 255, and not whether a change is for the better. It is new: if it fails where
+   of one build (the edge of a rounded corner, the end of a curve) are set aside with the pixels round them. A screen that
+   is not plainly the same is photographed twice more, and twice more again if the takes of a build stand two against two;
+   the takes that agree with most of the others are compared, and a screen whose takes still do not agree fails as not
+   holding still. It sees the first screenful of each screen as it opens: not a panel, a menu or a window, not what a click
+   or a drag brings up, not a change of fewer than nine pixels or of a colour by less than 5 levels in 255, not a change
+   that shows in fewer than half the takes, and not whether a change is for the better. A screen new in a build has no
+   picture in the build before: give it its entry in the check in the build after. The check is new: if it fails where
    nothing changed, that is a fault of the check, to be mended there and not worked round.
 
 A build that is meant to change a figure says which, shows it on the page before anything moves, and has a check of its
@@ -147,9 +150,11 @@ What each writes of its own:
 
 - its file under `tests/builds/`, which no other build writes;
 - in `tests/counts.json`, the lines of the checks it changed. The file is laid out so that git puts two builds' lines
-  together by itself (one check a line, a line left empty between two). It cannot where both change the same check, or each
-  adds a check whose name falls in the same gap, or one of them touches the last check of a part: then whichever merges
-  second takes `main` in, runs the checks, and writes those lines from the run of the two together (`tests/counts.py`);
+  together by itself (one check a line, a line left empty between two). It cannot where both change the same check; where
+  each adds a check whose name falls in the same gap; where one adds or takes out a check and the other changes the check
+  that comes right after it in the order of names; or where one adds a check after the last of a part or takes the last
+  out. Then whichever merges second takes `main` in, runs the checks, and writes those lines from the run of the two
+  together (`tests/counts.py`);
 - its faults and checks. A list that every build adds a word to (`SETS` in `faults.sh`, a part's line in `run.sh`) is one
   line, so two builds that each add a check to the same part settle that line by hand, keeping both.
 
