@@ -135,6 +135,8 @@ body.armed #map, body.armed #map * { cursor: crosshair; }
    the plate's one grey-green, not against whatever the photo shows there */
 .plate { fill: color-mix(in srgb, var(--raised) 60%, transparent); stroke: var(--line); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 .on-photo .plate { fill: rgba(214, 223, 217, 0.96); stroke: rgba(19, 36, 28, 0.2); filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.38)); }
+/* "Dim photo" on the map's tools: the photo greyed and darkened a little, for a grower who finds it loud behind the beds */
+#map.on-photo.photo-dim #mapPhoto { filter: saturate(0.7) brightness(0.9); }
 .bed { cursor: pointer; }
 .bed-base { fill: var(--bed-empty); pointer-events: all; }
 /* on the photo an empty bed is white on its plate; anything in colour is planted */

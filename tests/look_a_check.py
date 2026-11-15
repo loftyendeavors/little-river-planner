@@ -62,6 +62,11 @@ with sync_playwright() as pw:
       return { onPhoto: map.classList.contains('on-photo'), filter: photo ? getComputedStyle(photo).filter : null, plate: plate ? px(getComputedStyle(plate).fill, '#000') : null, plateShadow: plate ? getComputedStyle(plate).filter : null, base: base ? px(getComputedStyle(base).fill, '#000') : null, edge: edge ? px(getComputedStyle(edge).stroke, '#fff') : null };""") or {}
     check("the map is drawn on the farm photo: the lines below have their subject", ground.get("onPhoto") and ground.get("plate") and ground.get("base"), ground)
     check("the photo keeps its own colour: nothing greys or darkens it", ground.get("filter") == "none", ground.get("filter"))
+    dim = js("""const b = $('mapDimToggle'), f = () => getComputedStyle($('mapPhoto')).filter, kept = () => { try { return localStorage.getItem('lrf.map.dimPhoto'); } catch (_) { return 'refused'; } };
+      if (!b) return { there: false };
+      const was = [b.getAttribute('aria-pressed'), f()]; b.click(); const on = [b.getAttribute('aria-pressed'), f(), kept()]; b.click();
+      return { there: true, was, on, off: [b.getAttribute('aria-pressed'), f(), kept()] };""") or {}
+    check("“Dim photo” on the map’s tools greys and darkens the photo a little while it is pressed and lets it go when pressed again, and the computer keeps which", dim.get("was") == ["false", "none"] and len(dim.get("on") or []) == 3 and dim["on"][0] == "true" and "saturate" in dim["on"][1] and "brightness" in dim["on"][1] and dim["on"][2] == "1" and dim.get("off") == ["false", "none", "0"], dim)
     plate = ground.get("plate") or [0, 0, 0, 0]; base = ground.get("base") or [0, 0, 0, 0]
     check("each garden’s beds stand on a light grey-green plate that hides the photo under them and is lifted off it by a shadow", min(plate[:3]) >= 195 and plate[1] >= plate[0] and plate[1] >= plate[2] and max(plate[:3]) <= 232 and "drop-shadow" in (ground.get("plateShadow") or ""), ground)
     check("an empty bed is white on its plate, with a dark edge", min(base[:3]) >= 245 and ground.get("edge") and max(ground["edge"][:3]) <= 190, ground)

@@ -1,0 +1,18 @@
+{
+ "build": "Quieter colours and a tick for the photo: the ten family colours are softer (still told apart by the same measures), and “Dim photo” on the map’s tools greys and darkens the photo a little, kept on the computer it was pressed on.",
+ "words": [
+  "library.js",
+  "main.js"
+ ],
+ "code": [
+  "map.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "index.html",
+  "sw.js",
+  "css/app.css"
+ ],
+ "screens": []
+}
