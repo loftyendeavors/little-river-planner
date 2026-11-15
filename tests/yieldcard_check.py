@@ -604,7 +604,7 @@ with sync_playwright() as pw:
         open_crop(c, 250); js("document.querySelector('.view-assume').scrollTop = 0; return 1;"); wait(120)
         fit.append(js("""const r = id => $(id).getBoundingClientRect(), last = [...document.querySelectorAll('#ycGrid tbody tr')].pop().getBoundingClientRect(), bar = r('ycActions');
           return { crop: txt('ycName'), top: Math.round(r('ycCard').top), facts: Math.round(r('ycFacts').bottom), last: Math.round(last.bottom), bar: Math.round(bar.top), barIn: bar.bottom <= innerHeight + 0.5, ok: r('ycFacts').bottom <= bar.top + 0.5 && last.bottom <= bar.top + 0.5 && bar.bottom <= innerHeight + 0.5 };"""))
-    check("at a laptop's height (%d by %d) the last row of the grid and the facts under it stand above the bar that stays in view, and the card starts no more than 160 px down the page's own part" % (WIDTH, vh), len(fit) == 3 and all(f["ok"] is True for f in fit) and all(f["top"] - 53 <= 160 for f in fit), fit)
+    check("at a laptop's height (%d by %d) the last row of the grid and the facts under it stand above the bar that stays in view, and the card starts no more than 110 px below the planner's own bar" % (WIDTH, vh), len(fit) == 3 and all(f["ok"] is True for f in fit) and all(f["top"] - js("return Math.round(document.querySelector('header.top').getBoundingClientRect().bottom);") <= 110 for f in fit), fit)
     shot("card-laptop")
     page.set_viewport_size({"width": WIDTH, "height": 900}); wait(200)
 
