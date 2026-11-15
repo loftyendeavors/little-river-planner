@@ -135,6 +135,8 @@ body.armed #map, body.armed #map * { cursor: crosshair; }
    the plate's one grey-green, not against whatever the photo shows there */
 .plate { fill: color-mix(in srgb, var(--raised) 60%, transparent); stroke: var(--line); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 .on-photo .plate { fill: rgba(214, 223, 217, 0.96); stroke: rgba(19, 36, 28, 0.2); filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.38)); }
+/* "Dim photo", a tick in the key under the map: the photo greyed and darkened a little, for a grower who finds it loud behind the beds */
+#map.on-photo.photo-dim #mapPhoto { filter: saturate(0.7) brightness(0.9); }
 .bed { cursor: pointer; }
 .bed-base { fill: var(--bed-empty); pointer-events: all; }
 /* on the photo an empty bed is white on its plate; anything in colour is planted */
@@ -211,6 +213,8 @@ body.armed #map, body.armed #map * { cursor: crosshair; }
 .map-key i:first-child { margin-left: 0; }
 .map-key .k-grow { background: color-mix(in srgb, var(--ink-2) 62%, var(--raised)); }
 .map-key .k-pick { background: var(--ink); }
+.map-key .k-dim { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: var(--ink-2); cursor: pointer; }
+.map-key .k-dim input { width: 14px; height: 14px; margin: 0; accent-color: var(--ink); }
 .map-key .k-turn { background: repeating-linear-gradient(135deg, var(--ink-2) 0 2px, transparent 2px 5px); }
 .tip { position: absolute; z-index: 20; max-width: 300px; background: var(--raised); border: 1px solid var(--line); border-radius: 9px; box-shadow: var(--shadow); padding: 9px 11px; pointer-events: none; display: grid; gap: 3px; font-size: 13px; }
 .tip-spec, .tip small, .tip-free { color: var(--muted); font-size: 12px; }
