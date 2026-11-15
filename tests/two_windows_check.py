@@ -215,5 +215,5 @@ with sync_playwright() as pw:
 service.terminate(); server.shutdown()
 for line in results:
     print(line)
-print(json.dumps({'passed': len(results) - len(failed), 'of': len(results), 'failed': failed}))
+print(json.dumps({'passed': len(results) - len(failed), 'of': len(results), 'failed': failed, 'details': [r for r in results if r.startswith('FAIL')]}))
 sys.exit(0)
