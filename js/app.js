@@ -276,6 +276,9 @@
         if (v == null || v === '') delete record[key];
         else record[key] = key === 'unit' || key === 'pattern' ? String(v) : key === 'days' ? Math.max(1, Math.round(+v)) : key === 'turnover' ? Math.max(0, Math.round(+v)) : key === 'share' ? Math.min(100, Math.max(0, +v)) : Math.max(0, +v);
       }
+      // A tick says the crop's figures were looked at in the unit it was then sold by. With another unit they are to be looked
+      // at again: the figures stay as typed, and the tick comes off in the same step.
+      if ('unit' in change && before && before.unit.value !== (record.unit || before.unit.fallback)) delete record.looked;
       if (Object.keys(record).length) next.sell[cropId] = record; else delete next.sell[cropId];
       const weekly = (record.pattern || 'spread') === 'weekly';
       if (before && 'pattern' in change && weekly !== before.weekly) {
@@ -307,10 +310,17 @@
     if (value == null || value === false) delete record[key]; else record[key] = value;
     if (Object.keys(record).length) next.sell[cropId] = record; else delete next.sell[cropId];
   });
-  /** Tick a crop as looked at for the plan's year, or take the tick off. One step, and nothing else in the plan changes. */
-  function setLooked(cropId, on) {
+  /**
+   * Tick a crop as looked at for the plan's year, or take the tick off. One step, and nothing else in the plan changes. The tick
+   * is said in a message of its own, whose Undo takes back the tick and nothing before it; `note` is added to what it says.
+   */
+  function setLooked(cropId, on, note) {
     const c = state.engine.crop(cropId), year = planYear(), ops = c ? markStep(cropId, 'looked', on ? year : null) : null;
-    return !!ops && commit(`${c.name}: ${on ? 'looked at' : 'not looked at'} for ${year}`, ops, { unchecked: true });
+    if (!ops) return false;
+    const label = `${c.name}: ${on ? 'looked at' : 'not looked at'} for ${year}`;
+    if (!commit(label, ops, { unchecked: true })) return false;
+    toast(`${label}${note ? ' · ' + note : ''}`, { label: 'Undo', run: undo });
+    return true;
   }
   /**
    * Say whom a crop is grown for. `part` true: for sale and the house, which marks the crop and changes no figure. `part` false:

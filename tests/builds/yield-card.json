@@ -7,6 +7,7 @@
   "app.js",
   "assume.js",
   "engine.js",
+  "planio.js",
   "seeds.js"
  ],
  "added": [

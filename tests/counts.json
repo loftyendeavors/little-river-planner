@@ -101,7 +101,7 @@
 
   "bedpanel": 59,
 
-  "card": 89,
+  "card": 110,
 
   "cleanup": 27,
 
@@ -326,13 +326,13 @@
  },
  "site10": {
 
-  "card @1707": 89,
+  "card @1707": 110,
 
-  "card-site": 89,
+  "card-site": 110,
 
-  "card-site @1480": 89,
+  "card-site @1480": 110,
 
-  "card-site @3440": 89,
+  "card-site @3440": 110,
 
   "cleanup @1480": 27,
 

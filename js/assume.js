@@ -39,6 +39,10 @@
   const PATTERN_SAY = { weekly: 'picked gradually', once: 'cleared at once', spread: 'picked on demand' };
   const PATTERN_TIP = { spread: 'The yield is a total, picked evenly over the harvest days: held, and taken as it is wanted.', weekly: 'The yield is what is picked each week. A longer harvest gives more, a shorter one less.', once: 'The yield is a total, and all of it is counted the day the crop is ready.' };
   const BASIS = { plant: 'a plant', ft: 'a bed-foot', tray: 'a tray' };
+  const soldBy = unit => unit === 'each' ? 'sold each' : `sold by the ${unit}`;
+  // which of the two ways the second half was last looked at: a preference kept in this browser, not a figure of the plan
+  const WAY_KEY = 'lrf-next:yield-way';
+  const wayKept = value => { try { if (value === undefined) return root.localStorage.getItem(WAY_KEY); root.localStorage.setItem(WAY_KEY, value); } catch (_) { /* a browser that keeps nothing: the card, each time */ } return null; };
   /** A yield or a price as it is read: no more decimals than it needs. */
   const fig = n => n == null || !Number.isFinite(+n) ? '' : String(+(+n).toFixed(Math.abs(n) >= 100 ? 0 : Math.abs(n) >= 10 ? 1 : Math.abs(n) >= 0.1 ? 2 : 3));
   const money = n => '$' + Math.round(n).toLocaleString('en-US');
@@ -360,7 +364,7 @@
       const open = ui.open.has(c.id) || (q && !nameHit), unit = hc.unit.value, main = mainEnv(where.get(c.id), hc.cells), u = unit === 'each' ? '' : ' ' + unit, loose = hc.open.yield && eng.ENVS.every(e => hc.cells[e].mine == null);
       const unitCell = hc.micro ? h('td.as-start', h('span.as-fixed', { title: 'A live tray is counted and sold by the tray.' }, 'tray'))
         : h('td.as-start', h('select.as-from.ah-sel' + (hc.unit.mine ? '.mine' : ''), { 'aria-label': `${c.name}: sold by`, dataset: { hk: `unit|${c.id}` }, title: hc.unit.mine ? `Your choice. The crop’s record says ${hc.unit.fallback}.` : 'From the crop’s record. Choose another to change it.',
-          onchange: async e => { const value = e.target.value; if (!await App.setSell(c.id, { unit: value === '(default)' || value === hc.unit.fallback ? null : value }, `${c.name}: sold by the ${value === '(default)' ? hc.unit.fallback : value}`)) schedule(); } },
+          onchange: async e => { const value = e.target.value, to = value === '(default)' ? hc.unit.fallback : value; root.LRFYieldCard.unitChanged(c.id, unit); if (!await App.setSell(c.id, { unit: value === '(default)' || value === hc.unit.fallback ? null : value }, `${c.name}: ${soldBy(to)}`)) schedule(); } },
           unitOptions(unit, hc.unit.fallback).map(x => h('option', { value: x, selected: x === unit }, x)), hc.unit.mine ? h('option', { value: '(default)' }, `Back to ${hc.unit.fallback}`) : null));
       const pickCell = hc.micro ? h('td.as-start', h('span.as-fixed', { title: 'A live tray is counted whole on the Monday it is due.' }, 'when due'))
         : h('td.as-start', h('select.as-from.ah-sel' + (hc.pattern.mine ? '.mine' : ''), { 'aria-label': `${c.name}: picked`, dataset: { hk: `pick|${c.id}` }, title: `${PATTERN_TIP[hc.pattern.value]}${hc.pattern.mine ? '' : ' Not set: this is how every crop has been counted so far.'}`,
@@ -404,7 +408,7 @@
         body.append(h('tr.as-var', { dataset: { variety: v.id } },
           h('td', h('div.as-name', root.LRFThumbs.el({ varietyId: v.id, color: eng.cropColor(c), label: v.name, size: 22 }), h('span.as-nc', h('span.as-vname', v.name)))),
           h('td.as-start', h('select.as-from.ah-sel' + (hv.unit.mine ? '.own' : ''), { 'aria-label': `${v.name}: sold by`, dataset: { hk: `vunit|${v.id}` }, title: hv.unit.mine ? `This variety’s own unit. Its yield and price are in ${vu}; give it a yield of its own, since the crop’s is in ${unit}.` : 'Sold as the crop is.',
-            onchange: async e => { const value = e.target.value; if (!await App.setSellV(v.id, { unit: value || null }, value ? `${v.name}: sold by the ${value}` : `${v.name}: sold as the crop is`)) schedule(); } },
+            onchange: async e => { const value = e.target.value; if (!await App.setSellV(v.id, { unit: value || null }, value ? `${v.name}: ${soldBy(value)}` : `${v.name}: sold as the crop is`)) schedule(); } },
             h('option', { value: '', selected: !hv.unit.mine }, 'As the crop'), unitOptions(hv.unit.mine, null).map(x => h('option', { value: x, selected: hv.unit.mine === x }, x)))),
           figCell({ cls: '.ah-price', key: `vprice|${v.id}`, mine: hv.price.mine, fallback: hv.price.fallback, label: `${v.name}: price`, tip: hv.price.mine != null ? 'This variety’s own price. Clear it to use the crop’s.' : `The crop’s price: $${fig(hv.price.fallback)}.`, save: n => App.setSellV(v.id, { price: n }, n == null ? `${v.name}: priced as the crop` : `${v.name}: $${fig(n)}${vu === 'each' ? ' each' : ' a ' + vu}`) }),
           h('td'), h('td'),
@@ -435,6 +439,7 @@
   function chrome() {
     const harvest = ui.mode === 'harvest', card = harvest && ui.way === 'card', view = document.getElementById('assumeView');
     $('asTitle').textContent = HEAD[ui.mode][0]; $('asLead').textContent = HEAD[card ? 'card' : ui.mode][1];
+    $('asTitle').title = card ? HEAD.card[1] : '';   // on the card's page the lead gives its room to the card, and is said when the heading is pointed at
     $('asTable').hidden = harvest; $('ahTable').hidden = !harvest || card;
     if (!harvest || card) $('ahOpen').hidden = true;
     for (const b of document.querySelectorAll('[data-as-mode]')) b.setAttribute('aria-pressed', String(b.dataset.asMode === ui.mode));
@@ -533,7 +538,10 @@
       button.addEventListener('click', () => { ui.scope = button.dataset.asScope; for (const b of document.querySelectorAll('[data-as-scope]')) b.setAttribute('aria-pressed', String(b === button)); render(); });
     }
     for (const button of document.querySelectorAll('[data-as-mode]')) button.addEventListener('click', () => { ui.mode = button.dataset.asMode; render(); });
-    for (const button of document.querySelectorAll('[data-ah-way]')) button.addEventListener('click', () => { ui.way = button.dataset.ahWay; render(); });
+    const kept = wayKept();
+    if (kept === 'list' || kept === 'card') ui.way = kept;
+    // "All on one page" opens at the crop the card was on
+    for (const button of document.querySelectorAll('[data-ah-way]')) button.addEventListener('click', () => { const was = ui.way; ui.way = button.dataset.ahWay; wayKept(ui.way); render(); if (ui.way === 'list' && was === 'card') showRow(root.LRFYieldCard.current()); });
     $('ahHouseOn').addEventListener('change', async e => { if (!await App.setHouseFarm(e.target.checked)) schedule(); });
     App.on('plan', () => { if (audit) audit.close(); if (App.state.view === 'assume') schedule(); else ui.dirty = true; });
     App.on('view', () => { if (App.state.view !== 'assume') root.LRFYieldCard.reset(); else if (ui.dirty) render(); });
@@ -542,13 +550,28 @@
   /**
    * Show one half of the list. For the second half, `way` is 'card' (one crop at a time) or 'list' (all on one page), and `crop`
    * opens the card on that crop. A script that names no way is given the list, which is what such scripts were written for;
-   * the button on the page opens whichever way was last on show, the card to begin with.
+   * the button on the page opens whichever way was last chosen in this browser, the card to begin with. With 'list', `crop`
+   * opens the list at that crop's row (`options.varieties`: with its varieties shown).
    */
-  function setMode(mode, way, crop) {
+  function setMode(mode, way, crop, options = {}) {
     ui.mode = mode === 'harvest' ? 'harvest' : 'days';
     if (ui.mode === 'harvest') ui.way = way === 'card' ? 'card' : 'list';
     if (ui.mode === 'harvest' && ui.way === 'card' && crop) root.LRFYieldCard.open(crop);
+    if (ui.mode === 'harvest' && ui.way === 'list' && crop) {
+      // the list at one crop's row: whatever was typed in the search box would hide it, so that is cleared
+      if (ui.query) { ui.query = ''; $('asSearch').value = ''; }
+      if (options.varieties) ui.open.add(crop);
+    }
     render();
+    if (ui.mode === 'harvest' && ui.way === 'list' && crop) showRow(crop);
+  }
+  /** Bring one crop's row of the list into view, and mark it until the list is next drawn. */
+  function showRow(cropId) {
+    const row = cropId && document.querySelector(`#ahBody tr.as-crop[data-crop="${CSS.escape(cropId)}"]`);
+    if (!row) return false;
+    row.classList.add('as-at');
+    row.scrollIntoView({ block: 'center' });
+    return true;
   }
 
   root.LRFAssume = { init, LABEL, openAudit, audit: () => audit, auditView: change => Object.assign(auView, change || {}), tidy, setMode, mode: () => ui.mode, way: () => ui.way, fig };
