@@ -128,7 +128,9 @@ with sync_playwright() as pw:
     def typed(sel, text, key="Tab", ms=500):
         """Type into a box as a hand does: click it, select what is there, type, and leave with a key."""
         if not has(sel): wait(100); return False
-        page.locator(sel).first.click(); page.keyboard.press("Control+a")
+        try: page.locator(sel).first.click(timeout=4000)   # a window a fault left open stops the click: the named line after it fails
+        except Exception: return False
+        page.keyboard.press("Control+a")
         if text == "": page.keyboard.press("Delete")
         else: page.keyboard.type(text)
         if key: page.keyboard.press(key)
@@ -406,7 +408,7 @@ with sync_playwright() as pw:
 
     # Enter on a crop with nothing empty is the tick alone
     cid2 = sub["single"]; open_crop(cid2, 400)
-    if has('#ycCard [data-yk="price"]'): page.locator('#ycCard [data-yk="price"]').first.click()
+    click('#ycCard [data-yk="price"]', 100)
     before_enter = snap(); bare_before = js("return unticked();")
     page.keyboard.press("Enter"); wait(600)
     f3 = card(); s3 = last_step(); after_enter = snap()
@@ -418,17 +420,19 @@ with sync_playwright() as pw:
     open_crop(cid2, 400); unit0 = walk[cid2]["unit"] if isinstance(walk[cid2]["unit"], str) else "?"
     letter = "b" if not unit0.startswith("b") else "s"; want_unit = "bunch" if letter == "b" else "stem"
     price0 = walk[cid2]["card"]["boxes"]["price"]; key_a = snap()
-    if has('#ycCard [data-yk="price"]'): page.locator('#ycCard [data-yk="price"]').first.click()
+    click('#ycCard [data-yk="price"]', 100)
     page.keyboard.type("1e3"); wait(200)
     in_price = js("return { value: ($('ycCard').querySelector('[data-yk=price]') || {}).value, unit: S.engine.harvestFor(%s).unit.value, undo: S.undo.length, asked: !!document.querySelector('dialog[open]') };" % json.dumps(cid2))
     page.keyboard.press("Control+a"); page.keyboard.press("Delete"); page.keyboard.press(letter); page.keyboard.press("Shift+" + letter.upper()); wait(200)
-    if has('#ycCard [data-yk="days"]'): page.locator('#ycCard [data-yk="days"]').first.click()
+    if asking(): answer(False)   # a fault that makes a letter in a number box ask about the unit: answered no, so that the check goes on
+    click('#ycCard [data-yk="days"]', 100)
     page.keyboard.press("Shift+" + letter.upper()); page.keyboard.press(letter); wait(300)
     in_days = js("return { unit: S.engine.harvestFor(%s).unit.value, undo: S.undo.length, asked: !!document.querySelector('dialog[open]'), key: A.contentKey() };" % json.dumps(cid2))
+    if asking(): answer(False)
     check("in a number box a letter does nothing: it is not typed, picks no unit and takes no figure (“1e3” in the price box is 13 in the box, and nothing is written)", in_price["value"] == "13" and in_price["unit"] == unit0 and in_price["undo"] == 0 and in_price["asked"] is False and in_days["unit"] == unit0 and in_days["undo"] == 0 and in_days["asked"] is False and in_days["key"] == key_a["key"], {"price": in_price, "days": in_days})
     def on_unit(key):
         """A letter pressed with “Sold by” itself in focus."""
-        if has('#ycCard [data-yk="unit"]'): page.locator('#ycCard [data-yk="unit"]').first.focus()
+        if has('#ycCard [data-yk="unit"]') and not asking(): page.locator('#ycCard [data-yk="unit"]').first.focus()
         page.keyboard.press(key); wait(500)
     on_unit(letter); ask = asking()
     pfig = js("const hc = S.engine.harvestFor(%s); return { price: fig(hc.price.value), y: fig(hc.cells[%s].value) };" % (json.dumps(cid2), json.dumps(nth(walk[cid2]["places"], 0))))
@@ -457,7 +461,7 @@ with sync_playwright() as pw:
     check("a crop sold one by one is “sold each”, not “sold by the each”", unit0 == "each" or (ut["unit"] == "each" and ut["label"] == f"{names[cid2]}: sold each" and "sold each" in ask_t["title"]), ut)
     click("#ycNext", 500); open_crop(cid2, 300)
     check("ticked again, the note is gone: the figures have been looked at in the new unit", js("return txt('ycUnitNote');") == "" and js("return S.engine.sellRule(%s).looked;" % json.dumps(cid2)) == year, js("return txt('ycUnitNote');"))
-    if has('#ycCard [data-yk="price"]'): page.locator('#ycCard [data-yk="price"]').first.click()
+    click('#ycCard [data-yk="price"]', 100)
     page.keyboard.press("Tab"); wait(250)
     check("with no empty box left on a card, Tab goes on to the next box as it always does", card()["focus"] == "y|" + str(nth(walk[cid2]["places"], 0)), card()["focus"])
     shot("card-ticked")
