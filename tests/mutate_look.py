@@ -28,8 +28,8 @@ def alone(cmd, timeout, env=None, cwd=None):
 
 # (what goes wrong, file, now, with the fault in, a word of the line that must fail)
 NODE = [
-  ("two groups are nearly one colour", 'js/library.js', '{"id": "herbs", "name": "Herbs", "color": "#32459b"}', '{"id": "herbs", "name": "Herbs", "color": "#7046b0"}', 'plainly different'),
-  ("a group is told from the others by ordinary sight only", 'js/library.js', '{"id": "brassicas", "name": "Brassicas", "color": "#2a8a57"}', '{"id": "brassicas", "name": "Brassicas", "color": "#966340"}', 'colour-blind'),
+  ("two groups are nearly one colour", 'js/library.js', '{"id": "herbs", "name": "Herbs", "color": "#454d97"}', '{"id": "herbs", "name": "Herbs", "color": "#9565b0"}', 'plainly different'),
+  ("a group is told from the others by ordinary sight only", 'js/library.js', '{"id": "brassicas", "name": "Brassicas", "color": "#31694d"}', '{"id": "brassicas", "name": "Brassicas", "color": "#c434b6"}', 'colour-blind'),
   ("a bed being picked is hardly deeper", 'js/map.js', "const PICK = 0.3,", "const PICK = 0.08,", 'can be told from one growing'),
   ("a group is too pale for a white bed", 'js/library.js', '{"id": "micro", "name": "Microgreens", "color": "#e6dc9c"}', '{"id": "micro", "name": "Microgreens", "color": "#f4f1dc"}', 'stands off an empty bed'),
   ("a group is named twice", 'js/library.js', '{"id": "other", "name": "Other crops", "color": "#7c8279"}', '{"id": "herbs", "name": "Other crops", "color": "#7c8279"}', 'twelve groups'),
@@ -42,6 +42,8 @@ NODE = [
 ]
 PAGE = [
   ("the photo is greyed and darkened again", 'css/app.css', ".on-photo .plate { fill: rgba(214, 223, 217, 0.96);", "#map.on-photo #mapPhoto { filter: saturate(0.7) brightness(0.9); }\n.on-photo .plate { fill: rgba(214, 223, 217, 0.96);", 'photo keeps its own colour'),
+  ("“Dim photo” dims nothing", 'js/map.js', "$('map').classList.toggle('photo-dim', hasPhoto && layers.photo && layers.dim);", "$('map').classList.toggle('photo-dim', false);", 'Dim photo'),
+  ("“Dim photo” is forgotten by the computer", 'js/map.js', "root.localStorage.setItem(DIM_KEY, layers.dim ? '1' : '0');", "void 0;", 'Dim photo'),
   ("the plates are dark glass again", 'css/app.css', ".on-photo .plate { fill: rgba(214, 223, 217, 0.96);", ".on-photo .plate { fill: rgba(8, 19, 14, 0.5);", 'grey-green plate'),
   ("a plate has no shadow", 'css/app.css', " filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.38)); }", " }", 'grey-green plate'),
   ("an empty bed is see-through again", 'css/app.css', ".on-photo .bed-base, .on-photo .hatch-bg { fill: #fbfcfb; }", ".on-photo .bed-base, .on-photo .hatch-bg { fill: rgba(255, 255, 255, 0.13); }", 'empty bed is white'),

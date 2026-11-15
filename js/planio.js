@@ -130,7 +130,10 @@
   // A change is put back only while the backup still holds the value it was changed from; where the backup has moved on, the backup's value stands.
   const FACT_LISTS = ['crops', 'varieties', 'gardens', 'beds'];
   const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
-  const figures = a => a ? ['crops', 'varieties'].reduce((n, k) => n + Object.values(a[k] || {}).reduce((m, envs) => m + Object.keys(envs || {}).length, 0), 0) + Object.keys(a.starts || {}).length + Object.keys(a.sell || {}).length + Object.keys(a.sellV || {}).length : 0;
+  // A crop's line that holds only a tick or the mark for personal use holds no figure: it is not counted as one.
+  const MARKS = ['looked', 'house'];
+  const figures = a => a ? ['crops', 'varieties'].reduce((n, k) => n + Object.values(a[k] || {}).reduce((m, envs) => m + Object.keys(envs || {}).length, 0), 0) + Object.keys(a.starts || {}).length + Object.values(a.sell || {}).filter(line => Object.keys(line || {}).some(k => !MARKS.includes(k))).length + Object.keys(a.sellV || {}).length : 0;
+  const marks = a => a ? Object.values(a.sell || {}).filter(line => MARKS.some(k => line && line[k] != null)).length : 0;
   /**
    * Record the difference one edit makes to a crop, variety, garden or bed. facts: { crops: { id: { name, set, was } }, … }.
    * `was` is what the record held before it was first changed here; a field put back to that is forgotten.
@@ -162,7 +165,12 @@
   function carry(prev, next) {
     const mine = (prev && prev.lrfNext) || {}, plan = { ...next }, keep = {}, notes = [];
     if (!prev || mine.sample) return { plan, keep, notes, gone: [] };
-    if (figures(prev.assumptions) && !figures(next.assumptions)) { plan.assumptions = prev.assumptions; const n = figures(prev.assumptions); notes.push(`your assumptions list (${n} figure${n === 1 ? '' : 's'})`); }
+    if ((figures(prev.assumptions) || marks(prev.assumptions)) && !figures(next.assumptions) && !marks(next.assumptions)) {
+      plan.assumptions = prev.assumptions; const n = figures(prev.assumptions);
+      notes.push(n ? `your assumptions list (${n} figure${n === 1 ? '' : 's'})` : 'your ticks and marks on the assumptions list');
+      // the farm's own switch for what is kept for personal use was thrown here, beside the list: it goes where the list goes
+      if (prev.settings && prev.settings.houseKeeps === false && !(next.settings && 'houseKeeps' in next.settings)) { plan.settings = { ...(next.settings || {}), houseKeeps: false }; notes.push('the farm’s switch: everything it packs is sold'); }
+    }
     for (const key of ['crates', 'trayStart', 'trays', 'groups', 'supplies']) if (mine[key]) keep[key] = mine[key];
     // Benches changed here are a statement about the farm: they stay as they were set, whatever the backup holds.
     if (prev.nursery && prev.nursery.lrfEdited === true) { plan.nursery = prev.nursery; notes.push('your benches'); }

@@ -51,6 +51,10 @@
 
   "the made-up farm": 7,
 
+  "things, backup": 47,
+
+  "things, compact": 47,
+
   "waiting, backup": 54,
 
   "waiting, compact": 54,
@@ -72,6 +76,8 @@
   "core": 20,
 
   "folder": 14,
+
+  "numbers": 41,
 
   "sowing": 24,
 
@@ -105,9 +111,11 @@
 
   "bedpanel": 59,
 
+  "card": 110,
+
   "cleanup": 27,
 
-  "look": 32,
+  "look": 33,
 
   "mixed": 61,
 
@@ -136,7 +144,9 @@
 
   "mapgeo": 81,
 
-  "r1 @1480": 66
+  "r1 @1480": 66,
+
+  "things": 96
 
  },
  "new": {
@@ -215,7 +225,11 @@
 
   "map-site": 348,
 
-  "map-views-site": 22
+  "map-views-site": 22,
+
+  "things-site": 96,
+
+  "things-site @1480": 96
 
  },
  "site4": {
@@ -266,11 +280,11 @@
 
   "bedpanel-site @3440": 59,
 
-  "look-site": 32,
+  "look-site": 33,
 
-  "look-site @1707": 32,
+  "look-site @1707": 33,
 
-  "look-site @3440": 32
+  "look-site @3440": 33
 
  },
  "site7": {
@@ -283,7 +297,11 @@
 
   "mixed-site @1707": 63,
 
-  "mixed-site @3440": 63
+  "mixed-site @3440": 63,
+
+  "things @1707": 96,
+
+  "things-site @3440": 96
 
  },
  "site8": {
@@ -323,10 +341,20 @@
 
   "ask-site @3440": 33,
 
-  "ask-site dark": 33
+  "ask-site dark": 33,
+
+  "numbers-site": 41
 
  },
  "site10": {
+
+  "card @1707": 110,
+
+  "card-site": 110,
+
+  "card-site @1480": 110,
+
+  "card-site @3440": 110,
 
   "cleanup @1480": 27,
 

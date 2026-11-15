@@ -62,6 +62,12 @@ with sync_playwright() as pw:
       return { onPhoto: map.classList.contains('on-photo'), filter: photo ? getComputedStyle(photo).filter : null, plate: plate ? px(getComputedStyle(plate).fill, '#000') : null, plateShadow: plate ? getComputedStyle(plate).filter : null, base: base ? px(getComputedStyle(base).fill, '#000') : null, edge: edge ? px(getComputedStyle(edge).stroke, '#fff') : null };""") or {}
     check("the map is drawn on the farm photo: the lines below have their subject", ground.get("onPhoto") and ground.get("plate") and ground.get("base"), ground)
     check("the photo keeps its own colour: nothing greys or darkens it", ground.get("filter") == "none", ground.get("filter"))
+    dim = js("""const b = $('mapDimToggle'), f = () => getComputedStyle($('mapPhoto')).filter, kept = () => { try { return localStorage.getItem('lrf.map.dimPhoto'); } catch (_) { return 'refused'; } };
+      if (!b) return { there: false };
+      const inKey = !!b.closest('#mapBar .map-key'), tools = q('.map-tools > *').length;
+      const was = [b.checked, f()]; b.click(); const on = [b.checked, f(), kept()]; b.click();
+      return { there: true, inKey, tools, was, on, off: [b.checked, f(), kept()] };""") or {}
+    check("“Dim photo”, a tick in the key under the map, greys and darkens the photo a little while it is ticked and lets it go when it is not, and the computer keeps which; the map’s tools are as many as before", dim.get("inKey") and dim.get("tools") == 7 and dim.get("was") == [False, "none"] and len(dim.get("on") or []) == 3 and dim["on"][0] is True and "saturate" in dim["on"][1] and "brightness" in dim["on"][1] and dim["on"][2] == "1" and dim.get("off") == [False, "none", "0"], dim)
     plate = ground.get("plate") or [0, 0, 0, 0]; base = ground.get("base") or [0, 0, 0, 0]
     check("each garden’s beds stand on a light grey-green plate that hides the photo under them and is lifted off it by a shadow", min(plate[:3]) >= 195 and plate[1] >= plate[0] and plate[1] >= plate[2] and max(plate[:3]) <= 232 and "drop-shadow" in (ground.get("plateShadow") or ""), ground)
     check("an empty bed is white on its plate, with a dark edge", min(base[:3]) >= 245 and ground.get("edge") and max(ground["edge"][:3]) <= 190, ground)

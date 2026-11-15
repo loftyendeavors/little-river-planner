@@ -27,7 +27,7 @@ def alone(cmd, timeout, env=None, cwd=None):
     return out, err
 AP, PN, ME, FC, HV, SR, MN, EN, CSS = "js/app.js", "js/panels.js", "js/mapedit.js", "js/forecast.js", "js/harvestview.js", "js/series.js", "js/main.js", "js/engine.js", "css/app.css"
 LABEL = os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)"; OTHER = LABEL[:-1] + ("0" if LABEL[-1] != "0" else "1")   # the build's label, as tests/env.sh reads it from the page's own script, and one that is not it
-PRICE = ("const y = personal ? { ...y0, price: 0 } : y0;", "const y = y0;")
+PRICE = ("const y = personal ? { ...part, price: 0 } : part;", "const y = part;")
 ATEND = ("if (direction === 'undo' && Number.isInteger(op.at) && op.at <= list.length) list.splice(op.at, 0, to); else list.push(to);", "list.push(to);")
 PAGE = [
  ("the panel never says Saved", PN, "      if (headEl) headEl.after(savedLine());\n", ""),

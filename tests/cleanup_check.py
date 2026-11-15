@@ -154,7 +154,9 @@ with sync_playwright() as pw:
     lead = js("return { lead: $('asLead').textContent, diff: ($('asDiffLine') || {}).textContent || '' };") or {}
     check("the list's first line speaks of what days are counted from", "what its days are counted from" in lead.get("lead", "") and "where its days start" not in lead.get("lead", ""), lead)
     js("const d = $('asAuditMore'); if (d) d.open = true; return 1;"); look("Assumptions, days")
-    page.click("[data-as-mode=harvest]"); wait(700); look("Assumptions, yield and price"); page.click("[data-as-mode=days]"); wait(300)
+    page.click("[data-as-mode=harvest]"); wait(700); look("Assumptions, yield and price")
+    if page.locator("[data-ah-way=list]").count() and page.locator("[data-ah-way=list]").first.is_visible(): page.click("[data-ah-way=list]"); wait(600); look("Assumptions, yield and price, all on one page")
+    page.click("[data-as-mode=days]"); wait(300)
     opened = js("const b = $('asReview'); if (!b || b.disabled) return false; LRFAssume.auditView({ by: 'kind', all: true }); LRFAssume.openAudit(); return true;")
     if opened:
         wait(1000)

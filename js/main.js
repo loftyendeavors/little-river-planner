@@ -25,7 +25,7 @@
     $('seasonYear').textContent = App.planYear();
     const plan = App.state.plan, info = plan.lrfNext || {};
     const waits = App.waiting().length;
-    $('buildNote').textContent = `Preview 0.42 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
+    $('buildNote').textContent = `Preview 0.46 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
   });
   // A browser that holds no plan says so across the page, in every view, with the two ways to bring one in.
   // The same strip speaks for a stored plan that would not open: it is kept as it is until he chooses what to do.
@@ -108,6 +108,24 @@
     if ((e.key === 'Delete' || e.key === 'Backspace') && App.state.sel && App.state.sel.type === 'waiting') { e.preventDefault(); App.removeWaiting([App.state.sel.id]); return; }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); App.setDate(E.addDays(App.state.date, (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 7 : 1))); }
   });
+
+  // One rule for every number box on the page, the ones drawn later too: a figure changes only by being typed.
+  // The wheel: a box that has been clicked would be stepped by it. For the length of that one wheel event the box cannot be
+  // edited, so the browser leaves its figure alone and scrolls the page as it does over anything else; a moment later, or at
+  // the next key, it is a box to type in again. The Up and Down arrows: the browser's step is refused, and nothing else is, so
+  // a handler that listens for those keys still hears them.
+  const numberBox = el => !!el && el.tagName === 'INPUT' && el.type === 'number';
+  let heldBox = null;
+  const letGo = () => { if (heldBox) { heldBox.readOnly = false; heldBox = null; } };
+  document.addEventListener('wheel', e => {
+    const box = e.target;
+    if (!numberBox(box) || box.readOnly || box !== document.activeElement) return;   // a box that was not clicked is not stepped, and one that cannot be edited already is left as it is
+    letGo(); heldBox = box; box.readOnly = true; setTimeout(letGo, 0);
+  }, { capture: true, passive: true });
+  document.addEventListener('keydown', e => {
+    letGo();   // a key pressed in the same moment as the wheel is typed like any other
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && numberBox(e.target)) e.preventDefault();
+  }, true);
 
   App.start().catch(error => {
     $('inspectorBody').textContent = `The planner could not start: ${error && error.message ? error.message : error}`;

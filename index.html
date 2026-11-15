@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.42">
+<meta name="lrf-build" content="0.46">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -114,7 +114,7 @@
           <span class="bar-title">In the ground</span>
           <div class="map-legend" id="mapLegend" aria-label="The colours of the map: the groups of crops in the ground. Click a group to show only that group."></div>
           <button type="button" class="legend-more" id="legendMore" aria-expanded="false" hidden></button>
-          <p class="map-key" aria-label="How beds are drawn"><i class="k-grow"></i>growing <i class="k-pick"></i>harvest <i class="k-turn"></i>turning over</p>
+          <p class="map-key" aria-label="How beds are drawn"><i class="k-grow"></i>growing <i class="k-pick"></i>harvest <i class="k-turn"></i>turning over <label class="k-dim" title="Grey and darken the farm photo a little behind the beds. Kept on this computer."><input type="checkbox" id="mapDimToggle">Dim photo</label></p>
         </div>
       </div>
       <div class="tip" id="tip" hidden></div>
@@ -163,14 +163,20 @@
         <section class="as-audit" id="asAudit" aria-label="Figures kept on plantings"></section>
         <div class="as-hints" id="asHints" hidden></div>
         <div class="as-tools">
+          <div class="seg as-way" id="ahWay" role="group" aria-label="How yield and price are shown" hidden>
+            <button type="button" data-ah-way="card" aria-pressed="true" title="One crop at a time, with a box for each figure and what the box means written beside it">One crop at a time</button>
+            <button type="button" data-ah-way="list" aria-pressed="false" title="Every crop on one page: the same figures, as a list">All on one page</button>
+          </div>
           <div class="seg" role="group" aria-label="Which crops to list">
             <button type="button" data-as-scope="mine" aria-pressed="true">My crops <small></small></button>
             <button type="button" data-as-scope="all" aria-pressed="false">All crops <small></small></button>
           </div>
           <input type="search" id="asSearch" placeholder="Search crops and varieties" autocomplete="off">
+          <label class="ah-check as-house" id="ahHouseFarm" title="On: a crop can be marked as partly kept for personal use, and that part is taken off what is sold. Off: everything this farm packs is sold, and the idea is shown on no page. What either does to the season’s worth is shown before it is done." hidden><input type="checkbox" id="ahHouseOn"><span>Part of some crops is for personal use</span></label>
           <p class="as-key"><i class="k-default"></i>unchecked default <i class="k-guide"></i>checked against a guide <i class="k-own"></i>variety’s own <i class="k-mine"></i>yours <span id="asCount"></span></p>
         </div>
         <p class="as-hints ah-open" id="ahOpen" hidden></p>
+        <div class="yc" id="ycHost" hidden></div>
         <table class="as ah" id="ahTable" hidden><thead id="ahHead"></thead><tbody id="ahBody"></tbody></table>
         <table class="as" id="asTable">
           <thead><tr><th>Crop</th><th class="as-th-start" title="Where the numbers in the row count from. Transplanting: the day the crop goes in the bed. Seeding in trays: the day it is sown in the nursery, so the nursery time comes off. Direct seeding: a figure for seed sown in place; as a transplant the crop is in the bed about two weeks less.">Days counted from</th><th>Field</th><th>Unheated tunnel</th><th>Heated greenhouse</th><th>Towers</th><th title="Days in the nursery, plus days in the bed, and what that comes to from seed to first harvest. Worked out for the condition the crop is mostly grown in.">From seed</th><th>Plantings</th></tr></thead>
@@ -275,6 +281,8 @@
 <script src="js/panels.js"></script>
 <script src="js/mapedit.js"></script>
 <script src="js/assume.js"></script>
+<script src="js/yieldcard.js"></script>
+<script src="js/things.js"></script>
 <script src="js/seeds.js"></script>
 <script src="js/bench.js"></script>
 <script src="js/traysview.js"></script>

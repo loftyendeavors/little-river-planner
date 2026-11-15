@@ -36,6 +36,8 @@ node $T/stepF_test.cjs $APP $PLAN $OLD | named "stepF, backup"
 node $T/stepF_test.cjs $APP $SHIP $OLD | named "stepF, compact"
 node $T/look_a_test.cjs $APP $PLAN | named "look-a, backup"
 node $T/look_a_test.cjs $APP $SHIP | named "look-a, compact"
+node $T/things_test.cjs $APP $PLAN $OLD | named "things, backup"
+node $T/things_test.cjs $APP $SHIP $OLD | named "things, compact"
 node $T/rails_test.cjs $APP $PLAN | named "rails"
 node $T/assume_test.cjs $APP $PLAN | named "assume"
 node $T/store_test.cjs $APP | named "store"   # saving with two windows of one browser open: the count beside the plan, the one window that holds it
