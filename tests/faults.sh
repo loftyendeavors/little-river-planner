@@ -1,6 +1,6 @@
 #!/bin/sh
 # The deliberate faults: each puts one fault into a copy of the app and requires that the check then fails where it passed before
-# (five sets name the line that has to fail: changed, cleanup, look, map, screens). They prove that the checks can fail. One way in for all of them:
+# (six sets name the line that has to fail: changed, cleanup, look, map, screens, windows). They prove that the checks can fail. One way in for all of them:
 #   sh tests/faults.sh <set> [mode] [words…]      FROM=0 TO=12 in front runs a part; WIDTH= and DARK= reach the page checks
 #   sh tests/faults.sh list                        every set, its modes and the number of faults in each
 # With no mode a set runs its first one, which is its fast one where it has one (node, worker: seconds a fault; the page modes
@@ -12,7 +12,7 @@
 #   {"set": "step5a", "mode": "node", "faults": 30, "caught": 30, "missed": [], "broken": []}
 # The exit status is 0 only when every fault was caught.
 . "$(dirname "$0")/env.sh"
-SETS="step1 f018 step2a step2b step3a step3b step5a step5b stepF plain r1 sup sync maint bedpanel mixed season ask cleanup look map changed screens"
+SETS="step1 f018 step2a step2b step3a step3b step5a step5b stepF plain r1 sup sync maint bedpanel mixed season ask cleanup look map changed screens windows"
 # the script of a set and what it is given; F is the folder its copies are made in
 script() {
   case $1 in
@@ -39,6 +39,7 @@ script() {
     map) SCRIPT=$REPO/tools/mutate_map.py; ARGS="$APP $F $REPO/tools" ;;
     changed) SCRIPT=$T/mutate_changed.py; ARGS="$REPO $F $T $W/old $SCRATCH" ;;
     screens) SCRIPT=$T/mutate_screens.py; ARGS="$REPO $F $T $W/old $ZIP" ;;
+    windows) SCRIPT=$T/mutate_windows.py; ARGS="$APP $REPO $F $T" ;;
     *) return 1 ;;
   esac
 }
