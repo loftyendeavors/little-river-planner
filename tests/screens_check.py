@@ -11,9 +11,11 @@ and the two side by side with what changed boxed in red.
 
 Two takes of one build are not the same picture to the last pixel: the edge of a rounded corner or of a curve comes out a
 few levels lighter or darker from one take to the next. So each build is photographed twice, and what differs between two
-takes of the same build is set aside, with the pixels round it, before the two builds are compared. Where a great deal
-differs between two takes (a clock, something still loading) the screen fails as not holding still, since such a picture can
-prove nothing.
+takes of the same build is set aside, with the pixels round it, before the two builds are compared. And about one take in
+forty draws the names of the gardens on the map in other letter shapes. So a screen that is not plainly the same is
+photographed twice more, and of the four takes of a build the ones that agree are compared: a change is there every time, a
+fluke is not. Where no two takes of a build agree (a clock, something still loading) the screen fails as not holding still,
+since such a picture can prove nothing.
 
 What this cannot see: anything that needs a click or a drag to appear (a panel, a menu, a window), what lies below the first
 screenful, a change of colour too slight to see (under 5 levels in 255), a change of fewer than nine pixels, a change that
@@ -54,7 +56,7 @@ for f in sorted((repo / "tests" / "builds").glob("*.json")):
 VIEW = "document.body.dataset.view"
 MODE = "(document.querySelector('.view-assume') || { dataset: {} }).dataset.mode"
 SCREENS = [
-    ("map", "A.setView('map'); A.select(null);", f"{VIEW} === 'map'", "LRFMap.fit();"),   # fitted to its frame once everything round it has settled: fitted earlier, it can sit a fraction of a pixel off
+    ("map", "A.setView('map'); A.select(null);", f"{VIEW} === 'map'"),
     ("timeline", "A.setView('timeline');", f"{VIEW} === 'timeline'"),
     ("forecast", "A.setView('harvest');", f"{VIEW} === 'harvest'"),
     ("tasks", "A.setView('sow');", f"{VIEW} === 'sow'"),
@@ -87,12 +89,9 @@ def take(pw_browser, url, width, height, wanted):
             page.wait_for_function("LRFApp.state.plan.plantings.length > 600 && !LRFApp.isSample()", timeout=60000); page.wait_for_timeout(6000)
         page.add_style_tag(content=STILL)
         page.evaluate("async () => { await Promise.all([...document.fonts].map(f => f.load().catch(() => null))); await document.fonts.ready; }")
-        # Then everything is drawn again from the plan as it stands. The map measures a garden's name when it draws it: a name
-        # drawn before its typeface was in stays squeezed until the map next draws, about one load in forty on this computer.
-        page.evaluate("LRFApp.emit('plan')"); page.wait_for_timeout(1500)
     except Exception as e:
         errors.append(f"{url} at {width}: the page did not open: {str(e)[:200]}"); ctx.close(); return out
-    for name, how, shown, *settle in SCREENS:
+    for name, how, shown in SCREENS:
         if name not in wanted: continue
         try:   # one screen that fails to open does not take the others with it
             page.evaluate("(() => { const A = LRFApp; " + how + " })()")
@@ -108,8 +107,7 @@ def take(pw_browser, url, width, height, wanted):
                 if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
                 await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
             }""")
-            if settle: page.evaluate("(() => { " + settle[0] + " })()"); page.wait_for_timeout(500)
-            page.mouse.move(0, 0); page.wait_for_timeout(100)
+            page.mouse.move(0, 0)
             out[name] = page.screenshot(full_page=False, animations="disabled", caret="hide")
         except Exception as e:
             errors.append(f"{name} at {width}: {str(e)[:200]}")
@@ -122,12 +120,25 @@ def far(a, b):
     r, g, b_ = ImageChops.difference(a, b).split()
     return ImageChops.lighter(ImageChops.lighter(r, g), b_).point(lambda v: 255 if v > LEVELS else 0)
 count = lambda mask: mask.histogram()[255]
+def settled(takes):
+    """Two takes of one build that agree, out of two or four: [a, b] as pictures, or None when no two can be trusted.
+    About one take in forty on the computers this was written on draws the names of the gardens on the map in other letter
+    shapes (some thousands of pixels; the cause is not known). So where two takes of a build disagree, or the two builds do,
+    the screen is photographed twice more, and the takes that agree with most of the others are the ones compared."""
+    ims = [Image.open(io.BytesIO(x)).convert("RGB") for x in takes]
+    if len({i.size for i in ims}) > 1 or len(ims) < 2: return None
+    agree = [[i == j or count(far(ims[i], ims[j])) <= SHAKE for j in range(len(ims))] for i in range(len(ims))]
+    best = max(range(len(ims)), key=lambda i: sum(agree[i])); group = [j for j in range(len(ims)) if agree[best][j]]
+    rest = [j for j in range(len(ims)) if j not in group]
+    if len(group) < 2 or (len(group) == len(rest) and all(agree[i][j] for i in rest for j in rest)): return None   # none agree, or two camps of the same size
+    return [ims[group[0]], ims[group[1]]]
 def compare(was, now):
-    """was and now are two takes each. Returns ("same" | "differs" | "shakes", detail)."""
-    a1, a2, b1, b2 = [Image.open(io.BytesIO(x)).convert("RGB") for x in (*was, *now)]
-    if len({a1.size, a2.size, b1.size, b2.size}) > 1: return "differs", {"sizes": [a1.size, b1.size]}
-    own = ImageChops.lighter(far(a1, a2), far(b1, b2))   # what does not hold still between two takes of one build
-    if count(own) > SHAKE: return "shakes", {"two takes of one build differ, so nothing can be said": {"pixels": count(own), "box": list(own.getbbox())}}
+    """was and now are the takes of each build, two or four. Returns ("same" | "differs" | "shakes", detail)."""
+    a, b = settled(was), settled(now)
+    if a is None or b is None: return "shakes", "the takes of one build do not agree with each other, so nothing can be said (%d of the build before, %d of this one)" % (len(was), len(now))
+    (a1, a2), (b1, b2) = a, b
+    if a1.size != b1.size: return "differs", {"sizes": [a1.size, b1.size]}
+    own = ImageChops.lighter(far(a1, a2), far(b1, b2))   # what does not hold still between two takes of one build that agree
     seen = ImageChops.multiply(far(a1, b1), ImageChops.invert(own.filter(ImageFilter.MaxFilter(5))))   # with those pixels, and the two round each, set aside
     if count(seen) <= NOISE: return "same", None
     return "differs", {"pixels": count(seen), "box": list(seen.getbbox())}
@@ -141,19 +152,29 @@ def keep(name, width, a, b, box):
     side.save(shots / f"{name}-{width}-side-by-side.png")
 
 with sync_playwright() as pw:
-    browser = pw.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox", "--font-render-hinting=none", "--disable-lcd-text", "--num-raster-threads=1"])
+    browser = pw.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox", "--font-render-hinting=none", "--disable-lcd-text"])
     url_now, url_old = serve(now_dir), serve(old_dir)
     check("the build names only screens this check knows", not unknown, unknown)
     changed, got = [], {}
     for width, height, wanted in SIZES:
         was = [take(browser, url_old, width, height, wanted) for _ in (1, 2)]
         now = [take(browser, url_now, width, height, wanted) for _ in (1, 2)]
+        of = lambda takes, name: [t[name] for t in takes if name in t]
+        first = {name: compare(of(was, name), of(now, name)) if all(name in t for t in was + now) else ("none", None) for name in wanted}
+        again = [name for name in wanted if first[name][0] != "same"]
+        if again:   # whatever is not plainly the same is photographed twice more: a change is there both times, a fluke is not
+            was += [take(browser, url_old, width, height, again) for _ in (1, 2)]; now += [take(browser, url_now, width, height, again) for _ in (1, 2)]
         for name in wanted:
-            if any(name not in t for t in was + now): got[(name, width)] = ("none", "no picture was taken: " + "; ".join(e for e in errors if name in e or "did not open" in e)[-400:]); continue
-            state, detail = compare([t[name] for t in was], [t[name] for t in now])
+            if name not in again: got[(name, width)] = first[name]; continue
+            w, n = of(was, name), of(now, name)
+            if len(w) < 2 or len(n) < 2: got[(name, width)] = ("none", "no picture was taken: " + "; ".join(e for e in errors if name in e or "did not open" in e)[-400:]); continue
+            state, detail = compare(w, n)
             if state == "shakes":
-                for i, t in enumerate(was + now): (shots / f"{name}-{width}-{'before' if i < 2 else 'now'}-take-{i % 2 + 1}.png").write_bytes(t[name])
-            if state == "differs": keep(name, width, was[0][name], now[0][name], detail.get("box")); changed.append(f"{name} at {width}")
+                for i, x in enumerate(w): (shots / f"{name}-{width}-before-take-{i + 1}.png").write_bytes(x)
+                for i, x in enumerate(n): (shots / f"{name}-{width}-now-take-{i + 1}.png").write_bytes(x)
+            if state == "differs":
+                a, b = settled(w), settled(n); pa, pb = io.BytesIO(), io.BytesIO(); a[0].save(pa, "PNG"); b[0].save(pb, "PNG")
+                keep(name, width, pa.getvalue(), pb.getvalue(), detail.get("box")); changed.append(f"{name} at {width}")
             got[(name, width)] = (state, detail)
     # A screen the build does not name looks the same at every width. One it names looks different at one width at least.
     for (name, width), (state, detail) in got.items():
