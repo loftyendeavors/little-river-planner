@@ -13,6 +13,13 @@
  * passphrase, which is typed once and not kept), the stamp of the cloud plan it is in step with, and a fingerprint of
  * the plan as it stood then, which is how it knows whether anything has been changed here since.
  *
+ * A plan that differs from that fingerprint is taken to be "changed here", and is sent. That is only right when the plan
+ * the page opened with is the one that was in step, or one made from it. So two more words are kept with each note of
+ * being in step: `n`, the count beside the stored plan then, and `stored`, whether that plan was in fact in the browser's
+ * storage (it is not when a save was refused or failed). A page that starts from a stored plan whose count is under `n`,
+ * or from another plan than the one noted when `stored` is false, has a plan that is behind: it is never sent by itself.
+ * The page asks which plan to keep. A note that lacks the two words says nothing: not known is never behind.
+ *
  * No page of the app is touched here. The app is reached through `host`:
  *   mode()          'plan' | 'sample' | 'held'      a real plan, the sample, or a stored plan that would not open
  *   key()           a fingerprint of the plan's content
@@ -20,6 +27,9 @@
  *   extrasKey()     -> a fingerprint of the photos        extras() -> { map: { bytes, mime } | null, thumbs: text | null }
  *   open(text, { image, thumbs, why, from })  -> true once the plan is open here          photos({ image, thumbs })
  *   loads()         how many whole plans have been loaded over the open one       device()   say(message)
+ *   stored()        -> { n, ok }: the count beside the stored plan, and whether the plan open here is in the browser's storage;
+ *                   null where that is not known. A host without it is one where it is not known.
+ *   readOnly()      true in a window that only shows the plan: nothing is written to what this browser remembers
  */
 (function (root) {
   'use strict';
@@ -27,11 +37,11 @@
   const timing = { push: 4000, poll: 300000, focus: 60000, timeout: 45000, retry: 30000, retryMost: 300000 };
 
   /** What to do, from what each side holds. base: the cloud stamp this browser is in step with; cloud: the stamp there now. */
-  function decide({ base, cloud, dirty, sample }) {
+  function decide({ base, cloud, dirty, sample, behind }) {
     if (!cloud) return sample ? 'nothing' : 'push-first';
     if (sample) return 'pull';
     if (!base) return 'ask-first';
-    if (cloud === base) return dirty ? 'push' : 'in-step';
+    if (cloud === base) return dirty ? (behind ? 'conflict' : 'push') : 'in-step';   // a plan that is behind is not "changed here": it is never sent by itself
     return dirty ? 'conflict' : 'newer';
   }
   /** The service's address as it is used: https, no sign-in part, no trailing slash. '' when it is not one. */
@@ -71,7 +81,17 @@
     try { cfg = JSON.parse(store.get() || '{}') || {}; } catch (_) { cfg = {}; }
     const st = { status: cfg.url && cfg.token ? 'checking' : cfg.url ? 'signin' : 'off', cloud: null, files: null, first: false, error: '', until: null, checkedAt: 0, busy: false, snoozed: null, loads: 0, tries: 0, photoNote: '' };
     let timer = null, again = null, running = null;
-    const keep = change => { cfg = { ...cfg, ...change }; for (const k of Object.keys(cfg)) if (cfg[k] == null) delete cfg[k]; store.set(Object.keys(cfg).length ? JSON.stringify(cfg) : null); };
+    const quiet = () => { try { return typeof host.readOnly === 'function' && !!host.readOnly(); } catch (_) { return false; } };
+    const keep = change => { cfg = { ...cfg, ...change }; for (const k of Object.keys(cfg)) if (cfg[k] == null) delete cfg[k]; if (!quiet()) store.set(Object.keys(cfg).length ? JSON.stringify(cfg) : null); };
+    const stored = () => { try { const s = typeof host.stored === 'function' ? host.stored() : null; return s && Number.isInteger(s.n) ? { n: s.n, ok: !!s.ok } : null; } catch (_) { return null; } };
+    /** The two words kept with a note of being in step. `ok`: the plan that note is of is in the browser's storage. */
+    const words = (s, ok) => (s ? { n: s.n, stored: !!ok } : { n: null, stored: null });
+    // Worked out once, from the plan the page opened with: is it behind what this browser last noted? It stays so until he chooses.
+    let noted = false, behind = (() => {
+      const s = stored();
+      if (!s || !cfg.base || cfg.key == null) return false;
+      try { return host.mode() === 'plan' && ((Number.isInteger(cfg.n) && s.n < cfg.n) || (cfg.stored === false && host.key() !== cfg.key)); } catch (_) { return false; }
+    })();
     const emit = () => { const now = info(); for (const fn of listeners) { try { fn(now); } catch (_) { /* a listener's fault is not the sync's */ } } };
     const set = (status, error) => { st.status = status; st.error = error || ''; emit(); };
     const configured = () => !!(cfg.url && cfg.token);
@@ -111,11 +131,14 @@
 
     /** Send the plan open here, on condition that the cloud still holds `base` ('none': holds nothing). */
     async function push(base, replace) {
+      const was = stored();   // asked in the same turn the plan is taken: whether that very plan is in the browser's storage
       const p = await host.payload(), packed = await pack(p.text);
       set('sending');
       const meta = { savedAt: p.savedAt, device: host.device(), label: cfg.label || '', plantings: p.plantings, waiting: p.waiting, year: p.year, enc: packed.enc, bytes: p.text.length };
       const done = await call('PUT', '/plan', { body: packed.bytes, headers: { 'x-lrf-base': base || 'none', 'x-lrf-meta': metaHeader(meta), ...(replace || host.loads() !== st.loads ? { 'x-lrf-replace': '1' } : {}) } });
       keep({ base: done.plan.etag, key: p.key, savedAt: p.savedAt });
+      const now = stored();   // in storage then, or now (the plan open now is that one or one made from it)
+      keep(words(now, (was && was.ok) || (now && now.ok))); noted = true; behind = false;
       st.cloud = done.plan; st.first = false; st.snoozed = null; st.loads = host.loads();
       await photosUp(null).catch(error => { st.photoNote = error.message; });
       set('in-step');
@@ -165,6 +188,8 @@
       const ok = await host.open(text, { image: photos.image, thumbs: photos.thumbs, why: why || 'Before opening the plan from the cloud', from: 'the cloud' });
       if (!ok) return false;
       keep({ base: etag, key: host.key(), savedAt: meta.savedAt || null, ...photos.etags, extrasKey: await host.extrasKey() });
+      const now = stored();
+      keep(words(now, now && now.ok)); noted = true; behind = false;
       st.cloud = { ...(st.cloud || {}), etag, meta }; st.first = false; st.snoozed = null; st.loads = host.loads();
       set('in-step');
       return true;
@@ -202,13 +227,14 @@
           const mode = host.mode();
           if (mode === 'held') { set('held'); return; }
           // a change made here, while in step: straight to the conditional write, which says by itself if the cloud has moved
-          if (reason === 'change' && cfg.base && st.status === 'in-step' && mode === 'plan' && host.key() !== cfg.key) { emit(); await push(cfg.base); st.tries = 0; return; }
+          if (reason === 'change' && cfg.base && st.status === 'in-step' && mode === 'plan' && !behind && host.key() !== cfg.key) { emit(); await push(cfg.base); st.tries = 0; return; }
           if (st.status === 'off' || st.status === 'signin') st.status = 'checking';
           emit();
           const remote = await call('GET', '/state');
           st.cloud = remote.plan || null; st.files = remote.files || null; st.checkedAt = Date.now(); st.tries = 0; noteVersion(remote);
           const dirty = mode === 'plan' && host.key() !== cfg.key;
-          const act = decide({ base: cfg.base || null, cloud: st.cloud && st.cloud.etag, dirty, sample: mode === 'sample' });
+          if (!dirty) behind = false;   // the plan here is the very one that was noted
+          const act = decide({ base: cfg.base || null, cloud: st.cloud && st.cloud.etag, dirty, sample: mode === 'sample', behind });
           if (act === 'nothing') set('empty');
           else if (act === 'push-first') await push('none');
           else if (act === 'push') await push(cfg.base);
@@ -241,12 +267,12 @@
       catch (error) { if (error.kind === 'locked') st.until = error.detail && error.detail.until; throw error; }
       if (!got || typeof got.token !== 'string') throw problem('server', 'That address did not answer like the plan sync service.');
       const sameHome = cfg.url === at;
-      cfg = sameHome ? cfg : {};
+      if (!sameHome) { cfg = {}; behind = false; noted = false; }
       keep({ url: at, token: got.token, label: String(label == null ? cfg.label || '' : label).trim().slice(0, 40) });
       st.until = null; st.status = 'checking'; st.loads = host.loads();
       return run('connect');
     }
-    function disconnect() { cancel(timer); timer = null; cfg = {}; store.set(null); Object.assign(st, { status: 'off', cloud: null, files: null, first: false, error: '', snoozed: null, tries: 0 }); emit(); }
+    function disconnect() { cancel(timer); timer = null; cfg = {}; if (!quiet()) store.set(null); behind = false; noted = false; Object.assign(st, { status: 'off', cloud: null, files: null, first: false, error: '', snoozed: null, tries: 0 }); emit(); }
     const rename = label => { keep({ label: String(label || '').trim().slice(0, 40) }); emit(); };
     /** The user's answer to "which plan": the cloud's. */
     function openCloud() {
@@ -266,6 +292,12 @@
       return solo(() => push(st.cloud.etag, true));
     }
     const snooze = () => { if (st.cloud) st.snoozed = st.cloud.etag; emit(); };
+    /** The app says the plan open here has just been written to the browser's storage. A note this page made while that plan was still on its way there is now true of it. */
+    function saved() {
+      if (!noted || cfg.stored !== false) return;
+      const s = stored();
+      if (s && s.ok) keep({ n: s.n, stored: true });
+    }
 
     // snapshots kept in the cloud beside the plan
     const snaps = async () => (await call('GET', '/snaps')).snaps || [];
@@ -285,7 +317,7 @@
       if (!configured()) { emit(); return Promise.resolve(info()); }
       return run('start');
     }
-    return { info, linkService, on: fn => listeners.push(fn), start, run, touch, connect, disconnect, rename, openCloud, keepMine, snooze, snaps, putSnap, getSnap, dropSnap, configured, when, describe: what };
+    return { info, linkService, on: fn => listeners.push(fn), start, run, touch, saved, connect, disconnect, rename, openCloud, keepMine, snooze, snaps, putSnap, getSnap, dropSnap, configured, when, describe: what };
   }
 
   const api = { create, decide, address, pack, unpack, supported, timing, KEY };
