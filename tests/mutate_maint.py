@@ -1,4 +1,5 @@
-"""Deliberate faults in the maintenance pass (0.20), one at a time. Each must be caught by a named line of maint_check.py
+"""Deliberate faults in the maintenance pass (0.20), one at a time. Each must be caught by a line of maint_check.py
+that passes with no fault in it: any such line counts, and a check that stops with no line failed catches nothing
 (about a minute each: the check stops at the first line that fails).
 usage: python3 -I mutate_maint.py <app-dir> <scratch-dir> <maint_check.py> <plan.json> [page | list] [words…]     env FROM=, TO= to run a part
 list: how many faults there are, and nothing else."""

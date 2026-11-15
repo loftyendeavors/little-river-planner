@@ -1,7 +1,7 @@
 """Deliberate faults for preview 0.37 (the farm's dates, "Season…"; and the two-browser check of the farm photo, whose fix is 0.35's): each is put into a copy, and a named check must fail.
 usage: python3 -I mutate_season.py <app> <scratch> <tests-dir> <repo> [page | photo | list] [words…]     env FROM=, TO= to run a part, WIDTH= for the page
 page: against season_check.py (under a minute each). photo: against photo_keep_check.py (two browsers and the sync service: about a minute each). list: how many faults there are of each kind, and nothing else.
-(The node mode ran season_test.cjs, the proof of one past build. That proof is retired, tests/what_changed.cjs with tests/this-build.json does its work, and the mode is taken out.)
+(The node mode ran season_test.cjs, the proof of one past build. That proof is retired, tests/what_changed.cjs with the build’s file under tests/builds does its work, and the mode is taken out.)
 """
 import json, os, shutil, signal, subprocess, sys, time
 from pathlib import Path

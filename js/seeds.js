@@ -272,7 +272,7 @@
       } catch (error) { d.say(error.message || 'That could not be saved.', 'bad'); }
     }
   }
-  /** Adding a crop also puts it on the grower's own crop list, as v7 does. */
+  /** Adding a crop also puts it on the grower's own crop list. */
   function cropListOp(cropId) {
     const settings = App.state.plan.settings || {}, list = settings.cropTypeList && settings.cropTypeList.v === 1 ? settings.cropTypeList : { v: 1, added: [], removed: [], deleted: [] };
     return { kind: 'settings', before: settings, after: { ...settings, cropTypeList: { ...list, added: [...new Set([...(list.added || []), cropId])], removed: (list.removed || []).filter(id => id !== cropId) } } };
@@ -389,7 +389,7 @@
           if (await App.revise(`Add the crop ${name}`, [{ kind: 'crop', before: null, after: fresh }, cropListOp(fresh.id)])) { ui.sel = { type: 'crop', id: fresh.id }; ui.tab = 'crops'; d.close(); schedule(); }
           return;
         }
-        // only what was changed is written over the built-in crop, as v7 does
+        // only what was changed is written over the built-in crop
         const after = { ...(own || { id: crop.id }) };
         let changes = 0;
         for (const [key, value] of Object.entries(typed)) {

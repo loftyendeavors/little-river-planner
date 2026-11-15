@@ -6,7 +6,7 @@
  *
  *   survey()   how many plantings carry which figure of their own (cheap; shown on the Assumptions view)
  *   study()    the plantings that keep their own days, nursery weeks, yield, harvest days or turnover days,
- *              or a copy of the crop's values from the old planner, as rows to decide on
+ *              or a copy of the crop's values kept on the planting, as rows to decide on
  *   build()    the one step that carries out a set of decisions
  *   preview()  what that step moves, and which double bookings it would start
  *
@@ -31,7 +31,7 @@
   const recorded = p => !!p.done && E.DONE_KINDS.some(k => typeof p.done[k] === 'string' && p.done[k] !== '');
   /** The planting with its own days taken off. "Manual" goes with them: it only ever meant "use my number". */
   const freed = p => { const q = { ...p }; delete q.dtm; if (q.timingMode === 'manual') delete q.timingMode; return q; };
-  /** The nursery weeks v7 froze on a planting, when it froze any. */
+  /** The nursery weeks frozen on a planting, when any are. */
   const frozenWeeks = p => { const g = p.growingDefaults, x = g && g.v === 1 && g.cropId === p.cropId && g.crop && g.crop.gh; return x && x.present === true && Number.isFinite(+x.value) ? +x.value : null; };
   function thawed(p) {
     const g = p.growingDefaults, crop = { ...g.crop };
@@ -138,12 +138,34 @@
         if (off.every(d => Number.isFinite(d) && d === off[0]) && off[0] !== 0 && !c.tuned) { c.typed += off[0]; c.tuned = true; } else if (c.level === 'crop' && r.varietyId) { c.level = 'variety'; c.typed = r.days; c.tuned = false; } else c.dead = true;
       }
     }
-    for (const c of cand) if (c.ok) c.row.take = { level: c.level, id: c.level === 'crop' ? c.row.cropId : c.row.varietyId, env: c.row.env, typed: c.typed };
+    // What is suggested has to move nothing when it is taken as a whole, so the lines are tried together once more, as they
+    // would be written. One line of the list holds one number: where two rows would write two numbers on one line, the row
+    // with more plantings has it. A row whose own plantings would then move keeps its figures. And a row that carries what
+    // the list gives today is not let go where a line taken beside it changes what the list gives it (one variety with two
+    // figures on its plantings, one of them the crop's own): let go, it would move. It stays as it is.
+    const lineOf = c => [c.level, c.level === 'crop' ? c.row.cropId : c.row.varietyId, c.row.env].join('|');
+    for (let round = 0; round < 8; round++) {
+      const taking = cand.filter(c => c.ok);
+      const wins = new Map();
+      for (const c of taking) { const k = lineOf(c), w = wins.get(k); if (!w || c.row.ids.length > w.row.ids.length) wins.set(k, c); }
+      let drop = taking.filter(c => wins.get(lineOf(c)) !== c && wins.get(lineOf(c)).typed !== c.typed), moves = () => false;
+      if (!drop.length) {
+        const next = clone(plan.assumptions) || { v: 1, crops: {}, varieties: {} };
+        for (const c of taking) entry(next, c.level, c.level === 'crop' ? c.row.cropId : c.row.varietyId, c.row.env, c.typed);
+        const sim = E.create({ ...plan, assumptions: next, plantings: plan.plantings.map(p => ids.has(p.id) ? freed(p) : p) }, Lib);
+        moves = r => !r.ids.every(id => same(eng.calc(eng.planting(id)), sim.calc(sim.planting(id))));
+        drop = taking.filter(c => moves(c.row));
+      }
+      if (drop.length) { for (const c of drop) c.ok = false; if (round === 7) for (const c of cand) c.ok = false; continue; }   // out of rounds: nothing is taken that was not tried
+      for (const r of list) r.stays = r.agrees && taking.length > 0 && moves(r);
+      break;
+    }
+    for (const c of cand) c.row.take = c.ok ? { level: c.level, id: c.level === 'crop' ? c.row.cropId : c.row.varietyId, env: c.row.env, typed: c.typed } : null;
     for (const r of list) {
       r.listDays = [...r.listDays].sort((a, b) => a - b); r.shift = [Math.min(...r.shifts), Math.max(...r.shifts)]; delete r.shifts;
-      r.choice = r.agrees ? 'follow' : r.take ? 'take' : 'keep';
+      r.choice = r.stays ? 'keep' : r.agrees ? 'follow' : r.take ? 'take' : 'keep';
     }
-    // Nursery weeks frozen on the planting by v7, where the crop now says something else.
+    // Nursery weeks frozen on the planting, where the crop now says something else.
     const weeks = new Map();
     for (const p of o.weeks) {
       const c = eng.crop(p.cropId), bed = eng.bedOf(p.bedId), was = frozenWeeks(p);
@@ -165,11 +187,11 @@
     return { rows: [...list.sort(order), ...[...weeks.values()].sort(order), ...[...wait.values()].sort(order), ...more.rows.sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || bySize(a, b))], held: new Set([...o.held.map(p => p.id), ...more.held]).size };
   }
 
-  // ───────────────────────── yield, harvest days, turnover, and the old planner's copies ─────────────────────────
+  // ───────────────────────── yield, harvest days, turnover, and copied crop values ─────────────────────────
   const KINDS = ['days', 'weeks', 'wait', 'yield', 'window', 'turn', 'copy'];
   const cycle = p => !!(p.towerCycle && p.towerCycle.v === 1);
   const ownYield = p => has(p, 'yield'), ownWindow = p => has(p, 'hw') || p.harvestMode === 'season' || p.harvestMode === 'window', ownTurn = p => has(p, 'turnover');
-  /** Crop values the old planner copied onto a planting that bear on its harvest. The rest are facts about that planting (a bulb, a bought plant, its spacing). */
+  /** Crop values copied onto a planting that bear on its harvest. The rest are facts about that planting (a bulb, a bought plant, its spacing). */
   const COPY = ['yield', 'price', 'mk', 'hw', 'harvestMode', 'yieldDays', 'harvestUntil', 'baseUnit', 'yBasis'];
   const frozen = p => { const g = p.growingDefaults; return g && g.v === 1 && g.cropId === p.cropId && g.crop && typeof g.crop === 'object' && !Array.isArray(g.crop) ? g.crop : null; };
   const copied = p => { const c = frozen(p); return c ? COPY.filter(k => c[k] && typeof c[k] === 'object') : []; };
@@ -277,7 +299,7 @@
       }
       for (const r of rows.values()) { r.list = [...r.list].filter(x => x != null); r.varieties = [...new Set(r.varieties.values())].filter(Boolean); r.choice = r.agrees ? 'follow' : r.take ? 'take' : 'keep'; out.push(r); }
     }
-    // The old planner's copies of crop values. A copy that says what the crop says now changes nothing and is let go in one row;
+    // Copies of crop values kept on plantings. A copy that says what the crop says now changes nothing and is let go in one row;
     // one that says something else is a row of its own, let go where that changes nothing for its plantings and kept otherwise.
     const sameIds = {}, differ = new Map();
     for (const p of open) {

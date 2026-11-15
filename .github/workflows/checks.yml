@@ -1,5 +1,6 @@
 # Every check, on every push, on a made-up farm (tests/farm). The parts run side by side; "All checks" is the one result to
-# require before a merge. How to run the same thing on your own computer: tests/README.md.
+# require before a merge. It also prints what every check ran, as tests/counts.json would hold it, and keeps it as "counts".
+# How to run the same thing on your own computer: tests/README.md.
 name: Checks
 on:
   push:
@@ -17,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: [node, build, app1, app2, app3, app4, new, "off", site1, site2, site3, site4, site5, site6, site7, site8, site9, site10]
+        part: [node, build, app1, app2, app3, app4, new, "off", site1, site2, site3, site4, site5, site6, site7, site8, site9, site10, screens]
     env:
       LRF_WORK: ${{ github.workspace }}/../lrf-work
       # on main the build before is what main was before this push; on a branch setup.sh finds where the branch left main
@@ -34,20 +35,38 @@ jobs:
           python-version: "3.12"
       - name: Tools
         run: |
-          pip install --quiet playwright pillow
+          pip install --quiet playwright==1.63.0 pillow==12.3.0   # said outright: a newer driver or drawing library is a change like any other
           google-chrome --version
       - name: Work folder
         run: sh tests/setup.sh
       - name: Run
+        env:
+          LRF_SHOTS: ${{ runner.temp }}/shots     # the pictures the checks take: a place that can be kept with the run
         run: sh tests/run.sh ${{ matrix.part }} 2>&1 | tee "$RUNNER_TEMP/part.log"   # kept outside the repository: the site serves every file at its root
       - name: Verdict
-        run: python3 -I tests/verdict.py "$RUNNER_TEMP/part.log" ${{ matrix.part }}
+        run: python3 -I tests/verdict.py "$RUNNER_TEMP/part.log" ${{ matrix.part }} "$RUNNER_TEMP/ran/ran-${{ matrix.part }}.json"
+      - name: Keep what each check of this part ran, for tests/counts.json
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ran-${{ matrix.part }}
+          path: ${{ runner.temp }}/ran
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Keep the pictures of the screens that changed
+        if: always() && matrix.part == 'screens'
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens
+          path: ${{ runner.temp }}/shots/screens
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Keep the pictures of a part that failed
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: shots-${{ matrix.part }}
-          path: ${{ github.workspace }}/../lrf-work/shots
+          path: ${{ runner.temp }}/shots
           if-no-files-found: ignore
           retention-days: 7
   all:
@@ -58,3 +77,27 @@ jobs:
     steps:
       - name: Every part passed
         run: test "${{ needs.part.result }}" = "success"
+      # bookkeeping, after the verdict and unable to change it: what every check ran, as tests/counts.json would hold it
+      - uses: actions/checkout@v4
+        if: always()
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: always()
+        continue-on-error: true
+        with:
+          pattern: ran-*
+          path: ran
+          merge-multiple: true
+      - name: What every check ran, as tests/counts.json would hold it
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: python3 -I tests/counts.py ran | tee counts.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
+        with:
+          name: counts
+          path: counts.json
+          if-no-files-found: ignore
+          retention-days: 7

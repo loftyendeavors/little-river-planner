@@ -2,9 +2,7 @@
  *
  * A transplanted crop is not sown one seed per plant wanted. The grower fills whole rows of a plug tray,
  * allowing for germination and a buffer, and plantings of one variety with one schedule are sown together
- * and rounded once. This is v7's own model (its nursery-trays module), carried over function for function
- * so that cells, seeds, trays and bench room come out as v7 shows them; tests/parity.cjs holds the two
- * side by side on every planting.
+ * and rounded once.
  *
  *   buffered plants = ceil(plants × (100 + buffer) / 100)
  *   minimum cells   = ceil(buffered plants / germination)
@@ -37,7 +35,7 @@
   const DEFAULTS = Object.freeze([preset(32, 8, 4), preset(50, 10, 5), preset(72, 12, 6), preset(98, 14, 7), preset(128, 16, 8), preset(200, 20, 10), preset(288, 24, 12),
     Object.freeze({ id: 'tray-flat-1020', name: '10 × 20 flat', cells: 1, rows: 1, columns: 1, widthIn: 10, lengthIn: 20, active: true, template: true })]);
   // Rockwool for the towers comes as a sheet of 98 cubes, 14 rows of 7, that sits in one open 10 × 20 tray with drainage holes.
-  // v7 counted a tower sowing in the crop's plug tray (128 cells for lettuce and basil); the grower's sheets are 98.
+  // A tower sowing with no tray named for it is counted in this sheet, not by the crop's saved cell count (128 for lettuce and basil).
   const ROCKWOOL_SHEET = Object.freeze({ id: 'rockwool-98', name: '98-cell rockwool sheet', cells: 98, rows: 14, columns: 7, widthIn: 10, lengthIn: 20, active: true, template: true, sheet: true });
 
   function validateTray(tray) {

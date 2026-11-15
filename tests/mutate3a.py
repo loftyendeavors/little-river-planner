@@ -1,4 +1,5 @@
-"""Deliberate faults in step 3a (0.22), one at a time. Each must be caught by a named line.
+"""Deliberate faults in step 3a (0.22), one at a time. Each must be caught by a line
+that passes with no fault in it: any such line counts, and a check that stops with no line failed catches nothing.
 usage: python3 -I mutate3a.py <app-dir> <scratch-dir> <tests-dir> <plan.json> [node | page | list] [words…]     env FROM=, TO= to run a part
   node  faults in the engine, the audit and the plan file, against step3a_test.cjs (a few seconds each)
   page  faults in the page, against step3a_check.py (one to three minutes each: it stops at the first line that fails)
@@ -32,7 +33,6 @@ NODE = [
  ('the crop’s starting point overrides a variety’s own word', 'js/engine.js', "set = !!(rule && rule.set) && source.said !== true;", "set = !!(rule && rule.set);"),
  ('a number of the grower’s own is not counted from the row’s start', 'js/engine.js', "return { ...e, dtm: Math.max(1, turn.days), assumed:", "return { ...e, dtm: typed, assumed:"),
  ('a number that leaves nothing for the bed gives no days at all', 'js/engine.js', "return { ...e, dtm: Math.max(1, turn.days), assumed:", "return { ...e, dtm: turn.days, assumed:"),
- ('the arithmetic with multipliers listens to the starting points', 'js/engine.js', "const x = !legacy && S.assumptions && S.assumptions.starts ? S.assumptions.starts[cropId] : null;", "const x = S.assumptions && S.assumptions.starts ? S.assumptions.starts[cropId] : null;"),
  ('a transplant saves 10 days, not 14', 'js/engine.js', "START_LESS = 14;", "START_LESS = 10;"),
  ('the days a transplant saves cannot be changed for a crop', 'js/engine.js', "less: less == null ? START_LESS : less, set: !!from", "less: START_LESS, set: !!from"),
  ('a bulb crop is given the choice', 'js/engine.js', "c.micro ? 'tray' : (c.plantingMaterial || c.material) === 'bulb' || c.plantingMaterial === 'plant' ? 'planted' : c.method === 'TP' ? null : 'sown';", "c.micro ? 'tray' : c.method === 'TP' ? null : 'sown';"),
@@ -43,7 +43,8 @@ NODE = [
  ('printed days that leave nothing for the bed are used anyway', 'js/engine.js', "      if (turn.days < 1) return null;\n      return { days: turn.days, basis,", "      return { days: Math.max(1, turn.days), basis,"),
  ('an unknown starting point counts as one', 'js/engine.js', "const from = x && STARTS.includes(x.from) ? x.from : null, less =", "const from = x && x.from ? x.from : null, less ="),
  ('the guide gives kale the flowers’ rule', 'js/guide.js', "[/^kale\\b|kohlrabi|summer squash|zucchini/i, 'direct', 14,", "[/^kale\\b|kohlrabi|summer squash|zucchini/i, 'seed', null,"),
- ('a start is offered for a crop with no choice', 'js/engine.js', "return !legacy && c && !startFixed(c) && lib.guide && lib.guide.startFor ? lib.guide.startFor(c) : null;", "return !legacy && c && lib.guide && lib.guide.startFor ? lib.guide.startFor({ name: 'zinnia' }) : null;"),
+ ('a start is offered for a crop with no choice', 'js/engine.js', "return c && !startFixed(c) && lib.guide && lib.guide.startFor ? lib.guide.startFor(c) : null;", "return c && lib.guide && lib.guide.startFor ? lib.guide.startFor({ name: 'zinnia' }) : null;"),
+ ('an option handed to the engine brings a multiplier back', 'js/engine.js', "else e.dtm = Math.max(1, Math.round(e.dtm));", "else e.dtm = Math.max(1, Math.round(e.dtm * (options.multipliers === true ? 1.25 : 1)));"),
  ('“from direct seeding” is read as sowing in the nursery', 'js/seedlib.js', "basis === 'seed' && /direct/i.test(String(statement || '')) ? 'direct' :", "false ? 'direct' :"),
  ('starting points are lost when a newer backup is loaded over the plan', 'js/planio.js', " + Object.keys(a.starts || {}).length + Object.keys(a.sell", " + Object.keys(a.sell"),
  ('tray batches are offered for release', 'js/audit.js', "const trayBatch = p => !!p.liveTray;", "const trayBatch = p => false;"),
@@ -57,7 +58,9 @@ NODE = [
  ('a waiting planting follows the list whatever its twin does', 'js/audit.js', "r.choice = twin && twin.choice !== 'keep' ? 'follow' : 'keep';", "r.choice = 'follow';"),
  ('using the crop’s nursery weeks throws away everything that was copied', 'js/audit.js', "    const g = p.growingDefaults, crop = { ...g.crop };\n    delete crop.gh;\n    return { ...p, growingDefaults: { ...g, crop } };", "    const q = { ...p }; delete q.growingDefaults; return q;"),
  ('“take” is carried out for a row that cannot give its number', 'js/audit.js', "const choice = pick(r) === 'take' && !r.take ? 'keep' : pick(r), later =", "const choice = pick(r), later ="),
- ('the suggestion lets go a group whose dates would move', 'js/audit.js', "delete r.shifts;\n      r.choice = r.agrees ? 'follow' : r.take ? 'take' : 'keep';", "delete r.shifts;\n      r.choice = r.agrees || !r.take ? 'follow' : 'take';"),
+ ('the suggestion lets go a group whose dates would move', 'js/audit.js', "delete r.shifts;\n      r.choice = r.stays ? 'keep' : r.agrees ? 'follow' : r.take ? 'take' : 'keep';", "delete r.shifts;\n      r.choice = r.agrees || !r.take ? 'follow' : 'take';"),
+ ('a row the list agrees with today is let go though a line taken beside it would move it', 'js/audit.js', "for (const r of list) r.stays = r.agrees && taking.length > 0 && moves(r);", "for (const r of list) r.stays = false;"),
+ ('two rows write two numbers on one line of the list, or a row is let go that the lines taken would move', 'js/audit.js', "if (drop.length) { for (const c of drop) c.ok = false; if (round === 7) for (const c of cand) c.ok = false; continue; }", ""),
  ('the preview misses dates that move', 'js/audit.js', "if (first || last || sow) moves.push({ id: p.id, first, last, sow });", "if (first > 0) moves.push({ id: p.id, first, last, sow });"),
  ('plantings on a guessed start are not counted', 'js/audit.js', "t.activeMode === 'catalog' && t.basisBy === 'guess'; });", "t.activeMode === 'catalog' && t.basisBy === 'never'; });"),
  ('plantings that agree with the list are not counted as agreeing', 'js/audit.js', "for (const p of o.days) if (same(eng.calc(p), bare.calc(bare.planting(p.id)))) agree++;", "for (const p of o.days) if (false) agree++;"),

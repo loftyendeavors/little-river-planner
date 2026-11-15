@@ -1,7 +1,7 @@
 /* Little River Farm Planner — plan import / export.
  *
  * The working plan ("core") is what the planning screens read and write.
- * Everything else a v7 backup carries — harvest logs, seed inventory, soil
+ * Everything else a full backup carries — harvest logs, seed inventory, soil
  * tests, weather, the long supplier page captures on each variety — is kept
  * untouched in the "attic" and stitched back on export, so nothing a later
  * module needs is lost while those screens do not exist yet.
@@ -25,7 +25,7 @@
     for (const key of REQUIRED_LISTS) if (!Array.isArray(plan[key])) throw new Error(`This file is not a farm plan: "${key}" is missing.`);
   }
 
-  /** v7 plan.json -> { core, attic }. The input object is not modified. */
+  /** A full backup's plan.json -> { core, attic }. The input object is not modified. */
   function split(plan) {
     assertPlan(plan);
     const core = {}, attic = { v: 1, rest: {}, varieties: {} };
@@ -50,7 +50,7 @@
     return { core, attic };
   }
 
-  /** { core, attic } -> a plan the v7 app can restore. */
+  /** { core, attic } -> a full backup's plan.json. */
   function join(core, attic) {
     const plan = { ...((attic && attic.rest) || {}) };
     for (const [key, value] of Object.entries(core)) if (key !== 'lrfNext') plan[key] = value; // lrfNext is this app's own bookkeeping
@@ -124,10 +124,10 @@
     return core;
   }
 
-  // ── what was established here, carried onto a newer v7 backup ──
+  // ── what was established here, carried onto a newer full backup ──
   // The plan itself (plantings, tray demand, seed stock) comes from the backup. What was said here about the farm does not have
   // to be said again: the assumptions list, this app's own settings, and changes made here to a crop, variety, garden or bed.
-  // A change is put back only while the backup still holds the value it was changed from; where v7 has moved on, v7's value stands.
+  // A change is put back only while the backup still holds the value it was changed from; where the backup has moved on, the backup's value stands.
   const FACT_LISTS = ['crops', 'varieties', 'gardens', 'beds'];
   const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
   const figures = a => a ? ['crops', 'varieties'].reduce((n, k) => n + Object.values(a[k] || {}).reduce((m, envs) => m + Object.keys(envs || {}).length, 0), 0) + Object.keys(a.starts || {}).length + Object.keys(a.sell || {}).length + Object.keys(a.sellV || {}).length : 0;
@@ -164,9 +164,9 @@
     if (!prev || mine.sample) return { plan, keep, notes, gone: [] };
     if (figures(prev.assumptions) && !figures(next.assumptions)) { plan.assumptions = prev.assumptions; const n = figures(prev.assumptions); notes.push(`your assumptions list (${n} figure${n === 1 ? '' : 's'})`); }
     for (const key of ['crates', 'trayStart', 'trays', 'groups', 'supplies']) if (mine[key]) keep[key] = mine[key];
-    // Benches changed here are a statement about the farm that no v7 backup holds: they stay as they were set.
+    // Benches changed here are a statement about the farm: they stay as they were set, whatever the backup holds.
     if (prev.nursery && prev.nursery.lrfEdited === true) { plan.nursery = prev.nursery; notes.push('your benches'); }
-    // Plantings waiting to be placed were made here and are in no v7 backup: they stay, still waiting.
+    // Plantings waiting to be placed were made here and are not among a backup's plantings: they stay, still waiting.
     if (Array.isArray(mine.waiting) && mine.waiting.length) { keep.waiting = mine.waiting; notes.push(`${mine.waiting.length} planting${mine.waiting.length === 1 ? '' : 's'} waiting to be placed`); }
     const facts = {}, changed = [];
     for (const list of FACT_LISTS) {
@@ -183,7 +183,7 @@
         let applied = false;
         for (const [field, value] of Object.entries(fact.set || {})) {
           if (same(record[field], value)) continue;                                // the backup already says so
-          if (!same(record[field], (fact.was || {})[field])) continue;             // v7 has changed it since: v7's value stands
+          if (!same(record[field], (fact.was || {})[field])) continue;             // the backup has changed it since: the backup's value stands
           if (value === null) delete record[field]; else record[field] = value;
           set[field] = value; was[field] = fact.was[field]; applied = true;
         }
@@ -198,15 +198,15 @@
     return { plan, keep, notes, gone };
   }
 
-  /** What the page shows before a real plan is loaded: the stock layout with a few example plantings. */
+  /** What the page shows before a plan is loaded: a made-up layout with a few example plantings. */
   function sample(lib) {
     const year = new Date().getFullYear() + 1, at = (m, d) => `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const examples = [
-      ['front-field-south-1', 'lettuce_head', at(4, 20)], ['front-field-south-2', 'lettuce_head', at(5, 4)], ['front-field-south-3', 'lettuce_head', at(5, 18)],
-      ['front-field-south-5', 'carrot', at(4, 22)], ['front-field-south-6', 'beet', at(4, 22)], ['front-field-north-1', 'kale', at(4, 26)],
-      ['front-field-north-2', 'onion', at(4, 19)], ['front-field-north-4', 'bean_bush', at(5, 24)], ['hill-garden-1', 'potato', at(4, 24)],
-      ['hill-garden-2', 'winter_squash', at(5, 28)], ['production-house-a-1', 'tomato', at(4, 12)], ['production-house-a-2', 'cucumber', at(4, 26)],
-      ['production-house-b-1', 'pepper', at(4, 28)], ['towers-1', 'lettuce_head', at(4, 15)], ['towers-2', 'basil', at(5, 10)]
+      ['market-garden-1', 'lettuce_head', at(4, 20)], ['market-garden-2', 'lettuce_head', at(5, 4)], ['market-garden-3', 'lettuce_head', at(5, 18)],
+      ['market-garden-5', 'carrot', at(4, 22)], ['market-garden-6', 'beet', at(4, 22)], ['market-garden-9', 'kale', at(4, 26)],
+      ['market-garden-10', 'onion', at(4, 19)], ['market-garden-12', 'bean_bush', at(5, 24)], ['long-field-1', 'potato', at(4, 24)],
+      ['long-field-2', 'winter_squash', at(5, 28)], ['greenhouse-1', 'tomato', at(4, 12)], ['greenhouse-2', 'cucumber', at(4, 26)],
+      ['tunnel-1', 'pepper', at(4, 28)], ['tower-line-1', 'lettuce_head', at(4, 15)], ['tower-line-2', 'basil', at(5, 10)]
     ];
     return {
       v: 3, gardens: JSON.parse(JSON.stringify(lib.sampleGardens)), beds: JSON.parse(JSON.stringify(lib.sampleBeds)),

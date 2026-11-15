@@ -89,9 +89,6 @@ const add = (n, change) => { const made = N.addBench(n, { uid }); return N.setBe
   }
   const big = add(plan.nursery, { kind: 'outside', holds: Math.ceil(most) + 50 }), e3 = withNursery(big);
   check('with room enough outside, nothing that hardens off stays under heat on any day', [...days()].every(d => { const r = e3.benchDay(d); return near(r.pools.outside.used, r.harden) && near(r.pools.heated.used, r.total - r.harden); }) && N.season(e3, year).hardening.inside < 1e-9);
-  // the compatibility mode's reading of the same record
-  const compat = E.create({ ...plan, nursery: n2 }, Lib, { multipliers: true });
-  check('in the compatibility mode an unheated bench is under cover, and a typed tray count is not read', compat.benchList().find(b => b.name === 'Cold bench').kind === 'heated' && compat.benchList().find(b => b.name === 'Cold bench').cap === compat.benchList().find(b => b.name === 'Cold bench').estimate);
   // put away for the winter
   const seasonal = N.setBench(n1, n1.spaces[n1.spaces.length - 1].id, {}); seasonal.spaces[seasonal.spaces.length - 1].from = '04-15'; seasonal.spaces[seasonal.spaces.length - 1].to = '10-31';
   const e4 = withNursery(seasonal);
@@ -162,8 +159,6 @@ if (micro.length) {
   check('back in an open tray it is counted by weight again, and the cell figures are kept for next time', open.liveSow(open.crop(cropId)).how === 'open' && near(totals(open).g, trays * 15) && totals(open).seeds === 0 && need(open).every(r => r.unit === 'g'));
   const frac = withCrop({ ...crop0, liveSow: { how: 'cells', cells: 50, perCell: 2.5 } });
   check('a part seed a cell is an average: the tray takes a whole number of seeds', mine.every(x => Number.isInteger(frac.calc(frac.planting(x.p.id)).seeds)) && totals(frac).seeds >= trays * 125 && totals(frac).seeds < trays * 125 + mine.length);
-  const compat = E.create({ ...plan, crops: plan.crops.map(x => (x.id === cropId ? { ...crop0, seedG: 15, liveSow: { how: 'cells', cells: 72, perCell: 12 } } : x)) }, Lib, { multipliers: true });
-  check('the compatibility mode does not know cells: it counts grams', mine.every(x => { const r = compat.calc(compat.planting(x.p.id)); return r.seeds === 0 && near(r.seedG, x.r.len * 15); }));
   check('the tray list knows seeds as well as grams', (() => { const b = T.batches(cells, E).filter(x => x.cropId === cropId), by = T.byCrop(T.batches(cells, E)).find(x => x.cropId === cropId); return b.reduce((n, x) => n + x.seeds, 0) === trays * 864 && by.seeds === trays * 864 && by.seedG === 0; })());
   // supplies follow
   const s0 = N.supplies(unsaid, year, null), s1 = N.supplies(cells, year, null), sOpen = N.supplies(saidOpen, year, null), row = (s, id) => s.rows.find(r => r.id === id) || { need: 0, fills: 0 };
@@ -241,8 +236,6 @@ if (micro.length) {
   check('what hardens off has only the room the crop leaves on the unheated benches', [...days()].every(d => { const r = tight.benchDay(d); return r.pools.unheated.used <= Math.max(r.cool, r.pools.unheated.cap) + 1e-9 && r.hardenIn >= -1e-9; }) && [...days()].some(d => { const r = tight.benchDay(d); return r.cool >= 1 && r.harden > 0 && near(r.hardenIn, r.harden); }));
   const all = withNursery(N.setCool(base, cropId, { from: '', to: '', after: 0 }));
   check('with both days left open the crop is on the unheated benches all year, from the day it is sown', mine.every(x => { const hs2 = eng.hardenStart(x.r); return hs2 && E.dayDiff(hs2, x.r.sow) < 1 ? true : at(all, x, x.r.sow).cool === true; }));
-  const compat = E.create({ ...plan, nursery: ruled }, Lib, { multipliers: true });
-  check('the compatibility mode knows no such rule', [...days()].every(d => compat.benchDay(d).cool === 0) && compat.coolRules().length === 0);
 }
 
 // ── 8. a lot weighed where the plan counts seeds ──

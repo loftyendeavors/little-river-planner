@@ -34,7 +34,7 @@ const fails = async run => { try { await run(); return null; } catch (e) { retur
 let r = await Reader.readLink('https://www.johnnyseeds.com/vegetables/fennel/dragon-f1-fennel-seed-2345.html?utm_source=x', service, options);
 check('a supplier link is read through the service', r.name === 'Dragon (F1) Fennel Seed' && r.sku === '2345' && r.facts.maturity.min === 60 && r.facts.latin === 'Foeniculum vulgare' && r.facts.seedsPerPacket === 200 && r.prices[0].price === 6.5 && r.retrievedAt === '2026-11-10T12:00:00.000Z', { name: r.name, facts: r.facts, prices: r.prices });
 check('tracking tags are dropped from the saved address', r.url === 'https://www.johnnyseeds.com/vegetables/fennel/dragon-f1-fennel-seed-2345.html', r.url);
-check('the page\'s own sentence settles where the days start, where v7\'s reader could not', r.facts.maturityBasis === 'seed' && r.refined.includes('maturityBasis') && r.start.statement === 'From date of direct seeding.' && r.evidence.maturityBasis.value === 'From date of direct seeding.', { basis: r.facts.maturityBasis, start: r.start });
+check('the page\'s own sentence settles where the days start, where the reader could not', r.facts.maturityBasis === 'seed' && r.refined.includes('maturityBasis') && r.start.statement === 'From date of direct seeding.' && r.evidence.maturityBasis.value === 'From date of direct seeding.', { basis: r.facts.maturityBasis, start: r.start });
 let s = r.start;
 r = await Reader.readLink('https://johnnyseeds.com/old-dragon', service, options);
 check('a link that redirects is saved under the address it ended at', r.url === 'https://www.johnnyseeds.com/vegetables/fennel/dragon-f1-fennel-seed-2345.html' && r.facts.maturity.min === 60, r.url);

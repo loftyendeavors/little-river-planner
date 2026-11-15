@@ -2,40 +2,41 @@
 # The fast checks: no browser, a few seconds each. Each is run on the farm as a backup's plan and as the compact plan the app
 # folder ships, where the two could differ. The ones given $OLD also prove that the build moves nothing by itself: every date,
 # every piece of ground, every yield and every forecast figure is the build before's.
+# Each result is given the name its lines are counted under in tests/counts.json ("named", in env.sh).
 . "$(dirname "$0")/env.sh"
-last() { tail -1; }   # the whole line: the verdict reads its end
-node $T/what_changed.cjs $REPO $W/old $SCRATCH | last
+node $T/what_changed.cjs $REPO $W/old $SCRATCH | named "what the build changed"
 # the farm kept in the repository is what its generator writes
 rm -rf $W/farm-again && mkdir -p $W/farm-again && cp $FARM/farm-map.jpg $W/farm-again/ && node $T/farm/make_farm.cjs $REPO/js $W/farm-again > /dev/null 2>&1
 python3 -I $T/farm/make_pictures.py $W/farm-again > /dev/null 2>&1   # the pictures are compared by which varieties have one, not byte for byte: a newer drawing library may pack a picture differently
-python3 -I - $FARM $W/farm-again <<'PY'
+python3 -I - $FARM $W/farm-again <<'PY' | named "the made-up farm"
 import json, sys, os, filecmp
 a, b = sys.argv[1:3]; names = ['plan.json', 'backup-plan.json', 'inventory.json', 'packs.json', 'plan-info.json', 'layout.json']
 bad = ['tests/farm/data/%s is what make_farm.cjs writes' % n for n in names if not (os.path.exists(os.path.join(b, n)) and filecmp.cmp(os.path.join(a, n), os.path.join(b, n), shallow=False))]
 try: same = sorted(json.load(open(os.path.join(a, 'thumbs.json')))) == sorted(json.load(open(os.path.join(b, 'thumbs.json'))))
 except Exception: same = False
 if not same: bad.append('tests/farm/data/thumbs.json has a picture for the varieties make_pictures.py draws one for, and no other')
-print(json.dumps({'passed': len(names) + 1 - len(bad), 'of': len(names) + 1, 'failed': bad, 'name': 'the made-up farm'}))
+print(json.dumps({'passed': len(names) + 1 - len(bad), 'of': len(names) + 1, 'failed': bad}))
 PY
-node $T/rockwool_test.cjs $APP $PLAN | last
-node $T/step1_test.cjs $APP $PLAN | last
-node $T/step1_test.cjs $APP $SHIP | last
-node $T/step3a_test.cjs $APP $PLAN $OLD | last
-node $T/step3a_test.cjs $APP $SHIP $OLD | last
-node $T/step3b_test.cjs $APP $PLAN $OLD | last
-node $T/step3b_test.cjs $APP $SHIP $OLD | last
-node $T/step5a_test.cjs $APP $PLAN $OLD | last
-node $T/step5a_test.cjs $APP $SHIP $OLD | last
-node $T/step5b_test.cjs $APP $PLAN $OLD | last
-node $T/step5b_test.cjs $APP $SHIP $OLD | last
-node $T/succession_test.cjs $APP $SHIP | last
-node $T/waiting_test.cjs $APP $PLAN | last
-node $T/waiting_test.cjs $APP $SHIP | last
-node $T/stepF_test.cjs $APP $PLAN $OLD | last
-node $T/stepF_test.cjs $APP $SHIP $OLD | last
-node $T/look_a_test.cjs $APP $PLAN | last
-node $T/look_a_test.cjs $APP $SHIP | last
-node $T/rails_test.cjs $APP $PLAN | python3 -I -c "import json,sys; d=json.load(sys.stdin); print(json.dumps({'passed': d['passed'], 'of': d['checks'], 'failed': d['failed'], 'name': 'rails'}))"
-node $T/assume_test.cjs $APP $PLAN | python3 -I -c "import json,sys; d=json.load(sys.stdin); print(json.dumps({'passed': d['passed'], 'of': d['checks'], 'failed': d['failed'], 'name': 'assume'}))"
-node $REPO/tools/mapgeo_test.cjs | last
-(cd $REPO && node tools/reader_test.mjs 2>&1 | last; node tools/worker_test.mjs 2>&1 | last; node tools/sync_worker_test.mjs 2>&1 | tail -1 | sed 's/^/sync worker /'; node tools/sync_client_test.mjs $APP/js 2>&1 | tail -1 | sed 's/^/sync client /')
+# "backup" is the farm as a full backup's plan, "compact" the plan the app folder ships
+node $T/rockwool_test.cjs $APP $PLAN | named "rockwool"
+node $T/step1_test.cjs $APP $PLAN | named "step1, backup"
+node $T/step1_test.cjs $APP $SHIP | named "step1, compact"
+node $T/step3a_test.cjs $APP $PLAN $OLD | named "step3a, backup"
+node $T/step3a_test.cjs $APP $SHIP $OLD | named "step3a, compact"
+node $T/step3b_test.cjs $APP $PLAN $OLD | named "step3b, backup"
+node $T/step3b_test.cjs $APP $SHIP $OLD | named "step3b, compact"
+node $T/step5a_test.cjs $APP $PLAN $OLD | named "step5a, backup"
+node $T/step5a_test.cjs $APP $SHIP $OLD | named "step5a, compact"
+node $T/step5b_test.cjs $APP $PLAN $OLD | named "step5b, backup"
+node $T/step5b_test.cjs $APP $SHIP $OLD | named "step5b, compact"
+node $T/succession_test.cjs $APP $SHIP | named "succession"
+node $T/waiting_test.cjs $APP $PLAN | named "waiting, backup"
+node $T/waiting_test.cjs $APP $SHIP | named "waiting, compact"
+node $T/stepF_test.cjs $APP $PLAN $OLD | named "stepF, backup"
+node $T/stepF_test.cjs $APP $SHIP $OLD | named "stepF, compact"
+node $T/look_a_test.cjs $APP $PLAN | named "look-a, backup"
+node $T/look_a_test.cjs $APP $SHIP | named "look-a, compact"
+node $T/rails_test.cjs $APP $PLAN | named "rails"
+node $T/assume_test.cjs $APP $PLAN | named "assume"
+node $REPO/tools/mapgeo_test.cjs | named "map geometry"
+(cd $REPO && node tools/reader_test.mjs 2>&1 | named "page reader"; node tools/worker_test.mjs 2>&1 | named "fetch service"; node tools/sync_worker_test.mjs 2>&1 | named "sync service"; node tools/sync_client_test.mjs $APP/js 2>&1 | named "sync client")

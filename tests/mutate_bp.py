@@ -1,7 +1,7 @@
 """Deliberate faults for preview 0.34 (the bed panel build, stages a and b): each is put into a copy, and a named check must fail.
 usage: python3 -I mutate_bp.py <app> <scratch> <tests-dir> [page | list] [words…]     env FROM=, TO= to run a part
 page: against bedpanel_check.py (about a minute each). list: how many faults there are, and nothing else.
-(The node mode ran bedpanel_test.cjs, the proof of one past build. That proof is retired, tests/what_changed.cjs with tests/this-build.json does its work, and the mode is taken out.)
+(The node mode ran bedpanel_test.cjs, the proof of one past build. That proof is retired, tests/what_changed.cjs with the build’s file under tests/builds does its work, and the mode is taken out.)
 """
 import json, os, shutil, signal, subprocess, sys, time
 from pathlib import Path

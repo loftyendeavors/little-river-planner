@@ -2,9 +2,10 @@
 is put into a copy of the served files, and a named line of the check must fail.
 usage: python3 -I mutate_changed.py <the repository> <scratch> <tests-dir> <the build before, as setup.sh unpacked it> <dir holding node_modules/acorn> [node | list] [words…]     env FROM=, TO= to run a part
 node: every fault against what_changed.cjs (under a second each). list: how many faults there are, and nothing else.
-The check reads what the build says of itself in the this-build.json beside it, so it is a copy of the check that is run, beside
-a copy of that file; for the fault that needs a script named under "words", the copy of the file names it. Not a line of the
-check is changed. A fault is caught only by a line that passes before the fault is put in.
+The check reads what the build says of itself in its file under tests/builds, so it is a copy of the check that is run, with a
+copy of that folder beside it; for the fault that needs a script named under "words", the copy of the file names it. The build
+before is copied too, with one file an earlier build is pretended to have left. Not a line of the check is changed. A fault is
+caught only by a line that passes before the fault is put in.
 """
 import json, os, shutil, subprocess, sys
 from pathlib import Path
@@ -12,6 +13,7 @@ repo, scratch, tests, oldroot, mods = [Path(x).resolve() for x in sys.argv[1:6]]
 now, old = repo / "js", oldroot / "js"
 PAGE = ["index.html", "sw.js", "manifest.webmanifest", "css", "fonts", "icons"]
 mode = sys.argv[6] if len(sys.argv) > 6 else "node"; words = [w.lower() for w in sys.argv[7:]]
+EARLIER = "0-an-earlier-build.json"   # a file an earlier build is pretended to have left, in the copy of the build before and in the copy of this one
 
 # what each fault does to the copy: js is the copy of the scripts, said is what the build says of itself, free is a script
 # that the build does not name and that is the build before's, byte for byte
@@ -20,9 +22,16 @@ def code(js, said, free): said["words"] = list(said.get("words") or []) + [free]
 def added(js, said, free): (js / "one-more.js").write_text("// one script more\n", encoding="utf-8")
 def gone(js, said, free): (js / free).unlink()
 def unread(js, said, free): said.clear(); said["unreadable"] = True
-def styles(js, said, free): f = js.parent / "css" / "app.css"; f.write_text(f.read_text(encoding="utf-8") + "\n/* one rule more */\n", encoding="utf-8")
-def page(js, said, free): f = js.parent / "index.html"; f.write_text(f.read_text(encoding="utf-8") + "\n<!-- one line more -->\n", encoding="utf-8")
-def other(js, said, free): said["base"] = "0000000"
+# a build may itself name the style sheet or the page: then the fault goes into a served file it does not name
+def styles(js, said, free): f = js.parent / "css" / ("app.css" if "css/app.css" not in (said.get("page") or []) else "one-more.css"); f.write_text((f.read_text(encoding="utf-8") if f.exists() else "") + "\n/* one rule more */\n", encoding="utf-8")
+def page(js, said, free):
+    name = next((n for n in ("index.html", "sw.js", "manifest.webmanifest") if n not in (said.get("page") or [])), None)
+    f = js.parent / (name or "icons/one-more.txt"); f.write_text((f.read_text(encoding="utf-8") if f.exists() else "") + "\n", encoding="utf-8")
+def spoke(js, said, free):   # a file an earlier build left names a script, in the build before and now alike, and this build changes that script without naming it
+    for root in (js.parent, scratch / "changed-before"): (root / "tests" / "builds" / EARLIER).write_text(json.dumps({"build": "an earlier build", "code": [free]}), encoding="utf-8")
+    (js / free).write_text((js / free).read_text(encoding="utf-8") + "\n;void 0;\n", encoding="utf-8")
+def second(js, said, free): (js.parent / "tests" / "builds" / "one-more.json").write_text(json.dumps({"build": "another", "code": [free]}), encoding="utf-8"); (js / free).write_text((js / free).read_text(encoding="utf-8") + "\n;void 0;\n", encoding="utf-8")
+def rewrote(js, said, free): (js.parent / "tests" / "builds" / EARLIER).write_text(json.dumps({"build": "an earlier build, rewritten", "code": [free]}), encoding="utf-8")
 def under(js, said, free): (js / "more").mkdir(); (js / "more" / "extra.js").write_text("window.extra = 1;\n", encoding="utf-8")
 def kind(js, said, free): (js / "extra.mjs").write_text("export const extra = 1;\n", encoding="utf-8")
 def root(js, said, free): (js.parent / "other.html").write_text("<!doctype html><title>another page</title>\n", encoding="utf-8")
@@ -33,10 +42,12 @@ FAULTS = [
  ("a script named under “words” has its code changed: a statement more", code, "only the text inside its strings differs"),
  ("a script is added that the build does not name", added, "no script is added"),
  ("a script is gone that the build does not name", gone, "no script is gone"),
- ("what the build says of itself cannot be read", unread, "this-build.json can be read"),
+ ("what the build says of itself cannot be read", unread, "can be read"),
  ("the style sheet is changed and the build does not name it", styles, "every other file a browser is served"),
  ("the page is changed and the build does not name it", page, "every other file a browser is served"),
- ("what the build says of itself was written for another build", other, "was written for this build"),
+ ("a second file under tests/builds speaks for the build, and names a script it changes", second, "one file of its own"),
+ ("a file an earlier build left under tests/builds is written again", rewrote, "as they left them"),
+ ("a file an earlier build left names a script this build changes, and this build does not", spoke, "byte for byte"),
  ("a script is put in a folder under js/ and the build does not name it", under, "every other file a browser is served"),
  ("a file of another kind is put beside the scripts and the build does not name it", kind, "every other file a browser is served"),
  ("another page is put at the root of the site and the build does not name it", root, "every other file a browser is served"),
@@ -47,17 +58,29 @@ def run(change=None):
     """The check on a copy, with one fault in it or none. Returns the names of the lines that failed, or None with why."""
     work = scratch / "changed"
     if work.exists(): shutil.rmtree(work)
-    (work / "tests").mkdir(parents=True); shutil.copytree(now, work / "js"); shutil.copy(tests / "what_changed.cjs", work / "tests")
+    (work / "tests" / "builds").mkdir(parents=True); shutil.copytree(now, work / "js"); shutil.copy(tests / "what_changed.cjs", work / "tests")
     for name in PAGE: (shutil.copytree if (repo / name).is_dir() else shutil.copy)(repo / name, work / name)
-    said = json.loads((tests / "this-build.json").read_text(encoding="utf-8"))
+    # the build before, with a file an earlier build left; the same file stands in the copy of this build
+    before = scratch / "changed-before"
+    if before.exists(): shutil.rmtree(before)
+    (before / "tests" / "builds").mkdir(parents=True)
+    for entry in oldroot.iterdir():
+        if entry.name != "tests": os.symlink(entry, before / entry.name)
+    was = sorted(f.name for f in (oldroot / "tests" / "builds").glob("*.json")) if (oldroot / "tests" / "builds").is_dir() else []
+    for f in was: shutil.copy(oldroot / "tests" / "builds" / f, before / "tests" / "builds" / f)
+    (before / "tests" / "builds" / EARLIER).write_text(json.dumps({"build": "an earlier build"}), encoding="utf-8")
+    for f in was + [EARLIER]: shutil.copy(before / "tests" / "builds" / f, work / "tests" / "builds" / f)
+    own = [f for f in sorted(x.name for x in (tests / "builds").glob("*.json")) if f not in was]
+    if len(own) > 1: return None, "the build has more than one file of its own under tests/builds: " + ", ".join(own)
+    said = json.loads((tests / "builds" / own[0]).read_text(encoding="utf-8")) if own else {}
     named = {f for key in ("words", "code", "added", "removed") for f in (said.get(key) or [])}
     same = lambda f: (old / f).is_file() and (old / f).read_bytes() == (now / f).read_bytes()
     free = next((f.name for f in sorted(now.glob("*.js")) if f.name not in named and same(f.name)), None)
     if change:
         if not free: return None, "every script is named by the build or differs from the build before: there is none to put the fault in"
         change(work / "js", said, free)
-    (work / "tests" / "this-build.json").write_text("not a record" if said.get("unreadable") else json.dumps(said), encoding="utf-8")
-    out = subprocess.run(["node", str(work / "tests" / "what_changed.cjs"), str(work), str(oldroot), str(mods)], capture_output=True, text=True, timeout=120).stdout
+    (work / "tests" / "builds" / (own[0] if own else "this-build.json")).write_text("not a record" if said.get("unreadable") else json.dumps(said), encoding="utf-8")
+    out = subprocess.run(["node", str(work / "tests" / "what_changed.cjs"), str(work), str(before), str(mods)], capture_output=True, text=True, timeout=120).stdout
     try: d = json.loads(out[out.rfind('{"passed"'):])
     except Exception: return None, "the check gave no result: " + out[-200:].replace("\n", " ")
     return [x["name"] if isinstance(x, dict) else x for x in d["failed"]], ("" if d.get("finished") else "the check did not run to its end")

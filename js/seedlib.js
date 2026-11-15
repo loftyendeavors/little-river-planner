@@ -1,7 +1,7 @@
 /* Little River Farm Planner — the seed library's rules, with no screen attached.
  *
- * What a supplier page becomes when it is saved as a variety (the same fields v7 filled, so a
- * backup made here restores there), which saved variety a page belongs to, and how many seeds
+ * What a supplier page becomes when it is saved as a variety (the fields a full backup holds
+ * for a variety), which saved variety a page belongs to, and how many seeds
  * the plan needs of each variety.
  */
 (function (root, factory) {
@@ -48,7 +48,7 @@
       return (key && urlKey(v.url) === key) || (vendor && saved === vendor && v.sku && codes.has(String(v.sku).toLowerCase())) || (name && varietyKey(v.name) === name && (manual || (vendor && saved === vendor)));
     });
   }
-  /** The same product saved under a different crop: v7 refuses that, and so does this. */
+  /** The same product saved under a different crop is refused. */
   const elsewhere = (plan, data, cropId) => (plan.varieties || []).find(v => v.active !== false && v.deleted !== true && v.cropId !== cropId && urlKey(data.url) && urlKey(v.url) === urlKey(data.url)) || null;
 
   function number(raw, min, max, what, whole) {
@@ -110,7 +110,7 @@
     if (result.nurseryDays != null) { const config = variety.environmentDefaults || {}; v.environmentDefaults = { ...config, v: 1, field: { ...(config.field || {}), gh: result.patch.gh }, greenhouse: { ...(config.greenhouse || {}), gh: result.patch.gh } }; }
     return v;
   }
-  /** The bulky record kept beside the plan: what the page said and what was confirmed, as v7 keeps it. */
+  /** The bulky record kept beside the plan: what the page said and what was confirmed. */
   function record(data, input, previous, now) {
     const stamp = (now || new Date()).toISOString();
     const webImport = { v: 1, url: data.url, retrievedAt: data.retrievedAt, extraction: data.extraction, productCodes: copy(data.productCodes || []), facts: copy(data.facts || {}), evidence: copy(data.evidence || {}),
@@ -123,7 +123,7 @@
   }
   /** What the planner derives from page text that is set aside (see planio.split). */
   const derived = (Engine, text, dtmText) => ({ _basisFromText: Engine.basisFromText(text || dtmText || ''), _pageTextBasis: Engine.basisFromText(text || ''), _catalogTextBasis: Engine.basisFromText(text || '') });
-  /** A new crop with v7's starting values. The grower sets its real numbers on the crop and on the assumptions list. */
+  /** A new crop with starting values. The grower sets its real numbers on the crop and on the assumptions list. */
   function newCrop(details, id) {
     const name = String(details.name || '').trim(), family = String(details.family || '').trim(), method = String(details.method || ''), material = String(details.material || 'seed');
     if (!name || name.length > 160) throw new Error('Name the new crop, using up to 160 characters.');
@@ -168,7 +168,7 @@
     return { rows: list, settings: { germ: +(plan.settings && plan.settings.germ) || 85, buffer: +(plan.settings && plan.settings.buffer) || 0 } };
   }
   /**
-   * Seed on hand and on order from v7's lot records, by the same rule v7 uses: a lot counts when it has a whole,
+   * Seed on hand and on order from the plan's lot records. A lot counts when it has a whole,
    * non-negative quantity, a yes-or-no "usable", and an identifier no other lot shares. "ordered" lots are on order;
    * usable lots are on hand; anything else is left out. Keys match required(): "v:<variety>|seeds".
    */
@@ -186,12 +186,11 @@
     return out;
   }
   // ───────────────────────────── editing stock ─────────────────────────────
-  // Lots and their change log are written exactly as v7 writes them (seed-inventory.js: normalizeLot, addLot,
-  // updateLot, deleteLot; seed-buying-model.js: receive), so a backup made here restores there.
+  // Lots and their change log are written in the form a full backup holds them in.
   // Every function takes an inventory and returns a changed copy. ctx: { now: ISO time, uid(), year, name }.
   const STOCK_UNITS = ['seeds', 'g', 'plants'];
   const emptyInventory = () => ({ v: 1, lots: [], adjustments: [], legacyImported: {}, performanceNotes: {}, importReceipts: [] });
-  /** v7 keeps bulbs, cloves and seed pieces under "seeds"; only plants and grams have their own unit. */
+  /** Bulbs, cloves and seed pieces are kept under "seeds"; only plants and grams have their own unit. */
   const stockUnit = unit => (unit === 'g' || unit === 'plants' ? unit : 'seeds');
   const lifeOf = lot => (typeof lot.status === 'string' ? lot.status : lot.usable === true ? 'usable' : 'excluded');
   function readable(inventory) {
@@ -233,7 +232,7 @@
     lib.lots.push(lot); logged(lib, 'add', null, lot, '', ctx);
     return lib;
   }
-  /** Change a lot. patch may hold quantity, status, year, lotNumber, note, supplier. `kind` is v7's word for the change. */
+  /** Change a lot. patch may hold quantity, status, year, lotNumber, note, supplier. `kind` is the change log's word for the change. */
   function updateLot(inventory, id, patch, kind, ctx, reason) {
     const lib = readable(inventory), before = findLot(lib, id), after = { ...before };
     if ('quantity' in patch) after.quantity = amountOf(patch.quantity, before.unit, 'Quantity');
@@ -249,7 +248,7 @@
     after.updatedAt = ctx.now; lib.lots[lib.lots.indexOf(before)] = after; logged(lib, kind || 'details', before, after, reason || '', ctx);
     return lib;
   }
-  /** An ordered lot arrives: it becomes seed on hand, as v7's Received does. */
+  /** An ordered lot arrives: it becomes seed on hand. */
   function receiveLot(inventory, id, ctx, details = {}) {
     const lot = findLot(readable(inventory), id);
     if (lifeOf(lot) !== 'ordered') throw new Error('That lot is not on order.');
@@ -260,7 +259,7 @@
     lib.lots[lib.lots.indexOf(before)] = after; logged(lib, 'delete', before, after, 'Deleted from available stock; previous count and import receipt retained.', ctx);
     return lib;
   }
-  /** A lot filed under the wrong variety or the wrong unit is refiled. v7 logs that as a details change. to: { key?, unit?, name?, reason? } */
+  /** A lot filed under the wrong variety or the wrong unit is refiled, and that is logged as a details change. to: { key?, unit?, name?, reason? } */
   function moveLot(inventory, id, to, ctx) {
     const lib = readable(inventory), before = findLot(lib, id), after = { ...before };
     if (to.key !== undefined) { if (!/^[vc]:.+/.test(String(to.key || ''))) throw new Error('Choose the variety this seed belongs to.'); after.key = to.key; }
@@ -334,8 +333,8 @@
 
   // ───────────────────────────── the sizes a vendor sells ─────────────────────────────
   // A packet is whatever its vendor says it is: 15 tomato seeds from one, 500 arugula seeds from another, and most seed
-  // is not bought by the packet at all. Each variety carries the size list read from its vendor's page (supplierPacks,
-  // as v7 keeps it). What covers a shortfall is worked out from that list and from nothing else.
+  // is not bought by the packet at all. Each variety carries the size list read from its vendor's page (supplierPacks).
+  // What covers a shortfall is worked out from that list and from nothing else.
   const OZ_G = 28.349523125, LB_G = 453.59237;
   const grouped = n => Number(n).toLocaleString('en-US');
   const money = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -422,7 +421,7 @@
   }
   /**
    * The cheapest way to cover an amount from a vendor's sizes: least cost, and of equal costs the one with least left
-   * over. This is v7's rule (chooseSeedPacks), so both planners name the same sizes. unit: 'seeds' or 'g'.
+   * over. unit: 'seeds' or 'g'.
    * Returns { items: [{ n, pack }], total, cost } or null when no size can be counted in that unit. A list with no
    * prices is covered with the least left over.
    */
@@ -534,10 +533,10 @@
 
   // ───────────────────────────── sowing draws stock down ─────────────────────────────
   // A planned sowing never touches stock. Recording that it happened does: the planting gets its actual date, and the
-  // seed it used comes off the lots on hand. The records are v7's own (done, workflow.history, workflow.seedUse, and a
-  // "use" entry in the lot's change log), so either planner reads what the other recorded.
+  // seed it used comes off the lots on hand. The records are the planting's done, workflow.history and workflow.seedUse,
+  // and a "use" entry in the lot's change log.
   // Work that can only follow the sowing: once any of it is recorded, the seed is no longer counted as still to sow.
-  // (v7 knew sow, field, harvest and flip; potting up, hardening off and moving out are recorded since the Week view.)
+  // (Potting up, hardening off and moving out are recorded since the Week view.)
   const SOWN_KINDS = ['sow', 'potup', 'harden', 'field', 'move', 'harvest', 'flip'];
   const realDay = s => { if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false; const d = new Date(s + 'T12:00:00Z'); return !Number.isNaN(+d) && d.toISOString().slice(0, 10) === s; };
   const doneDate = (p, kind) => { const v = p && p.done && typeof p.done === 'object' ? p.done[kind] : null; return realDay(v) ? v : null; };
@@ -570,7 +569,7 @@
   /**
    * Record a sowing. input: { date: 'YYYY-MM-DD', quantity?: what was used (the plan's own count when left out), note? }.
    * ctx adds today: 'YYYY-MM-DD'. Seed comes off the lots on hand, oldest first; whatever was used beyond them is
-   * recorded as used without a counted lot, as v7 does, and no lot goes below zero.
+   * recorded as used without a counted lot, and no lot goes below zero.
    * Returns { planting, inventory (null when no lot changed), used: [{ lotId, quantity }], untracked, quantity, kind, unit, stockUnit, batchId }.
    */
   function recordSowing(engine, inventory, p, input, ctx) {
@@ -603,7 +602,7 @@
     return { planting: { ...p, done, workflow }, inventory: used.length ? lib : null, used, untracked: left > 1e-9 ? left : 0, quantity, kind: s.kind, unit: s.unit, stockUnit: unit, batchId };
   }
   /**
-   * Take a recorded sowing back: the date is cleared (v7's "clear-work"), and the seed that came off counted lots goes
+   * Take a recorded sowing back: the date is cleared (a "clear-work" entry in its history), and the seed that came off counted lots goes
    * back onto them. Seed taken from a lot that has since been deleted cannot go back, and is reported as `lost`.
    * Returns { planting, inventory (null when no lot changed), returned, lost, kind, unit, stockUnit }.
    */

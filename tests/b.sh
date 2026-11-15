@@ -76,6 +76,7 @@ except Exception: print('site NO RESULT', t[-300:])" ;;
     map-site) WIDTHS=${WIDTHS:-1280,1480,1707,3440} python3 -I $REPO/tools/map_check.py $SITE $S/map-site $ZIP 2>&1 | tally map-built-site ;;
     map-views-site) WIDTHS=${WIDTHS:-1480} python3 -I $REPO/tools/map_views_check.py $SITE $S/map-views-site $ZIP 2>&1 | tally map-and-every-other-view-built-site ;;
     sync-site) DARK=1 python3 -I $T/sync_check.py $SITE $S/sync-site $REPO $ZIP $PHOTO 2>&1 | tally sync-and-snapshots-built-site ;;
+    screens) python3 -I $T/screens_check.py $SITE $W/old $ZIP $S/screens $REPO 2>&1 | tally screens ;;
     tour) python3 -I $T/tour19.py $SITE $ZIP $S/tour $T/step2a_check.py 2>&1 | tail -1 | cut -c1-300 ;;
     *) echo "unknown $n" ;;
   esac

@@ -1,7 +1,8 @@
-"""Deliberate faults for the supplies build: each must fail a named line of sup_check.py (page) or of importer_check.py (importer).
+"""Deliberate faults for the supplies build: each must fail a line of sup_check.py (page) or of importer_check.py (importer)
+that passes with no fault in it: any such line counts, and a check that stops with no line failed catches nothing.
 usage: python3 -I mutate_sup.py <app> <scratch> <tests-dir> [page | importer | list] [words…]     env FROM=, TO= to run a part
 The app folder is copied; the copy is broken, checked and thrown away. list: how many faults there are of each kind, and nothing else.
-(The node mode ran sup_test.cjs, the proof of one past build. That proof is retired, tests/what_changed.cjs with tests/this-build.json does its work, and the mode is taken out.)
+(The node mode ran sup_test.cjs, the proof of one past build. That proof is retired, tests/what_changed.cjs with the build’s file under tests/builds does its work, and the mode is taken out.)
 """
 import json, os, shutil, signal, subprocess, sys, time
 app, scratch, tests = sys.argv[1:4]; which = sys.argv[4] if len(sys.argv) > 4 else "page"; words = [w.lower() for w in sys.argv[5:]]

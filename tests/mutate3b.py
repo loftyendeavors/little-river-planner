@@ -1,4 +1,5 @@
-"""Deliberate faults in step 3b (0.23), one at a time. Each must be caught by a named line.
+"""Deliberate faults in step 3b (0.23), one at a time. Each must be caught by a line
+that passes with no fault in it: any such line counts, and a check that stops with no line failed catches nothing.
 usage: python3 -I mutate3b.py <app-dir> <scratch-dir> <tests-dir> <plan.json> [node | page | list] [words…]     env FROM=, TO= to run a part
   node  faults in the engine, the forecast, the audit, the order sheet and the plan file, against step3b_test.cjs (a few seconds each)
   page  faults in the page, against step3b_check.py (one to three minutes each: it stops at the first line that fails)
@@ -30,7 +31,6 @@ NODE = [
  ('a variety’s own unit is ignored', 'js/engine.js', "String((v && v.cropId === c.id && sellVRule(v.id).unit) || sellRule(c.id).unit || recordUnit(c));", "String(sellRule(c.id).unit || recordUnit(c));"),
  ('the crop’s price beats the variety’s', 'js/engine.js', "return mine != null ? mine : crops != null ? crops : nonNegative(c.price);", "return crops != null ? crops : mine != null ? mine : nonNegative(c.price);"),
  ('the list’s price beats a planting’s own', 'js/engine.js', "      if (p && p.price != null && p.price !== '') return nonNegative(p.price);\n", ""),
- ('the arithmetic with multipliers listens to the crop lines', 'js/engine.js', "const x = (!legacy && S.assumptions && S.assumptions.sell && S.assumptions.sell[cropId]) || {}, share", "const x = (S.assumptions && S.assumptions.sell && S.assumptions.sell[cropId]) || {}, share"),
  ('a sold share over a hundred is used', 'js/engine.js', "share: share != null && share <= 100 ? share : null,", "share,"),
  ('an unknown pattern is used', 'js/engine.js', "pattern: PATTERNS.includes(x.pattern) ? x.pattern : null,", "pattern: x.pattern || null,"),
  ('the list’s harvest days override a planting’s own', 'js/engine.js', "if (days == null || ownHarvest(p)) return e;", "if (days == null) return e;"),

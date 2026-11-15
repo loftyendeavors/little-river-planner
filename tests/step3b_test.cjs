@@ -61,8 +61,6 @@ FIG.subject = { crop: crop.name, env, harvestDays: r0.harvestDays, per: y0.per, 
     check('a variety sold in another unit is forecast in a row of its own: units are never added together', keys.includes('pint') && (!sister || keys.includes('clamshell')));
   } else check('the subject has a variety to test variety lines with', false);
   check('nonsense on a line is ignored, not used', (() => { const x = listed({ sell: { [sub.cropId]: { unit: '  ', price: -3, pattern: 'sometimes', days: 0, keep: 'x', share: 140, turnover: -1 } } }).sellRule(sub.cropId); return Object.values(x).every(v => v == null); })());
-  const compat = E.create({ ...core, assumptions: { v: 1, crops: {}, varieties: {}, sell: { [sub.cropId]: { unit: 'clamshell', price: 9.5, days: 3, turnover: 0, share: 10 } } } }, Lib, { multipliers: true }), plainCompat = E.create(core, Lib, { multipliers: true });
-  check('the compatibility mode ignores the lines altogether', dates(compat, sub) === dates(plainCompat, sub) && near(units(compat, sub), units(plainCompat, sub)) && compat.yieldOf(compat.planting(sub.id)).unit === plainCompat.yieldOf(plainCompat.planting(sub.id)).unit);
 }
 
 // ── yield from the list, by growing condition ──

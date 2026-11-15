@@ -2,7 +2,7 @@
 app folder, and a named line of cleanup_check.py must fail.
 usage: python3 -I mutate_cleanup.py <app-dir> <scratch-dir> <tests-dir> [page | list] [words…]
 env: FROM=, TO= to run a part. Each fault takes about a minute. list: how many faults there are, and nothing else.
-(The node mode ran cleanup_test.cjs, the proof of one past build. That proof is retired, tests/what_changed.cjs with tests/this-build.json does its work, and the mode is taken out: its faults, a script changed or added that the build does not name, are in mutate_changed.py.)
+(The node mode ran cleanup_test.cjs, the proof of one past build. That proof is retired, tests/what_changed.cjs with the build’s file under tests/builds does its work, and the mode is taken out: its faults, a script changed or added that the build does not name, are in mutate_changed.py.)
 Some faults here put the earlier version's name back on the page on purpose: a line of the check searches for it, and must fail.
 """
 import json, os, shutil, signal, subprocess, sys, time

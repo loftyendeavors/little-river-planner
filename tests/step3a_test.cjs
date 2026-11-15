@@ -15,6 +15,7 @@ const raw = JSON.parse(fs.readFileSync(PLAN, 'utf8')), core = raw.format ? IO.un
 const clone = x => JSON.parse(JSON.stringify(x)), FIG = global.FIG = {};
 const eng = E.create(core, Lib);
 const sameDay = (a, b) => (a == null && b == null) || (a != null && b != null && +a === +b);
+const SHUFFLES = 6;
 const sameCalc = (a, b) => !!a && !!b && sameDay(a.first, b.first) && sameDay(a.last, b.last) && sameDay(a.sow, b.sow);
 const withStarts = (starts, extra) => E.create({ ...core, assumptions: { v: 1, crops: {}, varieties: {}, ...(extra || {}), starts } }, Lib);
 const withPlan = change => E.create({ ...core, ...change }, Lib);
@@ -52,7 +53,7 @@ if (open) {
   check('set to transplanting: the printed days stand', days(withStarts({ [c.id]: { from: 'transplant' } }), open) === printed && timing(withStarts({ [c.id]: { from: 'transplant' } }), open).basisBy === 'crop');
   check('a rule for another crop changes nothing here', days(withStarts({ 'no-such-crop': { from: 'seed' } }), open) === printed);
   check('a rule the planner does not know is no rule', days(withStarts({ [c.id]: { from: 'moon' } }), open) === printed && !withStarts({ [c.id]: { from: 'moon' } }).startRule(c.id).set);
-  check('the compatibility mode ignores the rule', E.create({ ...core, assumptions: { v: 1, crops: {}, varieties: {}, starts: { [c.id]: { from: 'seed' } } } }, Lib, { multipliers: true }).effective(open).dtm === E.create(core, Lib, { multipliers: true }).effective(open).dtm);
+  check('the engine has one way of counting: no option handed to it moves a date or a figure', (() => { const other = E.create(core, Lib, { multipliers: true, sowing: true }); return core.plantings.every(p => { const a = eng.calc(p), b = other.calc(p); return (!a && !b) || (sameCalc(a, b) && eng.effective(p).dtm === other.effective(p).dtm && (eng.yieldOf(p) || {}).units === (other.yieldOf(p) || {}).units); }); })());
   // the variety's own word beats the crop's rule
   const say = basis => E.create({ ...core, varieties: core.varieties.map(v => v.id === open.varietyId ? { ...v, catalogMaturityBasis: basis, catalogSourceChoice: v.catalogSourceChoice || 'url' } : v), assumptions: { v: 1, crops: {}, varieties: {}, starts: { [c.id]: { from: 'seed' } } } }, Lib);
   check('a variety that says “transplanting” keeps it under a crop set to sowing', days(say('transplant'), open) === printed && timing(say('transplant'), open).basisBy === 'variety');
@@ -130,7 +131,63 @@ FIG.survey = sv; FIG.rows = { days: dayRows.length, weeks: weekRows.length, take
 check('every such planting is in exactly one row, and no tray batch or unpinned planting is in any', (() => { const ids = dayRows.flatMap(r => r.ids); return ids.length === new Set(ids).size && ids.length === pinnedOpen.length && ids.every(id => { const p = eng.planting(id); return ownDays(p) && !isTray(p); }) && !st.rows.some(r => r.kind !== 'wait' && r.ids.some(id => isTray(eng.planting(id)))); })());
 check('the count of plantings that already carry the list’s number is the rows that agree', sv.days.agree === dayRows.filter(r => r.agrees).reduce((n, r) => n + r.ids.length, 0) && (pinnedOpen.length === 0 || sv.days.agree < sv.days.own || dayRows.every(r => r.agrees)));
 check('a row is one crop, one variety, one growing condition and one number', dayRows.every(r => r.ids.every(id => { const p = eng.planting(id); return p.cropId === r.cropId && (p.varietyId || '') === r.varietyId && Math.round(+p.dtm) === r.days && (eng.envOf(eng.bedOf(p.bedId)) || '') === r.env; })));
-check('suggested: follow where the list already gives the number, take where it can, keep otherwise', dayRows.every(r => r.choice === (r.agrees ? 'follow' : r.take ? 'take' : 'keep')) && dayRows.every(r => !(r.agrees && r.take)));
+check('suggested: follow where the list already gives the number, take where it can, keep otherwise', dayRows.every(r => r.choice === (r.stays ? 'keep' : r.agrees ? 'follow' : r.take ? 'take' : 'keep')) && dayRows.every(r => !(r.agrees && r.take)));
+// one variety with two figures on its plantings, one of them what the list gives today: taking the other as the variety's line would move the first
+{
+  const groups = new Map();
+  for (const p of P) { const env = eng.envOf(eng.bedOf(p.bedId)); if (!p.varietyId || !env || env === 'tower' || !eng.calc(p)) continue; const k = [p.cropId, p.varietyId, env].join('|'); groups.set(k, [...(groups.get(k) || []), p]); }
+  // a planting whose dates answer to its days: not one timed by the calendar or picked to the end of the season
+  const answers = p => { const other = E.create({ ...core, plantings: P.map(q => q.id === p.id ? { ...q, dtm: eng.effective(p).dtm + 9, timingMode: 'manual' } : q) }, Lib); return !sameCalc(eng.calc(p), other.calc(other.planting(p.id))); };
+  const clean = g => g.length >= 3 && g.every(p => !ownDays(p) && !isTray(p) && !isDone(p) && eng.effective(p).dtm === eng.effective(g[0]).dtm) && !pinnedOpen.some(q => q.cropId === g[0].cropId && q.varietyId === g[0].varietyId) && g.every(answers);
+  const group = [...groups.values()].find(clean);
+  check('a subject is found: three or more plantings of one variety in one growing condition, all following the list', !!group);
+  if (group) {
+    const D = eng.effective(group[0]).dtm, one = group[0], rest = new Set(group.slice(1).map(p => p.id));
+    const plan2 = { ...core, plantings: P.map(p => p.id === one.id ? { ...p, dtm: D, timingMode: 'manual' } : rest.has(p.id) ? { ...p, dtm: D + 9, timingMode: 'manual' } : p) };
+    const eng2 = E.create(plan2, Lib), s2 = study3a(plan2, Lib), rowA = s2.rows.find(r => r.kind === 'days' && r.ids.includes(one.id)), rowB = s2.rows.find(r => r.kind === 'days' && r.ids.some(id => rest.has(id)));
+    const pv2 = A.preview(plan2, Lib, A.build(plan2, s2.rows, {}).ops, eng2);
+    check('the list takes the commoner figure for the variety', !!rowB && rowB.choice === 'take' && rowB.ids.length === rest.size, rowB && { choice: rowB.choice, take: rowB.take });
+    check('the planting that carries what the list gives today stays as it is: that line would move it', !!rowA && rowA.agrees === true && rowA.stays === true && rowA.choice === 'keep', rowA && { agrees: rowA.agrees, stays: rowA.stays, choice: rowA.choice });
+    check('so what is suggested for such a pair moves no date', pv2.moves.length === 0 && plan2.plantings.every(p => sameCalc(eng2.calc(p), pv2.engine.calc(pv2.engine.planting(p.id)))), pv2.moves.slice(0, 3));
+    check('and letting that planting follow the list is shown to move it', !!rowA && A.preview(plan2, Lib, A.build(plan2, s2.rows, { [rowA.key]: 'follow' }).ops, eng2).moves.some(m => m.id === one.id));
+  }
+}
+// two varieties of one crop counted from sowing, one of them with no nursery time, every planting of the crop carrying the same
+// number: what each would write on the crop's line differs by the nursery time, and one line of the list holds one number
+{
+  const able = p => !isTray(p) && !isDone(p) && eng.calc(p) && eng.envOf(eng.bedOf(p.bedId)), bare = v => ({ ...v, catalogSourceChoice: undefined, catalogDtm: undefined, catalogDtmMax: undefined, dtm: undefined });
+  let tried = 0; const bad = [];
+  for (const c of eng.crops()) {
+    if (tried >= 6) break;
+    const mine = P.filter(p => p.cropId === c.id);
+    if (eng.startFixed(c) || !mine.length || !mine.every(p => able(p) || isTray(p))) continue;
+    const byEnv = new Map(); for (const p of mine.filter(able)) { const k = eng.envOf(eng.bedOf(p.bedId)); if (p.varietyId && k !== 'tower') byEnv.set(k, (byEnv.get(k) || new Set()).add(p.varietyId)); }
+    const env = [...byEnv].find(([k, vs]) => vs.size >= 2); if (!env) continue;
+    const vb = [...env[1]][0], first = mine.filter(p => p.varietyId === vb), rest = P.filter(p => !first.includes(p));
+    const varieties = core.varieties.map(v => v.id === vb ? { ...bare(v), environmentDefaults: { v: 1, field: { gh: 0 }, greenhouse: { gh: 0 }, tunnel: { gh: 0 } } } : v.cropId === c.id ? bare(v) : v);
+    const planC = { ...core, varieties, assumptions: { v: 1, crops: {}, varieties: {}, starts: { [c.id]: { from: 'seed' } } }, plantings: [...first, ...rest].map(p => p.cropId === c.id && able(p) ? { ...p, dtm: 90, timingMode: 'manual' } : p) };
+    const engC = E.create(planC, Lib), sC = study3a(planC, Lib), pvC = A.preview(planC, Lib, A.build(planC, sC.rows, {}).ops, engC), lines = new Map();
+    for (const r of sC.rows) if (r.kind === 'days' && r.take) { const k = [r.take.level, r.take.id, r.take.env].join('|'); lines.set(k, (lines.get(k) || new Set()).add(r.take.typed)); }
+    tried++;
+    if (pvC.moves.length || [...lines.values()].some(s => s.size > 1)) bad.push({ crop: c.id, moved: pvC.moves.length, twoNumbers: [...lines].filter(([k, s]) => s.size > 1).map(([k]) => k) });
+  }
+  check('a subject is found: crops with two varieties in one growing condition, where the crop may say what its days are counted from', tried >= 3, { tried });
+  check('two varieties that would write two numbers on the crop’s one line do not both write it, and what is suggested moves no date', tried > 0 && bad.length === 0, bad.slice(0, 3));
+}
+// whatever figures the plantings carry, what is suggested moves no date: the plan with its figures shuffled several ways
+{
+  let seed = 20261114; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const able = P.filter(p => !isTray(p) && !isDone(p) && eng.calc(p) && eng.envOf(eng.bedOf(p.bedId))), bad = [], sizes = [];
+  for (let k = 0; k < SHUFFLES; k++) {
+    const pick = new Map(able.filter(() => rnd() < 0.3).map(p => [p.id, Math.max(1, eng.effective(p).dtm + [0, 0, 5, 9, -4][Math.floor(rnd() * 5)])]));
+    const planK = { ...core, plantings: P.map(p => pick.has(p.id) ? { ...p, dtm: pick.get(p.id), timingMode: 'manual' } : p) };
+    const engK = E.create(planK, Lib), sK = study3a(planK, Lib), pvK = A.preview(planK, Lib, A.build(planK, sK.rows, {}).ops, engK);
+    sizes.push({ rows: sK.rows.length, take: sK.rows.filter(r => r.choice === 'take').length, stays: sK.rows.filter(r => r.stays).length });
+    if (pvK.moves.length) bad.push({ shuffle: k, moved: pvK.moves.length, first: pvK.moves[0] });
+  }
+  FIG.shuffles = sizes;
+  check('whatever figures the plantings carry, what is suggested moves no date (the plan with its figures shuffled ' + SHUFFLES + ' ways)', sizes.length === SHUFFLES && sizes.every(s => s.take > 0) && bad.length === 0, bad.slice(0, 3));
+}
 if (pinnedOpen.length) {
   const step = A.build(core, st.rows, {}), pv = A.preview(core, Lib, step.ops, eng), after = A.apply(core, step.ops), e2 = pv.engine;
   FIG.suggested = { released: step.released, taken: step.taken, kept: step.kept, harvestMoved: pv.harvest, sowingMoved: pv.sowing, newDoubleBookings: pv.fresh.length, standing: pv.standing };

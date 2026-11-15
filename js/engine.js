@@ -1,8 +1,7 @@
 /* Little River Farm Planner — planning engine.
  *
- * Pure functions over a plan. A plan uses the same record shapes the v7 app
- * saved (schema v3), so a v7 backup loads without transformation and this
- * engine can be checked planting-for-planting against v7.16.169.
+ * Pure functions over a plan. A plan is read in the record shapes a full
+ * backup holds (schema v3), so a backup loads without transformation.
  *
  * No DOM and no storage in this file. It runs in the browser and in Node.
  *
@@ -56,7 +55,6 @@
 
   const DONE_KINDS = ['sow', 'potup', 'harden', 'amend', 'field', 'move', 'sidedress', 'harvest', 'care', 'flip'];
   const VARIETY_ENV_FIELDS = ['inRow', 'rowSp', 'rowsPerBed', 'dtm', 'gh', 'hw'];
-  const ROW_COVER = { rate: 0.10, maxDays: 7 };
 
   /** The three places a crop's days can start, and how many days a transplant saves on a figure for seed sown in place. */
   const STARTS = ['transplant', 'seed', 'direct'], START_LESS = 14;
@@ -97,14 +95,12 @@
   // ───────────────────────────────── engine ────────────────────────────────
   function create(plan, lib, options = {}) {
     const S = plan, settings = S.settings || {}, DEF = lib.defaults;
-    // v7 laid a month multiplier, a house factor and a row-cover saving over every default. The planner
-    // no longer does: a number means what it says. `multipliers: true` brings them back for the v7 parity check.
-    const legacy = options.multipliers === true;
+    // A number means what it says: no month multiplier, house factor or row-cover saving is laid over a default.
     const libraryDtm = new Map((lib.crops || []).map(c => [c.id, c.dtm]));
     /** The published guide's figure for a crop, unless the grower has changed that crop's own default. */
-    const guideFor = c => { const g = !legacy && lib.guide && c && lib.guide.crops[c.id]; return g && libraryDtm.get(c.id) === c.dtm ? g : null; };
+    const guideFor = c => { const g = lib.guide && c && lib.guide.crops[c.id]; return g && libraryDtm.get(c.id) === c.dtm ? g : null; };
 
-    // Indexes. v7 resolved every lookup with Array.find; first match wins here too.
+    // Indexes. Where two records share an id, the first wins.
     const firstWins = (list, key = 'id') => { const m = new Map(); for (const x of list || []) if (x && !m.has(x[key])) m.set(x[key], x); return m; };
     const bedById = firstWins(S.beds), gardenById = firstWins(S.gardens), varietyById = firstWins(S.varieties);
     const plantingById = firstWins(S.plantings);
@@ -163,22 +159,21 @@
       return m ? Math.max(1, +m[1]) : positive(b && b.sites, 42);
     };
     // Heated nursery benches. Plug trays, sheltered crates and live trays all stand on them, so their room is one pool,
-    // counted in 10 × 20-inch tray spaces the way v7 counts it: bench area × packing ÷ one tray's footprint.
+    // counted in 10 × 20-inch tray spaces: bench area × packing ÷ one tray's footprint.
     const TRAY_FT2 = 200 / 144;
-    // Crates sheltered under heat until they move outdoors stand on the floor here, so they take no bench room.
-    // v7 counts each by its footprint as bench room; `crates: 'bench'` in this app's own settings, or the v7 parity mode, does the same.
-    const cratesOnBenches = legacy || !!(S.lrfNext && S.lrfNext.crates === 'bench');
+    // Crates sheltered under heat until they move outdoors stand on the floor, so they take no bench room.
+    // `crates: 'bench'` in the planner's own settings counts each by its footprint as bench room instead.
+    const cratesOnBenches = !!(S.lrfNext && S.lrfNext.crates === 'bench');
     const benches = () => Array.isArray(S.nursery && S.nursery.spaces) ? S.nursery.spaces.filter(x => x && typeof x === 'object') : [];
     const benchPacking = () => clamp(positive(S.nursery && S.nursery.packing, 85) / 100, 0.3, 1);
     // Three kinds of bench: under heat, under cover without heat, and outside, where seedlings harden off.
-    // (v7 knows two: whatever is not outside is under cover. Its mode still reads them that way.)
-    const benchKind = sp => sp.kind === 'outside' ? 'outside' : !legacy && sp.kind === 'unheated' ? 'unheated' : 'heated';
+    const benchKind = sp => sp.kind === 'outside' ? 'outside' : sp.kind === 'unheated' ? 'unheated' : 'heated';
     const benchEstimate = sp => Math.floor(nonNegative(sp.w) * nonNegative(sp.l) * benchPacking() / TRAY_FT2);
     /** The grower's own count of what a bench holds, where he has given one. */
-    const benchHolds = sp => !legacy && sp.holds != null && sp.holds !== '' && Number.isFinite(+sp.holds) && +sp.holds >= 0 ? Math.floor(+sp.holds) : null;
+    const benchHolds = sp => sp.holds != null && sp.holds !== '' && Number.isFinite(+sp.holds) && +sp.holds >= 0 ? Math.floor(+sp.holds) : null;
     /** What a bench holds, in tray spaces: his own count, else its area × packing ÷ one tray. */
     const benchCap = sp => { const mine = benchHolds(sp); return mine == null ? benchEstimate(sp) : mine; };
-    /** A bench outside can be put away for part of the year: v7's "available from" and "through", as a month and a day. */
+    /** A bench outside can be put away for part of the year: its "available from" and "through", as a month and a day. */
     function benchOpen(sp, date) {
       if (sp.active === false) return false;
       if (benchKind(sp) !== 'outside') return true;
@@ -190,7 +185,7 @@
     const benchRoom = date => { const room = { heated: 0, unheated: 0, outside: 0 }; for (const sp of benches()) if (benchOpen(sp, date)) room[benchKind(sp)] += benchCap(sp); return room; };
     // Crops grown on without heat: `nursery.cool = [{ cropId, from: 'MM-DD', to: 'MM-DD', after: days }]`. Between those
     // dates the crop's plug trays and pots stand on the unheated benches once they have had `after` days under heat to come up.
-    const coolRules = () => (!legacy && Array.isArray(S.nursery && S.nursery.cool) ? S.nursery.cool.filter(x => x && typeof x === 'object' && x.cropId) : []);
+    const coolRules = () => (Array.isArray(S.nursery && S.nursery.cool) ? S.nursery.cool.filter(x => x && typeof x === 'object' && x.cropId) : []);
     const inSpan = (date, from, to) => { const md = d2s(date).slice(5), a = validMonthDay(from) ? from : '', b = validMonthDay(to) ? to : ''; return a && b && a > b ? (md >= a || md <= b) : (!a || md >= a) && (!b || md <= b); };
     /** Does this planting's seedling stand on an unheated bench by rule on this day? (Tower seedlings in rockwool never do.) */
     function coolOn(r, date) {
@@ -198,7 +193,7 @@
       const rule = coolRules().find(x => x.cropId === r.planting.cropId);
       return !!rule && inSpan(date, rule.from, rule.to) && date >= addDays(r.sow, Math.max(0, Math.round(finite(rule.after, 0))));
     }
-    /** The stand-in space v7 files live trays under: it is every heated bench at once, and has no place of its own. */
+    /** The stand-in space live trays are filed under: it is every heated bench at once, and has no place of its own. */
     const isPool = b => !!b && b.liveTrayPool === true && isRack(b);
     /** Capacity in the space's own unit: tower sites, trays, containers or bed-feet. */
     const capOf = b => !b ? 0 : isTower(b) ? sites(b) : isRack(b) ? (b.liveTrayPool ? heatedTraySpaces() : nonNegative(b.trays)) : isCt(b) ? nonNegative(b.count) : nonNegative(b.l);
@@ -215,7 +210,7 @@
       if (shelterValid(b) && (isTower(b) || isCt(b))) g = gardenById.get(b.shelter.gardenId) || { type: 'greenhouse', frost: false };
       return g;
     };
-    const gCurve = g => (g && g.curveMode) || 'crop', gGap = g => (g && g.gapMode) || 'crop';
+    const gGap = g => (g && g.gapMode) || 'crop';
     const gWindow = (g, year) => ({ open: monthDayDate(year, g && g.open), close: monthDayDate(year, g && g.close) });
     const frostDates = year => ({
       last: monthDayDate(year, settings.frostLast) || monthDayDate(year, DEF.frostLast),
@@ -271,9 +266,7 @@
 
     const fieldDateOf = p => { const b = bedOf(p.bedId), c = growingCrop(p); return doneOf(p, 'field') || ((isRack(b) || (c && c.micro)) ? doneOf(p, 'sow') : null) || p.date; };
 
-    // ── days to maturity: seasonal curve, garden factor, catalog clock, row cover ──
-    const seasonCurve = c => c.dtmByMonth && c.dtmByMonth.length === 12 ? c.dtmByMonth : lib.seasonCurves[c.season || lib.cropSeason[c.id] || 'neutral'] || lib.seasonCurves.neutral;
-    const seasonMult = (c, date) => seasonCurve(c)[date.getMonth()] || 1;
+    // ── days to maturity: the crop's figure, the variety's, the supplier's clock ──
     const fieldSeasonFor = c => c && ['cool', 'warm', 'none'].includes(c.fieldSeason) ? c.fieldSeason : lib.fieldSeasons[c && c.id] || 'none';
     function harvestModeFor(c, v, p) {
       for (const o of [p, v]) {
@@ -309,15 +302,13 @@
       e.dtm = positive(e.dtm, 30); e.hw = nonNegative(e.hw); e.baseDtm = e.dtm;
       const date = s2d(fieldDateOf(p));
       if (!validDate(date)) return null;
-      const sm = !legacy || (g && gCurve(g) === 'flat') ? 1 : positive(seasonMult(c, date), 1), house = legacy ? positive(g && g.dtmFactor, 1) : 1;
       if (isTower(b)) {
-        e.seasonMult = sm;
-        e.dtm = Math.max(1, Math.round(positive(e.towerDays, legacy ? Math.round(e.dtm * 0.8) : e.dtm) * sm * house));
+        e.dtm = Math.max(1, Math.round(positive(e.towerDays, e.dtm)));
         const cyc = p.towerCycle;
         e.ghDays = cyc && cyc.v === 1 && Number.isInteger(cyc.nurseryDays) && cyc.nurseryDays >= 0 && cyc.nurseryDays <= 366 ? cyc.nurseryDays : nonNegative(e.rockwoolDays, 21);
         e.method = 'TP';
-      } else if (isRack(b) || c.micro) { e.method = 'DS'; e.seasonMult = 1; }
-      else { e.seasonMult = sm; e.dtm = Math.max(1, Math.round(e.dtm * (legacy ? (g && g.dtmFactor) || 1 : 1) * e.seasonMult)); }
+      } else if (isRack(b) || c.micro) e.method = 'DS';
+      else e.dtm = Math.max(1, Math.round(e.dtm));
       if (Number.isFinite(+p.dtm) && p.dtm > 0) e.dtm = Math.round(+p.dtm);
       if (p.hw != null && p.hw !== '' && Number.isFinite(+p.hw) && +p.hw >= 0) e.hw = Math.round(+p.hw);
       e.summerOK = !!(v && v.summerOK);
@@ -331,7 +322,7 @@
     function catalogInfo(entry) {
       const min = wholeDays(entry.printedMin ?? entry.dtmMin ?? entry.catalogDtm ?? entry.dtm);
       const max = wholeDays(entry.printedMax ?? entry.dtmMax ?? entry.catalogDtmMax ?? entry.dtm2) || min;
-      const said = entry.basis || entry.dtmBasis || entry.catalogMaturityBasis || entry.dtmFrom, stated = legacy && said === 'direct' ? 'seed' : said;
+      const stated = entry.basis || entry.dtmBasis || entry.catalogMaturityBasis || entry.dtmFrom;
       const basis = STARTS.includes(stated) ? stated
         : entry._basisFromText || basisFromText(entry.sourceText || entry.catalogSourceText || entry.dtmText || entry.catalogDtmText || '');
       // What the supplier's page text suggests when no starting point is stated (see catalogDays).
@@ -342,7 +333,7 @@
       if (!v) return null;
       if (['url', 'snapshot'].includes(v.catalogSourceChoice)) {
         const value = wholeDays(v.catalogDtm) || wholeDays(v.catalogDtmMax) ? catalogInfo(v) : null;
-        if (value) { value.basis = (legacy && v.catalogMaturityBasis === 'direct' ? 'seed' : v.catalogMaturityBasis) || 'unspecified'; value.said = STARTS.includes(value.basis); value.harvestStage = v.catalogHarvestStage || 'unspecified'; }
+        if (value) { value.basis = v.catalogMaturityBasis || 'unspecified'; value.said = STARTS.includes(value.basis); value.harvestStage = v.catalogHarvestStage || 'unspecified'; }
         return value;
       }
       if (wholeDays(v.catalogDtm) || wholeDays(v.catalogDtmMax)) {
@@ -355,7 +346,7 @@
     }
     /**
      * Printed catalog days converted to days from the field date.
-     * v7 behaviour kept for parity: when the variety states no starting point,
+     * When the variety does not say where its days are counted from,
      * the supplier page text is searched for "from sowing" / "from transplant"
      * and the match decides. That guess can be wrong (a page that says "weeks
      * from sowing to transplant" reads as a seed clock), so the result records
@@ -366,7 +357,7 @@
       if (source.printedMax && source.printedMax < source.printedMin) return null;
       if (['tower', 'living-tray'].includes(environment) && environmentReviewed !== true) return null;
       // Who says where the printed days start: the variety itself, then the crop's rule on the list.
-      // Only where neither speaks is v7's reading of the page text still used, and marked as a guess.
+      // Only where neither speaks is the page text read for it, and the result marked as a guess.
       const stated = STARTS.includes(source.basis), set = !!(rule && rule.set) && source.said !== true;
       const basis = set ? rule.from : stated ? source.basis : (options.inferBasisFromPageText !== false ? source.pageTextBasis : 'unspecified');
       if (method === 'DS' && basis === 'transplant') return null;
@@ -400,29 +391,15 @@
           const nurseryDays = nurseryOf(p, e, c, b);
           const conv = catalogDays(source, c, { method: isTower(b) ? 'TP' : e.method, environment, environmentReviewed: reviewed, nurseryDays: (isTower(b) ? 'TP' : e.method) === 'TP' ? nurseryDays : 0, rule: startRule(p.cropId) });
           if (conv) {
-            const fieldDate = s2d(fieldDateOf(p)), g = gardenOf(b) || {}, flat = gCurve(g) === 'flat';
-            const mult = !legacy || isRack(b) || c.micro ? 1 : (flat ? 1 : positive(seasonMult(c, fieldDate), 1)) * positive(g.dtmFactor, 1);
-            Object.assign(result, { activeMode: 'catalog', baseDays: conv.days, days: Math.max(1, Math.round(conv.days * mult)), printed: conv.printed, basis: conv.basis, conversion: conv.conversion, inferredBasis: conv.inferred, nurseryDays: conv.nurseryDays, off: conv.off, basisBy: conv.by });
-            e.baseDtm = conv.days; e.seasonMult = mult;
+            Object.assign(result, { activeMode: 'catalog', baseDays: conv.days, days: Math.max(1, Math.round(conv.days)), printed: conv.printed, basis: conv.basis, conversion: conv.conversion, inferredBasis: conv.inferred, nurseryDays: conv.nurseryDays, off: conv.off, basisBy: conv.by });
+            e.baseDtm = conv.days;
           }
         }
       }
       e.catalogTiming = result; e.dtm = result.days;
       return e;
     }
-    /** Layer 3 — row cover brings a cool-season field crop in a little earlier. */
-    function withRowCover(p, e) {
-      if (!e || !legacy) return e;
-      const b = plantingBed(p), field = s2d(fieldDateOf(p)), g = b ? fieldGardenFor(b) : {}, month = validDate(field) ? field.getMonth() + 1 : 0;
-      const active = e.catalogTiming && e.catalogTiming.activeMode, vv = variety(p.varietyId), v = vv && vv.cropId === p.cropId ? vv : null;
-      const manual = active !== 'catalog' && active !== 'learned' && (p.timingMode === 'manual' || (!p.timingMode && v && v.timingMode === 'manual') || (Number.isFinite(+p.dtm) && +p.dtm > 0));
-      const coolSeason = (month >= 3 && month <= 5) || (month >= 9 && month <= 10);
-      const applies = p.rowCover === true && g.type === 'field' && !(b && (isTower(b) || isRack(b))) && !e.micro && p.established !== true && !manual && active !== 'learned' && coolSeason;
-      if (!applies) return e;
-      const days = Math.max(1, Math.round(e.dtm - Math.min(ROW_COVER.maxDays, e.dtm * ROW_COVER.rate)));
-      return { ...e, dtm: days, rowCoverSavedDays: e.dtm - days };
-    }
-    const computed = p => withRowCover(p, withCatalogTiming(p));
+    const computed = p => withCatalogTiming(p);
 
     // ── the assumptions list: the grower's own days to harvest, by growing condition ──
     // plan.assumptions = { v: 1, crops: { cropId: { field|tunnel|heated|tower: { dtm } } }, varieties: { varietyId: {…} } }
@@ -439,17 +416,17 @@
     //   transplant  the figure is days in the bed
     //   seed        the figure counts from sowing in the nursery: the nursery time comes off
     //   direct      the figure is for seed sown in place: as a transplant the crop is in the bed `less` days fewer
-    // A variety that says where its own printed days start keeps that. A crop with no rule set counts as v7 did:
+    // A variety that says where its own printed days start keeps that. A crop with no rule set counts
     // from the day it goes in the bed, unless the supplier's page text suggested otherwise (shown as a guess).
     function startRule(cropId) {
-      const x = !legacy && S.assumptions && S.assumptions.starts ? S.assumptions.starts[cropId] : null;
+      const x = S.assumptions && S.assumptions.starts ? S.assumptions.starts[cropId] : null;
       const from = x && STARTS.includes(x.from) ? x.from : null, less = x && x.less != null && Number.isFinite(+x.less) && +x.less >= 0 ? Math.round(+x.less) : null;
       return { from: from || 'transplant', less: less == null ? START_LESS : less, set: !!from, lessSet: less != null };
     }
     /** Can this crop's starting point be chosen at all? Sown in place, or planted as a bulb or a bought plant, it cannot. */
     const startFixed = c => !c ? 'sown' : c.micro ? 'tray' : (c.plantingMaterial || c.material) === 'bulb' || c.plantingMaterial === 'plant' ? 'planted' : c.method === 'TP' ? null : 'sown';
     /** The published starting point for a crop, where a guide gives one and the crop's can be chosen. */
-    const startHint = cropId => { const c = crop(cropId); return !legacy && c && !startFixed(c) && lib.guide && lib.guide.startFor ? lib.guide.startFor(c) : null; };
+    const startHint = cropId => { const c = crop(cropId); return c && !startFixed(c) && lib.guide && lib.guide.startFor ? lib.guide.startFor(c) : null; };
     /** Where the numbers in a row of the list start. */
     const rowStart = (c, v, rule) => startFixed(c) ? 'transplant' : v && STARTS.includes(v.catalogMaturityBasis) ? v.catalogMaturityBasis : rule.from;
     /** Does the variety bring its own days to harvest for this planting? */
@@ -468,20 +445,20 @@
     //             once    the yield is a total, all of it counted the day the crop is ready
     //   days      harvest days · keep  weeks it stores after picking · share  the marketable part, in percent
     //   turnover  days the ground is held after the last harvest
-    // Nothing set means as before: the crop's own figures and v7's arithmetic.
+    // Nothing set means the crop's own figures.
     const PATTERNS = ['spread', 'weekly', 'once'];
     const amount0 = x => x != null && x !== '' && Number.isFinite(+x) && +x >= 0 ? +x : null;
     const word = x => typeof x === 'string' && x.trim() ? x.trim() : null;
     function sellRule(cropId) {
-      const x = (!legacy && S.assumptions && S.assumptions.sell && S.assumptions.sell[cropId]) || {}, share = amount0(x.share), turn = amount0(x.turnover);
+      const x = (S.assumptions && S.assumptions.sell && S.assumptions.sell[cropId]) || {}, share = amount0(x.share), turn = amount0(x.turnover);
       return { unit: word(x.unit), price: amount0(x.price), pattern: PATTERNS.includes(x.pattern) ? x.pattern : null, days: wholeDays(x.days), keep: amount0(x.keep),
         share: share != null && share <= 100 ? share : null, turnover: turn == null ? null : Math.round(turn) };
     }
     function sellVRule(varietyId) {
-      const x = (!legacy && varietyId && S.assumptions && S.assumptions.sellV && S.assumptions.sellV[varietyId]) || {};
+      const x = (varietyId && S.assumptions && S.assumptions.sellV && S.assumptions.sellV[varietyId]) || {};
       return { unit: word(x.unit), price: amount0(x.price) };
     }
-    const listedYield = (kind, id, env) => { const a = !legacy && S.assumptions, x = a && a[kind] && a[kind][id] && a[kind][id][env]; return x ? amount0(x.yield) : null; };
+    const listedYield = (kind, id, env) => { const a = S.assumptions, x = a && a[kind] && a[kind][id] && a[kind][id][env]; return x ? amount0(x.yield) : null; };
     /** The harvest days a total is spoken of over: what turns a total into a weekly figure and back. */
     const nominalDays = c => c.harvestBy === 'list' ? Math.max(1, c.hw) : c.harvestMode === 'season' ? positive(c.yieldDays, positive(c.hw, 1)) : Math.max(1, nonNegative(c.hw));
     const ownHarvest = o => !!o && (o.harvestMode === 'season' || o.harvestMode === 'window' || hasHarvestDays(o));
@@ -514,7 +491,7 @@
     }
     /**
      * One cell of the list: days to harvest for a crop (or one of its varieties) in one growing condition.
-     * `fallback` is what the planner uses when the grower has set nothing, before any month adjustment.
+     * `fallback` is what the planner uses when the grower has set nothing.
      */
     function timingFor(cropId, varietyId, env) {
       const bed = (S.beds || []).find(b => b.active !== false && envOf(b) === env && !isRack(b) && !isCt(b)) || (S.beds || []).find(b => b.active !== false && envOf(b) === env);
@@ -523,12 +500,11 @@
       const probe = { id: '\u0000probe', cropId, bedId: bed.id, date: `${positive(settings.year, new Date().getFullYear())}-06-15`, ...(v ? { varietyId: v.id } : {}) };
       const e = computed(probe);
       if (!e) return { mine, fallback: null, value: mine, source: 'none' };
-      const g = gardenOf(bed) || {}, factor = !legacy || isRack(bed) || e.micro ? 1 : positive(g.dtmFactor, 1), figure = v ? varietyFigure(probe, e) : null, published = guideFor(crop(cropId));
-      const base = e.catalogTiming && e.catalogTiming.activeMode === 'catalog' ? e.catalogTiming.baseDays : isTower(bed) ? positive(e.towerDays, legacy ? Math.round(e.baseDtm * 0.8) : e.baseDtm) : e.baseDtm;
-      let inBedDays = Math.max(1, Math.round(base * factor)), source = figure || (published && !(isTower(bed) && e.towerDays > 0) ? 'guide' : 'library');
+      const figure = v ? varietyFigure(probe, e) : null, published = guideFor(crop(cropId));
+      const base = e.catalogTiming && e.catalogTiming.activeMode === 'catalog' ? e.catalogTiming.baseDays : isTower(bed) ? positive(e.towerDays, e.baseDtm) : e.baseDtm;
+      let inBedDays = Math.max(1, Math.round(base)), source = figure || (published && !(isTower(bed) && e.towerDays > 0) ? 'guide' : 'library');
       // A variety with no figure of its own takes whatever the crop row says.
       if (v && !figure) { const c = timingFor(cropId, null, env); inBedDays = c.bed; source = c.mine ? 'crop-mine' : 'crop'; }
-      const curve = seasonCurve(crop(cropId)), swing = !legacy || isRack(bed) || e.micro || gCurve(g) === 'flat' ? [1, 1] : [Math.min(...curve), Math.max(...curve)];
       // The row's numbers are shown, and typed, counted from where the row says days start. `bed` is what a planting gets.
       const c0 = crop(cropId), rule = startRule(cropId), fixed = startFixed(c0), method = isTower(bed) ? 'TP' : e.method, ct = e.catalogTiming || {};
       const nursery = method === 'TP' && !fixed ? nurseryOf(probe, e, growingCrop(probe), bed) : 0;
@@ -538,7 +514,7 @@
       const off = inBed(0, start, method, nursery, rule.less).off;
       const fallback = figure === 'supplier' ? ct.printed : inBedDays + off, days = mine ? Math.max(1, mine - off) : inBedDays;
       return { mine, fallback, value: mine || fallback, bed: days, nursery, total: nursery + days, off, start, startBy: by, fixed, less: rule.less, method,
-        source, guide: source === 'guide' ? published : null, printed: figure === 'supplier' ? ct.printed : null, basis: figure === 'supplier' ? ct.basis : null, swing };
+        source, guide: source === 'guide' ? published : null, printed: figure === 'supplier' ? ct.printed : null, basis: figure === 'supplier' ? ct.basis : null };
     }
 
     // ── field-season rules ──
@@ -644,7 +620,7 @@
       if (cache.has(p)) return cache.get(p);
       let r = sowingOn ? baseOf(p) : calcRaw(p);
       if (r && sowingOn) {
-        // as v7's calc does: what is sown replaces the bare plant count. The base record is left as it was.
+        // what is sown replaces the bare plant count. The base record is left as it was.
         const sowing = sowingFor(p, r);
         if (sowing && !sowing.error) r = { ...r, cells: sowing.cells, seeds: sowing.seeds, trays: sowing.trays, sowing };
       }
@@ -652,7 +628,7 @@
       return r;
     }
 
-    // ── practical sowing: whole rows of a plug tray, and plantings of one variety sown as one batch (v7's nursery-sowing) ──
+    // ── practical sowing: whole rows of a plug tray, and plantings of one variety sown as one batch ──
     const sowingOn = options.sowing !== false && !!Sow;
     const dayText = value => value && validDate(value) ? d2s(value) : '';
     const baseCache = new Map();
@@ -674,8 +650,8 @@
       if (!r || !r.sow || r.tw || r.established || !nsHarden() || r.field <= r.sow) return null;
       return new Date(Math.max(r.sow, addDays(r.field, -nsHarden())));
     }
-    // Tower seedlings are sown in the grower's rockwool sheets (98 cubes, 14 rows of 7). v7 counted them in the crop's plug tray; its mode still does.
-    const sheet = legacy ? null : Sow && Sow.ROCKWOOL_SHEET;
+    // Tower seedlings are sown in the grower's rockwool sheets (98 cubes, 14 rows of 7).
+    const sheet = Sow && Sow.ROCKWOOL_SHEET;
     const sowOptions = (p, r) => ({ id: p.id, plants: r.plants, crop: r.c, planting: p, settings, nursery: S.nursery, tower: r.tw, rack: r.rack, sheet: r.tw ? sheet : null,
       sowDate: dayText(r.sow), plannedSowDate: dayText(r.plannedSow), fieldDate: dayText(r.field), potUpDate: dayText(potUpDate(r)), hardenDate: dayText(hardenStart(r)) });
     function sowSingle(p, r) {
@@ -710,15 +686,15 @@
       return (sowBuilt = { plans, batches, known: new Set(S.plantings || []) });
     }
     /**
-     * Varieties of one crop sown the same day into the same kind of tray stand in the same trays. (v7 gives every variety
-     * whole trays of its own.) Each variety still fills whole rows; the trays are counted once for the lot and shared out
+     * Varieties of one crop sown the same day into the same kind of tray stand in the same trays.
+     * Each variety still fills whole rows; the trays are counted once for the lot and shared out
      * by cells, so four varieties taking 24 rows of a 16-row tray hold two trays, not four. Seeds and cells do not change.
      *
      * Rockwool for the towers is freer still. A sheet is perforated, so any crops sown the same day share it (basil beside
      * lettuce), and they need not leave for the towers on the same day. Every sheet, whole or part, rides in one open
      * 10 × 20 tray, which is the room it takes on the bench.
      */
-    const shareTrays = sowingOn && !legacy && !(S.lrfNext && S.lrfNext.trays === 'variety');
+    const shareTrays = sowingOn && !(S.lrfNext && S.lrfNext.trays === 'variety');
     function shareOut(batches, plans) {
       const groups = new Map();
       for (const b of batches) {
@@ -772,10 +748,10 @@
      * { how: 'open', grams (a tray), set }. Nothing is assumed: a crop said to be sown in cells counts no seed until both figures are there.
      */
     function liveSow(c) {
-      const x = !legacy && c && c.micro && c.liveSow && typeof c.liveSow === 'object' ? c.liveSow : null, grams = c && finite(c.seedG) > 0 ? +c.seedG : 0;
+      const x = c && c.micro && c.liveSow && typeof c.liveSow === 'object' ? c.liveSow : null, grams = c && finite(c.seedG) > 0 ? +c.seedG : 0;
       // The grower sows his tray crops by the cell (pea shoots by weight). So a crop he has said nothing about, and that has
       // no weight to count, is taken as sown in cells; it still counts nothing until its two figures are there.
-      const how = x && (x.how === 'cells' || x.how === 'open') ? x.how : legacy || grams > 0 || !(c && c.micro) ? 'open' : 'cells';
+      const how = x && (x.how === 'cells' || x.how === 'open') ? x.how : grams > 0 || !(c && c.micro) ? 'open' : 'cells';
       if (how === 'cells') { const cells = Math.round(positive(x && x.cells, 0)), perCell = positive(x && x.perCell, 0), set = cells > 0 && perCell > 0; return { how: 'cells', cells, perCell, set, seeds: set ? cells * perCell : 0, said: !!x }; }
       return { how: 'open', grams, set: grams > 0, said: !!x };
     }
@@ -810,7 +786,7 @@
       }
       if (c.material === 'bulb' && !tw && !rack) { bulbs = Math.ceil(plants); seeds = 0; seedG = 0; cells = 0; trays = 0; gh = null; }
       if (p.established === true) { seeds = 0; seedG = 0; cells = 0; trays = 0; bulbs = 0; gh = null; }
-      // Not in v7: the day a transplant is sown can be set by hand. It holds while it falls before the day the planting goes out.
+      // The day a transplant is sown can be set by hand. It holds while it falls before the day the planting goes out.
       const sowDefault = gh, sowOwn = gh && typeof p.sowOn === 'string' && validDate(s2d(p.sowOn)) && s2d(p.sowOn) < planned ? s2d(p.sowOn) : null;
       const plannedGh = sowOwn || gh; gh = plannedGh ? sowDateOf(p, plannedGh) : null;
 
@@ -987,7 +963,7 @@
 
       const ct = r.c.catalogTiming;
       if (ct && ct.inferredBasis && ct.conversion === 'seed-minus-nursery') {
-        out.push({ k: 'model', t: `Maturity is a guess: the supplier prints ${ct.printed} days without saying from when. Its page text mentions sowing, so ${ct.nurseryDays} nursery days were subtracted, leaving ${ct.baseDays}. Confirm the starting point for this variety.` });   // v7's wording, kept for the parity check
+        out.push({ k: 'model', t: `Maturity is a guess: the supplier prints ${ct.printed} days without saying from when. Its page text mentions sowing, so ${ct.nurseryDays} nursery days were subtracted, leaving ${ct.baseDays}. Say what this variety's days are counted from.` });
       }
       const prev = plantingsIn(p.bedId).filter(q => q.id !== p.id).map(q => ({ q, x: calc(q) })).filter(x => x.x && x.x.field < r.field).sort((a, b) => b.x.field - a.x.field)[0];
       const years = settings.rotationYears || 3;
@@ -1003,7 +979,7 @@
     }
 
     // ── footprints and guard rails ──
-    // v7 only added lengths up. Here a planting in a soil bed covers a rectangle:
+    // A planting in a soil bed covers a rectangle:
     // feet along the bed and a share of its width. Two plantings collide when they
     // hold the same ground at the same time. Benches and container groups still
     // share by count; a tower is held whole.
@@ -1069,7 +1045,7 @@
       const resting = !here.length && plantingsIn(b.id).some(p => { const r = calc(p); return r && occupancyFrom(p, r) <= date && date <= occupancyThrough(p, r); });
       return { crops: here, cap, used, free: Math.max(0, cap - used), resting };
     }
-    // ── heated bench room in use: v7's nursery load ──
+    // ── heated bench room in use ──
     const ctFt2 = ct => { const [w, l] = ctDims(ct); return w * l; };
     function potUpDate(r) {
       const planned = potUpPlanned(r), actual = planned ? doneOf(r.planting, 'potup') : null;
@@ -1137,10 +1113,10 @@
       const pool = (cap, used, of) => { const p = { cap, used, over: Math.max(0, used - cap) }; for (const k of Object.keys(hard)) p[k] = of(k); return p; };
       row.hardenIn = row.harden - un - out;   // hardening off, and still under heat for want of room
       row.pools = {
-        heated: pool(legacy ? row.cap : room.heated, row.total - row.cool - un - out, k => row[k] - cool[k] - hard[k] * part(un + out)),
+        heated: pool(room.heated, row.total - row.cool - un - out, k => row[k] - cool[k] - hard[k] * part(un + out)),
         unheated: pool(room.unheated, row.cool + un, k => cool[k] + hard[k] * part(un)),
         outside: pool(room.outside, out, k => hard[k] * part(out)) };
-      row.over = legacy ? Math.max(0, row.total - row.cap) : row.pools.heated.over;
+      row.over = row.pools.heated.over;
       return row;
     }
     /**
@@ -1167,7 +1143,7 @@
       return { date: new Date(date), plug: [...plug.values()].sort((a, b) => b.n - a.n), carriers, live, flats: carriers + live };
     }
 
-    // ── what a planting is expected to yield (v7's own arithmetic) ──
+    // ── what a planting is expected to yield ──
     const cropUnits = () => (S.cropUnits && typeof S.cropUnits === 'object' ? S.cropUnits : {});
     /** The unit a crop is counted and sold in: trays for microgreens, else the farm's own unit for it, else the crop's. */
     const recordUnit = c => String((cropUnits()[c.id] && cropUnits()[c.id].base) || c.baseUnit || 'each');
@@ -1191,9 +1167,8 @@
       const fromV = !own && v && env ? listedYield('varieties', v.id, env) : null, fromC = !own && fromV == null && env ? listedYield('crops', p.cropId, env) : null, mine = fromV != null ? fromV : fromC;
       const basis = r.rack ? 'tray' : r.ct ? (p.yieldBasis === 'container' ? 'container' : 'plant') : c.yBasis === 'ft' && !r.tw ? 'ft' : 'plant';
       const count = basis === 'tray' || basis === 'container' || basis === 'ft' ? r.len : r.plants;
-      // v7 took nothing from a harvest day inside a crop's "summer gap". The planner no longer second-guesses the plan that way:
-      // what is planted to be picked in July counts in July. The v7 parity mode keeps the gap.
-      const mk = liveTray ? 1 : rule.share != null ? rule.share / 100 : clamp(finite(c.mk, 0.9), 0, 1), part = clamp((r.harvestDays - (legacy ? r.blackoutDays : 0)) / Math.max(1, r.expectedHarvestDays), 0, 1);
+      // What is planted to be picked in July counts in July: nothing is taken off for a harvest day inside a crop's "summer gap".
+      const mk = liveTray ? 1 : rule.share != null ? rule.share / 100 : clamp(finite(c.mk, 0.9), 0, 1), part = clamp(r.harvestDays / Math.max(1, r.expectedHarvestDays), 0, 1);
       const set = liveTray || (c.yield != null && c.yield !== '' && Number.isFinite(+c.yield)) || own || mine != null;
       // A planting's own yield is a total, as it always was, and is worked out as it always was. A figure that follows the list is in
       // the crop's pattern: a total, or what is picked each week (then a longer harvest gives more, and a shorter one less).
@@ -1203,8 +1178,8 @@
       return { basis, count, per: each, mk, part: weekly ? 1 : part, units: count * each * mk * (weekly ? 1 : part), unit: unitOf(c, v), set, own, price: priceOf(p, c, v),
         pattern: own && pattern === 'weekly' ? 'spread' : pattern, perWeek, nominal, by: own ? 'own' : fromV != null ? 'variety' : fromC != null ? 'crop' : 'default', keep: liveTray ? 0 : rule.keep || 0 };
     }
-    /** Is this a day the crop is picked? Any day of its harvest period (in the v7 parity mode, not the days in its summer gap). */
-    const pickedOn = (r, date) => date >= r.first && date <= r.last && (!legacy || blackoutOverlapDays(r.c, date, date, { summerOK: r.c.summerOK }, r.g) === 0);
+    /** Is this a day the crop is picked? Any day of its harvest period. */
+    const pickedOn = (r, date) => date >= r.first && date <= r.last;
 
     const usedEnvs = new Set((S.beds || []).filter(b => b.active !== false).map(envOf).filter(Boolean));
     /**

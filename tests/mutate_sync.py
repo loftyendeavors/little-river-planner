@@ -1,4 +1,5 @@
-"""Deliberate faults in cloud sync and snapshots: each must be caught by a named line of a test.
+"""Deliberate faults in cloud sync and snapshots: each must be caught by a line of a test
+that passes with no fault in it: any such line counts, and a check that stops with no line failed catches nothing.
 
 usage: python3 -I mutate_sync.py <app-dir> <repo-dir> <scratch-dir> <sync_check.py> [node | page | list] [words...]     env FROM=, TO= to run a part
 

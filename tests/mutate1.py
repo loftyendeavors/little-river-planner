@@ -1,4 +1,5 @@
-"""Deliberate faults for step 1: each is put into a copy of the app, and a named line of step1_test.cjs must fail.
+"""Deliberate faults for step 1: each is put into a copy of the app, and a line of step1_test.cjs must fail
+that passes with no fault in it: any such line counts, and a check that stops with no line failed catches nothing.
 usage: python3 -I mutate1.py <app> <scratch> <tests-dir> <plan.json> [node | list] [words…]     env FROM=, TO= to run a part
 node: every fault against step1_test.cjs (a second or two each). list: how many faults there are, and nothing else.
 (This was mutate.sh, which did the same with sed; it is in the shape of the others now.)
@@ -9,14 +10,13 @@ app, scratch, tests, plan = [Path(x).resolve() for x in sys.argv[1:5]]
 mode = sys.argv[5] if len(sys.argv) > 5 else "node"; words = [w.lower() for w in sys.argv[6:]]
 NODE = [
  ('sheet back to 128 cells', 'js/sowing.js', 'cells: 98, rows: 14, columns: 7, widthIn: 10, lengthIn: 20, active: true, template: true, sheet: true', 'cells: 128, rows: 16, columns: 8, widthIn: 10, lengthIn: 20, active: true, template: true, sheet: true'),
- ('the sheet is also used when counting with the multipliers', 'js/engine.js', 'const sheet = legacy ? null : Sow && Sow.ROCKWOOL_SHEET;', 'const sheet = Sow && Sow.ROCKWOOL_SHEET;'),
  ('a named tray no longer wins', 'js/sowing.js', '    if (selected) {', '    if (selected && !(tower && sheet)) {'),
  ('stand-in benches are held to their count again', 'js/engine.js', 'const unbounded = (p, b) => isPool(b) || (isRack(b) && (!(capOf(b) > 0) || !!(p && p.liveTray)));', 'const unbounded = (p, b) => isPool(b);'),
  ('tray batches on a counted bench are listed', 'js/engine.js', '(!(capOf(b) > 0) || !!(p && p.liveTray))', '(!(capOf(b) > 0))'),
  ('every bench is unbounded, hand-set plantings too', 'js/engine.js', 'const unbounded = (p, b) => isPool(b) || (isRack(b) && (!(capOf(b) > 0) || !!(p && p.liveTray)));', 'const unbounded = (p, b) => isPool(b) || isRack(b);'),
  ('a drop on a bench with no count is allowed', 'js/rails.js', "if (eng.isRack(bed) && !(eng.capOf(bed) > 0)) return { state: 'blocked', why: 'no-count', p: base };", ''),
- ('a new tray space keeps the old name', 'js/trays.js', "name: POOL_NAME, type: 'greenhouse'", "name: POOL_NAME_V7, type: 'greenhouse'"),
- ('any garden of that name is renamed', 'js/trays.js', 'g && g.liveTrayPool === true && g.name === POOL_NAME_V7', 'g && g.name === POOL_NAME_V7'),
+ ('a new tray space keeps the old name', 'js/trays.js', "name: POOL_NAME, type: 'greenhouse'", "name: POOL_NAME_BEFORE, type: 'greenhouse'"),
+ ('any garden of that name is renamed', 'js/trays.js', 'g && g.liveTrayPool === true && g.name === POOL_NAME_BEFORE', 'g && g.name === POOL_NAME_BEFORE'),
  ('a quick lot makes a second variety of the same name', 'js/seedlib.js', 'variety = all.find(v => isLive(v) && v.cropId === cropId && varietyKey(v.name) === varietyKey(name)) || null;', 'variety = null;'),
  ('a quick lot of nothing is taken', 'js/seedlib.js', 'if (!(quantity > 0)) throw new Error', 'if (quantity < 0) throw new Error'),
  ('an ordered quick lot is saved as on hand', 'js/seedlib.js', "const status = input.status === 'ordered' ? 'ordered' : 'usable';", "const status = 'usable';"),

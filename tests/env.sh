@@ -19,4 +19,15 @@ OFF=$W/offline.html
 # The label is read from the page's own script, so no check has it written in.
 LRF_LABEL=${LRF_LABEL:-$(sed -n 's/.*`Preview \([0-9][0-9.]*\) · .*/\1/p' "$REPO/js/main.js" | head -1)}
 export LRF_LABEL
+# Gives a check's result the name its lines are counted under in tests/counts.json:   node some_test.cjs … | named "some test"
+# It reads the last line the check printed: a result with "passed" and "of" (or "checks"), or "N of M passed".
+named() { python3 -I -c "import json, re, sys
+t = sys.stdin.read().strip(); l = t.splitlines()[-1] if t else ''
+try:
+    try: d = json.loads(t)
+    except Exception: d = json.loads(l[l.index('{'):])
+    print(json.dumps({'passed': d.get('passed'), 'of': d.get('of', d.get('checks')), 'check': sys.argv[1], **({'finished': d['finished']} if 'finished' in d else {}), 'failed': d.get('failed')}, ensure_ascii=False, default=str)[:6000])
+except Exception:
+    m = re.search(r'(\\d+) of (\\d+) passed', l)
+    print(json.dumps({'passed': int(m.group(1)), 'of': int(m.group(2)), 'check': sys.argv[1], 'failed': []}) if m else sys.argv[1] + ' NO RESULT ' + l[-300:])" "$1"; }
 export TZ=${TZ:-America/New_York}        # the checks were written in this time zone; a day must not turn over under them
