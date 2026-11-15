@@ -58,9 +58,9 @@
  },
  "build": {
 
-  "offline": 1,
+  "sync client, built site": 63,
 
-  "sync client, built site": 63
+  "the built site": 1
 
  },
  "app1": {

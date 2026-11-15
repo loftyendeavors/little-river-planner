@@ -53,13 +53,6 @@ jobs:
           path: ${{ runner.temp }}/ran
           if-no-files-found: ignore
           retention-days: 7
-      # The step that keeps files refuses a path with ".." in it, and the work folder is beside the repository, so the pictures
-      # are copied to a folder it will take. A part with no pictures has nothing to copy, and that is not a failure.
-      - name: Put the pictures where they can be kept
-        if: always()
-        run: |
-          mkdir -p "$RUNNER_TEMP/shots"
-          if [ -d "$LRF_WORK/shots" ]; then cp -r "$LRF_WORK/shots/." "$RUNNER_TEMP/shots/" || true; fi
       - name: Keep the pictures of the screens that changed
         if: always() && matrix.part == 'screens'
         uses: actions/upload-artifact@v4
