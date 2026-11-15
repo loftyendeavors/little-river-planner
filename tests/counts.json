@@ -142,7 +142,7 @@
 
   "r1 @1480": 66,
 
-  "things": 68
+  "things": 71
 
  },
  "new": {
@@ -223,9 +223,9 @@
 
   "map-views-site": 22,
 
-  "things-site": 68,
+  "things-site": 71,
 
-  "things-site @1480": 68
+  "things-site @1480": 71
 
  },
  "site4": {
@@ -295,9 +295,9 @@
 
   "mixed-site @3440": 63,
 
-  "things @1707": 68,
+  "things @1707": 71,
 
-  "things-site @3440": 68
+  "things-site @3440": 71
 
  },
  "site8": {

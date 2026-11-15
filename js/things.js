@@ -36,6 +36,9 @@
   const soldBy = unit => unit === 'each' ? 'sold each' : `sold by the ${unit}`;
   const why = text => h('span.yc-na', text);
   const key = (t, what) => `t|${t.id}|${what}`;
+  // the forecast of an engine, worked out once: a card is drawn many times over one plan
+  const models = new WeakMap();
+  const forecast = eng => { if (!models.has(eng)) models.set(eng, F.build(eng)); return models.get(eng); };
 
   /** The helper row of one thing: the words that say what its box means, the unit after the box, and the figure in it. */
   function helper(t) {
@@ -57,12 +60,12 @@
     const { eng, c, hc, x, year, box } = ctx, can = !hc.micro && !eng.isCoverCrop(c), list = can ? eng.thingsOf(c.id) : [], per = PER[hc.basis];
     const beds = list.filter(t => t.from === 'bed'), packs = list.filter(t => t.from === 'harvest'), counting = list.filter(t => t.counts);
     const taken = new Set(counting.filter(t => t.from === 'place').map(t => t.place)), rowsOf = new Map();
-    for (const line of F.build(eng).rows) if (line.cropId === c.id && line.thing) rowsOf.set(line.thing, line);
+    if (list.length) for (const line of forecast(eng).rows) if (line.cropId === c.id && line.thing) rowsOf.set(line.thing, line);
     const label = (t, what) => `${c.name} · ${t.name}: ${what}`;
     const save = (t, change, what) => App.setThing(c.id, t.id, change, label(t, what));
 
     /** The places left to the crop's own line: one whose plantings a thing that counts now takes is no longer its column. */
-    const places = cols => ({ ...cols, list: cols.list.filter(env => !taken.has(env)) });
+    const places = cols => { const left = cols.list.filter(env => !taken.has(env)); return left.length ? { ...cols, list: left } : cols; };   // the crop's own line always keeps a column
     const left = kind => 100 - list.filter(t => t.from === kind).reduce((n, t) => n + (t.share || 0), 0);
     const inForce = kind => 100 - counting.filter(t => t.from === kind).reduce((n, t) => n + t.share, 0);
 
@@ -179,7 +182,7 @@
 
   /** "Add something else you sell": its name, what it is sold by, and which of the three kinds it is. Nothing is forecast from it yet. */
   function ask(ctx, list) {
-    const { eng, c, hc, x } = ctx, worth = F.build(eng).rows.reduce((n, r) => n + r.worth, 0);
+    const { eng, c, hc, x } = ctx, worth = forecast(eng).rows.reduce((n, r) => n + r.worth, 0);
     // a place of its own: one the crop is planted in, that no other thing has, and that leaves the crop's own line a place
     const mine = eng.ENVS.filter(env => x.places.has(env)), free = mine.filter(env => !list.some(t => t.from === 'place' && t.place === env)), places = free.length > 1 ? free : [];
     const name = h('input', { type: 'text', id: 'thName', maxLength: 40, placeholder: 'babies, bouquets, tops off…', 'aria-label': 'What you sell' });
@@ -220,7 +223,7 @@
     const { eng, c, hc, figCell } = ctx, list = hc.micro || eng.isCoverCrop(c) ? [] : eng.thingsOf(c.id), per = PER[hc.basis];
     if (!list.length) return [];
     const rows = new Map();
-    for (const line of F.build(eng).rows) if (line.cropId === c.id && line.thing) rows.set(line.thing, line);
+    for (const line of forecast(eng).rows) if (line.cropId === c.id && line.thing) rows.set(line.thing, line);
     return list.map(t => {
       const hp = helper(t), own = t.from !== 'harvest', line = rows.get(t.id), u = t.counted || t.unit, weekly = t.pattern === 'weekly';
       const what = [t.from === 'place' ? `everything ${IN[t.place] || 'in its place'}` : t.share == null ? null : `${fig(t.share)}% of ${t.from === 'bed' ? 'each bed' : 'the harvest'}`,

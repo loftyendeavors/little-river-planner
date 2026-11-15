@@ -240,13 +240,18 @@ with sync_playwright() as pw:
     check("one Undo takes the completing figure back, and the forecast is the untouched one again; done again it is as it was", sU["whole"] == snap0["whole"] and sU["undo"] == sC["undo"] - 1 and sR["whole"] == sC["whole"] and sR["plan"] == sC["plan"], {"undo": [sC["undo"], sU["undo"], sR["undo"]]})
 
     # shares are held to 100
-    open_crop(B); sH = snap(); typed(box(b1, "share"), "101"); over1 = js("return { asked: !!document.querySelector('dialog[open]'), share: things(arg[0]).find(t => t.id === arg[1]).share, undo: S.undo.length };", [B, b1])
+    open_crop(B); sH = snap(); typed(box(b1, "share"), "101"); over1 = js("return { asked: !!document.querySelector('dialog[open]'), share: things(arg[0]).find(t => t.id === arg[1]).share, undo: S.undo.length, max: document.querySelector('[data-yk=\"t|' + arg[1] + '|share\"]').max, toast: toast() };", [B, b1])
     w, b2 = add(B, "More", "lb", "bed"); fill(b2, "price", 1); n2 = js("return S.undo.length;"); typed(box(b2, "share"), "71"); over2 = js("return { toast: toast(), share: things(arg[0]).find(t => t.id === arg[1]).share, undo: S.undo.length };", [B, b2])
     fill(b2, "share", 70); left = card()
-    check("a share over 100 is not taken; with another thing in the same beds, a share that would bring the two past 100 is refused in words (“add up to 100”, and how much is left), and nothing is changed", over1["asked"] is False and over1["share"] == 30 and over1["undo"] == sH["undo"] and "add up to 100" in over2["toast"] and "at most 70" in over2["toast"] and not over2["share"] and over2["undo"] == n2, [over1, over2])
+    check("a share over 100 is not taken by the box itself, which holds no more than 100 and says nothing; with another thing in the same beds, a share that would bring the two past 100 is refused in words (“add up to 100”, and how much is left), and nothing is changed", over1["asked"] is False and over1["share"] == 30 and over1["undo"] == sH["undo"] and over1["max"] == "100" and "add up to 100" not in over1["toast"] and "add up to 100" in over2["toast"] and "at most 70" in over2["toast"] and not over2["share"] and over2["undo"] == n2, [over1, over2])
     check("a share that fits is taken; the row says the shares add up to 100, and the crop's own column shows what is counted now (70) and what it will be once the other is counted (0)", js("return things(arg[0]).find(t => t.id === arg[1]).share;", [B, b2]) == 70 and "add up to 100" in left["rows"]["sharebed"]["hint"] and left["left"]["sharebed"] == 70 and "0% once" in left["rows"]["sharebed"]["own"], left["rows"]["sharebed"])
     click(f'[data-thing-remove="{b2}"]', 400); wr = asking(); answer(True); sH2 = snap()
     check("a thing that was not counted is taken away with a window that says nothing in the forecast changes; the forecast is what it was", bool(wr) and "nothing in the forecast changes" in wr["text"] and said(wr["text"]) == (dollars(sC["worth"]), dollars(sC["worth"])) and sH2["whole"] == sC["whole"] and "More" not in json.dumps(js("return things(arg);", B)), wr)
+
+    # called something else
+    sN = snap(); click(f'[data-thing-name="{b1}"]', 400); wn = asking(); typed("#thRename", "Babies", key="Enter", ms=600); sN2 = snap(); named = js("return { name: things(arg[0]).find(t => t.id === arg[1]).name, rows: rowsOf(arg[0]).map(r => r.name), head: card().heads.find(h => h.thing === arg[1]).text, toast: toast(), id: Object.keys(JSON.parse(record(arg[0]))) };", [B, b1])
+    check("“Rename…” changes its name and nothing else: one step, the same id, the same forecast but for the name of its row, and the message says the season's worth stays", bool(wn) and wn["id"] == "thRenameDlg" and named["name"] == "Babies" and f"{nameB} · Babies" in named["rows"] and named["head"].startswith("Babies") and named["id"] == [b1] and sN2["undo"] == sN["undo"] + 1 and sN2["worth"] == sN["worth"] and sN2["dates"] == sN["dates"] and said(named["toast"]) == (dollars(sN["worth"]), dollars(sN["worth"])), named)
+    undo(); check("and one Undo gives it its name back", snap()["plan"] == sN["plan"])
 
     # changed
     sD = snap(); wp = fill(b1, "price", 7); sE = snap()
@@ -367,8 +372,10 @@ with sync_playwright() as pw:
     check("a price typed on the list asks with the worth before and after, as on the card; the forecast shows that worth, and the card shows the price", bool(wl) and said(wl["text"]) == (dollars(sL["worth"]), dollars(sL2["worth"])) and sL2["worth"] > sL["worth"] and cL["boxes"][f"t|{k1}|price"]["value"] == "15", {"said": said(wl["text"]) if wl else None, "worth": [sL["worth"], sL2["worth"]], "box": cL["boxes"].get(f"t|{k1}|price")})
 
     # ── the crop's own unit changed under a thing packed from its harvest ──
-    sV = snap(); js("return A.setSell(arg, { unit: 'bunch' }, 'the crop sold by another unit').then(() => 1);", K); wait(700)
-    if asking(): answer(True)
+    sV = snap(); open_crop(K)
+    if has('[data-yk="unit"]'): page.select_option('[data-yk="unit"]', "bunch"); wait(600)
+    wv = asking(); answer(True)
+    check("the window that asks before the crop's own unit is changed says that what is packed from its harvest is not counted again until its figure is typed for the new unit", bool(wv) and "Bouquets, packed from its harvest, is not counted again until" in wv["text"], wv)
     stale = js("const t = things(arg[0]).find(t => t.id === arg[1]); return { counts: t.counts, waits: t.waits, rows: rowsOf(arg[0]).map(r => r.thing) };", [K, k1]); open_crop(K); cV = card()
     check("when the crop itself is sold by another unit, the helper figure typed for the old unit is not read as one for the new: the thing stops counting, its helper box is amber and empty, and the card says what it waits on", stale["counts"] is False and stale["waits"] == ["holds"] and k1 not in stale["rows"] and cV["boxes"][f"t|{k1}|helper"]["amber"] is True and cV["boxes"][f"t|{k1}|helper"]["value"] == "" and any("Bouquets is not counted yet" in x for x in cV["waits"]), {"stale": stale, "waits": cV["waits"]})
     undo_to(sV["undo"]); sV2 = snap()

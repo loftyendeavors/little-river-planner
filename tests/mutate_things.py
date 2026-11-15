@@ -71,7 +71,7 @@ NODE = [
 ]
 PAGE = [
  # adding
- ("the window that adds a thing gives another worth", TH, "const { eng, c, hc, x } = ctx, worth = F.build(eng).rows.reduce((n, r) => n + r.worth, 0);", "const { eng, c, hc, x } = ctx, worth = F.build(eng).rows.reduce((n, r) => n + r.worth, 1000);"),
+ ("the window that adds a thing gives another worth", TH, "const { eng, c, hc, x } = ctx, worth = forecast(eng).rows.reduce((n, r) => n + r.worth, 0);", "const { eng, c, hc, x } = ctx, worth = forecast(eng).rows.reduce((n, r) => n + r.worth, 1000);"),
  ("a thing can be added with no name", TH, "      if (!text) { said.dataset.kind = 'bad'; said.textContent = 'Give it a name first: what you call it when you sell it.'; name.focus(); return; }\n", ""),
  ("a thing can be called by the crop's own name", TH, "      if (text.toLowerCase() === String(c.name).toLowerCase() || list.some(t => t.name.toLowerCase() === text.toLowerCase())) { said.dataset.kind = 'bad';", "      if (false) { said.dataset.kind = 'bad';"),
  ("a place of its own is offered to a crop planted in one place", TH, "places = free.length > 1 ? free : [];", "places = eng.ENVS.filter(env => ctx.hc.cells[env].used);"),
@@ -90,7 +90,7 @@ PAGE = [
  ("the first-picking cell says nothing of a first picking of its own", TH, "`with ${c.name}: its own first picking will go here`", "`with ${c.name}`"),
  ("the crop's own share is shown as 100", TH, "const inForce = kind => 100 - counting.filter(t => t.from === kind).reduce((n, t) => n + t.share, 0);", "const inForce = kind => 100;"),
  ("the share once the others count is not said", TH, "Math.abs(now - typed) > 1e-9 ? h('small.yc-total.warn'", "false ? h('small.yc-total.warn'"),
- ("a place a thing takes stays a column of the crop's own", TH, "const places = cols => ({ ...cols, list: cols.list.filter(env => !taken.has(env)) });", "const places = cols => cols;"),
+ ("a place a thing takes stays a column of the crop's own", TH, "const places = cols => { const left = cols.list.filter(env => !taken.has(env)); return left.length ? { ...cols, list: left } : cols; };", "const places = cols => cols;"),
  ("a place is taken from the crop's own columns before its thing counts", TH, "const taken = new Set(counting.filter(t => t.from === 'place').map(t => t.place)), rowsOf = new Map();", "const taken = new Set(list.filter(t => t.from === 'place').map(t => t.place)), rowsOf = new Map();"),
  ("the thing's line under the grid is not named", YC, "k.thing ? `${k.sold}: ` : T.counting.length ? `${c.name}: ` : '',", "'',"),
  ("a thing packed from the harvest is given a yield box", TH, "if (!own) return td(why('none of its own: it is packed from the harvest'));", "if (false) return td(why('none of its own: it is packed from the harvest'));"),
@@ -103,6 +103,9 @@ PAGE = [
  ("the message after a change gives no worth", AP, "    toast(`${label}${state2 ? ' · ' + state2 : ''} · ${worthSaid(was, now)}`, { label: 'Undo', run: undo });\n    return { was, now, counts: t2.counts };", "    toast(label, { label: 'Undo', run: undo });\n    return { was, now, counts: t2.counts };"),
  ("a share is not held to 100", AP, "if (!(want >= 0) || want + others > 100 + 1e-9) return refuse(", "if (!(want >= 0)) return refuse("),
  ("the box for a share takes more than 100", TH, "amber: t.share == null, max: 100, label: label(t, `share ${of}, percent`),", "amber: t.share == null, label: label(t, `share ${of}, percent`),"),
+ ("“Rename…” gives the thing a new record", AP, "      if ('name' in change) x.name = String(change.name).trim().replace(/\\s+/g, ' ').slice(0, 40);\n", "      if ('name' in change) { x.name = String(change.name).trim().replace(/\\s+/g, ' ').slice(0, 40); delete things[id]; id = 't-again'; x.id = id; }\n"),
+ ("“Rename…” changes nothing", TH, "close(); await App.setThing(c.id, t.id, { name }, `${c.name}: ${t.name} is now called ${name}`); };", "close(); };"),
+ ("the window on the crop's own unit says nothing of what is packed from its harvest", YC, "packed.length ? `${packed.map(t => t.name).join(' and ')}, packed from its harvest,", "false ? `${packed.map(t => t.name).join(' and ')}, packed from its harvest,"),
  ("the yield is not turned when a thing is picked gradually", AP, "if (weekly !== (t.pattern === 'weekly') && x.yield != null) x.yield = figure3(", "if (false) x.yield = figure3("),
  ("a thing's harvest days are written to nothing", TH, "save: k => save(t, { days: k }, k == null ? `picked as long as ${c.name}` : `picked for ${k} days`) })", "save: k => save(t, {}, k == null ? `picked as long as ${c.name}` : `picked for ${k} days`) })"),
  ("the window on a unit does not say that no figure is turned", AP, "const unitSaid = unitTo ? `No figure is turned into the new unit: ", "const unitSaid = unitTo ? `The unit changes: "),

@@ -347,11 +347,14 @@
     if (to === was) return false;
     const x = of(eng, c.id), cols = placesOf(eng, c, hc, x), per = `${PER[hc.basis]}${hc.weekly ? ' a week' : ''}`;
     const yields = cols.list.filter(env => hc.cells[env].value != null && !w.places.includes(env)).map(env => `${PLACE[env].toLowerCase()} ${fig(hc.cells[env].value)}`), price = hc.price.value > 0 ? hc.price.value : null;
+    const packed = eng.thingsOf(c.id).filter(t => t.from === 'harvest' && t.counts);
     if (price != null || yields.length) {
       const says = [
         price != null ? `The price stays $${fig(price)}: it will mean $${fig(price)}${each(to)}, where it meant $${fig(price)}${each(was)}.` : '',
         yields.length ? `The yield stays as typed (${yields.join(', ')} ${per}): it will be counted in ${to === 'each' ? 'ones' : to}, where it was counted in ${was === 'each' ? 'ones' : was}.` : '',
-        hc.looked === year ? `The tick for ${year} comes off, so ${c.name} goes back among the crops to check.` : ''].filter(Boolean).join(' ');
+        hc.looked === year ? `The tick for ${year} comes off, so ${c.name} goes back among the crops to check.` : '',
+        // what is packed from its harvest was given a figure for the old unit: it is not read as one for the new
+        packed.length ? `${packed.map(t => t.name).join(' and ')}, packed from its harvest, ${packed.length === 1 ? 'is' : 'are'} not counted again until what one holds or weighs is typed for the new unit.` : ''].filter(Boolean).join(' ');
       if (!await UI.confirm({ title: `${c.name}: ${soldBy(to)}, not ${was === 'each' ? 'each' : 'by the ' + was}?`, confirmLabel: 'Change the unit', body: `No figure is turned into the new unit. ${says} The card will say so until the crop is ticked again, and one undo takes it all back.` })) { ui.redraw(); return false; }
     }
     unitChanged(c.id, was);
