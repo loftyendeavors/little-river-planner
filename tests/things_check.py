@@ -495,8 +495,8 @@ with sync_playwright() as pw:
     older = js("""const E0 = window.__before['engine.js'], F0 = window.__before['forecast.js'], bare = JSON.parse(JSON.stringify(S.plan));
       for (const id of Object.keys(bare.assumptions.sell)) { delete bare.assumptions.sell[id].things; if (!Object.keys(bare.assumptions.sell[id]).length) delete bare.assumptions.sell[id]; }
       const a = F0.build(E0.create(S.plan, LRFLibrary)), b = F0.build(E0.create(bare, LRFLibrary)), now = F.build(S.engine);
-      return { same: whole(a) === whole(b), rows: a.rows.filter(r => r.thing).length, differs: whole(a) !== whole(now), things: JSON.stringify(S.plan).includes('"things"') };""")
-    check("the build before, its scripts run on this very plan, forecasts it as if no thing had been added: it shows none of them and counts none", older["same"] is True and older["rows"] == 0 and older["differs"] is True and older["things"] is True, older)
+      return { same: whole(a) === whole(b), rows: a.rows.filter(r => r.thing).length, differs: whole(a) !== whole(now), things: JSON.stringify(S.plan).includes('"things"'), knew: typeof E0.create(bare, LRFLibrary).thingsOf === 'function' };""")
+    check("the build before, its scripts run on this very plan, forecasts it as if no thing had been added: it shows none of them and counts none; or, where it knows things itself, forecasts it exactly as this build does", older["things"] is True and ((older["differs"] is False and older["rows"] > 0) if older["knew"] is True else (older["same"] is True and older["rows"] == 0 and older["differs"] is True)), older)
     check("no error was written to the console", errors == [], errors[:4])
     browser.close()
 finish()

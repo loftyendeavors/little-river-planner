@@ -6,7 +6,7 @@
 mkdir -p $S
 tally() { python3 -I -c "import json,sys; t=sys.stdin.read(); i=t.rfind('{\"passed\"'); i=i if i>=0 else t.find('{');
 try:
-    d=json.loads(t[i:]); print(sys.argv[1], d.get('passed'), 'of', d.get('of'), d.get('failed')); [print('   ', json.dumps(x, default=str)[:600]) for x in (d.get('details') or [])[:5]]
+    d=json.loads(t[i:]); print(sys.argv[1], d.get('passed'), 'of', d.get('of'), d.get('failed')); [print('   ', json.dumps(x, default=str)[:1800]) for x in (d.get('details') or [])[:5]]
 except Exception as e: print(sys.argv[1], 'NO RESULT', t[-400:])" "$1"; }
 for n in "$@"; do
   s=$(date +%s)
@@ -41,6 +41,7 @@ for n in "$@"; do
     season) python3 -I $T/season_check.py $APP $S/season 2>&1 | tally farm-dates ;;
     season-site) python3 -I $T/season_check.py $SITE $S/season-site $ZIP 2>&1 | tally farm-dates-built-site ;;
     photo) python3 -I $T/photo_keep_check.py $APP $S/photo $REPO 2>&1 | tally farm-photo-two-browsers ;;
+    windows) python3 -I $T/two_windows_check.py $APP $S/two-windows $REPO 2>&1 | tally two-windows ;;
     photo-site) python3 -I $T/photo_keep_check.py $SITE $S/photo-site $REPO $ZIP $PHOTO 2>&1 | tally farm-photo-two-browsers-built-site ;;
     ask) python3 -I $T/ask_check.py $APP $S/ask 2>&1 | tally asked-only-from-the-library ;;
     ask-site) python3 -I $T/ask_check.py $SITE $S/ask-site $ZIP 2>&1 | tally asked-only-from-the-library-built-site ;;

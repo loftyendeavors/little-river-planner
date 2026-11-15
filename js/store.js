@@ -11,11 +11,20 @@
  *   plan/<part>     { json: "<JSON text>" }
  * Parts hold JSON text because the store limits documents to 256 KiB and
  * its own typing rules are stricter than a plan's records.
+ *
+ * The device copy is one text, written whole, and two windows of one browser share it. Two guards keep a window from
+ * writing over what another has saved:
+ *   one window holds the plan: the browser's lock "lrf-next:plan", asked for once as the page starts and held for the
+ *   life of the page. A window without it only shows the plan. It can ask for the plan to be handed over (takeOver).
+ *   a count beside the stored plan ("lrf-next:plan-n"), read with the plan and read again before every write. If it is
+ *   not the one this window last read or wrote, another window has written since, and nothing is written here.
+ * A window that writes nothing is read-only and says why (readOnly): 'window' another window holds the plan, 'moved' the
+ * plan was handed to another window, 'changed' another window has written. Only a reload ends it.
  */
 (function (root) {
   'use strict';
 
-  const DEVICE_KEY = 'lrf-next:plan', PART_TARGET = 100000, LOAD_TIMEOUT_MS = 10000;
+  const DEVICE_KEY = 'lrf-next:plan', COUNT_KEY = 'lrf-next:plan-n', LOCK = 'lrf-next:plan', PART_TARGET = 100000, LOAD_TIMEOUT_MS = 10000, AGAIN = 10;
   const SESSION = Math.random().toString(36).slice(2, 10);
   const BUCKETED = ['plantings', 'varieties'], WHOLE = ['gardens', 'beds', 'crops'];
   /** One large record cut into pieces of JSON text: seed stock and its change log grow with every count. */
@@ -66,14 +75,93 @@
     return core;
   }
 
+  /** Why a read-only window does not save, as saveNow says it. */
+  const ELSEWHERE = { window: 'The planner is open in another window of this browser, and the plan is saved from there.', moved: 'The plan is now being worked on in another window.', changed: 'The plan was changed in another window.' };
+
   function create(onStatus) {
     let db = null, backend = 'memory', rev = 0, saved = {}, buckets = {}, dirty = null, saving = false, unsubscribe = null, failed = false;
+    let timer = null, readOnly = '', count = 0, read = false, letGo = null, channel = null, given = null;
     const status = (state, detail) => onStatus && onStatus({ backend, state, detail: detail || '' });
+    /** From here on this window writes nothing. The first reason stands. */
+    function stop(why) {
+      if (readOnly) return;
+      readOnly = why; clearTimeout(timer);
+      status('elsewhere', why);
+    }
+    /** The count beside the stored plan. A stored plan with no count beside it reads as 0. */
+    const countNow = () => { const n = Number(root.localStorage.getItem(COUNT_KEY)); return Number.isInteger(n) && n > 0 ? n : 0; };
+
+    /**
+     * Ask for the plan, once. Without the lock this window is read-only. With it, the lock is kept until the page ends or
+     * hands the plan over. A browser without locks has no gate: there the count alone guards the plan.
+     */
+    function gate() {
+      const locks = root.navigator && root.navigator.locks;
+      if (!locks || typeof locks.request !== 'function') return Promise.resolve();
+      return new Promise(resolve => {
+        const wait = setTimeout(resolve, 3000), go = () => { clearTimeout(wait); resolve(); };   // a browser that never answers does not stop the page from opening
+        // A page that is being reloaded can still hold the lock for a moment as the page after it starts. So a lock that is
+        // not free is asked for again, for up to 1.5 s, before this window is taken to be a second one.
+        let tries = 0;
+        const ask = () => {
+          let asked;
+          try {
+            asked = locks.request(LOCK, { mode: 'exclusive', ifAvailable: true }, lock => {
+              if (!lock && ++tries < AGAIN) { setTimeout(ask, 150); return undefined; }
+              if (!lock) { stop('window'); go(); return undefined; }
+              return new Promise(done => { letGo = done; go(); });
+            });
+          } catch (_) { go(); return; }
+          Promise.resolve(asked).then(
+            () => { if (readOnly === 'moved' && channel) channel.postMessage('given'); },   // let go on request: the lock is free now, and the asking window is told
+            () => { if (letGo) { letGo = null; stop('moved'); } go(); });                    // taken from this window, or not allowed on this page (then there is no gate)
+        };
+        ask();
+        listen();
+      });
+    }
+    /** Windows of one browser talk here: 'take' asks the window that holds the plan to hand it over, 'given' says it has. */
+    function listen() {
+      if (channel || typeof root.BroadcastChannel !== 'function') return;
+      try { channel = new root.BroadcastChannel(LOCK); } catch (_) { channel = null; return; }
+      channel.onmessage = event => {
+        if (event.data === 'take' && letGo) handOver();
+        else if (event.data === 'given' && given) given();
+      };
+    }
+    /** The window that holds the plan gives it up: what is waiting is written first (the write is synchronous), and nothing after. */
+    function handOver() {
+      clearTimeout(timer);
+      if (dirty && !saving) flush();
+      const done = letGo; letGo = null;
+      stop('moved');
+      done();
+    }
+    /**
+     * Called in a window that only shows the plan: have the plan handed to this one. Resolves when the lock is free: given
+     * up by its holder, or taken from it when it has not answered within 1.5 s (a page the browser has put to sleep). The
+     * page then reloads, and takes the lock as it starts.
+     */
+    function takeOver() {
+      const locks = root.navigator && root.navigator.locks;
+      if (!locks || typeof locks.request !== 'function') return Promise.resolve(true);
+      return new Promise(resolve => {
+        const end = () => { if (!given) return; given = null; resolve(true); };
+        given = end;
+        listen();
+        if (channel) channel.postMessage('take');
+        setTimeout(() => {
+          if (!given) return;
+          try { Promise.resolve(locks.request(LOCK, { mode: 'exclusive', steal: true }, () => { end(); return new Promise(() => {}); })).catch(end); } catch (_) { end(); }
+        }, 1500);
+      });
+    }
 
     async function connect() {
       try { db = root.claude && typeof root.claude.use === 'function' ? await timeout(root.claude.use('db'), LOAD_TIMEOUT_MS + 2000, 'Storage') : null; } catch (_) { db = null; }
       if (db) { backend = 'cloud'; return backend; }
       try { root.localStorage.setItem('lrf-next:probe', '1'); root.localStorage.removeItem('lrf-next:probe'); backend = 'device'; } catch (_) { backend = 'memory'; }
+      if (backend === 'device') await gate();
       return backend;
     }
 
@@ -90,7 +178,9 @@
         return fromParts(parts, buckets);
       }
       if (backend === 'device') {
+        count = countNow();   // read before the plan: a write that lands between the two is then seen at this window's next write
         const text = root.localStorage.getItem(DEVICE_KEY);
+        read = true;
         return text ? JSON.parse(text) : null;
       }
       return null;
@@ -128,17 +218,29 @@
       saved = next.parts; buckets = next.buckets;
     }
 
+    /**
+     * One write of the plan to this browser's storage. The count is read again first: if it is not the one this window last
+     * read or wrote, another window has written since, and nothing is written. The count is written before the plan: a page
+     * that ends between the two leaves a moved count over an old plan, which only makes other windows stop, where the other
+     * order could let a window write over a newer plan unseen.
+     */
+    function writeDevice(core) {
+      const text = JSON.stringify(core);
+      if (countNow() !== count) { stop('changed'); return false; }
+      root.localStorage.setItem(COUNT_KEY, String(count + 1)); count += 1;
+      root.localStorage.setItem(DEVICE_KEY, text);
+      return true;
+    }
     async function flush() {
-      if (held || saving || !dirty) return;
+      if (held || readOnly || saving || !dirty) return;
       saving = true;
       while (dirty) {
         const core = dirty; dirty = null;
         status('saving');
         try {
           if (backend === 'cloud') await writeCloud(core);
-          else if (backend === 'device') root.localStorage.setItem(DEVICE_KEY, JSON.stringify(core));
+          else if (backend === 'device' && !writeDevice(core)) { dirty = dirty || core; saving = false; return; }
           failed = false;
-          if (!dirty) status('saved');
         } catch (error) {
           failed = true; dirty = dirty || core; saving = false;
           status('error', (error && (error.message || error.code)) || 'The plan could not be saved.');
@@ -146,11 +248,12 @@
         }
       }
       saving = false;
+      status('saved');   // said once nothing is waiting or being written: whoever hears it can ask `pending` and be told no
     }
-    let timer = null;
     /** Queue a save; bursts of edits collapse into one write. */
     function save(core) {
       dirty = core;
+      if (readOnly) { status('elsewhere', readOnly); return; }
       if (held) { status('held'); return; }
       if (backend === 'memory') { status('unsaved'); return; }
       status('pending');
@@ -167,9 +270,21 @@
     async function saveNow(core) {
       clearTimeout(timer); dirty = core;
       if (held) { status('held'); throw new Error('The plan stored here could not be opened and is being kept as it is.'); }
+      if (readOnly) { status('elsewhere', readOnly); throw new Error(ELSEWHERE[readOnly]); }
       if (backend === 'memory') { status('unsaved'); return; }
       await flush();
+      if (readOnly) throw new Error(ELSEWHERE[readOnly]);
       if (failed) throw new Error('The plan could not be saved.');
+    }
+    if (root.addEventListener) {
+      // A save that is waiting is written as the page is hidden or put away: on a phone its timer may never fire again.
+      const hidden = () => { if (backend !== 'memory' && dirty && !saving) { clearTimeout(timer); flush(); } };
+      root.addEventListener('pagehide', hidden);
+      if (root.document && root.document.addEventListener) root.document.addEventListener('visibilitychange', () => { if (root.document.visibilityState === 'hidden') hidden(); });
+      // Another window has written the plan or its count: this one stops at once, before another change is made in it. Only a
+      // write this window has not read stops it: a page that is reloaded hears of the last write of the page before it, which
+      // is the very plan it opened with, and a page that has not yet read the plan will read whatever is there.
+      root.addEventListener('storage', event => { if (backend === 'device' && read && (event.key === DEVICE_KEY || event.key === COUNT_KEY || event.key === null) && (!event.storageArea || event.storageArea === root.localStorage) && countNow() !== count) stop('changed'); });
     }
 
     /** Large read-only text (the attic) kept beside the plan, in the cloud only. */
@@ -217,7 +332,7 @@
       if (manifest.exists) await db.doc(`blob-${name}/manifest`).delete();
     }
 
-    return { connect, load, save, saveNow, retry, hold, release, raw, get held() { return held; }, watch, saveBlob, loadBlob, clearBlob, get backend() { return backend; }, get pending() { return !!dirty || saving; } };
+    return { connect, load, save, saveNow, retry, hold, release, raw, get held() { return held; }, takeOver, get readOnly() { return readOnly; }, get count() { return count; }, watch, saveBlob, loadBlob, clearBlob, get backend() { return backend; }, get pending() { return !!dirty || saving; } };
   }
 
   root.LRFStore = { create, toParts, fromParts };

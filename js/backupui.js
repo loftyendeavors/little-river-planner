@@ -1,4 +1,4 @@
-/* Little River Farm Planner — the two windows opened from Backup: Cloud sync and Snapshots, and the strip that asks which plan to keep. */
+/* Little River Farm Planner — the two windows opened from Backup: Cloud sync and Snapshots, the strip that asks which plan to keep, and the strip of a window that only shows the plan. */
 (function (root) {
   'use strict';
   const App = root.LRFApp, UI = root.LRFUI, { h } = UI;
@@ -40,6 +40,7 @@
   }
   function strip() {
     const host = $('syncStrip'), c = App.syncInfo(), show = App.state.ready && (c.status === 'conflict' || !!c.offer);
+    if (App.windowState()) { host.hidden = true; host.replaceChildren(); return; }   // not in a window that only shows the plan: nothing can be chosen there
     host.hidden = !show;
     if (!show) { host.replaceChildren(); return; }
     const busy = !!c.busy, btn = (id, label, run, kind) => h('button.btn' + (kind ? '.' + kind : ''), { type: 'button', id, disabled: busy, onclick: run }, label);
@@ -55,6 +56,28 @@
       host.replaceChildren(
         h('p', { id: 'syncStripText' }, h('b', 'A newer plan is in the cloud.'), ' Nothing has been changed here since the last sync. ', h('span.bk-pair', h('span.bk-label', 'In the cloud'), cloudFacts(c.cloud))),
         h('div.first-run-actions', btn('stripOpen', 'Open it', openCloud, 'primary'), btn('stripLater', 'Not now', () => sync().snooze())));
+    }
+  }
+
+  // ───────────────────────── a window that only shows the plan ─────────────────────────
+  // One window of a browser holds the plan (js/store.js). Any other says so across the page, in every view, with the one thing to do about it.
+  let taking = false;
+  function windowStrip() {
+    const host = $('windowStrip'), why = App.windowState(), show = App.state.ready && !!why;
+    if (!host) return;
+    host.hidden = !show;
+    if (!show) { host.replaceChildren(); return; }
+    const reload = () => root.location.reload(), btn = (id, label, run, title) => h('button.btn.primary', { type: 'button', id, title, disabled: taking, onclick: run }, label);
+    if (why === 'window') {
+      host.setAttribute('aria-label', 'The planner is open in another window');
+      host.replaceChildren(
+        h('p', { id: 'windowStripText' }, h('b', 'The planner is open in another window of this browser.'), ' Changes are made there.'),
+        h('div.first-run-actions', btn('windowUse', taking ? 'Asking the other window…' : 'Use this window instead', async () => { taking = true; windowStrip(); await App.useThisWindow(); }, 'The other window saves what it has and stops taking changes. This one opens the plan again and carries on.')));
+    } else {
+      host.setAttribute('aria-label', why === 'moved' ? 'The plan is being worked on in another window' : 'The plan was changed in another window');
+      host.replaceChildren(
+        h('p', { id: 'windowStripText' }, h('b', why === 'moved' ? 'The plan is now being worked on in another window.' : 'The plan was changed in another window.'), ' Nothing done here is saved.'),
+        h('div.first-run-actions', btn('windowReload', 'Reload', reload, 'Opens the plan again as it is stored now')));
     }
   }
 
@@ -217,7 +240,8 @@
     $('snapBtn').addEventListener('click', () => { closeMenu(); openSnaps(); });
     if ($('firstCloud')) $('firstCloud').addEventListener('click', openSync);
     App.on('sync', () => { menu(); strip(); drawSync(); if (snapDlg && App.syncInfo().status === 'in-step') drawSnaps(); });
-    App.on('plan', () => { menu(); strip(); if (syncDlg && App.syncInfo().configured) drawSync(); });
+    App.on('plan', () => { menu(); strip(); windowStrip(); if (syncDlg && App.syncInfo().configured) drawSync(); });
+    App.on('window', () => { strip(); windowStrip(); });
     App.on('snaps', drawSnaps);
     menu();
   }

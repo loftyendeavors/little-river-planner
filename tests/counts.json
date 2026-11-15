@@ -41,9 +41,11 @@
 
   "stepF, compact": 74,
 
+  "store": 31,
+
   "succession": 31,
 
-  "sync client": 63,
+  "sync client": 81,
 
   "sync service": 112,
 
@@ -62,7 +64,7 @@
  },
  "build": {
 
-  "sync client, built site": 63,
+  "sync client, built site": 81,
 
   "the built site": 1
 
@@ -83,7 +85,9 @@
 
   "step2a": 50,
 
-  "trays": 31
+  "trays": 31,
+
+  "windows": 17
 
  },
  "app2": {

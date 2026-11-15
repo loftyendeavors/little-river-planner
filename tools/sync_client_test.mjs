@@ -27,7 +27,7 @@ function world() {
 const fnv = text => { let x = 2166136261; for (let i = 0; i < text.length; i++) x = Math.imul(x ^ text.charCodeAt(i), 16777619); return (x >>> 0).toString(36); };
 /** A stand-in for the app in one browser. */
 function browser(w, name, plan) {
-  const b = { name, plan: plan || null, loads: 0, said: [], opened: [], gotPhotos: [], map: null, thumbs: null, held: false, saved: null, timers: [], openOk: true };
+  const b = { world: w, name, plan: plan || null, loads: 0, said: [], opened: [], gotPhotos: [], map: null, thumbs: null, held: false, saved: null, timers: [], openOk: true };
   const host = {
     mode: () => (b.held ? 'held' : b.plan ? 'plan' : 'sample'),
     key: () => fnv(JSON.stringify(b.plan)),
@@ -43,6 +43,21 @@ function browser(w, name, plan) {
   /** Let the waiting timers fire (a send a few seconds after a change, a retry), but not a request's own time limit. */
   b.tick = async () => { for (let i = 0; i < 6; i++) { const due = b.timers.filter(t => t.ms < 400000 && t.ms !== Sync.timing.timeout); if (!due.length) break; b.timers = b.timers.filter(t => !due.includes(t)); for (const t of due) t.fn(); await b.sync.run('settle').catch(() => {}); } return b.sync.info(); };
   b.change = async edit => { b.plan = { ...b.plan, plantings: [...b.plan.plantings, { id: edit }] }; b.sync.touch(); return b.tick(); };
+  b.host = host;
+  b.make();
+  return b;
+}
+/**
+ * The same stand-in with the browser's own storage: the plan it holds and the count beside it. A save can be refused (`full`:
+ * no room) or still be waiting when the plan is sent (`late`). `start` is the page opened again: it holds what storage holds.
+ */
+function stored(b, disk) {
+  b.disk = disk || { plan: b.plan, n: 1 }; b.plan = b.disk.plan; b.full = false; b.late = false;
+  b.host.stored = () => ({ n: b.disk.n, ok: b.disk.plan === b.plan });
+  b.save = () => { if (b.full) return false; b.disk = { plan: b.plan, n: b.disk.n + 1 }; b.sync.saved(); return true; };
+  b.edit = async (id, send = true) => { b.plan = { ...b.plan, plantings: [...b.plan.plantings, { id }] }; if (!b.late) b.save(); if (!send) return b.sync.info(); b.sync.touch(); return b.tick(); };
+  b.start = () => { const next = browser(b.world, b.name); next.saved = b.saved; return stored(next, b.disk); };
+  b.note = () => JSON.parse(b.saved || '{}');
   b.make();
   return b;
 }
@@ -200,6 +215,62 @@ await b.sync.dropSnap('snap', 's-abc-123'); check('and deleted', !(await a.sync.
   check('a signed-in device hands the reader the service\'s address, its token and the version the service said', !!ls && ls.base === b.sync.info().url && /^v1\./.test(ls.key) && ls.v === 2 && ls.key !== KEY, ls && { base: ls.base, v: ls.v });
   check('a device that is not connected hands it nothing', fresh.make().linkService() === null);
 }
+// ── a stored plan that is behind is never sent by itself ──
+check('a plan that is behind is not “changed here”: in step with the cloud it is a question, never a send', Sync.decide({ base: 'e1', cloud: 'e1', dirty: true, sample: false, behind: true }) === 'conflict' && Sync.decide({ base: 'e1', cloud: 'e1', dirty: true, sample: false, behind: false }) === 'push');
+check('behind changes nothing else: unchanged it is in step, with the cloud moved it is a question or an offer, with an empty cloud it is sent', Sync.decide({ base: 'e1', cloud: 'e1', dirty: false, sample: false, behind: true }) === 'in-step' && Sync.decide({ base: 'e1', cloud: 'e2', dirty: true, sample: false, behind: true }) === 'conflict'
+  && Sync.decide({ base: 'e1', cloud: 'e2', dirty: false, sample: false, behind: true }) === 'newer' && Sync.decide({ base: 'e1', cloud: null, dirty: true, sample: false, behind: true }) === 'push-first');
+check('a browser that cannot say what its storage holds keeps neither word of it', b.sync.info().status === 'in-step' && !('n' in JSON.parse(b.saved)) && !('stored' in JSON.parse(b.saved)), Object.keys(JSON.parse(b.saved)));
+const sends = world_ => world_.calls.filter(c => c === 'PUT /plan').length;
+{ // the save was refused (no room), the plan was sent all the same, and the page is opened again: storage holds the plan from before
+  const w6 = world(), c = stored(browser(w6, 'c', planOf(3, 'c'))); await c.sync.connect(URL_, KEY, 'C');
+  check('in step, the browser notes the count beside its stored plan, and that the plan sent is the one stored', c.note().n === c.disk.n && c.note().stored === true, c.note());
+  c.full = true; const sent = await c.edit('never-stored');
+  check('a plan whose save was refused is still sent, and the note says it is not the one stored', sent.status === 'in-step' && (await w6.text('plan')).includes('never-stored') && c.note().stored === false && !JSON.stringify(c.disk.plan).includes('never-stored'), [sent.status, c.note().stored]);
+  const before = sends(w6), c2 = c.start(), i1 = await c2.sync.start(); await c2.tick();
+  check('a refused save, then a new start: nothing is sent, and the page asks which plan to keep', sends(w6) === before && c2.sync.info().status === 'conflict' && i1.status === 'conflict' && !i1.first && (await w6.text('plan')).includes('never-stored'), [sends(w6) - before, i1.status]);
+  const i2 = await c2.edit('made-while-asking'); await c2.sync.run('poll');
+  check('a change made while it asks is kept here and not sent either', i2.status === 'conflict' && sends(w6) === before && (await w6.text('plan')).includes('never-stored') && !(await w6.text('plan')).includes('made-while-asking'), i2.status);
+  check('“open the cloud’s plan” brings back what was sent', (await c2.sync.openCloud()) === true && c2.plan.plantings.some(x => x.id === 'never-stored') && c2.sync.info().status === 'in-step');
+  c2.save(); const i3 = await c2.edit('after-the-choice');
+  check('and after the choice a change is sent again', i3.status === 'in-step' && (await w6.text('plan')).includes('after-the-choice') && c2.note().stored === true);
+}
+{ // the stored plan's count is under the one noted: an older text was put back under it
+  const w7 = world(), c = stored(browser(w7, 'c', planOf(3, 'c'))); await c.sync.connect(URL_, KEY, 'C');
+  const older = c.disk; await c.edit('sent-and-stored'); await c.edit('sent-and-stored-too');
+  check('each send notes the count as it stands', c.note().n === c.disk.n && c.disk.n === older.n + 2 && c.note().stored === true, [c.note().n, c.disk.n]);
+  c.disk = { plan: { ...older.plan, plantings: [...older.plan.plantings, { id: 'written-without-looking' }] }, n: older.n + 1 };
+  const before = sends(w7), c2 = c.start(), i1 = await c2.sync.start(); await c2.tick();
+  check('a plan behind by its count, then a new start: nothing is sent, and the page asks which plan to keep', sends(w7) === before && i1.status === 'conflict' && c2.sync.info().status === 'conflict' && (await w7.text('plan')).includes('sent-and-stored-too'), [sends(w7) - before, i1.status]);
+  check('“keep this plan” is still his to choose, and the cloud keeps the plan it replaces', (await c2.sync.keepMine()) === true && (await w7.text('plan')).includes('written-without-looking') && [...w7.store.keys()].some(k => k.startsWith('snap/auto-')) && c2.sync.info().status === 'in-step');
+  // the count under the one noted, but the very plan that was noted: nothing is behind in it
+  const w8 = world(), e = stored(browser(w8, 'e', planOf(3, 'e'))); await e.sync.connect(URL_, KEY, 'E'); await e.edit('one'); await e.edit('two');
+  e.disk = { plan: e.disk.plan, n: 1 };
+  const e2 = e.start(), i4 = await e2.sync.start(), i5 = await e2.edit('three');
+  check('a lower count over the very plan that was noted is in step, and the next change is sent', i4.status === 'in-step' && i5.status === 'in-step' && (await w8.text('plan')).includes('three'), [i4.status, i5.status]);
+}
+{ // changed here and not behind: stored, and the page closed before it was sent
+  const w9 = world(), c = stored(browser(w9, 'c', planOf(3, 'c'))); await c.sync.connect(URL_, KEY, 'C'); await c.edit('sent');
+  await c.edit('stored-and-not-sent', false);
+  const before = sends(w9), c2 = c.start(), i1 = await c2.sync.start();
+  check('a plan changed here and not behind is sent at the next start', i1.status === 'in-step' && sends(w9) === before + 1 && (await w9.text('plan')).includes('stored-and-not-sent'), [i1.status, sends(w9) - before]);
+  // sent while its save was still waiting: the note says "not stored" until the store has written, then says it is
+  c2.late = true; await c2.edit('sent-before-it-was-stored');
+  const early = c2.note().stored; c2.save();
+  check('a plan sent before its save was written is noted as stored once it is', early === false && c2.note().stored === true && c2.note().n === c2.disk.n, [early, c2.note()]);
+  c2.late = false; await c2.edit('a-later-change-stored-and-not-sent', false);
+  const c3 = c2.start(), i2 = await c3.sync.start();
+  check('and a later change stored there is sent at the next start: it is not behind', i2.status === 'in-step' && (await w9.text('plan')).includes('a-later-change-stored-and-not-sent'), i2.status);
+  // the note of a page that kept neither word: not known is never behind
+  await c3.edit('before-the-old-note'); await c3.edit('changed-under-an-old-note', false);
+  const old = c3.note(); delete old.n; delete old.stored; c3.saved = JSON.stringify(old); c3.disk = { plan: c3.disk.plan, n: 0 };
+  const c4 = c3.start(), i3 = await c4.sync.start();
+  check('a note with neither word, and no count beside the plan: a changed plan is sent', i3.status === 'in-step' && (await w9.text('plan')).includes('changed-under-an-old-note') && c4.note().n === c4.disk.n, i3.status);
+  // a window that only shows the plan
+  const kept = c4.saved, calls = w9.calls.length; c4.held = true; c4.host.readOnly = () => true;
+  c4.sync.rename('Another name'); const i6 = await c4.sync.run('poll'); c4.sync.touch(); await c4.tick();
+  check('a window that only shows the plan sends nothing, asks the cloud nothing, and leaves the browser’s note as it was', i6.status === 'held' && c4.saved === kept && w9.calls.length === calls, [i6.status, w9.calls.length - calls]);
+}
+
 // ── leaving ──
 a.sync.disconnect();
 check('and after disconnecting the reader gets nothing', a.sync.linkService() === null);

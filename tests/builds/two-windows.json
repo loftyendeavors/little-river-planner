@@ -1,0 +1,20 @@
+{
+ "build": "Two windows of one browser no longer lose a change: one window holds the plan and any other only shows it; a count beside the stored plan is checked at every write; a stored plan that is behind what was last sent is never sent by itself; the page saves when it is hidden.",
+ "words": [
+  "main.js"
+ ],
+ "code": [
+  "app.js",
+  "backupui.js",
+  "store.js",
+  "sync.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "index.html",
+  "sw.js",
+  "css/app.css"
+ ],
+ "screens": []
+}

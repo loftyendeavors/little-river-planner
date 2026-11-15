@@ -35,6 +35,8 @@ const differ = (a, b) => {
   return out;
 };
 const eng = E.create(core, Lib), base = F.build(eng), old = F0.build(E0.create(core, Lib));
+// the build before may itself know of things (any build after the one that brought them in): what it is held to then differs
+const KNEW = typeof E0.create(core, Lib).thingsOf === 'function';
 
 // ── a plan nobody has touched ──
 check('a plan with no second thing is forecast exactly as the build before forecast it: every row, every total, every day', differ(base, old).length === 0, differ(base, old).slice(0, 4));
@@ -130,7 +132,7 @@ if (placed && bedded && packed) {
       const mo = F.build(say('t-b')), mf = F.build(say('first'));
       check('in the forecast only that crop’s rows move, either way', others(mo, id).length === 0 && others(mf, id).length === 0 && differ(mo, m).length > 0 && differ(mf, m).length > 0);
       const q = clone(plan); q.plantings.find(x => x.id === pick).gives = 't-b';
-      check('the build before forecasts a plan that holds such a word as if it were not there', differ(F0.build(E0.create(q, Lib)), F0.build(E0.create(plan, Lib))).length === 0);
+      check('the build before forecasts a plan that holds such a word as if it were not there; or, where it reads the word itself, exactly as this build does', [F0.build(E0.create(plan, Lib)), F.build(E.create(q, Lib))].some(x => differ(F0.build(E0.create(q, Lib)), x).length === 0));
     }
     // its own way of picking
     const weekly = E.create(withThings(id, { 't-b': { ...thing, pattern: 'weekly', yield: 0.1 } }), Lib), w = partsOf(weekly, id).filter(x => x.parts);
@@ -178,7 +180,7 @@ if (placed && bedded && packed) {
   // ── the build before, given a plan that holds things ──
   {
     const id = bedded.id, plan = withThings(id, { 't-b': { id: 't-b', n: 1, name: 'Small ones', from: 'bed', unit: 'lb', price: 5, yield: 0.5, share: 30 } }, { price: 4 }), was = F0.build(E0.create({ ...core, assumptions: { v: 1, crops: {}, varieties: {}, sell: { [id]: { price: 4 } } } }, Lib));
-    check('the build before forecasts such a plan as if the thing had not been added', differ(F0.build(E0.create(plan, Lib)), was).length === 0);
+    check('the build before forecasts such a plan as if the thing had not been added; or, where it knows things itself, exactly as this build does', differ(F0.build(E0.create(plan, Lib)), KNEW ? F.build(E.create(plan, Lib)) : was).length === 0);
     const again = IO0.split(IO0.join(clone(plan), { v: 1, rest: {}, varieties: {} })).core, bare = clone(core); delete bare.assumptions;
     const carried = IO0.carry({ ...clone(plan), lrfNext: {} }, bare);
     check('and loses none of them: they are in the file it writes, and it carries them with the list onto a backup that has no list', JSON.stringify(again.assumptions) === JSON.stringify(plan.assumptions) && JSON.stringify(carried.plan.assumptions) === JSON.stringify(plan.assumptions));

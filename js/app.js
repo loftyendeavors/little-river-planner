@@ -23,6 +23,12 @@
   const clone = v => JSON.parse(JSON.stringify(v));
 
   let store = null;
+  /** Why this window takes no change, in words: the plan is held by, or was changed in, another window of this browser (see js/store.js). '' in the window that holds the plan. */
+  const elsewhere = () => ({
+    window: 'This window only shows the plan: the planner is open in another window of this browser, and changes are made there.',
+    moved: 'This window only shows the plan: it is now being worked on in another window.',
+    changed: 'This window takes no more changes: the plan was changed in another window. Reload it to carry on.'
+  }[store && store.readOnly] || '');
   const rebuild = () => { state.engine = E.create(state.plan, Lib); };
   /** What this app keeps beside a plan, apart from the plan's own records. It travels in a plan file's own note (see withOwn). */
   const OWN_KEYS = ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting', 'supplies'];
@@ -111,6 +117,7 @@
   }
   function commit(label, ops, options = {}) {
     if (!ops.length) return false;
+    if (elsewhere()) return refuse(elsewhere());
     // A sowing day set by hand belongs to the date it was set against: when the planting moves, the plan's own day applies again.
     ops = ops.map(op => { if (op.kind || !op.before || !op.after || !op.after.sowOn || op.after.liveTray || op.before.date === op.after.date || op.before.sowOn !== op.after.sowOn) return op; const after = { ...op.after }; delete after.sowOn; return { ...op, after }; });
     if (!isSample()) ops = noted(ops);
@@ -134,6 +141,7 @@
     return l.kind === 'saved' ? { kind: 'saved', label: l.label, at: l.at, canUndo: state.undo[state.undo.length - 1] === l.step } : { kind: 'refused', text: l.text, at: l.at };
   }
   function undo() {
+    if (elsewhere()) { refuse(elsewhere()); return; }
     const step = state.undo.pop();
     if (!step) return;
     state.last = null;
@@ -143,6 +151,7 @@
     toast(`Undid: ${step.label}`);
   }
   function redo() {
+    if (elsewhere()) { refuse(elsewhere()); return; }
     const step = state.redo.pop();
     if (!step) return;
     state.last = null;
@@ -841,6 +850,7 @@
     const list = [...(files || [])].filter(Boolean);
     if (!list.length) return null;
     if (isSample()) { toast('Load your plan first. Its photos can be added after that.'); return null; }
+    if (elsewhere()) { refuse(elsewhere()); return null; }
     const out = { map: null, added: 0, had: 0, strange: 0, problems: [] }, tally = r => { out.added += r.added; out.had += r.had; out.strange += r.strange; };
     const mapFrom = async (bytes, mime, force) => { if (force || !state.mapImageUrl) out.map = await setMapPhoto(bytes, mime); };
     for (const file of list) {
@@ -1603,6 +1613,7 @@
     } catch (_) { /* the plan is still usable without its photo */ }
   }
   async function importBackup(file, extra = {}) {
+    if (elsewhere()) return refuse(elsewhere());   // a whole plan is never loaded in a window that only shows the plan: nothing is kept, replaced or saved
     let parsed;
     try { parsed = await readBackupFile(file); IO.assertPlan(parsed.plan); } catch (error) { toast(`That file could not be read: ${error.message}`); return false; }
     // A file this app saved carries a note of what was settled here; any other full backup has no such note.
@@ -1730,6 +1741,7 @@
   async function saveToFolder(options = {}) {
     clearTimeout(folderTimer);
     if (!Folder || isSample()) return { skipped: 'sample' };
+    if (elsewhere()) return { skipped: 'window' };   // the folder is written by the window that holds the plan
     const done = await Folder.save(folderPayload, options);
     if (done.error) toast(`The plan folder could not be written: ${done.error}`);
     return done;
@@ -1744,6 +1756,7 @@
   async function saveNow() {
     const f = folderInfo();
     if (state.unreadable) { toast('Not saved: the plan stored in this browser could not be opened and is kept as it is. The choices are at the top of the page.'); return null; }
+    if (elsewhere()) { refuse(elsewhere()); return null; }
     if (isSample()) { toast('This is the sample plan. Load your backup first.'); return null; }
     if (f.needsPermission) { await reconnectFolder(); return null; }
     if (f.conflict) { toast('The folder holds a different plan. Choose which to keep under Backup.'); return null; }
@@ -1878,7 +1891,7 @@
   }
   function startOfDay() {
     const today = E.d2s(new Date());
-    if (snapDay === today || !state.ready || !Snaps) return;
+    if (snapDay === today || !state.ready || !Snaps || elsewhere()) return;
     snapDay = today;
     snapshot(`Start of ${day(new Date())}`, { auto: true, skipSame: true, daily: today, plan: state.plan });
   }
@@ -1903,6 +1916,7 @@
   const snapshotText = row => (row.here ? Snaps.text(row.id) : sync.getSnap(row.kind, row.id));
   /** Make the plan what it was at a snapshot. The plan as it is now is kept as a snapshot first. */
   async function restoreSnapshot(row, options = {}) {
+    if (elsewhere()) return refuse(elsewhere());
     let text = null;
     try { text = await snapshotText(row); } catch (error) { toast(`That snapshot could not be read: ${(error && error.message) || 'it is out of reach'}`); return false; }
     if (!text) { toast('That snapshot is no longer kept.'); return false; }
@@ -1967,7 +1981,8 @@
   function startSync(photosReady) {
     if (!Sync || sync) return;
     sync = Sync.create({
-      mode: () => (state.unreadable ? 'held' : isSample() ? 'sample' : 'plan'),
+      mode: () => (state.unreadable || elsewhere() ? 'held' : isSample() ? 'sample' : 'plan'),   // a window that only shows the plan sends and opens nothing by itself
+      stored: () => (store.backend === 'device' ? { n: store.count, ok: !store.pending } : null), readOnly: () => !!elsewhere(),
       key: () => contentKey(),
       payload: async () => { const plan = state.plan, key = contentKey(plan), made = await planText(plan); return { ...made, key, plantings: plan.plantings.length, waiting: ((plan.lrfNext || {}).waiting || []).length, year: planYear() }; },
       extrasKey, extras: () => photoFiles(), photos: takePhotos,
@@ -1989,6 +2004,8 @@
     const el = document.getElementById('saveState');
     if (!el) return;
     statusNow = info;
+    // A window that only shows the plan says so here whatever was last reported: nothing is saved from it.
+    if (elsewhere()) { el.textContent = 'Not saving in this window'; el.dataset.state = 'error'; el.title = elsewhere(); delete el.dataset.ask; return; }
     const f = folderInfo(), where = info.backend === 'cloud' ? 'Saved' : info.backend === 'device' ? 'Saved on this device' : 'Not saved';
     let text = info.label || { saving: 'Saving…', pending: 'Saving…', saved: where, error: 'Save failed · click to retry', unsaved: 'Not saved in this view', loading: 'Opening plan…', sample: 'Sample plan', held: 'Not saving · stored plan unreadable' }[info.state] || where;
     if (isSample() && info.state === 'saved') text = 'Sample plan';
@@ -2020,7 +2037,8 @@
   }
   async function start() {
     showStatus({ backend: 'cloud', state: 'loading' });
-    store = root.LRFStore.create(showStatus);
+    // What the store reports goes to the indicator. Sync is told when the plan has reached the browser's storage, and the page when this window stops taking changes.
+    store = root.LRFStore.create(info => { showStatus(info); if (info.state === 'saved' && sync) sync.saved(); if (info.state === 'elsewhere') { emit('window'); if (sync) sync.run('window'); } });
     const getJSON = path => fetch(path).then(r => r.ok ? r.json() : null).catch(() => null);
     const inlined = root.LRF_BUNDLED || null;   // the single-file build carries its data in the page
     const bundledInfo = inlined ? Promise.resolve(inlined.info) : getJSON('data/plan-info.json');
@@ -2087,6 +2105,14 @@
     root.location.reload();
   }
 
+  /** In a window that only shows the plan: have the plan handed to this one. The page reloads, and holds the plan as it starts. */
+  async function useThisWindow() {
+    if (!store || !store.readOnly) return false;
+    await store.takeOver();
+    root.location.reload();
+    return true;
+  }
+
   /** Keep the plan saved here and stop offering the one this copy carries. */
   function keepMine() {
     if (!state.newer) return;
@@ -2102,8 +2128,8 @@
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
-    saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
+    saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (elsewhere()) { refuse(elsewhere()); return null; } if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
     saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, editNursery, setSupply, setLiveSow, traysToMonday: () => applyTrayStart(),
-    snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, sync: () => sync, syncInfo, linkService: () => (sync && sync.linkService ? sync.linkService() : null), snapshotsKept: () => !!Snaps
+    snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, windowState: () => (store ? store.readOnly : ''), useThisWindow, sync: () => sync, syncInfo, linkService: () => (sync && sync.linkService ? sync.linkService() : null), snapshotsKept: () => !!Snaps
   };
 })(window);
