@@ -113,8 +113,8 @@ with sync_playwright() as pw:
 
     # ── Tasks ──
     js("A.setView('sow'); return 1;"); wait(1000)
-    late = js("const s = document.querySelector('#swWrap details summary b'); return s ? s.textContent : null;")
-    check("the line for earlier tasks ends its first sentence before the next begins", late is not None and late.endswith("not recorded."), late)
+    late = js("const e = document.querySelector('#swWrap .tk-empty p'), n = document.querySelector('#swWrap .tk-next'); return e ? [e.textContent, n ? n.textContent : ''] : null;")
+    check("an empty day says so in a sentence that ends, and names the next task to come", late is not None and late[0] == "Nothing is planned for today." and late[1].startswith("Next: "), late)
     look("Tasks")
 
     # ── the Nursery ──

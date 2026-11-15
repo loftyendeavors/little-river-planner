@@ -175,94 +175,105 @@ with sync_playwright() as pw:
     check("what was written for the old toggle still works: shutting the benches is going back to Bench room, opening them is Set-up", js("return NV.tab()") == "room" and js("B.openEditor(true); return NV.tab();") == "setup")
     # the way from the Nursery to its list in Tasks
     click('#nuTabs [data-tab="room"]'); click("#nuToTasks", 600)
-    to = js("return { view: S.view, scope: V.scope(), title: txt('wkTitle'), pressed: [...document.querySelectorAll('#wkScope button')].map(b => b.getAttribute('aria-pressed')) };")
-    check("“Open the nursery’s list” on Bench room goes to Tasks with only the nursery’s tasks listed", to["view"] == "sow" and to["scope"] == "nursery" and to["title"] == "This week in the nursery" and to["pressed"] == ["false", "true", "false"], to)
-    js("V.setScope('all');"); wait(300)
+    to = js("return { view: S.view, scope: V.scope(), title: txt('wkTitle'), where: V.where(), today: A.today() };")
+    check("“Open the nursery’s list” on Bench room goes to Tasks, on the week the planner's date is in, with the Nursery's list the one chosen", to["view"] == "sow" and to["scope"] == "nursery" and to["where"]["tab"] == "nursery" and to["where"]["week"] == js("return now") and to["where"]["day"] == to["today"] and to["title"] == "Today", to)
+    js("V.setScope('all'); V.showWeek(now);"); wait(400)
+    for i in range(page.locator(".tk-more").count()): page.locator(".tk-more").first.click(); wait(250)
 
     # ── Tasks: nursery and field apart ──
-    tk = js("""const halves = [...document.querySelectorAll('.view-sow .sw-wrap > .wk-half')], w = want();
-      const kinds = h => [...h.querySelectorAll(':scope > section')].map(s => s.dataset.kind), lines = [...document.querySelectorAll('.view-sow .sw-wrap > .wk-half tbody tr[data-line]')].map(r => r.dataset.line);
-      return { scope: V.scope(), title: txt('wkTitle'), halves: halves.map(h => ({ id: h.dataset.half, head: (h.querySelector('.wk-half-head h3') || {}).textContent, note: (h.querySelector('.wk-half-head span') || {}).textContent, about: (h.querySelector('.wk-half-head small') || {}).textContent || '', kinds: kinds(h), rows: h.querySelectorAll('tbody tr[data-line]').length })),
-        want: w, lines: lines.length, unique: new Set(lines).size, scopeBtns: [...document.querySelectorAll('#wkScope button')].map(b => [b.dataset.scope, b.textContent, b.getAttribute('aria-pressed')]), chips: [...document.querySelectorAll('#wkKinds .chip')].map(c => c.textContent),
-        bench: !!document.querySelector('.view-sow .bn'), line: txt('bnLine'), print: txt('wkPrint'), tiles: [...document.querySelectorAll('.sw-stats .tr-stat')].map(e => [...e.children].map(x => x.textContent)),
-        rule: halves.map(h => { const hd = h.querySelector('.wk-half-head'); return hd ? parseFloat(getComputedStyle(hd).borderBottomWidth) : 0; }), side: document.querySelector('.view-sow').scrollWidth > document.querySelector('.view-sow').clientWidth + 1 };""")
-    hv = {h["id"]: h for h in tk["halves"]}
-    check("with everything listed the week is in two halves under their own headings, Nursery first and Field after it, each ruled off", [h["id"] for h in tk["halves"]] == ["nursery", "field"] and hv["nursery"]["head"] == "Nursery" and hv["field"]["head"] == "Field" and all(r >= 2 for r in tk["rule"]) and tk["scopeBtns"] == [["all", "Everything", "true"], ["nursery", "Nursery", "false"], ["field", "Field", "false"]] and tk["title"] == "This week’s tasks", tk)
-    check("the nursery's half is the raising of the plant: sowing in trays and rockwool, live trays, potting up, hardening off, and nothing else", "nursery" in hv and set(hv["nursery"]["kinds"]) <= set(NURSERY_SOW + NURSERY_JOBS) and hv["nursery"]["kinds"] == [k for k in NURSERY_SOW + NURSERY_JOBS if k in hv["nursery"]["kinds"]] and hv["nursery"]["rows"] == tk["want"]["nursery"] and tk["want"]["nursery"] > 0 and "Raising the plant" in hv["nursery"]["about"], hv.get("nursery"))
-    check("the field's half is planting, wherever the plant goes, with seed sown in the ground and crates moved out", "field" in hv and set(hv["field"]["kinds"]) <= set(FIELD_SOW + FIELD_JOBS) and hv["field"]["kinds"] == [k for k in FIELD_SOW + FIELD_JOBS if k in hv["field"]["kinds"]] and hv["field"]["rows"] == tk["want"]["field"] and tk["want"]["field"] > 0 and "towers" in hv["field"]["about"], hv.get("field"))
-    check("every task of the week is in one half and only one, and each heading says how many it holds", tk["lines"] == tk["want"]["nursery"] + tk["want"]["field"] and tk["unique"] == tk["lines"] and hv["nursery"]["note"] == f"{tk['want']['nursery']} tasks" and hv["field"]["note"] == f"{tk['want']['field']} tasks", [tk["lines"], tk["want"], hv["nursery"]["note"], hv["field"]["note"]])
-    check("the kinds to narrow by are on a row of their own, the nursery's before the field's, and the first no longer reads like the scope", tk["chips"][0] == "All kinds" and tk["chips"][1:] == [c for c in ["Seedling trays", "Tower seedlings", "Live trays", "Pot up", "Harden off", "Sown in the ground", "Plant out", "Move out"] if c in tk["chips"]] and len(tk["chips"]) >= 4, tk["chips"])
+    TK = """const today = A.today(), end = E.d2s(E.addDays(E.s2d(now), 6)), open = t => t.state === 'open' || t.state === 'part', ORD = [...NS, ...NJ, ...FS, ...FJ];
+      const left = half => V.tasks().filter(t => t.half === half && open(t) && t.due <= end), did = half => V.tasks().filter(t => t.half === half && t.on && t.on >= now && t.on <= end);
+      const lists = [...document.querySelectorAll('.view-sow .tk-list')].map(l => ({ id: l.dataset.half, head: l.querySelector('h3').textContent, count: l.querySelector('.tk-count').textContent, box: (r => [Math.round(r.left), Math.round(r.top), Math.round(r.width)])(l.getBoundingClientRect()),
+        rows: [...l.querySelectorAll('.tk-row:not(.done)')].map(r => [r.dataset.due, ORD.indexOf(r.dataset.kind), r.dataset.kind, r.dataset.line]), want: left(l.dataset.half).length, done: did(l.dataset.half).length }));"""
+    tk = js(TK + """ return { title: txt('wkTitle'), range: txt('tkRange'), where: V.where(), lists, gone: ['#wkKinds', '.sw-stats', '.sw-record', '#wkScope', '#wkSpan', '.wk-half'].filter(s => document.querySelector(s)), days: document.querySelectorAll('#tkDays .tk-day').length, mode: [...document.querySelectorAll('#tkMode button')].map(b => [b.textContent, b.getAttribute('aria-pressed')]),
+        bench: !!document.querySelector('.view-sow .bn'), line: txt('bnLine'), print: txt('wkPrint'), side: document.querySelector('.view-sow').scrollWidth > document.querySelector('.view-sow').clientWidth + 1,
+        cells: [...document.querySelectorAll('#tkDays .tk-day')].map(b => [b.dataset.day, b.querySelector('em').textContent]), wantCells: [0, 1, 2, 3, 4, 5, 6].map(i => { const k = E.d2s(E.addDays(E.s2d(now), i)), dn = V.tasks().filter(t => t.on === k).length, op = k < today ? 0 : V.tasks().filter(t => open(t) && (k === today ? t.due <= today : t.due === k)).length; return [k, op ? op.toLocaleString('en-US') : dn ? '✓ ' + dn : '']; }) };""")
+    hv = {h["id"]: h for h in tk["lists"]}
+    kinds = lambda h: [r[2] for r in hv[h]["rows"]]
+    check("the week is in two lists under their own headings, Nursery first and Field after it, side by side where there is room", [h["id"] for h in tk["lists"]] == ["nursery", "field"] and hv["nursery"]["head"] == "Nursery" and hv["field"]["head"] == "Field" and tk["title"] == "This week" and tk["where"]["day"] is None
+          and (hv["nursery"]["box"][0] < hv["field"]["box"][0] and hv["nursery"]["box"][1] == hv["field"]["box"][1] if WIDTH > 900 else True) and tk["mode"] == [["Day", "false"], ["Week", "true"]], tk)
+    check("the nursery's list is the raising of the plant: sowing in trays and rockwool, live trays, potting up, hardening off, and nothing else", "nursery" in hv and set(kinds("nursery")) <= set(NURSERY_SOW + NURSERY_JOBS) and len(hv["nursery"]["rows"]) == hv["nursery"]["want"] and hv["nursery"]["want"] > 0 and [r[:2] for r in hv["nursery"]["rows"]] == sorted([r[:2] for r in hv["nursery"]["rows"]]), hv.get("nursery"))
+    check("the field's list is planting, wherever the plant goes, with seed sown in the ground and crates moved out", "field" in hv and set(kinds("field")) <= set(FIELD_SOW + FIELD_JOBS) and len(hv["field"]["rows"]) == hv["field"]["want"] and hv["field"]["want"] > 0 and [r[:2] for r in hv["field"]["rows"]] == sorted([r[:2] for r in hv["field"]["rows"]]), hv.get("field"))
+    lines = [r[3] for h in tk["lists"] for r in h["rows"]]
+    check("every task still to do is in one list and only one, and each heading counts what is done of what it holds", len(lines) == hv["nursery"]["want"] + hv["field"]["want"] and len(set(lines)) == len(lines) and all(h["count"] == f"{h['done']} of {h['done'] + h['want']}" for h in tk["lists"]) and tk["range"] == f"{len(lines)} to do", [len(lines), [h["count"] for h in tk["lists"]], tk["range"]])
+    check("nothing stands between the head and the work: no tiles, no row of kinds, no record bar, no switch of halves; a week of seven days, and the two lists", tk["gone"] == [] and tk["days"] == 7, tk["gone"])
     check("the bench chart is gone from the foot of Tasks: one line says what stands on the benches this week", not tk["bench"] and "On the benches this week" in tk["line"] and "Bench room, in Nursery" in tk["line"] and not tk["side"], [tk["bench"], tk["line"]])
     lineOk = js("const f = B.figures(), wk = f.weeks.find(w => w.week === now), p = wk.pools.heated, t = [...document.querySelectorAll('#bnLine span[data-pool]')].map(x => [x.dataset.pool, x.textContent]); return { t, used: Math.round(p.used), cap: p.cap };")
     check("that line is the engine's figure for the week", lineOk["t"] and lineOk["t"][0][0] == "heated" and f"{lineOk['used']} of {lineOk['cap']}" in lineOk["t"][0][1], lineOk)
     page.screenshot(path=str(shots / f"r1-tasks-all-{WIDTH}.png"))
-    allT = js("const e = V.figures().list.filter(l => l.week < now && l.state !== 'done').length + V.jobs().filter(l => l.week < now && l.state !== 'done').length; return { early: e, season: [...document.querySelectorAll('.sw-stats .tr-stat strong')][5].textContent, earlyTile: [...document.querySelectorAll('.sw-stats .tr-stat strong')][4].textContent };")
-    # Nursery only
-    click('#wkScope [data-scope="nursery"]')
-    COUNT = """const sow = sowOf(), jobs = jobsOf(), inN = l => l.kind ? NS.includes(l.kind) : false, e = (ks, js) => V.figures().list.filter(l => l.week < now && l.state !== 'done' && ks.includes(l.kind)).length + V.jobs().filter(l => l.week < now && l.state !== 'done' && js.includes(l.section)).length;
-      const tiles = [...document.querySelectorAll('.sw-stats .tr-stat')].map(x => [...x.children].map(c => c.textContent)), sheet = V.sheet();
-      const base = { scope: V.scope(), title: txt('wkTitle'), rows: rowsIn('.view-sow .sw-wrap > .wk-half'), heads: document.querySelectorAll('.view-sow .wk-half-head').length, kinds: [...document.querySelectorAll('.view-sow .sw-wrap > .wk-half > section')].map(s => s.dataset.kind), tiles, chips: [...document.querySelectorAll('#wkKinds .chip')].map(c => c.textContent), print: txt('wkPrint'),
-        sheet: { h1: sheet.querySelector('h1').textContent, scope: sheet.dataset.scope, rows: sheet.querySelectorAll('table')[0] ? sheet.querySelectorAll('table')[0].querySelectorAll('tbody tr:not(.wkp-head):not(.wkp-half)').length : 0, halves: sheet.querySelectorAll('tr.wkp-half').length, heads: [...sheet.querySelectorAll('tr.wkp-head')].map(r => r.textContent) },
-        line: !!$('bnLine'), summary: (document.querySelector('.sw-earlier summary b') || {}).textContent || '', none: (document.querySelector('.sw-none') || {}).textContent || '' };"""
-    nur = js(COUNT + """ return { ...base, want: want().nursery, sow: sow.filter(l => NS.includes(l.kind)), jobsOpen: jobs.filter(l => NJ.includes(l.section) && l.state !== 'done').length, early: e(NS, NJ),
-        season: V.figures().list.filter(l => NS.includes(l.kind)).length + V.jobs().filter(l => NJ.includes(l.section) && !l.passed).length, sowOpen: sow.filter(l => NS.includes(l.kind) && l.state !== 'done').length, sowN: sow.filter(l => NS.includes(l.kind)).length, sheetWant: sow.filter(l => NS.includes(l.kind)).length + jobs.filter(l => NJ.includes(l.section)).length };""")
-    nur.pop("sow", None)
-    check("Nursery lists the nursery's tasks and no other, with no half heading to repeat what the title says", nur["scope"] == "nursery" and nur["title"] == "This week in the nursery" and nur["rows"] == nur["want"] and nur["heads"] == 0 and set(nur["kinds"]) <= set(NURSERY_SOW + NURSERY_JOBS) and len(nur["kinds"]) >= 2, nur)
-    check("its tiles count that half alone: what is to sow, the other tasks, what is earlier and not recorded, the season", nur["tiles"][0][1] == f"{nur['sowOpen']} to sow" and nur["tiles"][3][1] == f"{nur['jobsOpen']} to do" and nur["tiles"][4][1] == f"{nur['early']:,}" and nur["tiles"][5][1].endswith(f"of {nur['season']:,}") and "in the nursery" in nur["summary"], [nur["tiles"], nur["sowOpen"], nur["jobsOpen"], nur["early"], nur["season"]])
-    check("the kinds offered are the nursery's only, and the line of bench room stays", all(c not in nur["chips"] for c in ("Sown in the ground", "Plant out", "Move out")) and nur["chips"][0] == "All kinds" and nur["line"], nur["chips"])
-    check("the sheet to print is the nursery's: named so, its rows the rows on the page, set out by task with no halves to head", nur["print"] == "Print the nursery sheet" and nur["sheet"]["h1"].startswith("Nursery, week of May 3") and nur["sheet"]["scope"] == "nursery" and nur["sheet"]["rows"] == nur["sheetWant"] and nur["sheet"]["halves"] == 0 and "Plant out" not in nur["sheet"]["heads"] and "Harden off" in nur["sheet"]["heads"], nur["sheet"])
-    page.evaluate("(() => { window.__printed = null; window.print = () => { const s = document.querySelector('#printSheet .wkp'); window.__printed = { h1: s.querySelector('h1').textContent, rows: s.querySelectorAll('tbody tr:not(.wkp-head):not(.wkp-half)').length }; }; })()")
+    check("the week's seven cells say what each day holds: what was done on the days gone, what is left today with all that is late, what is planned after", tk["cells"] == tk["wantCells"] and any(c[1] for c in tk["cells"]), [tk["cells"], tk["wantCells"]])
+    # a day, and back to the week
+    tomorrow = js("return E.d2s(E.addDays(E.s2d(A.today()), 1))")
+    click(f'#tkDays [data-day="{tomorrow}"]')
+    dayv = js("return { where: V.where(), title: txt('wkTitle'), dues: [...new Set([...document.querySelectorAll('.tk-row:not(.done)')].map(r => r.dataset.due))], rows: document.querySelectorAll('.tk-row:not(.done)').length, want: V.tasks().filter(t => (t.state === 'open' || t.state === 'part') && t.due === '" + tomorrow + "').length, pressed: [...document.querySelectorAll('#tkDays [aria-pressed=true]')].map(b => b.dataset.day) };")
+    click('#tkMode [data-mode="week"]')
+    weekv = js("return V.where()")
+    check("a press on a day shows that day alone, and “Week” goes back to the whole week", dayv["where"]["day"] == tomorrow and dayv["title"] == "Tomorrow" and dayv["pressed"] == [tomorrow] and dayv["rows"] == dayv["want"] and dayv["dues"] in ([tomorrow], []) and weekv["day"] is None and weekv["week"] == js("return now"), [dayv, weekv])
+    click('.tk-step [data-by="7"]')
+    nxt = js("return { where: V.where(), title: txt('wkTitle'), late: document.querySelectorAll('.tk-sec.late').length, today: !!$('wkToday') };")
+    click('.tk-step [data-by="-7"]')
+    home = js("return { where: V.where(), title: txt('wkTitle'), today: !!$('wkToday'), planner: E.d2s(S.date) };")
+    check("the arrows move a week at a time: another week is shown whole, with nothing of this week's lateness in it, and this week opens on today", nxt["where"]["day"] is None and nxt["where"]["week"] == js("return E.d2s(E.addDays(E.s2d(now), 7))") and nxt["title"] == "Next week" and nxt["late"] == 0 and nxt["today"]
+          and home["where"]["day"] == js("return A.today()") and home["title"] == "Today" and not home["today"], [nxt, home])
+    # the sheet
+    js("V.showWeek(now)"); wait(300)
+    sheet = js("const s = V.sheet(), t = s.querySelectorAll('table')[0]; return { h1: s.querySelector('h1').textContent, scope: s.dataset.scope, rows: t.querySelectorAll('tbody tr:not(.wkp-head):not(.wkp-half)').length, want: sowOf().filter(l => !l.skipped).length + jobsOf().filter(l => !l.skipped).length, halves: [...t.querySelectorAll('tr.wkp-half')].map(r => r.textContent), heads: [...t.querySelectorAll('tr.wkp-head')].map(r => r.textContent) };")
+    check("the sheet to print is the week's: both lists, Nursery and then Field, its rows the week's tasks, set out by task", tk["print"] == "Print the week" and sheet["h1"].startswith("Week of May 3") and sheet["scope"] == "all" and sheet["rows"] == sheet["want"] and sheet["halves"] == ["Nursery", "Field"] and "Plant out" in sheet["heads"] and "Harden off" in sheet["heads"], sheet)
+    page.evaluate("(() => { window.__printed = null; window.print = () => { const s = document.querySelector('#printSheet .wkp'); window.__printed = { h1: s.querySelector('h1').textContent, rows: s.querySelectorAll('table')[0].querySelectorAll('tbody tr:not(.wkp-head):not(.wkp-half)').length }; }; })()")
     click("#wkPrint", 300)
     pr = page.evaluate("window.__printed")
-    check("and the button prints exactly that", pr is not None and pr["h1"].startswith("Nursery, week of") and pr["rows"] == nur["sheetWant"], pr)
+    check("and the button prints exactly that", pr is not None and pr["h1"].startswith("Week of May 3") and pr["rows"] == sheet["want"], pr)
     wait(1700)
-    page.screenshot(path=str(shots / f"r1-tasks-nursery-{WIDTH}.png"))
-    # a kind within the half
-    if has('#wkKinds .chip[data-kind="harden"]'):
-        click('#wkKinds .chip[data-kind="harden"]')
-        only = js("return { kinds: [...document.querySelectorAll('.view-sow .sw-wrap > .wk-half > section')].map(s => s.dataset.kind), rows: rowsIn('.view-sow .sw-wrap > .wk-half'), want: jobsOf().filter(l => l.section === 'harden').length };")
-        click('#wkScope [data-scope="field"]')
-        reset = js("return { pressed: (document.querySelector('#wkKinds .chip[aria-pressed=true]') || {}).textContent, scope: V.scope() };")
-        check("a kind narrows the half to that kind, and changing the half goes back to all of its kinds", only["kinds"] == ["harden"] and only["rows"] == only["want"] and only["want"] > 0 and reset["pressed"] == "All kinds" and reset["scope"] == "field", [only, reset])
-    else:
-        check("a kind narrows the half to that kind, and changing the half goes back to all of its kinds", False, "no Harden off chip this week")
-        click('#wkScope [data-scope="field"]')
-    fld = js(COUNT + """ return { ...base, want: want().field, jobsOpen: jobs.filter(l => FJ.includes(l.section) && l.state !== 'done').length, early: e(FS, FJ), season: V.figures().list.filter(l => FS.includes(l.kind)).length + V.jobs().filter(l => FJ.includes(l.section) && !l.passed).length,
-        sowOpen: sow.filter(l => FS.includes(l.kind) && l.state !== 'done').length, sheetWant: sow.filter(l => FS.includes(l.kind)).length + jobs.filter(l => FJ.includes(l.section)).length, towers: jobs.filter(l => l.section === 'plant' && l.members.some(m => m.r.tw)).length };""")
-    check("a subject is found: this week the field has seed to sow in the ground as well as planting out, so its tiles and its kinds have something to count", fld["sowOpen"] > 0 and "plant" in fld["kinds"] and len(fld["kinds"]) >= 2, [fld["sowOpen"], fld["kinds"]])
-    check("Field lists planting, seed sown in the ground and moving out, and no other; tower planting is field work", fld["scope"] == "field" and fld["title"] == "This week in the field" and fld["rows"] == fld["want"] and fld["heads"] == 0 and set(fld["kinds"]) <= set(FIELD_SOW + FIELD_JOBS) and "plant" in fld["kinds"] and fld["towers"] > 0, fld)
-    check("its tiles, its sheet and its print button are the field's, and it shows no line of bench room", fld["tiles"][0][1] == f"{fld['sowOpen']} to sow" and fld["tiles"][3][1] == f"{fld['jobsOpen']} to do" and fld["tiles"][4][1] == f"{fld['early']:,}" and fld["print"] == "Print the field sheet" and fld["sheet"]["h1"].startswith("Field, week of") and fld["sheet"]["rows"] == fld["sheetWant"] and "Harden off" not in fld["sheet"]["heads"] and not fld["line"], fld)
-    check("the two halves add up to the whole: this week, earlier and not recorded, and the season", nur["want"] + fld["want"] == tk["lines"] and nur["early"] + fld["early"] == allT["early"] and allT["earlyTile"] == f"{allT['early']:,}" and allT["season"].endswith(f"of {nur['season'] + fld['season']:,}"), [nur["want"], fld["want"], tk["lines"], nur["early"], fld["early"], allT])
+    # the arrow keys
+    js("V.show(A.today()); document.activeElement && document.activeElement.blur();"); wait(300)
+    page.keyboard.press("ArrowRight"); wait(300); k1 = js("return V.where().day")
+    page.keyboard.press("ArrowLeft"); page.keyboard.press("ArrowLeft"); wait(300); k2 = js("return V.where().day")
+    click("#tkDate"); page.keyboard.press("ArrowRight"); wait(250); k3 = js("return [V.where().day, V.where().pop]"); page.keyboard.press("Escape"); wait(250)
+    js("V.show(A.today())"); wait(300)
+    check("the left and right arrow keys move a day, and are left alone while a calendar is open", k1 == tomorrow and k2 == js("return E.d2s(E.addDays(E.s2d(A.today()), -1))") and k3 == [k2, "go"], [k1, k2, k3])
+    fld = js("""const sow = sowOf(), jobs = jobsOf(), t = V.tasks(); return { sowOpen: sow.filter(l => FS.includes(l.kind) && l.state !== 'done').length, plant: jobs.filter(l => l.section === 'plant').length, towers: t.filter(x => x.id === 'plant' && x.line.members.some(m => m.r.tw)).map(x => x.half), wool: t.filter(x => x.id === 'rockwool').map(x => x.half) };""")
+    check("a subject is found: this week the field has seed to sow in the ground as well as planting out", fld["sowOpen"] > 0 and fld["plant"] > 0, fld)
+    check("tower planting is field work, and sowing for the towers is the nursery's", len(fld["towers"]) > 0 and set(fld["towers"]) == {"field"} and len(fld["wool"]) > 0 and set(fld["wool"]) == {"nursery"}, [len(fld["towers"]), len(fld["wool"])])
     page.screenshot(path=str(shots / f"r1-tasks-field-{WIDTH}.png"))
+    # a row opened by its words
+    js("V.showWeek(now)"); wait(300)
+    words = page.locator(".tk-list[data-half=field] .tk-row:not(.done) .tk-words")
+    words.nth(0).click(); wait(450)
+    op1 = js("const o = [...document.querySelectorAll('.tk-row.open')]; return { n: o.length, line: o[0] && o[0].dataset.line, note: o[0] && !!o[0].querySelector('.tk-note'), acts: o[0] ? [...o[0].querySelectorAll('.tk-acts button')].map(b => b.textContent) : [] };")
+    words.nth(1).click(); wait(450)
+    op2 = js("const o = [...document.querySelectorAll('.tk-row.open')]; return { n: o.length, line: o[0] && o[0].dataset.line, id: V.tasks().find(t => t.key === o[0].dataset.line).line.members[0].p.id, out: E.d2s(V.tasks().find(t => t.key === o[0].dataset.line).line.members[0].r.field) };")
+    check("a press on a task's words opens it: a note, “Delay…”, “Skip this task” and its place on the map; opening another closes the first", op1["n"] == 1 and op1["note"] and op1["acts"] == ["Delay…", "Skip this task", "Show on the map"] and op2["n"] == 1 and op2["line"] != op1["line"], [op1, op2])
+    click(".tk-row.open [data-act=map]", 600)
+    onmap = js("return { view: S.view, sel: S.sel, date: E.d2s(S.date) };")
+    check("“Show on the map” goes to the planting, on the day it goes out", onmap["view"] == "map" and onmap["sel"] and onmap["sel"]["type"] == "planting" and onmap["sel"]["id"] == op2["id"] and onmap["date"] == op2["out"], [onmap, op2])
+    js("A.select(null); A.setDate(E.s2d(A.today())); V.setScope('field');"); wait(300)
     # remembered
-    click('#wkSpan [data-span="2"]')
     kept = page.evaluate("localStorage.getItem('lrf-next:tasks')")
     js("NV.setTab('supplies');"); wait(400)   # the Nursery is left on another tab: a new visit must not find it there
     page.reload(); page.wait_for_function("window.LRFApp && LRFApp.state.ready"); wait(900)
     page.click('[data-view-btn="sow"]'); wait(600)
-    rem = js("return { scope: V.scope(), span: V.span(), title: txt('wkTitle'), pressed: [...document.querySelectorAll('#wkScope button')].map(b => b.getAttribute('aria-pressed')), nursery: NV.tab(), key: A.contentKey() };")
-    check("which half is shown, and how far ahead, are remembered in the browser from one visit to the next; nothing of it is in the plan", json.loads(kept or "{}") == {"scope": "field", "span": 2} and rem["scope"] == "field" and rem["span"] == 2 and rem["title"] == "2 weeks in the field" and rem["pressed"] == ["false", "false", "true"] and rem["key"] == key0, [kept, rem])
+    rem = js("return { scope: V.scope(), where: V.where(), title: txt('wkTitle'), nursery: NV.tab(), key: A.contentKey() };")
+    check("which list was last asked for is remembered in the browser from one visit to the next, for a phone to open on; nothing of it is in the plan, and the page opens on today", json.loads(kept or "{}") == {"scope": "field"} and rem["scope"] == "field" and rem["where"]["tab"] == "field" and rem["title"] == "Today" and rem["key"] == key0, [kept, rem])
     check("the Nursery opens on Bench room again at each visit", rem["nursery"] == "room", rem["nursery"])
-    click('#wkSpan [data-span="1"]'); click('#wkScope [data-scope="nursery"]')
-    # recording still works inside a half
-    rec = js("const l = sowOf().find(x => x.state === 'open' && NS.includes(x.kind) && x.kind !== 'live'); return l ? { key: l.key, ids: l.members.map(m => m.p.id), todo: V.weekCounts(now) } : null;")
-    if rec and has(f'table.sw tbody tr[data-line={json.dumps(rec["key"])}] input[type=checkbox]'):
-        page.locator(f'table.sw tbody tr[data-line={json.dumps(rec["key"])}] input[type=checkbox]').check(); wait(450)
-        barTxt = js("const b = document.querySelector('.sw-record'); return b ? b.querySelector('b').textContent : '';")
-        click("#swRecord", 900)
-        done = js(f"const ps = {json.dumps(rec['ids'])}.map(id => eng.planting(id)); return {{ done: ps.every(p => p.done && (p.done.sow || p.done.field)), undo: S.undo.length, todo: V.weekCounts(now), state: (document.querySelector('table.sw tbody tr[data-line=' + JSON.stringify({json.dumps(rec['key'])}) + ']') || {{ dataset: {{}} }}).dataset.state }};")
+    js("V.setScope('nursery'); V.showWeek(now);"); wait(400)
+    # recording still works
+    rec = js("const l = sowOf().find(x => x.state === 'open' && NS.includes(x.kind) && x.kind !== 'live' && x.date >= A.today()); return l ? { key: l.key, ids: l.members.map(m => m.p.id), todo: V.weekCounts(now) } : null;")
+    if rec and has(f'.tk-row[data-line={json.dumps(rec["key"])}] .tk-tick'):
+        page.locator(f'.tk-row[data-line={json.dumps(rec["key"])}] .tk-tick').click(); wait(1500)
+        said = js("return (document.querySelector('.toast') || {}).textContent || ''")
+        done = js(f"const ps = {json.dumps(rec['ids'])}.map(id => eng.planting(id)); return {{ done: ps.every(p => p.done && (p.done.sow || p.done.field)), undo: S.undo.length, todo: V.weekCounts(now), state: (V.tasks().find(t => t.key === {json.dumps(rec['key'])}) || {{}}).state }};")
         js("A.undo()"); wait(600)
-        check("a task ticked in the nursery's list is recorded as it always was, in one step that undoes", barTxt == "1 sowing ticked" and done["done"] and done["undo"] == 1 and js("return A.contentKey()") == key0, [barTxt, done])
+        check("a task ticked in the nursery's list is recorded as it always was, in one step that undoes", " sown" in said and done["done"] and done["undo"] == 1 and done["state"] == "done" and js("return A.contentKey()") == key0, [said, done])
         check("and what the Nursery says is still to do that week goes down by that one", done["todo"]["sow"] == rec["todo"]["sow"] - 1 and done["todo"]["nursery"] == rec["todo"]["nursery"] - 1 and done["todo"]["field"] == rec["todo"]["field"], [rec["todo"], done["todo"]])
     else: check("a task ticked in the nursery's list is recorded as it always was, in one step that undoes", False, rec)
     js("V.setScope('all');"); wait(300)
-    # an empty half says so in its own words
+    # an empty list says so
     emptyWeek = js("const weeks = new Set([...V.figures().list.filter(l => NS.includes(l.kind)).map(l => l.week), ...V.jobs().filter(l => NJ.includes(l.section) && !l.passed).map(l => l.week)]); for (let d = E.s2d(year + '-12-27'); d.getFullYear() === year; d = E.addDays(d, -7)) { const w = T.monday(E.d2s(d)); if (!weeks.has(w)) return w; } return null;")
     if emptyWeek:
-        js(f"V.setScope('nursery'); A.setDate(E.s2d({json.dumps(emptyWeek)}));"); wait(500)
-        none = js("return { text: (document.querySelector('.sw-none') || {}).textContent || '', rows: rowsIn('.view-sow .sw-wrap > .wk-half') };")
-        check("a week with nothing in the nursery says so, in the nursery's name", "Nothing is planned in the nursery" in none["text"] and none["rows"] == 0, none)
-        js("V.setScope('all'); A.setDate(E.s2d(A.today()));"); wait(400)
+        js(f"V.showWeek({json.dumps(emptyWeek)});"); wait(500)
+        none = js("const l = document.querySelector('.tk-list[data-half=nursery]'); return { text: (l.querySelector('.tk-empty') || {}).textContent || '', rows: l.querySelectorAll('.tk-row').length, count: l.querySelector('.tk-count').textContent };")
+        check("a week with nothing in the nursery says so, in the nursery's list", "Nothing is planned." in none["text"] and none["rows"] == 0 and none["count"] == "", none)
+        js("V.show(A.today());"); wait(400)
 
     # ── the ways into Live trays from the plan ──
     page.click('[data-view-btn="timeline"]'); wait(700)
@@ -337,16 +348,17 @@ with sync_playwright() as pw:
     # ── a phone: the week is still the whole page, now in its two halves ──
     ctx, page = open_page(390, 844)
     js = lambda body: page.evaluate("(() => { " + PRE + " " + body + " })()")
-    ph = js("""const vis = e => !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0, sc = $('wkScope');
-      return { phone: document.body.classList.contains('phone'), view: S.view, halves: [...document.querySelectorAll('.view-sow .sw-wrap > .wk-half')].map(h => h.dataset.half), scope: vis(sc), btn: sc ? Math.min(...[...sc.querySelectorAll('button')].map(b => b.getBoundingClientRect().height)) : 0,
-        inside: sc ? sc.getBoundingClientRect().right <= innerWidth + 1 && sc.getBoundingClientRect().left >= 0 : false, settle: vis($('settleBadge')), line: !!$('bnLine'), bench: !!document.querySelector('.view-sow .bn'), nav: vis(document.querySelector('nav.views')),
-        side: document.documentElement.scrollWidth > innerWidth + 1 || document.querySelector('.view-sow').scrollWidth > document.querySelector('.view-sow').clientWidth + 1, top: document.querySelector('header.top').getBoundingClientRect().height, rows: rowsIn('.view-sow .sw-wrap > .wk-half'), want: want() };""")
-    check("on a phone the week is still the whole page, in its two halves, with nothing running off sideways and the header on one line", ph["phone"] and ph["view"] == "sow" and ph["halves"] == ["nursery", "field"] and ph["rows"] == ph["want"]["nursery"] + ph["want"]["field"] and not ph["side"] and not ph["nav"] and ph["top"] <= 60, ph)
-    check("which half to show can be chosen there with a thumb; the count to settle, the bench line and the chart are left off", ph["scope"] and ph["inside"] and ph["btn"] >= 34 and not ph["settle"] and not ph["line"] and not ph["bench"], ph)
-    if has('#wkScope [data-scope="nursery"]'):
-        page.locator('#wkScope [data-scope="nursery"]').click(); page.wait_for_timeout(500)
-    pn = js("return { scope: V.scope(), rows: rowsIn('.view-sow .sw-wrap > .wk-half'), want: want().nursery, title: txt('wkTitle'), side: document.documentElement.scrollWidth > innerWidth + 1 };")
-    check("a tap on Nursery lists the nursery's tasks alone", pn["scope"] == "nursery" and pn["rows"] == pn["want"] and pn["title"] == "This week in the nursery" and not pn["side"], pn)
+    ph = js("""const vis = e => !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0, sc = $('tkTabs'), today = A.today(), open = t => t.state === 'open' || t.state === 'part';
+      return { phone: document.body.classList.contains('phone'), view: S.view, shown: [...document.querySelectorAll('.view-sow .tk-list')].filter(vis).map(h => h.dataset.half), tabs: sc ? [...sc.querySelectorAll('button')].map(b => b.dataset.half) : [], scope: vis(sc), btn: sc ? Math.min(...[...sc.querySelectorAll('button')].map(b => b.getBoundingClientRect().height)) : 0,
+        inside: sc ? sc.getBoundingClientRect().right <= innerWidth + 1 && sc.getBoundingClientRect().left >= 0 : false, settle: vis($('settleBadge')), line: !!$('bnLine'), bench: !!document.querySelector('.view-sow .bn'), nav: vis(document.querySelector('nav.views')), title: txt('wkTitle'),
+        side: document.documentElement.scrollWidth > innerWidth + 1 || document.querySelector('.view-sow').scrollWidth > document.querySelector('.view-sow').clientWidth + 1, top: document.querySelector('header.top').getBoundingClientRect().height, rows: [...document.querySelectorAll('.tk-row')].filter(vis).length,
+        left: { nursery: V.tasks().filter(t => t.half === 'nursery' && open(t) && t.due <= today).length, field: V.tasks().filter(t => t.half === 'field' && open(t) && t.due <= today).length } };""")
+    check("on a phone the tasks are still the whole page, one list at a time under two tabs, with nothing running off sideways and the header on one line", ph["phone"] and ph["view"] == "sow" and ph["title"] == "Today" and ph["tabs"] == ["nursery", "field"] and len(ph["shown"]) == 1 and ph["rows"] > 0 and not ph["side"] and not ph["nav"] and ph["top"] <= 60, ph)
+    check("which list to show can be chosen there with a thumb; the count to settle, the bench line and the chart are left off", ph["scope"] and ph["inside"] and ph["btn"] >= 34 and not ph["settle"] and not ph["line"] and not ph["bench"], ph)
+    page.locator('#tkTabs [data-half="field"]').click(); page.wait_for_timeout(500)
+    for i in range(page.locator(".tk-list:not(.off) .tk-more").count()): page.locator(".tk-list:not(.off) .tk-more").first.click(); page.wait_for_timeout(250)
+    pn = js("const vis = e => getComputedStyle(e).display !== 'none'; return { scope: V.scope(), halves: [...new Set([...document.querySelectorAll('.tk-row')].filter(r => vis(r.closest('.tk-list'))).map(r => r.closest('.tk-list').dataset.half))], rows: [...document.querySelectorAll('.tk-row:not(.done)')].filter(r => vis(r.closest('.tk-list'))).length, title: txt('wkTitle'), side: document.documentElement.scrollWidth > innerWidth + 1 };")
+    check("a tap on Field lists the field's tasks alone", pn["scope"] == "field" and pn["halves"] == ["field"] and pn["rows"] == ph["left"]["field"] and pn["title"] == "Today" and not pn["side"], pn)
     page.screenshot(path=str(shots / "r1-phone.png"))
     page.evaluate("localStorage.removeItem('lrf-next:tasks')")
     ctx.close()

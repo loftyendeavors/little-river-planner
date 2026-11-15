@@ -52,30 +52,32 @@ with sync_playwright() as pw:
     # ── Tasks: the name, and how far ahead it lists ──
     nav = js("return [...document.querySelectorAll('nav.views [data-view-btn]')].map(b => b.textContent.trim());")
     check('the views are Map, Timeline, Harvest, Tasks, Nursery, Seeds, Assumptions (0.31: three groups, Trays is Nursery)', nav == ['Map', 'Timeline', 'Harvest', 'Tasks', 'Nursery', 'Seeds', 'Assumptions'], nav)
-    js("A.setDate(new Date(year, 4, 5));"); page.click('[data-view-btn="sow"]'); wait(800)
-    COUNT = """const now = LRFTrays.monday(E.d2s(St.date)), until = n => E.d2s(E.addDays(E.s2d(now), 7 * n - 1)), inSpan = n => l => l.week >= now && l.week <= until(n);
-      const want = n => V.figures().list.filter(inSpan(n)).length + V.jobs().filter(l => inSpan(n)(l) && !l.passed).length;
-      const rows = () => document.querySelectorAll('#swWrap section.sw-kind tr[data-line], #swWrap section.wk-kind tr[data-line]').length - document.querySelectorAll('#swWrap details.sw-earlier tr[data-line]').length;"""
-    t1 = js(COUNT + " return { h2: txt('wkTitle'), eyebrow: document.querySelector('#swWrap .eyebrow').textContent, span: [...document.querySelectorAll('#wkSpan button')].map(b => [b.dataset.span, b.textContent, b.getAttribute('aria-pressed')]), stretch: txt('wkStretch'), rows: rows(), want: [want(1), want(2), want(4)], print: txt('wkPrint'), words: (document.getElementById('swWrap').textContent.match(/\\bjobs?/gi) || []).length, tiles: [...document.querySelectorAll('#swWrap .tr-stat span')].map(x => x.textContent), tile: document.querySelector('#swWrap .tr-stat span').textContent };")
-    check('it opens on this week’s tasks, and says so', t1['h2'] == 'This week’s tasks' and t1['eyebrow'].startswith('Tasks') and t1['stretch'].startswith('Week of') and t1['tile'] == t1['stretch'] and t1['print'] == 'Print the week', t1)
-    check('how far ahead to list can be chosen: the week, two weeks or four, the week pressed', t1['span'] == [['1', 'Week', 'true'], ['2', '2 weeks', 'false'], ['4', '4 weeks', 'false']], t1['span'])
-    check('the week lists the week’s sowings and other tasks', t1['rows'] == t1['want'][0] and t1['want'][0] > 0 and t1['want'][1] > t1['want'][0] and t1['want'][2] > t1['want'][1], [t1['rows'], t1['want']])
-    check('nothing on it is called a job any more: the other work is “Other tasks”', t1['words'] == 0 and 'Other tasks' in t1['tiles'], [t1['words'], t1['tiles']])
-    click('#wkSpan [data-span="2"]')
-    t2 = js(COUNT + " return { h2: txt('wkTitle'), stretch: txt('wkStretch'), rows: rows(), pressed: [...document.querySelectorAll('#wkSpan button')].map(b => b.getAttribute('aria-pressed')), print: txt('wkPrint'), head: [...document.querySelectorAll('#swWrap section.wk-kind thead th')].map(t => t.textContent).slice(0, 3), sheet: (() => { const s = V.sheet(); return { h1: s.querySelector('h1').textContent, rows: s.querySelectorAll('tbody tr').length }; })(), span: V.span() };")
-    check('two weeks lists both weeks’ tasks, says the days it covers, and prints both', t2['rows'] == t1['want'][1] and t2['h2'] == 'Tasks for 2 weeks' and '–' in t2['stretch'] and not t2['stretch'].startswith('Week of') and t2['pressed'] == ['false', 'true', 'false'] and t2['print'] == 'Print the 2 weeks' and t2['sheet']['h1'].startswith('2 weeks from') and t2['span'] == 2, t2)
+    page.click('[data-view-btn="sow"]'); wait(800)
+    COUNT = """const week = '2027-05-03', span = (w, n) => { const until = E.d2s(E.addDays(E.s2d(w), 7 * n - 1)); return V.figures().list.filter(l => l.week >= w && l.week <= until && l.state !== 'done').length + V.jobs().filter(l => l.week >= w && l.week <= until && !l.passed && l.state !== 'done').length; };
+      const rows = () => document.querySelectorAll('#swWrap .tk-list .tk-row:not(.done)').length;"""
+    t0 = js(COUNT + " return { h2: txt('wkTitle'), range: txt('tkRange'), today: A.today(), where: V.where(), print: txt('wkPrint'), mode: [...document.querySelectorAll('#tkMode button')].map(b => [b.dataset.mode, b.textContent, b.getAttribute('aria-pressed')]) };")
+    check('it opens on today’s tasks, and says so', t0['h2'] == 'Today' and t0['where']['day'] == t0['today'] and ' · ' in t0['range'] and t0['print'] == 'Print the week', t0)
+    check('a day or the whole week can be shown: it opens on the day', t0['mode'] == [['day', 'Day', 'true'], ['week', 'Week', 'false']], t0['mode'])
+    js("V.showWeek('2027-05-03')"); wait(500)
+    t1 = js(COUNT + " return { h2: txt('wkTitle'), label: txt('tkWeek'), rows: rows(), want: [span(week, 1), span('2027-05-10', 1), span(week, 2)], pressed: [...document.querySelectorAll('#tkMode button')].map(b => b.getAttribute('aria-pressed')), words: (document.getElementById('swWrap').textContent.match(/\\bjobs?/gi) || []).length, secs: [...document.querySelectorAll('#swWrap .tk-sec-name')].map(x => x.textContent) };")
+    check('a week lists the week’s sowings and other tasks, under a line for each of its days', t1['rows'] == t1['want'][0] and t1['want'][0] > 0 and t1['want'][1] > 0 and t1['want'][2] == t1['want'][0] + t1['want'][1] and t1['h2'] == 'Week of May 3' and t1['label'].startswith('May 3 – 9') and t1['pressed'] == ['false', 'true'] and any(s.startswith('Monday') for s in t1['secs']), [t1['rows'], t1['want'], t1['secs'][:3]])
+    check('nothing on it is called a job any more', t1['words'] == 0, t1['words'])
+    click('.tk-step [data-by="7"]')
+    t2 = js(COUNT + " return { h2: txt('wkTitle'), label: txt('tkWeek'), rows: rows(), where: V.where(), sheet: (() => { const s = V.sheet(); return { h1: s.querySelector('h1').textContent, rows: s.querySelectorAll('tbody tr').length }; })() };")
+    check('the next week is one press away, whole: it lists that week’s tasks, says the days it covers, and its sheet is that week’s', t2['rows'] == t1['want'][1] and t2['h2'] == 'Week of May 10' and t2['label'].startswith('May 10 – 16') and t2['where']['week'] == '2027-05-10' and t2['where']['day'] is None and t2['sheet']['h1'].startswith('Week of May 10'), t2)
     page.evaluate("(() => { window.print = () => { window.__printed = { h1: document.querySelector('#printSheet h1').textContent, rows: document.querySelectorAll('#printSheet tbody tr').length }; }; })()")
     click('#wkPrint'); wait(300)
     pr = page.evaluate('window.__printed || null')
-    check('the print button prints what is listed: both weeks', pr is not None and pr['h1'].startswith('2 weeks from') and pr['rows'] == t2['sheet']['rows'], [pr, t2['sheet']])
-    click('#wkSpan [data-span="4"]')
-    t4 = js(COUNT + " return { rows: rows(), h2: txt('wkTitle') };")
-    check('four weeks lists four', t4['rows'] == t1['want'][2] and t4['h2'] == 'Tasks for 4 weeks', [t4, t1['want']])
+    check('the print button prints what is listed: that week', pr is not None and pr['h1'].startswith('Week of May 10') and pr['rows'] == t2['sheet']['rows'], [pr, t2['sheet']])
+    busy = js("const n = {}; for (const t of V.tasks()) if (t.due >= '2027-05-10' && t.due <= '2027-05-16') n[t.due] = (n[t.due] || 0) + 1; return Object.entries(n).sort((a, b) => b[1] - a[1])[0];")
+    click(f'#tkDays [data-day="{busy[0]}"]')
+    t4 = js(COUNT + " return { rows: rows(), h2: txt('wkTitle'), where: V.where(), pressed: [...document.querySelectorAll('#tkMode button')].map(b => b.getAttribute('aria-pressed')), cell: document.querySelector('#tkDays [aria-pressed=true] em').textContent };")
+    check('a press on a day lists that day alone, and its cell had said how many', t4['rows'] == busy[1] and t4['where']['day'] == busy[0] and t4['pressed'] == ['true', 'false'] and t4['cell'] == str(busy[1]), [t4, busy])
     page.screenshot(path=str(shots / f"plain-tasks-{WIDTH}.png"))
-    fit = js("const w = $('swWrap'); return { sideways: w.scrollWidth > w.clientWidth + 1, seg: [...document.querySelectorAll('#wkSpan button')].every(b => b.scrollWidth <= b.clientWidth + 1) };")
+    fit = js("const w = $('swWrap'); return { sideways: w.scrollWidth > w.clientWidth + 1, seg: [...document.querySelectorAll('#tkMode button, .tk-day em, #tkWeek')].every(b => b.scrollWidth <= b.clientWidth + 1) };")
     check('the choice fits: no sideways scroll, no label cut', not fit['sideways'] and fit['seg'], fit)
-    click('#wkSpan [data-span="1"]')
-    check('back to the week it is the week again', js(COUNT + " return rows();") == t1['want'][0] and js("return txt('wkTitle');") == 'This week’s tasks')
+    click('#tkMode [data-mode="week"]'); click('.tk-step [data-by="-7"]')
+    check('back a week it is that week again, whole', js(COUNT + " return rows();") == t1['want'][0] and js("return txt('wkTitle');") == 'Week of May 3' and js("return V.where().day") is None)
 
     # ── where days are counted from ──
     page.click('[data-view-btn="assume"]'); wait(700)
@@ -190,8 +192,8 @@ with sync_playwright() as pw:
 
     # ── a phone still has the week and nothing else ──
     ctx2, phone = open_page(390, 800)
-    ph = phone.evaluate("(() => ({ phone: document.body.classList.contains('phone'), span: !!document.getElementById('wkSpan'), h2: (document.getElementById('wkTitle') || {}).textContent }))()")
-    check('on a phone the week is the whole page: no choice of how far ahead', ph['phone'] and not ph['span'], ph)
+    ph = phone.evaluate("(() => ({ phone: document.body.classList.contains('phone'), print: !!document.getElementById('wkPrint'), tabs: getComputedStyle(document.getElementById('tkTabs')).display, h2: (document.getElementById('wkTitle') || {}).textContent }))()")
+    check('on a phone the tasks are the whole page: today, one list at a time, and no sheet to print', ph['phone'] and ph['h2'] == 'Today' and ph['tabs'] == 'flex' and not ph['print'], ph)
     ctx2.close()
 
     page.click('[data-view-btn="map"]'); wait(300)
