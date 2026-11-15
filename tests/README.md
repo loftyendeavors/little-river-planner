@@ -71,8 +71,10 @@ python3 -I tests/verdict.py /tmp/part.log app1    # exit 0: every line passed, a
 
 ## On GitHub
 
-`.github/workflows/checks.yml` runs every part on every push, side by side: about eight minutes. The result named
-**All checks** is the one a merge waits for. The pictures a failed part took are kept with the run for a week. Two things are
+`.github/workflows/checks.yml` runs every part on every push, side by side: about eight minutes. Beside the parts it runs
+**lint**, which reads the scripts without running them (a name used and never made, a key written twice, a branch that
+cannot be reached): its rules, and how to run it by hand, are in `tools/eslint.config.mjs`. The result named
+**All checks** is the one a merge waits for, and it waits for the parts and for lint. The pictures a failed part took are kept with the run for a week. Two things are
 kept with every run: **counts**, the file `tests/counts.json` as that run would have it, and **screens**, the pictures of
 every main screen that looks different from the build before (before, now, and the two side by side). The driver of the
 browser and the drawing library are installed at versions said outright in the workflow; the browser is the runner's own.
