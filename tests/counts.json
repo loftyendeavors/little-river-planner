@@ -71,7 +71,7 @@
 
   "folder": 14,
 
-  "numbers": 40,
+  "numbers": 41,
 
   "sowing": 24,
 
@@ -102,6 +102,8 @@
   "ask": 33,
 
   "bedpanel": 59,
+
+  "card": 110,
 
   "cleanup": 27,
 
@@ -323,10 +325,18 @@
 
   "ask-site dark": 33,
 
-  "numbers-site": 40
+  "numbers-site": 41
 
  },
  "site10": {
+
+  "card @1707": 110,
+
+  "card-site": 110,
+
+  "card-site @1480": 110,
+
+  "card-site @3440": 110,
 
   "cleanup @1480": 27,
 

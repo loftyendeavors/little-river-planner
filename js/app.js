@@ -276,6 +276,9 @@
         if (v == null || v === '') delete record[key];
         else record[key] = key === 'unit' || key === 'pattern' ? String(v) : key === 'days' ? Math.max(1, Math.round(+v)) : key === 'turnover' ? Math.max(0, Math.round(+v)) : key === 'share' ? Math.min(100, Math.max(0, +v)) : Math.max(0, +v);
       }
+      // A tick says the crop's figures were looked at in the unit it was then sold by. With another unit they are to be looked
+      // at again: the figures stay as typed, and the tick comes off in the same step.
+      if ('unit' in change && before && before.unit.value !== (record.unit || before.unit.fallback)) delete record.looked;
       if (Object.keys(record).length) next.sell[cropId] = record; else delete next.sell[cropId];
       const weekly = (record.pattern || 'spread') === 'weekly';
       if (before && 'pattern' in change && weekly !== before.weekly) {
@@ -295,6 +298,71 @@
       if (Object.keys(record).length) next.sellV[varietyId] = record; else delete next.sellV[varietyId];
     });
     return ops ? assume(label, ops) : Promise.resolve(false);
+  }
+  // ── what the house keeps, and what has been looked at ──
+  // Two marks on a crop's line of the list, beside the figures they speak of, and one switch in the farm's settings. None of the
+  // three is a figure. A mark moves nothing by itself; the switch, and saying a crop is sold in full, change what counts as sold,
+  // so what either does to the season's worth is shown before it is done.
+  /** One crop's line with a mark set (`house`: true, `looked`: a year) or, with nothing, taken off. */
+  const markStep = (cropId, key, value) => listStep(next => {
+    next.sell = next.sell || {};
+    const record = { ...(next.sell[cropId] || {}) };
+    if (value == null || value === false) delete record[key]; else record[key] = value;
+    if (Object.keys(record).length) next.sell[cropId] = record; else delete next.sell[cropId];
+  });
+  /**
+   * Tick a crop as looked at for the plan's year, or take the tick off. One step, and nothing else in the plan changes. The tick
+   * is said in a message of its own, whose Undo takes back the tick and nothing before it; `note` is added to what it says.
+   */
+  function setLooked(cropId, on, note) {
+    const c = state.engine.crop(cropId), year = planYear(), ops = c ? markStep(cropId, 'looked', on ? year : null) : null;
+    if (!ops) return false;
+    const label = `${c.name}: ${on ? 'looked at' : 'not looked at'} for ${year}`;
+    if (!commit(label, ops, { unchecked: true })) return false;
+    toast(`${label}${note ? ' · ' + note : ''}`, { label: 'Undo', run: undo });
+    return true;
+  }
+  /**
+   * Say whom a crop is grown for. `part` true: for sale and the house, which marks the crop and changes no figure. `part` false:
+   * sold in full, which counts all that is packed as sold; what that does to the season's worth is shown first, and it is done
+   * only if he agrees.
+   */
+  async function setHouse(cropId, part) {
+    const eng = state.engine, c = eng.crop(cropId), hc = c ? eng.harvestFor(cropId) : null;
+    if (!hc || hc.micro || !hc.house.farm) return false;
+    if (part) {
+      const ops = hc.house.marked ? null : markStep(cropId, 'house', true);
+      if (!ops) return false;
+      commit(`${c.name}: grown for sale and the house`, ops, { unchecked: true });
+      toast(`${c.name}: grown for sale and the house · no figure changes: ${figure3(hc.house.sold)}% of what is packed counts as sold, as before`, { label: 'Undo', run: undo });
+      return true;
+    }
+    const ops = listStep(next => { next.sell = next.sell || {}; const record = { ...(next.sell[cropId] || {}), share: 100 }; delete record.house; next.sell[cropId] = record; });
+    if (!ops) return false;
+    const was = worthOf(eng), now = worthOf(E.create(withOps(state.plan, ops, 'do'), Lib)), label = `${c.name}: sold in full`;
+    if (hc.house.sold < 100 && !await UI.confirm({ title: `${c.name}: sold in full?`, confirmLabel: 'Sold in full',
+      body: `Today ${figure3(hc.house.sold)}% of what is packed counts as sold, and the house keeps the other ${figure3(100 - hc.house.sold)}%. Sold in full, all of it counts as sold: ${worthSaid(was, now)}. No date and no yield changes, and one undo takes it back.` })) return false;
+    commit(label, ops, { unchecked: true });
+    toast(`${label} · ${worthSaid(was, now)}`, { label: 'Undo', run: undo });
+    return { was, now };
+  }
+  /**
+   * The farm's own switch. Off: nothing is kept for the house, every crop is sold in full whatever its line says, and the idea is
+   * shown on no page. On: each crop's own share counts again. Either way the season's worth before and after is shown first.
+   */
+  async function setHouseFarm(on) {
+    const settings = { ...state.plan.settings }, isOn = settings.houseKeeps !== false;
+    if (!!on === isOn) return false;
+    if (on) delete settings.houseKeeps; else settings.houseKeeps = false;
+    const was = worthOf(state.engine), now = worthOf(E.create({ ...state.plan, settings }, Lib));
+    const ok = await UI.confirm(on
+      ? { title: 'Keep part of some crops for the house?', confirmLabel: 'Turn it on', body: `Each crop’s own share counts again: what its line says is sold, and the rest is the house’s. ${worthSaid(was, now).replace(/^t/, 'T')}. No date and no yield changes, and one undo takes it back.` }
+      : { title: 'Everything this farm packs is sold?', confirmLabel: 'Sell everything', body: `Nothing is kept for the house: every crop counts as sold in full, and what the house keeps is shown on no page. Each crop’s own share is kept as it is, for the day this is turned on again. ${worthSaid(was, now).replace(/^t/, 'T')}. No date and no yield changes, and one undo takes it back.` });
+    if (!ok) return false;
+    const label = on ? 'The house keeps part of some crops' : 'Everything the farm packs is sold';
+    if (!commit(label, [{ kind: 'settings', before: state.plan.settings, after: settings }], { unchecked: true })) return false;
+    toast(`${label} · ${worthSaid(was, now)}`, { label: 'Undo', run: undo });
+    return { was, now };
   }
   /**
    * Say where crops' days start: `changes` is [{ cropId, from, less }]. `from` is transplant, seed or direct; `less` the days a
@@ -1820,7 +1888,7 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, lastChange, refuse, setUse, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV,
+    commit, undo, redo, lastChange, refuse, setUse, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),

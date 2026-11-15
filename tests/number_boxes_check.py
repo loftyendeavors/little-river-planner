@@ -59,7 +59,8 @@ SCREENS = [
     ("the Nursery’s set-up", "A.setView('trays'); LRFTraysView.setTab('setup');", True),
     ("Seeds", "A.setView('seeds');", True),
     ("the Assumptions list, days to harvest", "A.setView('assume'); document.querySelector('[data-as-mode=days]').click();", True),
-    ("the Assumptions list, yield and price", "A.setView('assume'); document.querySelector('[data-as-mode=harvest]').click();", True),
+    ("the Assumptions list, yield and price", "A.setView('assume'); document.querySelector('[data-as-mode=harvest]').click(); { const w = document.querySelector('[data-ah-way=list]'); if (w && w.getClientRects().length) w.click(); }", True),
+    ("yield and price, one crop at a time", "A.setView('assume'); LRFAssume.setMode('harvest', 'card');", True),
 ]
 with sync_playwright() as pw:
     browser = pw.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
@@ -105,8 +106,8 @@ with sync_playwright() as pw:
     key0 = start["key"]
     check("a plan is open with nothing to undo, on a day of its own year, and the recorder is listening", start["n"] > 300 and start["undo"] == [] and start["recorder"] and start["today"].startswith(str(start["year"])), start)
 
-    # ══ (a) the Assumptions list, yield and price: a price box and a yield box ══
-    js("A.setView('assume'); document.querySelector('[data-as-mode=harvest]').click();"); wait(700)
+    # ══ (a) the Assumptions list, yield and price, all on one page (the page opens one crop at a time; the list is its other way): a price box and a yield box ══
+    js("A.setView('assume'); document.querySelector('[data-as-mode=harvest]').click(); { const w = document.querySelector('[data-ah-way=list]'); if (w && w.getClientRects().length) w.click(); }"); wait(700)
     # a crop a third of the way down the list, so that the list has room to scroll both ways: its price box and its first yield box, both as drawn
     pick = js("""const rows = [...document.querySelectorAll('#ahBody tr')].filter(tr => { const p = tr.querySelector('input[data-hk^="price|"]'), y = tr.querySelector('input[data-hk^="y|"]'); return p && y && drawn(p) && drawn(y) && !p.disabled && !y.disabled && p.value === '' && y.value === ''; });
       const tr = rows[Math.floor(rows.length / 3)]; if (!tr) return { rows: rows.length };

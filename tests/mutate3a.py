@@ -46,7 +46,7 @@ NODE = [
  ('a start is offered for a crop with no choice', 'js/engine.js', "return c && !startFixed(c) && lib.guide && lib.guide.startFor ? lib.guide.startFor(c) : null;", "return c && lib.guide && lib.guide.startFor ? lib.guide.startFor({ name: 'zinnia' }) : null;"),
  ('an option handed to the engine brings a multiplier back', 'js/engine.js', "else e.dtm = Math.max(1, Math.round(e.dtm));", "else e.dtm = Math.max(1, Math.round(e.dtm * (options.multipliers === true ? 1.25 : 1)));"),
  ('“from direct seeding” is read as sowing in the nursery', 'js/seedlib.js', "basis === 'seed' && /direct/i.test(String(statement || '')) ? 'direct' :", "false ? 'direct' :"),
- ('starting points are lost when a newer backup is loaded over the plan', 'js/planio.js', " + Object.keys(a.starts || {}).length + Object.keys(a.sell", " + Object.keys(a.sell"),
+ ('starting points are lost when a newer backup is loaded over the plan', 'js/planio.js', " + Object.keys(a.starts || {}).length + Object.values(a.sell", " + Object.values(a.sell"),
  ('tray batches are offered for release', 'js/audit.js', "const trayBatch = p => !!p.liveTray;", "const trayBatch = p => false;"),
  ('recorded work is offered for release', 'js/audit.js', "const recorded = p => !!p.done && E.DONE_KINDS.some(k => typeof p.done[k] === 'string' && p.done[k] !== '');", "const recorded = p => false;"),
  ('a planting let go keeps “manual”', 'js/audit.js', "delete q.dtm; if (q.timingMode === 'manual') delete q.timingMode; return q;", "delete q.dtm; return q;"),

@@ -71,7 +71,7 @@ NODE = [
  ('an amount typed on a line is ignored', 'js/seedlib.js', "amount = set ? +asked : r.short;", "amount = r.short;"),
  ('the total leaves suppliers out', 'js/seedlib.js', "cost: list.reduce((n, g) => n + g.cost, 0),", "cost: list.length ? list[0].cost : 0,"),
  ('plantings with no variety chosen vanish from the sheet', 'js/seedlib.js', "if (!r.variety) { loose.push({ key: r.key, row: r, crop: r.crop, unit: r.unit, amount }); continue; }", "if (!r.variety) continue;"),
- ('a list holding only a price is dropped when a newer backup is loaded', 'js/planio.js', " + Object.keys(a.sell || {}).length + Object.keys(a.sellV || {}).length : 0;", " : 0;"),
+ ('a list holding only a price is dropped when a newer backup is loaded', 'js/planio.js', " + Object.values(a.sell || {}).filter(line => Object.keys(line || {}).some(k => !MARKS.includes(k))).length + Object.keys(a.sellV || {}).length : 0;", " : 0;"),
 ]
 PAGE = [
  ('the buttons under the heading do nothing', 'js/assume.js', "button.addEventListener('click', () => { ui.mode = button.dataset.asMode; render(); });", "button.addEventListener('click', () => { render(); });"),

@@ -437,7 +437,7 @@
       return v.dtm > 0 ? 'variety' : null;
     }
     // ── what is picked, and what it is sold as: the second half of the list ──
-    // plan.assumptions.sell  = { cropId: { unit, price, pattern, days, keep, share, turnover } }
+    // plan.assumptions.sell  = { cropId: { unit, price, pattern, days, keep, share, turnover, house, looked } }
     // plan.assumptions.sellV = { varietyId: { unit, price } }
     // and a yield beside the days in a cell of the list: assumptions.crops[cropId][env].yield (the same for varieties)
     //   pattern   spread  the yield is a total, picked evenly over the harvest days (held, and taken to demand)
@@ -445,15 +445,19 @@
     //             once    the yield is a total, all of it counted the day the crop is ready
     //   days      harvest days · keep  weeks it stores after picking · share  the marketable part, in percent
     //   turnover  days the ground is held after the last harvest
-    // Nothing set means the crop's own figures.
+    //   house     true: the crop is marked as partly kept for the house (a crop whose share is under 100 is shown so without it)
+    //   looked    the year its figures were last looked at and said to be right
+    // Nothing set means the crop's own figures. The two marks are words about the line: no figure is worked out from them.
+    // settings.houseKeeps === false is the farm's own switch: nothing is kept for the house, and all that is packed counts as sold.
     const PATTERNS = ['spread', 'weekly', 'once'];
     const amount0 = x => x != null && x !== '' && Number.isFinite(+x) && +x >= 0 ? +x : null;
     const word = x => typeof x === 'string' && x.trim() ? x.trim() : null;
     function sellRule(cropId) {
       const x = (S.assumptions && S.assumptions.sell && S.assumptions.sell[cropId]) || {}, share = amount0(x.share), turn = amount0(x.turnover);
       return { unit: word(x.unit), price: amount0(x.price), pattern: PATTERNS.includes(x.pattern) ? x.pattern : null, days: wholeDays(x.days), keep: amount0(x.keep),
-        share: share != null && share <= 100 ? share : null, turnover: turn == null ? null : Math.round(turn) };
+        share: share != null && share <= 100 ? share : null, turnover: turn == null ? null : Math.round(turn), house: x.house === true ? true : null, looked: Number.isInteger(x.looked) ? x.looked : null };
     }
+    const sellsAll = settings.houseKeeps === false;
     function sellVRule(varietyId) {
       const x = (varietyId && S.assumptions && S.assumptions.sellV && S.assumptions.sellV[varietyId]) || {};
       return { unit: word(x.unit), price: amount0(x.price) };
@@ -1168,7 +1172,7 @@
       const basis = r.rack ? 'tray' : r.ct ? (p.yieldBasis === 'container' ? 'container' : 'plant') : c.yBasis === 'ft' && !r.tw ? 'ft' : 'plant';
       const count = basis === 'tray' || basis === 'container' || basis === 'ft' ? r.len : r.plants;
       // What is planted to be picked in July counts in July: nothing is taken off for a harvest day inside a crop's "summer gap".
-      const mk = liveTray ? 1 : rule.share != null ? rule.share / 100 : clamp(finite(c.mk, 0.9), 0, 1), part = clamp(r.harvestDays / Math.max(1, r.expectedHarvestDays), 0, 1);
+      const mk = liveTray || sellsAll ? 1 : rule.share != null ? rule.share / 100 : clamp(finite(c.mk, 0.9), 0, 1), part = clamp(r.harvestDays / Math.max(1, r.expectedHarvestDays), 0, 1);
       const set = liveTray || (c.yield != null && c.yield !== '' && Number.isFinite(+c.yield)) || own || mine != null;
       // A planting's own yield is a total, as it always was, and is worked out as it always was. A figure that follows the list is in
       // the crop's pattern: a total, or what is picked each week (then a longer harvest gives more, and a shorter one less).
@@ -1201,7 +1205,10 @@
           total: value == null ? null : weekly ? value * nominal / 7 : value, weekly: value == null ? null : weekly ? value : value * 7 / nominal };
       }
       const pick = (mine, fallback) => ({ mine, fallback, value: mine != null ? mine : fallback });
+      // what the house keeps: `sold` is the share in force; `part` says the crop is shown as partly kept (marked so, or under 100 today)
+      const share0 = micro ? 100 : rule.share != null ? rule.share : Math.round(clamp(finite(c.mk, 0.9), 0, 1) * 100), sold = micro || sellsAll ? 100 : share0;
       return { micro, basis: micro ? 'tray' : c.yBasis === 'ft' ? 'ft' : 'plant', season, nominal, weekly, cells,
+        house: { farm: !sellsAll, marked: !micro && !!rule.house, sold, part: !micro && !sellsAll && (!!rule.house || share0 < 100) }, looked: rule.looked,
         unit: pick(micro ? null : v ? ruleV.unit : rule.unit, v ? rule.unit || unit0 : unit0), price: pick(v ? ruleV.price : rule.price, v ? (rule.price != null ? rule.price : price0) : price0),
         pattern: pick(micro ? null : rule.pattern, micro ? 'once' : 'spread'), days: pick(micro ? null : rule.days, micro || season ? null : Math.max(1, Math.round(nonNegative(c.hw)))),
         share: pick(micro ? null : rule.share, micro ? 100 : Math.round(clamp(finite(c.mk, 0.9), 0, 1) * 100)), keep: pick(micro ? null : rule.keep, 0), turnover: pick(micro ? null : rule.turnover, micro ? 0 : turnoverDays()),
