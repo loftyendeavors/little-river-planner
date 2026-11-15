@@ -3,8 +3,12 @@
  "words": [],
  "code": [
   "app.js",
+  "assume.js",
   "engine.js",
   "forecast.js",
+  "harvestview.js",
+  "series.js",
+  "succession.js",
   "yieldcard.js"
  ],
  "added": [
