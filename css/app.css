@@ -1725,13 +1725,13 @@ body.phone .tk-top h2 { font-size: 32px; }
 body.phone .tk-range { order: 3; width: 100%; padding: 0; }
 body.phone .tk-week { padding: 10px 8px 6px; border-radius: 18px; }
 body.phone .tk-wk-head { padding: 0 0 0 6px; gap: 4px; }
-body.phone .tk-wk-date { font-size: 17px !important; letter-spacing: -0.02em; margin-left: -6px; padding: 0 6px; }
+body.phone .tk-wk-date { font-size: 16px !important; letter-spacing: -0.02em; margin-left: -6px; padding: 0 6px; }
 body.phone .tk-wk-date .wide, body.phone .tk-wk-date .tk-caret { display: none; }
 body.phone .tk-wk-date .slim { display: inline; }
-body.phone .tk-today { height: 28px; padding: 0 8px; }
-body.phone .tk-mode button { padding: 0 7px; }
+body.phone .tk-today { height: 36px; padding: 0 9px; border-radius: 18px; }
+body.phone .tk-mode button { height: 32px; padding: 0 8px; }
 body.phone .tk-step { gap: 0; }
-body.phone .tk-step button { width: 25px; height: 28px; }
+body.phone .tk-step button { width: 40px; height: 40px; }
 body.phone .tk-days { gap: 2px; }
 body.phone .tk-day { padding: 3px 0; border-radius: 12px; }
 body.phone .tk-face { width: 36px; height: 36px; }
