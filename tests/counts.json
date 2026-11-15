@@ -71,6 +71,8 @@
 
   "folder": 14,
 
+  "numbers": 41,
+
   "sowing": 24,
 
   "step1": 66,
@@ -321,7 +323,9 @@
 
   "ask-site @3440": 33,
 
-  "ask-site dark": 33
+  "ask-site dark": 33,
+
+  "numbers-site": 41
 
  },
  "site10": {

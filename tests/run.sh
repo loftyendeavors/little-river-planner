@@ -12,7 +12,7 @@ for part in ${@:-node build app1 app2 app3 app4 new off site1 site2 site3 site4 
       # the site kept in the repository is what its own code builds to: a build that left it stale, or edited it by hand, shows here
       if [ -z "$(git -C $REPO status --porcelain -- index.html sw.js manifest.webmanifest css js fonts icons)" ]; then echo '{"passed":1,"of":1,"failed":[]}' | named "the built site"; else echo '{"passed":0,"of":1,"failed":["the built site in the repository is what the code builds to"]}' | named "the built site"; git -C $REPO status --porcelain -- index.html sw.js manifest.webmanifest css js fonts icons | head -5; fi
       sh $T/b.sh offline; (cd $REPO && node tools/sync_client_test.mjs $REPO/js 2>&1 | named "sync client, built site") ;;
-    app1) sh $T/b.sh ahead core sowing trays step1 folder step2a ;;
+    app1) sh $T/b.sh ahead core sowing trays step1 folder step2a numbers ;;
     app2) sh $T/b.sh f018 step2b maint sync step3a step3b ;;
     app3) sh $T/b.sh wide step5a step5b stepF plain r1 bedpanel mixed season photo ask cleanup look card ;;
     app4) sh $T/b.sh mapgeo; WIDTHS=${WIDTHS:-1280,1480,1707,3440} sh $T/b.sh map; sh $T/b.sh map-views; WIDTH=1480 sh $T/b.sh r1 ;;
@@ -26,7 +26,7 @@ for part in ${@:-node build app1 app2 app3 app4 new off site1 site2 site3 site4 
     site6) sh $T/b.sh bedpanel-site; WIDTH=1707 sh $T/b.sh bedpanel-site; WIDTH=3440 sh $T/b.sh bedpanel-site; WIDTH=1707 sh $T/b.sh bedpanel; sh $T/b.sh look-site; WIDTH=1707 sh $T/b.sh look-site; WIDTH=3440 sh $T/b.sh look-site ;;
     site7) sh $T/b.sh mixed-site; WIDTH=1707 sh $T/b.sh mixed-site; WIDTH=3440 sh $T/b.sh mixed-site; WIDTH=1707 sh $T/b.sh mixed; WIDTH=3440 sh $T/b.sh mixed ;;
     site8) sh $T/b.sh season-site photo-site; WIDTH=1480 sh $T/b.sh season season-site; WIDTH=1707 sh $T/b.sh season season-site; WIDTH=3440 sh $T/b.sh season season-site; DARK=1 sh $T/b.sh season-site ;;
-    site9) sh $T/b.sh ask-site; WIDTH=1480 sh $T/b.sh ask ask-site; WIDTH=1707 sh $T/b.sh ask ask-site; WIDTH=3440 sh $T/b.sh ask ask-site; DARK=1 sh $T/b.sh ask-site ;;
+    site9) sh $T/b.sh ask-site; WIDTH=1480 sh $T/b.sh ask ask-site; WIDTH=1707 sh $T/b.sh ask ask-site; WIDTH=3440 sh $T/b.sh ask ask-site; DARK=1 sh $T/b.sh ask-site; sh $T/b.sh numbers-site ;;
     site10) sh $T/b.sh cleanup-site; WIDTH=1480 sh $T/b.sh cleanup cleanup-site; WIDTH=1707 sh $T/b.sh cleanup cleanup-site; WIDTH=3440 sh $T/b.sh cleanup cleanup-site; sh $T/b.sh card-site; WIDTH=1480 sh $T/b.sh card-site; WIDTH=1707 sh $T/b.sh card; WIDTH=3440 sh $T/b.sh card-site ;;
     screens) sh $T/b.sh screens ;;   # a picture of each main screen, compared with the build before
     *) echo "unknown part $part" ;;

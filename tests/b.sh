@@ -50,6 +50,8 @@ for n in "$@"; do
     cleanup-site) python3 -I $T/cleanup_check.py $SITE $S/cleanup-site $ZIP 2>&1 | tally clean-up-built-site ;;
     look) python3 -I $T/look_a_check.py $APP $S/look 2>&1 | tally the-maps-look ;;
     look-site) python3 -I $T/look_a_check.py $SITE $S/look-site $ZIP 2>&1 | tally the-maps-look-built-site ;;
+    numbers) python3 -I $T/number_boxes_check.py $APP $S/numbers 2>&1 | tally number-boxes ;;
+    numbers-site) python3 -I $T/number_boxes_check.py $SITE $S/numbers-site $ZIP 2>&1 | tally number-boxes-built-site ;;
     map) WIDTHS=${WIDTHS:-1280,1480,1707,3440} python3 -I $REPO/tools/map_check.py $APP $S/map 2>&1 | tally map ;;
     map-views) WIDTHS=${WIDTHS:-1280,1707,3440} python3 -I $REPO/tools/map_views_check.py $APP $S/map-views 2>&1 | tally map-and-every-other-view ;;
     mapgeo) node $REPO/tools/mapgeo_test.cjs 2>&1 | tally map-geometry ;;
