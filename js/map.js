@@ -27,7 +27,8 @@
   const view = { x: 0, y: 0, z: 1, home: 1, fitted: false, moved: false };   // moved: the grower has panned or zoomed since the farm was last fitted
   const beds = new Map();       // bedId -> { bed, geo, g, base, fills, tag, parts, status, drop }
   const gardenSize = new Map(); // gardenId -> number of spaces drawn
-  let layers = { photo: true, labels: true }, highlightCrop = null, highlightGroup = null, feetPerPx = 0.1, raf = 0, spaceDown = false;
+  const DIM_KEY = 'lrf.map.dimPhoto';
+  let layers = { photo: true, dim: false, labels: true }, highlightCrop = null, highlightGroup = null, feetPerPx = 0.1, raf = 0, spaceDown = false;
   // While the layout is being edited this map only moves the view: picking, dragging and hover cards are the editor's.
   let locked = false;
   const watchers = [];
@@ -66,6 +67,7 @@
     if (hasPhoto) { photo.setAttribute('href', App.state.mapImageUrl); photo.setAttribute('width', map.imgW || 2000); photo.setAttribute('height', map.imgH || 1200); }
     photo.style.display = hasPhoto && layers.photo ? '' : 'none';
     $('map').classList.toggle('on-photo', hasPhoto && layers.photo);
+    $('map').classList.toggle('photo-dim', hasPhoto && layers.photo && layers.dim);
     $('mapPhotoToggle').hidden = !hasPhoto;
 
     const slots = unplacedSlots(plan, eng);
@@ -762,6 +764,10 @@
     $('mapZoomOut').addEventListener('click', () => { view.moved = true; glide(zoomed(...center(), 1 / 1.5), 200); });
     $('mapFit').addEventListener('click', () => fit(false, true));
     $('mapPhotoToggle').addEventListener('click', e => { layers.photo = !layers.photo; e.currentTarget.setAttribute('aria-pressed', layers.photo); build(); });
+    // "Dim photo" is how this computer likes to see the map, not part of the plan: it is kept in the browser and nowhere else
+    try { layers.dim = root.localStorage.getItem(DIM_KEY) === '1'; } catch (_) { /* a browser that keeps nothing still works */ }
+    $('mapDimToggle').checked = layers.dim;
+    $('mapDimToggle').addEventListener('change', e => { layers.dim = e.currentTarget.checked; try { root.localStorage.setItem(DIM_KEY, layers.dim ? '1' : '0'); } catch (_) { /* as above */ } build(); });
     $('mapLabelToggle').addEventListener('click', e => { layers.labels = !layers.labels; e.currentTarget.setAttribute('aria-pressed', layers.labels); updateLabels(); });
     $('mapSeasonToggle').addEventListener('click', () => setWholeSeason(!wholeSeason));
     // A window that changes size (dragged to the other monitor, made full screen) is fitted again, unless the grower has moved the view since.
