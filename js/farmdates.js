@@ -109,7 +109,7 @@
       if (dayOf(a.last) !== dayOf(b.last) || through(before, q, a) !== through(after, p, b)) harvest.push({ ...base, was: dayOf(a.last), now: dayOf(b.last), days: E.dayDiff(b.last, a.last), heldWas: through(before, q, a), heldNow: through(after, p, b) });
       if (dayOf(a.field) !== dayOf(b.field) || dayOf(a.sow) !== dayOf(b.sow) || dayOf(a.first) !== dayOf(b.first)) dates.push({ ...base, was: { sow: dayOf(a.sow), field: dayOf(a.field), first: dayOf(a.first) }, now: { sow: dayOf(b.sow), field: dayOf(b.field), first: dayOf(b.first) } });
       if (dayOf(a.out) !== dayOf(b.out)) out.push({ ...base, was: dayOf(a.out), now: dayOf(b.out) });
-      const ya = before.yieldOf(q), yb = after.yieldOf(p), ua = ya ? +ya.units || 0 : 0, ub = yb ? +yb.units || 0 : 0;
+      const ya = before.givenOf(q), yb = after.givenOf(p), ua = ya ? +ya.units || 0 : 0, ub = yb ? +yb.units || 0 : 0;
       if (Math.abs(ua - ub) > 1e-6) yields.push({ ...base, was: ua, now: ub, unit: (yb && yb.unit) || (ya && ya.unit) || '' });
       if (tools.trouble) {
         const ta = tools.trouble(before, q, a), tb = tools.trouble(after, p, b);

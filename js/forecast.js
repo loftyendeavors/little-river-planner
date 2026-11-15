@@ -68,7 +68,7 @@
     return /^stems?$/i.test(String(unit || '')) || FLOWER.test(String(crop.name || '')) ? 'flower' : 'produce';
   }
   /** "12 heads", "3.5 lb", "40 bunches", "6 trays", "25" for things counted singly. */
-  const PLURAL = { head: 'heads', bunch: 'bunches', stem: 'stems', tray: 'trays', pint: 'pints', quart: 'quarts', bag: 'bags', case: 'cases', box: 'boxes', each: '', lb: 'lb', oz: 'oz', bu: 'bu', kg: 'kg', g: 'g' };
+  const PLURAL = { head: 'heads', bunch: 'bunches', stem: 'stems', bouquet: 'bouquets', tray: 'trays', pint: 'pints', quart: 'quarts', bag: 'bags', case: 'cases', box: 'boxes', each: '', lb: 'lb', oz: 'oz', bu: 'bu', kg: 'kg', g: 'g' };
   function unitWord(n, unit, group) {
     const u = String(unit || 'each');
     if (group === 'flower' && /^(each|stems?)$/i.test(u)) return Math.abs(n - 1) < 1e-9 ? 'stem' : 'stems';
@@ -87,7 +87,8 @@
 
   /**
    * The forecast for one season. options: { year, groups: the grower's own sorting of crops, use }.
-   * rows are one per crop and unit, each with a quantity for every day of the year.
+   * rows are one per crop and unit, each with a quantity for every day of the year; a crop that sells more than one thing has a
+   * row for each (`thing`: the thing's id, `sold`: its name; the crop's own line has neither).
    * use: 'commercial' or 'personal' counts only those plantings; without it every planting is counted, and a personal
    * one gives its quantity and no dollars. `personal` is how many plantings of the season are marked for personal use,
    * whichever were counted.
@@ -106,41 +107,49 @@
       const personal = useOf(eng, p).personal;
       if (personal) marked++;
       if (use !== 'all' && personal !== (use === 'personal')) continue;
-      const y = personal ? { ...y0, price: 0 } : y0;                // grown for the farm's own table: picked, and not sold
-      const crop = eng.crop(p.cropId) || r.c, key = p.cropId + '|' + y.unit;
-      let row = rows.get(key);
-      if (!row) {
-        row = { key, cropId: p.cropId, name: short(crop.name || r.c.name || 'Crop'), unit: y.unit, group: groupOf(crop, y.unit, own), color: eng.cropColor(r.c), days: new Float64Array(n), picked: new Float64Array(n), value: new Float64Array(n),
-          total: 0, pickedTotal: 0, worth: 0, plantings: [], varieties: new Map(), unset: 0, first: null, last: null, keeps: 0, patterns: new Set() };
-        rows.set(key, row);
+      // what it gives of each thing the crop sells: the crop's own line alone, as always, unless another thing counts for it.
+      // A thing's row is listed with its crop (a flower's bouquets among the flowers), whatever unit the thing is sold by.
+      const parts = (eng.soldOf && eng.soldOf(p, r, y0)) || [y0];
+      let any = false;
+      for (const part of parts) {
+        const y = personal ? { ...part, price: 0 } : part;              // grown for the farm's own table: picked, and not sold
+        const crop = eng.crop(p.cropId) || r.c, key = p.cropId + '|' + y.unit + (y.thing ? '|' + y.thing : ''), from = y.first || r.first, to = y.last || r.last;
+        let row = rows.get(key);
+        if (!row) {
+          row = { key, cropId: p.cropId, name: short(crop.name || r.c.name || 'Crop') + (y.thing ? ' · ' + y.name : ''), unit: y.unit, group: groupOf(crop, y.thing ? eng.unitOf(crop) : y.unit, own), color: eng.cropColor(r.c), days: new Float64Array(n), picked: new Float64Array(n), value: new Float64Array(n),
+            total: 0, pickedTotal: 0, worth: 0, plantings: [], varieties: new Map(), unset: 0, first: null, last: null, keeps: 0, patterns: new Set(), ...(y.thing ? { thing: y.thing, sold: y.name } : {}) };
+          rows.set(key, row);
+        }
+        // a first thing that is left nothing by the others is not a yield that works out to nothing
+        if ((!y.set || !(y.units > 0)) && !(parts.length > 1 && y.set)) { row.unset++; unset.push({ p, r, why: y.set ? 'its yield works out to nothing' : 'no yield is set for this crop' }); if (!y.set) continue; }
+        // the days it is picked: its harvest period
+        const picked = [];
+        for (let d = new Date(from), i = at(d); d <= to; d = E.addDays(d, 1), i++) if (eng.pickedOn(r, d)) picked.push(i);
+        if (!picked.length || !(y.units > 0)) continue;
+        const rate = y.units / picked.length, vId = p.varietyId || '', v = eng.variety(p.varietyId);
+        let variety = row.varieties.get(vId);
+        if (!variety) { variety = { id: vId, name: v && v.name ? v.name : 'No variety chosen', days: new Float64Array(n), picked: new Float64Array(n), total: 0 }; row.varieties.set(vId, variety); }
+        // what comes out of the ground each day, and what there is to sell: a crop that keeps is drawn down evenly over the weeks it keeps
+        const keep = Math.max(1, Math.round((y.keep || 0) * 7)), lo = picked[0], span = picked[picked.length - 1] - lo + keep, out = new Float64Array(span), avail = new Float64Array(span);
+        const lots = y.pattern === 'once' ? [[lo, y.units]] : picked.map(i => [i, rate]);
+        for (const [i, q] of lots) { out[i - lo] += q; if (keep === 1) avail[i - lo] += q; else for (let k = 0; k < keep; k++) avail[i - lo + k] += q / keep; }
+        let inYear = 0, cut = 0;
+        for (let k = 0; k < span; k++) {
+          const i = lo + k;
+          if (i < 0 || i >= n) continue;
+          if (out[k]) { row.picked[i] += out[k]; variety.picked[i] += out[k]; cut += out[k]; }
+          if (avail[k]) { row.days[i] += avail[k]; row.value[i] += avail[k] * y.price; variety.days[i] += avail[k]; inYear += avail[k]; }
+        }
+        if (!(inYear > 0) && !(cut > 0)) continue;
+        row.total += inYear; row.pickedTotal += cut; row.worth += inYear * y.price; variety.total += inYear; any = true;
+        if (keep > 1) row.keeps = Math.max(row.keeps, y.keep);
+        row.patterns.add(y.pattern);
+        row.plantings.push({ p, r, units: y.units, inYear, rate, lo, avail, out, pattern: y.pattern, keep: y.keep || 0, i0: Math.max(0, lo), i1: Math.min(n - 1, lo + span - 1), p0: Math.max(0, lo), p1: Math.min(n - 1, picked[picked.length - 1]), price: y.price, personal, ...(y.first ? { from, to } : {}) });
+        const a = new Date(Math.max(from, start)), z = new Date(Math.min(to, E.addDays(start, n - 1)));
+        if (!row.first || a < row.first) row.first = a;
+        if (!row.last || z > row.last) row.last = z;
       }
-      if (!y.set || !(y.units > 0)) { row.unset++; unset.push({ p, r, why: y.set ? 'its yield works out to nothing' : 'no yield is set for this crop' }); if (!y.set) continue; }
-      // the days it is picked: its harvest period
-      const picked = [];
-      for (let d = new Date(r.first), i = at(d); d <= r.last; d = E.addDays(d, 1), i++) if (eng.pickedOn(r, d)) picked.push(i);
-      if (!picked.length || !(y.units > 0)) continue;
-      const rate = y.units / picked.length, vId = p.varietyId || '', v = eng.variety(p.varietyId);
-      let variety = row.varieties.get(vId);
-      if (!variety) { variety = { id: vId, name: v && v.name ? v.name : 'No variety chosen', days: new Float64Array(n), picked: new Float64Array(n), total: 0 }; row.varieties.set(vId, variety); }
-      // what comes out of the ground each day, and what there is to sell: a crop that keeps is drawn down evenly over the weeks it keeps
-      const keep = Math.max(1, Math.round((y.keep || 0) * 7)), lo = picked[0], span = picked[picked.length - 1] - lo + keep, out = new Float64Array(span), avail = new Float64Array(span);
-      const lots = y.pattern === 'once' ? [[lo, y.units]] : picked.map(i => [i, rate]);
-      for (const [i, q] of lots) { out[i - lo] += q; if (keep === 1) avail[i - lo] += q; else for (let k = 0; k < keep; k++) avail[i - lo + k] += q / keep; }
-      let inYear = 0, cut = 0;
-      for (let k = 0; k < span; k++) {
-        const i = lo + k;
-        if (i < 0 || i >= n) continue;
-        if (out[k]) { row.picked[i] += out[k]; variety.picked[i] += out[k]; cut += out[k]; }
-        if (avail[k]) { row.days[i] += avail[k]; row.value[i] += avail[k] * y.price; variety.days[i] += avail[k]; inYear += avail[k]; }
-      }
-      if (!(inYear > 0) && !(cut > 0)) continue;
-      row.total += inYear; row.pickedTotal += cut; row.worth += inYear * y.price; variety.total += inYear; counted++;
-      if (keep > 1) row.keeps = Math.max(row.keeps, y.keep);
-      row.patterns.add(y.pattern);
-      row.plantings.push({ p, r, units: y.units, inYear, rate, lo, avail, out, pattern: y.pattern, keep: y.keep || 0, i0: Math.max(0, lo), i1: Math.min(n - 1, lo + span - 1), p0: Math.max(0, lo), p1: Math.min(n - 1, picked[picked.length - 1]), price: y.price, personal });
-      const a = new Date(Math.max(r.first, start)), z = new Date(Math.min(r.last, E.addDays(start, n - 1)));
-      if (!row.first || a < row.first) row.first = a;
-      if (!row.last || z > row.last) row.last = z;
+      if (any) counted++;
     }
     const order = { produce: 0, micro: 1, flower: 2 };
     const list = [...rows.values()].filter(r => r.total > 0 || r.unset).sort((a, b) => order[a.group] - order[b.group] || a.name.localeCompare(b.name));
@@ -188,11 +197,15 @@
     }
     return out;
   }
+  /** How many crops some rows stand for: a crop that sells more than one thing has a row for each, and is one crop. */
+  const cropCount = rows => rows.filter(r => !r.thing).length + new Set(rows.filter(r => r.thing && !rows.some(q => !q.thing && q.cropId === r.cropId)).map(r => r.cropId)).size;
+  /** Does a row add to the stems? Another thing a flower sells does only where it is itself counted in stems (a bouquet is not a stem). */
+  const inStems = row => !row.thing || /^(each|stems?)$/i.test(String(row.unit));
   /** The headline figures for a stretch of days. Flowers add up as stems; microgreens as trays; vegetables only as a count of crops and a value. */
   function glance(model, i0, i1) {
-    const list = available(model, i0, i1), by = g => list.filter(x => x.row.group === g);
-    return { crops: list.length, produce: by('produce').length, flowers: by('flower').length, micros: by('micro').length,
-      trays: by('micro').reduce((n, x) => n + x.qty, 0), stems: by('flower').reduce((n, x) => n + x.qty, 0), worth: list.reduce((n, x) => n + x.worth, 0), list };
+    const list = available(model, i0, i1), by = g => list.filter(x => x.row.group === g), crops = part => cropCount(part.map(x => x.row));
+    return { crops: crops(list), produce: crops(by('produce')), flowers: crops(by('flower')), micros: crops(by('micro')),
+      trays: by('micro').reduce((n, x) => n + x.qty, 0), stems: by('flower').filter(x => inStems(x.row)).reduce((n, x) => n + x.qty, 0), worth: list.reduce((n, x) => n + x.worth, 0), list };
   }
 
   /** A plain-text availability list, the kind that is pasted into an email or a text to a chef. */
@@ -245,5 +258,5 @@
     return out;
   }
 
-  return { GROUPS, MONTHS, useOf, useOfBed, follows, build, sum, share, periods, season, available, glance, text, csv, gaps, groupOf, unitWord, shown, amount, monday };
+  return { GROUPS, MONTHS, useOf, useOfBed, follows, build, sum, share, periods, season, available, glance, text, csv, gaps, groupOf, unitWord, shown, amount, monday, cropCount, inStems };
 });

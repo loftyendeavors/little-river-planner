@@ -209,7 +209,7 @@
   function figure(eng, p) {
     const r = p && eng.calc(p);
     if (!r) return null;
-    const y = eng.yieldOf(p, r), through = eng.occupancyThrough(p, r);
+    const y = eng.givenOf(p, r), through = eng.occupancyThrough(p, r);   // every thing it gives, together
     return { first: +r.first, last: +r.last, sow: +(r.sow || 0), through: through === Infinity ? Infinity : +through, units: y ? y.units : 0, unit: y ? y.unit : '', price: y ? y.price : 0, pattern: y ? y.pattern : '' };
   }
   const alike = (a, b) => !!a && !!b && a.first === b.first && a.last === b.last && a.sow === b.sow && a.through === b.through && Math.abs(a.units - b.units) < 1e-6 && a.unit === b.unit && Math.abs(a.price - b.price) < 1e-9 && a.pattern === b.pattern;

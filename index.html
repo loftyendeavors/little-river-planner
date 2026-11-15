@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.44">
+<meta name="lrf-build" content="0.45">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -171,7 +171,7 @@
             <button type="button" data-as-scope="all" aria-pressed="false">All crops <small></small></button>
           </div>
           <input type="search" id="asSearch" placeholder="Search crops and varieties" autocomplete="off">
-          <label class="ah-check as-house" id="ahHouseFarm" title="On: a crop can be marked as partly kept for the house, and what the house keeps is taken off what is sold. Off: everything this farm packs is sold, and the idea is shown on no page. What either does to the season’s worth is shown before it is done." hidden><input type="checkbox" id="ahHouseOn"><span>The house keeps part of some crops</span></label>
+          <label class="ah-check as-house" id="ahHouseFarm" title="On: a crop can be marked as partly kept for personal use, and that part is taken off what is sold. Off: everything this farm packs is sold, and the idea is shown on no page. What either does to the season’s worth is shown before it is done." hidden><input type="checkbox" id="ahHouseOn"><span>Part of some crops is for personal use</span></label>
           <p class="as-key"><i class="k-default"></i>unchecked default <i class="k-guide"></i>checked against a guide <i class="k-own"></i>variety’s own <i class="k-mine"></i>yours <span id="asCount"></span></p>
         </div>
         <p class="as-hints ah-open" id="ahOpen" hidden></p>
@@ -281,6 +281,7 @@
 <script src="js/mapedit.js"></script>
 <script src="js/assume.js"></script>
 <script src="js/yieldcard.js"></script>
+<script src="js/things.js"></script>
 <script src="js/seeds.js"></script>
 <script src="js/bench.js"></script>
 <script src="js/traysview.js"></script>

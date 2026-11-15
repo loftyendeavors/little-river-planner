@@ -445,10 +445,12 @@
     //             once    the yield is a total, all of it counted the day the crop is ready
     //   days      harvest days · keep  weeks it stores after picking · share  the marketable part, in percent
     //   turnover  days the ground is held after the last harvest
-    //   house     true: the crop is marked as partly kept for the house (a crop whose share is under 100 is shown so without it)
+    //   house     true: the crop is marked as partly kept for personal use (a crop whose share is under 100 is shown so without it)
     //   looked    the year its figures were last looked at and said to be right
     // Nothing set means the crop's own figures. The two marks are words about the line: no figure is worked out from them.
-    // settings.houseKeeps === false is the farm's own switch: nothing is kept for the house, and all that is packed counts as sold.
+    //   things    more than one thing sold from the crop: { thingId: { id, n, name, from, place, unit, price, pattern, days, share, yield,
+    //             counted, weighs, holds, of } }. The line itself is the first thing; these are the others (thingsOf, below).
+    // settings.houseKeeps === false is the farm's own switch: nothing is kept for personal use, and all that is packed counts as sold.
     const PATTERNS = ['spread', 'weekly', 'once'];
     const amount0 = x => x != null && x !== '' && Number.isFinite(+x) && +x >= 0 ? +x : null;
     const word = x => typeof x === 'string' && x.trim() ? x.trim() : null;
@@ -1185,6 +1187,111 @@
     /** Is this a day the crop is picked? Any day of its harvest period. */
     const pickedOn = (r, date) => date >= r.first && date <= r.last;
 
+    // ── more than one thing sold from a crop ──
+    // A crop's own line (its unit, price, yields and picking) is the first thing it sells. Each other thing is a record of its
+    // own inside that line, with an id that never changes, and is one of three kinds (`from`):
+    //   place     a different thing from one growing place: every planting of the crop there is sold as this, and not as the first
+    //   bed       a part of each bed is grown for it (`share`, percent): its own yield and its own picking
+    //   harvest   a part of the first thing's harvest (`share`) is packed as it: so many of the crop's own unit to one of this
+    //             (`holds`), or what one of them weighs in this thing's unit (`weighs`), typed while the crop was sold by `of`
+    // A `place` or `bed` thing has a yield of its own, for a plant or a bed-foot as the crop is counted, in its own unit; where
+    // it is sold by weight and its yield is typed in something counted (`counted`), `weighs` turns the one into the other.
+    // Nothing else turns a unit into another. A thing counts for nothing until every figure it needs is there: until then the
+    // crop is worked out exactly as if the thing had never been added.
+    const THING_KINDS = ['place', 'bed', 'harvest'], WEIGHED = ['lb', 'oz', 'kg', 'g'], COUNTED = ['each', 'head'];
+    const thingCache = new Map();
+    /**
+     * The other things a crop sells, in the order they were added. Each: its figures as typed (null where empty), `way`
+     * ('yield', 'holds' or 'weighs': how its amount is got), `waits` (the figures still missing, by key), `counts` (it is
+     * complete and in force) and `why` (what stops a complete thing from counting: its place is taken, or the shares pass 100).
+     */
+    function thingsOf(cropId) {
+      if (thingCache.has(cropId)) return thingCache.get(cropId);
+      const c = crop(cropId), line = S.assumptions && S.assumptions.sell && S.assumptions.sell[cropId], raw = line && line.things, out = [];
+      if (c && !c.micro && !isCoverCrop(c) && raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        const own = unitOf(c, null), positive0 = x => { const n = amount0(x); return n != null && n > 0 ? n : null; };
+        for (const [id, x] of Object.entries(raw)) {
+          if (!x || typeof x !== 'object' || !THING_KINDS.includes(x.from)) continue;
+          const unit = word(x.unit) || own, share = amount0(x.share), from = x.from, counted = from !== 'harvest' && WEIGHED.includes(unit) && COUNTED.includes(x.counted) ? x.counted : null;
+          const t = { id, n: Number.isFinite(+x.n) ? +x.n : 0, name: word(x.name) || 'Something else', from, place: from === 'place' && ENVS.includes(x.place) ? x.place : null, unit, price: amount0(x.price),
+            pattern: PATTERNS.includes(x.pattern) ? x.pattern : 'spread', patternMine: PATTERNS.includes(x.pattern) ? x.pattern : null, days: wholeDays(x.days), share: share == null || share > 100 ? null : share,
+            yield: amount0(x.yield), counted, weighs: positive0(x.weighs), holds: positive0(x.holds), of: word(x.of), source: own, waits: [], counts: false, why: null };
+          t.way = from !== 'harvest' ? 'yield' : WEIGHED.includes(unit) && !WEIGHED.includes(own) ? 'weighs' : 'holds';
+          if (t.price == null) t.waits.push('price');
+          if (from !== 'place' && t.share == null) t.waits.push('share');
+          if (from !== 'harvest') { if (t.yield == null) t.waits.push('yield'); if (counted && t.weighs == null) t.waits.push('weighs'); }
+          else if (t[t.way] == null || t.of !== own) t.waits.push(t.way);
+          out.push(t);
+        }
+        out.sort((a, b) => a.n - b.n || String(a.id).localeCompare(String(b.id)));
+        // what cannot both hold: two things on one place, or shares of one kind that pass 100. The one added first stands.
+        const taken = new Set(), sum = { bed: 0, harvest: 0 };
+        for (const t of out) {
+          if (t.waits.length) continue;
+          if (t.from === 'place') { if (!t.place) t.why = 'place'; else if (taken.has(t.place)) t.why = 'taken'; else { taken.add(t.place); t.counts = true; } }
+          else if (sum[t.from] + t.share > 100 + 1e-9) t.why = 'over';
+          else { sum[t.from] += t.share; t.counts = true; }
+        }
+      }
+      thingCache.set(cropId, out);
+      return out;
+    }
+    /**
+     * What one planting gives of each thing its crop sells: null where only the crop's own line applies (no thing counts, or the
+     * planting carries a yield of its own, is a live tray, or grows a variety sold by a unit of its own), and then yieldOf is
+     * the whole of it, as it always was. Else a list, one part for each thing the planting feeds. A part reads as yieldOf's
+     * result does (units, unit, price, pattern, keep, set) and says which thing it is (`thing`: null for the first, `name`) and,
+     * for a thing picked on days of its own, the first and last of them (`first`, `last`). A thing moves no date: it is first
+     * picked the day the planting is, and never after the planting's own last picking.
+     */
+    function soldOf(p, r, y) {
+      r = r || calc(p);
+      if (!r) return null;
+      const all = thingsOf(p.cropId);
+      if (!all.some(t => t.counts)) return null;
+      y = y || yieldOf(p, r);
+      if (!y || y.own || (r.rack && !!r.c.micro)) return null;
+      const saved = variety(p.varietyId), v = saved && saved.cropId === p.cropId ? saved : null;
+      if (v && sellVRule(v.id).unit) return null;
+      const env = envOf(r.b), list = all.filter(t => t.counts);
+      // a thing with a yield of its own, from `part` of what the planting is counted by
+      const own = (t, part) => {
+        const days = t.days ? Math.min(t.days, r.harvestDays) : r.harvestDays, nominal = t.days || Math.max(1, r.expectedHarvestDays), weekly = t.pattern === 'weekly';
+        const each = weekly ? t.yield * days / 7 : t.yield, cut = weekly ? 1 : clamp(days / Math.max(1, nominal), 0, 1), k = t.counted ? t.weighs : 1;
+        return { thing: t.id, name: t.name, from: t.from, basis: y.basis, count: y.count * part, per: each * k, mk: y.mk, part: cut, units: y.count * part * each * k * y.mk * cut, unit: t.unit, set: true, own: false,
+          price: t.price, pattern: t.pattern, perWeek: weekly ? t.yield * k : null, nominal, by: 'thing', keep: y.keep, first: r.first, last: addDays(r.first, Math.max(0, days - 1)), slice: part };
+      };
+      const there = list.find(t => t.from === 'place' && t.place === env);
+      if (there) return [own(there, 1)];
+      // Where two things come out of one bed, a planting may say which of them it is grown for (`gives`): 'first', the crop's
+      // own line and none of the bed's other things; a thing's id, that thing on the whole of it; nothing, both by the crop's shares.
+      // A word that names no thing in force is read as nothing said.
+      const shared = list.filter(t => t.from === 'bed'), only = p.gives && p.gives !== 'first' ? shared.find(t => t.id === p.gives) : null;
+      if (only) return [own(only, 1)];
+      const beds = p.gives === 'first' ? [] : shared, packs = list.filter(t => t.from === 'harvest');
+      if (!beds.length && !packs.length) return null;
+      const bedLeft = 1 - beds.reduce((n, t) => n + t.share, 0) / 100, packLeft = 1 - packs.reduce((n, t) => n + t.share, 0) / 100, source = y.units * Math.max(0, bedLeft);
+      const parts = [{ ...y, units: source * Math.max(0, packLeft), thing: null, name: null, slice: Math.max(0, bedLeft) * Math.max(0, packLeft) }];
+      for (const t of beds) parts.push(own(t, t.share / 100));
+      // packed from the first thing's harvest: picked when it is, kept as it keeps
+      for (const t of packs) parts.push({ ...y, thing: t.id, name: t.name, from: t.from, units: source * t.share / 100 * (t.way === 'weighs' ? t.weighs : 1 / t.holds), unit: t.unit, price: t.price, by: 'thing', perWeek: null,
+        packed: { of: y.unit, share: t.share, way: t.way, n: t.way === 'weighs' ? t.weighs : t.holds, left: Math.max(0, bedLeft) } });   // `per` stays the crop's own yield, in the crop's own unit: this says how it becomes the thing
+      return parts;
+    }
+    /**
+     * What one planting gives, read as one figure: yieldOf's own result where the planting gives the crop's own line alone.
+     * Where it gives more than one thing, the things together: `units` the sum of what it gives of each, `unit` their units
+     * side by side ("bunch + lb"), `price` what a unit of that sum is worth, so that units × price is the planting's worth,
+     * and `parts` each thing by itself. For a reading that compares a planting with itself before and after a change.
+     */
+    function givenOf(p, r) {
+      r = r || calc(p);
+      const y = r ? yieldOf(p, r) : null, parts = y ? soldOf(p, r, y) : null;
+      if (!parts) return y;
+      const units = parts.reduce((n, x) => n + x.units, 0), worth = parts.reduce((n, x) => n + x.units * x.price, 0);
+      return { ...y, units, unit: [...new Set(parts.map(x => x.unit))].join(' + '), price: units > 0 ? worth / units : 0, parts };
+    }
+
     const usedEnvs = new Set((S.beds || []).filter(b => b.active !== false).map(envOf).filter(Boolean));
     /**
      * One row of the list's second table: what a crop, or one of its varieties, is sold as, how it is picked and what it yields.
@@ -1205,7 +1312,7 @@
           total: value == null ? null : weekly ? value * nominal / 7 : value, weekly: value == null ? null : weekly ? value : value * 7 / nominal };
       }
       const pick = (mine, fallback) => ({ mine, fallback, value: mine != null ? mine : fallback });
-      // what the house keeps: `sold` is the share in force; `part` says the crop is shown as partly kept (marked so, or under 100 today)
+      // what is kept for personal use: `sold` is the share in force; `part` says the crop is shown as partly kept (marked so, or under 100 today)
       const share0 = micro ? 100 : rule.share != null ? rule.share : Math.round(clamp(finite(c.mk, 0.9), 0, 1) * 100), sold = micro || sellsAll ? 100 : share0;
       return { micro, basis: micro ? 'tray' : c.yBasis === 'ft' ? 'ft' : 'plant', season, nominal, weekly, cells,
         house: { farm: !sellsAll, marked: !micro && !!rule.house, sold, part: !micro && !sellsAll && (!!rule.house || share0 < 100) }, looked: rule.looked,
@@ -1229,7 +1336,7 @@
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
       heatedTraySpaces, benchRoom, coolRules, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
-      yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
+      yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, thingsOf, soldOf, givenOf, WEIGHED, COUNTED, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, startRule, startFixed, startHint, STARTS, START_LESS, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,

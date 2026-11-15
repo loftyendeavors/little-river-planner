@@ -406,23 +406,23 @@
   }
 
   /**
-   * Whom a crop is grown for, in the words a planting uses: for sale, or for sale and the house. It is set at once, apart from
+   * Whom a crop is grown for, in the words a planting uses: for sale, or for sale and personal use. It is set at once, apart from
    * the form above it, and is one step of its own. A crop that counts less than all of what is packed as sold is shown as
-   * partly kept for the house, marked or not; saying it is sold in full shows what that does to the season's worth first.
+   * partly kept for personal use, marked or not; saying it is sold in full shows what that does to the season's worth first.
    * On a farm that sells everything there is nothing to choose.
    */
   function houseBlock(crop) {
     const eng = App.state.engine, hc = eng.harvestFor(crop.id);
     if (!hc || hc.micro || eng.isCoverCrop(crop)) return null;
-    if (!hc.house.farm) return h('div.sd-house', { id: 'sdHouse', dataset: { farm: 'off' } }, h('h3', 'Grown for'), h('p.dlg-hint', 'For sale: everything this farm packs is sold. To keep part of a crop for the house, turn that on under Assumptions, Yield and price.'));
+    if (!hc.house.farm) return h('div.sd-house', { id: 'sdHouse', dataset: { farm: 'off' } }, h('h3', 'Grown for'), h('p.dlg-hint', 'For sale: everything this farm packs is sold. To keep part of a crop for personal use, turn that on under Assumptions, Yield and price.'));
     const part = hc.house.part, sold = root.LRFAssume.fig(hc.house.sold), kept = root.LRFAssume.fig(100 - hc.house.sold);
     return h('div.sd-house', { id: 'sdHouse', dataset: { part: String(part), marked: String(hc.house.marked) } }, h('h3', 'Grown for'),
       h('div.seg', { role: 'group', 'aria-label': 'Grown for' },
         h('button', { type: 'button', dataset: { house: 'sale' }, 'aria-pressed': String(!part), title: 'All that is packed counts as sold. What that does to the season’s worth is shown before anything changes.', onclick: () => { App.setHouse(crop.id, false); } }, 'For sale'),
-        h('button', { type: 'button', dataset: { house: 'part' }, 'aria-pressed': String(part), title: 'The house keeps part of what is packed. Marking a crop so changes no figure.', onclick: () => { App.setHouse(crop.id, true); } }, 'For sale and the house')),
+        h('button', { type: 'button', dataset: { house: 'part' }, 'aria-pressed': String(part), title: 'Part of what is packed is for personal use. Marking a crop so changes no figure.', onclick: () => { App.setHouse(crop.id, true); } }, 'For sale and personal use')),
       h('p.dlg-hint', !part ? 'All that is packed counts as sold.'
-        : hc.house.marked ? `Marked as partly kept for the house${hc.house.sold >= 100 ? '. How much is not set yet: it is typed' : `: ${kept}% of what is packed today. How much is set`} on the Assumptions list, Yield and price.`
-          : `${sold}% of what is packed counts as sold today, so ${crop.name} is shown as partly kept for the house. “For sale” sells it in full, and shows what that does to the season’s worth first.`,
+        : hc.house.marked ? `Marked as partly kept for personal use${hc.house.sold >= 100 ? '. How much is not set yet: it is typed' : `: ${kept}% of what is packed today. How much is set`} on the Assumptions list, Yield and price.`
+          : `${sold}% of what is packed counts as sold today, so ${crop.name} is shown as partly kept for personal use. “For sale” sells it in full, and shows what that does to the season’s worth first.`,
         ' This is set at once, apart from Save above.'));
   }
 

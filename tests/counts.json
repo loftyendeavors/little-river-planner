@@ -49,6 +49,10 @@
 
   "the made-up farm": 7,
 
+  "things, backup": 47,
+
+  "things, compact": 47,
+
   "waiting, backup": 54,
 
   "waiting, compact": 54,
@@ -136,7 +140,9 @@
 
   "mapgeo": 81,
 
-  "r1 @1480": 66
+  "r1 @1480": 66,
+
+  "things": 96
 
  },
  "new": {
@@ -215,7 +221,11 @@
 
   "map-site": 348,
 
-  "map-views-site": 22
+  "map-views-site": 22,
+
+  "things-site": 96,
+
+  "things-site @1480": 96
 
  },
  "site4": {
@@ -283,7 +293,11 @@
 
   "mixed-site @1707": 63,
 
-  "mixed-site @3440": 63
+  "mixed-site @3440": 63,
+
+  "things @1707": 96,
+
+  "things-site @3440": 96
 
  },
  "site8": {
