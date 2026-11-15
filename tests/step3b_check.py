@@ -97,6 +97,10 @@ with sync_playwright() as pw:
     def settle(ms=350):
         page.wait_for_timeout(ms)
 
+    def the_list():
+        """Yield and price opens one crop at a time; this check is of the list, which is its other way: "All on one page"."""
+        way = page.locator('[data-ah-way="list"]')
+        if way.count() and way.first.is_visible(): way.first.click(); settle(500)
     def toast():
         return ev("document.getElementById('toast').classList.contains('show') ? document.getElementById('toast').textContent : ''")
 
@@ -145,7 +149,7 @@ with sync_playwright() as pw:
     ev("LRFApp.setView('assume')"); settle(900)
     start = ev("({ days: !document.getElementById('asTable').hidden, harvest: !document.getElementById('ahTable').hidden, title: document.getElementById('asTitle').textContent, pressed: document.querySelector('[data-as-mode=\"days\"]').getAttribute('aria-pressed') })")
     check('the Assumptions view opens on days to harvest, as before', start == {'days': True, 'harvest': False, 'title': 'Days to first harvest', 'pressed': 'true'}, start)
-    page.click('[data-as-mode="harvest"]'); settle(900)
+    page.click('[data-as-mode="harvest"]'); settle(900); the_list()
     seen = ev("""(() => { const e = LRFApp.state.engine, rows = [...document.querySelectorAll('#ahBody tr.as-crop')];
       return { days: !document.getElementById('asTable').hidden, harvest: !document.getElementById('ahTable').hidden, title: document.getElementById('asTitle').textContent, heads: document.querySelectorAll('#ahHead th').length, rows: rows.length,
         mine: +document.querySelector('[data-as-scope="mine"] small').textContent, cells: rows.every(r => r.children.length === 13), set: document.querySelectorAll('#ahBody .mine').length, hints: document.getElementById('asHints').hidden, audit: !!document.getElementById('asReview') }; })()""")
@@ -305,7 +309,7 @@ with sync_playwright() as pw:
         check('Apply is one step, with the plan as it stood kept as a snapshot first', not done['open'] and done['steps'] == stepsA + 1 and done['snaps'] == snaps0 + 1 and 'follow' in done['label'] and done['label'].split(' ')[0] == head.split(' ')[0], {'done': done, 'head': head})
         check('nothing moved and nothing is forecast differently: every planting has the dates, the ground and the yield it had', figs3 == figs0 and abs(ev(WORTH) - worth0) < 1e-6 and 'no date moved' in t, {'toast': t, 'changed': len([k for k in figs0 if figs0[k] != figs3[k]])})
         check('only the rows that were to be kept are left to review', done['keepOnly'], done)
-        page.click('[data-as-mode="harvest"]'); settle(700)
+        page.click('[data-as-mode="harvest"]'); settle(700); the_list()
         taken = ev("(() => { const a = LRFApp.state.plan.assumptions || {}, cells = Object.entries(a.crops || {}).flatMap(([id, envs]) => Object.entries(envs).filter(([, c]) => c.yield != null).map(([env]) => 'y|crops|' + id + '|' + env)); return { cells: cells.length, marked: cells.filter(k => { const el = document.querySelector('#ahBody [data-hk=\"' + k + '\"]'); return !el || el.closest('td').classList.contains('mine'); }).length, count: document.getElementById('asCount').textContent }; })()")
         check('the figures the list took are on its lines, shown as yours', taken['cells'] == taken['marked'] and (taken['cells'] == 0 or 'yield' in taken['count']), taken)
         shot('3b-after')

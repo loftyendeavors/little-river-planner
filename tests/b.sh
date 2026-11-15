@@ -44,6 +44,8 @@ for n in "$@"; do
     photo-site) python3 -I $T/photo_keep_check.py $SITE $S/photo-site $REPO $ZIP $PHOTO 2>&1 | tally farm-photo-two-browsers-built-site ;;
     ask) python3 -I $T/ask_check.py $APP $S/ask 2>&1 | tally asked-only-from-the-library ;;
     ask-site) python3 -I $T/ask_check.py $SITE $S/ask-site $ZIP 2>&1 | tally asked-only-from-the-library-built-site ;;
+    card) python3 -I $T/yieldcard_check.py $APP $S/card 2>&1 | tally yield-card ;;
+    card-site) python3 -I $T/yieldcard_check.py $SITE $S/card-site $ZIP 2>&1 | tally yield-card-built-site ;;
     cleanup) python3 -I $T/cleanup_check.py $APP $S/cleanup 2>&1 | tally clean-up ;;
     cleanup-site) python3 -I $T/cleanup_check.py $SITE $S/cleanup-site $ZIP 2>&1 | tally clean-up-built-site ;;
     look) python3 -I $T/look_a_check.py $APP $S/look 2>&1 | tally the-maps-look ;;

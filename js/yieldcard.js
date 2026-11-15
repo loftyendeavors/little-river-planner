@@ -376,7 +376,7 @@
     const want = ui.focus || (key ? { key } : null);
     ui.focus = null;
     if (want) {
-      const all = stops(main), to = want.blank ? all.find(blank) || all.find(el => el.tagName === 'INPUT') || $('ycNext') : want.key === 'next' ? $('ycNext') : main.querySelector(`[data-yk="${CSS.escape(want.key)}"]`);
+      const all = stops(main), to = want.blank ? all.find(blank) || main.querySelector('[data-yk="price"]') || $('ycNext') : want.key === 'next' ? $('ycNext') : main.querySelector(`[data-yk="${CSS.escape(want.key)}"]`);
       if (to) { to.focus({ preventScroll: !want.blank }); if (to.select && to.tagName === 'INPUT') to.select(); }
     }
     return { mine: made.mine, all: made.all, left };
