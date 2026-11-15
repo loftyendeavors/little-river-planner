@@ -121,7 +121,8 @@
     // with no bed to work a planting out in, its days are read off a space like the ones it is headed for
     const like = list[0] || spaces(eng, crop, o.gardenIds)[0] || refSpace(eng, crop, source);
     return { crop, source, from, every, basis, count, unit, amount, spaces: list, variety, skipCovered: !sized && o.skipCovered === true, gardenIds: (o.gardenIds || []).slice(),
-      place, spill: o.spill !== false, wants, like, seriesId: 's-' + newId(), sized, want, until: sized && E.validDate(to) ? to : null, net: sized && o.net !== false };
+      place, spill: o.spill !== false, wants, like, seriesId: 's-' + newId(), sized, want, until: sized && E.validDate(to) ? to : null, net: sized && o.net !== false,
+      thing: sized && o.thing ? String(o.thing) : '' };   // which thing the amount wanted is of: the crop's own line, or another thing it sells
   }
   /** A space to judge a crop's days by when it has no bed: where the planting it copies stands, else where the crop is already grown, else the first that suits. */
   function refSpace(eng, crop, source) {
@@ -150,6 +151,15 @@
     return Rails.propose(eng, payload, { bedId: bed.id, date }, { source, noShrink: false });
   }
   // ── sized by harvest ──
+  /**
+   * What a planting gives of what a series is sized by: the crop's own line, or (`o.thing`, an id) another thing the crop sells.
+   * Null where the planting gives none of it: a thing sold from one place only is not had from another.
+   */
+  function given(eng, o, p, r) {
+    const y = eng.yieldOf(p, r), parts = y && eng.soldOf ? eng.soldOf(p, r, y) : null;
+    if (!y || !parts) return o.thing ? null : y;
+    return parts.find(x => (x.thing || '') === (o.thing || '')) || null;
+  }
   const COVERED = 0.1, NEAR = 0.05;           // a stretch the plan already fills to within a tenth gets no planting; a week within a twentieth of what was asked is a full week
   const PIECE = 5, SCRAP = 3;                 // feet: a planting is not started on less ground than this unless that finishes it; a scrap that short is not left over
   /**
@@ -158,7 +168,7 @@
    * much of the stretch it is meant to serve its harvest really covers (a harvest the season cuts short serves fewer days).
    */
   function gauge(eng, o, p, r) {
-    const y = eng.yieldOf(p, r);
+    const y = given(eng, o, p, r);
     if (!y) return null;
     const soil = eng.isSoilBed(r.b), size = soil ? r.physicalLength : 1, hf = eng.harvestFor(o.crop.id, p.varietyId), env = eng.envOf(r.b);
     const keepDays = Math.round((y.keep || 0) * 7), once = y.pattern === 'once', more = keepDays > 0 ? keepDays - 1 : 0;
@@ -180,7 +190,7 @@
     const crop = eng.crop(input.cropId);
     if (!crop || crop.micro) return { error: 'Choose a crop.' };
     const source = input.sourceId ? eng.planting(input.sourceId) : null, variety = input.varietyId ? eng.variety(input.varietyId) : null;
-    const o = { crop, source: source && source.cropId === crop.id ? source : null, variety: variety && variety.cropId === crop.id ? variety : null, unit: 'yield', every: null };
+    const o = { crop, source: source && source.cropId === crop.id ? source : null, variety: variety && variety.cropId === crop.id ? variety : null, unit: 'yield', every: null, thing: input.thing || '' };
     const named = input.place === 'beds' ? (input.bedIds || []).map(id => eng.bedOf(id)).filter(b => suits(eng, crop, b)) : input.place === 'hold' ? [] : spaces(eng, crop, input.gardenIds);
     const like = named[0] || spaces(eng, crop, input.gardenIds)[0] || refSpace(eng, crop, o.source), year = planYear(eng);
     if (!like) return { error: 'There is no space this crop can go in to size a planting by.' };
@@ -188,6 +198,7 @@
     if (!E.validDate(target)) target = new Date(year, 5, 15);
     const first = draftFor(eng, o, like, target);
     if (!first.r) return { error: 'This crop cannot be worked out there.', like };
+    if (o.thing && !given(eng, o, first.p, first.r)) return { error: 'That is not sold from a space like this one: it has a place of its own.', like };
     const then = draftFor(eng, o, like, E.addDays(target, -E.dayDiff(first.r.first, first.r.field))), res = then.r ? then : first, g = gauge(eng, o, res.p, res.r);
     if (!g) return { error: 'This crop has nothing to pick.', like };
     if (input.basis === 'planting') { const g0 = gauge(eng, o, first.p, first.r); if (g0) return { ...paceOf(g0, first.r), like }; }
@@ -286,7 +297,7 @@
         if (sized) {
           // as long as it takes to give what is still wanted of this planting; a harvest the season cuts short is asked for the days it has
           const g = gauge(probe, o, p, r);
-          if (!g || !g.y.set || !(g.per > 0)) { note(g && g.y.set ? 'Nothing would be ready before the season ends' : 'No yield is set for it here', bed); continue; }
+          if (!g || !g.y.set || !(g.per > 0)) { note(g && g.y.set ? 'Nothing would be ready before the season ends' : !g && o.thing ? 'That is not sold from here' : 'No yield is set for it here', bed); continue; }
           if (g.open) { note('Its yield here has not been checked', bed); continue; }
           part = g.part > 0 ? g.part : 1;
           const here = remaining * part;
@@ -296,19 +307,19 @@
             let made = null;
             // plants come in whole numbers, so a length is tried, and lengthened a foot at a time until it gives enough
             for (let ft = Math.min(feetFor(here, g.per), Math.floor(r.physicalLength + EPS)), tries = 0; ft < r.physicalLength - EPS && tries < 12; ft++, tries++) {
-              const next = cut(res, ft), y = next && probe.yieldOf(next.p, next.r);
+              const next = cut(res, ft), y = next && given(probe, o, next.p, next.r);
               if (!next) break;
               made = next;
               if (y && y.units >= here - EPS) break;
             }
-            if (made) { const y = probe.yieldOf(made.p, made.r); if (y && y.units >= here - EPS) { p = made.p; r = made.r; } }
+            if (made) { const y = given(probe, o, made.p, made.r); if (y && y.units >= here - EPS) { p = made.p; r = made.r; } }
           }
         }
         const trouble = seasonTrouble(probe, p, r);
         if (trouble) { note(trouble, bed); continue; }
         if (!(r.harvestDays > 0)) { note('Nothing would be ready before the season ends', bed); continue; }
         if (o.skipCovered && covered && !wave.placed.length && covered(r.first)) { wave.skipped = 'covered'; wave.firstHarvest = r.first; break; }
-        const y = eng.yieldOf(p, r);
+        const y = sized ? given(eng, o, p, r) : eng.yieldOf(p, r);
         wave.placed.push({ p, r, bed, units: y ? y.units : 0, unit: y ? y.unit : '' });
         added.push(p);
         remaining -= sized ? (y ? y.units : 0) / part : o.unit === 'ft' && probe.isSoilBed(bed) ? r.physicalLength : 1;
@@ -340,7 +351,7 @@
       units: all.reduce((n, x) => n + x.units, 0), unit: all.length ? all[0].unit : sized ? rests.y.unit : eng.unitOf(o.crop), ground: all.reduce((n, x) => n + (x.r.tw ? 1 : x.r.len), 0), groundUnit: o.spaces.length ? unitOfKind[eng.spaceKind(o.spaces[0])] : 'ft',
       ...(sized ? { sized: { want: o.want, unit: rests.y.unit, every: o.every, until: o.until, net: !!supply, asked: waves.reduce((n, w) => n + w.asked, 0), have: waves.reduce((n, w) => n + w.have, 0), covered: waves.filter(w => w.skipped === 'covered').length,
         feet: all.reduce((n, x) => n + (probeSoil(eng, x.bed) ? x.r.physicalLength : 0), 0), heldFeet: waves.flatMap(w => w.held).reduce((n, w) => n + (+w.ft || 0), 0),
-        rests: { per: rests.per, soil: rests.soil, each: rests.y.per, mk: rests.y.mk, basis: rests.y.basis, pattern: rests.y.pattern, by: rests.y.by, env: rests.env, days: rests.there, meant: rests.meant, keep: rests.y.keep || 0, perWeek: rests.y.perWeek, bed: rests.bed } } } : {}) };
+        rests: { per: rests.per, soil: rests.soil, each: rests.y.per, mk: rests.y.mk, basis: rests.y.basis, pattern: rests.y.pattern, by: rests.y.by, env: rests.env, days: rests.there, meant: rests.meant, keep: rests.y.keep || 0, perWeek: rests.y.perWeek, bed: rests.bed, ...(rests.y.slice != null && rests.y.slice < 1 ? { slice: rests.y.slice } : {}) } } } : {}) };
   }
   const probeSoil = (eng, bed) => !!bed && eng.isSoilBed(bed);
   function heldWhy(eng, res) {

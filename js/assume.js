@@ -402,6 +402,8 @@
         !hc.house.farm ? h('td.as-cell.none', { hidden: true }) : hc.micro ? fixed('—') : figCell({ cls: '.ah-s', key: `share|${c.id}`, mine: hc.share.mine, fallback: hc.share.fallback, max: 100, label: `${c.name}: sold percent`, tip: `Of what is packed, the part counted as sold: the rest is the house’s. ${hc.share.mine != null ? 'Yours.' : 'From the crop’s record.'}`, save: n => App.setSell(c.id, { share: n }, n == null ? `${c.name}: sold share back to ${hc.share.fallback}%` : `${c.name}: ${fig(n)}% sold`) }),
         hc.micro ? fixed('—') : figCell({ cls: '.ah-s', key: `keep|${c.id}`, mine: hc.keep.mine, fallback: 0, max: 60, label: `${c.name}: keeps, weeks`, tip: 'Weeks it keeps after picking. What is picked is counted as there to sell evenly over those weeks. Nothing set: it is sold as it is picked.', save: n => App.setSell(c.id, { keep: n }, n == null || n === 0 ? `${c.name}: sold as it is picked` : `${c.name}: keeps ${fig(n)} week${n === 1 ? '' : 's'}`) }),
         hc.micro ? fixed('—') : figCell({ cls: '.ah-s', key: `turn|${c.id}`, mine: hc.turnover.mine, fallback: hc.turnover.fallback, whole: true, max: 120, label: `${c.name}: turnover days`, tip: `Days the ground is held after the last harvest. ${hc.turnover.mine != null ? 'Yours for this crop.' : `Nothing set: the farm’s ${hc.turnover.fallback} days.`} A planting with its own number keeps it.`, save: n => App.setSell(c.id, { turnover: n }, n == null ? `${c.name}: turnover back to ${hc.turnover.fallback} days` : `${c.name}: ${n} turnover day${n === 1 ? '' : 's'}`) })));
+      // a line for each other thing the crop sells: the same figures as its column on the card (js/things.js)
+      for (const line of root.LRFThings.listRows({ eng, c, hc, figCell, places: eng.ENVS.length, house: hc.house.farm })) body.append(line);
       if (!open) continue;
       for (const v of (nameHit ? varieties : hits)) {
         const hv = eng.harvestFor(c.id, v.id), vu = hv.unit.value;
@@ -428,8 +430,9 @@
   function countLine(plan) {
     const a = plan.assumptions, cells = a ? Object.values(a.crops || {}).concat(Object.values(a.varieties || {})).flatMap(r => Object.values(r)) : [];
     const days = cells.filter(c => c && c.dtm != null).length, yields = cells.filter(c => c && c.yield != null).length, starts = a && a.starts ? Object.keys(a.starts).length : 0;
-    const lines = a ? Object.values(a.sell || {}).concat(Object.values(a.sellV || {})).reduce((n, r) => n + Object.keys(r).filter(k => k !== 'house' && k !== 'looked').length, 0) : 0;
-    $('asCount').textContent = days || starts || yields || lines ? [days ? `${days} number${days === 1 ? '' : 's'} of your own` : '', starts ? `“Days counted from” set for ${starts} crop${starts === 1 ? '' : 's'}` : '', yields ? `${yields} yield${yields === 1 ? '' : 's'}` : '', lines ? `${lines} other figure${lines === 1 ? '' : 's'} on crop lines` : ''].filter(Boolean).join(' · ') : 'Nothing set yet: every number is a default';
+    const lines = a ? Object.values(a.sell || {}).concat(Object.values(a.sellV || {})).reduce((n, r) => n + Object.keys(r).filter(k => k !== 'house' && k !== 'looked' && k !== 'things').length, 0) : 0;
+    const things = a ? Object.values(a.sell || {}).reduce((n, r) => n + Object.keys((r && r.things) || {}).length, 0) : 0;
+    $('asCount').textContent = days || starts || yields || lines || things ? [days ? `${days} number${days === 1 ? '' : 's'} of your own` : '', starts ? `“Days counted from” set for ${starts} crop${starts === 1 ? '' : 's'}` : '', yields ? `${yields} yield${yields === 1 ? '' : 's'}` : '', lines ? `${lines} other figure${lines === 1 ? '' : 's'} on crop lines` : '', things ? `${things} other thing${things === 1 ? '' : 's'} sold from a crop` : ''].filter(Boolean).join(' · ') : 'Nothing set yet: every number is a default';
   }
   const HEAD = {
     days: ['Days to first harvest', 'Each row says what its days are counted from, and its numbers count from there. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; a variety with its own figure keeps it, and a planting with no variety uses the crop row.'],

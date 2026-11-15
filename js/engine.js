@@ -1259,14 +1259,14 @@
         const days = t.days ? Math.min(t.days, r.harvestDays) : r.harvestDays, nominal = t.days || Math.max(1, r.expectedHarvestDays), weekly = t.pattern === 'weekly';
         const each = weekly ? t.yield * days / 7 : t.yield, cut = weekly ? 1 : clamp(days / Math.max(1, nominal), 0, 1), k = t.counted ? t.weighs : 1;
         return { thing: t.id, name: t.name, from: t.from, basis: y.basis, count: y.count * part, per: each * k, mk: y.mk, part: cut, units: y.count * part * each * k * y.mk * cut, unit: t.unit, set: true, own: false,
-          price: t.price, pattern: t.pattern, perWeek: weekly ? t.yield * k : null, nominal, by: 'thing', keep: y.keep, first: r.first, last: addDays(r.first, Math.max(0, days - 1)) };
+          price: t.price, pattern: t.pattern, perWeek: weekly ? t.yield * k : null, nominal, by: 'thing', keep: y.keep, first: r.first, last: addDays(r.first, Math.max(0, days - 1)), slice: part };
       };
       const there = list.find(t => t.from === 'place' && t.place === env);
       if (there) return [own(there, 1)];
       const beds = list.filter(t => t.from === 'bed'), packs = list.filter(t => t.from === 'harvest');
       if (!beds.length && !packs.length) return null;
       const bedLeft = 1 - beds.reduce((n, t) => n + t.share, 0) / 100, packLeft = 1 - packs.reduce((n, t) => n + t.share, 0) / 100, source = y.units * Math.max(0, bedLeft);
-      const parts = [{ ...y, units: source * Math.max(0, packLeft), thing: null, name: null, left: Math.max(0, bedLeft) * Math.max(0, packLeft) }];
+      const parts = [{ ...y, units: source * Math.max(0, packLeft), thing: null, name: null, slice: Math.max(0, bedLeft) * Math.max(0, packLeft) }];
       for (const t of beds) parts.push(own(t, t.share / 100));
       // packed from the first thing's harvest: picked when it is, kept as it keeps
       for (const t of packs) parts.push({ ...y, thing: t.id, name: t.name, from: t.from, units: source * t.share / 100 * (t.way === 'weighs' ? t.weighs : 1 / t.holds), unit: t.unit, price: t.price, by: 'thing', perWeek: null });

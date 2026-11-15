@@ -68,7 +68,7 @@
     return /^stems?$/i.test(String(unit || '')) || FLOWER.test(String(crop.name || '')) ? 'flower' : 'produce';
   }
   /** "12 heads", "3.5 lb", "40 bunches", "6 trays", "25" for things counted singly. */
-  const PLURAL = { head: 'heads', bunch: 'bunches', stem: 'stems', tray: 'trays', pint: 'pints', quart: 'quarts', bag: 'bags', case: 'cases', box: 'boxes', each: '', lb: 'lb', oz: 'oz', bu: 'bu', kg: 'kg', g: 'g' };
+  const PLURAL = { head: 'heads', bunch: 'bunches', stem: 'stems', bouquet: 'bouquets', tray: 'trays', pint: 'pints', quart: 'quarts', bag: 'bags', case: 'cases', box: 'boxes', each: '', lb: 'lb', oz: 'oz', bu: 'bu', kg: 'kg', g: 'g' };
   function unitWord(n, unit, group) {
     const u = String(unit || 'each');
     if (group === 'flower' && /^(each|stems?)$/i.test(u)) return Math.abs(n - 1) < 1e-9 ? 'stem' : 'stems';
@@ -196,11 +196,15 @@
     }
     return out;
   }
+  /** How many crops some rows stand for: a crop that sells more than one thing has a row for each, and is one crop. */
+  const cropCount = rows => rows.filter(r => !r.thing).length + new Set(rows.filter(r => r.thing && !rows.some(q => !q.thing && q.cropId === r.cropId)).map(r => r.cropId)).size;
+  /** Does a row add to the stems? Another thing a flower sells does only where it is itself counted in stems (a bouquet is not a stem). */
+  const inStems = row => !row.thing || /^(each|stems?)$/i.test(String(row.unit));
   /** The headline figures for a stretch of days. Flowers add up as stems; microgreens as trays; vegetables only as a count of crops and a value. */
   function glance(model, i0, i1) {
-    const list = available(model, i0, i1), by = g => list.filter(x => x.row.group === g);
-    return { crops: list.length, produce: by('produce').length, flowers: by('flower').length, micros: by('micro').length,
-      trays: by('micro').reduce((n, x) => n + x.qty, 0), stems: by('flower').reduce((n, x) => n + x.qty, 0), worth: list.reduce((n, x) => n + x.worth, 0), list };
+    const list = available(model, i0, i1), by = g => list.filter(x => x.row.group === g), crops = part => cropCount(part.map(x => x.row));
+    return { crops: crops(list), produce: crops(by('produce')), flowers: crops(by('flower')), micros: crops(by('micro')),
+      trays: by('micro').reduce((n, x) => n + x.qty, 0), stems: by('flower').filter(x => inStems(x.row)).reduce((n, x) => n + x.qty, 0), worth: list.reduce((n, x) => n + x.worth, 0), list };
   }
 
   /** A plain-text availability list, the kind that is pasted into an email or a text to a chef. */
@@ -253,5 +257,5 @@
     return out;
   }
 
-  return { GROUPS, MONTHS, useOf, useOfBed, follows, build, sum, share, periods, season, available, glance, text, csv, gaps, groupOf, unitWord, shown, amount, monday };
+  return { GROUPS, MONTHS, useOf, useOfBed, follows, build, sum, share, periods, season, available, glance, text, csv, gaps, groupOf, unitWord, shown, amount, monday, cropCount, inStems };
 });

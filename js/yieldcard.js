@@ -224,6 +224,7 @@
       h('thead', h('tr', h('th'), cols.list.map(env => { const at = x.places.get(env); return h('th', { scope: 'col', dataset: { place: env } }, PLACE[env], h('small', at ? plural(at.n, 'planting') : cols.planted ? 'nothing planted there now' : 'not planted yet')); }), T.heads())));
     const body = h('tbody');
     grid.append(body);
+    if (T.any) grid.classList.add('things');
 
     // sold by, and for how much: one unit and one price for the crop, wherever it grows
     const ownUnit = varieties.filter(v => eng.sellVRule(v.id).unit).length, ownPrice = varieties.filter(v => eng.sellVRule(v.id).price != null).length;

@@ -101,7 +101,7 @@
     const list = row.plantings.map(x => ({ ...x, here: F.share(x, col.i0, col.i1, picked) })).filter(x => x.here > 1e-9).sort((a, b) => b.here - a.here), total = list.reduce((n, x) => n + x.here, 0);
     const close = () => { dialog.close(); dialog.remove(); };
     const go = x => { close(); App.setDate(x.r.first > App.state.date ? x.r.first : App.state.date); App.setView('map'); App.select({ type: 'planting', id: x.p.id }); };
-    const how = x => x.pattern === 'once' ? `all of it ${day(x.r.first)}` : `picked ${UI.span(x.r.first, x.r.last)}`;
+    const how = x => x.pattern === 'once' ? `all of it ${day(x.from || x.r.first)}` : `picked ${UI.span(x.from || x.r.first, x.to || x.r.last)}`;   // a thing picked on days of its own says those
     const dialog = h('dialog.dialog.wide', { id: 'hvFrom', oncancel: e => { e.preventDefault(); close(); } },
       h('h2', `${row.name}, ${colTitle(col)}`), h('p', `${F.amount(total, row.unit, row.group)} ${picked ? 'picked' : 'to sell'}, from ${num(list.length)} planting${list.length === 1 ? '' : 's'}. How each comes in is the crop’s line on the Assumptions list: evenly over the days it is picked, or all at once${row.keeps ? `; what keeps is counted as there to sell over the ${num(row.keeps, 1)} week${row.keeps === 1 ? '' : 's'} it keeps` : ''}.`),
       h('ul.hv-from', list.map(x => h('li',
@@ -111,7 +111,7 @@
       h('div.dialog-actions',
         // more of it wanted that week: the series tool, asked from the harvest end, opens on this crop from that day
         plannable(row)
-          ? h('button.btn', { type: 'button', id: 'hvPlan', title: `Say how much ${row.name.toLowerCase()} is wanted each week from here on, and see the plantings that would give it`, onclick: () => { close(); App.openAhead({ mode: 'series', by: 'harvest', cropId: row.cropId, from: E.d2s(col.start) }); } }, 'Plan to a weekly amount…') : null,
+          ? h('button.btn', { type: 'button', id: 'hvPlan', title: `Say how much ${row.name.toLowerCase()} is wanted each week from here on, and see the plantings that would give it`, onclick: () => { close(); App.openAhead({ thing: row.thing || '', mode: 'series', by: 'harvest', cropId: row.cropId, from: E.d2s(col.start) }); } }, 'Plan to a weekly amount…') : null,
         h('button.btn.primary', { type: 'button', onclick: close }, 'Close')));
     document.body.append(dialog); dialog.showModal();
   }
@@ -157,16 +157,18 @@
     for (const [g, , long] of F.GROUPS) {
       const part = rows.filter(r => r.group === g);
       if (!part.length) continue;
-      body.push(h('tr.hv-group', { dataset: { group: g } }, h('th', { colSpan: 2 }, long, h('small', `${num(part.length)} crop${part.length === 1 ? '' : 's'}`)), h('td', { colSpan: cols.length })));
+      body.push(h('tr.hv-group', { dataset: { group: g } }, h('th', { colSpan: 2 }, long, h('small', `${num(F.cropCount(part))} crop${F.cropCount(part) === 1 ? '' : 's'}`)), h('td', { colSpan: cols.length })));
       for (const row of part) {
         const many = row.varieties.length > 1 || (row.varieties.length === 1 && row.varieties[0].id), isOpen = opened.has(row.key);
         const name = h('td.hv-name', h('button.hv-crop', { type: 'button', disabled: !many, 'aria-expanded': many ? String(isOpen) : null, style: { '--crop': row.color }, title: many ? `${isOpen ? 'Hide' : 'Show'} the varieties` : row.name,
           onclick: () => { if (isOpen) opened.delete(row.key); else opened.add(row.key); render(); } }, h('span.caret', many ? (isOpen ? '▾' : '▸') : ''), h('i'), h('span', row.name), h('small', F.unitWord(2, row.unit, row.group) || 'each')),
           // more or less of it wanted: the series tool, asked from the harvest end, on this crop's own season
-          plannable(row) ? h('button.hv-plan', { type: 'button', dataset: { crop: row.cropId }, 'aria-label': `Plan ${row.name} to a weekly amount`, title: `Say how much ${row.name.toLowerCase()} is wanted each week, and see the plantings that would give it`, onclick: () => App.openAhead({ mode: 'series', by: 'harvest', cropId: row.cropId }) }, 'plan…') : null);
+          plannable(row) && row.thing ? h('button.hv-plan', { type: 'button', dataset: { crop: row.cropId, thing: row.thing }, 'aria-label': `Plan ${row.name} to a weekly amount`, title: `Say how much of ${row.name} is wanted each week, and see the plantings that would give it`, onclick: () => App.openAhead({ mode: 'series', by: 'harvest', thing: row.thing, cropId: row.cropId }) }, 'plan…')
+          : plannable(row) ? h('button.hv-plan', { type: 'button', dataset: { crop: row.cropId }, 'aria-label': `Plan ${row.name} to a weekly amount`, title: `Say how much ${row.name.toLowerCase()} is wanted each week, and see the plantings that would give it`, onclick: () => App.openAhead({ mode: 'series', by: 'harvest', cropId: row.cropId }) }, 'plan…') : null);
         const whole = series === 'picked' && m.keeps ? row.pickedTotal : row.total;
         body.push(line('.hv-row', name, h('td.hv-total', { title: `${money(row.worth)} at its own price${row.keeps ? ` · keeps ${num(row.keeps, 1)} week${row.keeps === 1 ? '' : 's'} after picking` : ''}` }, whole > 0 ? F.amount(whole, row.unit, row.group) : '—'), seriesOf(m, row), row));
         body[body.length - 1].dataset.crop = row.cropId;
+        if (row.thing) body[body.length - 1].dataset.thing = row.thing;   // another thing the crop sells: a row of its own, in its own unit
         if (many && isOpen) {
           const peak = Math.max(0, ...cols.map(c => F.sum(seriesOf(m, row), c.i0, c.i1)));
           for (const v of row.varieties) body.push(line('.hv-var', h('td.hv-name', { title: v.name }, v.name), h('td.hv-total', F.amount(v.total, row.unit, row.group)), seriesOf(m, v), null, peak));
@@ -175,7 +177,7 @@
       }
       // trays add up, and so do stems; pounds and heads and bunches do not
       if (g !== 'produce' && part.length > 1) {
-        const all = new Float64Array(m.days); for (const r of part) { const src = seriesOf(m, r); for (let k = 0; k < m.days; k++) all[k] += src[k]; }
+        const all = new Float64Array(m.days); for (const r of part.filter(r => g !== 'flower' || F.inStems(r))) { const src = seriesOf(m, r); for (let k = 0; k < m.days; k++) all[k] += src[k]; }
         body.push(line('.hv-sum', h('td.hv-name', g === 'micro' ? 'All trays' : 'All stems'), h('td.hv-total', num(F.shown(F.sum(all, 0, m.days - 1)))), all, null));
       }
     }
@@ -216,7 +218,7 @@
           ['days', 'picked'].map(value => h('button', { type: 'button', 'aria-pressed': String(series === value), dataset: { hvSeries: value }, onclick: () => { series = value; render(); } }, value === 'days' ? 'To sell' : 'Picked'))) : null,
         marked ? h('div.seg.hv-use', { id: 'hvUse', role: 'group', 'aria-label': 'Grown for', title: 'Everything that is picked, only what is grown to sell, or only what is marked for personal use. Worth and the list to send count what is grown to sell.' },
           USES.map(([value, label]) => h('button', { type: 'button', 'aria-pressed': String(m.use === value), dataset: { hvUse: value }, onclick: () => { use = value; render(); } }, label))) : null,
-        h('div.sd-filters', { role: 'group', 'aria-label': 'Which kinds' }, chip('all', 'All', m.rows.filter(r => r.total > 0).length), F.GROUPS.map(([g, short]) => chip(g, short, m.rows.filter(r => r.total > 0 && r.group === g).length))),
+        h('div.sd-filters', { role: 'group', 'aria-label': 'Which kinds' }, chip('all', 'All', F.cropCount(m.rows.filter(r => r.total > 0))), F.GROUPS.map(([g, short]) => chip(g, short, F.cropCount(m.rows.filter(r => r.total > 0 && r.group === g))))),
         h('span.grow'), search),
       !m.rows.some(r => r.total > 0) ? h('p.hv-empty', 'Nothing in this plan has a harvest to forecast yet.') : !rows.length ? h('p.hv-empty', 'No crop matches.') : table(m, cols, rows),
       marked ? h('p.hv-note', { id: 'hvOwnNote' }, `${num(marked)} planting${marked === 1 ? ' is' : 's are'} marked for personal use. ${marked === 1 ? 'It is' : 'They are'} picked and counted like any other, ${m.use === 'commercial' ? 'and left out of this page while it shows Commercial' : m.use === 'personal' ? 'and this page shows only those' : 'so the quantities here include them'}; worth, and “A list to send…”, count only what is grown to sell.`) : null,
