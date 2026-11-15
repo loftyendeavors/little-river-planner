@@ -1,0 +1,14 @@
+{
+ "build": "Number boxes: a figure changes only by being typed. The wheel never changes a number box's figure and the page scrolls under it; the Up and Down arrows do not step it. One rule, in main.js, for every number box.",
+ "words": [],
+ "code": [
+  "main.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "index.html",
+  "sw.js"
+ ],
+ "screens": []
+}
