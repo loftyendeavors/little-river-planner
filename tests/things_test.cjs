@@ -45,15 +45,18 @@ check('on it no crop has another thing, and no planting is given in parts', eng.
 const follows = (e, p) => { const r = e.calc(p), y = r ? e.yieldOf(p, r) : null, v = e.variety(p.varietyId); return !!y && !y.own && y.set && y.units > 0 && !(r.rack && r.c.micro) && !(v && v.cropId === p.cropId && e.sellVRule(v.id).unit) && r.b.active !== false && r.g.active !== false; };
 const info = new Map();
 for (const p of core.plantings) {
+  const r = eng.calc(p), y = r ? eng.yieldOf(p, r) : null, x = info.get(p.cropId) || { id: p.cropId, n: 0, envs: new Map(), own: 0, least: Infinity, soil: true };
+  info.set(p.cropId, x);
+  if (y && y.own && !(r.rack && r.c.micro)) x.own++;                       // carries a yield of its own: no thing reaches it
   if (!follows(eng, p)) continue;
-  const r = eng.calc(p), x = info.get(p.cropId) || { id: p.cropId, n: 0, envs: new Map() };
-  x.n++; x.envs.set(eng.envOf(r.b), (x.envs.get(eng.envOf(r.b)) || 0) + 1); info.set(p.cropId, x);
+  x.n++; x.envs.set(eng.envOf(r.b), (x.envs.get(eng.envOf(r.b)) || 0) + 1); x.least = Math.min(x.least, r.harvestDays); if (!eng.isSoilBed(r.b)) x.soil = false;
 }
-const usable = [...info.values()].filter(x => { const c = eng.crop(x.id), hc = eng.harvestFor(x.id); return c && !c.micro && !eng.isCoverCrop(c) && hc.price.value > 0 && base.rows.some(r => r.cropId === x.id && r.total > 0); });
+const usable = [...info.values()].filter(x => x.n > 0).filter(x => { const c = eng.crop(x.id), hc = eng.harvestFor(x.id); return c && !c.micro && !eng.isCoverCrop(c) && hc.price.value > 0 && base.rows.some(r => r.cropId === x.id && r.total > 0); });
 const placed = usable.filter(x => x.envs.size >= 2 && eng.COUNTED.includes(eng.unitOf(eng.crop(x.id)))).sort((a, b) => b.n - a.n)[0];
-const bedded = usable.filter(x => x.envs.size === 1 && x.n >= 2 && eng.harvestFor(x.id).basis === 'ft' && (!placed || x.id !== placed.id)).sort((a, b) => b.n - a.n)[0];
+// in soil beds, picked for ten days or more (so that harvest days of its own are fewer), with a planting that carries its own yield
+const bedded = usable.filter(x => x.envs.size === 1 && x.n >= 2 && x.soil && x.least >= 10 && x.own >= 1 && eng.harvestFor(x.id).basis === 'ft' && (!placed || x.id !== placed.id)).sort((a, b) => b.n - a.n)[0];
 const packed = usable.filter(x => x.n >= 1 && /^stems?$/.test(eng.unitOf(eng.crop(x.id))) && (!bedded || x.id !== bedded.id)).sort((a, b) => b.n - a.n)[0];
-check('the farm has a subject for each kind: a counted crop in two places, a crop sown by the bed-foot in one, and a flower sold by the stem', !!placed && !!bedded && !!packed, { placed: placed && placed.id, bedded: bedded && bedded.id, packed: packed && packed.id });
+check('the farm has a subject for each kind: a counted crop in two places; a crop sown by the bed-foot in soil beds, picked for ten days or more, one of whose plantings carries a yield of its own; and a flower sold by the stem', !!placed && !!bedded && !!packed, { placed: placed && placed.id, bedded: bedded && bedded.id, packed: packed && packed.id });
 const withThings = (cropId, things, more) => ({ ...core, assumptions: { v: 1, crops: {}, varieties: {}, sell: { [cropId]: { things, ...(more || {}) } } } });
 const partsOf = (e, cropId) => core.plantings.filter(p => p.cropId === cropId).map(p => { const r = e.calc(p), y = r ? e.yieldOf(p, r) : null; return { p, r, y, parts: r ? e.soldOf(p, r, y) : null }; });
 const rowsOf = (m, cropId) => m.rows.filter(r => r.cropId === cropId);
@@ -85,7 +88,8 @@ if (placed && bedded && packed) {
       const e = E.create(withThings(id, { 't-b': { ...thing, [lack]: undefined } }), Lib), t = e.thingsOf(id)[0];
       check(`with no ${lack} it does not count, and the crop is forecast exactly as before it was added`, t.counts === false && t.waits.join() === lack && differ(F.build(e), base).length === 0);
     }
-    const e = E.create(withThings(id, { 't-b': thing }), Lib), m = F.build(e), list = partsOf(e, id).filter(x => x.r && follows(eng, x.p));
+    const e = E.create(withThings(id, { 't-b': thing }), Lib), m = F.build(e), list = partsOf(e, id).filter(x => x.r && follows(eng, x.p)), apart = partsOf(e, id).filter(x => x.y && x.y.own);
+    check('a planting that carries a yield of its own is not shared out: it is the crop’s own line, whole', apart.length >= 1 && apart.every(x => x.parts === null), apart.length);
     check('complete, each bed gives the crop’s own line 70% of what it gave and the thing its yield on the other 30%, in its own unit',
       list.length >= 2 && list.every(x => x.parts && x.parts.length === 2 && x.parts[0].thing === null && near(x.parts[0].units, x.y.units * 0.7) && x.parts[0].unit === x.y.unit && x.parts[0].price === x.y.price
         && x.parts[1].thing === 't-b' && x.parts[1].unit === 'lb' && near(x.parts[1].units, x.y.count * 0.3 * 0.5 * x.y.mk * Math.min(1, x.r.harvestDays / Math.max(1, x.r.expectedHarvestDays)))), list.slice(0, 1).map(x => x.parts));
