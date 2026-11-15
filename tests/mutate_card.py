@@ -31,7 +31,8 @@ PAGE = [
  # the page and the checklist
  ("the button opens the list, not one crop at a time", AS, "mode: 'days', way: 'card' };", "mode: 'days', way: 'list' };"),
  ("“All on one page” does nothing", AS, "button.addEventListener('click', () => { ui.way = button.dataset.ahWay; render(); });", "button.addEventListener('click', () => { render(); });"),
- ("the crops with nothing set are put last", YC, "return { order: [...first, ...rest].map(c => c.id),", "return { order: [...rest, ...first].map(c => c.id),"),
+ ("the page opens on the biggest crop, not on one with nothing set", YC, "ui.cur = ui.order.find(id => made.first.has(id) && ui.first.has(id)) ||", "ui.cur = ui.order.find(id => !ui.first.has(id)) ||"),
+ ("the crops with nothing set are not set apart", YC, "first: new Set(first.map(c => c.id)), mine:", "first: new Set(), mine:"),
  ("the rest are smallest first", YC, "big = (a, b) => size(b).worth - size(a).worth ||", "big = (a, b) => size(a).worth - size(b).worth ||"),
  ("the count of what is left counts every crop", YC, "left = ui.order.filter(id => waits(eng, eng.crop(id), eng.harvestFor(id)).any).length;", "left = ui.order.length;"),
  ("the bar counts no tick", YC, "h('p', h('b', `${num(lookedN)} of ${num(ui.order.length)}`)", "h('p', h('b', `${num(0)} of ${num(ui.order.length)}`)"),
@@ -55,7 +56,7 @@ PAGE = [
  ("the label of a weekly box does not say a week", YC, "`Gives, packed, ${per}${weekly ? ' a week' : ''}`;", "`Gives, packed, ${per}`;"),
  ("the season's total is the list's round figure, not the engine's for the plantings there", YC, "const list = at && at.per.length ? at.per : [cell.total],", "const list = [cell.total],"),
  # the keyboard
- ("Tab stays in the box it is in", YC, "to = all.slice(at + 1).find(blank);", "to = all.find(blank);"),
+ ("Tab goes to the last empty box, past the next", YC, "to = all.slice(at + 1).find(blank);", "to = all.slice(at + 1).reverse().find(blank);"),
  ("Enter does not take what was typed", YC, "      if (isBox && !await t.commit()) return;\n      looksRight(App.state.engine, q);", "      looksRight(App.state.engine, q);"),
  ("Enter ticks nothing", YC, "const ticked = eng.harvestFor(id).looked === ui.year || App.setLooked(id, true);", "const ticked = true;"),
  ("Enter stays on the crop", YC, "if (next) { ui.cur = next; ui.unit = null; }", "if (false) { ui.cur = next; ui.unit = null; }"),

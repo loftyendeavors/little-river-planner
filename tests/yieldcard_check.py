@@ -85,6 +85,8 @@ with sync_playwright() as pw:
         def __abs__(self): return 0
         def __float__(self): return float("nan")
         def startswith(self, x): return False
+        def split(self, *a): return []
+        def lower(self): return ""
         def __str__(self): return "(not there)"
     def soft(v):
         """A reading with everything that is not there turned into Missing, however deep."""
@@ -92,6 +94,9 @@ with sync_playwright() as pw:
         if isinstance(v, dict): return type("Soft", (dict,), {"__getitem__": lambda s, k: dict.get(s, k, Missing()), "get": lambda s, k, d=None: dict.get(s, k, Missing() if d is None else d)})({k: soft(x) for k, x in v.items()})
         if isinstance(v, list): return [soft(x) for x in v]
         return v
+    def nth(seq, i):
+        """The i-th of a list, or Missing where the list is too short: a fault that empties the checklist fails named lines."""
+        return seq[i] if isinstance(seq, list) and -len(seq) <= i < len(seq) else Missing()
     def js(body):
         try:
             return soft(page.evaluate("(() => { " + PRE + " " + body + " })()"))
@@ -148,12 +153,12 @@ with sync_playwright() as pw:
     ids = [i["id"] for i in s0["items"]]
     check("down the left every crop of “My crops” is on the checklist, once", len(ids) > 20 and sorted(ids) == want["mine"] and len(set(ids)) == len(ids), {"listed": len(ids), "mine": len(want["mine"])})
     nleft = len(want["left"])
-    check("the crops with no price or no yield come first, and the page says how many are left", nleft > 0 and sorted(ids[:nleft]) == want["left"] and s0["left"] == nleft and str(nleft) in s0["leftText"] and "left to set" in s0["leftText"] and all(i["open"] for i in s0["items"][:nleft]) and not any(i["open"] for i in s0["items"][nleft:]), {"left": s0["left"], "want": nleft, "text": s0["leftText"]})
-    check("the page opens on the first of them", c0["crop"] == ids[0] and c0["crop"] in want["left"] and s0["items"][0]["cur"] is True, {"card": c0["crop"], "first": ids[:1]})
+    check("the crops with no price or no yield come first, and the page says how many are left", nleft > 0 and sorted(ids[:nleft]) == want["left"] and s0["left"] == nleft and str(nleft) in s0["leftText"] and "left to set" in s0["leftText"] and all(i["open"] for i in s0["items"][:nleft]) and not any(i["open"] for i in s0["items"][nleft:]) and s0["secs"] == ["No price or no yield", "The rest, biggest first"], {"left": s0["left"], "want": nleft, "text": s0["leftText"], "headings": s0["secs"]})
+    check("the page opens on the first of them", [c0["crop"]] == ids[:1] and c0["crop"] in want["left"] and nth(s0["items"], 0)["cur"] is True, {"card": c0["crop"], "first": ids[:1]})
     rest = [want["worth"][i] for i in ids[nleft:]]
     check("the rest follow, biggest first: by what each is worth over the season in the forecast", len(rest) > 10 and all(rest[k] >= rest[k + 1] - 1e-6 for k in range(len(rest) - 1)), rest[:8])
     check("a bar says how many are looked at for the year: none yet", s0["looked"] == 0 and s0["of"] == len(ids) and f"0 of {len(ids)}" in s0["prog"] and f"looked at for {year}" in s0["prog"] and s0["meter"] in ("0%", "0"), s0["prog"])
-    check("nothing is ticked, and each crop that has a price and a yield says what it is worth", not any(i["done"] for i in s0["items"]) and all(i["say"] == js("return money(%s);" % want["worth"][i["id"]]) for i in s0["items"][nleft:nleft + 6] if want["worth"][i["id"]] >= 0.5), s0["items"][nleft:nleft + 3])
+    check("nothing is ticked, and each crop that has a price and a yield says what it is worth", not any(i["done"] for i in s0["items"]) and len(s0["items"]) > nleft + 6 and all(i["say"] == js("return money(%s);" % want["worth"][i["id"]]) for i in s0["items"][nleft:nleft + 6] if want["worth"][i["id"]] >= 0.5), s0["items"][nleft:nleft + 3])
     shot("card")
 
     # ── subjects, found on the plan ──
@@ -178,7 +183,9 @@ with sync_playwright() as pw:
     click('[data-ah-way="card"]', 600)
 
     # ── every crop's card, against the plan, the engine, the forecast and the list ──
-    walk = {}
+    class Walk(dict):
+        def __missing__(self, k): return Missing()   # a crop the checklist did not hold: every line that reads it fails by name
+    walk = Walk()
     for cid in ids:
         open_crop(cid, 60)
         walk[cid] = js("""const id = %s, c = S.engine.crop(id), hc = S.engine.harvestFor(id), k = card(), at = placesOf(id);
@@ -249,11 +256,11 @@ with sync_playwright() as pw:
     n_house = sum(1 for c in ids if walk[c]["card"]["house"])
     check("“The house keeps [n] % of what is packed” is on the card of a crop that sells less than all of it today, with n what is left, and on no other", bad == [] and n_house > 10, {"bad": bad[:6], "with": n_house})
     k = walk[sub["multi"]]["card"]
-    check("a crop grown in several places has a yield box for each, and one unit and one price across them all", len(k["cols"]) >= 2 and len(k["rows"]["yield"]["cells"]) == len(k["cols"]) and [c["place"] for c in k["rows"]["yield"]["cells"]] == k["cols"] and all(c["inputs"] == 1 for c in k["rows"]["yield"]["cells"]) and len(k["rows"]["unit"]["cells"]) == 1 and k["rows"]["unit"]["cells"][0]["span"] == len(k["cols"]) and k["rows"]["price"]["cells"][0]["span"] == len(k["cols"]) and "wherever it grows" in k["rows"]["unit"]["hint"], k["rows"]["yield"])
+    check("a crop grown in several places has a yield box for each, and one unit and one price across them all", len(k["cols"]) >= 2 and len(k["rows"]["yield"]["cells"]) == len(k["cols"]) and [c["place"] for c in k["rows"]["yield"]["cells"]] == k["cols"] and all(c["inputs"] == 1 for c in k["rows"]["yield"]["cells"]) and len(k["rows"]["unit"]["cells"]) == 1 and nth(k["rows"]["unit"]["cells"], 0)["span"] == len(k["cols"]) and nth(k["rows"]["price"]["cells"], 0)["span"] == len(k["cols"]) and "wherever it grows" in k["rows"]["unit"]["hint"], k["rows"]["yield"])
     k = walk[sub["single"]]["card"]; kf = walk[sub["ft"]]["card"]
     check("the label of a yield box says what the box means: packed, from a plant, or from a bed-foot where the crop is counted so", k["rows"]["yield"]["label"] == "Gives, packed, a plant" and "in all" in k["rows"]["yield"]["hint"] and kf["rows"]["yield"]["label"] == "Gives, packed, a bed-foot" and walk[sub["ft"]]["basis"] == "ft", [k["rows"]["yield"], kf["rows"]["yield"]["label"]])
     k = walk[sub["micro"]]["card"]
-    check("a live tray's card has one column, a price to type, and says why the rest is not asked: a tray is a tray", k["cols"] == ["tray"] and "living trays" in k["heads"][0].lower() and sorted(k["boxes"]) == ["price"] and "a tray is a tray" in k["rows"]["yield"]["cells"][0]["na"] and "tray" in k["rows"]["unit"]["cells"][0]["na"] and k["rows"]["pick"]["cells"][0]["na"] != "" and not k["house"], {"cols": k["cols"], "boxes": sorted(k["boxes"])})
+    check("a live tray's card has one column, a price to type, and says why the rest is not asked: a tray is a tray", k["cols"] == ["tray"] and "living trays" in str(nth(k["heads"], 0)).lower() and sorted(k["boxes"]) == ["price"] and "a tray is a tray" in nth(k["rows"]["yield"]["cells"], 0)["na"] and "tray" in nth(k["rows"]["unit"]["cells"], 0)["na"] and nth(k["rows"]["pick"]["cells"], 0)["na"] != "" and not k["house"], {"cols": k["cols"], "boxes": sorted(k["boxes"])})
     k = walk[sub["season"]]["card"]
     check("a crop picked to the end of the season says so where its last picking would be, and its harvest days stand empty", all("season ends" in c["na"] for c in k["rows"]["last"]["cells"]) and k["boxes"]["days"]["value"] == "" and k["boxes"]["days"]["placeholder"] == "season", k["rows"]["last"])
     k = walk[sub["single"]]["card"]
@@ -267,7 +274,7 @@ with sync_playwright() as pw:
     check("opening the page and walking every crop's card changes nothing in the plan, and leaves nothing to undo", walked["key"] == snap0["key"] and walked["plan"] == snap0["plan"] and walked["undo"] == 0, {"undo": walked["undo"]})
 
     # ── a figure typed on the card is the figure typed on the list ──
-    cid = sub["single"]; env = walk[cid]["places"][0]
+    cid = sub["single"]; env = nth(walk[cid]["places"], 0)
     open_crop(cid)
     typed('#ycCard [data-yk="price"]', "7.25"); wait(300)
     a1 = last_step(); k1 = snap(); c1 = card()
@@ -315,11 +322,11 @@ with sync_playwright() as pw:
         arith = all(abs(x["week"] * x["days"] / 7 - x["per"]) < 1e-9 for x in e)
         return arith and abs(float(t["lo"]) - lo) < 1e-9 and abs(float(t["hi"]) - hi) < 1e-9 and js("return fig(%s);" % lo) in t["text"] and js("return fig(%s);" % hi) in t["text"] and "over the season" in t["text"]
     check("beside each weekly box the season's total it comes to, which is the engine's: the week's figure times the weeks each planting there is picked", len(kw["rows"]["yield"]["cells"]) == len(walk[cid]["places"]) and all(total_ok(c) for c in kw["rows"]["yield"]["cells"]), {"card": [c["total"] for c in kw["rows"]["yield"]["cells"]], "engine": {e: [min(x["per"] for x in v), max(x["per"] for x in v)] if v else None for e, v in eng_tot.items()}})
-    e0 = walk[cid]["places"][0]
+    e0 = nth(walk[cid]["places"], 0)
     typed(f'#ycCard [data-yk="y|{e0}"]', "0.9"); wait(400)
     kw2 = card(); e2 = js("return perIn(%s, %s);" % (json.dumps(cid), json.dumps(e0)))
     cell = [c for c in kw2["rows"]["yield"]["cells"] if c["place"] == e0]
-    check("a week's figure typed there moves the total beside it, and still to the engine's", len(cell) == 1 and len(e2) > 0 and all(abs(x["week"] - 0.9) < 1e-9 for x in e2) and abs(float(cell[0]["total"]["lo"]) - min(x["per"] for x in e2)) < 1e-9 and abs(float(cell[0]["total"]["hi"]) - max(x["per"] for x in e2)) < 1e-9, {"card": cell[0]["total"] if cell else None})
+    check("a week's figure typed there moves the total beside it, and still to the engine's", len(cell) == 1 and len(e2) > 0 and all(abs(x["week"] - 0.9) < 1e-9 for x in e2) and abs(float(nth(cell, 0)["total"]["lo"]) - min(x["per"] for x in e2)) < 1e-9 and abs(float(nth(cell, 0)["total"]["hi"]) - max(x["per"] for x in e2)) < 1e-9, {"card": nth(cell, 0)["total"]})
     shot("card-gradually")
     undo_to(0)
     check("undone, the plan is what it was", snap()["key"] == snap0["key"])
@@ -328,7 +335,7 @@ with sync_playwright() as pw:
     cid = sub["head"]; open_crop(cid)
     if has('#ycCard [data-yk="pick"]'): page.select_option('#ycCard [data-yk="pick"]', "once"); wait(600)
     if asking(): answer(True)
-    ko = card(); e0 = walk[cid]["places"][0]; y0 = walk[cid]["cells"][e0]["value"]
+    ko = card(); e0 = nth(walk[cid]["places"], 0); y0 = walk[cid]["cells"][e0]["value"]; y0 = y0 if isinstance(y0, (int, float)) else 0
     check("a crop cleared at once and sold by the head asks how many of every 10 planted are fit to sell, and shows its figure so", ko["rows"]["yield"]["label"] == "Of every 10 planted, fit to sell" and (ko["boxes"][f"y|{e0}"]["value"] or ko["boxes"][f"y|{e0}"]["placeholder"]) == js("return fig(%s);" % (y0 * 10)) and all("cleared in one day" in c["na"] for c in ko["rows"]["last"]["cells"]), {"label": ko["rows"]["yield"]["label"], "box": ko["boxes"].get(f"y|{e0}"), "last": ko["rows"]["last"]})
     n0 = snap()["undo"]
     typed(f'#ycCard [data-yk="y|{e0}"]', "8"); wait(300)
@@ -349,14 +356,14 @@ with sync_playwright() as pw:
     f0 = card()
     check("a crop opened from the checklist has the pointer for typing in its first empty box", f0["focus"] == "price" and f0["boxes"]["price"]["amber"] is True, f0["focus"])
     page.keyboard.type("4.5"); page.keyboard.press("Tab"); wait(500)
-    f1 = card(); s1 = last_step(); y_first = "y|" + walk[cid]["places"][0]
+    f1 = card(); s1 = last_step(); y_first = "y|" + str(nth(walk[cid]["places"], 0))
     check("Tab takes what was typed and goes to the next box that is still empty", s1["n"] == 1 and "$4.5" in s1["label"] and f1["focus"] == y_first and f1["boxes"][y_first]["amber"] is True and f1["boxes"]["price"]["value"] == "4.5", {"focus": f1["focus"], "step": s1})
     page.keyboard.type("2"); wait(100)
     order_now = [i["id"] for i in side()["items"]]; expect_next = order_now[(order_now.index(cid) + 1) % len(order_now)] if cid in order_now else None
     said_next = card()["next"]
     page.keyboard.press("Enter"); wait(700)
     f2 = card(); s2 = js("return { steps: S.undo.map(u => u.label), looked: S.engine.sellRule(%s).looked, y: (((S.plan.assumptions || {}).crops || {})[%s] || {}) };" % (json.dumps(cid), json.dumps(cid)))
-    check("Enter takes what was typed, ticks the crop as looked at for the year, and opens the next crop down", len(s2["steps"]) == 3 and s2["looked"] == year and s2["y"] == {walk[cid]["places"][0]: {"yield": 2}} and "looked at for %s" % year in s2["steps"][-1] and f2["crop"] == expect_next and said_next["id"] == expect_next and names.get(expect_next, "?") in said_next["text"] and said_next["text"].startswith("Looks right. Next: "), {"steps": s2["steps"], "now": names.get(f2["crop"]), "want": names.get(expect_next), "button": said_next})
+    check("Enter takes what was typed, ticks the crop as looked at for the year, and opens the next crop down", len(s2["steps"]) == 3 and s2["looked"] == year and s2["y"] == {nth(walk[cid]["places"], 0): {"yield": 2}} and "looked at for %s" % year in s2["steps"][-1] and f2["crop"] == expect_next and said_next["id"] == expect_next and names.get(expect_next, "?") in said_next["text"] and said_next["text"].startswith("Looks right. Next: "), {"steps": s2["steps"], "now": names.get(f2["crop"]), "want": names.get(expect_next), "button": said_next})
     amber_next = [yk for yk, b in walk[expect_next]["card"]["boxes"].items() if b["amber"]] if expect_next in walk else []
     check("and the pointer lands in that crop's first empty box", f2["focus"] == (amber_next[0] if amber_next else "price") and (not amber_next or f2["boxes"][f2["focus"]]["amber"] is True), {"focus": f2["focus"], "amber": amber_next})
     sd = side(); it = [i for i in sd["items"] if i["id"] == cid]
@@ -367,14 +374,14 @@ with sync_playwright() as pw:
     f3 = card(); s3 = last_step(); after_enter = snap()
     check("Enter with nothing typed is the tick alone: one step, and the plan differs by that tick and nothing else", s3["n"] == 4 and names.get(cur, "?") in s3["label"] and "looked at" in s3["label"] and isinstance(bare_before, str) and js("return unticked();") == bare_before and after_enter["plan"] != before_enter["plan"] and after_enter["sig"] == before_enter["sig"] and f3["crop"] != cur, {"step": s3})
     # a letter picks the unit
-    cid2 = sub["single"]; open_crop(cid2, 400); unit0 = walk[cid2]["unit"]
+    cid2 = sub["single"]; open_crop(cid2, 400); unit0 = walk[cid2]["unit"] if isinstance(walk[cid2]["unit"], str) else "?"
     letter = "b" if not unit0.startswith("b") else "s"; want_unit = "bunch" if letter == "b" else "stem"
     if has('#ycCard [data-yk="price"]'): page.locator('#ycCard [data-yk="price"]').first.click()
     n_before = snap()["undo"]
     page.keyboard.press(letter); wait(500)
     u1 = last_step(); ku = card()
     check("a letter typed in a number box picks the unit it begins, in the list's own step, and is not typed into the box", u1["n"] == n_before + 1 and u1["label"] == f"{names[cid2]}: sold by the {want_unit}" and js("return S.engine.sellRule(%s).unit;" % json.dumps(cid2)) == want_unit and ku["boxes"]["unit"]["value"] == want_unit and ku["boxes"]["price"]["value"] == walk[cid2]["card"]["boxes"]["price"]["value"] and ku["focus"] == "price", {"step": u1, "focus": ku["focus"]})
-    check("the card says that no figure was turned into the new unit, and the yield stands as typed", "No figure was turned into the new unit" in js("return txt('ycUnitNote');") and js("return S.engine.harvestFor(%s).cells[%s].value;" % (json.dumps(cid2), json.dumps(walk[cid2]["places"][0]))) == walk[cid2]["cells"][walk[cid2]["places"][0]]["value"], js("return txt('ycUnitNote');"))
+    check("the card says that no figure was turned into the new unit, and the yield stands as typed", "No figure was turned into the new unit" in js("return txt('ycUnitNote');") and js("return S.engine.harvestFor(%s).cells[%s].value;" % (json.dumps(cid2), json.dumps(nth(walk[cid2]["places"], 0)))) == walk[cid2]["cells"][nth(walk[cid2]["places"], 0)]["value"], js("return txt('ycUnitNote');"))
     page.keyboard.press(unit0[0]); wait(500)
     for _ in range(3):   # a letter pressed again goes on to the next unit that begins with it
         if js("return S.engine.harvestFor(%s).unit.value;" % json.dumps(cid2)) == unit0: break
@@ -382,25 +389,25 @@ with sync_playwright() as pw:
     check("the crop's own unit is picked the same way, and the plan is then what it was before the letter", js("return S.engine.sellRule(%s).unit;" % json.dumps(cid2)) is None or not js("return S.engine.sellRule(%s).unit;" % json.dumps(cid2)), js("return S.engine.harvestFor(%s).unit;" % json.dumps(cid2)))
     if has('#ycCard [data-yk="price"]'): page.locator('#ycCard [data-yk="price"]').first.click()
     page.keyboard.press("Tab"); wait(250)
-    check("with no empty box left on a card, Tab goes on to the next box as it always does", card()["focus"] == "y|" + walk[cid2]["places"][0], card()["focus"])
+    check("with no empty box left on a card, Tab goes on to the next box as it always does", card()["focus"] == "y|" + str(nth(walk[cid2]["places"], 0)), card()["focus"])
     shot("card-ticked")
 
     # ── ticks: the button, taking one off, and what they leave in the plan ──
     undo_to(0); wait(200)
     base = snap()
     check("undone, the plan is what it was", base["key"] == snap0["key"] and base["plan"] == snap0["plan"])
-    open_crop(ids[nleft + 1]); click("#ycNext", 500); t_a = card()
+    open_crop(nth(ids, nleft + 1)); click("#ycNext", 500); t_a = card()
     click("#ycNext", 500); click("#ycNext", 500)
     sd = side(); st3 = snap()
     done_ids = [i["id"] for i in sd["items"] if i["done"]]
-    check("“Looks right. Next: …” ticks the crop on the card and opens the next that is not yet ticked", done_ids == ids[nleft + 1:nleft + 4] and t_a["crop"] == ids[nleft + 2] and card()["crop"] == ids[nleft + 4] and sd["looked"] == 3 and st3["undo"] == 3, {"done": [names.get(x) for x in done_ids], "undo": st3["undo"]})
+    check("“Looks right. Next: …” ticks the crop on the card and opens the next that is not yet ticked", len(done_ids) == 3 and done_ids == ids[nleft + 1:nleft + 4] and t_a["crop"] == nth(ids, nleft + 2) and card()["crop"] == nth(ids, nleft + 4) and sd["looked"] == 3 and st3["undo"] == 3, {"done": [names.get(x) for x in done_ids], "undo": st3["undo"]})
     check("only opened, walked and ticked, the plan differs by the ticks and by nothing else: no figure of any planting, and not the season's worth", js("return unticked();") == snap0["plan"] and st3["sig"] == snap0["sig"] and abs(st3["worth"] - snap0["worth"]) < 1e-6 and st3["key"] != snap0["key"], {"worth": [snap0["worth"], st3["worth"]]})
     stored = js("return (S.plan.assumptions || {}).sell || {};")
     check("a tick is the year, kept on the crop's line of the list", stored == {i: {"looked": year} for i in ids[nleft + 1:nleft + 4]}, stored)
-    open_crop(ids[nleft + 2]); kd = card()
+    open_crop(nth(ids, nleft + 2)); kd = card()
     check("a ticked crop's card says it is looked at for the year, and offers to take the tick off", f"Looked at for {year}" in kd["state"] and kd["untick"] is True, kd["state"])
     click("#ycUntick", 500); sd2 = side()
-    check("the tick taken off is one step, and the bar counts one fewer", snap()["undo"] == 4 and sd2["looked"] == 2 and not [i for i in sd2["items"] if i["id"] == ids[nleft + 2]][0]["done"] and f"Not looked at for {year}" in card()["state"], sd2["prog"])
+    check("the tick taken off is one step, and the bar counts one fewer", snap()["undo"] == 4 and sd2["looked"] == 2 and nth([i for i in sd2["items"] if i["id"] == nth(ids, nleft + 2)], 0)["done"] is False and f"Not looked at for {year}" in card()["state"], sd2["prog"])
     undo_to(0)
     check("undone, the plan is what it was", snap()["key"] == snap0["key"])
 
