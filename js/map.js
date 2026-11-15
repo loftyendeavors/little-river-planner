@@ -766,8 +766,8 @@
     $('mapPhotoToggle').addEventListener('click', e => { layers.photo = !layers.photo; e.currentTarget.setAttribute('aria-pressed', layers.photo); build(); });
     // "Dim photo" is how this computer likes to see the map, not part of the plan: it is kept in the browser and nowhere else
     try { layers.dim = root.localStorage.getItem(DIM_KEY) === '1'; } catch (_) { /* a browser that keeps nothing still works */ }
-    $('mapDimToggle').setAttribute('aria-pressed', layers.dim);
-    $('mapDimToggle').addEventListener('click', e => { layers.dim = !layers.dim; e.currentTarget.setAttribute('aria-pressed', layers.dim); try { root.localStorage.setItem(DIM_KEY, layers.dim ? '1' : '0'); } catch (_) { /* as above */ } build(); });
+    $('mapDimToggle').checked = layers.dim;
+    $('mapDimToggle').addEventListener('change', e => { layers.dim = e.currentTarget.checked; try { root.localStorage.setItem(DIM_KEY, layers.dim ? '1' : '0'); } catch (_) { /* as above */ } build(); });
     $('mapLabelToggle').addEventListener('click', e => { layers.labels = !layers.labels; e.currentTarget.setAttribute('aria-pressed', layers.labels); updateLabels(); });
     $('mapSeasonToggle').addEventListener('click', () => setWholeSeason(!wholeSeason));
     // A window that changes size (dragged to the other monitor, made full screen) is fitted again, unless the grower has moved the view since.
