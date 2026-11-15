@@ -6,9 +6,12 @@
  "code": [
   "app.js",
   "assume.js",
+  "audit.js",
   "engine.js",
+  "farmdates.js",
   "forecast.js",
   "harvestview.js",
+  "panels.js",
   "series.js",
   "succession.js",
   "yieldcard.js"

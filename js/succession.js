@@ -160,6 +160,12 @@
     if (!y || !parts) return o.thing ? null : y;
     return parts.find(x => (x.thing || '') === (o.thing || '')) || null;
   }
+  /** Why the crop's own line cannot be sized from a planting: where it stands, everything is sold as another thing. Null where that is not so. */
+  function soldElse(eng, p, r) {
+    const y = eng.yieldOf(p, r), parts = y && eng.soldOf ? eng.soldOf(p, r, y) : null;
+    if (!parts || parts.some(x => !x.thing)) return null;
+    return `Everything ${r.c.name} gives there is sold as ${parts.map(x => x.name).join(' and ')}, so there is no amount of ${r.c.name} itself to plan from it. Choose ${parts[0].name} under “Of”, or a garden where ${r.c.name} itself is sold.`;
+  }
   const COVERED = 0.1, NEAR = 0.05;           // a stretch the plan already fills to within a tenth gets no planting; a week within a twentieth of what was asked is a full week
   const PIECE = 5, SCRAP = 3;                 // feet: a planting is not started on less ground than this unless that finishes it; a scrap that short is not left over
   /**
@@ -199,6 +205,7 @@
     const first = draftFor(eng, o, like, target);
     if (!first.r) return { error: 'This crop cannot be worked out there.', like };
     if (o.thing && !given(eng, o, first.p, first.r)) return { error: 'That is not sold from a space like this one: it has a place of its own.', like };
+    if (!o.thing && soldElse(eng, first.p, first.r)) return { error: soldElse(eng, first.p, first.r), like };
     const then = draftFor(eng, o, like, E.addDays(target, -E.dayDiff(first.r.first, first.r.field))), res = then.r ? then : first, g = gauge(eng, o, res.p, res.r);
     if (!g) return { error: 'This crop has nothing to pick.', like };
     if (input.basis === 'planting') { const g0 = gauge(eng, o, first.p, first.r); if (g0) return { ...paceOf(g0, first.r), like }; }
@@ -231,7 +238,7 @@
       if (!o.like) return { error: 'There is no space this crop can go in to size a planting by.' };
       const a = draftFor(eng, o, o.like, o.from), b = a.r ? draftFor(eng, o, o.like, E.addDays(o.from, -E.dayDiff(a.r.first, a.r.field))) : a, res = b.r ? b : a;
       rests = res.r ? gauge(eng, o, res.p, res.r) : null;
-      if (!rests) return { error: 'This crop cannot be worked out where it is headed.' };
+      if (!rests) return { error: (!o.thing && res.r && soldElse(eng, res.p, res.r)) || 'This crop cannot be worked out where it is headed.' };
       if (rests.open) return { error: openWhy(o.crop), unchecked: true };
       if (!rests.y.set || !(rests.per > 0)) return { error: `${o.crop.name} has no yield to size a planting from. Set it under Assumptions, Yield and price.`, unchecked: true };
     }
@@ -351,7 +358,7 @@
       units: all.reduce((n, x) => n + x.units, 0), unit: all.length ? all[0].unit : sized ? rests.y.unit : eng.unitOf(o.crop), ground: all.reduce((n, x) => n + (x.r.tw ? 1 : x.r.len), 0), groundUnit: o.spaces.length ? unitOfKind[eng.spaceKind(o.spaces[0])] : 'ft',
       ...(sized ? { sized: { want: o.want, unit: rests.y.unit, every: o.every, until: o.until, net: !!supply, asked: waves.reduce((n, w) => n + w.asked, 0), have: waves.reduce((n, w) => n + w.have, 0), covered: waves.filter(w => w.skipped === 'covered').length,
         feet: all.reduce((n, x) => n + (probeSoil(eng, x.bed) ? x.r.physicalLength : 0), 0), heldFeet: waves.flatMap(w => w.held).reduce((n, w) => n + (+w.ft || 0), 0),
-        rests: { per: rests.per, soil: rests.soil, each: rests.y.per, mk: rests.y.mk, basis: rests.y.basis, pattern: rests.y.pattern, by: rests.y.by, env: rests.env, days: rests.there, meant: rests.meant, keep: rests.y.keep || 0, perWeek: rests.y.perWeek, bed: rests.bed, ...(rests.y.slice != null && rests.y.slice < 1 ? { slice: rests.y.slice } : {}) } } } : {}) };
+        rests: { per: rests.per, soil: rests.soil, each: rests.y.per, mk: rests.y.mk, basis: rests.y.basis, pattern: rests.y.pattern, by: rests.y.by, env: rests.env, days: rests.there, meant: rests.meant, keep: rests.y.keep || 0, perWeek: rests.y.perWeek, bed: rests.bed, ...(rests.y.slice != null && rests.y.slice < 1 ? { slice: rests.y.slice } : {}), ...(rests.y.packed ? { packed: rests.y.packed } : {}) } } } : {}) };
   }
   const probeSoil = (eng, bed) => !!bed && eng.isSoilBed(bed);
   function heldWhy(eng, res) {

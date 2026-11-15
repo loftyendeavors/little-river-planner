@@ -1269,8 +1269,22 @@
       const parts = [{ ...y, units: source * Math.max(0, packLeft), thing: null, name: null, slice: Math.max(0, bedLeft) * Math.max(0, packLeft) }];
       for (const t of beds) parts.push(own(t, t.share / 100));
       // packed from the first thing's harvest: picked when it is, kept as it keeps
-      for (const t of packs) parts.push({ ...y, thing: t.id, name: t.name, from: t.from, units: source * t.share / 100 * (t.way === 'weighs' ? t.weighs : 1 / t.holds), unit: t.unit, price: t.price, by: 'thing', perWeek: null });
+      for (const t of packs) parts.push({ ...y, thing: t.id, name: t.name, from: t.from, units: source * t.share / 100 * (t.way === 'weighs' ? t.weighs : 1 / t.holds), unit: t.unit, price: t.price, by: 'thing', perWeek: null,
+        packed: { of: y.unit, share: t.share, way: t.way, n: t.way === 'weighs' ? t.weighs : t.holds, left: Math.max(0, bedLeft) } });   // `per` stays the crop's own yield, in the crop's own unit: this says how it becomes the thing
       return parts;
+    }
+    /**
+     * What one planting gives, read as one figure: yieldOf's own result where the planting gives the crop's own line alone.
+     * Where it gives more than one thing, the things together: `units` the sum of what it gives of each, `unit` their units
+     * side by side ("bunch + lb"), `price` what a unit of that sum is worth, so that units × price is the planting's worth,
+     * and `parts` each thing by itself. For a reading that compares a planting with itself before and after a change.
+     */
+    function givenOf(p, r) {
+      r = r || calc(p);
+      const y = r ? yieldOf(p, r) : null, parts = y ? soldOf(p, r, y) : null;
+      if (!parts) return y;
+      const units = parts.reduce((n, x) => n + x.units, 0), worth = parts.reduce((n, x) => n + x.units * x.price, 0);
+      return { ...y, units, unit: [...new Set(parts.map(x => x.unit))].join(' + '), price: units > 0 ? worth / units : 0, parts };
     }
 
     const usedEnvs = new Set((S.beds || []).filter(b => b.active !== false).map(envOf).filter(Boolean));
@@ -1317,7 +1331,7 @@
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
       heatedTraySpaces, benchRoom, coolRules, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
-      yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, thingsOf, soldOf, WEIGHED, COUNTED, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
+      yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, thingsOf, soldOf, givenOf, WEIGHED, COUNTED, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, startRule, startFixed, startHint, STARTS, START_LESS, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,

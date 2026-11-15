@@ -266,8 +266,13 @@
    * over the crop's harvest days, so the choice of words does not by itself change what is forecast.
    */
   function setSell(cropId, change, label, options) {
+    const ops = sellOps(cropId, change);
+    return ops ? thingsFirst(cropId, label, ops, options).then(ok => ok ? assume(label, ops, options) : false) : Promise.resolve(false);
+  }
+  /** The step setSell makes, not yet taken: for the call itself, and for whoever has to say first what it would do. */
+  function sellOps(cropId, change) {
     const eng = state.engine, before = eng.harvestFor(cropId);
-    const ops = listStep(next => {
+    return listStep(next => {
       next.sell = next.sell || {};
       const record = { ...(next.sell[cropId] || {}) };
       for (const key of ['unit', 'price', 'pattern', 'days', 'keep', 'share', 'turnover']) {
@@ -287,17 +292,17 @@
           for (const id of ids) for (const [env, cell] of Object.entries((next[kind] || {})[id] || {})) if (cell && cell.yield != null) next[kind][id][env] = { ...cell, yield: turn(+cell.yield) };
       }
     });
-    return ops ? assume(label, ops, options) : Promise.resolve(false);
   }
   /** A variety's own unit or price: `change` may hold unit and price; a null goes back to the crop's. */
   function setSellV(varietyId, change, label) {
-    const ops = listStep(next => {
+    const v = state.engine.variety(varietyId), ops = listStep(next => {
       next.sellV = next.sellV || {};
       const record = { ...(next.sellV[varietyId] || {}) };
       for (const key of ['unit', 'price']) { if (!(key in change)) continue; const v = change[key]; if (v == null || v === '') delete record[key]; else record[key] = key === 'unit' ? String(v) : Math.max(0, +v); }
       if (Object.keys(record).length) next.sellV[varietyId] = record; else delete next.sellV[varietyId];
     });
-    return ops ? assume(label, ops) : Promise.resolve(false);
+    // a variety sold by a unit of its own is counted as that variety is sold, whole: its plantings leave the crop's other things
+    return ops ? thingsFirst(v ? v.cropId : '', label, ops).then(ok => ok ? assume(label, ops) : false) : Promise.resolve(false);
   }
   // ── what the house keeps, and what has been looked at ──
   // Two marks on a crop's line of the list, beside the figures they speak of, and one switch in the farm's settings. None of the
@@ -379,6 +384,58 @@
     if (Object.keys(record).length) next.sell[cropId] = record; else delete next.sell[cropId];
   });
   const aOne = unit => unit === 'each' ? 'one' : `a ${unit}`;
+  /** The season's worth before and after, with the difference in words: "goes from $96,997 to $96,872: $125 less". */
+  const worthTold = (was, now) => `${worthSaid(was, now)}${Math.abs(now - was) >= 0.5 ? `: ${dollars(Math.abs(now - was))} ${now > was ? 'more' : 'less'}` : ''}`;
+  /**
+   * A window that asks before something is done to what a thing counts as. It opens with the button that agrees in focus, so
+   * that Enter after a figure takes the figure; Escape and Cancel leave everything as it was.
+   */
+  function askFirst({ title, body, confirmLabel = 'Apply' }) {
+    return new Promise(resolve => {
+      const done = value => { dialog.close(); dialog.remove(); resolve(value); };
+      const yes = UI.h('button.btn.primary', { type: 'button', onclick: () => done(true) }, confirmLabel);
+      const dialog = UI.h('dialog.dialog', { dataset: { ask: 'things' }, oncancel: e => { e.preventDefault(); done(false); } }, UI.h('h2', title), UI.h('p', body),
+        UI.h('div.dialog-actions', UI.h('button.btn', { type: 'button', onclick: () => done(false) }, 'Cancel'), yes));
+      document.body.append(dialog); dialog.showModal(); yes.focus();
+    });
+  }
+  /** The plantings a thing is, or would be, fed by: those of its crop that follow the crop's line, in its place if it has one. */
+  function thingPlantings(eng, cropId, t) {
+    const taken = new Set(eng.thingsOf(cropId).filter(x => x.counts && x.from === 'place').map(x => x.place)), out = [];
+    for (const p of state.plan.plantings) {
+      if (p.cropId !== cropId) continue;
+      const r = eng.calc(p), y = r ? eng.yieldOf(p, r) : null, v = eng.variety(p.varietyId), env = r ? eng.envOf(r.b) : null;
+      if (!y || y.own || (r.rack && r.c.micro) || (v && v.cropId === cropId && eng.sellVRule(v.id).unit)) continue;
+      if (t.from === 'place' ? env === t.place : !taken.has(env)) out.push(r);
+    }
+    return out;
+  }
+  /**
+   * What a step on a crop's own line, or on one of its varieties, would do to the other things the crop sells: null when it
+   * leaves each as it is. Else { said, was, now }: which thing would stop being counted, start, or be fed by other plantings,
+   * what the plan counts before and after, and the season's worth before and after.
+   */
+  function thingsAfter(cropId, ops) {
+    const eng = state.engine, F = root.LRFForecast;
+    if (!ops || !cropId || !eng.thingsOf(cropId).length) return null;
+    const next = E.create(withOps(state.plan, ops, 'do'), Lib), rows = e => new Map(F.build(e).rows.filter(r => r.cropId === cropId && r.thing).map(r => [r.thing, r.plantings.length]));
+    const a = rows(eng), b = rows(next), then = new Map(next.thingsOf(cropId).map(t => [t.id, t])), says = [];
+    for (const t of eng.thingsOf(cropId)) {
+      const t2 = then.get(t.id);
+      if (!t2) continue;
+      if (t.counts && !t2.counts) says.push(`${t.name} would no longer be counted: ${t2.waits.length ? `it would wait on ${thingWaits(t2).join(', ')}, typed again for the new unit` : thingWhy(t2)}.`);
+      else if (!t.counts && t2.counts) says.push(`${t.name} would be counted from then on.`);
+      else if ((a.get(t.id) || 0) !== (b.get(t.id) || 0)) says.push(`${t.name} would be fed by ${b.get(t.id) || 0} planting${(b.get(t.id) || 0) === 1 ? '' : 's'}, not ${a.get(t.id) || 0}.`);
+    }
+    if (!says.length) return null;
+    const was = worthOf(eng), now = worthOf(next), before = linesOf(eng, cropId), after = linesOf(next, cropId);
+    return { was, now, said: `${says.join(' ')} Today the plan counts ${before.said}. Then: ${after.said}. ${worthTold(was, now).replace(/^t/, 'T')}.` };
+  }
+  /** Ask before a step that would change what a thing counts as. `options.told`: whoever called has said it already. */
+  async function thingsFirst(cropId, label, ops, options) {
+    const hit = options && options.told ? null : thingsAfter(cropId, ops);
+    return !hit || askFirst({ title: label, confirmLabel: 'Apply', body: `${hit.said} No date changes, and one undo takes it back.` });
+  }
   /** The figures a thing still waits on, each in a few words. */
   function thingWaits(t) {
     const say = { price: 'its price', share: t.from === 'bed' ? 'its share of each bed' : 'its share of the harvest', yield: 'its yield',
@@ -414,21 +471,30 @@
   /**
    * Change one thing a crop sells. `change` may hold name, unit, price, pattern, days, share, yield and helper (the helper row's
    * figure: what one counted thing weighs, or what one of this holds); a null empties the box. A share is held to what the other
-   * things of its kind leave of 100. A unit keeps every figure as typed and takes the crop's tick off, and asks first. Whatever
-   * would move the forecast says what it does to the season's worth first. Returns { was, now, counts } or false.
+   * things of its kind leave of 100, and harvest days to what its plantings have. A window asks first, with the season's worth
+   * before and after, when the thing would start counting, stop counting, or be sold by another unit (which keeps every figure
+   * as typed and takes the crop's tick off). A figure changed on a thing that already counts is applied at once, as a crop's
+   * own boxes are, with a message that gives the worth before and after and an Undo. `options.asked(yes)` is told how a
+   * window was answered. Returns { was, now, counts } or false.
    */
-  async function setThing(cropId, id, change, label) {
+  async function setThing(cropId, id, change, label, options = {}) {
     const eng = state.engine, c = eng.crop(cropId), hc = c ? eng.harvestFor(cropId) : null, all = c ? eng.thingsOf(cropId) : [], t = all.find(x => x.id === id);
     if (!t) return false;
     const year = planYear(), one = n => Math.round(n * 1000) / 1000;
     if ('share' in change && change.share != null) {
       const others = all.filter(x => x.from === t.from && x.id !== id).reduce((n, x) => n + (x.share || 0), 0), want = +change.share;
-      if (!(want >= 0) || want + others > 100 + 1e-9) return refuse(`${t.from === 'bed' ? 'Shares of each bed' : 'Shares of the harvest'} add up to 100 with ${c.name}’s own: ${others > 0 ? `the others take ${one(others)}, so ` : ''}at most ${one(100 - others)} can go to ${t.name}.`);
+      if (!(want >= 0) || want > 100) return refuse('A share is 0 to 100.');
+      if (want + others > 100 + 1e-9) return refuse(`${t.from === 'bed' ? 'Shares of each bed' : 'Shares of the harvest'} add up to 100 with ${c.name}’s own: ${others > 0 ? `the others take ${one(others)}, so ` : ''}at most ${one(100 - others)} can go to ${t.name}.`);
     }
     if ('name' in change) {
       const name = String(change.name || '').trim().replace(/\s+/g, ' ').slice(0, 40);
       if (!name) return false;
       if (name.toLowerCase() === String(c.name).toLowerCase() || all.some(x => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) return refuse(`${c.name} already sells something called ${name}. Give this one another name.`);
+    }
+    if ('days' in change && change.days != null && t.from !== 'harvest') {
+      // a thing is never picked after its planting's last picking: more days than its plantings have would only cut what it counts as
+      const fed = thingPlantings(eng, cropId, t), longest = fed.length ? Math.max(...fed.map(r => r.harvestDays)) : null, want = Math.round(+change.days);
+      if (longest != null && want > longest) return refuse(`${t.name} cannot be picked for ${want} days: the plantings it comes from are picked for ${longest} day${longest === 1 ? '' : 's'} at the most, and a thing is never picked after its planting’s last picking. Type ${longest} or fewer, or empty the box to pick it as long as ${c.name}.`);
     }
     const unitTo = 'unit' in change && change.unit && String(change.unit) !== t.unit ? String(change.unit) : null;
     const ops = thingStep(cropId, (things, record) => {
@@ -462,16 +528,19 @@
     label = label || `${c.name} · ${name}: changed`;
     const waits = t2.waits.length ? `it waits on ${thingWaits(t2).join(', ')}` : thingWhy(t2);
     const state2 = t2.counts ? (t.counts ? '' : 'counted from now on') : `not counted yet: ${waits}`;
-    if (moved || (unitTo && (t.price != null || t.yield != null || t.weighs != null || t.holds != null))) {
+    const typed = t.price != null || t.share != null || t.yield != null || t.weighs != null || t.holds != null;
+    if (t2.counts !== t.counts || (unitTo && typed)) {
       const unitSaid = unitTo ? `No figure is turned into the new unit: ${[t.price != null ? `the price stays $${one(t.price)} and will mean $${one(t.price)} for ${aOne(unitTo)}` : '', t.yield != null ? 'the yield stays as typed' : ''].filter(Boolean).join(', ') || 'what is typed stays as typed'}.${hc.looked === year ? ` The tick for ${year} comes off, so ${c.name} goes back among the crops to check.` : ''} ` : '';
       const what = !moved ? `Nothing in the forecast changes: ${name} is ${t2.counts ? 'counted as before' : 'still not counted'}.`
         : t2.counts && !t.counts ? `${name} has every figure it needs, and is counted from now on. Today the plan counts ${before.said}. With it: ${after.said}.`
         : !t2.counts && t.counts ? `${name} would no longer be counted (${waits}), and ${c.name} would be forecast as it was before ${name} was added. Today the plan counts ${before.said}. Then: ${after.said}.`
         : `Today the plan counts ${before.said}. Then: ${after.said}.`;
-      if (!await UI.confirm({ title: label, confirmLabel: unitTo ? 'Change the unit' : 'Apply', body: `${unitSaid}${what} ${worthSaid(was, now).replace(/^t/, 'T')}. No date changes, and one undo takes it back.` })) return false;
+      const yes = await askFirst({ title: label, confirmLabel: unitTo ? 'Change the unit' : 'Apply', body: `${unitSaid}${what} ${worthTold(was, now).replace(/^t/, 'T')}. No date changes, and one undo takes it back.` });
+      if (options.asked) options.asked(yes);
+      if (!yes) return false;
     }
     if (!commit(label, ops, { unchecked: true })) return false;
-    toast(`${label}${state2 ? ' · ' + state2 : ''} · ${worthSaid(was, now)}`, { label: 'Undo', run: undo });
+    toast(`${label}${state2 ? ' · ' + state2 : ''} · ${worthTold(was, now)}`, { label: 'Undo', run: undo });
     return { was, now, counts: t2.counts };
   }
   /** Take a thing away again. What that does to the season's worth is shown first; one undo brings it back with every figure. */
@@ -482,7 +551,7 @@
     if (!ops) return false;
     const next = E.create(withOps(state.plan, ops, 'do'), Lib), before = linesOf(eng, cropId), after = linesOf(next, cropId), was = worthOf(eng), now = worthOf(next), label = `${c.name}: ${t.name} taken away`;
     if (!await UI.confirm({ title: `Take ${t.name} away from ${c.name}?`, confirmLabel: 'Take it away',
-      body: `Its column goes, with the figures typed in it. ${t.counts ? `${c.name} is forecast as it was before ${t.name} was added. Today the plan counts ${before.said}. Then: ${after.said}.` : `${t.name} was not counted yet, so nothing in the forecast changes.`} ${worthSaid(was, now).replace(/^t/, 'T')}. One undo brings it back.` })) return false;
+      body: `Its column goes, with the figures typed in it. ${t.counts ? `${c.name} is forecast as it was before ${t.name} was added. Today the plan counts ${before.said}. Then: ${after.said}.` : `${t.name} was not counted yet, so nothing in the forecast changes.`} ${worthTold(was, now).replace(/^t/, 'T')}. One undo brings it back.` })) return false;
     if (!commit(label, ops, { unchecked: true })) return false;
     toast(`${label} · ${worthSaid(was, now)}`, { label: 'Undo', run: undo });
     return { was, now };
@@ -2011,7 +2080,7 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, lastChange, refuse, setUse, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS,
+    commit, undo, redo, lastChange, refuse, setUse, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),

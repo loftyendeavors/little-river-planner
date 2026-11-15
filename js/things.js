@@ -62,7 +62,9 @@
     const taken = new Set(counting.filter(t => t.from === 'place').map(t => t.place)), rowsOf = new Map();
     if (list.length) for (const line of forecast(eng).rows) if (line.cropId === c.id && line.thing) rowsOf.set(line.thing, line);
     const label = (t, what) => `${c.name} · ${t.name}: ${what}`;
-    const save = (t, change, what) => App.setThing(c.id, t.id, change, label(t, what));
+    // When a window asked and was agreed to, the pointer for typing goes to the next box still empty (the thing's own first),
+    // or to "Looks right"; turned down, it goes back to the box the figure was typed in.
+    const save = (t, change, what, box) => App.setThing(c.id, t.id, change, label(t, what), { asked: yes => { root.LRFYieldCard.state.focus = yes ? { blank: true, next: true, thing: t.id } : box ? { key: key(t, box) } : null; } });
 
     /** The places left to the crop's own line: one whose plantings a thing that counts now takes is no longer its column. */
     const places = cols => { const left = cols.list.filter(env => !taken.has(env)); return left.length ? { ...cols, list: left } : cols; };   // the crop's own line always keeps a column
@@ -77,11 +79,12 @@
         h('button.link', { type: 'button', dataset: { thingRemove: t.id }, title: `Take ${t.name} away again. What that does to the season’s worth is shown first.`, onclick: () => App.removeThing(c.id, t.id) }, 'Take away…'))));
 
     const share = (t, kind) => {
-      if (t.from !== kind) return why(t.from === 'place' ? 'all of its own plantings' : kind === 'bed' ? `packed from what ${c.name} is left` : 'has its own share of the bed');
+      if (t.from !== kind) return why(t.from === 'place' ? 'all of its own plantings' : kind === 'bed' ? `packed from ${c.name}’s own share` : 'has its own share of the bed');
       const room = left(kind) + (t.share || 0), of = kind === 'bed' ? 'of each bed' : 'of the harvest';
-      return h('span.yc-line', box({ key: key(t, 'share'), mine: t.share, fallback: null, amber: t.share == null, max: 100, label: label(t, `share ${of}, percent`),
+      // no bound of its own: a share that cannot be is refused in a sentence, where the grower can read why
+      return h('span.yc-line', box({ key: key(t, 'share'), mine: t.share, fallback: null, amber: t.share == null, min: -1e9, label: label(t, `share ${of}, percent`),
         tip: `The part ${of} that is ${kind === 'bed' ? 'grown for' : 'packed as'} ${t.name}. The shares add up to 100 with ${c.name}’s own: at most ${fig(room)} can go here.`,
-        save: k => save(t, { share: k }, k == null ? `share ${of} emptied` : `${fig(k)}% ${of}`) }), h('span.yc-unit', '%'));
+        save: k => save(t, { share: k }, k == null ? `share ${of} emptied` : `${fig(k)}% ${of}`, 'share') }), h('span.yc-unit', '%'));
     };
     const cells = id => list.map(t => {
       const td = (...kids) => h('td.yc-thing', { dataset: { thing: t.id } }, kids), own = t.from !== 'harvest', u = t.counted || t.unit;
@@ -89,23 +92,25 @@
         onchange: e => save(t, { unit: e.target.value }, soldBy(e.target.value)).then(done => { if (!done) ctx.redraw(); }) },
         [...new Set([...App.THING_UNITS, t.unit])].map(v => h('option', { value: v, selected: v === t.unit }, v))));
       if (id === 'price') return td('$ ', box({ key: key(t, 'price'), mine: t.price, fallback: null, amber: t.price == null, label: label(t, 'price'), tip: t.price == null ? `No price is set, so ${t.name} is not counted yet.` : `Your price for ${t.unit === 'each' ? 'one' : 'one ' + t.unit} of ${t.name}.`,
-        save: k => save(t, { price: k }, k == null ? 'price emptied' : `$${fig(k)}${each(t.unit)}`) }), h('span.yc-unit', each(t.unit).trim()));
+        save: k => save(t, { price: k }, k == null ? 'price emptied' : `$${fig(k)}${each(t.unit)}`, 'price') }), h('span.yc-unit', each(t.unit).trim()));
       if (id === 'sharebed') return td(share(t, 'bed'));
       if (id === 'sharepack') return td(share(t, 'harvest'));
       if (id === 'yield') {
         if (!own) return td(why('none of its own: it is packed from the harvest'));
         const weekly = t.pattern === 'weekly', how = weekly ? 'a week' : 'in all', nominal = t.days || hc.nominal;
+        // a thing out of each bed: its yield is of the part of the bed grown for it, not of the whole bed (the share is taken once)
+        const of = t.from === 'bed' ? `${per} of its ${t.share == null ? 'share' : fig(t.share) + ' %'}` : per;
         return td(h('span.yc-line', box({ key: key(t, 'yield'), mine: t.yield, fallback: null, amber: t.yield == null, label: label(t, `yield, ${per}${weekly ? ' a week' : ''}`),
-          tip: `What ${per}${t.from === 'bed' ? ' of its share' : ''} gives of ${t.name}, packed, ${weekly ? 'each week it is picked' : 'in all'}, in ${u === 'each' ? 'ones' : many(u)}.${t.counted ? ` It is sold by the ${t.unit}: the row below turns the one into the other.` : ''}`,
-          save: k => save(t, { yield: k }, k == null ? 'yield emptied' : `${fig(k)}${u === 'each' ? '' : ' ' + u} ${how}`) }), h('span.yc-unit', u === 'each' ? '' : u)),
-          h('small.yc-total', t.yield == null ? `${per}, ${how}` : weekly ? `${per}, a week: ${fig(t.yield * nominal / 7)} over ${nominal} days` : t.pattern === 'once' ? `${per}, in all, the day it is cleared` : `${per}, in all: about ${fig(t.yield * 7 / nominal)} a week`));
+          tip: `What ${t.from === 'bed' ? `${per} of the part of each bed grown for ${t.name}` : per} gives of ${t.name}, packed, ${weekly ? 'each week it is picked' : 'in all'}, in ${u === 'each' ? 'ones' : many(u)}.${t.from === 'bed' ? ' The share above is taken once: this is not a figure for the whole bed.' : ''}${t.counted ? ` It is sold by the ${t.unit}: the row below turns the one into the other.` : ''}`,
+          save: k => save(t, { yield: k }, k == null ? 'yield emptied' : `${fig(k)}${u === 'each' ? '' : ' ' + u} ${how}`, 'yield') }), h('span.yc-unit', u === 'each' ? '' : u)),
+          h('small.yc-total', { dataset: { of } }, t.yield == null ? `${of}, ${how}` : weekly ? `${of}, a week: ${fig(t.yield * nominal / 7)} over ${nominal} days` : t.pattern === 'once' ? `${of}, in all, the day it is cleared` : `${of}, in all: about ${fig(t.yield * 7 / nominal)} a week`));
       }
       if (id === 'helper') {
         const hp = helper(t);
         if (!hp) return td(why('not needed: its yield is in its own unit'));
         return td(h('span.yc-line', box({ key: key(t, 'helper'), mine: hp.value, fallback: null, amber: hp.value == null, label: label(t, hp.label.toLowerCase()),
           tip: `${hp.label}: the one figure that turns ${t.from === 'harvest' ? `${c.name}’s ${many(t.source) || 'own count'} into ${many(t.unit) || t.unit}` : `${many(t.counted) || 'what is counted'} into ${many(t.unit) || t.unit}`}. Nothing else does.${hp.stale ? ` The figure typed before was for another unit, and is not used.` : ''}`,
-          save: k => save(t, { helper: k }, k == null ? `${hp.label.toLowerCase()} emptied` : `${hp.label.toLowerCase()} ${fig(k)} ${hp.unit}`) }), h('span.yc-unit', hp.unit)),
+          save: k => save(t, { helper: k }, k == null ? `${hp.label.toLowerCase()} emptied` : `${hp.label.toLowerCase()} ${fig(k)} ${hp.unit}`, 'helper') }), h('span.yc-unit', hp.unit)),
           h('small.yc-total', { dataset: { helper: hp.label } }, hp.label.replace(/^A /, 'a ').replace(/, packed$/, '')));
       }
       if (id === 'first') {
@@ -122,9 +127,9 @@
           Object.entries(PATTERN).map(([value, text]) => h('option', { value, selected: t.pattern === value }, text))),
           ' for ', box({ key: key(t, 'days'), mine: t.days, fallback, whole: true, min: 1, max: 400, wide: true, label: label(t, 'harvest days'),
             tip: t.days != null ? `Your number: ${t.name} is picked for ${t.days} days, and never after ${c.name}’s own last picking. Clear it to pick it as long as ${c.name}.` : `Nothing set: it is picked as long as ${c.name} is. Type a number to pick it for fewer days.`,
-            save: k => save(t, { days: k }, k == null ? `picked as long as ${c.name}` : `picked for ${k} days`) }), h('span.yc-unit', 'days')));
+            save: k => save(t, { days: k }, k == null ? `picked as long as ${c.name}` : `picked for ${k} days`, 'days') }), h('span.yc-unit', 'days')));
       }
-      if (id === 'last') return td(!own ? why(`as ${c.name}`) : t.pattern === 'once' ? why('none: cleared in one day') : t.days != null ? h('span.yc-line', h('b.yc-fixed', String(t.days)), h('span.yc-unit', `days after the first, and no later than ${c.name}’s`)) : why(`with ${c.name}’s own last picking`));
+      if (id === 'last') return td(!own ? why(`as ${c.name}`) : t.pattern === 'once' ? h('span.yc-na', { dataset: { cleared: 'first' } }, `none: cleared in one day, the day ${c.name} is first picked. A day of its own comes with a later build.`) : t.days != null ? h('span.yc-line', h('b.yc-fixed', String(t.days)), h('span.yc-unit', `days after the first, and no later than ${c.name}’s`)) : why(`with ${c.name}’s own last picking`));
       return td();
     });
 
@@ -188,11 +193,14 @@
     const name = h('input', { type: 'text', id: 'thName', maxLength: 40, placeholder: 'babies, bouquets, tops off…', 'aria-label': 'What you sell' });
     const unit = h('select', { id: 'thUnit', 'aria-label': 'Sold by' }, [...new Set([...App.THING_UNITS, hc.unit.value])].map(v => h('option', { value: v, selected: v === hc.unit.value }, v)));
     const place = h('select', { id: 'thPlace', 'aria-label': 'Which place', disabled: !places.length }, places.map(env => h('option', { value: env }, `${PLACE[env]} (${plural(x.places.get(env).n, 'planting')})`)));
-    const kind = (value, title, text, extra, off) => h('label.th-kind' + (off ? '.off' : ''), h('input', { type: 'radio', name: 'thFrom', value, disabled: !!off, checked: value === 'bed' }), h('span', h('b', title), h('small', text), extra || null));
+    const kind = (value, title, plain, text, extra, off) => h('label.th-kind' + (off ? '.off' : ''), h('input', { type: 'radio', name: 'thFrom', value, disabled: !!off, onchange: () => { add.disabled = false; said.textContent = ''; } }), h('span', h('b', title), h('small.th-plain', plain), h('small', text), extra || null));
     const said = h('p.dlg-status', { id: 'thSaid', role: 'status' });
+    // not to be pressed until he has said which of the three it is: none is chosen for him
+    const add = h('button.btn.primary', { type: 'button', id: 'thGo', disabled: true, title: 'Choose which of the three it is first.', onclick: () => go() }, 'Add it');
     const close = () => { dialog.close(); dialog.remove(); };
     const go = () => {
       const from = (dialog.querySelector('input[name="thFrom"]:checked') || {}).value, text = name.value.trim();
+      if (!from) { said.dataset.kind = 'bad'; said.textContent = 'Choose which of the three it is first.'; return; }
       if (!text) { said.dataset.kind = 'bad'; said.textContent = 'Give it a name first: what you call it when you sell it.'; name.focus(); return; }
       if (text.toLowerCase() === String(c.name).toLowerCase() || list.some(t => t.name.toLowerCase() === text.toLowerCase())) { said.dataset.kind = 'bad'; said.textContent = `${c.name} already sells something called ${text}. Give this one another name.`; name.focus(); return; }
       close();
@@ -204,12 +212,12 @@
       h('h2', `${c.name}: something else you sell`),
       h('p', { id: 'thLead' }, `It gets a column of its own on the card, with its own unit, price, yield and way of picking. Nothing is forecast from it until its boxes are filled: the season’s worth stays ${money(worth)}.`),
       h('div.field-pair', h('label.field', h('span', 'What you sell'), name), h('label.field', h('span', 'Sold by'), unit)),
-      h('fieldset.th-kinds', h('legend', 'How it comes out of the plan'),
-        kind('bed', KIND.bed, `A part of each bed of ${c.name} is grown for it. Each has a share of each bed, and its own yield and picking.`),
-        kind('harvest', KIND.harvest, `A part of what ${c.name} gives is packed as it. Each has a share of the harvest, and one figure says what one of them holds or weighs.`),
-        kind('place', KIND.place, places.length ? `Every planting of ${c.name} there is sold as this, and no longer as ${c.name} itself:` : mine.length > 1 ? `Every other place ${c.name} is planted in already has a thing of its own, or is the last one left to ${c.name} itself.` : `${c.name} is planted in one kind of place only, so there is no second place to sell from.`, places.length ? place : null, !places.length)),
+      h('fieldset.th-kinds', h('legend', 'Which is it?'),
+        kind('bed', KIND.bed, 'Picked at different times out of one bed.', `A part of each bed of ${c.name} is grown for it. Each has a share of each bed, and its own yield and picking.`),
+        kind('harvest', KIND.harvest, 'The same picking, packed two ways.', `A part of what ${c.name} gives is packed as it. Each has a share of the harvest, and one figure says what one of them holds or weighs.`),
+        kind('place', KIND.place, 'Everything from one growing place.', places.length ? `Every planting of ${c.name} there is sold as this, and no longer as ${c.name} itself:` : mine.length > 1 ? `Every other place ${c.name} is planted in already has a thing of its own, or is the last one left to ${c.name} itself.` : `${c.name} is planted in one kind of place only, so there is no second place to sell from.`, places.length ? place : null, !places.length)),
       said,
-      h('div.dialog-actions', h('button.btn', { type: 'button', onclick: close }, 'Cancel'), h('button.btn.primary', { type: 'button', id: 'thGo', onclick: go }, 'Add it')));
+      h('div.dialog-actions', h('button.btn', { type: 'button', onclick: close }, 'Cancel'), add));
     name.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
     document.body.append(dialog); dialog.showModal(); name.focus();
   }
@@ -235,7 +243,7 @@
         h('td', h('div.as-name', h('span.as-more'), h('span.as-nc', h('button.linkish.as-tname', { type: 'button', title: `Something else ${c.name} sells: ${KIND[t.from].toLowerCase()}. Opens its column on the card, where its figures are typed.`, onclick: () => root.LRFAssume.setMode('harvest', 'card', c.id) }, `↳ ${t.name}`),
           h('small.as-tstate' + (t.counts ? '.on' : ''), state)))),
         h('td.as-start', h('span.as-fixed', { title: `${t.name} is ${soldBy(t.unit)}. Changed on the card.` }, t.unit)),
-        figCell({ cls: '.ah-price', key: `tprice|${t.id}`, mine: t.price, fallback: null, open: t.price == null, label: `${c.name} · ${t.name}: price`, tip: t.price == null ? `No price is set, so ${t.name} is not counted yet.` : `Your price for ${t.unit === 'each' ? 'one' : 'one ' + t.unit} of ${t.name}. What a change does to the season’s worth is shown first.`,
+        figCell({ cls: '.ah-price' + (t.price == null ? '.amber' : ''), key: `tprice|${t.id}`, mine: t.price, fallback: null, open: t.price == null, label: `${c.name} · ${t.name}: price`, tip: t.price == null ? `No price is set, so ${t.name} is not counted yet.` : `Your price for ${t.unit === 'each' ? 'one' : 'one ' + t.unit} of ${t.name}. What a change does to the season’s worth is shown first.`,
           save: n => App.setThing(c.id, t.id, { price: n }, `${c.name} · ${t.name}: ${n == null ? 'price emptied' : `$${fig(n)}${each(t.unit)}`}`) }),
         h('td.as-start', h('span.as-fixed', own ? PATTERN[t.pattern] : 'as the crop')),
         h('td.as-cell.none', own && t.days != null ? String(t.days) : '—'),
@@ -245,5 +253,16 @@
     });
   }
 
-  root.LRFThings = { of, helper, whence, listRows, KIND, PLACE, IN };
+  /** A letter on a thing's own "Sold by" picks the unit that begins with it; pressed again, the next one that does. */
+  function letter(c, id, char) {
+    const t = App.state.engine.thingsOf(c.id).find(x => x.id === id);
+    if (!t) return false;
+    const fit = [...new Set([...App.THING_UNITS, t.unit])].filter(u => u.toLowerCase().startsWith(String(char).toLowerCase()));
+    if (!fit.length) return false;
+    const to = fit[(fit.indexOf(t.unit) + 1) % fit.length];
+    if (to !== t.unit) App.setThing(c.id, id, { unit: to }, `${c.name} · ${t.name}: ${soldBy(to)}`).then(done => { if (!done) root.LRFYieldCard.state.redraw(); });
+    return true;
+  }
+
+  root.LRFThings = { of, helper, whence, listRows, letter, KIND, PLACE, IN };
 })(window);

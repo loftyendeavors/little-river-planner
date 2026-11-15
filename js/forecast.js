@@ -107,7 +107,8 @@
       const personal = useOf(eng, p).personal;
       if (personal) marked++;
       if (use !== 'all' && personal !== (use === 'personal')) continue;
-      // what it gives of each thing the crop sells: the crop's own line alone, as always, unless another thing counts for it
+      // what it gives of each thing the crop sells: the crop's own line alone, as always, unless another thing counts for it.
+      // A thing's row is listed with its crop (a flower's bouquets among the flowers), whatever unit the thing is sold by.
       const parts = (eng.soldOf && eng.soldOf(p, r, y0)) || [y0];
       let any = false;
       for (const part of parts) {
@@ -115,7 +116,7 @@
         const crop = eng.crop(p.cropId) || r.c, key = p.cropId + '|' + y.unit + (y.thing ? '|' + y.thing : ''), from = y.first || r.first, to = y.last || r.last;
         let row = rows.get(key);
         if (!row) {
-          row = { key, cropId: p.cropId, name: short(crop.name || r.c.name || 'Crop') + (y.thing ? ' · ' + y.name : ''), unit: y.unit, group: groupOf(crop, y.unit, own), color: eng.cropColor(r.c), days: new Float64Array(n), picked: new Float64Array(n), value: new Float64Array(n),
+          row = { key, cropId: p.cropId, name: short(crop.name || r.c.name || 'Crop') + (y.thing ? ' · ' + y.name : ''), unit: y.unit, group: groupOf(crop, y.thing ? eng.unitOf(crop) : y.unit, own), color: eng.cropColor(r.c), days: new Float64Array(n), picked: new Float64Array(n), value: new Float64Array(n),
             total: 0, pickedTotal: 0, worth: 0, plantings: [], varieties: new Map(), unset: 0, first: null, last: null, keeps: 0, patterns: new Set(), ...(y.thing ? { thing: y.thing, sold: y.name } : {}) };
           rows.set(key, row);
         }

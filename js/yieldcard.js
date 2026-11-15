@@ -51,7 +51,7 @@
   // are typed). first: the crops that waited on a price or a yield then. focus: where the pointer for typing goes after the
   // next drawing ({ key } a box, { blank: true } the first empty box). units: crop → { from }, a unit changed since the crop
   // was last ticked. turned: crop → what its yields read before "Picked" turned them. Both last while the page is open.
-  const ui = { cur: null, order: [], first: new Set(), scope: null, year: null, focus: null, units: new Map(), turned: new Map(), redraw: () => {} };
+  const ui = { cur: null, order: [], first: new Set(), scope: null, year: null, focus: null, column: null, units: new Map(), turned: new Map(), redraw: () => {} };
 
   // ───────────────────────── what the plan says of each crop ─────────────────────────
   const cache = new WeakMap();
@@ -97,11 +97,13 @@
    * for one yield, in any place.
    */
   function waits(eng, c, hc) {
-    if (eng.isCoverCrop(c)) return { price: false, yield: false, any: false, places: [] };
+    if (eng.isCoverCrop(c)) return { price: false, yield: false, any: false, places: [], things: 0 };
     const x = of(eng, c.id), price = hc.open.price && hc.price.mine == null, away = taken(eng, c.id), planted = hc.micro ? [] : eng.ENVS.filter(env => x.places.has(env) && !away.has(env));
     const places = !hc.open.yield || hc.micro ? [] : planted.length ? planted.filter(env => hc.cells[env].mine == null)
       : eng.ENVS.every(env => hc.cells[env].mine == null) ? eng.ENVS.filter(env => hc.cells[env].used) : [];
-    return { price, yield: places.length > 0, places, any: price || places.length > 0 };
+    // another thing the crop sells that still waits on a box of its own: the crop is not set until it counts, or is taken away
+    const things = hc.micro ? 0 : eng.thingsOf(c.id).filter(t => !t.counts).length;
+    return { price, yield: places.length > 0, places, things, any: price || places.length > 0 || things > 0 };
   }
   /** The boxes of a crop's card that are amber and empty, in the order they stand on it, each with words for it. */
   function empties(eng, c) {
@@ -173,7 +175,18 @@
     return h('span.yc-box' + (wide ? '.wide' : '') + (mine != null ? '.mine' : amber ? '.amber' : ''), input);
   }
   const blank = el => el.tagName === 'INPUT' && el.value === '' && !!el.closest('.yc-box.amber');
-  const stops = card => [...card.querySelectorAll('[data-yk]')];
+  /** The thing whose column a box stands in; null for a box of the crop's own. */
+  const column = el => { const m = /^t\|([^|]+)\|/.exec((el && el.dataset && el.dataset.yk) || ''); return m ? m[1] : null; };
+  /**
+   * The boxes of a card in the order Tab walks them. From a box in a thing's column, that column's own boxes come first (those
+   * under it, then those above), so that a thing is filled before the pointer goes anywhere else; then every other box.
+   */
+  const stops = (card, from) => {
+    const all = [...card.querySelectorAll('[data-yk]')], col = column(from);
+    if (!col) return all;
+    const own = all.filter(el => column(el) === col), at = own.indexOf(from);
+    return [from, ...own.slice(at + 1), ...own.slice(0, at), ...all.filter(el => column(el) !== col)];
+  };
   /** Words on the card that name something kept on the list: a press opens "All on one page" at this crop's row. */
   const toList = (c, text, varieties) => h('button.link', { type: 'button', dataset: { tolist: c.id }, title: `Opens “All on one page” at ${c.name}’s row.`, onclick: () => root.LRFAssume.setMode('harvest', 'list', c.id, { varieties: !!varieties }) }, text);
 
@@ -347,18 +360,18 @@
     if (to === was) return false;
     const x = of(eng, c.id), cols = placesOf(eng, c, hc, x), per = `${PER[hc.basis]}${hc.weekly ? ' a week' : ''}`;
     const yields = cols.list.filter(env => hc.cells[env].value != null && !w.places.includes(env)).map(env => `${PLACE[env].toLowerCase()} ${fig(hc.cells[env].value)}`), price = hc.price.value > 0 ? hc.price.value : null;
-    const packed = eng.thingsOf(c.id).filter(t => t.from === 'harvest' && t.counts);
-    if (price != null || yields.length) {
+    // what the new unit would do to the other things the crop sells (one packed from its harvest was given a figure for the old unit)
+    const unitTo = value === '(default)' || value === hc.unit.fallback ? null : value, hit = App.thingsAfter(c.id, App.sellOps(c.id, { unit: unitTo }));
+    if (price != null || yields.length || hit) {
       const says = [
         price != null ? `The price stays $${fig(price)}: it will mean $${fig(price)}${each(to)}, where it meant $${fig(price)}${each(was)}.` : '',
         yields.length ? `The yield stays as typed (${yields.join(', ')} ${per}): it will be counted in ${to === 'each' ? 'ones' : to}, where it was counted in ${was === 'each' ? 'ones' : was}.` : '',
         hc.looked === year ? `The tick for ${year} comes off, so ${c.name} goes back among the crops to check.` : '',
-        // what is packed from its harvest was given a figure for the old unit: it is not read as one for the new
-        packed.length ? `${packed.map(t => t.name).join(' and ')}, packed from its harvest, ${packed.length === 1 ? 'is' : 'are'} not counted again until what one holds or weighs is typed for the new unit.` : ''].filter(Boolean).join(' ');
+        hit ? hit.said : ''].filter(Boolean).join(' ');
       if (!await UI.confirm({ title: `${c.name}: ${soldBy(to)}, not ${was === 'each' ? 'each' : 'by the ' + was}?`, confirmLabel: 'Change the unit', body: `No figure is turned into the new unit. ${says} The card will say so until the crop is ticked again, and one undo takes it all back.` })) { ui.redraw(); return false; }
     }
     unitChanged(c.id, was);
-    const done = await App.setSell(c.id, { unit: value === '(default)' || value === hc.unit.fallback ? null : value }, `${c.name}: ${soldBy(to)}`);
+    const done = await App.setSell(c.id, { unit: unitTo }, `${c.name}: ${soldBy(to)}`, { told: true });   // what it does to a thing was said in the window above
     if (!done) ui.redraw();
     return done;
   }
@@ -414,7 +427,7 @@
   }
   function open(id, focus) {
     if (!id) return;
-    ui.cur = id; ui.focus = focus ? { blank: true } : null;
+    ui.cur = id; ui.focus = focus ? { blank: true } : null; ui.column = null;
     ui.redraw();
   }
   async function onKey(e, eng, q) {
@@ -422,12 +435,13 @@
     if (!c || !t || !t.dataset || e.ctrlKey || e.metaKey || e.altKey) return;
     const isBox = t.tagName === 'INPUT' && !!t.dataset.yk, isSel = t.tagName === 'SELECT' && !!t.dataset.yk;
     if (!isBox && !isSel) return;
+    ui.column = column(t);   // the thing whose column the keys are in: the pointer stays there while it has empty boxes
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       enter(isBox ? t : null, q);
     } else if (e.key === 'Tab' && !e.shiftKey) {
       // Tab goes to the next box that is still empty; with none left on the card, it goes on as Tab always does
-      const all = stops(t.closest('.yc-card')), at = all.indexOf(t), to = all.slice(at + 1).find(blank);
+      const all = stops(t.closest('.yc-card'), t), at = all.indexOf(t), to = all.slice(at + 1).find(blank);
       if (!to) return;
       e.preventDefault();
       ui.focus = { key: to.dataset.yk };
@@ -438,6 +452,7 @@
       // a letter picks a unit only on "Sold by" itself; in a number box it is not typed, picks nothing and takes nothing
       e.preventDefault();
       if (t.dataset.yk === 'unit') unitByLetter(App.state.engine, c, e.key);
+      if (isSel && column(t) && /\|unit$/.test(t.dataset.yk)) root.LRFThings.letter(c, column(t), e.key);   // a thing's own “Sold by”
     }
   }
 
@@ -453,8 +468,9 @@
       const c = eng.crop(id), hc = eng.harvestFor(id), x = s.crops.get(id) || NONE, w = waits(eng, c, hc), done = hc.looked === year;
       const yieldSay = w.places.every(env => hc.cells[env].value == null) ? 'no yield' : 'yield not checked';
       const say = w.price && w.yield ? `no price · ${yieldSay === 'no yield' ? yieldSay : 'not checked'}` : w.price ? 'no price' : w.yield ? yieldSay : x.worth >= 0.5 ? money(x.worth) : '';
+      const said = w.things ? `${w.price || w.yield ? say + ' · ' : ''}${plural(w.things, 'thing')} waiting` : say;   // another thing it sells still waits on a box
       return h('li', h('button.yc-item' + (done ? '.done' : '') + (w.any ? '.open' : ''), { type: 'button', dataset: { crop: id }, 'aria-current': id === ui.cur ? 'true' : null, title: `${c.name}${done ? `: looked at for ${year}` : ''}`, onclick: () => open(id, true) },
-        h('i.yc-tick', { 'aria-hidden': 'true' }, done ? '✓' : ''), root.LRFThumbs.el({ cropId: id, color: eng.cropColor(c), label: c.name, size: 20, cls: 'key' }), h('b', c.name), h('small' + (w.any ? '.warn' : ''), say)));
+        h('i.yc-tick', { 'aria-hidden': 'true' }, done ? '✓' : ''), root.LRFThumbs.el({ cropId: id, color: eng.cropColor(c), label: c.name, size: 20, cls: 'key' }), h('b', c.name), h('small' + (w.any ? '.warn' : ''), { title: w.things ? `${plural(w.things, 'thing')} ${c.name} sells ${w.things === 1 ? 'waits' : 'wait'} on a box, and ${w.things === 1 ? 'is' : 'are'} not counted yet.` : null }, said)));
     };
     const firstNow = shown.filter(id => ui.first.has(id)), restNow = shown.filter(id => !ui.first.has(id));
     // the sold shares typed by the grower, listed where they can be seen together: they stand as typed
@@ -462,7 +478,7 @@
     const side = h('aside.yc-side', { 'aria-label': 'Every crop, as a checklist' },
       h('div.yc-prog', { id: 'ycProg', dataset: { looked: String(lookedN), of: String(ui.order.length) } }, h('p', h('b', `${num(lookedN)} of ${num(ui.order.length)}`), ` looked at for ${year}`),
         h('div.yc-meter', { role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': ui.order.length, 'aria-valuenow': lookedN, 'aria-label': `Crops looked at for ${year}` }, h('i', { style: { width: `${ui.order.length ? Math.round(lookedN / ui.order.length * 1000) / 10 : 0}%` } }))),
-      h('p.yc-left' + (left ? '.warn' : ''), { id: 'ycLeft', dataset: { left: String(left) } }, left ? `${plural(left, 'crop')} left to set: no price, or a yield not yet checked` : 'Every crop has a price and a yield of your own.'),
+      h('p.yc-left' + (left ? '.warn' : ''), { id: 'ycLeft', dataset: { left: String(left) } }, left ? `${plural(left, 'crop')} left to set: no price, or a yield not yet checked${ui.order.some(id => waits(eng, eng.crop(id), eng.harvestFor(id)).things) ? ', or a thing still waiting on a box' : ''}` : 'Every crop has a price and a yield of your own.'),
       h('ol.yc-list', { id: 'ycList' },
         firstNow.length ? h('li.yc-sec', firstNow.some(id => waits(eng, eng.crop(id), eng.harvestFor(id)).any) ? 'No price, or a yield not yet checked' : 'Now set') : null, firstNow.map(item),
         restNow.length ? h('li.yc-sec', 'The rest, biggest first') : null, restNow.map(item),
@@ -479,7 +495,9 @@
     const want = ui.focus || (key ? { key } : null);
     ui.focus = null;
     if (want) {
-      const all = stops(main), to = want.blank ? all.find(blank) || main.querySelector('[data-yk="price"]') || $('ycNext') : want.key === 'next' ? $('ycNext') : main.querySelector(`[data-yk="${CSS.escape(want.key)}"]`);
+      // an empty box of the thing last typed in comes before any other; `next`: with none left, the button and not the price
+      const all = stops(main), col = want.thing || ui.column, own = col ? all.filter(el => column(el) === col) : [];
+      const to = want.blank ? own.find(blank) || all.find(blank) || (want.next ? null : main.querySelector('[data-yk="price"]')) || $('ycNext') : want.key === 'next' ? $('ycNext') : main.querySelector(`[data-yk="${CSS.escape(want.key)}"]`);
       if (to) { to.focus({ preventScroll: !want.blank }); if (to.select && to.tagName === 'INPUT') to.select(); }
     }
     return { mine: made.mine, all: made.all, left };

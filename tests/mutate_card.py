@@ -75,7 +75,7 @@ PAGE = [
  ("a letter in a number box picks a unit", YC, "if (t.dataset.yk === 'unit') unitByLetter(App.state.engine, c, e.key);", "unitByLetter(App.state.engine, c, e.key);"),
  ("a letter in a number box is typed into it: “1e3” is a thousand", YC, "    } else if (/^[a-z]$/i.test(e.key)) {\n", "    } else if (/^[a-z]$/i.test(e.key) && t.dataset.yk === 'unit') {\n"),
  # 2. a unit changed
- ("a unit is changed without asking, whatever the crop holds", YC, "    if (price != null || yields.length) {\n", "    if (false) {\n"),
+ ("a unit is changed without asking, whatever the crop holds", YC, "    if (price != null || yields.length || hit) {\n", "    if (false) {\n"),
  ("the window does not say what the price will now mean", YC, "price != null ? `The price stays $${fig(price)}: it will mean $${fig(price)}${each(to)}, where it meant $${fig(price)}${each(was)}.` : '',", "price != null ? `The price stays $${fig(price)}.` : '',"),
  ("turned down, the unit is changed all the same", YC, "body: `No figure is turned into the new unit. ${says} The card will say so until the crop is ticked again, and one undo takes it all back.` })) { ui.redraw(); return false; }", "body: `No figure is turned into the new unit. ${says} The card will say so until the crop is ticked again, and one undo takes it all back.` })) { ui.redraw(); }"),
  ("a changed unit is passed over in silence", YC, "changed && changed.from !== unit ? h('small.yc-note.warn'", "false ? h('small.yc-note.warn'"),
