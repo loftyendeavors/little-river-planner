@@ -364,6 +364,129 @@
     toast(`${label} · ${worthSaid(was, now)}`, { label: 'Undo', run: undo });
     return { was, now };
   }
+  // ── more than one thing sold from a crop ──
+  // A crop's own line is the first thing it sells. Each other thing is a record inside that line, with an id of its own that never
+  // changes (engine.thingsOf says what each holds). A thing counts for nothing until every figure it needs is there, so adding
+  // one, or filling a box of one that still waits on another, moves nothing. A change that would move the forecast (the thing
+  // becomes complete, stops being complete, or counts differently) says what it does to the season's worth first and is made only
+  // if the grower agrees: one step, one undo.
+  const THING_UNITS = ['each', 'bunch', 'lb', 'pint', 'quart', 'clamshell', 'head', 'stem', 'bouquet'];
+  const thingStep = (cropId, edit) => listStep(next => {
+    next.sell = next.sell || {};
+    const record = { ...(next.sell[cropId] || {}) }, things = { ...(record.things || {}) };
+    edit(things, record);
+    if (Object.keys(things).length) record.things = things; else delete record.things;
+    if (Object.keys(record).length) next.sell[cropId] = record; else delete next.sell[cropId];
+  });
+  const aOne = unit => unit === 'each' ? 'one' : `a ${unit}`;
+  /** The figures a thing still waits on, each in a few words. */
+  function thingWaits(t) {
+    const say = { price: 'its price', share: t.from === 'bed' ? 'its share of each bed' : 'its share of the harvest', yield: 'its yield',
+      weighs: `what ${aOne(t.from === 'harvest' ? t.source : t.counted || t.source)} weighs`, holds: `what ${aOne(t.unit)} holds` };
+    return t.waits.map(key => say[key] || key);
+  }
+  /** Why a thing that has every figure is still not counted. */
+  const thingWhy = t => t.why === 'taken' ? 'another thing is already sold from that place' : t.why === 'over' ? 'the shares come to more than 100' : t.why === 'place' ? 'it has no place' : '';
+  /** A crop's lines of the forecast, as they are said in a window: "Carrots 233 bunches, Carrots · Babies 27 lb". */
+  const linesOf = (eng, cropId) => { const F = root.LRFForecast, rows = F.build(eng).rows.filter(r => r.cropId === cropId && r.total > 0); return { rows, said: rows.length ? rows.map(r => `${r.name} ${F.amount(r.total, r.unit, r.group)}`).join(', ') : 'nothing' }; };
+  const sameLines = (a, b) => a.length === b.length && a.every((r, i) => r.key === b[i].key && Math.abs(r.total - b[i].total) <= 1e-9 * Math.max(1, r.total) && Math.abs(r.worth - b[i].worth) <= 1e-9 * Math.max(1, r.worth));
+  /**
+   * Add something else a crop sells: input { name, from: 'place' | 'bed' | 'harvest', place, unit }. It is added empty, so it counts
+   * for nothing and the forecast is what it was: the message says so, and what the thing waits on. Returns its id.
+   */
+  function addThing(cropId, input = {}) {
+    const eng = state.engine, c = eng.crop(cropId), hc = c ? eng.harvestFor(cropId) : null;
+    if (!hc || hc.micro || eng.isCoverCrop(c)) return false;
+    const from = ['place', 'bed', 'harvest'].includes(input.from) ? input.from : null, name = String(input.name || '').trim().replace(/\s+/g, ' ').slice(0, 40), unit = String(input.unit || '').trim() || hc.unit.value, have = eng.thingsOf(cropId);
+    if (!from || !name) return false;
+    if (name.toLowerCase() === String(c.name).toLowerCase() || have.some(t => t.name.toLowerCase() === name.toLowerCase())) return refuse(`${c.name} already sells something called ${name}. Give this one another name.`);
+    if (from === 'place' && (!eng.ENVS.includes(input.place) || have.some(t => t.from === 'place' && t.place === input.place))) return refuse('Another thing is already sold from that place.');
+    const id = 't-' + uid(), record = { id, n: have.reduce((m, t) => Math.max(m, t.n), 0) + 1, name, from, unit };
+    if (from === 'place') record.place = input.place;
+    // sold by weight where the crop itself is counted: its yield is typed in what is counted, and the helper row gives the weight
+    if (from !== 'harvest' && eng.WEIGHED.includes(unit) && eng.COUNTED.includes(hc.unit.value)) record.counted = hc.unit.value;
+    const ops = thingStep(cropId, things => { things[id] = record; }), worth = worthOf(eng), label = `${c.name}: ${name} added as something else it sells`;
+    if (!ops || !commit(label, ops, { unchecked: true })) return false;
+    const t = state.engine.thingsOf(cropId).find(x => x.id === id);
+    toast(`${label} · not counted yet: it waits on ${thingWaits(t).join(', ')} · the season’s worth stays ${dollars(worth)}`, { label: 'Undo', run: undo });
+    return id;
+  }
+  /**
+   * Change one thing a crop sells. `change` may hold name, unit, price, pattern, days, share, yield and helper (the helper row's
+   * figure: what one counted thing weighs, or what one of this holds); a null empties the box. A share is held to what the other
+   * things of its kind leave of 100. A unit keeps every figure as typed and takes the crop's tick off, and asks first. Whatever
+   * would move the forecast says what it does to the season's worth first. Returns { was, now, counts } or false.
+   */
+  async function setThing(cropId, id, change, label) {
+    const eng = state.engine, c = eng.crop(cropId), hc = c ? eng.harvestFor(cropId) : null, all = c ? eng.thingsOf(cropId) : [], t = all.find(x => x.id === id);
+    if (!t) return false;
+    const year = planYear(), one = n => Math.round(n * 1000) / 1000;
+    if ('share' in change && change.share != null) {
+      const others = all.filter(x => x.from === t.from && x.id !== id).reduce((n, x) => n + (x.share || 0), 0), want = +change.share;
+      if (!(want >= 0) || want + others > 100 + 1e-9) return refuse(`${t.from === 'bed' ? 'Shares of each bed' : 'Shares of the harvest'} add up to 100 with ${c.name}’s own: ${others > 0 ? `the others take ${one(others)}, so ` : ''}at most ${one(100 - others)} can go to ${t.name}.`);
+    }
+    if ('name' in change) {
+      const name = String(change.name || '').trim().replace(/\s+/g, ' ').slice(0, 40);
+      if (!name) return false;
+      if (name.toLowerCase() === String(c.name).toLowerCase() || all.some(x => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) return refuse(`${c.name} already sells something called ${name}. Give this one another name.`);
+    }
+    const unitTo = 'unit' in change && change.unit && String(change.unit) !== t.unit ? String(change.unit) : null;
+    const ops = thingStep(cropId, (things, record) => {
+      const x = { ...things[id] }, put = (key, v) => { if (v == null || v === '' || !Number.isFinite(+v)) delete x[key]; else x[key] = +v; };
+      if ('name' in change) x.name = String(change.name).trim().replace(/\s+/g, ' ').slice(0, 40);
+      if ('price' in change) put('price', change.price == null ? null : Math.max(0, +change.price));
+      if ('share' in change) put('share', change.share == null ? null : Math.min(100, Math.max(0, +change.share)));
+      if ('yield' in change) put('yield', change.yield == null || change.yield === '' ? null : figure3(Math.max(0, +change.yield)));
+      if ('days' in change) put('days', change.days == null ? null : Math.max(1, Math.round(+change.days)));
+      if ('helper' in change) {
+        const v = change.helper == null || !(+change.helper > 0) ? null : +change.helper;
+        if (t.from !== 'harvest') put('weighs', v);
+        else { delete x.holds; delete x.weighs; delete x.of; if (v != null) { x[t.way] = v; x.of = t.source; } }   // typed against the unit the crop is sold by today
+      }
+      if ('pattern' in change) {
+        const to = eng.PATTERNS.includes(change.pattern) ? change.pattern : null, weekly = (to || 'spread') === 'weekly', nominal = t.days || hc.nominal;
+        if (to) x.pattern = to; else delete x.pattern;
+        // as for a crop's own line: between a week's picking and a total the yield typed is turned into the other, over its harvest days
+        if (weekly !== (t.pattern === 'weekly') && x.yield != null) x.yield = figure3(weekly ? x.yield * 7 / nominal : x.yield * nominal / 7);
+      }
+      if (unitTo) {
+        x.unit = unitTo;
+        if (t.from !== 'harvest') { if (eng.WEIGHED.includes(unitTo) && eng.COUNTED.includes(hc.unit.value)) x.counted = x.counted || hc.unit.value; else delete x.counted; }
+        delete record.looked;   // looked at in the unit it was then sold by: to be looked at again
+      }
+      things[id] = x;
+    });
+    if (!ops) return false;
+    const next = E.create(withOps(state.plan, ops, 'do'), Lib), t2 = next.thingsOf(cropId).find(x => x.id === id), before = linesOf(eng, cropId), after = linesOf(next, cropId), was = worthOf(eng), now = worthOf(next);
+    const moved = !sameLines(before.rows, after.rows) || Math.abs(now - was) >= 0.005, name = t2.name;
+    label = label || `${c.name} · ${name}: changed`;
+    const waits = t2.waits.length ? `it waits on ${thingWaits(t2).join(', ')}` : thingWhy(t2);
+    const state2 = t2.counts ? (t.counts ? '' : 'counted from now on') : `not counted yet: ${waits}`;
+    if (moved || (unitTo && (t.price != null || t.yield != null || t.weighs != null || t.holds != null))) {
+      const unitSaid = unitTo ? `No figure is turned into the new unit: ${[t.price != null ? `the price stays $${one(t.price)} and will mean $${one(t.price)} for ${aOne(unitTo)}` : '', t.yield != null ? 'the yield stays as typed' : ''].filter(Boolean).join(', ') || 'what is typed stays as typed'}.${hc.looked === year ? ` The tick for ${year} comes off, so ${c.name} goes back among the crops to check.` : ''} ` : '';
+      const what = !moved ? `Nothing in the forecast changes: ${name} is ${t2.counts ? 'counted as before' : 'still not counted'}.`
+        : t2.counts && !t.counts ? `${name} has every figure it needs, and is counted from now on. Today the plan counts ${before.said}. With it: ${after.said}.`
+        : !t2.counts && t.counts ? `${name} would no longer be counted (${waits}), and ${c.name} would be forecast as it was before ${name} was added. Today the plan counts ${before.said}. Then: ${after.said}.`
+        : `Today the plan counts ${before.said}. Then: ${after.said}.`;
+      if (!await UI.confirm({ title: label, confirmLabel: unitTo ? 'Change the unit' : 'Apply', body: `${unitSaid}${what} ${worthSaid(was, now).replace(/^t/, 'T')}. No date changes, and one undo takes it back.` })) return false;
+    }
+    if (!commit(label, ops, { unchecked: true })) return false;
+    toast(`${label}${state2 ? ' · ' + state2 : ''} · ${worthSaid(was, now)}`, { label: 'Undo', run: undo });
+    return { was, now, counts: t2.counts };
+  }
+  /** Take a thing away again. What that does to the season's worth is shown first; one undo brings it back with every figure. */
+  async function removeThing(cropId, id) {
+    const eng = state.engine, c = eng.crop(cropId), t = c ? eng.thingsOf(cropId).find(x => x.id === id) : null;
+    if (!t) return false;
+    const ops = thingStep(cropId, things => { delete things[id]; });
+    if (!ops) return false;
+    const next = E.create(withOps(state.plan, ops, 'do'), Lib), before = linesOf(eng, cropId), after = linesOf(next, cropId), was = worthOf(eng), now = worthOf(next), label = `${c.name}: ${t.name} taken away`;
+    if (!await UI.confirm({ title: `Take ${t.name} away from ${c.name}?`, confirmLabel: 'Take it away',
+      body: `Its column goes, with the figures typed in it. ${t.counts ? `${c.name} is forecast as it was before ${t.name} was added. Today the plan counts ${before.said}. Then: ${after.said}.` : `${t.name} was not counted yet, so nothing in the forecast changes.`} ${worthSaid(was, now).replace(/^t/, 'T')}. One undo brings it back.` })) return false;
+    if (!commit(label, ops, { unchecked: true })) return false;
+    toast(`${label} · ${worthSaid(was, now)}`, { label: 'Undo', run: undo });
+    return { was, now };
+  }
   /**
    * Say where crops' days start: `changes` is [{ cropId, from, less }]. `from` is transplant, seed or direct; `less` the days a
    * transplant saves on a figure for seed sown in place. A null for either goes back to the default. One step, whatever the number of crops.
@@ -1888,7 +2011,7 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, lastChange, refuse, setUse, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm,
+    commit, undo, redo, lastChange, refuse, setUse, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),

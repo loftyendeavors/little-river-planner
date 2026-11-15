@@ -77,8 +77,8 @@
     for (const line of model.rows) {
       const x = row(line.cropId);
       x.worth += line.worth; x.personal += line.plantings.filter(q => q.personal).length; total += line.worth;
-      const u = x.units.get(line.unit) || { unit: line.unit, group: line.group, total: 0, worth: 0 };
-      u.total += line.total; u.worth += line.worth; x.units.set(line.unit, u);
+      const u = x.units.get(line.key) || { unit: line.unit, group: line.group, total: 0, worth: 0, thing: line.thing || '', sold: line.sold || '' };
+      u.total += line.total; u.worth += line.worth; x.units.set(line.key, u);
       for (const q of line.plantings) { const env = envOf(q.p); if (!env) continue; const at = place(x, env); at.total += q.inYear; at.worth += q.inYear * q.price; }
     }
     const waiting = new Map();
@@ -89,6 +89,8 @@
   }
   const NONE = { n: 0, places: new Map(), worth: 0, units: new Map(), personal: 0, own: 0 };
   const of = (eng, id) => study(eng).crops.get(id) || NONE;
+  /** The places whose plantings are sold as another thing, and no longer as the crop's own line (js/things.js). */
+  const taken = (eng, id) => new Set(eng.thingsOf(id).filter(t => t.counts && t.from === 'place').map(t => t.place));
   /**
    * What only the grower can set and has not: a price, and a yield for each place the crop is planted in. A yield is asked
    * place by place, so a figure typed for the field leaves the greenhouse's still asked for. A crop planted nowhere is asked
@@ -96,7 +98,7 @@
    */
   function waits(eng, c, hc) {
     if (eng.isCoverCrop(c)) return { price: false, yield: false, any: false, places: [] };
-    const x = of(eng, c.id), price = hc.open.price && hc.price.mine == null, planted = hc.micro ? [] : eng.ENVS.filter(env => x.places.has(env));
+    const x = of(eng, c.id), price = hc.open.price && hc.price.mine == null, away = taken(eng, c.id), planted = hc.micro ? [] : eng.ENVS.filter(env => x.places.has(env) && !away.has(env));
     const places = !hc.open.yield || hc.micro ? [] : planted.length ? planted.filter(env => hc.cells[env].mine == null)
       : eng.ENVS.every(env => hc.cells[env].mine == null) ? eng.ENVS.filter(env => hc.cells[env].used) : [];
     return { price, yield: places.length > 0, places, any: price || places.length > 0 };
@@ -108,6 +110,7 @@
     if (hc.house.part && hc.house.sold >= 100) out.push({ key: 'house', say: 'what the house keeps' });
     if (w.price) out.push({ key: 'price', say: 'the price' });
     for (const env of w.places) out.push({ key: `y|${env}`, say: `the yield ${IN[env]}` });
+    for (const e of root.LRFThings.of({ eng, c, hc, x: of(eng, c.id), box }).empties()) out.push(e);
     return out;
   }
   /** The columns of a crop's grid: the places it is planted in; with nothing planted, every place the farm has. */
@@ -177,12 +180,15 @@
   // ───────────────────────── the card ─────────────────────────
   function card(eng, plan, c, q) {
     const s = study(eng), x = s.crops.get(c.id) || NONE, hc = eng.harvestFor(c.id), year = s.year, unit = hc.unit.value, u = unitWord(unit), w = waits(eng, c, hc), cover = eng.isCoverCrop(c);
-    const cols = placesOf(eng, c, hc, x), n = cols.list.length, per = PER[hc.basis], varieties = hc.micro ? [] : eng.varietiesOf(c.id);
+    // the other things the crop sells: a column each after the crop's own (js/things.js)
+    const T = root.LRFThings.of({ eng, c, hc, x, year, box, redraw: () => ui.redraw() });
+    const cols = T.places(placesOf(eng, c, hc, x)), n = cols.list.length, per = PER[hc.basis], varieties = hc.micro ? [] : eng.varietiesOf(c.id);
     const next = nextAfter(eng, q, c.id), nextCrop = next && eng.crop(next), looked = hc.looked === year, still = empties(eng, c);
     const head = h('header.yc-head',
       root.LRFThumbs.el({ cropId: c.id, color: eng.cropColor(c), label: c.name, size: 30, cls: 'key' }),
       h('div', h('h3', { id: 'ycName' }, c.name),
         h('p.yc-where', { id: 'ycWhere' }, !x.n ? 'Not planted this season.' : `${plural(x.n, 'planting')}: ${[...x.places.entries()].sort((a, b) => Object.keys(PLACE).indexOf(a[0]) - Object.keys(PLACE).indexOf(b[0])).map(([env, at]) => `${PLACE[env]} ${num(at.n)}`).join(' · ')}`)),
+      T.add(),
       h('p.yc-state' + (looked ? '.done' : ''), { id: 'ycState' }, looked ? `Looked at for ${year}` : hc.looked ? `Last looked at for ${hc.looked}` : `Not looked at for ${year}`));
     const out = h('section.yc-card', { id: 'ycCard', dataset: { crop: c.id }, 'aria-label': `${c.name}: yield and price` }, head);
     const finish = (...rest) => { UI.add(out, rest, actions()); return out; };
@@ -212,10 +218,10 @@
 
     // ── the grid ──
     const span = (...kids) => h('td.yc-all', { colSpan: n }, kids);
-    const row = (id, label, hint, cells) => h('tr', { dataset: { row: id } }, h('th', { scope: 'row' }, h('b', label), hint ? h('small', hint) : null), cells);
+    const row = (id, label, hint, cells) => h('tr', { dataset: { row: id } }, h('th', { scope: 'row' }, h('b', label), hint ? h('small', hint) : null), cells, T.cells(id));
     const why = text => h('span.yc-na', text);
     const grid = h('table.yc-grid', { id: 'ycGrid' },
-      h('thead', h('tr', h('th'), cols.list.map(env => { const at = x.places.get(env); return h('th', { scope: 'col', dataset: { place: env } }, PLACE[env], h('small', at ? plural(at.n, 'planting') : cols.planted ? 'nothing planted there now' : 'not planted yet')); }))));
+      h('thead', h('tr', h('th'), cols.list.map(env => { const at = x.places.get(env); return h('th', { scope: 'col', dataset: { place: env } }, PLACE[env], h('small', at ? plural(at.n, 'planting') : cols.planted ? 'nothing planted there now' : 'not planted yet')); }), T.heads())));
     const body = h('tbody');
     grid.append(body);
 
@@ -237,6 +243,8 @@
         tip: hc.price.mine != null ? `Your price for one ${unit === 'each' ? 'of them' : unit}. Clear it to go back to ${fig(hc.price.fallback)}.` : w.price ? 'No price is set, so this crop adds nothing to what the season is worth.' : `From the crop’s record: $${fig(hc.price.fallback)} for one ${unit === 'each' ? 'of them' : unit}.`,
         save: k => App.setSell(c.id, { price: k }, k == null ? `${c.name}: price back to $${fig(hc.price.fallback)}` : `${c.name}: $${fig(k)}${each(unit)}`) }),
       h('span.yc-unit', each(unit).trim()), also(ownPrice, 'a price'))));
+    // a share for each thing, only where two come out of the same plantings
+    body.append(...T.shareRows(row, span));
 
     // what it gives: a box for each place, in the crop's own way of being picked
     if (hc.micro) body.append(row('yield', 'Gives, packed', null, span(why('a tray is a tray'))));
@@ -270,6 +278,9 @@
       })));
     }
 
+    // where one unit has to be turned into another, the one figure that does it
+    if (T.any) UI.add(body, T.helperRow(row, span));
+
     // first picking: the crop's DTM for the place, shown and not changed here
     const timing = hc.micro ? [] : cols.list.map(env => eng.timingFor(c.id, null, env)), after = t => t && t.value != null ? `days after ${t.fixed ? FIXED[t.fixed] : FROM[t.start]}` : '';
     const oneStart = timing.length > 0 && timing.every(t => after(t) && after(t) === after(timing[0]));
@@ -299,7 +310,7 @@
     // ── under the grid: what it comes to, and what it waits on ──
     const comes = [], units = [...x.units.values()].filter(k => k.total > 0);
     if (units.length) {
-      for (const k of units) comes.push(h('p', { dataset: { unit: k.unit, total: String(k.total), worth: String(k.worth) } }, h('b', F.amount(k.total, k.unit, k.group)), ` to sell in ${year}, worth `, h('b', money(k.worth)), '.'));
+      for (const k of units) comes.push(h('p', { dataset: { unit: k.unit, total: String(k.total), worth: String(k.worth), ...(k.thing ? { thing: k.thing } : {}) } }, k.thing ? `${k.sold}: ` : T.counting.length ? `${c.name}: ` : '', h('b', F.amount(k.total, k.unit, k.group)), ` to sell in ${year}, worth `, h('b', money(k.worth)), '.'));
       const split = Object.keys(PLACE).filter(env => x.places.has(env) && x.places.get(env).total > 0).map(env => [env, x.places.get(env)]);
       if (split.length > 1 && units.length === 1) comes.push(h('p.yc-split', split.map(([env, at]) => `${PLACE[env]} ${F.amount(at.total, units[0].unit, units[0].group)}`).join(' · ')));
       comes.push(h('p.yc-fine', hc.house.part && hc.house.sold >= 100 ? 'That is the worth of what is packed for sale: all of it counts as sold until the house’s part is typed above.' : hc.house.part ? `That is what is packed for sale: the house’s ${fig(100 - hc.house.sold)}% is already taken off.` : hc.micro ? 'A tray sown is a tray to sell.' : 'That is the worth of what is packed for sale: all of it counts as sold.',
@@ -309,6 +320,8 @@
     if (w.price) need.push('A price. Until there is one, this crop adds nothing to what the season is worth.');
     if (w.yield) { const there = cols.planted && w.places.length < n ? ` ${w.places.map(env => IN[env]).join(' and ')}` : ''; need.push(w.places.every(env => hc.cells[env].value == null) ? `A yield${there}. Until there is one, nothing is forecast ${there ? 'there' : 'for this crop'}.` : `A yield of your own${there}. The plan counts a starting value nobody has checked.`); }
     if (hc.house.part && hc.house.sold >= 100) need.push('What the house keeps. The crop is marked as partly kept, and no part is set.');
+    for (const line of T.needs()) need.push(line);
+    if (T.apart()) need.push(T.apart());
     if (x.own) need.push([`${plural(x.own, 'planting')} ${x.own === 1 ? 'carries a yield of its own and does' : 'carry a yield of their own and do'} not follow these boxes. `, h('button.link', { type: 'button', id: 'ycDiffers', title: 'Opens the window that lists the plantings that differ from the list, with what letting each go would change.', onclick: () => root.LRFAssume.openAudit() }, '“See what differs…”'), ' lets them.']);
     const ownYield = varieties.filter(v => eng.ENVS.some(env => eng.harvestFor(c.id, v.id).cells[env].mine != null)).length;
     if (ownYield) need.push([`${plural(ownYield, 'variety', 'varieties')} ${ownYield === 1 ? 'has' : 'have'} a yield of ${ownYield === 1 ? 'its' : 'their'} own, on `, toList(c, '“All on one page”', true), '.']);
@@ -468,5 +481,5 @@
     return { mine: made.mine, all: made.all, left };
   }
 
-  root.LRFYieldCard = { render, reset, open, unitChanged, current: () => ui.cur, order: () => ui.order.slice(), state: ui };
+  root.LRFYieldCard = { render, reset, open, unitChanged, current: () => ui.cur, order: () => ui.order.slice(), state: ui, box };
 })(window);

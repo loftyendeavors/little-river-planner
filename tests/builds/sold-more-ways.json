@@ -1,0 +1,22 @@
+{
+ "build": "More than one thing sold from a crop: a column on the yield and price card for each thing a crop sells, with its own unit, price, yield and way of picking; a different thing from each place, two things out of one bed, or one harvest packed two ways. The forecast, the Harvest page, the list to send and “plan to a weekly amount” count each thing in its own unit. A plan with no second thing forecasts as it did.",
+ "words": [],
+ "code": [
+  "app.js",
+  "engine.js",
+  "forecast.js",
+  "yieldcard.js"
+ ],
+ "added": [
+  "things.js"
+ ],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html",
+  "sw.js"
+ ],
+ "screens": [
+  "assumptions-yield"
+ ]
+}
