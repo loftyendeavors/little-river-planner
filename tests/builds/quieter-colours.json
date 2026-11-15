@@ -14,5 +14,11 @@
   "sw.js",
   "css/app.css"
  ],
- "screens": []
+ "screens": [
+  "assumptions-days",
+  "forecast",
+  "map",
+  "seeds",
+  "timeline"
+ ]
 }
