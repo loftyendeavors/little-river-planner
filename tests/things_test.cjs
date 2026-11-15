@@ -57,7 +57,14 @@ const placed = usable.filter(x => x.envs.size >= 2 && eng.COUNTED.includes(eng.u
 const bedded = usable.filter(x => x.envs.size === 1 && x.n >= 2 && x.soil && x.least >= 10 && x.own >= 1 && eng.harvestFor(x.id).basis === 'ft' && (!placed || x.id !== placed.id)).sort((a, b) => b.n - a.n)[0];
 const packed = usable.filter(x => x.n >= 1 && /^stems?$/.test(eng.unitOf(eng.crop(x.id))) && (!bedded || x.id !== bedded.id)).sort((a, b) => b.n - a.n)[0];
 check('the farm has a subject for each kind: a counted crop in two places; a crop sown by the bed-foot in soil beds, picked for ten days or more, one of whose plantings carries a yield of its own; and a flower sold by the stem', !!placed && !!bedded && !!packed, { placed: placed && placed.id, bedded: bedded && bedded.id, packed: packed && packed.id });
-const withThings = (cropId, things, more) => ({ ...core, assumptions: { v: 1, crops: {}, varieties: {}, sell: { [cropId]: { things, ...(more || {}) } } } });
+const withThings = (cropId, things, more, plan) => ({ ...(plan || core), assumptions: { v: 1, crops: {}, varieties: {}, sell: { [cropId]: { things, ...(more || {}) } } } });
+/** The farm with one planting of a crop that follows its line picked for half its days: its harvest is given an end. Made here; the farm as shipped has none cut short. */
+const cutShort = (cropId, env) => {
+  const p = core.plantings.find(q => { if (q.cropId !== cropId || !follows(eng, q)) return false; const r = eng.calc(q); return r.harvestDays >= 6 && r.harvestDays === r.expectedHarvestDays && !q.harvestEnd && (!env || eng.envOf(r.b) === env); });
+  if (!p) return null;
+  const r = eng.calc(p), end = E.d2s(E.addDays(r.first, Math.floor(r.harvestDays / 2) - 1));
+  return { id: p.id, plan: { ...core, plantings: core.plantings.map(q => q.id === p.id ? { ...q, harvestEnd: end } : q) } };
+};
 const partsOf = (e, cropId) => core.plantings.filter(p => p.cropId === cropId).map(p => { const r = e.calc(p), y = r ? e.yieldOf(p, r) : null; return { p, r, y, parts: r ? e.soldOf(p, r, y) : null }; });
 const rowsOf = (m, cropId) => m.rows.filter(r => r.cropId === cropId);
 const others = (m, cropId) => differ({ ...m, rows: m.rows.filter(r => r.cropId !== cropId) }, { ...base, rows: base.rows.filter(r => r.cropId !== cropId) });
@@ -78,6 +85,20 @@ if (placed && bedded && packed) {
     check('the forecast has a row for the thing, in its unit, named for the crop and the thing; the crop’s own row no longer holds those plantings; no other crop’s row moves',
       !!row && row.unit === 'lb' && row.sold === 'By weight' && row.name.endsWith(' · By weight') && row.key === `${id}|lb|t-a` && near(row.total, row.plantings.reduce((n, q) => n + q.inYear, 0)) && first.every(r => r.plantings.every(q => !there.some(x => x.p.id === q.p.id))) && others(m, id).length === 0, { row: row && row.key, others: others(m, id).slice(0, 3) });
     check('worth is the sum over things: each at its own price', near(worth(m), worth(base) - there.reduce((n, x) => n + rowsOf(base, id).reduce((k, r) => k + r.plantings.filter(q => q.p.id === x.p.id).reduce((j, q) => j + q.inYear * q.price, 0), 0), 0) + row.worth, 1e-7) && near(row.worth, row.total * 6));
+    const cut = cutShort(id, place), ec = cut ? E.create(withThings(id, { 't-a': thing }, null, cut.plan), Lib) : null, pc = cut ? ec.planting(cut.id) : null, rc = cut ? ec.calc(pc) : null, yc = cut ? ec.yieldOf(pc, rc) : null, sc = cut ? ec.soldOf(pc, rc, yc) : null;
+    check('a planting whose harvest is cut short gives the thing only the part of its harvest it has: picked for half its days, a total is halved',
+      !!sc && rc.harvestDays < rc.expectedHarvestDays && sc.length === 1 && near(sc[0].units, yc.count * 0.8 * 0.5 * yc.mk * rc.harvestDays / rc.expectedHarvestDays) && sc[0].units < yc.count * 0.8 * 0.5 * yc.mk * 0.7, sc && { days: [rc.harvestDays, rc.expectedHarvestDays], units: sc[0].units });
+    // a planting of a variety sold by a unit of its own is counted as that variety is sold, whole
+    const withV = there.find(x => { const v = eng.variety(x.p.varietyId); return v && v.cropId === id; }), planV = withV ? { ...withThings(id, { 't-a': thing }) } : null;
+    if (planV) planV.assumptions.sellV = { [withV.p.varietyId]: { unit: 'bunch' } };
+    const ev = planV ? E.create(planV, Lib) : null;
+    check('a planting of a variety sold by a unit of its own is not given in parts: it is counted as that variety is sold, whole', !!ev && core.plantings.filter(q => q.varietyId === withV.p.varietyId).every(q => ev.soldOf(q) === null) && ev.yieldOf(ev.planting(withV.p.id)).unit === 'bunch', withV ? withV.p.varietyId : 'no planting there has a variety');
+    // read as one figure, for what compares a planting with itself
+    const g = e.givenOf(there[0].p), plain = e.givenOf(away[0].p), panel = there[0].parts[0];
+    check('read as one figure, a planting that feeds a thing gives the thing’s amount, unit and price, and one that does not gives what it always gave', near(g.units, panel.units) && g.unit === 'lb' && near(g.price, 6) && g.parts.length === 1 && plain.units === away[0].y.units && plain.unit === away[0].y.unit && !plain.parts, { g: [g.units, g.unit, g.price] });
+    // the crop's own weekly amount where everything is sold as the thing
+    const bedThere = core.beds.find(b => b.id === there[0].p.bedId), asked = SU.pace(e, { cropId: id, place: 'beds', bedIds: [bedThere.id], from: `${base.year}-07-15` }), elsewhere = SU.pace(e, { cropId: id, place: 'beds', bedIds: [away[0].p.bedId], from: `${base.year}-07-15` });
+    check('“plan to a weekly amount” of the crop itself, in a place whose plantings are all sold as the thing, says so and names the thing; in another place it is worked out as before', typeof asked.error === 'string' && asked.error.includes('By weight') && /is sold as/.test(asked.error) && !elsewhere.error && elsewhere.unit === own, { asked: asked.error || asked.unit, elsewhere: elsewhere.error || elsewhere.unit });
     const two = E.create(withThings(id, { 't-a': thing, 't-b': { ...thing, id: 't-b', n: 2, name: 'Again' } }), Lib).thingsOf(id);
     check('two things cannot be sold from one place: the one added first stands, the other does not count and says why', two[0].counts === true && two[1].counts === false && two[1].why === 'taken');
   }
@@ -101,6 +122,14 @@ if (placed && bedded && packed) {
     const short = E.create(withThings(id, { 't-b': { ...thing, days: 5, pattern: 'once' } }), Lib), ms = F.build(short), rs = rowsOf(ms, id).find(r => r.thing === 't-b');
     check('with harvest days of its own it is picked from the planting’s first picking for that many days and never after its last; cleared, all of it is counted that first day',
       !!rs && rs.plantings.length > 0 && rs.plantings.every(q => +q.from === +q.r.first && q.to <= q.r.last && Math.round((q.to - q.from) / 864e5) + 1 === Math.min(5, q.r.harvestDays) && q.out[0] > 0 && Array.from(q.out).slice(1).every(v => v === 0)), rs && rs.plantings.slice(0, 1).map(q => [E.d2s(q.from), E.d2s(q.to)]));
+    const ps = partsOf(short, id).filter(x => x.parts);
+    check('harvest days of its own that the planting has in full leave its total whole: 30% of what the bed is counted by × the yield × the share sold, not that over the crop’s own days', ps.length >= 2 && ps.every(x => x.r.harvestDays >= 5 && near(x.parts[1].units, x.y.count * 0.3 * 0.5 * x.y.mk)), ps.slice(0, 1).map(x => [x.parts[1].units, x.y.count * 0.3 * 0.5 * x.y.mk]));
+    const kept = E.create(withThings(id, { 't-b': thing }, { keep: 2 }), Lib), mk = F.build(kept), rk = rowsOf(mk, id).find(r => r.thing === 't-b'), fk = rowsOf(mk, id).find(r => !r.thing);
+    check('a thing keeps as its crop keeps: with the crop kept two weeks, what is picked of the thing is there to sell over those two weeks too', !!rk && !!fk && rk.keeps === 2 && fk.keeps === 2 && rk.plantings.length > 0 && rk.plantings.every(q => q.keep === 2 && Array.from(q.avail).filter(v => v > 0).length > Array.from(q.out).filter(v => v > 0).length) && !Array.from(rk.days).every((v, i) => near(v, rk.picked[i])), rk && { keeps: rk.keeps });
+    const all100 = E.create(withThings(id, { 't-b': { ...thing, share: 100 } }), Lib), m100 = F.build(all100);
+    check('a crop’s own line that the other thing leaves nothing of is not told as a yield that works out to nothing', m100.unset.length === base.unset.length && rowsOf(m100, id).filter(r => !r.thing).every(r => r.unset === (rowsOf(base, id).find(o => o.key === r.key) || {}).unset) && rowsOf(m100, id).some(r => r.thing === 't-b' && r.total > 0), { unset: [m100.unset.length, base.unset.length] });
+    const cut = cutShort(id), ec = cut ? E.create(withThings(id, { 't-b': thing }, null, cut.plan), Lib) : null, pc = cut ? ec.planting(cut.id) : null, rc = cut ? ec.calc(pc) : null, yc = cut ? ec.yieldOf(pc, rc) : null, sc = cut ? ec.soldOf(pc, rc, yc) : null;
+    check('a bed whose harvest is cut short gives the thing its share of the part of its harvest it has, and no more', !!sc && rc.harvestDays < rc.expectedHarvestDays && near(sc[1].units, yc.count * 0.3 * 0.5 * yc.mk * rc.harvestDays / rc.expectedHarvestDays) && sc[1].units < yc.count * 0.3 * 0.5 * yc.mk * 0.7 && near(sc[0].units, yc.units * 0.7), sc && { days: [rc.harvestDays, rc.expectedHarvestDays] });
     check('a thing moves no date: every planting has the sowing, planting and picking days it had', core.plantings.every(p => { const a = eng.calc(p), b = short.calc(p); return !a === !b && (!a || (+a.first === +b.first && +a.last === +b.last && +(a.sow || 0) === +(b.sow || 0) && +a.field === +b.field && +eng.occupancyThrough(p, a) === +short.occupancyThrough(p, b))); }));
     const over = E.create(withThings(id, { 't-b': { ...thing, share: 70 }, 't-c': { ...thing, id: 't-c', n: 2, name: 'More', share: 40 } }), Lib).thingsOf(id);
     check('shares of each bed that come to more than 100 are not both counted: the one added first stands, the other says why', over[0].counts === true && over[1].counts === false && over[1].why === 'over');
@@ -117,6 +146,11 @@ if (placed && bedded && packed) {
     check('the forecast’s two rows are picked on the same days, and the thing’s is in its own unit and at its own price', !!row && !!first && row.plantings.length > 0 && row.plantings.every(q => { const o = first.plantings.find(k => k.p.id === q.p.id); return !!o && o.lo === q.lo && o.out.length === q.out.length && o.pattern === q.pattern; }) && near(row.worth, row.total * 12) && row.unit === 'bouquet' && others(m, id).length === 0);
     check('a bouquet is not a stem: it adds nothing to the count of stems, and a crop that sells two things is one crop', F.inStems(row) === false && F.inStems(first) === true && F.cropCount(m.rows) === F.cropCount(base.rows) && F.cropCount(base.rows) === base.rows.length
       && near(F.glance(m, 0, m.days - 1).stems, m.rows.filter(r => r.group === 'flower' && !r.thing).reduce((n, r) => n + F.sum(r.days, 0, m.days - 1), 0)));
+    const part = list[0].parts[1];
+    check('what is packed says how: the crop’s own yield in the crop’s own unit, the share, and how many to one', !!part.packed && part.packed.of === own && part.packed.share === 40 && part.packed.way === 'holds' && part.packed.n === 10 && near(part.per, list[0].y.per), part.packed);
+    // a crop that is no flower by its name, sold by the stem: its bouquets are listed where the crop is
+    const plain = bedded.id, stems = E.create(withThings(plain, { 't-c': { ...thing, of: 'stem' } }, { unit: 'stem' }), Lib), mst = F.build(stems), rs2 = rowsOf(mst, plain);
+    check('a thing’s row is listed with its crop: bouquets of a crop sold by the stem stand among the flowers with it, whatever the crop is called', rs2.some(r => r.thing === 't-c') && rs2.every(r => r.group === 'flower') && F.groupOf(stems.crop(plain), 'bouquet', null) === 'produce', rs2.map(r => [r.name, r.unit, r.group]));
     const stale = E.create(withThings(id, { 't-c': thing }, { unit: 'bunch' }), Lib), ts = stale.thingsOf(id)[0];
     check('a figure typed while the crop was sold by another unit is not read as one for this unit: the thing waits on it again', ts.counts === false && ts.waits.join() === 'holds');
     const byWeight = E.create(withThings(id, { 't-c': { ...thing, unit: 'lb', holds: undefined, weighs: 0.05 } }), Lib), bw = partsOf(byWeight, id).filter(x => x.parts);

@@ -162,7 +162,7 @@
   }
   /** Why the crop's own line cannot be sized from a planting: where it stands, everything is sold as another thing. Null where that is not so. */
   function soldElse(eng, p, r) {
-    const y = eng.yieldOf(p, r), parts = y && eng.soldOf ? eng.soldOf(p, r, y) : null;
+    const own = eng.yieldOf(p, r), parts = own && eng.soldOf ? eng.soldOf(p, r, own) : null;
     if (!parts || parts.some(x => !x.thing)) return null;
     return `Everything ${r.c.name} gives there is sold as ${parts.map(x => x.name).join(' and ')}, so there is no amount of ${r.c.name} itself to plan from it. Choose ${parts[0].name} under “Of”, or a garden where ${r.c.name} itself is sold.`;
   }

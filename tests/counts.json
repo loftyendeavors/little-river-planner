@@ -49,9 +49,9 @@
 
   "the made-up farm": 7,
 
-  "things, backup": 30,
+  "things, backup": 40,
 
-  "things, compact": 30,
+  "things, compact": 40,
 
   "waiting, backup": 54,
 
@@ -142,7 +142,7 @@
 
   "r1 @1480": 66,
 
-  "things": 71
+  "things": 90
 
  },
  "new": {
@@ -223,9 +223,9 @@
 
   "map-views-site": 22,
 
-  "things-site": 71,
+  "things-site": 90,
 
-  "things-site @1480": 71
+  "things-site @1480": 90
 
  },
  "site4": {
@@ -295,9 +295,9 @@
 
   "mixed-site @3440": 63,
 
-  "things @1707": 71,
+  "things @1707": 90,
 
-  "things-site @3440": 71
+  "things-site @3440": 90
 
  },
  "site8": {

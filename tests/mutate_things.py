@@ -26,6 +26,7 @@ def alone(cmd, timeout, env=None, cwd=None):
             if mark.encode() in open("/proc/%s/environ" % pid, "rb").read().split(b"\0"): os.kill(int(pid), signal.SIGKILL)
         except OSError: pass
     return out, err
+PN = "js/panels.js"
 EN, FC, SU, AP, TH, YC, AS, HV, SR, IO, CSS = "js/engine.js", "js/forecast.js", "js/succession.js", "js/app.js", "js/things.js", "js/yieldcard.js", "js/assume.js", "js/harvestview.js", "js/series.js", "js/planio.js", "css/app.css"
 NODE = [
  # a plan nobody has touched
@@ -68,6 +69,17 @@ NODE = [
  ("the weekly amount of a thing is read from the planting whole", SU, "    const y = eng.yieldOf(p, r), parts = y && eng.soldOf ? eng.soldOf(p, r, y) : null;\n", "    const y = eng.yieldOf(p, r), parts = null;\n"),
  # a backup
  ("a backup loaded over the plan does not carry the list", IO, "      plan.assumptions = prev.assumptions; const n = figures(prev.assumptions);", "      const n = figures(prev.assumptions);"),
+ # found by a reader of the build: each passed the checks as they then stood
+ ("a thing's total is not cut where its planting's harvest is cut short", EN, "cut = weekly ? 1 : clamp(days / Math.max(1, nominal), 0, 1), k =", "cut = 1, k ="),
+ ("a thing's own harvest days no longer rescale its total", EN, "nominal = t.days || Math.max(1, r.expectedHarvestDays),", "nominal = Math.max(1, r.expectedHarvestDays),"),
+ ("a thing does not keep as its crop keeps", EN, "by: 'thing', keep: y.keep, first: r.first", "by: 'thing', keep: 0, first: r.first"),
+ ("a planting of a variety sold by a unit of its own is given in parts", EN, "      if (v && sellVRule(v.id).unit) return null;\n", ""),
+ ("a first thing left nothing is told as a yield that works out to nothing", FC, "if ((!y.set || !(y.units > 0)) && !(parts.length > 1 && y.set))", "if ((!y.set || !(y.units > 0)))"),
+ # where a thing is listed, and the readings that take a planting whole
+ ("a thing's row is grouped by its own unit, not as its crop is", FC, "group: groupOf(crop, y.thing ? eng.unitOf(crop) : y.unit, own),", "group: groupOf(crop, y.unit, own),"),
+ ("read as one figure, a planting gives the crop's own line whatever it feeds", EN, "      if (!parts) return y;\n      const units = parts.reduce(", "      if (true) return y;\n      const units = parts.reduce("),
+ ("what is packed does not say how", EN, "packed: { of: y.unit, share: t.share, way: t.way,", "packed0: { of: y.unit, share: t.share, way: t.way,"),
+ ("the crop's own weekly amount in a place a thing takes gives no reason", SU, "    if (!o.thing && soldElse(eng, first.p, first.r)) return { error: soldElse(eng, first.p, first.r), like };\n", ""),
 ]
 PAGE = [
  # adding
@@ -95,19 +107,49 @@ PAGE = [
  ("the thing's line under the grid is not named", YC, "k.thing ? `${k.sold}: ` : T.counting.length ? `${c.name}: ` : '',", "'',"),
  ("a thing packed from the harvest is given a yield box", TH, "if (!own) return td(why('none of its own: it is packed from the harvest'));", "if (false) return td(why('none of its own: it is packed from the harvest'));"),
  # what a box writes, and what it says first
- ("a thing's price typed on the card is written to its share", TH, "save: k => save(t, { price: k }, k == null ? 'price emptied' : `$${fig(k)}${each(t.unit)}`) }), h('span.yc-unit', each(t.unit).trim()));", "save: k => save(t, { share: k }, k == null ? 'price emptied' : `$${fig(k)}${each(t.unit)}`) }), h('span.yc-unit', each(t.unit).trim()));"),
- ("the figure that completes a thing is taken without asking", AP, "    if (moved || (unitTo && (t.price != null || t.yield != null || t.weighs != null || t.holds != null))) {\n", "    if (unitTo && (t.price != null || t.yield != null || t.weighs != null || t.holds != null)) {\n"),
- ("turned down, the change is made all the same", AP, "body: `${unitSaid}${what} ${worthSaid(was, now).replace(/^t/, 'T')}. No date changes, and one undo takes it back.` })) return false;", "body: `${unitSaid}${what} ${worthSaid(was, now).replace(/^t/, 'T')}. No date changes, and one undo takes it back.` })) { /* made all the same */ }"),
- ("the window gives the worth as it is for before and after", AP, "body: `${unitSaid}${what} ${worthSaid(was, now).replace(/^t/, 'T')}. No date changes,", "body: `${unitSaid}${what} ${worthSaid(was, was).replace(/^t/, 'T')}. No date changes,"),
+ ("a thing's price typed on the card is written to its share", TH, "save: k => save(t, { price: k }, k == null ? 'price emptied' : `$${fig(k)}${each(t.unit)}`, 'price') }), h('span.yc-unit', each(t.unit).trim()));", "save: k => save(t, { share: k }, k == null ? 'price emptied' : `$${fig(k)}${each(t.unit)}`, 'price') }), h('span.yc-unit', each(t.unit).trim()));"),
+ ("the figure that completes a thing is taken without asking", AP, "    if (t2.counts !== t.counts || (unitTo && typed)) {\n", "    if (unitTo && typed) {\n"),
+ ("every change to a thing that counts asks first", AP, "    if (t2.counts !== t.counts || (unitTo && typed)) {\n", "    if (moved || t2.counts !== t.counts || (unitTo && typed)) {\n"),
+ ("turned down, the change is made all the same", AP, "      if (options.asked) options.asked(yes);\n      if (!yes) return false;\n", "      if (options.asked) options.asked(yes);\n"),
+ ("the window gives the worth as it is for before and after", AP, "body: `${unitSaid}${what} ${worthTold(was, now).replace(/^t/, 'T')}. No date changes,", "body: `${unitSaid}${what} ${worthTold(was, was).replace(/^t/, 'T')}. No date changes,"),
+ ("the window opens with Cancel in focus", AP, "document.body.append(dialog); dialog.showModal(); yes.focus();", "document.body.append(dialog); dialog.showModal();"),
+ ("the window gives no difference in words", AP, "const worthTold = (was, now) => `${worthSaid(was, now)}${Math.abs(now - was) >= 0.5 ? `: ${dollars(Math.abs(now - was))} ${now > was ? 'more' : 'less'}` : ''}`;", "const worthTold = (was, now) => worthSaid(was, now);"),
+ ("when the window closes the pointer for typing is nowhere", TH, "{ asked: yes => { root.LRFYieldCard.state.focus = yes ? { blank: true, next: true, thing: t.id } : box ? { key: key(t, box) } : null; } });", "{ asked: yes => { } });"),
+ ("a figure typed before a window is taken twice", YC, "      if (input.busy) return Promise.resolve(true);\n      input.busy = true;\n", ""),
  ("the window does not say the thing is counted from now on", AP, ": t2.counts && !t.counts ? `${name} has every figure it needs, and is counted from now on. Today", ": t2.counts && !t.counts ? `Today"),
- ("the message after a change gives no worth", AP, "    toast(`${label}${state2 ? ' · ' + state2 : ''} · ${worthSaid(was, now)}`, { label: 'Undo', run: undo });\n    return { was, now, counts: t2.counts };", "    toast(label, { label: 'Undo', run: undo });\n    return { was, now, counts: t2.counts };"),
- ("a share is not held to 100", AP, "if (!(want >= 0) || want + others > 100 + 1e-9) return refuse(", "if (!(want >= 0)) return refuse("),
- ("the box for a share takes more than 100", TH, "amber: t.share == null, max: 100, label: label(t, `share ${of}, percent`),", "amber: t.share == null, label: label(t, `share ${of}, percent`),"),
+ ("the message after a change gives no worth", AP, "    toast(`${label}${state2 ? ' · ' + state2 : ''} · ${worthTold(was, now)}`, { label: 'Undo', run: undo });\n    return { was, now, counts: t2.counts };", "    toast(label, { label: 'Undo', run: undo });\n    return { was, now, counts: t2.counts };"),
+ ("a share is not held to 100", AP, "      if (want + others > 100 + 1e-9) return refuse(", "      if (false) return refuse("),
+ ("a share over 100 is dropped without a word", TH, "amber: t.share == null, min: -1e9, label:", "amber: t.share == null, max: 100, label:"),
+ ("a share over 100 is told as what the others leave", AP, "      if (!(want >= 0) || want > 100) return refuse('A share is 0 to 100.');\n", ""),
+ ("more harvest days than its plantings have are taken", AP, "if (longest != null && want > longest) return refuse(", "if (false) return refuse("),
  ("“Rename…” gives the thing a new record", AP, "      if ('name' in change) x.name = String(change.name).trim().replace(/\\s+/g, ' ').slice(0, 40);\n", "      if ('name' in change) { x.name = String(change.name).trim().replace(/\\s+/g, ' ').slice(0, 40); delete things[id]; id = 't-again'; x.id = id; }\n"),
  ("“Rename…” changes nothing", TH, "close(); await App.setThing(c.id, t.id, { name }, `${c.name}: ${t.name} is now called ${name}`); };", "close(); };"),
- ("the window on the crop's own unit says nothing of what is packed from its harvest", YC, "packed.length ? `${packed.map(t => t.name).join(' and ')}, packed from its harvest,", "false ? `${packed.map(t => t.name).join(' and ')}, packed from its harvest,"),
+ ("the window on the crop's own unit says nothing of what it does to a thing", YC, "        hit ? hit.said : ''].filter(Boolean).join(' ');", "        ''].filter(Boolean).join(' ');"),
+ # a counted thing never stops counting without a window
+ ("a crop's unit changed on the list drops a thing without a word", AP, "    return !hit || askFirst({ title: label, confirmLabel: 'Apply', body: `${hit.said} No date changes, and one undo takes it back.` });", "    return true;"),
+ ("a variety given a unit of its own takes its plantings out of a thing without a word", AP, "return ops ? thingsFirst(v ? v.cropId : '', label, ops).then(ok => ok ? assume(label, ops) : false) : Promise.resolve(false);", "return ops ? assume(label, ops) : Promise.resolve(false);"),
+ ("the window on the list gives no worth", AP, "Then: ${after.said}. ${worthTold(was, now).replace(/^t/, 'T')}.` };", "Then: ${after.said}.` };"),
+ ("the window on the list does not say how many plantings would feed a thing", AP, "else if ((a.get(t.id) || 0) !== (b.get(t.id) || 0)) says.push(", "else if (false) says.push("),
+ # keys
+ ("Tab from a thing's box goes on in the card's own order", YC, "    return [from, ...own.slice(at + 1), ...own.slice(0, at), ...all.filter(el => column(el) !== col)];", "    return all;"),
+ ("Enter goes to the card's first empty box, whatever column the keys were in", YC, "const to = want.blank ? own.find(blank) || all.find(blank) ||", "const to = want.blank ? all.find(blank) ||"),
+ ("a letter on a thing's “Sold by” picks nothing", YC, "      if (isSel && column(t) && /\\|unit$/.test(t.dataset.yk)) root.LRFThings.letter(c, column(t), e.key);   // a thing's own “Sold by”\n", ""),
+ # words and marks
+ ("the bed-share yield's label does not say what it is a yield of", TH, "const of = t.from === 'bed' ? `${per} of its ${t.share == null ? 'share' : fig(t.share) + ' %'}` : per;", "const of = per;"),
+ ("a kind is chosen for him", TH, "disabled: !!off, onchange: () => { add.disabled = false; said.textContent = ''; } })", "disabled: !!off, checked: value === 'bed', onchange: () => { add.disabled = false; said.textContent = ''; } })"),
+ ("“Add it” can be pressed before a kind is chosen", TH, "id: 'thGo', disabled: true, title:", "id: 'thGo', disabled: false, title:"),
+ ("a kind carries no plain line of its own", TH, "h('small.th-plain', plain), ", ""),
+ ("the add window asks “How it comes out of the plan”", TH, "h('legend', 'Which is it?')", "h('legend', 'How it comes out of the plan')"),
+ ("a crop with a thing waiting is not among the crops left to set", YC, "any: price || places.length > 0 || things > 0 };", "any: price || places.length > 0 };"),
+ ("the checklist does not say a thing is waiting", YC, "const said = w.things ? `${w.price || w.yield ? say + ' · ' : ''}${plural(w.things, 'thing')} waiting` : say;", "const said = say;"),
+ ("a thing's empty price is not amber on the list", TH, "cls: '.ah-price' + (t.price == null ? '.amber' : ''),", "cls: '.ah-price',"),
+ ("a thing packed from the crop's share is said in the old words", TH, "`packed from ${c.name}’s own share`", "`packed from what ${c.name} is left`"),
+ ("a thing cleared in one day does not say which day", TH, "h('span.yc-na', { dataset: { cleared: 'first' } }, `none: cleared in one day, the day ${c.name} is first picked. A day of its own comes with a later build.`)", "why('none: cleared in one day')"),
+ # the planting's panel, and the weekly amount's sentence
+ ("the planting's panel gives the crop's unit and price for a planting that feeds a thing", PN, "    if (parts) return h('p.help', { id: 'fYieldLine', dataset: { things: String(parts.length) } },", "    if (false) return h('p.help', { id: 'fYieldLine', dataset: { things: String(parts.length) } },"),
+ ("the weekly amount of a packed thing gives the crop's yield in the thing's unit", SR, "h('b', 'Sized at '), `${k ? packed : gives}${", "h('b', 'Sized at '), `${gives}${"),
  ("the yield is not turned when a thing is picked gradually", AP, "if (weekly !== (t.pattern === 'weekly') && x.yield != null) x.yield = figure3(", "if (false) x.yield = figure3("),
- ("a thing's harvest days are written to nothing", TH, "save: k => save(t, { days: k }, k == null ? `picked as long as ${c.name}` : `picked for ${k} days`) })", "save: k => save(t, {}, k == null ? `picked as long as ${c.name}` : `picked for ${k} days`) })"),
+ ("a thing's harvest days are written to nothing", TH, "save: k => save(t, { days: k }, k == null ? `picked as long as ${c.name}` : `picked for ${k} days`, 'days') })", "save: k => save(t, {}, k == null ? `picked as long as ${c.name}` : `picked for ${k} days`, 'days') })"),
  ("the window on a unit does not say that no figure is turned", AP, "const unitSaid = unitTo ? `No figure is turned into the new unit: ", "const unitSaid = unitTo ? `The unit changes: "),
  ("a tick outlives a thing's change of unit", AP, "        delete record.looked;   // looked at in the unit it was then sold by: to be looked at again\n", ""),
  ("a helper figure is kept when the crop is sold by another unit", TH, "const good = t.of === t.source;", "const good = true;"),

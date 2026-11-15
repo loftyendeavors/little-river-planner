@@ -168,6 +168,9 @@
       const raw = input.value.trim(), n = raw === '' ? null : whole ? Math.round(+raw) : +raw;
       if ((input.validity && input.validity.badInput) || (n != null && (!Number.isFinite(n) || n < min || (max != null && n > max)))) { input.value = shown; return Promise.resolve(false); }
       if ((n == null && mine == null) || (n != null && mine != null && Math.abs(n - mine) < 1e-9)) { input.value = shown; return Promise.resolve(true); }
+      // a window that asks takes the pointer for typing, the box is left, and leaving it says “changed” once more: taken once
+      if (input.busy) return Promise.resolve(true);
+      input.busy = true;
       input.sent = Promise.resolve(save(n)).then(done => { if (!done) { input.sent = null; ui.redraw(); } return !!done; });
       return input.sent;
     };
