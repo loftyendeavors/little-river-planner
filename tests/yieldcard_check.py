@@ -515,7 +515,7 @@ with sync_playwright() as pw:
     page.evaluate("LRFApp.setView('assume')"); wait(400)
     click('[data-as-mode="harvest"]', 400); click('[data-ah-way="card"]', 400); open_crop(cid, 400)
     km = card()
-    check("its card then has the personal-use line, the box amber and empty, and says the crop is marked so on its record", bool(km["house"]) and km["boxes"]["house"]["amber"] is True and km["boxes"]["house"]["value"] == "" and "marked" in km["house"]["why"] and any("house keeps" in t for t in km["waits"]), km["house"])
+    check("its card then has the personal-use line, the box amber and empty, and says the crop is marked so on its record", bool(km["house"]) and km["boxes"]["house"]["amber"] is True and km["boxes"]["house"]["value"] == "" and "marked" in km["house"]["why"] and any("personal use" in t for t in km["waits"]), km["house"])
     typed('#ycCard [data-yk="house"]', "15"); wait(400)
     hs = last_step(); kh2 = card()
     check("what is kept for personal use, typed there, is the list's sold share: 15 kept is 85 sold, in the list's own words", js("return S.engine.sellRule(%s).share;" % json.dumps(cid)) == 85 and hs["label"] == f"{names[cid]}: 85% sold" and kh2["boxes"]["house"]["value"] == "15" and kh2["boxes"]["house"]["mine"] is True, hs)
@@ -571,7 +571,7 @@ with sync_playwright() as pw:
     check("and the page shows them again: the tick on the checklist, the switch off", sd["looked"] == 1 and [i["id"] for i in sd["items"] if i["done"]] == [sub["multi"]] and js("return $('ahHouseOn').checked;") is False, sd["prog"])
     click("#ahHouseOn", 500); ask_on = asking(); answer(True, 800)
     on = js("return { keys: Object.keys(S.plan.settings), on: $('ahHouseOn').checked, sold: S.engine.harvestFor(%s).house.sold };" % json.dumps(sub["under"]))
-    check("turned on again it asks the same way, and each crop's own share counts as before", bool(ask_on) and "house" in ask_on["title"].lower() and "houseKeeps" not in on["keys"] and on["on"] is True and on["sold"] == 85, {"window": ask_on, "now": on})
+    check("turned on again it asks the same way, and each crop's own share counts as before", bool(ask_on) and "personal use" in ask_on["title"].lower() and "houseKeeps" not in on["keys"] and on["on"] is True and on["sold"] == 85, {"window": ask_on, "now": on})
 
     # ── from the card to the list, and back ──
     cid = sub["owned"]; open_crop(cid, 300)

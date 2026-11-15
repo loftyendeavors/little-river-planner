@@ -228,7 +228,7 @@
             tip: empty ? 'Nothing is set: all that is packed counts as sold. Type the part the house keeps.' : `${fig(hc.house.sold)}% of what is packed counts as sold. ${typed != null ? 'Yours. Clear it to go back to the crop’s record.' : 'From the crop’s record.'}`,
             save: k => App.setSell(c.id, { share: k == null ? null : 100 - k }, k == null ? `${c.name}: sold share back to ${hc.share.fallback}%` : `${c.name}: ${fig(100 - k)}% sold`) }),
           ' % of what is packed'),
-        h('p.yc-why', { id: 'ycHouseWhy' }, hc.house.marked ? `Shown because ${c.name} is marked as grown for sale and personal use, on its record under Seeds.` : `Shown because ${fig(hc.house.sold)}% of ${c.name} counts as sold today, so the house is taken to keep the rest.`,
+        h('p.yc-why', { id: 'ycHouseWhy' }, hc.house.marked ? `Shown because ${c.name} is marked as grown for sale and personal use, on its record under Seeds.` : `Shown because ${fig(hc.house.sold)}% of ${c.name} counts as sold today, so the rest is taken to be for personal use.`,
           ' ', h('button.link', { type: 'button', id: 'ycSoldAll', title: 'Counts all that is packed as sold. What that does to the season’s worth is shown first.', onclick: () => App.setHouse(c.id, false) }, 'Sold in full…')));
     }
 
