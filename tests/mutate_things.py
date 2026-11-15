@@ -80,6 +80,11 @@ NODE = [
  ("read as one figure, a planting gives the crop's own line whatever it feeds", EN, "      if (!parts) return y;\n      const units = parts.reduce(", "      if (true) return y;\n      const units = parts.reduce("),
  ("what is packed does not say how", EN, "packed: { of: y.unit, share: t.share, way: t.way,", "packed0: { of: y.unit, share: t.share, way: t.way,"),
  ("the crop's own weekly amount in a place a thing takes gives no reason", SU, "    if (!o.thing && soldElse(eng, first.p, first.r)) return { error: soldElse(eng, first.p, first.r), like };\n", ""),
+ # a planting says which of the two it is grown for
+ ("a planting said to be for the thing still gives both", EN, "if (only) return [own(only, 1)];", "if (only && false) return [own(only, 1)];"),
+ ("a planting said to be for the thing gives it on its share only", EN, "if (only) return [own(only, 1)];", "if (only) return [own(only, only.share / 100)];"),
+ ("a planting said to be for the crop alone is still shared out", EN, "const beds = p.gives === 'first' ? [] : shared,", "const beds = shared,"),
+ ("a word that names no thing is read as the crop alone", EN, "const beds = p.gives === 'first' ? [] : shared,", "const beds = p.gives ? [] : shared,"),
 ]
 PAGE = [
  # adding
@@ -173,6 +178,12 @@ PAGE = [
  ("a card with three columns is cut off at a laptop's width", CSS, ".yc-grid td.yc-thing .yc-box input { width: 72px; }", ".yc-grid td.yc-thing .yc-box input { width: 320px; }"),
  ("a backup loaded over the plan does not carry the list", IO, "      plan.assumptions = prev.assumptions; const n = figures(prev.assumptions);", "      const n = figures(prev.assumptions);"),
  ("a planting's days move when a thing counts", EN, "    const effective = p => withHarvestRule(p, effectiveDays(p));", "    const effective = p => { const e = withHarvestRule(p, effectiveDays(p)); return e && !e.micro && thingsOf(p.cropId).some(t => t.counts) ? { ...e, dtm: e.dtm + 1 } : e; };"),
+ # a planting says which of the two it is grown for
+ ("the planting's panel does not ask which thing it is for", PN, "        givesField,\n", ""),
+ ("the answer is kept under another name", AP, "after: changed(before, { gives: want })", "after: changed(before, { given: want })"),
+ ("the answer for the thing is saved as the crop alone", PN, "App.setGives(p.id, value === 'both' ? null : value)", "App.setGives(p.id, value === 'both' ? null : 'first')"),
+ ("both again leaves a word on the planting", PN, "App.setGives(p.id, value === 'both' ? null : value)", "App.setGives(p.id, value === 'both' ? 'first' : value)"),
+ ("the answer says nothing of the season's worth", AP, "toast(`${label} · ${worthSaid(was, now)} · no date moves`,", "toast(`${label} · no date moves`,"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)
 faults = NODE if mode == "node" else PAGE

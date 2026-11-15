@@ -140,7 +140,7 @@ with sync_playwright() as pw:
     start = js("return { n: S.plan.plantings.length, undo: S.undo.length, label: txt('buildNote'), sample: A.isSample(), year: A.planYear(), mine: mine().length, all: S.engine.crops().length, marks: JSON.stringify(S.plan.assumptions || null).includes('looked') || JSON.stringify(S.plan.assumptions || null).includes('house'), farm: S.plan.settings.houseKeeps };")
     year = start["year"]
     check("a plan is open, there is nothing to undo, and the build says its own label", start["n"] > 300 and start["undo"] == 0 and (os.environ.get("LRF_LABEL") or "(LRF_LABEL is not set)") in start["label"] and not start["sample"], start)
-    check("the plan as it is opened holds no tick, no mark for the house and no switch: nothing was added by opening it", start["marks"] is False and not isinstance(start["farm"], bool), start)
+    check("the plan as it is opened holds no tick, no mark for personal use and no switch: nothing was added by opening it", start["marks"] is False and not isinstance(start["farm"], bool), start)
     snap0 = snap()
 
     # ── the page opens on one crop at a time ──
@@ -253,10 +253,10 @@ with sync_playwright() as pw:
         h = walk[c]["card"]["house"]; part = (not walk[c]["micro"]) and walk[c]["share"] < 100
         if not part: return bool(h)   # a line that should not be there
         b = walk[c]["card"]["boxes"].get("house", None)
-        return not (bool(h) and bool(b) and "The house keeps" in h["text"] and "% of what is packed" in h["text"] and (b["value"] or b["placeholder"]) == js("return fig(%s);" % (100 - walk[c]["share"])) and f"{js('return fig(%s);' % walk[c]['share'])}%" in h["why"])
+        return not (bool(h) and bool(b) and "Personal use:" in h["text"] and "% of what is packed" in h["text"] and (b["value"] or b["placeholder"]) == js("return fig(%s);" % (100 - walk[c]["share"])) and f"{js('return fig(%s);' % walk[c]['share'])}%" in h["why"])
     bad = [names.get(c) for c in ids if house_wrong(c)]
     n_house = sum(1 for c in ids if walk[c]["card"]["house"])
-    check("“The house keeps [n] % of what is packed” is on the card of a crop that sells less than all of it today, with n what is left, and on no other", bad == [] and n_house > 10, {"bad": bad[:6], "with": n_house})
+    check("“Personal use: [n] % of what is packed” is on the card of a crop that sells less than all of it today, with n what is left, and on no other", bad == [] and n_house > 10, {"bad": bad[:6], "with": n_house})
     k = walk[sub["multi"]]["card"]
     check("a crop grown in several places has a yield box for each, and one unit and one price across them all", len(k["cols"]) >= 2 and len(k["rows"]["yield"]["cells"]) == len(k["cols"]) and [c["place"] for c in k["rows"]["yield"]["cells"]] == k["cols"] and all(c["inputs"] == 1 for c in k["rows"]["yield"]["cells"]) and len(k["rows"]["unit"]["cells"]) == 1 and nth(k["rows"]["unit"]["cells"], 0)["span"] == len(k["cols"]) and nth(k["rows"]["price"]["cells"], 0)["span"] == len(k["cols"]) and "wherever it grows" in nth(k["rows"]["unit"]["cells"], 0)["text"], k["rows"]["yield"])
     k = walk[sub["single"]]["card"]; kf = walk[sub["ft"]]["card"]
@@ -485,7 +485,7 @@ with sync_playwright() as pw:
     undo_to(0)
     check("undone, the plan is what it was", snap()["key"] == snap0["key"])
 
-    # ── what the house keeps ──
+    # ── what is kept for personal use ──
     cid = sub["under"]; open_crop(cid); kh = card(); share = walk[cid]["share"]
     said = js("const hc = S.engine.harvestFor(%s); return { house: hc.house, share: hc.share };" % json.dumps(cid))
     check("a crop that sells less than all of it today is shown as partly kept, with no mark on it: no figure had to change for that", said["house"]["part"] is True and said["house"]["marked"] is False and said["house"]["sold"] == share and "counts as sold today" in kh["house"]["why"] and snap()["key"] == snap0["key"], said)
@@ -497,7 +497,7 @@ with sync_playwright() as pw:
     check("turned down, nothing is changed", snap()["key"] == snap0["key"] and snap()["undo"] == 0 and not asking())
     click("#ycSoldAll", 500); answer(True, 700)
     sold = js("const hc = S.engine.harvestFor(%s); return { rule: S.engine.sellRule(%s).share, house: hc.house, worth: money(worthOf(S.engine)), undo: S.undo.length, label: (S.undo[S.undo.length - 1] || {}).label, toast: txt('toast') };" % (json.dumps(cid), json.dumps(cid)))
-    check("agreed, it is one step: all of the crop counts as sold, the season is worth what the window said, and the house's line is gone from the card", sold["rule"] == 100 and sold["house"]["part"] is False and sold["worth"] == full["now"] and sold["undo"] == 1 and "sold in full" in sold["label"] and not card()["house"] and full["now"] in sold["toast"], sold)
+    check("agreed, it is one step: all of the crop counts as sold, the season is worth what the window said, and the personal-use line is gone from the card", sold["rule"] == 100 and sold["house"]["part"] is False and sold["worth"] == full["now"] and sold["undo"] == 1 and "sold in full" in sold["label"] and not card()["house"] and full["now"] in sold["toast"], sold)
     dates = [l.rsplit("|", 3)[0] for l in snap()["sig"].split("\n")]
     check("and no date of any planting moved with it", dates == [l.rsplit("|", 3)[0] for l in snap0["sig"].split("\n")])
     # the mark, on the crop's record
@@ -505,20 +505,20 @@ with sync_playwright() as pw:
     click("[data-sd-tab=crops]", 500)
     page.evaluate("id => { const row = document.querySelector(`#seedsView [data-croprow=\"${CSS.escape(id)}\"]`); if (row) row.click(); }", cid); wait(600)
     sh = js("const el = $('sdHouse'); return el ? { seen: seen(el), text: el.innerText, pressed: [...el.querySelectorAll('.seg button')].map(b => [b.dataset.house, b.textContent, b.getAttribute('aria-pressed')]) } : null;")
-    check("Seeds, a crop's record: “Grown for” is “For sale” or “For sale and the house”, and says which the crop is", bool(sh) and sh["seen"] is True and sh["pressed"] == [["sale", "For sale", "true"], ["part", "For sale and the house", "false"]], sh)
+    check("Seeds, a crop's record: “Grown for” is “For sale” or “For sale and personal use”, and says which the crop is", bool(sh) and sh["seen"] is True and sh["pressed"] == [["sale", "For sale", "true"], ["part", "For sale and personal use", "false"]], sh)
     before = snap()
     click('#sdHouse [data-house="part"]', 500)
     mk = js("const hc = S.engine.harvestFor(%s); return { stored: ((S.plan.assumptions || {}).sell || {})[%s], house: hc.house, undo: S.undo.length, label: (S.undo[S.undo.length - 1] || {}).label, asked: !!document.querySelector('dialog[open]'), pressed: [...document.querySelectorAll('#sdHouse .seg button')].map(b => b.getAttribute('aria-pressed')), toast: txt('toast') };" % (json.dumps(cid), json.dumps(cid)))
     after = snap()
-    check("“For sale and the house” marks the crop, on its own line of the plan, in one step, without asking", mk["stored"] == {"share": 100, "house": True} and mk["house"]["marked"] is True and mk["house"]["part"] is True and mk["undo"] == before["undo"] + 1 and "for sale and the house" in mk["label"] and mk["asked"] is False and mk["pressed"] == ["false", "true"], mk)
+    check("“For sale and personal use” marks the crop, on its own line of the plan, in one step, without asking", mk["stored"] == {"share": 100, "house": True} and mk["house"]["marked"] is True and mk["house"]["part"] is True and mk["undo"] == before["undo"] + 1 and "for sale and personal use" in mk["label"] and mk["asked"] is False and mk["pressed"] == ["false", "true"], mk)
     check("and the mark changes no figure: every planting gives what it gave, and the season is worth what it was", after["sig"] == before["sig"] and abs(after["worth"] - before["worth"]) < 1e-9 and "no figure changes" in mk["toast"], {"worth": [before["worth"], after["worth"]]})
     page.evaluate("LRFApp.setView('assume')"); wait(400)
     click('[data-as-mode="harvest"]', 400); click('[data-ah-way="card"]', 400); open_crop(cid, 400)
     km = card()
-    check("its card then has the house's line, the box amber and empty, and says the crop is marked so on its record", bool(km["house"]) and km["boxes"]["house"]["amber"] is True and km["boxes"]["house"]["value"] == "" and "marked" in km["house"]["why"] and any("house keeps" in t for t in km["waits"]), km["house"])
+    check("its card then has the personal-use line, the box amber and empty, and says the crop is marked so on its record", bool(km["house"]) and km["boxes"]["house"]["amber"] is True and km["boxes"]["house"]["value"] == "" and "marked" in km["house"]["why"] and any("house keeps" in t for t in km["waits"]), km["house"])
     typed('#ycCard [data-yk="house"]', "15"); wait(400)
     hs = last_step(); kh2 = card()
-    check("what the house keeps, typed there, is the list's sold share: 15 kept is 85 sold, in the list's own words", js("return S.engine.sellRule(%s).share;" % json.dumps(cid)) == 85 and hs["label"] == f"{names[cid]}: 85% sold" and kh2["boxes"]["house"]["value"] == "15" and kh2["boxes"]["house"]["mine"] is True, hs)
+    check("what is kept for personal use, typed there, is the list's sold share: 15 kept is 85 sold, in the list's own words", js("return S.engine.sellRule(%s).share;" % json.dumps(cid)) == 85 and hs["label"] == f"{names[cid]}: 85% sold" and kh2["boxes"]["house"]["value"] == "15" and kh2["boxes"]["house"]["mine"] is True, hs)
     check("a sold share typed by the grower is listed under the checklist, as typed", f"{names[cid]} 85%" in js("return txt('ycTyped');") and "Sold shares you typed" in js("return txt('ycTyped');"), js("return txt('ycTyped');"))
     click('[data-ah-way="list"]', 500)
     check("and the list shows it as 85 in “Sold %”", js("return (document.querySelector('#ahBody [data-hk=\"share|%s\"]') || {}).value;" % cid) == "85")
@@ -526,7 +526,7 @@ with sync_playwright() as pw:
 
     # ── the farm's own switch ──
     sw0 = js("return { on: $('ahHouseOn').checked, seen: seen($('ahHouseFarm')), text: $('ahHouseFarm').innerText.trim() };")
-    check("one switch for the farm stands on the page, on while the farm keeps part of some crops", sw0 == {"on": True, "seen": True, "text": "The house keeps part of some crops"}, sw0)
+    check("one switch for the farm stands on the page, on while the farm keeps part of some crops", sw0 == {"on": True, "seen": True, "text": "Part of some crops is for personal use"}, sw0)
     before = snap()
     click("#ahHouseOn", 500); ask = asking()
     allsold = js("const a = JSON.parse(JSON.stringify(S.plan.assumptions || { v: 1, crops: {}, varieties: {} })); a.sell = a.sell || {}; for (const c of S.engine.crops()) a.sell[c.id] = { ...(a.sell[c.id] || {}), share: 100 }; const e2 = E.create({ ...S.plan, assumptions: a }, LRFLibrary); return { was: money(worthOf(S.engine)), now: money(worthOf(e2)), n: worthOf(e2) };")
@@ -557,7 +557,7 @@ with sync_playwright() as pw:
     except Exception as e:
         errors.append("download: " + str(e)[:160])
     sell = (data.get("assumptions") or {}).get("sell") or {}
-    check("the tick, the mark for the house and the farm's switch are in the file “Download a backup” writes", bool(held["sell"]) and sell == held["sell"] and (data.get("settings") or {}).get("houseKeeps") is False and (sell.get(sub["multi"]) or {}).get("looked") == year and (sell.get(sub["under"]) or {}).get("house") is True, {"file": sell, "held": held})
+    check("the tick, the mark for personal use and the farm's switch are in the file “Download a backup” writes", bool(held["sell"]) and sell == held["sell"] and (data.get("settings") or {}).get("houseKeeps") is False and (sell.get(sub["multi"]) or {}).get("looked") == year and (sell.get(sub["under"]) or {}).get("house") is True, {"file": sell, "held": held})
     kept = page.evaluate("(async () => { const A = LRFApp; if (!A.snapshotsKept()) return null; const row = await A.snapshot('with the marks'); return row ? { id: row.id, name: row.name } : null; })()")
     page.evaluate("(() => { const A = LRFApp; while (A.state.undo.length) A.undo(); })()"); wait(600)
     bare = snap()

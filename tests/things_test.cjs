@@ -38,7 +38,7 @@ const eng = E.create(core, Lib), base = F.build(eng), old = F0.build(E0.create(c
 
 // ── a plan nobody has touched ──
 check('a plan with no second thing is forecast exactly as the build before forecast it: every row, every total, every day', differ(base, old).length === 0, differ(base, old).slice(0, 4));
-check('and the same for what is grown to sell alone, and for what is kept for the house alone', ['commercial', 'personal'].every(use => differ(F.build(eng, { use }), F0.build(E0.create(core, Lib), { use })).length === 0));
+check('and the same for what is grown to sell alone, and for what is kept for personal use alone', ['commercial', 'personal'].every(use => differ(F.build(eng, { use }), F0.build(E0.create(core, Lib), { use })).length === 0));
 check('on it no crop has another thing, and no planting is given in parts', eng.crops().every(c => eng.thingsOf(c.id).length === 0) && core.plantings.every(p => eng.soldOf(p) === null));
 
 // ── subjects, found on the plan: plantings that follow their crop's own line ──
@@ -116,6 +116,22 @@ if (placed && bedded && packed) {
         && x.parts[1].thing === 't-b' && x.parts[1].unit === 'lb' && near(x.parts[1].units, x.y.count * 0.3 * 0.5 * x.y.mk * Math.min(1, x.r.harvestDays / Math.max(1, x.r.expectedHarvestDays)))), list.slice(0, 1).map(x => x.parts));
     const own = rowsOf(base, id).reduce((n, r) => n + r.plantings.filter(q => !follows(eng, q.p)).reduce((k, q) => k + q.inYear, 0), 0), firstNow = rowsOf(m, id).filter(r => !r.thing).reduce((n, r) => n + r.total, 0), firstWas = rowsOf(base, id).reduce((n, r) => n + r.total, 0);
     check('in the forecast the crop’s own row is 70% of what follows the line, with what does not follow it whole; no other crop’s row moves', near(firstNow, (firstWas - own) * 0.7 + own, 1e-7) && others(m, id).length === 0, { firstNow, firstWas, own });
+    // a planting says which of the two it is grown for
+    {
+      const plan = withThings(id, { 't-b': thing }), pick = list[0].p.id, beside = list[1].p.id;
+      const say = g => { const q = clone(plan); q.plantings.find(x => x.id === pick).gives = g; return E.create(q, Lib); };
+      const read = (en, pid) => { const q = en.planting(pid), r = en.calc(q), y = en.yieldOf(q, r); return { r, y, parts: en.soldOf(q, r, y) }; };
+      const first = read(say('first'), pick), only = read(say('t-b'), pick), stray = read(say('t-gone'), pick), nextTo = read(say('t-b'), beside);
+      check('a planting said to be for the crop’s own line alone gives the whole of it, as if the thing had never been added', first.parts === null && near(first.y.units, list[0].y.units) && first.y.unit === list[0].y.unit);
+      check('a planting said to be for the thing alone gives the thing on the whole of it, in its unit and at its price, and none of the crop’s own line', !!only.parts && only.parts.length === 1 && only.parts[0].thing === 't-b' && only.parts[0].unit === 'lb' && only.parts[0].price === 5 && near(only.parts[0].units, list[0].parts[1].units / 0.3), only.parts);
+      check('the planting beside it, told nothing, still gives both by the crop’s shares', !!nextTo.parts && nextTo.parts.length === 2 && near(nextTo.parts[0].units, list[1].parts[0].units) && near(nextTo.parts[1].units, list[1].parts[1].units));
+      check('a word that names no thing in force is read as nothing said', !!stray.parts && stray.parts.length === 2 && near(stray.parts[0].units, list[0].parts[0].units) && near(stray.parts[1].units, list[0].parts[1].units));
+      check('saying it moves no date: the first and last picking are the ones the planting had', [first, only].every(x => +x.r.first === +list[0].r.first && +x.r.last === +list[0].r.last && x.r.harvestDays === list[0].r.harvestDays));
+      const mo = F.build(say('t-b')), mf = F.build(say('first'));
+      check('in the forecast only that crop’s rows move, either way', others(mo, id).length === 0 && others(mf, id).length === 0 && differ(mo, m).length > 0 && differ(mf, m).length > 0);
+      const q = clone(plan); q.plantings.find(x => x.id === pick).gives = 't-b';
+      check('the build before forecasts a plan that holds such a word as if it were not there', differ(F0.build(E0.create(q, Lib)), F0.build(E0.create(plan, Lib))).length === 0);
+    }
     // its own way of picking
     const weekly = E.create(withThings(id, { 't-b': { ...thing, pattern: 'weekly', yield: 0.1 } }), Lib), w = partsOf(weekly, id).filter(x => x.parts);
     check('picked gradually, its yield is a week’s picking: 30% of what the bed is counted by × the yield × the days it is picked ÷ 7', w.length > 0 && w.every(x => near(x.parts[1].units, x.y.count * 0.3 * 0.1 * x.r.harvestDays / 7 * x.y.mk) && x.parts[1].pattern === 'weekly'));

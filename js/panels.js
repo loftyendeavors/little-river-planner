@@ -561,6 +561,12 @@
       : use.by === 'default' ? 'Personal use is sown, picked and counted like any other planting, and left out of revenue and out of the list you send.'
         : `Follows ${use.by === 'bed' ? 'its bed' : (eng.gardenOf(bed) || {}).name || 'its garden'}, which is ${use.personal ? 'for personal use: left out of revenue and out of the list you send' : 'commercial'}.`;
     const useField = h('div.field', { id: 'fUseField' }, h('span', 'Grown for'), h('div.seg', { id: 'fUse', role: 'group', 'aria-label': 'Grown for', dataset: { use: use.use, by: use.by } }, useBtn('commercial', 'Commercial'), useBtn('personal', 'Personal use')), h('small', useHelp));
+    // Which of the crop's things it is grown for: asked only where two things come out of one bed of this crop, and this planting is shared out.
+    const shared = eng.thingsOf(p.cropId).filter(t => t.counts && t.from === 'bed'), givesNow = p.gives === 'first' || shared.some(t => t.id === p.gives) ? p.gives : 'both';
+    const givesBtn = (value, text) => h('button', { type: 'button', 'aria-pressed': String(givesNow === value), dataset: { gives: value }, onclick: () => { if (givesNow !== value) App.setGives(p.id, value === 'both' ? null : value); } }, text);
+    const givesField = shared.length && (p.gives || eng.soldOf(p, r)) ? h('div.field', { id: 'fGivesField' }, h('span', 'This planting is for'),
+      h('div.seg', { id: 'fGives', role: 'group', 'aria-label': 'This planting is for', dataset: { gives: givesNow } }, givesBtn('both', shared.length > 1 ? 'All, by shares' : 'Both, by shares'), givesBtn('first', c.name), ...shared.map(t => givesBtn(t.id, t.name))),
+      h('small', givesNow === 'both' ? `${c.name} sells more than one thing out of a bed. This planting gives each its share, as set under Assumptions, Yield and price.` : `The whole of this planting is counted as ${givesNow === 'first' ? c.name : shared.find(t => t.id === givesNow).name}, with that column’s yield, price and picking. Dates do not move.`)) : null;
     const fromList = c.assumed ? `From your assumptions list: ${c.assumed.level === 'variety' ? (c.vname || 'this variety') : c.name}, ${root.LRFAssume.LABEL[c.assumed.env].toLowerCase()}${c.assumed.off ? `. ${c.assumed.typed} days from ${c.assumed.basis === 'direct' ? 'direct sowing' : 'sowing'}, less ${c.assumed.off}` : ''}.` : null;
 
     add(host,
@@ -586,6 +592,7 @@
             onchange: e => { const raw = e.target.value; set(raw === '' ? { hw: null, harvestMode: null } : { hw: Math.max(0, Math.round(+raw)), harvestMode: 'window' }, 'Change harvest days'); } }))),
         h('p.help', fromList || dtmSource),
         useField,
+        givesField,
         yieldLine(eng, p, r)),
       h('section.insp-section',
         h('h3', 'Schedule'),

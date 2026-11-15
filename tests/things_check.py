@@ -182,7 +182,7 @@ with sync_playwright() as pw:
         none: S.engine.crops().every(c => S.engine.thingsOf(c.id).length === 0) && plan.plantings.every(p => S.engine.soldOf(p) === null) && !JSON.stringify(plan.assumptions || null).includes('things') };""", old_scripts())
     check("the farm is loaded and nobody has touched it: no crop sells a second thing", start["n"] > 600 and start["sample"] is False and start["none"] is True, start)
     check("an untouched plan is forecast exactly as the build before forecasts it, its scripts run in this page on this plan: every row, every total, every day of what is picked, sold and worth", start["had"] is True and start["same"] is True and start["rows"][0] == start["rows"][1] and start["worth"][0] == start["worth"][1] and start["worth"][1] > 1000, {k: start[k] for k in ("had", "same", "rows", "worth")})
-    check("and so is what is grown to sell alone and what is for the house alone; every planting has the build before's days, ground, plants, seeds, trays, yield and price, and the benches hold what they held", start["uses"] is True and start["days"] is True and start["bench"] is True, {k: start[k] for k in ("uses", "days", "bench")})
+    check("and so is what is grown to sell alone and what is for personal use alone; every planting has the build before's days, ground, plants, seeds, trays, yield and price, and the benches hold what they held", start["uses"] is True and start["days"] is True and start["bench"] is True, {k: start[k] for k in ("uses", "days", "bench")})
     year = start["year"]; snap0 = snap()
 
     # ── subjects, found on the plan ──
@@ -268,6 +268,22 @@ with sync_playwright() as pw:
     check("the card says “counted”, shows 70 as what is left for the crop itself, and “What it comes to” has a line for the crop and one for the thing, each the forecast's own total and worth", head2["counts"] == "true" and " counted" in head2["text"] and "not counted" not in head2["text"] and c2["left"]["sharebed"] == 70 and len(c2["comes"]) == len(rows2) >= 2 and all(any(k["thing"] == r["thing"] and k["unit"] == r["unit"] and abs(k["total"] - r["total"]) < 1e-6 and abs(k["worth"] - r["worth"]) < 1e-6 for k in c2["comes"]) for r in rows2) and any(k["text"].startswith("Small ones: ") for k in c2["comes"]), {"comes": c2["comes"], "rows": rows2, "left": c2["left"]})
     undo(); sU = snap(); js("A.redo(); return 1;"); wait(300); sR = snap()
     check("one Undo takes the completing figure back, and the forecast is the untouched one again; done again it is as it was", sU["whole"] == snap0["whole"] and sU["undo"] == sC["undo"] - 1 and sR["whole"] == sC["whole"] and sR["plan"] == sC["plan"], {"undo": [sC["undo"], sU["undo"], sR["undo"]]})
+
+    # ── a planting says which of the two it is grown for ──
+    gp = js("const ps = S.plan.plantings.filter(p => p.cropId === arg && follows(p)); const view = S.view; A.setView('map'); A.select({ type: 'planting', id: ps[0].id }); return { id: ps[0].id, beside: ps[1].id, view };", B); wait(400)
+    seg = lambda: js("const s = $('fGives'); return s ? { now: s.dataset.gives, btns: [...s.querySelectorAll('button')].map(b => [b.dataset.gives, b.textContent, b.getAttribute('aria-pressed')]), help: $('fGivesField').querySelector('small').textContent, line: txt('fYieldLine') } : null;")
+    g0 = seg(); u0 = js("return S.undo.length;")
+    check("the panel of a planting whose crop sells two things out of one bed asks “This planting is for”: both by shares (pressed), the crop alone, or the thing alone", bool(g0) and g0["now"] == "both" and [b[0] for b in g0["btns"]] == ["both", "first", b1] and [b[2] for b in g0["btns"]] == ["true", "false", "false"] and nth(nth(g0["btns"], 1), 1) == nameB and nth(nth(g0["btns"], 2), 1) == "Small ones", g0)
+    click(f"#fGives button[data-gives='{b1}']", 600); g1 = seg(); s1 = snap(); t1g = js("return toast();")
+    p1g = js("const p = S.engine.planting(arg[0]), r = S.engine.calc(p), parts = S.engine.soldOf(p, r) || [], q = S.engine.planting(arg[1]), parts2 = S.engine.soldOf(q, S.engine.calc(q)) || []; return { gives: p.gives || '', n: parts.length, thing: (parts[0] || {}).thing || '', unit: (parts[0] || {}).unit || '', beside: parts2.length };", [gp["id"], gp["beside"]])
+    check("pressed for the thing, that planting gives the thing on the whole of it and none of the crop's own line; the planting beside it still gives both; it is one step, and the message says what the season's worth does and offers Undo", p1g == {"gives": b1, "n": 1, "thing": b1, "unit": "lb", "beside": 2} and g1["now"] == b1 and s1["undo"] == u0 + 1 and "Small ones only" in t1g and "season’s worth" in t1g and "Undo" in t1g, {"p": p1g, "toast": t1g})
+    check("no planting's days moved by it, and the panel's “Expected” line is the thing's alone", s1["dates"] == snap0["dates"] and "Small ones" in g1["line"] and g1["line"].count(";") == 0, g1)
+    click("#fGives button[data-gives='first']", 600); g2 = seg(); p2g = js("const p = S.engine.planting(arg), r = S.engine.calc(p); return { gives: p.gives || '', parts: (S.engine.soldOf(p, r) || []).length };", gp["id"])
+    check("pressed for the crop alone, it gives the crop's own line, whole", p2g == {"gives": "first", "parts": 0} and g2["now"] == "first", p2g)
+    click("#fGives button[data-gives='both']", 600); g3 = seg(); s3 = snap()
+    check("pressed for both again, nothing is kept on the planting and the forecast is what it was before it was asked", js("return 'gives' in S.engine.planting(arg) ? 1 : 0;", gp["id"]) == 0 and s3["whole"] == sR["whole"] and g3["now"] == "both", g3)
+    js("while (S.undo.length > arg[0]) A.undo(); A.select(null); A.setView(arg[1]); return 1;", [u0, gp["view"]]); wait(400)
+    check("three Undos take the three answers back: the plan is the one it was", snap()["plan"] == sR["plan"])
 
     # shares are held to 100
     open_crop(B); sH = snap(); typed(box(b1, "share"), "101"); over1 = js("return { asked: !!document.querySelector('dialog[open]'), share: things(arg[0]).find(t => t.id === arg[1]).share, undo: S.undo.length, max: document.querySelector('[data-yk=\"t|' + arg[1] + '|share\"]').max, toast: toast() };", [B, b1])

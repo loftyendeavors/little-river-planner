@@ -445,12 +445,12 @@
     //             once    the yield is a total, all of it counted the day the crop is ready
     //   days      harvest days · keep  weeks it stores after picking · share  the marketable part, in percent
     //   turnover  days the ground is held after the last harvest
-    //   house     true: the crop is marked as partly kept for the house (a crop whose share is under 100 is shown so without it)
+    //   house     true: the crop is marked as partly kept for personal use (a crop whose share is under 100 is shown so without it)
     //   looked    the year its figures were last looked at and said to be right
     // Nothing set means the crop's own figures. The two marks are words about the line: no figure is worked out from them.
     //   things    more than one thing sold from the crop: { thingId: { id, n, name, from, place, unit, price, pattern, days, share, yield,
     //             counted, weighs, holds, of } }. The line itself is the first thing; these are the others (thingsOf, below).
-    // settings.houseKeeps === false is the farm's own switch: nothing is kept for the house, and all that is packed counts as sold.
+    // settings.houseKeeps === false is the farm's own switch: nothing is kept for personal use, and all that is packed counts as sold.
     const PATTERNS = ['spread', 'weekly', 'once'];
     const amount0 = x => x != null && x !== '' && Number.isFinite(+x) && +x >= 0 ? +x : null;
     const word = x => typeof x === 'string' && x.trim() ? x.trim() : null;
@@ -1263,7 +1263,12 @@
       };
       const there = list.find(t => t.from === 'place' && t.place === env);
       if (there) return [own(there, 1)];
-      const beds = list.filter(t => t.from === 'bed'), packs = list.filter(t => t.from === 'harvest');
+      // Where two things come out of one bed, a planting may say which of them it is grown for (`gives`): 'first', the crop's
+      // own line and none of the bed's other things; a thing's id, that thing on the whole of it; nothing, both by the crop's shares.
+      // A word that names no thing in force is read as nothing said.
+      const shared = list.filter(t => t.from === 'bed'), only = p.gives && p.gives !== 'first' ? shared.find(t => t.id === p.gives) : null;
+      if (only) return [own(only, 1)];
+      const beds = p.gives === 'first' ? [] : shared, packs = list.filter(t => t.from === 'harvest');
       if (!beds.length && !packs.length) return null;
       const bedLeft = 1 - beds.reduce((n, t) => n + t.share, 0) / 100, packLeft = 1 - packs.reduce((n, t) => n + t.share, 0) / 100, source = y.units * Math.max(0, bedLeft);
       const parts = [{ ...y, units: source * Math.max(0, packLeft), thing: null, name: null, slice: Math.max(0, bedLeft) * Math.max(0, packLeft) }];
@@ -1307,7 +1312,7 @@
           total: value == null ? null : weekly ? value * nominal / 7 : value, weekly: value == null ? null : weekly ? value : value * 7 / nominal };
       }
       const pick = (mine, fallback) => ({ mine, fallback, value: mine != null ? mine : fallback });
-      // what the house keeps: `sold` is the share in force; `part` says the crop is shown as partly kept (marked so, or under 100 today)
+      // what is kept for personal use: `sold` is the share in force; `part` says the crop is shown as partly kept (marked so, or under 100 today)
       const share0 = micro ? 100 : rule.share != null ? rule.share : Math.round(clamp(finite(c.mk, 0.9), 0, 1) * 100), sold = micro || sellsAll ? 100 : share0;
       return { micro, basis: micro ? 'tray' : c.yBasis === 'ft' ? 'ft' : 'plant', season, nominal, weekly, cells,
         house: { farm: !sellsAll, marked: !micro && !!rule.house, sold, part: !micro && !sellsAll && (!!rule.house || share0 < 100) }, looked: rule.looked,

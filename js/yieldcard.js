@@ -109,7 +109,7 @@
   function empties(eng, c) {
     const hc = eng.harvestFor(c.id), w = waits(eng, c, hc), out = [];
     if (eng.isCoverCrop(c)) return out;
-    if (hc.house.part && hc.house.sold >= 100) out.push({ key: 'house', say: 'what the house keeps' });
+    if (hc.house.part && hc.house.sold >= 100) out.push({ key: 'house', say: 'what is kept for personal use' });
     if (w.price) out.push({ key: 'price', say: 'the price' });
     for (const env of w.places) out.push({ key: `y|${env}`, say: `the yield ${IN[env]}` });
     for (const e of root.LRFThings.of({ eng, c, hc, x: of(eng, c.id), box }).empties()) out.push(e);
@@ -218,17 +218,17 @@
       h('p.yc-key', h('i.amber'), 'only you can fill', h('i.mine'), 'yours', h('i'), 'what the plan uses now'));
     if (cover) return finish(h('p.yc-plain', { id: 'ycPlain' }, 'A cover crop: nothing is picked from it and nothing is sold, so there is no figure to set here.'));
 
-    // ── what the house keeps: only for a crop that is partly kept, and never on a farm that sells everything ──
+    // ── what is kept for personal use: only for a crop that is partly kept, and never on a farm that sells everything ──
     let house = null;
     if (hc.house.part) {
       const keeps = 100 - hc.house.sold, typed = hc.share.mine != null && hc.share.mine < 100 ? 100 - hc.share.mine : null, empty = hc.house.sold >= 100;
       house = h('div.yc-house', { id: 'ycHouse' },
-        h('p.yc-houseline', 'The house keeps ',
-          box({ key: 'house', mine: typed, fallback: empty ? null : keeps, amber: empty, max: 100, label: `${c.name}: what the house keeps, percent of what is packed`,
+        h('p.yc-houseline', 'Personal use: ',
+          box({ key: 'house', mine: typed, fallback: empty ? null : keeps, amber: empty, max: 100, label: `${c.name}: what is kept for personal use, percent of what is packed`,
             tip: empty ? 'Nothing is set: all that is packed counts as sold. Type the part the house keeps.' : `${fig(hc.house.sold)}% of what is packed counts as sold. ${typed != null ? 'Yours. Clear it to go back to the crop’s record.' : 'From the crop’s record.'}`,
             save: k => App.setSell(c.id, { share: k == null ? null : 100 - k }, k == null ? `${c.name}: sold share back to ${hc.share.fallback}%` : `${c.name}: ${fig(100 - k)}% sold`) }),
           ' % of what is packed'),
-        h('p.yc-why', { id: 'ycHouseWhy' }, hc.house.marked ? `Shown because ${c.name} is marked as grown for sale and the house, on its record under Seeds.` : `Shown because ${fig(hc.house.sold)}% of ${c.name} counts as sold today, so the house is taken to keep the rest.`,
+        h('p.yc-why', { id: 'ycHouseWhy' }, hc.house.marked ? `Shown because ${c.name} is marked as grown for sale and personal use, on its record under Seeds.` : `Shown because ${fig(hc.house.sold)}% of ${c.name} counts as sold today, so the house is taken to keep the rest.`,
           ' ', h('button.link', { type: 'button', id: 'ycSoldAll', title: 'Counts all that is packed as sold. What that does to the season’s worth is shown first.', onclick: () => App.setHouse(c.id, false) }, 'Sold in full…')));
     }
 
@@ -330,13 +330,13 @@
       for (const k of units) comes.push(h('p', { dataset: { unit: k.unit, total: String(k.total), worth: String(k.worth), ...(k.thing ? { thing: k.thing } : {}) } }, k.thing ? `${k.sold}: ` : T.counting.length ? `${c.name}: ` : '', h('b', F.amount(k.total, k.unit, k.group)), ` to sell in ${year}, worth `, h('b', money(k.worth)), '.'));
       const split = Object.keys(PLACE).filter(env => x.places.has(env) && x.places.get(env).total > 0).map(env => [env, x.places.get(env)]);
       if (split.length > 1 && units.length === 1) comes.push(h('p.yc-split', split.map(([env, at]) => `${PLACE[env]} ${F.amount(at.total, units[0].unit, units[0].group)}`).join(' · ')));
-      comes.push(h('p.yc-fine', hc.house.part && hc.house.sold >= 100 ? 'That is the worth of what is packed for sale: all of it counts as sold until the house’s part is typed above.' : hc.house.part ? `That is what is packed for sale: the house’s ${fig(100 - hc.house.sold)}% is already taken off.` : hc.micro ? 'A tray sown is a tray to sell.' : 'That is the worth of what is packed for sale: all of it counts as sold.',
+      comes.push(h('p.yc-fine', hc.house.part && hc.house.sold >= 100 ? 'That is the worth of what is packed for sale: all of it counts as sold until the part for personal use is typed above.' : hc.house.part ? `That is what is packed for sale: the house’s ${fig(100 - hc.house.sold)}% is already taken off.` : hc.micro ? 'A tray sown is a tray to sell.' : 'That is the worth of what is packed for sale: all of it counts as sold.',
         x.personal ? ` ${plural(x.personal, 'planting')} marked for personal use ${x.personal === 1 ? 'is' : 'are'} picked and not counted as revenue.` : ''));
     } else comes.push(h('p', !x.n ? `Nothing: ${c.name} is not planted in ${year}.` : `Nothing is forecast for ${year} yet.`));
     const need = [];
     if (w.price) need.push('A price. Until there is one, this crop adds nothing to what the season is worth.');
     if (w.yield) { const there = cols.planted && w.places.length < n ? ` ${w.places.map(env => IN[env]).join(' and ')}` : ''; need.push(w.places.every(env => hc.cells[env].value == null) ? `A yield${there}. Until there is one, nothing is forecast ${there ? 'there' : 'for this crop'}.` : `A yield of your own${there}. The plan counts a starting value nobody has checked.`); }
-    if (hc.house.part && hc.house.sold >= 100) need.push('What the house keeps. The crop is marked as partly kept, and no part is set.');
+    if (hc.house.part && hc.house.sold >= 100) need.push('What is kept for personal use. The crop is marked as partly kept, and no part is set.');
     for (const line of T.needs()) need.push(line);
     if (T.apart()) need.push(T.apart());
     if (x.own) need.push([`${plural(x.own, 'planting')} ${x.own === 1 ? 'carries a yield of its own and does' : 'carry a yield of their own and do'} not follow these boxes. `, h('button.link', { type: 'button', id: 'ycDiffers', title: 'Opens the window that lists the plantings that differ from the list, with what letting each go would change.', onclick: () => root.LRFAssume.openAudit() }, '“See what differs…”'), ' lets them.']);

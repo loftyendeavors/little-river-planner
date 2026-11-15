@@ -190,6 +190,24 @@
     toast(`${label} · ${moved} · ${Math.abs(now - was) >= 0.5 ? `the season’s worth goes from ${dollars(was)} to ${dollars(now)}` : `the season’s worth stays ${dollars(now)}`}`, { label: 'Undo', run: undo });
     return { was, now, out, back };
   }
+  // ───────────────────── which thing a planting is grown for ─────────────────────
+  /**
+   * Where two things come out of one bed of a crop, which of them one planting is grown for. value: 'first' (the crop's own
+   * line and nothing else), a thing's id (that thing on the whole planting), or nothing (both, by the crop's shares, which is
+   * what a planting does until it is told otherwise). It moves no date. What it does to the season's worth is said with it.
+   */
+  function setGives(id, value) {
+    const F = root.LRFForecast, eng = state.engine, before = eng.planting(id);
+    if (!before) return false;
+    const beds = eng.thingsOf(before.cropId).filter(t => t.counts && t.from === 'bed'), want = value === 'first' || beds.some(t => t.id === value) ? value : null;
+    if ((before.gives || null) === want) return false;
+    const ops = [{ before, after: changed(before, { gives: want }) }], c = eng.crop(before.cropId), t = beds.find(x => x.id === want);
+    const worthOf = e => F.build(e).rows.reduce((sum, r) => sum + r.worth, 0), was = worthOf(eng), now = worthOf(E.create(withOps(state.plan, ops, 'do'), Lib));
+    const label = `${cropLabel(before)}: grown for ${want === 'first' ? `${c.name} only` : t ? `${t.name} only` : `both, by ${c.name}’s shares`}`;
+    if (!commit(label, ops, { unchecked: true })) return false;
+    toast(`${label} · ${worthSaid(was, now)} · no date moves`, { label: 'Undo', run: undo });
+    return { was, now };
+  }
   // ───────────────────────── assumptions ─────────────────────────
   // A change to the list, or to a garden's growing conditions, is a statement about the world, not
   // an edit to the plan. It is never refused. What it does to the plan is shown first when it would
@@ -304,7 +322,7 @@
     // a variety sold by a unit of its own is counted as that variety is sold, whole: its plantings leave the crop's other things
     return ops ? thingsFirst(v ? v.cropId : '', label, ops).then(ok => ok ? assume(label, ops) : false) : Promise.resolve(false);
   }
-  // ── what the house keeps, and what has been looked at ──
+  // ── what is kept for personal use, and what has been looked at ──
   // Two marks on a crop's line of the list, beside the figures they speak of, and one switch in the farm's settings. None of the
   // three is a figure. A mark moves nothing by itself; the switch, and saying a crop is sold in full, change what counts as sold,
   // so what either does to the season's worth is shown before it is done.
@@ -328,7 +346,7 @@
     return true;
   }
   /**
-   * Say whom a crop is grown for. `part` true: for sale and the house, which marks the crop and changes no figure. `part` false:
+   * Say whom a crop is grown for. `part` true: for sale and personal use, which marks the crop and changes no figure. `part` false:
    * sold in full, which counts all that is packed as sold; what that does to the season's worth is shown first, and it is done
    * only if he agrees.
    */
@@ -338,21 +356,21 @@
     if (part) {
       const ops = hc.house.marked ? null : markStep(cropId, 'house', true);
       if (!ops) return false;
-      commit(`${c.name}: grown for sale and the house`, ops, { unchecked: true });
-      toast(`${c.name}: grown for sale and the house · no figure changes: ${figure3(hc.house.sold)}% of what is packed counts as sold, as before`, { label: 'Undo', run: undo });
+      commit(`${c.name}: grown for sale and personal use`, ops, { unchecked: true });
+      toast(`${c.name}: grown for sale and personal use · no figure changes: ${figure3(hc.house.sold)}% of what is packed counts as sold, as before`, { label: 'Undo', run: undo });
       return true;
     }
     const ops = listStep(next => { next.sell = next.sell || {}; const record = { ...(next.sell[cropId] || {}), share: 100 }; delete record.house; next.sell[cropId] = record; });
     if (!ops) return false;
     const was = worthOf(eng), now = worthOf(E.create(withOps(state.plan, ops, 'do'), Lib)), label = `${c.name}: sold in full`;
     if (hc.house.sold < 100 && !await UI.confirm({ title: `${c.name}: sold in full?`, confirmLabel: 'Sold in full',
-      body: `Today ${figure3(hc.house.sold)}% of what is packed counts as sold, and the house keeps the other ${figure3(100 - hc.house.sold)}%. Sold in full, all of it counts as sold: ${worthSaid(was, now)}. No date and no yield changes, and one undo takes it back.` })) return false;
+      body: `Today ${figure3(hc.house.sold)}% of what is packed counts as sold, and the other ${figure3(100 - hc.house.sold)}% is for personal use. Sold in full, all of it counts as sold: ${worthSaid(was, now)}. No date and no yield changes, and one undo takes it back.` })) return false;
     commit(label, ops, { unchecked: true });
     toast(`${label} · ${worthSaid(was, now)}`, { label: 'Undo', run: undo });
     return { was, now };
   }
   /**
-   * The farm's own switch. Off: nothing is kept for the house, every crop is sold in full whatever its line says, and the idea is
+   * The farm's own switch. Off: nothing is kept for personal use, every crop is sold in full whatever its line says, and the idea is
    * shown on no page. On: each crop's own share counts again. Either way the season's worth before and after is shown first.
    */
   async function setHouseFarm(on) {
@@ -361,10 +379,10 @@
     if (on) delete settings.houseKeeps; else settings.houseKeeps = false;
     const was = worthOf(state.engine), now = worthOf(E.create({ ...state.plan, settings }, Lib));
     const ok = await UI.confirm(on
-      ? { title: 'Keep part of some crops for the house?', confirmLabel: 'Turn it on', body: `Each crop’s own share counts again: what its line says is sold, and the rest is the house’s. ${worthSaid(was, now).replace(/^t/, 'T')}. No date and no yield changes, and one undo takes it back.` }
-      : { title: 'Everything this farm packs is sold?', confirmLabel: 'Sell everything', body: `Nothing is kept for the house: every crop counts as sold in full, and what the house keeps is shown on no page. Each crop’s own share is kept as it is, for the day this is turned on again. ${worthSaid(was, now).replace(/^t/, 'T')}. No date and no yield changes, and one undo takes it back.` });
+      ? { title: 'Keep part of some crops for personal use?', confirmLabel: 'Turn it on', body: `Each crop’s own share counts again: what its line says is sold, and the rest is for personal use. ${worthSaid(was, now).replace(/^t/, 'T')}. No date and no yield changes, and one undo takes it back.` }
+      : { title: 'Everything this farm packs is sold?', confirmLabel: 'Sell everything', body: `Nothing is kept for personal use: every crop counts as sold in full, and what is kept for personal use is shown on no page. Each crop’s own share is kept as it is, for the day this is turned on again. ${worthSaid(was, now).replace(/^t/, 'T')}. No date and no yield changes, and one undo takes it back.` });
     if (!ok) return false;
-    const label = on ? 'The house keeps part of some crops' : 'Everything the farm packs is sold';
+    const label = on ? 'Part of some crops is for personal use' : 'Everything the farm packs is sold';
     if (!commit(label, [{ kind: 'settings', before: state.plan.settings, after: settings }], { unchecked: true })) return false;
     toast(`${label} · ${worthSaid(was, now)}`, { label: 'Undo', run: undo });
     return { was, now };
@@ -2080,7 +2098,7 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, lastChange, refuse, setUse, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
+    commit, undo, redo, lastChange, refuse, setUse, setGives, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
