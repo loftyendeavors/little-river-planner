@@ -31,6 +31,7 @@ HOLD = "letGo(); heldBox = box; box.readOnly = true; setTimeout(letGo, 0);\n  },
 KEYS = "if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && numberBox(e.target)) e.preventDefault();"
 FREE = "    letGo();   // a key pressed in the same moment as the wheel is typed like any other\n"
 WHICH = "const numberBox = el => !!el && el.tagName === 'INPUT' && el.type === 'number';"
+GUARD = "if (!numberBox(box) || box.readOnly || box !== document.activeElement) return;"
 PAGE = [
  ("the wheel steps a box that has been clicked", MN, HOLD, HOLD.replace("box.readOnly = true; ", "")),
  ("the wheel is stopped at the box: the figure keeps, and the page no longer scrolls under it", MN, HOLD, "e.preventDefault();\n  }, { capture: true, passive: false });"),
@@ -40,6 +41,7 @@ PAGE = [
  ("ArrowDown steps the box: only ArrowUp is refused", MN, KEYS, KEYS.replace("(e.key === 'ArrowUp' || e.key === 'ArrowDown')", "e.key === 'ArrowUp'")),
  ("the arrows are kept from every other handler", MN, KEYS, "if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); }"),
  ("the rule holds only for the boxes of the Assumptions list", MN, WHICH, WHICH.replace("el.type === 'number'", "el.type === 'number' && !!el.dataset.hk")),
+ ("the wheel makes a box that cannot be edited into one to type in", MN, GUARD, GUARD.replace("box.readOnly || ", "")),
 ]
 if mode == "list": print(json.dumps({"page": len(PAGE)})); sys.exit(0)
 faults = PAGE

@@ -182,6 +182,14 @@ with sync_playwright() as pw:
         check("harvest days typed and left with Tab are saved as before: the planting holds them, with one step to undo", t["hw"] == pl["hw"] + 7 and t["value"] == str(pl["hw"] + 7) and t["undo"] == ["Change harvest days"], t)
         shot("harvest-days"); undo_all()
         check("undone, the planting has its harvest days back and the plan is the one the check started from", hw() == pl["hw"] and js("return saved()")["key"] == key0, {"hw": hw()})
+        # A box that cannot be edited is left as it is (on Seeds, the stock of a variety held in several lots is such a box): the
+        # rule holds a clicked box for the length of one wheel event and lets it go, and must not let go a box it never held.
+        # This one wheel event is made by the check and sent to the box, not turned: a real wheel over a box that cannot be
+        # edited arrived at another element in this browser, so a turned wheel would try nothing here.
+        w = watch(H); js("N.box.readOnly = true;")
+        if w: click_box(w); js("N.box.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 100 }));"); a = seen(); wait(400); z = seen(); js("if (N.box) N.box.readOnly = false;"); away()
+        check("a number box that cannot be edited is still one after a notch of the wheel over it, at once and a moment later, and its figure is what it was", bool(w) and a["log"] == ["wheel"] and a["focus"] and a["readOnly"] and z["readOnly"] and z["value"] == w["value"] and z["key"] == key0 and z["undo"] == [], {"box": w, "at the wheel": a if w else None, "a moment later": z if w else None})
+        undo_all()
 
     # ══ (e) every number box each main screen draws ══
     def sweep(name, need):
