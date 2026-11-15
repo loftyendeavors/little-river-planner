@@ -19,6 +19,9 @@
  * crop is sold by and for, how it is picked (a total over its harvest days, a
  * weekly figure, or all at once), its yield in each growing condition, how long
  * it keeps, and how long its ground is held afterwards.
+ *
+ * That second half is shown in two ways over the same figures: one crop at a time (js/yieldcard.js), which is what the
+ * button on the page opens, and all on one page, the table drawn here.
  */
 (function (root) {
   'use strict';
@@ -29,7 +32,7 @@
   const START = { transplant: 'Transplanting', seed: 'Seeding in trays', direct: 'Direct seeding' };
   const FROM = { transplant: 'transplanting', seed: 'seeding in trays', direct: 'direct seeding' };
   const FIXED = { sown: ['direct seeding', 'Seeded in place: its days are counted from the day it is seeded.'], planted: ['planting', 'Planted as a bulb or a bought plant: its days are counted from the day it goes in.'], tray: ['seeding in trays', 'Its days are counted from the day the tray is seeded.'] };
-  const ui = { scope: 'mine', query: '', open: new Set(), dirty: true, frame: 0, mode: 'days' };
+  const ui = { scope: 'mine', query: '', open: new Set(), dirty: true, frame: 0, mode: 'days', way: 'card' };
   const SHORT = { field: 'Field', tunnel: 'Tunnel', heated: 'Heated', tower: 'Towers' };
   const UNITS = ['each', 'bunch', 'lb', 'pint', 'quart', 'clamshell', 'head', 'stem'];
   const PATTERN = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' };
@@ -322,7 +325,7 @@
       th('.ah-days', 'Days', 'Harvest days: how long the crop is picked, or held to be picked. The ground is held that long.'),
       App.state.engine.ENVS.map(env => th('.ah-y', SHORT[env], `Yield ${LABEL[env].toLowerCase()}, for a plant or a bed-foot as the row says: a total, or a week’s picking where the crop is picked each week`, 'Yield')),
       th('.ah-comes', 'Comes to', 'The total and the weekly figure side by side, for the condition the crop is mostly grown in. One is yours; the other follows from the harvest days.'),
-      th('.ah-s', 'Sold %', 'The part of what is picked that is good enough to sell'),
+      h('th.ah-s', { title: 'The part of what is packed that is sold: what is left after the house’s share', hidden: App.state.plan.settings.houseKeeps === false }, 'Sold %'),
       th('.ah-s', 'Keeps wk', 'Weeks the crop keeps after picking. What is picked is then counted as there to sell evenly over those weeks.'),
       th('.ah-s', 'Turnover', 'Days the ground is held after the last harvest, before the next crop can go in')));
   }
@@ -331,7 +334,7 @@
     if (hc.micro) return h('td.as-seed.ah-comes', 'a tray is a tray');
     if (!cell || cell.value == null) return h('td.as-seed.ah-comes.bad', { title: 'No yield is set, so nothing is forecast for this crop.' }, 'no yield');
     const u = unit === 'each' ? '' : ' ' + unit, weeks = fig(hc.nominal / 7), per = BASIS[hc.basis];
-    const tip = `${LABEL[env]}: ${fig(cell.total)}${u} from ${per} over ${hc.nominal} harvest days, which is ${fig(cell.weekly)} a week. ${hc.share.value}% of it is counted as sold.`;
+    const tip = `${LABEL[env]}: ${fig(cell.total)}${u} from ${per} over ${hc.nominal} harvest days, which is ${fig(cell.weekly)} a week. ${hc.house.sold}% of it is counted as sold.`;
     const from = hc.basis === 'ft' ? 'a bed-ft' : per;
     return h('td.as-seed.ah-comes', { title: tip }, h('b', `${fig(cell.total)}${u}`), h('small', hc.weekly ? `${fig(cell.weekly)} × ${weeks} wk · ${from}` : `${fig(cell.weekly)}/wk · ${from}`));
   }
@@ -390,7 +393,7 @@
           save: n => App.setSell(c.id, { days: n }, n == null ? `${c.name}: harvest days as before` : `${c.name}: picked for ${n} days`) }),
         yields('crops', c.id, hc, c.name),
         comesTo(hc, main, unit),
-        hc.micro ? fixed('—') : figCell({ cls: '.ah-s', key: `share|${c.id}`, mine: hc.share.mine, fallback: hc.share.fallback, max: 100, label: `${c.name}: sold percent`, tip: `Of what is picked, the part counted as sold. ${hc.share.mine != null ? 'Yours.' : 'From the crop’s record.'}`, save: n => App.setSell(c.id, { share: n }, n == null ? `${c.name}: sold share back to ${hc.share.fallback}%` : `${c.name}: ${fig(n)}% sold`) }),
+        !hc.house.farm ? h('td.as-cell.none', { hidden: true }) : hc.micro ? fixed('—') : figCell({ cls: '.ah-s', key: `share|${c.id}`, mine: hc.share.mine, fallback: hc.share.fallback, max: 100, label: `${c.name}: sold percent`, tip: `Of what is packed, the part counted as sold: the rest is the house’s. ${hc.share.mine != null ? 'Yours.' : 'From the crop’s record.'}`, save: n => App.setSell(c.id, { share: n }, n == null ? `${c.name}: sold share back to ${hc.share.fallback}%` : `${c.name}: ${fig(n)}% sold`) }),
         hc.micro ? fixed('—') : figCell({ cls: '.ah-s', key: `keep|${c.id}`, mine: hc.keep.mine, fallback: 0, max: 60, label: `${c.name}: keeps, weeks`, tip: 'Weeks it keeps after picking. What is picked is counted as there to sell evenly over those weeks. Nothing set: it is sold as it is picked.', save: n => App.setSell(c.id, { keep: n }, n == null || n === 0 ? `${c.name}: sold as it is picked` : `${c.name}: keeps ${fig(n)} week${n === 1 ? '' : 's'}`) }),
         hc.micro ? fixed('—') : figCell({ cls: '.ah-s', key: `turn|${c.id}`, mine: hc.turnover.mine, fallback: hc.turnover.fallback, whole: true, max: 120, label: `${c.name}: turnover days`, tip: `Days the ground is held after the last harvest. ${hc.turnover.mine != null ? 'Yours for this crop.' : `Nothing set: the farm’s ${hc.turnover.fallback} days.`} A planting with its own number keeps it.`, save: n => App.setSell(c.id, { turnover: n }, n == null ? `${c.name}: turnover back to ${hc.turnover.fallback} days` : `${c.name}: ${n} turnover day${n === 1 ? '' : 's'}`) })));
       if (!open) continue;
@@ -404,7 +407,7 @@
           figCell({ cls: '.ah-price', key: `vprice|${v.id}`, mine: hv.price.mine, fallback: hv.price.fallback, label: `${v.name}: price`, tip: hv.price.mine != null ? 'This variety’s own price. Clear it to use the crop’s.' : `The crop’s price: $${fig(hv.price.fallback)}.`, save: n => App.setSellV(v.id, { price: n }, n == null ? `${v.name}: priced as the crop` : `${v.name}: $${fig(n)}${vu === 'each' ? ' each' : ' a ' + vu}`) }),
           h('td'), h('td'),
           yields('varieties', v.id, hv, v.name),
-          comesTo(hv, mainEnv(whereV.get(v.id), hv.cells), vu), h('td'), h('td'), h('td')));
+          comesTo(hv, mainEnv(whereV.get(v.id), hv.cells), vu), h('td', { hidden: !hv.house.farm }), h('td'), h('td')));
       }
     }
     if (!shown) body.append(h('tr', h('td.empty', { colSpan: 13 }, q ? `No crop or variety matches “${ui.query}”.` : 'No crops yet.')));
@@ -419,20 +422,26 @@
   function countLine(plan) {
     const a = plan.assumptions, cells = a ? Object.values(a.crops || {}).concat(Object.values(a.varieties || {})).flatMap(r => Object.values(r)) : [];
     const days = cells.filter(c => c && c.dtm != null).length, yields = cells.filter(c => c && c.yield != null).length, starts = a && a.starts ? Object.keys(a.starts).length : 0;
-    const lines = a ? Object.values(a.sell || {}).concat(Object.values(a.sellV || {})).reduce((n, r) => n + Object.keys(r).length, 0) : 0;
+    const lines = a ? Object.values(a.sell || {}).concat(Object.values(a.sellV || {})).reduce((n, r) => n + Object.keys(r).filter(k => k !== 'house' && k !== 'looked').length, 0) : 0;
     $('asCount').textContent = days || starts || yields || lines ? [days ? `${days} number${days === 1 ? '' : 's'} of your own` : '', starts ? `“Days counted from” set for ${starts} crop${starts === 1 ? '' : 's'}` : '', yields ? `${yields} yield${yields === 1 ? '' : 's'}` : '', lines ? `${lines} other figure${lines === 1 ? '' : 's'} on crop lines` : ''].filter(Boolean).join(' · ') : 'Nothing set yet: every number is a default';
   }
   const HEAD = {
     days: ['Days to first harvest', 'Each row says what its days are counted from, and its numbers count from there. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; a variety with its own figure keeps it, and a planting with no variety uses the crop row.'],
-    harvest: ['Yield and price', 'What each crop is sold by and for, how it is picked, and what it yields from a plant or a bed-foot in each growing condition. A yield is a total over the harvest days, or a week’s picking where “Picked” says Gradually. Grey is what the plan uses now; type over it to make it yours. A planting with a figure of its own keeps it until “See what differs…” lets it go.']
+    harvest: ['Yield and price', 'What each crop is sold by and for, how it is picked, and what it yields from a plant or a bed-foot in each growing condition. A yield is a total over the harvest days, or a week’s picking where “Picked” says Gradually. Grey is what the plan uses now; type over it to make it yours. A planting with a figure of its own keeps it until “See what differs…” lets it go.'],
+    card: ['Yield and price', 'One crop at a time: what it is sold by and for, what it gives in each place it is planted, and how it is picked. Each box says what it means. Amber is a box only you can fill; grey is what the plan uses now, and typing over it makes it yours. “All on one page” shows the same figures as a list.']
   };
   function chrome() {
-    const harvest = ui.mode === 'harvest';
-    $('asTitle').textContent = HEAD[ui.mode][0]; $('asLead').textContent = HEAD[ui.mode][1];
-    $('asTable').hidden = harvest; $('ahTable').hidden = !harvest;
-    if (!harvest) $('ahOpen').hidden = true;
+    const harvest = ui.mode === 'harvest', card = harvest && ui.way === 'card', view = document.getElementById('assumeView');
+    $('asTitle').textContent = HEAD[ui.mode][0]; $('asLead').textContent = HEAD[card ? 'card' : ui.mode][1];
+    $('asTable').hidden = harvest; $('ahTable').hidden = !harvest || card;
+    if (!harvest || card) $('ahOpen').hidden = true;
     for (const b of document.querySelectorAll('[data-as-mode]')) b.setAttribute('aria-pressed', String(b.dataset.asMode === ui.mode));
-    document.getElementById('assumeView').dataset.mode = ui.mode;
+    view.dataset.mode = ui.mode;
+    // the second half's two ways, and the farm's own switch for what the house keeps
+    if (card) view.dataset.way = 'card'; else delete view.dataset.way;
+    $('ahWay').hidden = !harvest; $('ycHost').hidden = !card; $('ahHouseFarm').hidden = !harvest;
+    for (const b of document.querySelectorAll('[data-ah-way]')) b.setAttribute('aria-pressed', String(b.dataset.ahWay === ui.way));
+    $('ahHouseOn').checked = App.state.plan.settings.houseKeeps !== false;
   }
 
   function render() {
@@ -451,6 +460,12 @@
       if (env) { const m = where.get(p.cropId) || new Map(); bump(m, env); where.set(p.cropId, m); if (p.varietyId) { const mv = whereV.get(p.varietyId) || new Map(); bump(mv, env); whereV.set(p.varietyId, mv); } }
     }
     places(); auditNote(); chrome(); countLine(plan);
+    if (ui.mode === 'harvest' && ui.way === 'card') {
+      $('asHints').hidden = true;
+      const made = root.LRFYieldCard.render({ eng, plan, q, list, scope: ui.scope, redraw: render });
+      for (const [scope, count] of [['mine', made.mine], ['all', made.all]]) { const el = document.querySelector(`[data-as-scope="${scope}"] small`); if (el) el.textContent = count; }
+      return;
+    }
     if (ui.mode === 'harvest') { $('asHints').hidden = true; harvestTable(eng, plan, q, list); refocus(); return; }
     const body = clear($('asBody')), crops = eng.crops().filter(c => !c.micro);
     const useCell = (n, pinned) => h('td.as-use', n ? String(n) : '', pinned ? h('span', { title: `${pinned} of them carry their own days to harvest and do not follow this row. “See what differs…” above lets them follow it.` }, ` · ${pinned} own`) : null);
@@ -516,9 +531,23 @@
       button.addEventListener('click', () => { ui.scope = button.dataset.asScope; for (const b of document.querySelectorAll('[data-as-scope]')) b.setAttribute('aria-pressed', String(b === button)); render(); });
     }
     for (const button of document.querySelectorAll('[data-as-mode]')) button.addEventListener('click', () => { ui.mode = button.dataset.asMode; render(); });
+    for (const button of document.querySelectorAll('[data-ah-way]')) button.addEventListener('click', () => { ui.way = button.dataset.ahWay; render(); });
+    $('ahHouseOn').addEventListener('change', async e => { if (!await App.setHouseFarm(e.target.checked)) schedule(); });
     App.on('plan', () => { if (audit) audit.close(); if (App.state.view === 'assume') schedule(); else ui.dirty = true; });
-    App.on('view', () => { if (App.state.view === 'assume' && ui.dirty) render(); });
+    App.on('view', () => { if (App.state.view !== 'assume') root.LRFYieldCard.reset(); else if (ui.dirty) render(); });
   }
 
-  root.LRFAssume = { init, LABEL, openAudit, audit: () => audit, auditView: change => Object.assign(auView, change || {}), tidy, setMode: mode => { ui.mode = mode === 'harvest' ? 'harvest' : 'days'; render(); }, mode: () => ui.mode, fig };
+  /**
+   * Show one half of the list. For the second half, `way` is 'card' (one crop at a time) or 'list' (all on one page), and `crop`
+   * opens the card on that crop. A script that names no way is given the list, which is what such scripts were written for;
+   * the button on the page opens whichever way was last on show, the card to begin with.
+   */
+  function setMode(mode, way, crop) {
+    ui.mode = mode === 'harvest' ? 'harvest' : 'days';
+    if (ui.mode === 'harvest') ui.way = way === 'card' ? 'card' : 'list';
+    if (ui.mode === 'harvest' && ui.way === 'card' && crop) root.LRFYieldCard.open(crop);
+    render();
+  }
+
+  root.LRFAssume = { init, LABEL, openAudit, audit: () => audit, auditView: change => Object.assign(auView, change || {}), tidy, setMode, mode: () => ui.mode, way: () => ui.way, fig };
 })(window);

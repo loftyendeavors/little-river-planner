@@ -1,0 +1,21 @@
+{
+ "build": "Yield and price, one crop at a time: a card with a box for each figure and a column for each place the crop is planted in, a checklist of crops with a tick for the year, the house's share shown only for a crop partly kept, and the list kept as “All on one page”.",
+ "words": [],
+ "code": [
+  "app.js",
+  "assume.js",
+  "engine.js"
+ ],
+ "added": [
+  "yieldcard.js"
+ ],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html",
+  "sw.js"
+ ],
+ "screens": [
+  "assumptions-yield"
+ ]
+}
