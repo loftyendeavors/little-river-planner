@@ -179,7 +179,8 @@ body.armed #map, body.armed #map * { cursor: crosshair; }
 .bed.drop-target.drop-blocked .bed-edge, .on-photo .bed.drop-target.drop-blocked .bed-edge { stroke: var(--bad); stroke-width: 4px; }
 .drop-ghost { fill: color-mix(in srgb, var(--flag) 58%, transparent); stroke: var(--flag); stroke-width: 2.5px; vector-effect: non-scaling-stroke; pointer-events: none; }
 .drop-ghost[data-state="swap"] { fill: color-mix(in srgb, var(--flag) 30%, transparent); stroke-dasharray: 2 5; stroke-linecap: round; }
-.map-tools { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; align-items: center; }
+/* the tools keep clear of the scale marker at the map's other corner: on a narrow map they take a second row, not its place */
+.map-tools { position: absolute; top: 10px; right: 10px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; align-items: center; max-width: calc(100% - 182px); }
 .tool-btn { border: 1px solid var(--line); background: var(--raised); border-radius: var(--radius); padding: 6px 10px; font-size: 13px; font-weight: 600; height: 32px; }
 .tool-btn[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 /* The scale: a label over a ruler exactly as long as the distance it names, on a small plate with an edge all round so it reads on the photo. */
@@ -525,7 +526,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none;
   #datePick { display: none; }
   .map-key, .map-scale, .bar-title { display: none; }
   .map-bar { padding-left: 6px; }
-  .map-tools { left: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .map-tools { left: 10px; flex-wrap: wrap; justify-content: flex-end; max-width: none; }
   .toast { top: 54px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

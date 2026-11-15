@@ -15,10 +15,12 @@
   "css/app.css"
  ],
  "screens": [
-  "assumptions-days",
-  "forecast",
   "map",
+  "timeline",
+  "forecast",
+  "tasks",
   "seeds",
-  "timeline"
+  "assumptions-days",
+  "assumptions-yield"
  ]
 }
