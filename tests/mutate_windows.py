@@ -31,6 +31,8 @@ def alone(cmd, timeout, env=None, cwd=None):
 
 # (the guard taken out, file, as it is, as the fault has it, words of the line that must fail)
 NODE = [
+  ('a page that finds the lock taken gives up at once: a reload can leave the one window read-only', 'js/store.js',
+   "if (!lock && ++tries < AGAIN) { setTimeout(ask, 150); return undefined; }", "", 'still letting go of the lock'),
   ('the count beside the stored plan is not checked before a write', 'js/store.js',
    "      if (countNow() !== count) { stop('changed'); return false; }\n", "", 'a moved count refuses the write'),
   ('the plan is written before the count', 'js/store.js',
@@ -43,7 +45,7 @@ NODE = [
 ]
 PAGE = [
   ("the lock's answer is ignored: a second window takes changes like the first", 'js/store.js',
-   "            if (!lock) { stop('window'); go(); return undefined; }\n", "            if (!lock) { go(); return undefined; }\n", 'a second window says why it takes no change'),
+   "              if (!lock) { stop('window'); go(); return undefined; }\n", "              if (!lock) { go(); return undefined; }\n", 'a second window says why it takes no change'),
   ('a window that only shows the plan takes a change all the same', 'js/app.js',
    "    if (!ops.length) return false;\n    if (elsewhere()) return refuse(elsewhere());\n", "    if (!ops.length) return false;\n", 'every change a window took is in the stored plan'),
   ('nothing is saved as the page is hidden', 'js/store.js',

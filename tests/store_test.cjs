@@ -38,7 +38,7 @@ function browser({ locks = true, events = true } = {}) {
   return b;
 }
 /** A window of that browser, with the store made and connected in it. `deaf`: it hears nothing the other windows say. */
-async function open(b, name, { deaf = false } = {}) {
+async function open(b, name, { deaf = false, meanwhile = null } = {}) {
   const w = { name, now: 0, timers: [], listeners: {}, docListeners: {}, said: [], asked: 0, closed: false };
   const fire = (list, event) => { for (const fn of list || []) fn(event); };
   const storage = {
@@ -93,7 +93,11 @@ async function open(b, name, { deaf = false } = {}) {
   w.wrote = () => b.writes.filter(x => x.by === name && (x.key === PLAN || x.key === COUNT)).map(x => x.key);
   b.windows.push(w);
   w.store = w.box.LRFStore.create(info => w.said.push(info.state + (info.detail ? ':' + info.detail : '')));
-  w.backend = await w.store.connect();
+  // A window that finds the lock taken asks again for a moment before it gives up: time is let pass in it until it has its answer.
+  let known = false; const connecting = w.store.connect().then(value => { known = true; return value; });
+  await settle(); if (meanwhile) meanwhile(w);
+  for (let i = 0; i < 12 && !known; i++) { await w.pass(150); }
+  w.backend = await connecting;
   w.plan = await w.store.load();
   return w;
 }
@@ -156,7 +160,15 @@ const refused = async promise => { try { await promise; return null; } catch (er
   const no = await refused(c.store.saveNow(plan(1, 'two, outright')));
   check('a read-only window writes nothing: a queued save, its timer, the page hidden, a save asked for outright', b.text() === text0[0] && b.count() === text0[1] && c.wrote().length === 0 && no !== null && /another window/.test(no), [c.wrote(), no]);
   await a.store.saveNow(plan(5, 'one, again')); a.store.save(plan(6, 'one, queued')); await a.pass(700);
-  check('the lock is asked for once in a page, however often it saves', a.asked === 1 && c.asked === 1, [a.asked, c.asked]);
+  check('the lock is asked for once in a page that gets it, however often it saves; a page that finds it taken asks ten times over 1.5 s, and then no more', a.asked === 1 && c.asked === 10, [a.asked, c.asked]);
+  // a reload: the page before still holds the lock for a moment as the page after it starts
+  {
+    const br = browser(), first = await open(br, 'before the reload'); await first.store.saveNow(plan(2, 'saved before the reload'));
+    const after = await open(br, 'after the reload', { meanwhile: () => first.close() });
+    check('a page that starts while the page before it is still letting go of the lock gets it a moment later: it is not taken to be a second window', after.store.readOnly === '' && after.asked >= 2 && after.asked < 10 && after.plan.word === 'saved before the reload', [after.store.readOnly, after.asked]);
+    await after.store.saveNow(plan(3, 'saved after the reload'));
+    check('and it saves', JSON.parse(br.text()).word === 'saved after the reload' && br.count() === '2', [br.count()]);
+  }
 
   // handing over
   a.store.save(plan(7, 'waiting in one when it was asked')); b.writes.length = 0;

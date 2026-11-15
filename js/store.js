@@ -24,7 +24,7 @@
 (function (root) {
   'use strict';
 
-  const DEVICE_KEY = 'lrf-next:plan', COUNT_KEY = 'lrf-next:plan-n', LOCK = 'lrf-next:plan', PART_TARGET = 100000, LOAD_TIMEOUT_MS = 10000;
+  const DEVICE_KEY = 'lrf-next:plan', COUNT_KEY = 'lrf-next:plan-n', LOCK = 'lrf-next:plan', PART_TARGET = 100000, LOAD_TIMEOUT_MS = 10000, AGAIN = 10;
   const SESSION = Math.random().toString(36).slice(2, 10);
   const BUCKETED = ['plantings', 'varieties'], WHOLE = ['gardens', 'beds', 'crops'];
   /** One large record cut into pieces of JSON text: seed stock and its change log grow with every count. */
@@ -100,16 +100,23 @@
       if (!locks || typeof locks.request !== 'function') return Promise.resolve();
       return new Promise(resolve => {
         const wait = setTimeout(resolve, 3000), go = () => { clearTimeout(wait); resolve(); };   // a browser that never answers does not stop the page from opening
-        let asked;
-        try {
-          asked = locks.request(LOCK, { mode: 'exclusive', ifAvailable: true }, lock => {
-            if (!lock) { stop('window'); go(); return undefined; }
-            return new Promise(done => { letGo = done; go(); });
-          });
-        } catch (_) { go(); return; }
-        Promise.resolve(asked).then(
-          () => { if (readOnly === 'moved' && channel) channel.postMessage('given'); },   // let go on request: the lock is free now, and the asking window is told
-          () => { if (letGo) { letGo = null; stop('moved'); } go(); });                    // taken from this window, or not allowed on this page (then there is no gate)
+        // A page that is being reloaded can still hold the lock for a moment as the page after it starts. So a lock that is
+        // not free is asked for again, for up to 1.5 s, before this window is taken to be a second one.
+        let tries = 0;
+        const ask = () => {
+          let asked;
+          try {
+            asked = locks.request(LOCK, { mode: 'exclusive', ifAvailable: true }, lock => {
+              if (!lock && ++tries < AGAIN) { setTimeout(ask, 150); return undefined; }
+              if (!lock) { stop('window'); go(); return undefined; }
+              return new Promise(done => { letGo = done; go(); });
+            });
+          } catch (_) { go(); return; }
+          Promise.resolve(asked).then(
+            () => { if (readOnly === 'moved' && channel) channel.postMessage('given'); },   // let go on request: the lock is free now, and the asking window is told
+            () => { if (letGo) { letGo = null; stop('moved'); } go(); });                    // taken from this window, or not allowed on this page (then there is no gate)
+        };
+        ask();
         listen();
       });
     }
