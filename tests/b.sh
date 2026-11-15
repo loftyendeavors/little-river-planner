@@ -6,7 +6,7 @@
 mkdir -p $S
 tally() { python3 -I -c "import json,sys; t=sys.stdin.read(); i=t.rfind('{\"passed\"'); i=i if i>=0 else t.find('{');
 try:
-    d=json.loads(t[i:]); print(sys.argv[1], d.get('passed'), 'of', d.get('of'), d.get('failed')); [print('   ', json.dumps(x, default=str)[:600]) for x in (d.get('details') or [])[:5]]
+    d=json.loads(t[i:]); print(sys.argv[1], d.get('passed'), 'of', d.get('of'), d.get('failed')); [print('   ', json.dumps(x, default=str)[:1800]) for x in (d.get('details') or [])[:5]]
 except Exception as e: print(sys.argv[1], 'NO RESULT', t[-400:])" "$1"; }
 for n in "$@"; do
   s=$(date +%s)

@@ -27,7 +27,7 @@ results, failed = [], []
 KEY = 'two words twice two words twice'
 
 def check(name, ok, detail=None):
-    results.append(('ok   ' if ok else 'FAIL ') + name + ('' if ok or detail is None else ' ' + json.dumps(detail, default=str)[:900]))
+    results.append(('ok   ' if ok else 'FAIL ') + name + ('' if ok or detail is None else ' ' + json.dumps(detail, default=str)[:1500]))
     if not ok:
         failed.append(name)
 
@@ -152,6 +152,10 @@ with sync_playwright() as pw:
           return (localStorage.getItem('lrf-next:plan') || '').includes(word); }""", [9, 'word-just-before-hiding'])
         g = H.evaluate(CHANGE, [10, 'word-just-before-putting-away']); H.reload(); H.wait_for_function(READY, timeout=40000); H.wait_for_timeout(400)
         hid.update({'took': g['took'], 'again': H.evaluate(SHOWN, g['id']), 'holds the plan again': H.evaluate("LRFApp.windowState()") == ''})
+        if not hid['holds the plan again']:   # what a failing line found: who holds the lock, and how this page came to be
+            LOOK = "async () => { const q = await navigator.locks.query(), n = performance.getEntriesByType('navigation')[0]; return { held: q.held.map(l => l.name + ' ' + l.clientId.slice(0, 6)), pending: q.pending.length, state: LRFApp.windowState(), nav: n && n.type, visible: document.visibilityState }; }"
+            O = A if H is B else B
+            hid['this window'] = H.evaluate(LOOK); hid['the other'] = O.evaluate(LOOK); H.wait_for_timeout(3000); hid['3 s later'] = H.evaluate(LOOK)
     check("a change made within 0.2 s of the page being hidden is there when it is opened again", hid['window'] and hid.get('at once') and hid.get('took') and hid.get('again') == 'word-just-before-putting-away' and hid.get('holds the plan again'), hid)
     check("no error on either page", not A.errors and not B.errors, [A.errors, B.errors])
     ctx.close()
