@@ -367,13 +367,15 @@
           onchange: async e => { const value = e.target.value; if (!await App.setSell(c.id, { pattern: value === 'unset' ? null : value }, `${c.name}: ${value === 'unset' ? 'picked as before' : PATTERN_SAY[value]}`)) schedule(); } },
           Object.entries(PATTERN).map(([value, text]) => h('option', { value, selected: hc.pattern.value === value }, text)), hc.pattern.mine ? h('option', { value: 'unset' }, 'Back to not set') : null));
       const fixed = (text, title) => h('td.as-cell.none', { title }, text);
-      const yields = (kind, id, x, name) => eng.ENVS.map(env => {
+      // A yield is shown only for a place the crop is planted in: elsewhere the box stays, empty, for a figure that is to wait there.
+      const yields = (kind, id, x, name, planted) => eng.ENVS.map(env => {
         const cell = x.cells[env];
         if (x.micro) return fixed('—', 'A live tray is one tray.');
         if (!cell.used) return fixed('—', `Nothing on the farm is ${LABEL[env].toLowerCase()} yet`);
         const what = `${x.weekly ? 'picked each week from' : 'in all from'} ${BASIS[x.basis]}`, back = cell.fallback == null ? 'no yield at all' : fig(cell.fallback);
-        return figCell({ cls: '.ah-y', key: `y|${kind}|${id}|${env}`, mine: cell.mine, fallback: cell.fallback, open: kind === 'crops' && loose, label: `${name}, ${LABEL[env].toLowerCase()}: yield`,
-          tip: cell.mine != null ? `Your figure: ${fig(cell.mine)}${u} ${what}. Clear it to go back to ${back}.` : cell.by === 'crop-mine' ? `Your figure for the crop: ${fig(cell.fallback)}${u} ${what}.` : cell.fallback == null ? 'No yield is set for this crop.' : `${kind === 'crops' && loose ? 'A starting value nobody has checked' : 'From the crop’s record, not yet checked'}: ${fig(cell.fallback)}${u} ${what}.`,
+        const away = !!planted && planted.size > 0 && !planted.has(env) && cell.mine == null;
+        return figCell({ cls: '.ah-y' + (away ? '.ah-away' : ''), key: `y|${kind}|${id}|${env}`, mine: cell.mine, fallback: away ? null : cell.fallback, open: kind === 'crops' && loose && !away, label: `${name}, ${LABEL[env].toLowerCase()}: yield`,
+          tip: away ? `Nothing of ${name} is planted in this kind of place (${LABEL[env].toLowerCase()}) this season, so no figure is shown. One typed here waits for a planting there.` : cell.mine != null ? `Your figure: ${fig(cell.mine)}${u} ${what}. Clear it to go back to ${back}.` : cell.by === 'crop-mine' ? `Your figure for the crop: ${fig(cell.fallback)}${u} ${what}.` : cell.fallback == null ? 'No yield is set for this crop.' : `${kind === 'crops' && loose ? 'A starting value nobody has checked' : 'From the crop’s record, not yet checked'}: ${fig(cell.fallback)}${u} ${what}.`,
           save: n => App.setYield(kind, id, env, n, n == null ? `${name}, ${LABEL[env].toLowerCase()}: yield back to ${back}` : `${name}, ${LABEL[env].toLowerCase()}: ${fig(n)}${u} ${x.weekly ? 'a week' : 'in all'}`) });
       });
       body.append(h('tr.as-crop' + (open ? '.open' : ''), { dataset: { crop: c.id } },
@@ -391,7 +393,7 @@
         hc.micro ? fixed('—', 'A live tray is ready on one day.') : figCell({ cls: '.ah-days', key: `days|${c.id}`, mine: hc.days.mine, fallback: hc.season ? 'season' : hc.days.fallback, whole: true, min: 1, max: 400, label: `${c.name}: harvest days`,
           tip: hc.days.mine != null ? `Your number: picked for ${hc.days.mine} days. Clear it to go back to ${hc.season ? 'the end of the season' : hc.days.fallback + ' days'}.` : hc.season ? `Picked until the season ends where it grows. A yield is spoken of over ${hc.nominal} days. Type a number to pick it for that many days instead.` : `From the crop’s record: picked for ${hc.days.fallback} days.`,
           save: n => App.setSell(c.id, { days: n }, n == null ? `${c.name}: harvest days as before` : `${c.name}: picked for ${n} days`) }),
-        yields('crops', c.id, hc, c.name),
+        yields('crops', c.id, hc, c.name, where.get(c.id)),
         comesTo(hc, main, unit),
         !hc.house.farm ? h('td.as-cell.none', { hidden: true }) : hc.micro ? fixed('—') : figCell({ cls: '.ah-s', key: `share|${c.id}`, mine: hc.share.mine, fallback: hc.share.fallback, max: 100, label: `${c.name}: sold percent`, tip: `Of what is packed, the part counted as sold: the rest is the house’s. ${hc.share.mine != null ? 'Yours.' : 'From the crop’s record.'}`, save: n => App.setSell(c.id, { share: n }, n == null ? `${c.name}: sold share back to ${hc.share.fallback}%` : `${c.name}: ${fig(n)}% sold`) }),
         hc.micro ? fixed('—') : figCell({ cls: '.ah-s', key: `keep|${c.id}`, mine: hc.keep.mine, fallback: 0, max: 60, label: `${c.name}: keeps, weeks`, tip: 'Weeks it keeps after picking. What is picked is counted as there to sell evenly over those weeks. Nothing set: it is sold as it is picked.', save: n => App.setSell(c.id, { keep: n }, n == null || n === 0 ? `${c.name}: sold as it is picked` : `${c.name}: keeps ${fig(n)} week${n === 1 ? '' : 's'}`) }),
@@ -406,7 +408,7 @@
             h('option', { value: '', selected: !hv.unit.mine }, 'As the crop'), unitOptions(hv.unit.mine, null).map(x => h('option', { value: x, selected: hv.unit.mine === x }, x)))),
           figCell({ cls: '.ah-price', key: `vprice|${v.id}`, mine: hv.price.mine, fallback: hv.price.fallback, label: `${v.name}: price`, tip: hv.price.mine != null ? 'This variety’s own price. Clear it to use the crop’s.' : `The crop’s price: $${fig(hv.price.fallback)}.`, save: n => App.setSellV(v.id, { price: n }, n == null ? `${v.name}: priced as the crop` : `${v.name}: $${fig(n)}${vu === 'each' ? ' each' : ' a ' + vu}`) }),
           h('td'), h('td'),
-          yields('varieties', v.id, hv, v.name),
+          yields('varieties', v.id, hv, v.name, whereV.get(v.id)),
           comesTo(hv, mainEnv(whereV.get(v.id), hv.cells), vu), h('td', { hidden: !hv.house.farm }), h('td'), h('td')));
       }
     }
@@ -428,7 +430,7 @@
   const HEAD = {
     days: ['Days to first harvest', 'Each row says what its days are counted from, and its numbers count from there. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; a variety with its own figure keeps it, and a planting with no variety uses the crop row.'],
     harvest: ['Yield and price', 'What each crop is sold by and for, how it is picked, and what it yields from a plant or a bed-foot in each growing condition. A yield is a total over the harvest days, or a week’s picking where “Picked” says Gradually. Grey is what the plan uses now; type over it to make it yours. A planting with a figure of its own keeps it until “See what differs…” lets it go.'],
-    card: ['Yield and price', 'One crop at a time: what it is sold by and for, what it gives in each place it is planted, and how it is picked. Each box says what it means. Amber is a box only you can fill; grey is what the plan uses now, and typing over it makes it yours. “All on one page” shows the same figures as a list.']
+    card: ['Yield and price', 'One crop at a time: what it is sold by and for, what it gives in each place it is planted, and how it is picked. Each box says what it means. “All on one page” shows the same figures as a list.']
   };
   function chrome() {
     const harvest = ui.mode === 'harvest', card = harvest && ui.way === 'card', view = document.getElementById('assumeView');

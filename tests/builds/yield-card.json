@@ -4,7 +4,8 @@
  "code": [
   "app.js",
   "assume.js",
-  "engine.js"
+  "engine.js",
+  "seeds.js"
  ],
  "added": [
   "yieldcard.js"

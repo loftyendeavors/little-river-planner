@@ -232,7 +232,7 @@
     }
 
     // first picking: the crop's DTM for the place, shown and not changed here
-    body.append(row('first', 'First picking', h('span', 'days to maturity, changed on ', h('button.link', { type: 'button', id: 'ycToDays', onclick: () => root.LRFAssume.setMode('days') }, 'Days to harvest')), cols.list.map(env => {
+    body.append(row('first', 'First picking', h('span', 'its DTM, changed on ', h('button.link', { type: 'button', id: 'ycToDays', title: 'DTM: days to maturity. They are set on the other half of this list, for each place.', onclick: () => root.LRFAssume.setMode('days') }, 'Days to harvest')), cols.list.map(env => {
       if (hc.micro) return h('td', { dataset: { place: env } }, why('set on the tray plan, under Nursery'));
       const t = eng.timingFor(c.id, null, env);
       if (!t || t.value == null) return h('td', { dataset: { place: env } }, why('no days are set for this place'));
@@ -260,14 +260,15 @@
     const comes = [], units = [...x.units.values()].filter(k => k.total > 0);
     if (units.length) {
       for (const k of units) comes.push(h('p', { dataset: { unit: k.unit, total: String(k.total), worth: String(k.worth) } }, h('b', F.amount(k.total, k.unit, k.group)), ` to sell in ${year}, worth `, h('b', money(k.worth)), '.'));
-      const split = [...x.places.entries()].filter(([, at]) => at.total > 0);
+      const split = Object.keys(PLACE).filter(env => x.places.has(env) && x.places.get(env).total > 0).map(env => [env, x.places.get(env)]);
       if (split.length > 1 && units.length === 1) comes.push(h('p.yc-split', split.map(([env, at]) => `${PLACE[env]} ${F.amount(at.total, units[0].unit, units[0].group)}`).join(' · ')));
-      comes.push(h('p.yc-fine', hc.house.part ? `That is what is packed for sale: the house’s ${fig(100 - hc.house.sold)}% is already taken off.` : hc.micro ? 'A tray sown is a tray to sell.' : 'That is the worth of what is packed for sale: all of it counts as sold.',
+      comes.push(h('p.yc-fine', hc.house.part && hc.house.sold >= 100 ? 'That is the worth of what is packed for sale: all of it counts as sold until the house’s part is typed above.' : hc.house.part ? `That is what is packed for sale: the house’s ${fig(100 - hc.house.sold)}% is already taken off.` : hc.micro ? 'A tray sown is a tray to sell.' : 'That is the worth of what is packed for sale: all of it counts as sold.',
         x.personal ? ` ${plural(x.personal, 'planting')} marked for personal use ${x.personal === 1 ? 'is' : 'are'} picked and not counted as revenue.` : ''));
     } else comes.push(h('p', !x.n ? `Nothing: ${c.name} is not planted in ${year}.` : `Nothing is forecast for ${year} yet.`));
     const need = [];
     if (w.price) need.push('A price. Until there is one, this crop adds nothing to what the season is worth.');
     if (w.yield) need.push(eng.ENVS.every(env => hc.cells[env].value == null) ? 'A yield. Until there is one, nothing is forecast for this crop.' : 'A yield of your own. The plan counts a starting value nobody has checked.');
+    if (hc.house.part && hc.house.sold >= 100) need.push('What the house keeps. The crop is marked as partly kept, and no part is set.');
     if (x.own) need.push(`${plural(x.own, 'planting')} ${x.own === 1 ? 'carries a yield of its own and does' : 'carry a yield of their own and do'} not follow these boxes. “See what differs…” lets them.`);
     const ownYield = varieties.filter(v => eng.ENVS.some(env => eng.harvestFor(c.id, v.id).cells[env].mine != null)).length;
     if (ownYield) need.push(`${plural(ownYield, 'variety', 'varieties')} ${ownYield === 1 ? 'has' : 'have'} a yield of ${ownYield === 1 ? 'its' : 'their'} own, on “All on one page”.`);
@@ -361,7 +362,7 @@
         h('div.yc-meter', { role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': ui.order.length, 'aria-valuenow': lookedN, 'aria-label': `Crops looked at for ${year}` }, h('i', { style: { width: `${ui.order.length ? Math.round(lookedN / ui.order.length * 1000) / 10 : 0}%` } }))),
       h('p.yc-left' + (left ? '.warn' : ''), { id: 'ycLeft', dataset: { left: String(left) } }, left ? `${plural(left, 'crop')} left to set: no price or no yield` : 'Every crop has a price and a yield.'),
       h('ol.yc-list', { id: 'ycList' },
-        firstNow.length ? h('li.yc-sec', 'No price or no yield') : null, firstNow.map(item),
+        firstNow.length ? h('li.yc-sec', firstNow.some(id => waits(eng, eng.crop(id), eng.harvestFor(id)).any) ? 'No price or no yield' : 'Had no price or no yield') : null, firstNow.map(item),
         restNow.length ? h('li.yc-sec', 'The rest, biggest first') : null, restNow.map(item),
         !shown.length ? h('li.yc-sec', q ? 'No crop matches.' : 'No crops yet.') : null));
     const c = eng.crop(ui.cur), main = c ? card(eng, plan, c, q) : h('section.yc-card', { id: 'ycCard' }, h('p.yc-plain', 'No crops yet.'));

@@ -455,7 +455,7 @@
     function sellRule(cropId) {
       const x = (S.assumptions && S.assumptions.sell && S.assumptions.sell[cropId]) || {}, share = amount0(x.share), turn = amount0(x.turnover);
       return { unit: word(x.unit), price: amount0(x.price), pattern: PATTERNS.includes(x.pattern) ? x.pattern : null, days: wholeDays(x.days), keep: amount0(x.keep),
-        share: share != null && share <= 100 ? share : null, turnover: turn == null ? null : Math.round(turn), house: x.house === true, looked: Number.isInteger(x.looked) ? x.looked : null };
+        share: share != null && share <= 100 ? share : null, turnover: turn == null ? null : Math.round(turn), house: x.house === true ? true : null, looked: Number.isInteger(x.looked) ? x.looked : null };
     }
     const sellsAll = settings.houseKeeps === false;
     function sellVRule(varietyId) {
@@ -1208,7 +1208,7 @@
       // what the house keeps: `sold` is the share in force; `part` says the crop is shown as partly kept (marked so, or under 100 today)
       const share0 = micro ? 100 : rule.share != null ? rule.share : Math.round(clamp(finite(c.mk, 0.9), 0, 1) * 100), sold = micro || sellsAll ? 100 : share0;
       return { micro, basis: micro ? 'tray' : c.yBasis === 'ft' ? 'ft' : 'plant', season, nominal, weekly, cells,
-        house: { farm: !sellsAll, marked: !micro && rule.house, sold, part: !micro && !sellsAll && (rule.house || share0 < 100) }, looked: rule.looked,
+        house: { farm: !sellsAll, marked: !micro && !!rule.house, sold, part: !micro && !sellsAll && (!!rule.house || share0 < 100) }, looked: rule.looked,
         unit: pick(micro ? null : v ? ruleV.unit : rule.unit, v ? rule.unit || unit0 : unit0), price: pick(v ? ruleV.price : rule.price, v ? (rule.price != null ? rule.price : price0) : price0),
         pattern: pick(micro ? null : rule.pattern, micro ? 'once' : 'spread'), days: pick(micro ? null : rule.days, micro || season ? null : Math.max(1, Math.round(nonNegative(c.hw)))),
         share: pick(micro ? null : rule.share, micro ? 100 : Math.round(clamp(finite(c.mk, 0.9), 0, 1) * 100)), keep: pick(micro ? null : rule.keep, 0), turnover: pick(micro ? null : rule.turnover, micro ? 0 : turnoverDays()),
