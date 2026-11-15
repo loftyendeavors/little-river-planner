@@ -8,6 +8,7 @@
  *   the card        a small grid. A column for each growing place the crop is planted in; a row for each figure, named in
  *                   plain words. A row is shown only where it is needed, and a cell that is not says why.
  *   under the grid  what it comes to (the forecast's own figures), and what it waits on.
+ *   under the list  the sold shares the grower has typed, crop by crop: they are his, and are shown, not questioned.
  *
  * It holds no figures of its own. Every box reads what the list reads (engine.harvestFor) and writes through the call the
  * list's box writes through (App.setSell, App.setYield), with the same words for the step, so a figure typed here and the
@@ -357,6 +358,8 @@
         h('i.yc-tick', { 'aria-hidden': 'true' }, done ? '✓' : ''), root.LRFThumbs.el({ cropId: id, color: eng.cropColor(c), label: c.name, size: 20, cls: 'key' }), h('b', c.name), h('small' + (w.any ? '.warn' : ''), say)));
     };
     const firstNow = shown.filter(id => ui.first.has(id)), restNow = shown.filter(id => !ui.first.has(id));
+    // the sold shares typed by the grower, listed where they can be seen together: they stand as typed
+    const typed = plan.settings.houseKeeps === false ? [] : ui.order.filter(id => { const hc = eng.harvestFor(id); return !hc.micro && hc.share.mine != null; });
     const side = h('aside.yc-side', { 'aria-label': 'Every crop, as a checklist' },
       h('div.yc-prog', { id: 'ycProg', dataset: { looked: String(lookedN), of: String(ui.order.length) } }, h('p', h('b', `${num(lookedN)} of ${num(ui.order.length)}`), ` looked at for ${year}`),
         h('div.yc-meter', { role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': ui.order.length, 'aria-valuenow': lookedN, 'aria-label': `Crops looked at for ${year}` }, h('i', { style: { width: `${ui.order.length ? Math.round(lookedN / ui.order.length * 1000) / 10 : 0}%` } }))),
@@ -364,7 +367,8 @@
       h('ol.yc-list', { id: 'ycList' },
         firstNow.length ? h('li.yc-sec', firstNow.some(id => waits(eng, eng.crop(id), eng.harvestFor(id)).any) ? 'No price or no yield' : 'Had no price or no yield') : null, firstNow.map(item),
         restNow.length ? h('li.yc-sec', 'The rest, biggest first') : null, restNow.map(item),
-        !shown.length ? h('li.yc-sec', q ? 'No crop matches.' : 'No crops yet.') : null));
+        !shown.length ? h('li.yc-sec', q ? 'No crop matches.' : 'No crops yet.') : null),
+      typed.length ? h('p.yc-typed', { id: 'ycTyped' }, 'Sold shares you typed: ', typed.map((id, i) => [i ? ' · ' : '', h('button.link', { type: 'button', dataset: { crop: id }, title: 'Open this crop’s card', onclick: () => open(id) }, `${eng.crop(id).name} ${fig(eng.harvestFor(id).share.mine)}%`)])) : null);
     const c = eng.crop(ui.cur), main = c ? card(eng, plan, c, q) : h('section.yc-card', { id: 'ycCard' }, h('p.yc-plain', 'No crops yet.'));
     main.addEventListener('keydown', e => { onKey(e, App.state.engine, q); });
     const keepScroll = host.querySelector('.yc-list') ? host.querySelector('.yc-list').scrollTop : 0;

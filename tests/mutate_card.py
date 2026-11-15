@@ -77,6 +77,7 @@ PAGE = [
  ("with the switch off the engine still takes the house's share", EN, "const mk = liveTray || sellsAll ? 1 :", "const mk = liveTray ? 1 :"),
  ("with the switch off the list still has “Sold %”", AS, "hidden: App.state.plan.settings.houseKeeps === false }, 'Sold %')", "hidden: false }, 'Sold %')"),
  ("with the switch off a crop's record still offers the choice", SE, "    if (!hc.house.farm) return h('div.sd-house', { id: 'sdHouse', dataset: { farm: 'off' } }", "    if (false) return h('div.sd-house', { id: 'sdHouse', dataset: { farm: 'off' } }"),
+ ("the shares the grower typed are not listed", YC, "return !hc.micro && hc.share.mine != null; });", "return false; });"),
  # the list
  ("the list shows a yield for every place, planted or not", AS, "const away = !!planted && planted.size > 0 && !planted.has(env) && cell.mine == null;", "const away = false;"),
  ("the label is another build's", MN, "Preview " + LABEL, "Preview " + OTHER),

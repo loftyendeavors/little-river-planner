@@ -1958,7 +1958,7 @@ body.phone .wk-scope button { padding: 8px 6px; font-size: 13.5px; }
 .view-assume[data-way="card"] .as-key { display: none; }
 .yc { display: grid; grid-template-columns: 292px minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 4px; }
 .yc[hidden] { display: none; }
-.yc-side { border: 1px solid var(--line); border-radius: 10px; background: var(--raised); display: grid; grid-template-rows: auto auto minmax(0, 1fr); max-height: max(360px, calc(100vh - 268px)); overflow: hidden; }
+.yc-side { border: 1px solid var(--line); border-radius: 10px; background: var(--raised); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; max-height: max(360px, calc(100vh - 268px)); overflow: hidden; }
 .yc-prog { padding: 11px 13px 4px; display: grid; gap: 6px; }
 .yc-prog p { font-size: 13px; color: var(--ink-2); }
 .yc-prog b { font-weight: 700; color: var(--ink); }
@@ -1987,8 +1987,9 @@ body.phone .wk-scope button { padding: 8px 6px; font-size: 13.5px; }
 .yc-house { border: 1px solid var(--line-soft); border-radius: 8px; background: var(--surface); padding: 9px 12px; display: grid; gap: 3px; }
 .yc-houseline { font-size: 14px; font-weight: 600; }
 .yc-why { font-size: 12.5px; color: var(--muted); }
-.yc-card .link { border: 0; background: none; padding: 0; color: var(--ink-2); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
-.yc-card .link:hover { color: var(--ink); }
+.yc-typed { padding: 8px 13px 10px; border-top: 1px solid var(--line-soft); font-size: 12px; line-height: 1.5; color: var(--muted); max-height: 96px; overflow: auto; }
+.yc .link { border: 0; background: none; padding: 0; color: var(--ink-2); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.yc .link:hover { color: var(--ink); }
 table.yc-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .yc-grid th, .yc-grid td { text-align: left; vertical-align: top; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line-soft); }
 .yc-grid thead th { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); padding-top: 2px; border-bottom-color: var(--line); }

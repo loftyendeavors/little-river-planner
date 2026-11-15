@@ -438,6 +438,7 @@ with sync_playwright() as pw:
     typed('#ycCard [data-yk="house"]', "15"); wait(400)
     hs = last_step(); kh2 = card()
     check("what the house keeps, typed there, is the list's sold share: 15 kept is 85 sold, in the list's own words", js("return S.engine.sellRule(%s).share;" % json.dumps(cid)) == 85 and hs["label"] == f"{names[cid]}: 85% sold" and kh2["boxes"]["house"]["value"] == "15" and kh2["boxes"]["house"]["mine"] is True, hs)
+    check("a sold share typed by the grower is listed under the checklist, as typed", f"{names[cid]} 85%" in js("return txt('ycTyped');") and "Sold shares you typed" in js("return txt('ycTyped');"), js("return txt('ycTyped');"))
     click('[data-ah-way="list"]', 500)
     check("and the list shows it as 85 in “Sold %”", js("return (document.querySelector('#ahBody [data-hk=\"share|%s\"]') || {}).value;" % cid) == "85")
     click('[data-ah-way="card"]', 500)
