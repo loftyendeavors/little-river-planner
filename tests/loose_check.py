@@ -90,7 +90,14 @@ with sync_playwright() as pw:
     check("the button is the page's own surface, never a coloured panel; its count alone is orange; its tooltip says what is counted", st["bg"] == st["raised"] and st["bg"] != st["soft"] and st["nBg"] == st["orange"] and "booked twice" in st["title"] and "can wait" in st["title"], st)
 
     head = js("const y = $('seasonYear').getBoundingClientRect(), n = document.querySelector('nav.views').getBoundingClientRect(), t = document.querySelector('header.top'); return { year: Math.round(y.right), tabs: Math.round(n.left), side: t.scrollWidth > t.clientWidth + 1, high: Math.round(t.getBoundingClientRect().height) }")
-    check("with the button in it the header is still one line, and the year beside the name keeps clear of the tabs", head["year"] + 4 <= head["tabs"] and not head["side"] and head["high"] <= 60, head)
+    # how wide the button is just over and just under 1340: read at both, whatever typeface the page was given, so that the rule is
+    # held where a system typeface happens to leave room at 1280 without it
+    widths = []
+    for w in (1341, 1340):
+        page.set_viewport_size({"width": w, "height": 900}); wait(250); widths.append(js("return Math.round($('settleBadge').getBoundingClientRect().width)"))
+    page.set_viewport_size({"width": WIDTH, "height": 900}); wait(400)
+    head["wide"], head["narrow"] = widths
+    check("with the button in it the header is still one line, and the year beside the name keeps clear of the tabs: at 1340 wide and under, the button gives back 16 px or more", head["year"] + 4 <= head["tabs"] and not head["side"] and head["high"] <= 60 and head["wide"] - head["narrow"] >= 16, head)
 
     # ══ the list ══
     lst = open_list() or {}
