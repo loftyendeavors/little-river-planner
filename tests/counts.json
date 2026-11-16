@@ -11,7 +11,7 @@
 
   "map geometry": 81,
 
-  "merge": 64,
+  "merge": 87,
 
   "page reader": 29,
 
@@ -49,9 +49,9 @@
 
   "succession": 31,
 
-  "sync client": 109,
+  "sync client": 116,
 
-  "sync service": 134,
+  "sync service": 137,
 
   "the made-up farm": 7,
 
@@ -68,7 +68,7 @@
  },
  "build": {
 
-  "sync client, built site": 109,
+  "sync client, built site": 116,
 
   "the built site": 1
 

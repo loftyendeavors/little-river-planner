@@ -188,17 +188,24 @@ async function putPlan(request, env, origin, now) {
   // an older planner does not write over a newer one's plan, whatever it names and even "on purpose": it is told to reload
   if (there && (metaOf(there).m || 0) > (meta.m || 0)) return json(409, { error: 'This device is running an older planner. Reload the page.', plan: stamp(there) }, origin);
   if ((base === 'none') !== !there || (there && there.etag !== base)) return json(412, { error: 'changed', plan: stamp(there) }, origin);
+  let before = null;   // the name under which the plan about to be replaced by a joined plan is kept
   if (there) {
     const was = metaOf(there), wasDay = dayOf(was.savedAt), stampNow = new Date(Date.now()).toISOString().replace(/[:.]/g, '-') + '-' + Math.random().toString(36).slice(2, 6);   // from the same clock as `now`: the kept plans are thinned by their names
-    // a plan replaced by one that joins two devices' changes is kept whole first
-    if (meta.merged === true && !replace) { await copy(bucket, 'plan', `snap/merge-${stampNow}`, { ...was, name: 'The plan in the cloud before two devices’ changes were joined', auto: true, at: new Date(now * 1000).toISOString() }); await pruneMerges(bucket, now); }
+    // A plan replaced by one that joins two devices' changes is kept whole first. If this write then does not land (another
+    // device wrote in the same moment), the copy is taken away again, below: it is the plan before nothing, and may by then be
+    // a copy of the other device's plan. Only a write that lands thins the kept plans.
+    if (meta.merged && !replace) {   // `merged` is true or absent: readMeta keeps nothing else
+      before = `snap/merge-${stampNow}`;
+      if (!(await copy(bucket, 'plan', before, { ...was, name: 'The plan in the cloud before two devices’ changes were joined', auto: true, at: new Date(now * 1000).toISOString() }))) before = null;
+    }
     // a plan replaced on purpose over a different one is kept whole, whatever the day
     if (replace) { await copy(bucket, 'plan', `snap/auto-${stampNow}`, { ...was, name: 'The plan in the cloud before it was replaced', auto: true, at: new Date(now * 1000).toISOString() }); await prune(bucket, (await listAll(bucket, 'snap/auto-')), LIMITS.autos); }
     // the first save of a day: the plan as it was left on its last day goes into the daily copies
     if (wasDay && wasDay !== dayOf(meta.savedAt) && !(await bucket.head(`day/${wasDay}`))) { await copy(bucket, 'plan', `day/${wasDay}`, was); await prune(bucket, await listAll(bucket, 'day/'), LIMITS.days); }
   }
   const put = await putIf(bucket, 'plan', bytes, there ? there.etag : null, { customMetadata: { m: JSON.stringify({ ...meta, at: new Date(now * 1000).toISOString() }) }, httpMetadata: { contentType: 'application/octet-stream' } });
-  if (!put) return json(412, { error: 'changed', plan: stamp(await bucket.head('plan')) }, origin);
+  if (!put) { if (before) await bucket.delete(before); return json(412, { error: 'changed', plan: stamp(await bucket.head('plan')) }, origin); }
+  if (before) await pruneMerges(bucket, now);
   return json(200, { ok: true, plan: stamp(put) }, origin);
 }
 const send = (obj, origin, extra) => new Response(obj.body, { status: 200, headers: { 'content-type': (obj.httpMetadata && obj.httpMetadata.contentType) || 'application/octet-stream', 'x-lrf-etag': obj.etag, 'x-lrf-meta': encodeURIComponent(JSON.stringify(metaOf(obj))), ...cors(origin), ...(extra || {}) } });

@@ -118,27 +118,31 @@
      * A failure is not the sync's: the plan was sent or opened all the same. It is noted, and there is then no plan to compare with.
      */
     async function keepPlan(etag, text, key) {
-      if (!kept || st.keptOff || quiet() || !etag) return false;
+      if (!kept || st.keptOff || !etag) return false;
       try { await answered(kept.put({ etag, text, key, at: new Date().toISOString() })); st.kept = etag; st.keptNote = ''; return true; }
       catch (error) {
         st.kept = null; st.keptNote = (error && error.message) || 'The plan to compare with could not be kept.';
+        st.keptTried = etag;   // refused for this very plan: the look that follows does not fetch it to be refused again
         if (!st.keptOff) { try { await answered(kept.clear()); } catch (_) { /* what is left there is under an older stamp, and counts for nothing */ } }
         return false;
       }
     }
     /** In step, and no plan kept under that stamp (a browser that synced before plans were kept, or whose database was emptied): fetch the cloud's once, and keep it. */
     async function ensureKept() {
-      if (!kept || st.keptOff || quiet() || !cfg.base) return false;
+      if (!kept || st.keptOff || !cfg.base) return false;
       if (st.kept === undefined) { try { const n = await answered(kept.note()); st.kept = n ? n.etag : null; } catch (error) { st.kept = null; st.keptNote = (error && error.message) || ''; if (st.keptOff) return false; } }
       if (st.kept === cfg.base || st.keptTried === cfg.base) return st.kept === cfg.base;   // one try a stamp: a database that refuses is not asked again at every look
-      st.keptTried = cfg.base;
-      const res = await call('GET', '/plan', { raw: true }), meta = readMeta(res), etag = res.headers.get('x-lrf-etag');
+      const res = await call('GET', '/plan', { raw: true }), meta = readMeta(res), etag = res.headers.get('x-lrf-etag');   // a fetch that fails is tried again at the next look
       if (etag !== cfg.base) return false;   // the cloud moved between the look and the fetch: the next look says so
       return keepPlan(etag, await unpack(new Uint8Array(await res.arrayBuffer()), meta.enc), cfg.key);
     }
-    /** The plan to compare with: { etag, key, at, bytes, text }, or null when none is kept under the stamp this browser is in step with. */
+    /**
+     * The plan to compare with: { etag, key, at, bytes, text }, or null when none is kept under the stamp this browser is in
+     * step with. Null too when the plan open here does not come from that plan: it is behind what was noted, or a whole plan
+     * (a backup, a snapshot) has been loaded over it since. Joined with such a plan, every difference would read as a change made here.
+     */
     async function keptPlan() {
-      if (!kept || st.keptOff || !cfg.base) return null;
+      if (!kept || !cfg.base || behind || host.loads() !== st.loads) return null;
       try { const k = await answered(kept.get()); return k && k.etag === cfg.base ? k : null; } catch (_) { return null; }
     }
     const forget = () => { st.kept = undefined; st.keptNote = ''; st.keptTried = null; if (kept && !st.keptOff && !quiet()) Promise.resolve().then(() => kept.clear()).catch(() => {}); };
@@ -312,7 +316,7 @@
       catch (error) { if (error.kind === 'locked') st.until = error.detail && error.detail.until; throw error; }
       if (!got || typeof got.token !== 'string') throw problem('server', 'That address did not answer like the plan sync service.');
       const sameHome = cfg.url === at;
-      if (!sameHome) { cfg = {}; behind = false; noted = false; forget(); }
+      if (!sameHome) { cfg = {}; behind = false; noted = false; }   // a plan kept for the other service stays under its own stamp, which is no longer the note's, until the next one replaces it
       keep({ url: at, token: got.token, label: String(label == null ? cfg.label || '' : label).trim().slice(0, 40) });
       st.until = null; st.status = 'checking'; st.loads = host.loads();
       return run('connect');

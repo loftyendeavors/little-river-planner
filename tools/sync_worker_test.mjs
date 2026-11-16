@@ -239,6 +239,7 @@ for (const wildcard of [true, false, 'throws']) {
   r = await ask(v, 'plan', { token: t }); check('an older planner may still fetch the plan', r.status === 200 && (await r.text()) === 'FROM A NEWER PLANNER');
   r = await ask(v, 'state', { token: t }); check('and its sign-in still stands', r.status === 200);
   r = await putPlan(v, t, 'A NUMBER THAT IS NOT ONE', p.plan.etag, { m: 'two' }); check('a number that is not a whole number counts as none', r.status === 409);
+  r = await putPlan(v, t, 'A NUMBER OUT OF ALL REASON', p.plan.etag, { m: 1000 }); check('and so does one of a thousand or more: a planner\'s number is small', r.status === 409 && (await held()) === 'FROM A NEWER PLANNER');
   r = await putPlan(v, t, 'FROM THE NEWER PLANNER AGAIN', p.plan.etag, { m: 1 }); p = await r.json();
   check('the newer planner goes on writing', r.status === 200 && (await held()) === 'FROM THE NEWER PLANNER AGAIN');
   r = await putPlan(v, t, 'FROM A NEWER ONE STILL', p.plan.etag, { m: 2 }); p = await r.json();
@@ -247,18 +248,30 @@ for (const wildcard of [true, false, 'throws']) {
 
   // the plan before a join
   check('no plan is kept "before a join" by an ordinary send', keys('snap/merge-').length === 0);
+  r = await putPlan(v, t, 'NOT A JOINED PLAN, WHATEVER IT SAYS', p.plan.etag, { m: 2, merged: 'yes' }); p = await r.json();
+  check('nor by a send whose note says "merged" in any way but the one', r.status === 200 && keys('snap/merge-').length === 0 && !('merged' in p.plan.meta), p.plan.meta);
   r = await putPlan(v, t, 'JOINED 0', p.plan.etag, { m: 2, merged: true }); p = await r.json();
-  check('a joined plan replaces the plan it names, and the plan it replaced is kept whole first', r.status === 200 && keys('snap/merge-').length === 1 && bodyOf(keys('snap/merge-')[0]) === 'FROM A NEWER ONE STILL' && JSON.parse(v.store.get(keys('snap/merge-')[0]).customMetadata.m).auto === true, keys('snap/'));
+  check('a joined plan replaces the plan it names, and the plan it replaced is kept whole first', r.status === 200 && keys('snap/merge-').length === 1 && bodyOf(keys('snap/merge-')[0]) === 'NOT A JOINED PLAN, WHATEVER IT SAYS' && JSON.parse(v.store.get(keys('snap/merge-')[0]).customMetadata.m).auto === true, keys('snap/'));
   r = await putPlan(v, t, 'JOINED OVER A PLAN IT HAS NOT SEEN', 'stale-stamp', { m: 2, merged: true });
   check('a joined plan still lands only on the plan its sender saw, and keeps nothing when it does not land', r.status === 412 && keys('snap/merge-').length === 1 && (await held()) === 'JOINED 0');
+  { // two joined plans sent at the same moment over the same plan, both having looked before either writes: one lands, and one plan-before is kept, which is the plan both named
+    later(60);   // the kept plans are named by the clock: a later minute, so that the one made here is the last of them by name
+    const head = v.bucket.head, was = await held(), n = keys('snap/merge-').length;
+    v.bucket.head = async key => { const found = await head(key); await new Promise(resolve => setTimeout(resolve, 25)); return found; };
+    const [a, b] = await Promise.all([putPlan(v, t, 'JOINED AT ONCE, A', p.plan.etag, { m: 2, merged: true }), putPlan(v, t, 'JOINED AT ONCE, B', p.plan.etag, { m: 2, merged: true })]);
+    v.bucket.head = head;
+    const after = keys('snap/merge-'), landed = a.status === 200 ? a : b;
+    check('of two joined plans sent at once exactly one lands, and exactly one plan-before is kept: the plan both named, not the other\'s', [a.status, b.status].sort().join() === '200,412' && after.length === n + 1 && bodyOf(after[after.length - 1]) === was && (await held()) === (a.status === 200 ? 'JOINED AT ONCE, A' : 'JOINED AT ONCE, B'), [a.status, b.status, after.length - n, after.map(bodyOf)]);
+    p = await landed.json();
+  }
   r = await ask(v, 'snaps', { token: t }); const listed = (await r.json()).snaps;
-  check('the kept plan is listed with the snapshots, and can be fetched', listed.some(x => x.id.startsWith('merge-') && x.meta.auto === true && /before two devices/.test(x.meta.name)) && (await (await ask(v, 'snap/' + listed.find(x => x.id.startsWith('merge-')).id, { token: t })).text()) === 'FROM A NEWER ONE STILL', listed.map(x => x.id));
+  check('the kept plan is listed with the snapshots, and can be fetched', listed.some(x => x.id.startsWith('merge-') && x.meta.auto === true && /before two devices/.test(x.meta.name)) && (await (await ask(v, 'snap/' + listed.filter(x => x.id.startsWith('merge-')).map(x => x.id).sort()[0], { token: t })).text()) === 'NOT A JOINED PLAN, WHATEVER IT SAYS', listed.map(x => x.id));
   r = await ask(v, 'snap/merge-made-up-by-a-page', { method: 'PUT', token: t, body: 'X', headers: { 'x-lrf-meta': metaHeader({ name: 'Mine' }) } });
   check('a page cannot write a snapshot under that kind of name', r.status === 404 && !v.store.has('snap/merge-made-up-by-a-page'), r.status);
   const first = keys('snap/merge-')[0];
   for (let i = 1; i <= 40; i++) { later(45); r = await putPlan(v, t, 'JOINED ' + i, p.plan.etag, { m: 2, merged: true }); p = await r.json(); }
   let kept = keys('snap/merge-');
-  check('after 40 more joins inside one hour: the last 10 plans-before are kept, and the plan before the first join is still there', r.status === 200 && kept.includes(first) && kept.length === 11 && bodyOf(kept[kept.length - 1]) === 'JOINED 39' && bodyOf(kept[1]) === 'JOINED 30', [kept.length, kept.includes(first)]);
+  check('after 40 more joins inside one hour: the last 10 plans-before are kept, and the plan before the first join is still there', r.status === 200 && kept.includes(first) && kept.length === 11 && bodyOf(kept[kept.length - 1]) === 'JOINED 39' && bodyOf(kept[1]) === 'JOINED 30', [kept.length, kept.includes(first), kept.map(bodyOf).slice(0, 3)]);
   for (let h = 0; h < 5; h++) { later(3600); for (let i = 0; i < 12; i++) { later(60); r = await putPlan(v, t, `HOUR ${h} JOIN ${i}`, p.plan.etag, { m: 2, merged: true }); p = await r.json(); } }
   kept = keys('snap/merge-');
   const hours = new Set(kept.map(k => k.slice(0, 'snap/merge-0000-00-00T00'.length)));
@@ -268,5 +281,5 @@ for (const wildcard of [true, false, 'throws']) {
   check('a day later only the last 10 are left of them', r.status === 200 && kept.length === 10 && !kept.includes(first) && bodyOf(kept[9]) === 'HOUR 4 JOIN 11', kept.length);
   check('and the daily copy was made as for any other send', keys('day/').length >= 1);
   r = await putPlan(v, t, 'MINE, ON PURPOSE, AND JOINED', p.plan.etag, { m: 2, merged: true }, { 'x-lrf-replace': '1' });
-  check('a plan replaced on purpose is kept once, as that', r.status === 200 && keys('snap/auto-').length === 1 && keys('snap/merge-').length === 10);
+  check('a plan replaced on purpose is kept once, as that, and not as the plan before a join', r.status === 200 && keys('snap/auto-').length === 1 && bodyOf(keys('snap/auto-')[0]) === 'THE NEXT DAY' && keys('snap/merge-').length === 10 && !keys('snap/merge-').some(k => bodyOf(k) === 'THE NEXT DAY'), keys('snap/merge-').map(bodyOf).slice(-2));
 }

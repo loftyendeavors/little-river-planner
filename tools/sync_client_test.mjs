@@ -321,6 +321,22 @@ const sends = world_ => world_.calls.filter(c => c === 'PUT /plan').length;
   check('a browser in step with no plan kept fetches the cloud\'s once, and keeps it', i.status === 'in-step' && i.kept === true && fetched() === n + 1 && !!d2.keptRec && d2.keptRec.etag === baseOf(d2) && d2.keptRec.text === (await cloudText()), [i.status, i.kept, fetched() - n]);
   await d2.sync.run('poll'); await d2.sync.run('poll');
   check('and does not fetch it again', fetched() === n + 1);
+  { const again = keeping(browser(wk, 'desk')); again.saved = d2.saved; again.plan = d2.plan; again.keptRec = d2.keptRec; again.make();
+    const g = fetched(), i2 = await again.sync.start(); await again.sync.run('poll');
+    check('a page opened again with its plan kept under the right stamp fetches nothing', i2.status === 'in-step' && i2.kept === true && fetched() === g && again.keptPuts === 0, [i2.kept, fetched() - g, again.keptPuts]); }
+  { // the one fetch fails (no connection for a moment): it is tried again at the next look, not left until the page is opened again
+    const lost = keeping(browser(wk, 'desk')); lost.saved = d2.saved; lost.plan = d2.plan; lost.make();
+    const real = wk.fetch; let failed = 0;
+    wk.fetch = async (url, init = {}) => { if (!failed && String(url).endsWith('/plan') && (init.method || 'GET') === 'GET') { failed++; throw new TypeError('Failed to fetch'); } return real(url, init); };
+    const i3 = await lost.sync.start(), i4 = await lost.sync.run('poll'); wk.fetch = real;
+    check('a fetch of the plan to keep that fails is tried again at the next look', failed === 1 && i3.kept === false && i3.status === 'in-step' && i4.kept === true && !!lost.keptRec && lost.keptRec.etag === baseOf(lost), [failed, i3.status, i3.kept, i4.kept]); }
+  { // the cloud moves between the look and the fetch: what comes back is not the plan this browser is in step with, and is not kept as if it were
+    const late = keeping(browser(wk, 'desk')); late.saved = d2.saved; late.plan = d2.plan; late.make();
+    const real = wk.fetch; let moved = false;
+    wk.fetch = async (url, init = {}) => { if (!moved && String(url).endsWith('/plan') && (init.method || 'GET') === 'GET') { moved = true; await ph.sync.run('poll'); await ph.sync.openCloud(); await ph.change('k-moved-meanwhile'); } return real(url, init); };
+    const i5 = await late.sync.start(); wk.fetch = real;
+    check('a plan fetched after the cloud has moved is not kept under the older stamp', moved && i5.kept === false && late.keptRec === null && (await late.sync.keptPlan()) === null, [moved, i5.kept, late.keptRec && late.keptRec.etag]);
+    await d2.sync.run('poll'); await d2.sync.openCloud(); }
   // the page ended between keeping the plan and noting the stamp: what is kept is under another stamp
   d2.keptRec = { ...d2.keptRec, etag: 'a-stamp-nobody-noted' };
   check('a plan kept under another stamp than the one this browser is in step with is not the plan to compare with', (await d2.sync.keptPlan()) === null);
@@ -328,10 +344,13 @@ const sends = world_ => world_.calls.filter(c => c === 'PUT /plan').length;
   i = await d3.sync.start();
   check('at the next start it is replaced by the cloud\'s plan', i.kept === true && d3.keptRec.etag === baseOf(d3) && d3.keptRec.text === (await cloudText()) && !!(await d3.sync.keptPlan()));
   // the browser's database refuses the write
-  d3.keptFull = true; i = await d3.change('k-no-room');
+  n = fetched(); d3.keptFull = true; i = await d3.change('k-no-room');
   check('a kept plan that cannot be written stops nothing: the change is sent, and the page knows it has no plan to compare with, and why', i.status === 'in-step' && (await cloudText()).includes('k-no-room') && i.kept === false && /full/.test(i.keptNote) && d3.keptRec === null && (await d3.sync.keptPlan()) === null, [i.status, i.kept, i.keptNote]);
-  n = fetched(); await d3.sync.run('poll'); await d3.sync.run('poll'); await d3.sync.run('poll');
-  check('the cloud is asked for the plan once more at most, not at every look', fetched() - n <= 1 && d3.sync.info().status === 'in-step', fetched() - n);
+  await d3.sync.run('poll'); await d3.sync.run('poll'); await d3.sync.run('poll');
+  check('and the cloud is not asked for the plan it could not keep: not at the next look, nor at any', fetched() === n && d3.sync.info().status === 'in-step', fetched() - n);
+  { const d4 = keeping(browser(wk, 'desk')); d4.saved = d3.saved; d4.plan = d3.plan; d4.keptFull = true; d4.make();
+    n = fetched(); await d4.sync.start(); await d4.sync.run('poll'); await d4.sync.run('poll');
+    check('a page opened on a database that refuses fetches the plan once, not at every look', fetched() === n + 1 && d4.sync.info().kept === false, fetched() - n); }
   d3.keptFull = false; i = await d3.change('k-room-again');
   check('and the next send keeps it again', i.kept === true && d3.keptRec.text === (await cloudText()) && i.keptNote === '');
   // the browser's database never answers (it has happened as a page starts): the send is not left waiting for it
@@ -345,11 +364,20 @@ const sends = world_ => world_.calls.filter(c => c === 'PUT /plan').length;
     e.env.kept.put = async r => { noted.push(JSON.parse(e.saved).base || null); return put(r); };
     await e.sync.connect(URL_, KEY, 'E');
     check('the stamp is noted before the plan is kept under it, and the plan is kept once', noted.length === 1 && noted[0] !== null && noted[0] === wn.store.get('plan').etag && e.keptRec.etag === noted[0], noted); }
-  // a window that only shows the plan keeps nothing; leaving forgets what was kept
-  const puts = d3.keptPuts, was = d3.keptRec; d3.held = true; d3.host.readOnly = () => true;
-  await d3.sync.run('poll'); d3.sync.touch(); await d3.tick();
-  check('a window that only shows the plan writes no kept plan', d3.keptPuts === puts && d3.keptRec === was);
-  d3.held = false; delete d3.host.readOnly; d3.sync.disconnect(); await new Promise(resolve => setTimeout(resolve, 5));
+  // the plan here no longer comes from the kept plan: a whole plan was loaded over it, or it is behind what was noted
+  check('with the plan here made from it, the kept plan is the plan to compare with', !!(await d3.sync.keptPlan()));
+  d3.loads++; const afterLoad = await d3.sync.keptPlan(); d3.loads--;
+  check('after a whole plan is loaded over the open one, the kept plan is not handed out as the plan it came from', afterLoad === null && !!(await d3.sync.keptPlan()));
+  { const wb = world(), c = stored(keeping(browser(wb, 'c', planOf(3, 'c')))); await c.sync.connect(URL_, KEY, 'C'); await c.edit('sent-and-stored');
+    c.disk = { plan: { ...c.disk.plan, plantings: c.disk.plan.plantings.slice(0, 2) }, n: c.disk.n - 1 };
+    const c2 = c.start(); c2.env.kept = c.env.kept; c2.make(); const ib = await c2.sync.start();
+    check('nor for a stored plan that is behind what was noted', ib.status === 'conflict' && !!c.keptRec && (await c2.sync.keptPlan()) === null, [ib.status, !!c.keptRec]); }
+  // a window that only shows the plan leaves the kept plan alone, even when it is told to leave the cloud; leaving, in the window that holds the plan, forgets it
+  const was = d3.keptRec; d3.held = true; d3.host.readOnly = () => true;
+  await d3.sync.run('poll'); d3.sync.disconnect(); await new Promise(resolve => setTimeout(resolve, 5));
+  check('a window that only shows the plan leaves the kept plan as it is', d3.keptRec === was && was !== null);
+  d3.held = false; delete d3.host.readOnly; d3.saved = d2.saved; d3.make(); await d3.sync.start();
+  d3.sync.disconnect(); await new Promise(resolve => setTimeout(resolve, 5));
   check('disconnecting forgets the kept plan', d3.keptRec === null && (await d3.sync.keptPlan()) === null);
 }
 

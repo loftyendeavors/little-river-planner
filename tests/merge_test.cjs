@@ -249,10 +249,85 @@ tryCase('a job that draws no seed, recorded on both devices on different days: t
   const r = M.merge(s, record(s, A1.id, 'harden', d1, mine(), { follow: false }), record(s, A1.id, 'harden', d2, theirs(), { follow: false })), p = planting(r.plan, A1.id);
   return [ok(r) && p.done.harden === d2 && p.done.sow === DAY && p.workflow.history.filter(x => x.kind === 'harden').length === 1 && items(r, 'recorded-twice').length === 1 && lot(r.plan, LOT).quantity === HELD - A1.need, [p.done, r.report]];
 });
+// a planting that is potted up and hardened off, found on the farm: its sowing recorded, then one of the two jobs on each device
+const POT = FARM.plantings.find(p => { const k = W.steps(e0, p).map(st => st.kind); return k.includes('sow') && k.includes('potup') && k.includes('harden'); });
+const potted = () => {
+  const day = kind => W.steps(e0, POT).find(st => st.kind === kind).planned, s = record(FARM, POT.id, 'sow', E.d2s(day('sow')), device('before', 6));
+  const late = E.d2s(E.addDays(day('harden'), 5)), pot = E.d2s(day('potup'));
+  return { s, late, pot, hardened: record(s, POT.id, 'harden', late, mine()), pottedUp: record(s, POT.id, 'potup', pot, theirs()) };
+};
+tryCase('two different jobs, one on each device, and one of them pushed the planting out: both stand, and the pushed day is kept whichever device reached the cloud first', () => {
+  const { s, late, pot, hardened, pottedUp } = potted(), pushed = planting(hardened, POT.id).date;
+  const a = M.merge(s, hardened, pottedUp), b = M.merge(s, pottedUp, hardened);
+  const fine = r => { const p = planting(r.plan, POT.id), line = p.workflow.history.find(x => x.kind === 'harden'); return ok(r) && p.date === pushed && line.follow.to === pushed && p.done.harden === late && p.done.potup === pot && !!p.done.sow && !r.report.items.length; };
+  return [pushed !== planting(s, POT.id).date && planting(pottedUp, POT.id).date === planting(s, POT.id).date && fine(a) && fine(b), [pushed, a.why, b.why, a.plan && planting(a.plan, POT.id).date, b.plan && planting(b.plan, POT.id).date, a.report, b.report]];
+});
+tryCase('two different jobs, one on each device, and each device also changed the day: the cloud\'s day stands, and this device\'s is reported', () => {
+  const { s, late, pot, hardened, pottedUp } = potted(), r = M.merge(s, hardened, setP(pottedUp, POT.id, { date: '2027-09-09' })), p = planting(r.plan, POT.id), said = items(r, 'move-not-applied');
+  return [ok(r) && p.date === '2027-09-09' && p.done.harden === late && p.done.potup === pot && said.length === 1 && said[0].whose === 'mine' && said[0].what === 'day', [p.date, r.report]];
+});
 tryCase('two different jobs of one planting, one recorded on each device: both stand', () => {
   const s = record(FARM, A1.id, 'sow', DAY, device('before', 6)), d1 = E.d2s(E.addDays(E.s2d(DAY), 20));
   const r = M.merge(s, setP(s, A1.id, { note: 'm' }), record(s, A1.id, 'harden', d1, theirs(), { follow: false })), p = planting(r.plan, A1.id);
   return [ok(r) && p.done.harden === d1 && p.done.sow === DAY && p.note === 'm' && p.workflow.history.length === 2 && !r.report.items.length, [p.done, r.report]];
+});
+// what a second reader found (the pull request says who): each of these gave a wrong plan and reported nothing
+tryCase('a send whose answer was lost, and that sowing then taken back here: it is not sown, and its seed is back on the lot', () => {
+  const d = mine(), sent = record(FARM, A1.id, 'sow', DAY, d), m = takeBack(sent, A1.id, 'sow', d);
+  const a = M.merge(FARM, m, sent), b = M.merge(FARM, m, setP(sent, X1, { note: 't' }));
+  const fine = r => ok(r) && !planting(r.plan, A1.id).done && !planting(r.plan, A1.id).workflow.seedUse && planting(r.plan, A1.id).workflow.history.length === 2 && lot(r.plan, LOT).quantity === HELD && !r.report.items.length;
+  return [fine(a) && fine(b) && planting(b.plan, X1).note === 't', [a.why, b.why, a.plan && lot(a.plan, LOT).quantity, a.report]];
+});
+tryCase('recorded and taken back here, recorded there: the cloud\'s sowing stands, and taking it back afterwards gives its seed back', () => {
+  const d = mine(), m = takeBack(record(FARM, A1.id, 'sow', DAY, d), A1.id, 'sow', d), t = record(FARM, A1.id, 'sow', DAY, theirs());
+  const r = M.merge(FARM, m, t), p = planting(r.plan, A1.id), last = p.workflow.history[p.workflow.history.length - 1];
+  const after = takeBack(r.plan, A1.id, 'sow', device('later', 20));
+  return [ok(r) && p.done.sow === DAY && last.action === 'complete' && last.sowingReview.batchId === p.workflow.seedUse[0].batchId && lot(r.plan, LOT).quantity === HELD - A1.need && !r.report.items.length
+    && lot(after, LOT).quantity === HELD && !planting(after, A1.id).workflow.seedUse, [r.why, p.workflow.history.map(x => x.action), lot(after, LOT).quantity]];
+});
+tryCase('a sown planting taken out of the plan, on either device, keeps its seed used: the lot is as one device would have it', () => {
+  const S = record(FARM, A1.id, 'sow', DAY, device('before', 6)), rm = (plan, id) => ({ ...plan, plantings: plan.plantings.filter(x => x.id !== id) }), d = mine();
+  const rows = [[rm(S, A1.id), setP(S, X1, { note: 't' }), HELD - A1.need], [setP(S, X1, { note: 'm' }), rm(S, A1.id), HELD - A1.need],
+    [rm(S, A1.id), record(S, A2.id, 'sow', DAY, theirs()), HELD - A1.need - A2.need], [rm(record(S, A2.id, 'sow', DAY, d), A2.id), setP(S, X1, { note: 't' }), HELD - A1.need - A2.need]];
+  const got = rows.map(([m, t]) => M.merge(S, m, t));
+  return [got.every((r, i) => ok(r) && lot(r.plan, LOT).quantity === rows[i][2] && !r.report.items.length), got.map(r => r.why || lot(r.plan, LOT).quantity)];
+});
+tryCase('a sowing taken back here on a planting the other device also changed: its lines and its seed are off the planting, and the change is kept', () => {
+  const s = record(FARM, A1.id, 'sow', DAY, device('before', 6)), r = M.merge(s, takeBack(s, A1.id, 'sow', mine()), setP(s, A1.id, { note: 'theirs' })), p = planting(r.plan, A1.id);
+  return [ok(r) && !p.done && !p.workflow.seedUse && p.workflow.history.map(x => x.action).join() === 'complete,clear-work' && p.note === 'theirs' && lot(r.plan, LOT).quantity === HELD && !r.report.items.length, [r.why, p.done, p.workflow, lot(r.plan || s, LOT).quantity]];
+});
+tryCase('two jobs, one on each device, in an order the planner refuses (sown after it was planted out): the cloud\'s stands, this device\'s is dropped with its seed, and the report says so', () => {
+  const later = E.d2s(E.addDays(E.s2d(DAY), 20)), sooner = E.d2s(E.addDays(E.s2d(DAY), 5));
+  const m = record(FARM, A1.id, 'sow', later, mine(), { follow: false }), t = record(FARM, A1.id, 'field', sooner, theirs(), { follow: false });
+  const r = M.merge(FARM, m, t, { order: SL.DONE_ORDER }), p = planting(r.plan, A1.id), said = items(r, 'recorded-twice'), free = M.merge(FARM, m, t);
+  let refused = false; try { record(t, A1.id, 'sow', later, mine(), { follow: false }); } catch (_) { refused = true; }
+  return [refused && ok(r) && p.done.field === sooner && !p.done.sow && !p.workflow.seedUse && p.workflow.history.length === 1 && lot(r.plan, LOT).quantity === HELD && said.length === 1 && said[0].job === 'sow' && said[0].against === 'field' && said[0].mine === later
+    && ok(free) && planting(free.plan, A1.id).done.sow === later, [refused, r.why, p.done, r.report]];
+});
+tryCase('a plan whose plantings are not all records with ids, each id once, is not joined: nothing of this device is lost under one line of the report', () => {
+  const m = setP(FARM, X2, { note: 'mine' }), noted = setP(FARM, X1, { note: 't' });
+  const a = M.merge(FARM, m, { ...noted, plantings: [...noted.plantings, null] }), b = M.merge(FARM, m, { ...noted, plantings: [...noted.plantings, noted.plantings[0]] }), c = M.merge(FARM, m, { gardens: [], beds: [], plantings: [null] });
+  return [[a, b, c].every(r => r.ok === false && /^The plan in the cloud has plantings .* each id once/.test(r.why) && !r.plan), [a.why, b.why, c.why]];
+});
+tryCase('waiting at the start, put on a bed on one device and taken off the list on the other: it is on its bed, and the report says so (both ways)', () => {
+  const w = { ...planting(FARM, X1), id: 'waits-3' }; delete w.bedId;
+  const s = { ...FARM, lrfNext: { ...(FARM.lrfNext || {}), waiting: [w] } };
+  const placed = { ...s, plantings: [...s.plantings, { ...w, bedId: planting(FARM, X1).bedId }], lrfNext: { ...s.lrfNext, waiting: [] } }, dropped = { ...s, lrfNext: { ...s.lrfNext, waiting: [] } };
+  const a = M.merge(s, placed, setP(dropped, X2, { note: 't' })), b = M.merge(s, setP(dropped, X2, { note: 'm' }), placed);
+  const fine = (r, by) => ok(r) && r.plan.plantings.filter(p => p.id === 'waits-3').length === 1 && !r.plan.lrfNext.waiting.length && items(r, 'kept').length === 1 && items(r, 'kept')[0].id === 'waits-3' && items(r, 'kept')[0].removedBy === by;
+  return [fine(a, 'theirs') && fine(b, 'mine'), [a.why, b.why, a.report, b.report]];
+});
+tryCase('a sowing day set by hand goes with the planting\'s day: the sowing day changed on one device and the day on the other, the cloud\'s two stand together and this device\'s is reported', () => {
+  const s = setP(FARM, X1, { sowOn: '2027-03-03' }), r = M.merge(s, setP(s, X1, { sowOn: '2027-03-05' }), setP(s, X1, { date: '2027-06-06' })), p = planting(r.plan, X1);
+  return [ok(r) && p.date === '2027-06-06' && p.sowOn === '2027-03-03' && items(r, 'same-box').length === 1, [p.date, p.sowOn, r.report]];
+});
+tryCase('a planting whose record of work cannot be read is joined by shape, and nothing stops', () => {
+  const s = setP(FARM, X1, { done: 'not a record' }), r = M.merge(s, setP(s, X1, { note: 'm' }), setP(s, X1, { price: 3 })), p = planting(r.plan, X1);
+  return [ok(r) && p.done === 'not a record' && p.note === 'm' && p.price === 3, [r.why, p]];
+});
+tryCase('a key of any name is a key like any other', () => {
+  const odd = JSON.parse('{"__proto__": {"a": 1}}'), r = M.merge(FARM, { ...FARM, settings: { ...FARM.settings, ...odd, germ: 80 } }, { ...FARM, settings: { ...FARM.settings, buffer: 15 } });
+  return [ok(r) && Object.prototype.hasOwnProperty.call(r.plan.settings, '__proto__') && r.plan.settings.germ === 80 && r.plan.settings.buffer === 15 && JSON.stringify(r.plan.settings).includes('"__proto__":{"a":1}'), r.why];
 });
 // seed on hand
 tryCase('a lot counted by hand here and drawn on by a sowing there: both are applied', () => {
@@ -268,9 +343,10 @@ tryCase('a count undone here (its line is gone from the log) is undone in the jo
   const r = M.merge(s, undone, record(s, A1.id, 'sow', DAY, theirs()));
   return [ok(r) && lot(r.plan, LOT).quantity === HELD - A1.need && r.plan.seedInventory.adjustments.filter(e => e.lotId === LOT && e.kind === 'count').length === 0, [lot(r.plan, LOT).quantity, r.why]];
 });
-tryCase('a lot added on each device: both are there, each with its own count and its line in the log', () => {
-  const r = M.merge(FARM, addLot(FARM, A1.key, 111, mine()), addLot(FARM, A1.key, 222, theirs())), added = r.plan.seedInventory.lots.slice(FARM.seedInventory.lots.length);
-  return [ok(r) && added.map(l => l.quantity).join() === '222,111' && r.plan.seedInventory.adjustments.length === FARM.seedInventory.adjustments.length + 2 && lot(r.plan, LOT).quantity === HELD, added.map(l => l.quantity)];
+tryCase('a lot added on each device, and this device\'s counted again after it was added: both are there, each with its own count and its lines in the log', () => {
+  const d = mine(), made = addLot(FARM, A1.key, 120, d), m = countLot(made, made.seedInventory.lots[made.seedInventory.lots.length - 1].id, 111, d);
+  const r = M.merge(FARM, m, addLot(FARM, A1.key, 222, theirs())), added = r.plan.seedInventory.lots.slice(FARM.seedInventory.lots.length);
+  return [ok(r) && added.map(l => l.quantity).join() === '222,111' && r.plan.seedInventory.adjustments.length === FARM.seedInventory.adjustments.length + 3 && lot(r.plan, LOT).quantity === HELD, added.map(l => l.quantity)];
 });
 tryCase('seed on hand here that its own log does not account for: nothing is joined, and the answer says why', () => {
   const m = { ...setP(FARM, X1, { note: 'm' }), seedInventory: { ...FARM.seedInventory, lots: FARM.seedInventory.lots.map(l => (l.id === LOT ? { ...l, quantity: l.quantity - 3 } : l)) } };
@@ -278,7 +354,7 @@ tryCase('seed on hand here that its own log does not account for: nothing is joi
   return [r.ok === false && /record of changes/.test(r.why) && !r.plan, r.why];
 });
 tryCase('a plan with recorded work, joined with itself, is unchanged to the letter', () => {
-  const s = record(record(FARM, A1.id, 'sow', DAY, mine()), T1.id, 'sow', T1.planned, mine()), a = clone(s), b = clone(s);
+  const d = mine(), s = record(record(FARM, A1.id, 'sow', DAY, d), T1.id, 'sow', T1.planned, d), a = clone(s), b = clone(s);
   const r = M.merge(s, a, b);
   return [ok(r) && JSON.stringify(r.plan) === JSON.stringify(s) && !r.report.items.length, r.why];
 });
@@ -286,8 +362,27 @@ tryCase('a plan as a file holds it is joined as the working plan is: the same pl
   const file = (plan, waiting) => { const out = IO.join(plan, split.attic); out.lrfNextKeep = { v: 1, savedAt: '2027-03-01T0' + waiting.length + ':00:00.000Z', device: 'd-' + waiting.length, keep: { trayStart: 'monday', ...(waiting.length ? { waiting } : {}) } }; return out; };
   const w = { ...planting(FARM, X1), id: 'waits-2' }; delete w.bedId;
   const m = record(FARM, A1.id, 'sow', DAY, mine()), t = record(setP(FARM, X1, { note: 't' }), A2.id, 'sow', DAY, theirs());
-  const core = M.merge(FARM, m, t), r = M.merge(file(FARM, []), file(m, []), file(t, [w]));
-  return [ok(core) && ok(r) && M.same(r.plan.plantings, core.plan.plantings) && M.same(r.plan.seedInventory, core.plan.seedInventory) && r.plan.lrfNextKeep.keep.waiting.length === 1 && r.plan.lrfNextKeep.savedAt === '2027-03-01T01:00:00.000Z' && !r.report.items.length && !!IO.split(r.plan).core, [r.why, r.report]];
+  const core = M.merge(FARM, m, t), start = file(FARM, []), here = file(m, []), there = file(t, [w]);
+  start.lrfNextKeep.device = 'd-start'; here.lrfNextKeep.device = 'd-here'; here.lrfNextKeep.savedAt = '2027-03-01T00:30:00.000Z';
+  const r = M.merge(start, here, there);
+  return [ok(core) && ok(r) && M.same(r.plan.plantings, core.plan.plantings) && M.same(r.plan.seedInventory, core.plan.seedInventory) && r.plan.lrfNextKeep.keep.waiting.length === 1 && r.plan.lrfNextKeep.savedAt === '2027-03-01T01:00:00.000Z'
+    && r.plan.lrfNextKeep.device === 'd-1' && !r.report.items.length && !!IO.split(r.plan).core, [r.why, r.report]];
+});
+tryCase('and in a file too, a planting put on a bed on one side and changed as it waited on the other is on its bed once', () => {
+  const w = { ...planting(FARM, X1), id: 'waits-4' }; delete w.bedId;
+  const file = (plan, waiting) => ({ ...IO.join(plan, split.attic), lrfNextKeep: { v: 1, savedAt: '2027-03-01T00:00:00.000Z', device: 'd', keep: { trayStart: 'monday', waiting } } });
+  const r = M.merge(file(FARM, [w]), file({ ...FARM, plantings: [...FARM.plantings, { ...w, bedId: planting(FARM, X1).bedId }] }, []), file(FARM, [{ ...w, date: '2027-07-07' }]));
+  return [ok(r) && r.plan.plantings.filter(p => p.id === 'waits-4').length === 1 && !r.plan.lrfNextKeep.keep.waiting.length && items(r, 'placed-and-waiting').length === 1, [r.why, r.report]];
+});
+tryCase('a list inside a record that already had an id twice is one value, and does not stop the join', () => {
+  const rows = (plan, list) => ({ ...plan, liveTrayPlans: plan.liveTrayPlans.map(tp => (tp.id === TRAYS.id ? { ...tp, rows: list(tp.rows) } : tp)) });
+  const s = rows(FARM, l => [...l, l[0]]), r = M.merge(s, rows(s, l => l.map((x, i) => (i === 1 ? { ...x, price: 91 } : x))), rows(s, l => l.map((x, i) => (i === 2 ? { ...x, price: 92 } : x)))), got = r.plan && r.plan.liveTrayPlans.find(tp => tp.id === TRAYS.id).rows;
+  return [ok(r) && got[2].price === 92 && got[1].price !== 91 && items(r, 'same-box').length === 1, [r.why, r.report.items.length]];
+});
+tryCase('records this device added inside a thing taken whole go with it when the cloud\'s stands, and the report says the thing was changed on both sides', () => {
+  const space = FARM.nursery.spaces[0].id, lay = (plan, benchLayout) => ({ ...plan, nursery: { ...plan.nursery, spaces: plan.nursery.spaces.map(x => (x.id === space ? { ...x, benchLayout } : x)) } });
+  const s = lay(FARM, { rows: [{ id: 'r1', n: 1 }] }), r = M.merge(s, lay(s, { rows: [{ id: 'r1', n: 1 }, { id: 'r2', n: 2 }] }), lay(s, { rows: [{ id: 'r1', n: 5 }] }));
+  return [ok(r) && M.same(r.plan.nursery.spaces.find(x => x.id === space).benchLayout, { rows: [{ id: 'r1', n: 5 }] }) && items(r, 'same-box').length === 1, [r.why, r.report]];
 });
 tryCase('a joined plan that fails one of the five tests is not handed back: the answer is no, and why', () => {
   const r = M.merge(FARM, { ...FARM, settings: { ...FARM.settings, germ: NaN } }, setP(FARM, X1, { note: 't' }));
@@ -304,14 +399,25 @@ tryCase('something that is not a plan is not joined', () => {
   const v = (plan, report = good.report) => M.verify(FARM, m, t, plan, report);
   check('the joined plan of the two passes the five tests', ok(good) && v(good.plan) === '', good.why);
   check('1. a joined plan that does not open as a plan fails', /no beds/.test(v({ ...good.plan, beds: undefined })) && /read back/.test(v({ ...good.plan, settings: { ...good.plan.settings, germ: NaN } })), v({ ...good.plan, beds: undefined }));
-  check('2. an id there twice fails', /twice/.test(v({ ...good.plan, plantings: [...good.plan.plantings, good.plan.plantings[0]] })), v({ ...good.plan, plantings: [...good.plan.plantings, good.plan.plantings[0]] }));
+  check('1. so does one whose plantings are not all records with ids, each id once', /each id once/.test(v({ ...good.plan, plantings: [...good.plan.plantings, good.plan.plantings[0]] })) && /each id once/.test(v({ ...good.plan, plantings: [...good.plan.plantings, null] })), v({ ...good.plan, plantings: [...good.plan.plantings, null] }));
+  const rowTwice = { ...good.plan, liveTrayPlans: good.plan.liveTrayPlans.map(tp => (tp.id === TRAYS.id ? { ...tp, rows: [...tp.rows, tp.rows[0]] } : tp)) };
+  check('2. an id there twice in a list inside a record fails', /twice/.test(v(rowTwice)), v(rowTwice));
   check('3. a record one side changed that is missing fails', /not in the joined plan/.test(v({ ...good.plan, plantings: good.plan.plantings.filter(p => p.id !== X1) })));
   const undone = putPlanting(good.plan, { ...planting(good.plan, A2.id), done: undefined });
   check('4. a day of recorded work that is missing fails', /Work recorded/.test(v(JSON.parse(JSON.stringify(undone)))), v(JSON.parse(JSON.stringify(undone))));
+  const mineGone = putPlanting(good.plan, { ...planting(good.plan, A1.id), done: undefined });
+  check('4. and so does one this device recorded', /Work recorded/.test(v(JSON.parse(JSON.stringify(mineGone)))), v(JSON.parse(JSON.stringify(mineGone))));
   const off = { ...good.plan, seedInventory: { ...good.plan.seedInventory, lots: good.plan.seedInventory.lots.map(l => (l.id === LOT ? { ...l, quantity: l.quantity + A1.need } : l)) } };
   check('5. seed that does not add up fails: one sowing\'s seed left on the lot', /does not add up/.test(v(off)), v(off));
   const p = planting(good.plan, A1.id), twice = putPlanting(good.plan, { ...p, workflow: { ...p.workflow, seedUse: [...p.workflow.seedUse, { ...p.workflow.seedUse[0], batchId: 'another', lotId: null }] } });
   check('5. a planting that draws seed for two sowings fails', /more than one sowing/.test(v(twice)), v(twice));
+  const below = { ...good.plan, seedInventory: { ...good.plan.seedInventory, lots: good.plan.seedInventory.lots.map(l => (l.id === LOT ? { ...l, quantity: -1 } : l)) } };
+  check('5. a lot below zero fails', /below zero/.test(v(below)), v(below));
+  const over = M.merge(FARM, record(FARM, T1.id, 'sow', T1.planned, mine()), record(FARM, T2.id, 'sow', T2.planned, theirs())), tight2 = { ...over.plan, plantings: over.plan.plantings.map(p => (p.id === T1.id ? planting(record(FARM, T1.id, 'sow', T1.planned, mine()), T1.id) : p)) };
+  check('5. a lot drawn below zero that the report does not name fails', ok(over) && /does not say so/.test(M.verify(FARM, record(FARM, T1.id, 'sow', T1.planned, mine()), record(FARM, T2.id, 'sow', T2.planned, theirs()), tight2, { items: [] })), M.verify(FARM, record(FARM, T1.id, 'sow', T1.planned, mine()), record(FARM, T2.id, 'sow', T2.planned, theirs()), tight2, { items: [] }));
+  const s5 = record(FARM, A1.id, 'sow', DAY, device('before', 6)), m5 = takeBack(s5, A1.id, 'sow', mine()), t5 = setP(s5, A1.id, { note: 't' }), j5 = M.merge(s5, m5, t5);
+  const left = putPlanting(j5.plan, { ...planting(j5.plan, A1.id), workflow: { ...planting(j5.plan, A1.id).workflow, seedUse: planting(s5, A1.id).workflow.seedUse } });
+  check('5. seed lines left on a planting whose sowing was taken back, with the seed back on the lot, fail: the lots are worked a second way, from the lines', ok(j5) && M.verify(s5, m5, t5, j5.plan, j5.report) === '' && /does not add up/.test(M.verify(s5, m5, t5, left, j5.report)), M.verify(s5, m5, t5, left, j5.report));
 }
 
 // ───────────────────────────── 3. lists the merge does not know ─────────────────────────────
@@ -333,7 +439,7 @@ const LOTS = [...new Set([...POOL, ...sowable.filter(x => recorded.includes(x.id
 const keyOfLot = new Map(START.seedInventory.lots.map(l => [l.id, l.key])), keyOfPlanting = new Map(sowable.map(x => [x.id, x.key]));
 /** One edit, chosen by chance: (plan, device) -> plan, with what it touches, so that two runs that touch nothing in common can be told. */
 function pick(rand, near) {
-  const of = list => { const from = near ? list.slice(0, 3) : list; return from[Math.floor(rand() * from.length)]; }, n = Math.floor(rand() * 13), shift = Math.floor(rand() * 9) - 4;
+  const of = list => { const from = near ? list.slice(0, 3) : list; return from[Math.floor(rand() * from.length)]; }, n = Math.floor(rand() * 15), shift = Math.floor(rand() * 9) - 4;
   // a sowing draws what the plan works out with the farm's germination and spare, so it has those two settings in common with a run that changes them
   if (n === 0 || n === 1) { const x = of(POOL); return { keys: ['p:' + x.id, 'k:' + x.key, 's:germ', 's:buffer'], run: (plan, d) => record(plan, x.id, 'sow', E.d2s(E.addDays(E.s2d(x.planned), Math.max(0, shift))), d) }; }
   if (n === 2) { const id = of(recorded); return { keys: ['p:' + id, 'k:' + keyOfPlanting.get(id)], run: (plan, d) => takeBack(plan, id, 'sow', d) }; }
@@ -346,7 +452,10 @@ function pick(rand, near) {
   if (n === 9) { const x = of(POOL), q = 10 + Math.floor(rand() * 90); return { keys: ['k:' + x.key], run: (plan, d) => addLot(plan, x.key, q, d) }; }
   if (n === 10) { const bed = of(FARM.beds.filter(b => b.px)).id, dx = 1 + Math.floor(rand() * 20); return { keys: ['b:' + bed], run: plan => ({ ...plan, beds: plan.beds.map(b => (b.id === bed ? { ...b, px: { ...b.px, x: b.px.x + dx } } : b)) }) }; }
   if (n === 11) { const key = of(['germ', 'buffer', 'turnover', 'trayCost']), by = 1 + Math.floor(rand() * 3); return { keys: ['s:' + key], run: plan => ({ ...plan, settings: { ...plan.settings, [key]: plan.settings[key] + by } }) }; }
-  const x = of(POOL), on = '2027-03-0' + (1 + Math.floor(rand() * 8)); return { keys: ['p:' + x.id], run: plan => putPlanting(plan, W.skip(planting(plan, x.id), 'sow', on)) };
+  if (n === 12) { const x = of(POOL), on = '2027-03-0' + (1 + Math.floor(rand() * 8)); return { keys: ['p:' + x.id], run: plan => putPlanting(plan, W.skip(planting(plan, x.id), 'sow', on)) }; }
+  // a sowing recorded and taken back in one run; a planting, sown or not, taken out of the plan (its seed stays used)
+  if (n === 13) { const x = of(POOL); return { keys: ['p:' + x.id, 'k:' + x.key, 's:germ', 's:buffer'], run: (plan, d) => takeBack(record(plan, x.id, 'sow', x.planned, d), x.id, 'sow', d) }; }
+  const id = of([...recorded, ...POOL.map(x => x.id)]); return { keys: ['p:' + id], run: plan => { if (!planting(plan, id)) throw new Error('gone'); return { ...plan, plantings: plan.plantings.filter(p => p.id !== id) }; } };
 }
 /** Run a list of edits on a plan as one device. An edit that cannot be made there (already sown, already gone) is left out. */
 function runAll(plan, edits, dev) { const made = []; for (const e of edits) { try { const next = e.run(plan, dev); if (next && !M.same(next, plan)) { plan = next; made.push(e); } } catch (_) { /* not possible on this plan */ } } return { plan, made }; }
@@ -354,7 +463,8 @@ function runAll(plan, edits, dev) { const made = []; for (const e of edits) { tr
 const sorted = v => (Array.isArray(v) ? (v.length && v.every(x => x && typeof x === 'object' && !Array.isArray(x) && x.id != null) ? v.map(sorted).sort((a, b) => (String(a.id) < String(b.id) ? -1 : 1)) : v.map(sorted)) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).map(k => [k, sorted(v[k])])) : v);
 const alike = (a, b) => M.same(sorted(a), sorted(b));
 {
-  const rand = rng(20261116), bad = { untouched: [], refused: [], opens: [], both: [], out: [], order: [], settles: [], seed: [], days: [] };
+  const rand = rng(20261116), bad = { untouched: [], refused: [], opens: [], both: [], out: [], order: [], settles: [], seed: [], days: [], back: [], seen: [], round: [] };
+  const JOIN = { order: SL.DONE_ORDER };
   let apart = 0, together = 0, reported = 0, opened = 0;
   const PAIRS = Math.max(20, Math.floor(+process.env.LRF_PAIRS) || 500);
   for (let i = 0; i < PAIRS; i++) {
@@ -362,16 +472,38 @@ const alike = (a, b) => M.same(sorted(a), sorted(b));
     const editsA = Array.from({ length: 1 + Math.floor(rand() * 4) }, () => pick(rand, near)), editsB = Array.from({ length: 1 + Math.floor(rand() * 4) }, () => pick(rand, near));
     const a = runAll(START, editsA, device('mine' + i, 9)), b = runAll(START, editsB, device('theirs' + i, 14));
     if (!a.made.length || !b.made.length) continue;
-    const r = M.merge(START, a.plan, b.plan);
+    const r = M.merge(START, a.plan, b.plan, JOIN);
+    // A device that had seen all the cloud holds and went on from it (a send whose answer was lost). The plan the two started from is
+    // then older than both, so a box changed twice reads as changed on both sides, and that is reported. But seed and recorded work
+    // have ids to go by: every lot, and every planting's recorded days and seed lines, are that device's own, and no sowing is dropped.
+    if (i % 2 === 0) { const on = runAll(b.plan, editsA, device('mine' + i, 9));
+      if (on.made.length) {
+        const j = M.merge(START, on.plan, b.plan, JOIN), work = p => [p.done || null, ((p.workflow || {}).seedUse || []).map(u => [u.batchId, u.lotId, u.quantity]).sort()];
+        if (!j.ok || j.report.items.some(x => x.kind === 'recorded-twice' || x.kind === 'seed-short') || on.plan.seedInventory.lots.some(l => lot(j.plan, l.id).quantity !== l.quantity)
+          || on.plan.plantings.some(p => planting(j.plan, p.id) && !M.same(work(planting(j.plan, p.id)), work(p)))) bad.seen.push([i, j.why || j.report.items.map(x => x.kind).join()]);
+      } }
     // a side that changed nothing changes nothing
     if (M.merge(START, START, b.plan).plan !== b.plan || M.merge(START, a.plan, START).plan !== a.plan) bad.untouched.push(i);
     if (!r.ok) { bad.refused.push([i, r.why]); continue; }
     if (r.report.items.length) reported++;
     // the joined plan opens, and on some of them the forecast is run
-    try { const en = eng(r.plan); if (i % 10 === 0) { if (IO.split(IO.join(r.plan, split.attic)).core.plantings.length !== r.plan.plantings.length) throw new Error('lost plantings'); F.build(en); opened++; } } catch (e) { bad.opens.push([i, String(e.message)]); }
+    try { if (i % 10 === 0) { const en = eng(r.plan); if (IO.split(IO.join(r.plan, split.attic)).core.plantings.length !== r.plan.plantings.length) throw new Error('lost plantings'); F.build(en); opened++; } } catch (e) { bad.opens.push([i, String(e.message)]); }
     // every lot at zero or more; no planting draws for two sowings; every day the cloud's side recorded is there
     if (r.plan.seedInventory.lots.some(l => !(l.quantity >= 0)) || r.plan.plantings.some(p => new Set(((p.workflow || {}).seedUse || []).map(u => u.batchId)).size > 1)) bad.seed.push(i);
     if (b.plan.plantings.some(p => p.done && Object.entries(p.done).some(([k, d]) => { const s = planting(START, p.id), j = planting(r.plan, p.id); return !(s && s.done && s.done[k] === d) && !(j && j.done && j.done[k] === d); }))) bad.days.push(i);
+    // every sowing in the joined plan can be taken back as on one device, and its seed goes back to the lots its lines name
+    for (const p of i % 2 === 1 ? r.plan.plantings.filter(q => q.done && q.done.sow && keyOfPlanting.has(q.id)).slice(0, 2) : []) {
+      try {
+        const back = takeBack(r.plan, p.id, 'sow', device('later' + i, 20)), drew = new Map();
+        for (const u of (p.workflow.seedUse || [])) if (u.lotId) drew.set(u.lotId, (drew.get(u.lotId) || 0) + u.quantity);
+        if (planting(back, p.id).done || (planting(back, p.id).workflow.seedUse || []).length || [...drew].some(([lotId, q]) => lot(back, lotId).quantity !== lot(r.plan, lotId).quantity + q)) bad.back.push([i, p.id]);
+      } catch (e) { bad.back.push([i, p.id, String(e.message)]); }
+    }
+    // a second round: the other device takes the joined plan, each makes one more run, and they are joined again
+    if (i % 5 === 0) {
+      const a2 = runAll(r.plan, [pick(rand, near)], device('mine2' + i, 10)), b2 = runAll(r.plan, [pick(rand, near)], device('theirs2' + i, 15));
+      if (a2.made.length && b2.made.length) { const j = M.merge(r.plan, a2.plan, b2.plan, JOIN); if (!j.ok || j.plan.seedInventory.lots.some(l => !(l.quantity >= 0)) || j.plan.plantings.some(p => new Set(((p.workflow || {}).seedUse || []).map(u => u.batchId)).size > 1)) bad.round.push([i, j.why]); }
+    }
     // once both devices hold the joined plan, another look joins nothing
     if (M.merge(b.plan, b.plan, r.plan).plan !== r.plan || M.merge(r.plan, r.plan, r.plan).plan !== r.plan) bad.settles.push(i);
     const touchedA = new Set(a.made.flatMap(e => e.keys)), common = b.made.flatMap(e => e.keys).some(k => touchedA.has(k));
@@ -381,21 +513,24 @@ const alike = (a, b) => M.same(sorted(a), sorted(b));
     const one = runAll(a.plan, editsB, device('theirs' + i, 14));   // the same device making the same tries, so that its ids and its clock are the same
     if (one.made.length !== b.made.length || !one.made.every((e, k) => e === b.made[k]) || !alike(r.plan, one.plan) || r.report.items.length) bad.both.push(i);
     // the other way round it is the same plan
-    const back = M.merge(START, b.plan, a.plan);
-    if (!back.ok || !alike(back.plan, r.plan)) bad.order.push(i);
+    const swapped = M.merge(START, b.plan, a.plan, JOIN);
+    if (!swapped.ok || !alike(swapped.plan, r.plan)) bad.order.push(i);
     // taking this device's run out again leaves the other's alone: the plan is the cloud's
-    const out = M.merge(a.plan, START, r.plan);
+    const out = M.merge(a.plan, START, r.plan, JOIN);
     if (!out.ok || !alike(out.plan, b.plan)) bad.out.push([i, out.why]);
   }
-  check(`pairs of runs (${PAIRS} unless fewer were asked for): enough of them touch nothing in common, enough touch the same thing, and enough have something to report`, apart >= PAIRS * 0.2 && together >= PAIRS * 0.2 && reported >= PAIRS * 0.1 && opened >= PAIRS * 0.06, { apart, together, reported, opened });
+  check(`pairs of runs (${PAIRS} unless fewer were asked for): enough of them touch nothing in common, enough touch the same thing, and enough have something to report`, apart >= PAIRS * 0.2 && together >= PAIRS * 0.2 && reported >= PAIRS * 0.04 && opened >= PAIRS * 0.06, { apart, together, reported, opened });
   check('a side that changed nothing changes nothing', bad.untouched.length === 0, bad.untouched.slice(0, 5));
   check('no pair is refused: every one is joined and passes the five tests', bad.refused.length === 0, bad.refused.slice(0, 3));
-  check('every joined plan opens; one in ten goes into a file and comes back, and its forecast runs', bad.opens.length === 0, bad.opens.slice(0, 3));
+  check('one joined plan in ten is opened by the engine, goes into a file and comes back, and its forecast runs', bad.opens.length === 0, bad.opens.slice(0, 3));
   check('two runs that touch nothing in common: the joined plan is the plan one device would hold after both, with nothing to report', bad.both.length === 0, bad.both.slice(0, 5));
   check('and it is the same plan whichever of the two reached the cloud first', bad.order.length === 0, bad.order.slice(0, 5));
   check('taking one run out of the joined plan leaves the other run, whole', bad.out.length === 0, bad.out.slice(0, 3));
   check('no lot is below zero and no planting draws seed for two sowings', bad.seed.length === 0, bad.seed.slice(0, 5));
   check('every day of work the cloud\'s side recorded is in the joined plan', bad.days.length === 0, bad.days.slice(0, 5));
   check('once both devices hold the joined plan, another look joins nothing', bad.settles.length === 0, bad.settles.slice(0, 5));
+  check('(every other pair) a device that had seen all the cloud holds and went on from it: every lot, every recorded day and every seed line is that device\'s own, and no sowing is dropped', bad.seen.length === 0, bad.seen.slice(0, 3));
+  check('(every other pair) every sowing in a joined plan can be taken back as on one device, and its seed goes back to the lots its lines name', bad.back.length === 0, bad.back.slice(0, 3));
+  check('a second round of runs on the joined plan joins too', bad.round.length === 0, bad.round.slice(0, 3));
 }
 finished = true;
