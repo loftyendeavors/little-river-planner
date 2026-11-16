@@ -204,7 +204,7 @@ async function putPlan(request, env, origin, now) {
     if (wasDay && wasDay !== dayOf(meta.savedAt) && !(await bucket.head(`day/${wasDay}`))) { await copy(bucket, 'plan', `day/${wasDay}`, was); await prune(bucket, await listAll(bucket, 'day/'), LIMITS.days); }
   }
   const put = await putIf(bucket, 'plan', bytes, there ? there.etag : null, { customMetadata: { m: JSON.stringify({ ...meta, at: new Date(now * 1000).toISOString() }) }, httpMetadata: { contentType: 'application/octet-stream' } });
-  if (!put) { if (before) await bucket.delete(before); return json(412, { error: 'changed', plan: stamp(await bucket.head('plan')) }, origin); }
+  if (!put) { if (before) { try { await bucket.delete(before); } catch (_) { /* a copy left behind is thinned later; the sender is still told its plan did not land */ } } return json(412, { error: 'changed', plan: stamp(await bucket.head('plan')) }, origin); }
   if (before) { try { await pruneMerges(bucket, now); } catch (_) { /* the plan is stored: a thinning that failed is done by the next joined plan, and must not turn this answer into an error */ } }
   return json(200, { ok: true, plan: stamp(put) }, origin);
 }

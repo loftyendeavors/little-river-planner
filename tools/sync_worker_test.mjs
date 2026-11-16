@@ -264,6 +264,15 @@ for (const wildcard of [true, false, 'throws']) {
     check('of two joined plans sent at once exactly one lands, and exactly one plan-before is kept: the plan both named, not the other\'s', [a.status, b.status].sort().join() === '200,412' && after.length === n + 1 && bodyOf(after[after.length - 1]) === was && (await held()) === (a.status === 200 ? 'JOINED AT ONCE, A' : 'JOINED AT ONCE, B'), [a.status, b.status, after.length - n, after.map(bodyOf)]);
     p = await landed.json();
   }
+  { // of two joined plans at once, the one that does not land cannot take its copy away (the bucket would not delete): it is still told "changed", not given an error
+    const head = v.bucket.head, del = v.bucket.delete; let failed = 0; later(60);
+    v.bucket.head = async key => { const found = await head(key); await new Promise(resolve => setTimeout(resolve, 25)); return found; };
+    v.bucket.delete = async keys => { if ([].concat(keys).some(k => String(k).startsWith('snap/merge-')) && !failed) { failed++; throw new Error('the bucket did not delete'); } return del(keys); };
+    const [a, b] = await Promise.all([putPlan(v, t, 'AT ONCE AGAIN, A', p.plan.etag, { m: 2, merged: true }), putPlan(v, t, 'AT ONCE AGAIN, B', p.plan.etag, { m: 2, merged: true })]);
+    v.bucket.head = head; v.bucket.delete = del;
+    check('a joined plan that did not land is told so even when its copy cannot be taken away', failed === 1 && [a.status, b.status].sort().join() === '200,412', [failed, a.status, b.status]);
+    p = await (a.status === 200 ? a : b).json();
+  }
   { // the thinning fails after the plan is stored (the bucket would not list for a moment): the write is still answered as the write it was
     const list = v.bucket.list; let failed = 0; later(60);
     v.bucket.list = async opts => { if (opts && opts.prefix === 'snap/merge-' && !failed) { failed++; throw new Error('the bucket did not list'); } return list(opts); };
