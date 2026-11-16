@@ -71,11 +71,15 @@ const planOf = (n, tag) => ({ gardens: [], beds: [], plantings: Array.from({ len
 function keeping(b) {
   b.keptRec = null; b.keptFull = false; b.keptPuts = 0;
   b.env.kept = {
-    put: async r => { b.keptPuts++; if (b.keptFull) throw new Error('The database is full.'); b.keptRec = { etag: r.etag, key: r.key, at: r.at, bytes: r.text.length, text: r.text }; return b.keptRec; },
+    put: async r => {
+      b.keptPuts++;
+      // a database that never answers: sync's own time limit for it is what ends the wait (its timer is turned here, since no clock runs in this test)
+      if (b.keptHangs) { setTimeout(() => { for (const t of b.timers.filter(x => x.ms === Sync.timing.kept)) t.fn(); }, 1); return new Promise(() => {}); }
+      if (b.keptFull) throw new Error('The database is full.'); b.keptRec = { etag: r.etag, key: r.key, at: r.at, bytes: r.text.length, text: r.text }; return b.keptRec;
+    },
     note: async () => (b.keptRec ? { etag: b.keptRec.etag, key: b.keptRec.key, at: b.keptRec.at, bytes: b.keptRec.bytes } : null),
     get: async () => (b.keptRec ? { ...b.keptRec } : null),
-    clear: async () => { b.keptRec = null; return true; }
-  };
+    clear: async () => { b.keptRec = null; return true; } };
   b.make();
   return b;
 }
@@ -330,6 +334,17 @@ const sends = world_ => world_.calls.filter(c => c === 'PUT /plan').length;
   check('the cloud is asked for the plan once more at most, not at every look', fetched() - n <= 1 && d3.sync.info().status === 'in-step', fetched() - n);
   d3.keptFull = false; i = await d3.change('k-room-again');
   check('and the next send keeps it again', i.kept === true && d3.keptRec.text === (await cloudText()) && i.keptNote === '');
+  // the browser's database never answers (it has happened as a page starts): the send is not left waiting for it
+  { const wh = world(), h = keeping(browser(wh, 'hangs', planOf(3, 'h'))); h.keptHangs = true;
+    const waited = work => Promise.race([work, new Promise(resolve => setTimeout(() => resolve({ status: 'still waiting for the database' }), 2500))]);   // so that a send left waiting fails this line by name, and the test goes on
+    const first = await waited(h.sync.connect(URL_, KEY, 'H')), puts = h.keptPuts, second = await waited(h.change('h-after'));
+    check('a database that never answers is waited for once, and the plan is sent and in step all the same', first.status === 'in-step' && first.kept === false && /did not answer/.test(first.keptNote) && second.status === 'in-step' && (await wh.text('plan')).includes('h-after'), [first.status, first.kept, first.keptNote, second.status]);
+    check('and it is not asked again while that page is open', puts === 1 && h.keptPuts === 1 && !h.timers.some(t => t.ms === Sync.timing.kept) && (await h.sync.keptPlan()) === null, [puts, h.keptPuts]); }
+  // the note of being in step is written before the plan is kept: a page that ends between the two is in step, and fetches the plan at its next look
+  { const wn = world(), e = keeping(browser(wn, 'ends', planOf(3, 'e'))), noted = [], put = e.env.kept.put;
+    e.env.kept.put = async r => { noted.push(JSON.parse(e.saved).base || null); return put(r); };
+    await e.sync.connect(URL_, KEY, 'E');
+    check('the stamp is noted before the plan is kept under it, and the plan is kept once', noted.length === 1 && noted[0] !== null && noted[0] === wn.store.get('plan').etag && e.keptRec.etag === noted[0], noted); }
   // a window that only shows the plan keeps nothing; leaving forgets what was kept
   const puts = d3.keptPuts, was = d3.keptRec; d3.held = true; d3.host.readOnly = () => true;
   await d3.sync.run('poll'); d3.sync.touch(); await d3.tick();

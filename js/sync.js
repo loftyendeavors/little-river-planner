@@ -23,9 +23,11 @@
  * Beside the note, the plan itself is kept as the cloud held it when this browser was last in step (js/kept.js, in the
  * browser's database): the text that was sent, or the text that was opened. Nothing here reads it yet. It is there so that
  * a plan another device sends can one day be joined with the plan here, record by record, and for that the plan the two
- * started from has to be at hand. It is written before the note, and it counts only while its stamp is the note's: a page
- * that ends between the two leaves a kept plan nobody trusts. A device that is in step and has none fetches the cloud's
- * plan once to keep it. A kept plan that cannot be written stops nothing: `info().kept` says there is none, and why.
+ * started from has to be at hand. It is written after the note, and it counts only while its stamp is the note's: a page
+ * that ends between the two has a kept plan under an older stamp, which nobody trusts, and fetches the cloud's plan once
+ * at its next look to keep it, as a device does that has none. A kept plan that cannot be written stops nothing, and a
+ * database that does not answer is waited for once, for a few seconds, and then left alone until the page is opened
+ * again: `info().kept` says there is none, and `info().keptNote` why.
  *
  * No page of the app is touched here. The app is reached through `host`:
  *   mode()          'plan' | 'sample' | 'held'      a real plan, the sample, or a stored plan that would not open
@@ -41,7 +43,7 @@
 (function (root) {
   'use strict';
   const KEY = 'lrf-next:sync';
-  const timing = { push: 4000, poll: 300000, focus: 60000, timeout: 45000, retry: 30000, retryMost: 300000 };
+  const timing = { push: 4000, poll: 300000, focus: 60000, timeout: 45000, retry: 30000, retryMost: 300000, kept: 8000 };
 
   /** What to do, from what each side holds. base: the cloud stamp this browser is in step with; cloud: the stamp there now. */
   function decide({ base, cloud, dirty, sample, behind }) {
@@ -86,7 +88,7 @@
     const listeners = [];
     let cfg = {};
     try { cfg = JSON.parse(store.get() || '{}') || {}; } catch (_) { cfg = {}; }
-    const st = { status: cfg.url && cfg.token ? 'checking' : cfg.url ? 'signin' : 'off', cloud: null, files: null, first: false, error: '', until: null, checkedAt: 0, busy: false, snoozed: null, loads: 0, tries: 0, photoNote: '', kept: undefined, keptNote: '', keptTried: null };
+    const st = { status: cfg.url && cfg.token ? 'checking' : cfg.url ? 'signin' : 'off', cloud: null, files: null, first: false, error: '', until: null, checkedAt: 0, busy: false, snoozed: null, loads: 0, tries: 0, photoNote: '', kept: undefined, keptNote: '', keptTried: null, keptOff: false };
     // the plan as the cloud held it when this browser was last in step (js/kept.js); null where the browser keeps no database
     const kept = env.kept !== undefined ? env.kept : root.LRFKept && root.indexedDB ? root.LRFKept.create('') : null;
     let timer = null, again = null, running = null;
@@ -109,23 +111,25 @@
         savedAt: cfg.savedAt || null, busy: st.busy, checkedAt: st.checkedAt, offer: st.status === 'newer' && !!st.cloud && st.cloud.etag !== st.snoozed, photoNote: st.photoNote,
         kept: !!cfg.base && st.kept === cfg.base, keptNote: st.keptNote };
     }
+    /** What the browser's database answers, or a refusal if it has not answered in time: some browsers have left a page waiting for good. */
+    const answered = promise => { let t; return Promise.race([promise, new Promise((_, reject) => { t = later(() => { st.keptOff = true; reject(new Error('The browser’s database did not answer.')); }, timing.kept); })]).finally(() => cancel(t)); };
     /**
-     * Keep the plan the cloud holds under `etag`, to compare with later. Called before the note of being in step is written.
+     * Keep the plan the cloud holds under `etag`, to compare with later. Called once the note of being in step is written.
      * A failure is not the sync's: the plan was sent or opened all the same. It is noted, and there is then no plan to compare with.
      */
     async function keepPlan(etag, text, key) {
-      if (!kept || quiet() || !etag) return false;
-      try { await kept.put({ etag, text, key, at: new Date().toISOString() }); st.kept = etag; st.keptNote = ''; return true; }
+      if (!kept || st.keptOff || quiet() || !etag) return false;
+      try { await answered(kept.put({ etag, text, key, at: new Date().toISOString() })); st.kept = etag; st.keptNote = ''; return true; }
       catch (error) {
         st.kept = null; st.keptNote = (error && error.message) || 'The plan to compare with could not be kept.';
-        try { await kept.clear(); } catch (_) { /* what is left there is under an older stamp, and counts for nothing */ }
+        if (!st.keptOff) { try { await answered(kept.clear()); } catch (_) { /* what is left there is under an older stamp, and counts for nothing */ } }
         return false;
       }
     }
     /** In step, and no plan kept under that stamp (a browser that synced before plans were kept, or whose database was emptied): fetch the cloud's once, and keep it. */
     async function ensureKept() {
-      if (!kept || quiet() || !cfg.base) return false;
-      if (st.kept === undefined) { try { const n = await kept.note(); st.kept = n ? n.etag : null; } catch (error) { st.kept = null; st.keptNote = (error && error.message) || ''; } }
+      if (!kept || st.keptOff || quiet() || !cfg.base) return false;
+      if (st.kept === undefined) { try { const n = await answered(kept.note()); st.kept = n ? n.etag : null; } catch (error) { st.kept = null; st.keptNote = (error && error.message) || ''; if (st.keptOff) return false; } }
       if (st.kept === cfg.base || st.keptTried === cfg.base) return st.kept === cfg.base;   // one try a stamp: a database that refuses is not asked again at every look
       st.keptTried = cfg.base;
       const res = await call('GET', '/plan', { raw: true }), meta = readMeta(res), etag = res.headers.get('x-lrf-etag');
@@ -134,10 +138,10 @@
     }
     /** The plan to compare with: { etag, key, at, bytes, text }, or null when none is kept under the stamp this browser is in step with. */
     async function keptPlan() {
-      if (!kept || !cfg.base) return null;
-      try { const k = await kept.get(); return k && k.etag === cfg.base ? k : null; } catch (_) { return null; }
+      if (!kept || st.keptOff || !cfg.base) return null;
+      try { const k = await answered(kept.get()); return k && k.etag === cfg.base ? k : null; } catch (_) { return null; }
     }
-    const forget = () => { st.kept = undefined; st.keptNote = ''; st.keptTried = null; if (kept && !quiet()) Promise.resolve().then(() => kept.clear()).catch(() => {}); };
+    const forget = () => { st.kept = undefined; st.keptNote = ''; st.keptTried = null; if (kept && !st.keptOff && !quiet()) Promise.resolve().then(() => kept.clear()).catch(() => {}); };
 
     // The service also reads seed suppliers' pages for the seed library, from its version 2 on. A device that is signed in hands the
     // library's reader the service's address and its own token (never the passphrase); `v` is the version the service last said.
@@ -175,10 +179,10 @@
       set('sending');
       const meta = { savedAt: p.savedAt, device: host.device(), label: cfg.label || '', plantings: p.plantings, waiting: p.waiting, year: p.year, enc: packed.enc, bytes: p.text.length };
       const done = await call('PUT', '/plan', { body: packed.bytes, headers: { 'x-lrf-base': base || 'none', 'x-lrf-meta': metaHeader(meta), ...(replace || host.loads() !== st.loads ? { 'x-lrf-replace': '1' } : {}) } });
-      await keepPlan(done.plan.etag, p.text, p.key);   // what the cloud now holds is this very text
       keep({ base: done.plan.etag, key: p.key, savedAt: p.savedAt });
       const now = stored();   // in storage then, or now (the plan open now is that one or one made from it)
       keep(words(now, (was && was.ok) || (now && now.ok))); noted = true; behind = false;
+      await keepPlan(done.plan.etag, p.text, p.key);   // what the cloud now holds is this very text
       st.cloud = done.plan; st.first = false; st.snoozed = null; st.loads = host.loads();
       await photosUp(null).catch(error => { st.photoNote = error.message; });
       set('in-step');
@@ -227,10 +231,10 @@
       try { photos = await fetchPhotos(st.files); } catch (error) { st.photoNote = error.message; }
       const ok = await host.open(text, { image: photos.image, thumbs: photos.thumbs, why: why || 'Before opening the plan from the cloud', from: 'the cloud' });
       if (!ok) return false;
-      await keepPlan(etag, text, host.key());
       keep({ base: etag, key: host.key(), savedAt: meta.savedAt || null, ...photos.etags, extrasKey: await host.extrasKey() });
       const now = stored();
       keep(words(now, now && now.ok)); noted = true; behind = false;
+      await keepPlan(etag, text, host.key());
       st.cloud = { ...(st.cloud || {}), etag, meta }; st.first = false; st.snoozed = null; st.loads = host.loads();
       set('in-step');
       return true;

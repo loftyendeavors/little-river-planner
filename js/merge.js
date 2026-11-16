@@ -396,35 +396,6 @@
     return '';
   }
 
-  // ───────────────────────────── what one plan changed in another ─────────────────────────────
-  /**
-   * What `to` holds that `from` does not, list by list: { lists: { plantings: { added, changed, removed } … }, values: [keys],
-   * recorded: [{ id, job, date }], takenBack: [{ id, job }] }. It is how a message can say what was taken in.
-   */
-  function changes(from, to) {
-    const out = { lists: {}, values: [], recorded: [], takenBack: [] };
-    if (!isObj(from) || !isObj(to)) return out;
-    const visit = (a, b, name) => {
-      if (recordLists(a, b)) {
-        const A = new Map((a || []).map(x => [x.id, x])), B = new Map((b || []).map(x => [x.id, x]));
-        const d = { added: [...B.keys()].filter(id => !A.has(id)), changed: [...B.keys()].filter(id => A.has(id) && !same(A.get(id), B.get(id))), removed: [...A.keys()].filter(id => !B.has(id)) };
-        if (d.added.length || d.changed.length || d.removed.length) out.lists[name] = d;
-      } else if (!same(a, b)) out.values.push(name);
-    };
-    for (const key of new Set([...Object.keys(from), ...Object.keys(to)])) {
-      if (['seedInventory', 'lrfNext', 'nursery'].includes(key) && isObj(from[key] || {}) && isObj(to[key] || {})) { for (const k of new Set([...Object.keys(from[key] || {}), ...Object.keys(to[key] || {})])) visit((from[key] || {})[k], (to[key] || {})[k], key + '.' + k); }
-      else if (key === 'lrfNextKeep') { const a = (isObj(from[key]) && from[key].keep) || {}, b = (isObj(to[key]) && to[key].keep) || {}; for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) visit(a[k], b[k], 'lrfNext.' + k); }
-      else visit(from[key], to[key], key);
-    }
-    const A = new Map(listOf(from, 'plantings').map(p => [p.id, p]));
-    for (const p of listOf(to, 'plantings')) {
-      const was = doneOf(A.get(p.id)), now = doneOf(p);
-      for (const [job, date] of Object.entries(now)) if (!same(was[job], date)) out.recorded.push({ id: p.id, job, date });
-      for (const job of Object.keys(was)) if (now[job] === undefined) out.takenBack.push({ id: p.id, job });
-    }
-    return out;
-  }
-
   // ───────────────────────────── the merge ─────────────────────────────
   const RULES = { 'plantings[]': joinPlanting, 'seedInventory.lots[].quantity': (ctx, pat, path, s, m, t) => t };   // a lot's count is worked out afterwards, from all three plans
   /**
@@ -454,7 +425,7 @@
     }
   }
 
-  const api = { merge, verify, changes, unkeyed, same, WHOLE, NO_IDS, PLACE, TIME };
+  const api = { merge, verify, unkeyed, same, WHOLE, NO_IDS };
   root.LRFMerge = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof self !== 'undefined' ? self : globalThis);

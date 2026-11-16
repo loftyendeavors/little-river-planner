@@ -73,7 +73,10 @@ NODE = [
   ('client: a plan kept under another stamp is handed out as the plan to compare with', 'js/sync.js', "return k && k.etag === cfg.base ? k : null;", "return k || null;", 'client'),
   ('client: a kept plan that cannot be written fails the send', 'js/sync.js', "        st.kept = null; st.keptNote = (error && error.message) || 'The plan to compare with could not be kept.';", "        throw error;", 'client'),
   ('client: the page says a plan is kept when none is', 'js/sync.js', "kept: !!cfg.base && st.kept === cfg.base, keptNote", "kept: !!cfg.base, keptNote", 'client'),
-  ('client: leaving the cloud leaves the kept plan behind', 'js/sync.js', "if (kept && !quiet()) Promise.resolve().then(() => kept.clear()).catch(() => {});", "", 'client'),
+  ('client: leaving the cloud leaves the kept plan behind', 'js/sync.js', "if (kept && !st.keptOff && !quiet()) Promise.resolve().then(() => kept.clear()).catch(() => {});", "", 'client'),
+  ('client: a database that never answers leaves the send waiting', 'js/sync.js', "try { await answered(kept.put({ etag, text, key, at: new Date().toISOString() }));", "try { await kept.put({ etag, text, key, at: new Date().toISOString() });", 'client'),
+  ('client: a database that did not answer is asked again at every send', 'js/sync.js', "t = later(() => { st.keptOff = true; reject(", "t = later(() => { reject(", 'client'),
+  ('client: the plan is kept before the stamp it is kept under is noted', 'js/sync.js', "      keep({ base: done.plan.etag, key: p.key, savedAt: p.savedAt });\n", "      await keepPlan(done.plan.etag, p.text, p.key); keep({ base: done.plan.etag, key: p.key, savedAt: p.savedAt });\n", 'client'),
 ]
 PAGE = [
   ('app: a change is not handed to sync', 'js/app.js', "    folderSoon();\n    if (sync) sync.touch();\n    emit('plan');\n  }", "    folderSoon();\n    emit('plan');\n  }"),
