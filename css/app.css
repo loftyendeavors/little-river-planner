@@ -2265,6 +2265,7 @@ table.as tr.as-thing td { background: var(--surface); }
 .hint.cols { max-width: min(520px, calc(100vw - 24px)); }
 .hint.cols dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-8) var(--space-16); }
 .hint.cols dd { margin: 0; }
+.map-tools .help-btn { width: var(--control); height: var(--control); }   /* among the map's tools it is as high as they are */
 
 /* A sheet, and its foot: the way back at the left, then Cancel and the one dark button at the right. */
 .dialog { border: 0; border-radius: var(--corner-20); padding: var(--space-24); box-shadow: var(--shadow-float); }

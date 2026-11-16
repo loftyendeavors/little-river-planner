@@ -102,6 +102,7 @@ with sync_playwright() as pw:
         check('a planting still offers the longer series, beside the quick "more, every so many days"', link['plain']['link'] and link['plain']['quick'], link)
         check('a cover crop planting keeps the quick repeat and does not offer a series it cannot have', 'cover' in link and link['cover']['quick'] and not link['cover']['link'], link)
         check('(the cover crop planted for that look is out of the plan again)', ev("LRFApp.state.plan.plantings.length") == full['n'], ev("LRFApp.state.plan.plantings.length"))
+        ev("(() => { LRFApp.select(null); LRFApp.setView('map'); })()"); page.wait_for_timeout(500)
         page.click('#mapHelp'); page.wait_for_timeout(300)
         how = ev("(() => { const a = document.getElementById('ovSeries'), dd = a && a.closest('dd'), dl = dd && dd.parentElement; if (!dd) return null; const dt = dd.previousElementSibling; return { inCell: a.parentElement === dd, whole: dd.childNodes.length === 3, name: dt.textContent, pairs: dl.querySelectorAll('dt').length === dl.querySelectorAll('dd').length, oneBlock: a.getBoundingClientRect().left > dt.getBoundingClientRect().right, side: !!document.querySelector('#inspectorBody .howto') }; })()")
         page.keyboard.press('Escape'); page.wait_for_timeout(200)

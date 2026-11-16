@@ -151,7 +151,7 @@ with sync_playwright() as pw:
     shot("map-help")
     page.keyboard.press("Escape"); wait(250)
     esc2 = js("return { card: !!$('mapHelpCard'), focus: document.activeElement === $('mapHelp'), open: $('mapHelp').getAttribute('aria-expanded') }")
-    press("#mapHelp", 300); page.mouse.click(40, 500); wait(250)
+    press("#mapHelp", 300); page.mouse.click(100, 26); wait(250)   # the farm's name in the header: a click there does nothing else
     away = js("return { card: !!$('mapHelpCard'), ...saved() }")
     check("Escape closes the card and gives “?” the focus back; a click elsewhere closes it; nothing has changed", not esc2["card"] and esc2["focus"] and esc2["open"] == "false" and not away["card"] and away["key"] == key0 and away["undo"] == 0, [esc2, away])
     went = press("#mapHelp", 300) and press("#ovSeries", 700) and js("return { sel: S.sel && S.sel.type, form: !!document.querySelector('#inspectorBody #srForm'), card: !!$('mapHelpCard'), view: S.view, ...saved() }")
