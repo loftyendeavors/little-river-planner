@@ -56,7 +56,7 @@ had a name of its own for the same part is listed beside it there, so the two ca
 |---|---|---|
 | A card | `.card`; floating, `.card.float` | Corner 20. On the page: the soft shadow (`--shadow-card`), no border. Floating: the strong shadow (`--shadow-float`) |
 | A row | `.row`, with `.row-name`, `.row-detail`, `.row-word` | A photograph 40 square, a name over one line of detail, one word at the right |
-| A tick | `.tick.round`; `.tick.square` or any checkbox | The round one finishes a job; the square one sets a yes or a no, in ink |
+| A tick | `.tick.round`; any checkbox | The round one finishes a job; the square one sets a yes or a no, in ink |
 | A button | `.btn`; `.btn.primary` (or `.btn.main`); `.btn.quiet`; `.btn.small` | Standard is bounded, main is ink, quiet has no edge. 13 px, weight 600, corner 8 |
 | A switch | `.seg` | Bordered, the chosen side in ink |
 | A filter pill | `.chip` | A pill; the chosen one in ink |

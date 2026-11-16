@@ -2177,8 +2177,8 @@ table.as tr.as-thing td { background: var(--surface); }
 .row-detail { display: block; font-size: var(--type-13); font-weight: 400; color: var(--muted); }
 .row-word { font-size: var(--type-13); font-weight: 600; white-space: nowrap; }
 
-/* Two ticks. The round one finishes a job (.tick.round, drawn with Tasks' own, above). The square one sets a yes or a no. */
-.tick.square, input[type="checkbox"] { accent-color: var(--ink); }
+/* Two ticks. The round one finishes a job (.tick.round, drawn with Tasks' own, above). The square one sets a yes or a no: it is
+   any checkbox, in the page's own ink, which the rule near the head of this sheet gives. Said once, there. */
 
 /* Three buttons. Standard: bounded. Main: ink. Quiet: no edge, a soft ground under the pointer. */
 .btn, .tool-btn, .tl-tools > button, .tl-zoom button, .tk-quiet, .tk-today, .tk-soft {
