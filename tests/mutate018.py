@@ -37,7 +37,7 @@ FAULTS = [
  ('the cursor is lost when the list is drawn again', 'js/seeds.js', "    if (typing && !lotRow.focus) lotRow.focus = typing;", ""),
  ('Escape does not close the lot line', 'js/seeds.js', "onkeydown: e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeLotRow(); } } },", "},"),
  ('a lot added under a row is always on hand', 'js/seeds.js', "unit, status: lotRow.status }, ctx); }", "unit, status: 'usable' }, ctx); }"),
- ('the lot line sits to the left of its variety', 'css/app.css', "#sdBody tr.sd-lotrow > td { padding: 0 12px 10px 78px;", "#sdBody tr.sd-lotrow > td { padding: 0 12px 10px 8px;"),
+ ('the lot line sits to the left of its variety', 'css/app.css', "#sdBody tr.sd-lotrow > td { padding: 0 var(--space-12) var(--space-8) 78px;", "#sdBody tr.sd-lotrow > td { padding: 0 12px 10px 8px;"),
  ('the lot line stays open after a lot is added', 'js/seeds.js', "    Object.assign(lotRow, { varietyId: '', amount: '', focus: '', node: null });\n    ui.sel = { type: 'variety', id: v.id }; ui.panelKey = ''; schedule();", "    ui.sel = { type: 'variety', id: v.id }; ui.panelKey = ''; schedule();"),
 ]
 if mode == 'list': print(json.dumps({'page': len(FAULTS)})); sys.exit(0)

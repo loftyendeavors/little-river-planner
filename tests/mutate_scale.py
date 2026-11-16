@@ -10,10 +10,10 @@ from pathlib import Path
 repo, scratch = [Path(x).resolve() for x in sys.argv[1:3]]
 mode = sys.argv[3] if len(sys.argv) > 3 else "node"; words = [w.lower() for w in sys.argv[4:]]
 CSS, UI, DESIGN = "css/app.css", "js/ui.js", "DESIGN.md"
-BTN = ".btn { border: 1px solid var(--line); background: var(--raised); border-radius: var(--corner-8); padding: 6px 12px; font-weight: 600; }"
+BTN = ".btn { border: 1px solid var(--line); background: var(--raised); border-radius: var(--corner-8); padding: var(--space-4) var(--space-12); font-weight: 600; }"
 SAVE = ".save-state { border: 0; background: none; font: 500 var(--type-13) var(--mono);"
 PHONE = "body.phone .top .btn { font-size: var(--type-13); }"
-TYPE, CORNER, SPEED, NAMED, LEFT, SCRIPT, PAGE = "every type size", "every corner", "every transition and every animation", "the steps are named once", "everything listed as left alone", "no script sets a size", "DESIGN.md names the same steps"
+TYPE, CORNER, SPACE, SPEED, NAMED, LEFT, SCRIPT, PAGE = "every type size", "every corner", "every padding and gap", "every transition and every animation", "the steps are named once", "everything listed as left alone", "no script sets a size", "DESIGN.md names the same steps"
 NODE = [
  ("a size off the scale", CSS, None, ".one-more { font-size: 12.5px; }", TYPE),
  ("a size on the scale, written as a number and not by its name", CSS, PHONE, PHONE.replace("var(--type-13)", "13px"), TYPE),
@@ -24,6 +24,11 @@ NODE = [
  ("a corner of two sizes, one of them off the scale", CSS, None, ".one-more { border-radius: var(--corner-8) 7px 0 0; }", CORNER),
  ("a corner as a share of the box", CSS, None, ".one-more { border-radius: 40%; }", CORNER),
  ("a new mark with a corner of its own is not on the list", CSS, None, ".one-more-bar { border-radius: 3px; }", CORNER),
+ ("a padding off the scale", CSS, None, ".one-more { padding: 6px 10px; }", SPACE),
+ ("a gap off the scale", CSS, None, ".one-more { column-gap: 14px; }", SPACE),
+ ("a padding on the scale, written as a number and not by its name", CSS, None, ".one-more { padding-left: 12px; }", SPACE),
+ ("a step of space is given another value", CSS, "--space-12: 12px;", "--space-12: 10px;", NAMED),
+ ("the design page names other steps of space", DESIGN, "4, 8, 12, 16, 24, 32", "4, 6, 10, 14, 20, 28", PAGE),
  ("a transition at a third speed", CSS, None, ".one-more { transition: opacity 0.4s var(--ease); }", SPEED),
  ("a transition on an easing of its own", CSS, None, ".one-more { transition: opacity var(--speed-press) ease-in; }", SPEED),
  ("a transition on no easing", CSS, None, ".one-more { transition: opacity var(--speed-press); }", SPEED),

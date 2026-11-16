@@ -96,7 +96,7 @@ PAGE = [
  ("Escape leaves the calendar open", "js/sowview.js", "if (e.key === 'Escape') { if (ui.pop) closePop(); else if (ui.open)", "if (e.key === 'Escape') { if (ui.open)"),
  ("on a phone the calendar is a small box, not a sheet", "css/app.css", "body.phone .tk-pop { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto;", "body.phone .tk-pop { right: 0; bottom: 0;"),
  ("on a phone both lists are shown at once", "css/app.css", "body.phone .tk-list.off { display: none; }", "body.phone .tk-list.off { display: block; }"),
- ("on a phone the week's arrows are too small for a thumb", "css/app.css", "body.phone .tk-step button { width: 40px; height: 40px; }", "body.phone .tk-step button { width: 25px; height: 28px; }"),
+ ("on a phone the week's arrows are too small for a thumb", "css/app.css", "body.phone .tk-step button { width: var(--control-phone); height: var(--control-phone); }", "body.phone .tk-step button { width: 25px; height: 28px; }"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)
 faults = NODE if mode == "node" else PAGE
