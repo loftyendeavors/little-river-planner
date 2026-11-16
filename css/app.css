@@ -1917,6 +1917,8 @@ body.phone .views-sep { display: none; }
 body.phone #settleBadge { display: none !important; }
 .cleanup.flash { animation: wait-flash 0.9s ease-out; }
 @media (max-width: 1400px) { .views-sep { margin: 0 3px; } .settle-badge, .wait-badge { padding-inline: var(--space-8); } }
+/* at the narrowest desktop width the button gives back what its word added, so the year beside the name keeps clear of the tabs */
+@media (max-width: 1340px) { .settle-badge { padding-inline: var(--space-4); gap: var(--space-4); } .settle-badge b { padding-inline: var(--space-4); } }
 
 /* the Nursery: a title one line high, the tabs under it, so the tabs stay where they are from one to the next */
 .nu-head h2 { white-space: nowrap; }
@@ -2271,6 +2273,8 @@ body.phone .top { padding-block: var(--space-4); }   /* the header stays one sho
 #sdFigs { display: grid; gap: var(--space-4); }
 .sd-arrived { margin: var(--space-16) 0 0; }
 .view-assume .as-head #asCount { display: block; flex-basis: 100%; font-size: var(--type-13); color: var(--muted); }
+/* one crop at a time: the card leads with that crop's own figures, and the head gives its room to the card */
+.view-assume[data-way="card"] .as-head #asCount { display: none; }
 /* the Nursery's figures: one line under the title, the values in ink and bold; each figure's second line is behind "?" */
 #trWrap { display: flex; flex-direction: column; }
 #trWrap > .nu-head { order: 0; }

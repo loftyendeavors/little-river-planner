@@ -89,6 +89,9 @@ with sync_playwright() as pw:
     check("the header says Loose ends, and its count is what needs the grower and nothing that can wait", not st["hidden"] and st["drawn"] and st["text"] == f"Loose ends{st['needs']:,}" and st["n"] == f"{st['needs']:,}" and st["said"] == st["needs"] and st["settle"] == st["raw"] and st["needs"] == st["raw"], st)
     check("the button is the page's own surface, never a coloured panel; its count alone is orange; its tooltip says what is counted", st["bg"] == st["raised"] and st["bg"] != st["soft"] and st["nBg"] == st["orange"] and "booked twice" in st["title"] and "can wait" in st["title"], st)
 
+    head = js("const y = $('seasonYear').getBoundingClientRect(), n = document.querySelector('nav.views').getBoundingClientRect(), t = document.querySelector('header.top'); return { year: Math.round(y.right), tabs: Math.round(n.left), side: t.scrollWidth > t.clientWidth + 1, high: Math.round(t.getBoundingClientRect().height) }")
+    check("with the button in it the header is still one line, and the year beside the name keeps clear of the tabs", head["year"] + 4 <= head["tabs"] and not head["side"] and head["high"] <= 60, head)
+
     # ══ the list ══
     lst = open_list() or {}
     rows = {r["key"]: r for r in lst.get("rows", [])}
@@ -110,34 +113,34 @@ with sync_playwright() as pw:
     check("ground booked twice opens the Map from another view with its list of fixes, one for each counted, and changes nothing", bool(went) and went["view"] == "map" and went["sel"] is None and went["there"] and went["head"] == f"To settle · {st['raw']}" and went["fixes"] == st["raw"] and not went["list"] and went["key"] == key0 and went["undo"] == 0, went)
 
     js("A.setView('map')"); wait(300)
-    d = row("differ") and js("""const dlg = $('asDifferDlg'), s = A.auditSurvey(), hv = s.harvest; return { view: S.view, open: dlg.open, head: (dlg.querySelector('.au-head b') || {}).textContent, line: txt('asDiffLine'), tidy: drawn($('asTidy')), review: drawn($('asReview')) && !$('asReview').disabled, more: !!$('asAuditMore') && !$('asAuditMore').open,
+    d = row("differ") and js("""const dlg = $('asDifferDlg'), s = A.auditSurvey(), hv = s.harvest; if (!dlg) return { view: S.view, open: false, ...saved() }; return { view: S.view, open: dlg.open, head: (dlg.querySelector('.au-head b') || {}).textContent, line: txt('asDiffLine'), tidy: drawn($('asTidy')), review: drawn($('asReview')) && !$('asReview').disabled, more: !!$('asAuditMore') && !$('asAuditMore').open,
       figures: s.days.own + s.days.waiting + s.nursery.differ + hv.yield + hv.window + hv.turnover + hv.copy, done: txt('asDifferDone'), dark: dlg.querySelectorAll('.btn.primary').length, onPage: !!document.querySelector('#assumeView #asAudit, #assumeView #asHints, #assumeView .as-audit'), ...saved() };""")
     check("plantings that differ from the list opens the Assumptions list with a sheet: its title, one sentence, the two actions, the count kind by kind closed, and Done as its one dark button",
-          bool(d) and d["view"] == "assume" and d["open"] and d["head"] == "Plantings that differ from your list" and "figures of their own" in d["line"] and d["tidy"] and d["review"] and d["more"] and d["done"] == "Done" and d["dark"] == 1 and d["key"] == key0, d)
-    check("its row counts the figures the sheet speaks of", bool(d) and rows.get("differ", {}).get("word") == f"{d['figures']:,} figure{'' if d['figures'] == 1 else 's'}", [rows.get("differ"), d])
+          bool(d) and d["view"] == "assume" and d["open"] and d.get("head") == "Plantings that differ from your list" and "figures of their own" in d["line"] and d["tidy"] and d["review"] and d["more"] and d["done"] == "Done" and d["dark"] == 1 and d["key"] == key0, d)
+    check("its row counts the figures the sheet speaks of", bool(d) and "figures" in d and rows.get("differ", {}).get("word") == f"{d['figures']:,} figure{'' if d['figures'] == 1 else 's'}", [rows.get("differ"), d])
     shot("loose-differ")
     press("#asReview", 900)
-    rv = js("return { review: !!$('auditDlg') && $('auditDlg').open, sheet: $('asDifferDlg').open }")
+    rv = js("return { review: !!$('auditDlg') && $('auditDlg').open, sheet: !!$('asDifferDlg') }")
     page.keyboard.press("Escape"); wait(400)
     check("“See what differs…” closes the sheet and opens the review window, one over nothing", rv["review"] and not rv["sheet"] and not js("return !!$('auditDlg')"), rv)
     row("differ"); press("#asDifferDone")
     frame = js("""const head = document.querySelector('#assumeView .as-head'), t = $('asTitle').getBoundingClientRect(), c = $('asCount'), cr = c.getBoundingClientRect(), mode = document.querySelector('#assumeView .as-mode').getBoundingClientRect(), first = [...document.querySelectorAll('#asBody tr')].find(drawn);
-      return { sheet: $('asDifferDlg').open, notices: [...document.querySelectorAll('#assumeView .as-audit, #assumeView #asAudit, #assumeView #asHints')].filter(drawn).length, count: c.textContent.trim().length > 0 && drawn(c), under: cr.top >= t.bottom - 2 && cr.bottom <= mode.top + 1, inHead: head.contains(c), one: Math.round(cr.height / parseFloat(getComputedStyle(c).lineHeight)), first: first ? Math.round(first.getBoundingClientRect().top) : null, ...saved() };""")
-    check("Done closes it; on the Assumptions list no notice stands, and one line of figures is under the title, over the page's controls", not frame["sheet"] and frame["notices"] == 0 and frame["count"] and frame["under"] and frame["inHead"] and frame["one"] == 1 and frame["key"] == key0 and frame["undo"] == 0, frame)
+      return { sheet: !!$('asDifferDlg'), kept: !!document.querySelector('#asKept[hidden] #asAudit'), notices: [...document.querySelectorAll('#assumeView .as-audit, #assumeView #asAudit, #assumeView #asHints')].filter(drawn).length, count: c.textContent.trim().length > 0 && drawn(c), under: cr.top >= t.bottom - 2 && cr.bottom <= mode.top + 1, inHead: head.contains(c), one: Math.round(cr.height / parseFloat(getComputedStyle(c).lineHeight)), first: first ? Math.round(first.getBoundingClientRect().top) : null, ...saved() };""")
+    check("Done closes it; on the Assumptions list no notice stands, and one line of figures is under the title, over the page's controls", not frame["sheet"] and frame["kept"] and frame["notices"] == 0 and frame["count"] and frame["under"] and frame["inHead"] and frame["one"] == 1 and frame["key"] == key0 and frame["undo"] == 0, frame)
     check("the list of crops starts within 340 px of the top of a window 900 high", frame["first"] is not None and frame["first"] <= 340, frame)
     shot("loose-assumptions")
 
     js("A.setView('map'); LRFAssume.setMode('harvest', 'list');"); wait(300)
-    g = row("guide") and js("""const dlg = $('asGuideDlg'), h = $('asHints'); return { view: S.view, mode: document.getElementById('assumeView').dataset.mode, open: dlg.open, head: (h.querySelector('h2') || {}).textContent || '', names: (h.querySelector('small') || {}).textContent || '', chips: new Set([...document.querySelectorAll('#asBody .as-hint')].map(b => b.dataset.hint)).size,
+    g = row("guide") and js("""const dlg = $('asGuideDlg'), h = $('asHints'); return { view: S.view, mode: document.getElementById('assumeView').dataset.mode, open: !!dlg && dlg.open && dlg.contains(h), head: (h.querySelector('h2') || {}).textContent || '', names: (h.querySelector('small') || {}).textContent || '', chips: new Set([...document.querySelectorAll('#asBody .as-hint')].map(b => b.dataset.hint)).size,
       foot: [...h.querySelectorAll('.sheet-foot .btn')].map(b => [b.textContent, b.classList.contains('primary')]), ...saved() };""")
     n_guide = len(g["names"].split(", ")) if g and g["names"] else 0
     check("published guidance not yet used opens the Assumptions list on Days to harvest with a sheet naming the crops, as many as its row says; Cancel, and “Use them all…” as its one dark button",
           bool(g) and g["view"] == "assume" and g["mode"] == "days" and g["open"] and n_guide > 0 and g["head"].startswith(f"{n_guide} crop") and rows.get("guide", {}).get("word") == f"{n_guide} crop{'' if n_guide == 1 else 's'}" and g["foot"] == [["Cancel", False], ["Use them all…", True]] and g["key"] == key0, [g, rows.get("guide")])
     shot("loose-guide")
     press("#asGuideCancel")
-    check("Cancel closes it and nothing has changed", not js("return $('asGuideDlg').open") and js("return saved()") == {"key": key0, "undo": 0})
+    check("Cancel closes it and nothing has changed", not js("return !!$('asGuideDlg')") and js("return saved()") == {"key": key0, "undo": 0})
     if row("guide") and press("#asHintsAll", 900):
-        ask = js("const a = document.querySelector('dialog[open]'); return { sheet: $('asGuideDlg').open, ask: !!a && a.id !== 'asGuideDlg', text: a ? a.textContent.slice(0, 160) : '', ...saved() }")
+        ask = js("const a = document.querySelector('dialog[open]'); return { sheet: !!$('asGuideDlg'), ask: !!a && a.id !== 'asGuideDlg', text: a ? a.textContent.slice(0, 160) : '', ...saved() }")
         page.keyboard.press("Escape"); wait(400)
         check("“Use them all…” closes the sheet and asks first, showing what would move: nothing has changed until that is answered", not ask["sheet"] and ask["ask"] and ask["key"] == key0 and ask["undo"] == 0 and js("return saved()") == {"key": key0, "undo": 0}, ask)
     else: check("“Use them all…” closes the sheet and asks first, showing what would move: nothing has changed until that is answered", False, "no row for guidance, or no button in its sheet")

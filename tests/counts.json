@@ -119,7 +119,7 @@
 
   "look": 33,
 
-  "loose": 30,
+  "loose": 31,
 
   "mixed": 61,
 
@@ -212,7 +212,7 @@
  },
  "site2": {
 
-  "loose-site": 31,
+  "loose-site": 32,
 
   "plain-site": 47,
 
@@ -240,7 +240,7 @@
  },
  "site4": {
 
-  "loose-site @1480": 31,
+  "loose-site @1480": 32,
 
   "r1-site @1480": 67,
 
@@ -261,7 +261,7 @@
  },
  "site5": {
 
-  "loose-site @3440": 31,
+  "loose-site @3440": 32,
 
   "r1-site @3440": 67,
 

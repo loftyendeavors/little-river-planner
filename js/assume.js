@@ -127,7 +127,7 @@
   // ───────────────────────── what Loose ends lists for this page, and the two sheets it opens ─────────────────────────
   // The two notices that stood on this page (plantings that differ from the list; published guidance not used) are sheets
   // now, opened from Loose ends in the header (DESIGN.md, rule 4). Their words and controls are as they were.
-  let differDlg = null, guideDlg = null;
+  let differDlg = null, guideDlg = null, kept = null;
   /** The crops of the grower's own whose published starting point differs from how the plan counts now. */
   function guidance(eng, plan) {
     const used = new Map(), list = plan.settings.cropTypeList || {}, out = [];
@@ -150,22 +150,28 @@
       offers.length ? { key: 'guide', kind: 'minute', name: 'Published guidance not yet used', detail: 'On Assumptions: where days are counted from', word: plural(offers.length, 'crop'), n: offers.length, open: openGuide } : null
     ].filter(Boolean);
   }
+  // A sheet is in the page only while it is open, like every other window here. What it shows (the summary; the offers) is kept
+  // in a part of the page that is not drawn, where it is filled as before, and is lent to the sheet for as long as it is open.
+  function sheet(id, part, foot, shut) {
+    const dlg = h('dialog.dialog.as-sheet', { id, oncancel: e => { e.preventDefault(); shut(); } }, part, foot);
+    document.body.append(dlg); dlg.showModal();
+    return dlg;
+  }
+  function closeDiffer() { if (!differDlg) return; kept.append($('asAudit')); differDlg.close(); differDlg.remove(); differDlg = null; }
+  function closeGuide() { if (!guideDlg) return; kept.append($('asHints')); guideDlg.close(); guideDlg.remove(); guideDlg = null; }
   function openDiffer() {
     if (App.state.view !== 'assume') App.setView('assume');
     render();
-    if (!differDlg.open) differDlg.showModal();
+    if (!differDlg) differDlg = sheet('asDifferDlg', $('asAudit'), h('div.sheet-foot', h('button.btn.primary', { type: 'button', id: 'asDifferDone', onclick: closeDiffer }, 'Done')), closeDiffer);
   }
   function openGuide() {
     if (App.state.view !== 'assume') App.setView('assume');
     ui.mode = 'days'; render();
-    if (!$('asHints').hidden && !guideDlg.open) guideDlg.showModal();
+    if (!$('asHints').hidden && !guideDlg) guideDlg = sheet('asGuideDlg', $('asHints'), null, closeGuide);
   }
   function sheets() {
-    differDlg = h('dialog.dialog.as-sheet', { id: 'asDifferDlg', oncancel: e => { e.preventDefault(); differDlg.close(); } },
-      h('section.as-audit', { id: 'asAudit', 'aria-label': 'Figures kept on plantings' }),
-      h('div.sheet-foot', h('button.btn.primary', { type: 'button', id: 'asDifferDone', onclick: () => differDlg.close() }, 'Done')));
-    guideDlg = h('dialog.dialog.as-sheet', { id: 'asGuideDlg', oncancel: e => { e.preventDefault(); guideDlg.close(); } }, h('div.as-guide', { id: 'asHints', hidden: true }));
-    document.body.append(differDlg, guideDlg);
+    kept = h('div', { id: 'asKept', hidden: true }, h('section.as-audit', { id: 'asAudit', 'aria-label': 'Figures kept on plantings' }), h('div.as-guide', { id: 'asHints', hidden: true }));
+    document.body.append(kept);
   }
 
   // ───────────────────────── figures kept on plantings: the summary ─────────────────────────
@@ -179,8 +185,8 @@
       h('h2.au-head', h('b', 'Plantings that differ from your list')),
       h('p.au-line.au-lead', { id: 'asDiffLine' }, !open ? 'Every planting follows your list.' : `Some plantings still carry figures of their own, so your list does not decide them: ${say.length ? say.join(', ') : 'copies of crop values'}. Most can go onto the list with nothing changing; the rest would move a date or a yield, and are yours to decide.`),
       h('div.au-acts',
-        open ? h('button.btn.small', { type: 'button', id: 'asTidy', title: 'Moves onto the list every figure that can go there with no date, no yield and no dollar changing. It is worked out and shown first; the plan as it stands is kept as a snapshot, and one undo takes it back.', onclick: () => { differDlg.close(); tidy(); } }, 'Move onto the list what changes nothing…') : null,
-        h('button.btn.small', { type: 'button', id: 'asReview', disabled: !open, title: open ? 'The plantings that would change if they followed the list, crop by crop, with what would move. Nothing changes until you press Apply.' : 'Nothing to see: every planting follows the list.', onclick: () => { differDlg.close(); openAudit(); } }, 'See what differs…')),
+        open ? h('button.btn.small', { type: 'button', id: 'asTidy', title: 'Moves onto the list every figure that can go there with no date, no yield and no dollar changing. It is worked out and shown first; the plan as it stands is kept as a snapshot, and one undo takes it back.', onclick: () => { closeDiffer(); tidy(); } }, 'Move onto the list what changes nothing…') : null,
+        h('button.btn.small', { type: 'button', id: 'asReview', disabled: !open, title: open ? 'The plantings that would change if they followed the list, crop by crop, with what would move. Nothing changes until you press Apply.' : 'Nothing to see: every planting follows the list.', onclick: () => { closeDiffer(); openAudit(); } }, 'See what differs…')),
       h('details.au-more', { id: 'asAuditMore' }, h('summary', 'The count, kind by kind'),
       h('p.au-figs', fig('own days', d.own, 'Plantings that carry their own days to harvest and do not follow this list'), fig('own nursery weeks', s.nursery.differ, 'Plantings that carry nursery weeks of their own that differ from the crop’s now'),
         fig('own yield', hv.yield, 'Plantings that carry their own yield'), fig('own harvest days', hv.window, 'Plantings that carry their own harvest days'), fig('own turnover', hv.turnover, 'Plantings that carry their own turnover days'),
@@ -577,9 +583,9 @@
       if (offers.length) all.append(h('h2', h('b', `${plural(offers.length, 'crop')} of yours ${offers.length === 1 ? 'has' : 'have'} published guidance on where days are counted from that the plan does not use yet`)),
         h('p', 'Each crop’s row on this list offers its own. “Use them all…” counts every one of them the way Johnny’s says; what moves is shown before anything changes.'),
         h('small', offers.map(o => o.c.name).join(', ')),
-        h('div.sheet-foot', h('button.btn', { type: 'button', id: 'asGuideCancel', onclick: () => guideDlg.close() }, 'Cancel'),
-          h('button.btn.primary', { type: 'button', id: 'asHintsAll', title: 'Count each of these crops the way Johnny’s says. What moves is shown before anything changes.', onclick: () => { guideDlg.close(); App.setStarts(offers.map(o => hintChange(eng, o.c, o.hint)), `${plural(offers.length, 'crop')}: days counted from where Johnny’s says`, { ask: true }); } }, 'Use them all…')));
-      else if (guideDlg.open) guideDlg.close();
+        h('div.sheet-foot', h('button.btn', { type: 'button', id: 'asGuideCancel', onclick: closeGuide }, 'Cancel'),
+          h('button.btn.primary', { type: 'button', id: 'asHintsAll', title: 'Count each of these crops the way Johnny’s says. What moves is shown before anything changes.', onclick: () => { closeGuide(); App.setStarts(offers.map(o => hintChange(eng, o.c, o.hint)), `${plural(offers.length, 'crop')}: days counted from where Johnny’s says`, { ask: true }); } }, 'Use them all…')));
+      else closeGuide();
     }
     refocus();
   }

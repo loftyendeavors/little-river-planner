@@ -41,10 +41,11 @@ PAGE = [
  ("seed on order is no filter of the Seeds list", SE, "['short', 'Short of seed'], ['ordered', 'On order'], ", "['short', 'Short of seed'], "),
  ("the filter for seed on order lists what is short of seed", SE, "(id === 'ordered' && !!r && r.onOrder > 0)", "(id === 'ordered' && !!r && r.short > 0)"),
  ("the row for supplier days opens Seeds with no filter pressed", SE, "App.setView('seeds'); ui.filter = 'open'; ui.tab = 'list'; select(null);", "App.setView('seeds'); ui.tab = 'list'; select(null);"),
- ("“See what differs…” leaves the sheet open under the review window", AS, "onclick: () => { differDlg.close(); openAudit(); } }, 'See what differs…')", "onclick: () => { openAudit(); } }, 'See what differs…')"),
+ ("“See what differs…” leaves the sheet open under the review window", AS, "onclick: () => { closeDiffer(); openAudit(); } }, 'See what differs…')", "onclick: () => { openAudit(); } }, 'See what differs…')"),
  ("the sheet of what differs has two dark buttons", AS, "h('button.btn.small', { type: 'button', id: 'asTidy',", "h('button.btn.small.primary', { type: 'button', id: 'asTidy',"),
- ("the sheet of published guidance is asked for on Yield and price, where it has nothing to show", AS, "    ui.mode = 'days'; render();\n    if (!$('asHints').hidden && !guideDlg.open) guideDlg.showModal();", "    render();\n    if (!$('asHints').hidden && !guideDlg.open) guideDlg.showModal();"),
- ("the notice of what differs stands on the Assumptions page again", AS, "    document.body.append(differDlg, guideDlg);", "    $('assumeView').querySelector('.as-tools').before(h('section.as-audit', h('b', 'Plantings that differ from your list'))); document.body.append(differDlg, guideDlg);"),
+ ("the sheet of published guidance is asked for on Yield and price, where it has nothing to show", AS, "    ui.mode = 'days'; render();\n    if (!$('asHints').hidden && !guideDlg)", "    render();\n    if (!$('asHints').hidden && !guideDlg)"),
+ ("the notice of what differs stands on the Assumptions page again", AS, "    document.body.append(kept);", "    $('assumeView').querySelector('.as-tools').before(h('section.as-audit', h('b', 'Plantings that differ from your list'))); document.body.append(kept);"),
+ ("at the narrowest desktop width the button pushes the tabs over the year", CSS, "@media (max-width: 1340px) { .settle-badge { padding-inline: var(--space-4); gap: var(--space-4); } .settle-badge b { padding-inline: var(--space-4); } }", ""),
  ("the line of figures is gone from the Assumptions list", CSS, ".view-assume .as-head #asCount { display: block;", ".view-assume .as-head #asCount { display: none;"),
 ]
 if mode == "list": print(json.dumps({"page": len(PAGE)})); sys.exit(0)

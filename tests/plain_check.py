@@ -110,12 +110,12 @@ with sync_playwright() as pw:
     # The note stood above the list until the frame; it is a sheet now, opened from Loose ends in the header (tests/loose_check.py
     # presses that row). Either of its two buttons closes the sheet first, so what it opens is the one window over the page.
     def sheet():
-        js("if (!$('asDifferDlg').open) LRFAssume.openDiffer();"); wait(300)
+        js("if (!$('asDifferDlg')) LRFAssume.openDiffer();"); wait(300)
     js("LRFAssume.setMode('days');"); wait(500); sheet()
     note = js("""const host = $('asAudit'), s = A.auditStudy(), ch = Object.fromEntries(s.rows.map(r => [r.key, r.choice])), v = A.auditPreview(s.rows, ch), more = $('asAuditMore');
       return { head: host.querySelector('.au-head b').textContent, tidy: txt('asTidy'), review: txt('asReview'), line: txt('asDiffLine'), more: more ? { open: more.open, figs: more.querySelectorAll('.au-figs span').length } : null,
         step: { plantings: v.step.plantings, taken: v.step.taken, kept: v.step.kept }, quiet: !v.harvest && !v.sowing && !v.yields.length && !v.ground.length && !v.fresh.length, rows: s.rows.length, differ: s.rows.filter(r => r.choice === 'keep').length, own: A.auditSurvey().days.own, worth: Math.round(v.worth[0]) };""")
-    check('in its sheet: plantings that differ from the list, one button for what changes nothing and one to see what differs', js("return $('asDifferDlg').open && !document.querySelector('#assumeView #asAudit');") and note['head'] == 'Plantings that differ from your list' and note['tidy'] is not None and note['tidy'].startswith('Move onto the list what changes nothing') and note['review'] == 'See what differs…' and 'your list does not decide' in (note['line'] or ''), note)
+    check('in its sheet: plantings that differ from the list, one button for what changes nothing and one to see what differs', js("return !!$('asDifferDlg') && $('asDifferDlg').contains($('asAudit')) && !document.querySelector('#assumeView #asAudit');") and note['head'] == 'Plantings that differ from your list' and note['tidy'] is not None and note['tidy'].startswith('Move onto the list what changes nothing') and note['review'] == 'See what differs…' and 'your list does not decide' in (note['line'] or ''), note)
     check('the count kind by kind is folded away, and still there', note['more'] is not None and note['more']['open'] is False and note['more']['figs'] >= 5, note['more'])
     check('there is something to move that changes nothing, and something that differs', note['step']['plantings'] > 0 and note['quiet'] and note['differ'] > 0, note)
     sheet(); click('#asTidy'); wait(900)
