@@ -2246,9 +2246,10 @@ body.phone .top { padding-block: var(--space-4); }   /* the header stays one sho
    (On the Nursery the controls are its four tabs, and they stand over the figures: see below.)
    No eyebrow and no standing paragraph: what a paragraph said is behind "?" (the words stay in the page, unseen, and "?" reads
    them). Nursery, Seeds and Assumptions stand in it; Tasks was built to it. */
-.as-head .eyebrow, .sd-title .eyebrow, .as-head #asLead, #nuLead { display: none; }
-.as-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-8) var(--space-12); max-width: none; }
-.as-head h2 { font-size: var(--type-24); }
+/* only these three pages: the Harvest page shares the head's name and is not in the frame yet (it becomes the Forecast page) */
+.view-assume .as-head .eyebrow, .nu-head .eyebrow, .sd-title .eyebrow, .view-assume .as-head #asLead, #nuLead { display: none; }
+.view-assume .as-head, .nu-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-8) var(--space-12); max-width: none; }
+.view-assume .as-head h2, .nu-head h2 { font-size: var(--type-24); }
 .sd-title { display: flex; align-items: center; gap: var(--space-8); }
 /* the Nursery's figures: one line under the title, the values in ink and bold; each figure's second line is behind "?" */
 #trWrap { display: flex; flex-direction: column; }
