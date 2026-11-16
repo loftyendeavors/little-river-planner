@@ -1036,6 +1036,37 @@
   /** Take recorded jobs back, as one step: items [{ id, kind }]. */
   const takeBackWork = items => sowingSteps(n => `${n} task${n === 1 ? '' : 's'} taken back`, items || [], (p, item, inventory, ctx) => Week.takeBack(state.engine, inventory, p, item.kind, ctx));
   /**
+   * Put jobs off to a day on purpose, as one step: items [{ id, kind }]. A change to the plan, so the guard rails have
+   * their say. Returns { moved: [{ id, days, from, to, moves }], failed, overlaps }.
+   */
+  function delayWork(items, date) {
+    const ops = [], moved = [], failed = [];
+    for (const item of items || []) {
+      const p = state.engine.planting(item.id);
+      if (!p) continue;
+      try { const r = Week.delay(state.engine, p, item.kind, date); if (r) { ops.push({ before: p, after: r.planting }); moved.push({ id: p.id, days: r.days, from: r.from, to: r.to, moves: r.moves }); } }
+      catch (error) { failed.push({ id: p.id, label: cropLabel(p), why: error.message || 'It could not be moved.' }); }
+    }
+    if (!ops.length) { toast(failed.length ? `Nothing moved: ${failed[0].label}: ${failed[0].why}` : 'That is the day it is planned for already.'); return null; }
+    const was = state.engine;
+    if (!commit(`${ops.length} task${ops.length === 1 ? '' : 's'} put off to ${day(E.s2d(date))}`, ops)) return null;
+    return { moved, failed, overlaps: impact(was, state.engine).overlaps };
+  }
+  /** Skip jobs, or with no day put them back on the list, as one step: items [{ id, kind }]. The plan itself does not change. */
+  function skipWork(items, on) {
+    const ops = [];
+    for (const item of items || []) { const p = state.engine.planting(item.id); if (p && Week.skipOf(p, item.kind) !== (on || null)) ops.push({ before: p, after: Week.skip(p, item.kind, on || null) }); }
+    if (!ops.length) return null;
+    return commit(on ? `${ops.length} task${ops.length === 1 ? '' : 's'} skipped` : `${ops.length} task${ops.length === 1 ? '' : 's'} back on the list`, ops, { unchecked: true }) ? { n: ops.length } : null;
+  }
+  /** A note kept for jobs that are not done yet: items [{ id, kind }]. */
+  function noteWork(items, text) {
+    const note = String(text || '').trim().slice(0, 400), ops = [];
+    for (const item of items || []) { const p = state.engine.planting(item.id); if (p && Week.noteOf(p, item.kind) !== note) ops.push({ before: p, after: Week.withTask(p, 'note', item.kind, note) }); }
+    if (!ops.length) return null;
+    return commit(note ? 'A note on a task' : 'A task’s note cleared', ops, { unchecked: true }) ? { n: ops.length } : null;
+  }
+  /**
    * Set the day sowings are planned for, as one step. Nothing is marked sown and no seed leaves stock: this moves the plan.
    * A transplant keeps the day it goes out and is raised for longer or shorter. A tray batch keeps the day it is due.
    * Seed sown in the ground moves with its planting, so the guard rails have their say. With no date, the plan's own day is put back.
@@ -1420,7 +1451,7 @@
     if (!p0 || !bed || !eng.isSoilBed(bed)) return { no: 'Only a bed in the ground can be divided this way.' };
     if (!varietyIds.length) return { no: 'Tick the varieties to add.' };
     // each variety is a copy of the planting: its date and its choices, another variety, no record of work, and ground of its own
-    const drafts = varietyIds.map(varietyId => { const d = { ...p0, id: uid(), varietyId }; for (const key of ['variety', 'done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'sowOn', 'seat', 'ft', 'startFt', 'bedLayout']) delete d[key]; return d; });
+    const drafts = varietyIds.map(varietyId => { const d = { ...p0, id: uid(), varietyId }; for (const key of ['variety', 'done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'tasks', 'sowOn', 'seat', 'ft', 'startFt', 'bedLayout']) delete d[key]; return d; });
     const group = Rails.mates(eng, p0), res = Rails.equalize(eng, group.length ? group.map(x => x.p.id) : [p0.id], { extra: drafts, by });
     if (res.no) return { no: res.who ? `${cropLabel(res.who)} cannot give up ground: it ${{ recorded: 'is already recorded as sown or planted', standing: 'stands for years', tray: 'follows weekly demand' }[res.no] || 'is held'}.`
       : res.no === 'rows' ? (by === 'rows' ? 'The rows of this bed do not divide evenly among that many, or the bed is already shared along its length.' : 'This bed is shared by rows: choose By rows.')
@@ -2127,7 +2158,7 @@
     commit, undo, redo, lastChange, refuse, setUse, setGives, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
-    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
+    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (elsewhere()) { refuse(elsewhere()); return null; } if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
     saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, editNursery, setSupply, setLiveSow, traysToMonday: () => applyTrayStart(),
     snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, windowState: () => (store ? store.readOnly : ''), useThisWindow, sync: () => sync, syncInfo, linkService: () => (sync && sync.linkService ? sync.linkService() : null), snapshotsKept: () => !!Snaps

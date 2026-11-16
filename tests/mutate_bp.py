@@ -55,7 +55,7 @@ PAGE = [
  ("marking says nothing of the season's worth", AP, "    toast(`${label} · ${moved} · ${Math.abs(now - was) >= 0.5 ?", "    if (false) toast(`${label} · ${moved} · ${Math.abs(now - was) >= 0.5 ?"),
  ("marking counts no planting in its toast", AP, "const q = eng.planting(p.id), a = !!q && F.useOf(eng, q).personal, b = F.useOf(engine, p).personal;", "const a = F.useOf(eng, p).personal, b = F.useOf(engine, p).personal;"),
  ("Commercial pressed back is written on the planting", AP, "if (want && want !== F.follows(eng, kind, after)) after.use = want;", "if (want) after.use = want;"),
- ("the planting's panel has no Grown for", PN, "        useField,\n        yieldLine(eng, p, r)),", "        yieldLine(eng, p, r)),"),
+ ("the planting's panel has no Grown for", PN, "        useField,\n        givesField,\n", "        givesField,\n"),
  ("a personal planting's panel still shows dollars", PN, "${personal ? ', for personal use: not counted as revenue' : y.price > 0 ?", "${false ? ', for personal use: not counted as revenue' : y.price > 0 ?"),
  ("the planting's panel does not say whose word it follows", PN, "dataset: { use: use.use, by: use.by } }, useBtn('commercial', 'Commercial')", "dataset: { use: use.use, by: 'default' } }, useBtn('commercial', 'Commercial')"),
  ("the bed's panel does not say whom it is grown for", PN, "    if (root.LRFMapEdit && (soil || !eng.isPool(bed))) {\n      const use = root.LRFForecast.useOfBed(eng, bed);", "    if (false) {\n      const use = root.LRFForecast.useOfBed(eng, bed);"),

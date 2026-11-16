@@ -1,0 +1,23 @@
+{
+ "build": "Tasks, part 1: the page opens on today, with a week of days across the top and a calendar to go to any day; Nursery and Field as two lists with a photograph on every row; a tick records at once, and a late task is asked the day it was done in a popup calendar that says what each day would move; a task can be put off on purpose, skipped or given a note; late is judged against today, not against the week looked at.",
+ "words": [
+  "main.js"
+ ],
+ "code": [
+  "app.js",
+  "rails.js",
+  "sowview.js",
+  "succession.js",
+  "week.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html",
+  "sw.js"
+ ],
+ "screens": [
+  "tasks"
+ ]
+}

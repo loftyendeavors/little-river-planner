@@ -30,7 +30,7 @@ FAULTS = [
  # (name, what is done, the screen and width it is run on, words of the line that must fail)
  ("the Assumptions list is made narrower and the build does not say so", rule(NARROW), "assumptions-days", 1707, "assumptions-days at 1707 px looks as it did"),
  ("the small grey text is made darker everywhere and the build does not say so", rule(":root { --muted: #2f3a33 !important; }"), "timeline", 1707, "timeline at 1707 px looks as it did"),
- ("a line of Tasks is made taller on a phone and the build does not say so", rule("body.phone table.sw td { padding-block: 14px !important; }"), "tasks", 390, "tasks at 390 px looks as it did"),
+ ("a line of Tasks is made taller on a phone and the build does not say so", rule("body.phone .tk-row { padding-block: 14px !important; }"), "tasks", 390, "tasks at 390 px looks as it did"),
  ("the build names a screen as changed that looks as it did", names("seeds"), "seeds", 1707, "seeds at 1707 px: the build names this screen as changed"),
  ("the build names a screen the check does not know", names("the-moon"), "seeds", 1707, "names only screens this check knows"),
 ]

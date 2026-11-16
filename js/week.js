@@ -13,6 +13,13 @@
  *   Week.lines(engine, plan, year)               -> pot up, harden off, plant out and move out, as lines of a list
  *   Week.record(engine, inventory, p, kind, input, ctx)   -> the planting with that job dated (and pushed, when late)
  *   Week.takeBack(engine, inventory, p, kind, ctx)        -> the planting with that job cleared (and put back)
+ *   Week.delay(engine, p, kind, date)            -> the planting with that job put off to a day, on purpose
+ *   Week.skip(p, kind, day | null)               -> the planting with that job skipped, or no longer skipped
+ *
+ * A job put off on purpose is a change to the plan, not a record. Sowing, hardening off and planting are tied to the
+ * day the planting goes out, so putting one off moves the planting, and every job after it, by as many days. Potting
+ * up and moving out push nothing, so only the day they are listed on changes. A skipped job is left out of the list
+ * and nothing else changes. What was put off, skipped or noted is kept on the planting, under `tasks`.
  *
  * Sowing itself is recorded by the seed library (LRFSeedLib.recordSowing), which takes the seed off stock; this
  * file calls it and adds the push. The records are the planting's done and workflow.history.
@@ -32,9 +39,29 @@
   const DID = { sow: 'sown', potup: 'potted up', harden: 'hardened off', field: 'planted', move: 'moved out' };
   // The jobs that push the day a transplant goes out when they are done late.
   const PUSHES = ['sow', 'harden'];
+  // The jobs that move their planting when they are put off on purpose: the rest of its jobs are counted from the day it goes out.
+  const MOVES = ['sow', 'harden', 'field'];
   const monday = iso => { const d = s2d(iso); return d2s(addDays(d, -((d.getDay() + 6) % 7))); };
   const done = (p, kind) => SL.doneDate(p, kind);
   const objectOr = (x, fallback) => (x && typeof x === 'object' && !Array.isArray(x) ? x : fallback);
+
+  // ── what the Tasks page keeps on a planting: tasks: { skip: { kind: day }, delay: { kind: { from, to, own? } }, note: { kind: text } } ──
+  const part = (p, name) => objectOr(objectOr(p && p.tasks, {})[name], {});
+  const isDay = x => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x) && validDate(s2d(x));
+  /** The day a job was skipped on, or null. */
+  const skipOf = (p, kind) => { const x = part(p, 'skip')[kind]; return isDay(x) ? x : null; };
+  /** Where a job was put off from and to: { from, to, own? }, or null. */
+  const delayOf = (p, kind) => { const x = objectOr(part(p, 'delay')[kind], null); return x && isDay(x.from) && isDay(x.to) ? x : null; };
+  const noteOf = (p, kind) => { const x = part(p, 'note')[kind]; return typeof x === 'string' ? x : ''; };
+  /** The planting with one thing kept for one of its jobs, or with it cleared when the value is empty. */
+  function withTask(p, name, kind, value) {
+    const tasks = { ...objectOr(p.tasks, {}) }, group = { ...objectOr(tasks[name], {}) };
+    if (value == null || value === '') delete group[kind]; else group[kind] = value;
+    if (Object.keys(group).length) tasks[name] = group; else delete tasks[name];
+    const out = { ...p };
+    if (Object.keys(tasks).length) out.tasks = tasks; else delete out.tasks;
+    return out;
+  }
 
   /**
    * The jobs of one planting, in order: [{ kind, planned: Date, done: 'YYYY-MM-DD' | null, passed, late }].
@@ -42,6 +69,8 @@
    * `late` is days after the plan's day (negative when early), once done: counted from the day first planned when the
    * job pushed its planting, whose plan then moved to meet it (`pushed`: { days, from, to }).
    * `seed` marks the job that uses the seed or the bulbs, which is recorded with what was used.
+   * `skipped` is the day an open job was skipped on. `delayedFrom` is the day a job was first planned for, while it
+   * stands where it was put off to; `own` is the day the plan itself works out, whatever was put off.
    */
   function steps(engine, p) {
     const r = engine.calc(p);
@@ -57,6 +86,12 @@
     for (const st of out) {
       st.done = done(p, st.kind);
       st.passed = !st.done && AFTER[st.kind].some(k => done(p, k));
+      st.own = st.planned;
+      const put = st.done ? null : delayOf(p, st.kind), own = d2s(st.planned);
+      // a job that moved its planting stands on the new day already; one that moves nothing is listed on the day chosen, for as long as the plan's own day is where it was
+      if (put && own === put.to) st.delayedFrom = put.from;
+      else if (put && !MOVES.includes(st.kind) && put.own === own) { st.planned = s2d(put.to); st.delayedFrom = put.from; }
+      st.skipped = !st.done && !st.passed ? skipOf(p, st.kind) : null;
       st.pushed = st.done ? pushed(p, st.kind) : null;
       st.late = st.done ? dayDiff(s2d(st.done), st.planned) + (st.pushed ? st.pushed.days : 0) : null;
     }
@@ -160,6 +195,34 @@
     return result;
   }
 
+  /**
+   * Put a job off to a day (or bring it forward), on purpose: { planting, days, from, to, moves } or null when it is
+   * on that day already. `moves` says the planting itself moved, and its later jobs with it.
+   */
+  function delay(engine, p, kind, date) {
+    const st = step(engine, p, kind);
+    if (!st) throw new Error('This planting has no such work to put off.');
+    if (st.done) throw new Error(`This ${SL.DONE_WORD[kind] || 'work'} is already recorded, on ${st.done}.`);
+    if (!isDay(date)) throw new Error('Choose a real calendar date.');
+    const was = d2s(st.planned), days = dayDiff(s2d(date), st.planned), first = st.delayedFrom || was;
+    if (!days) return null;
+    if (!MOVES.includes(kind)) {
+      const own = d2s(st.own);
+      return { planting: withTask(p, 'delay', kind, date === own ? null : { from: own, to: date, own }), days, from: was, to: date, moves: false };
+    }
+    const to = d2s(addDays(s2d(p.date), days));
+    if (to.slice(0, 4) !== String(p.date).slice(0, 4)) throw new Error(`That would take it out of ${String(p.date).slice(0, 4)}.`);
+    const planting = withTask({ ...p, date: to }, 'delay', kind, date === first ? null : { from: first, to: date });
+    // a sowing day set by hand is the day being put off: it goes to the day chosen, and the planting goes out as many days later
+    if (kind === 'sow' && p.sowOn) planting.sowOn = date;
+    return { planting, days, from: was, to: date, moves: true };
+  }
+  /** Skip a job on a day, or with no day put it back on the list. Nothing else about the planting changes. */
+  function skip(p, kind, day) {
+    if (day != null && !isDay(day)) throw new Error('Choose a real calendar date.');
+    return withTask(p, 'skip', kind, day);
+  }
+
   // ── the lines of the list ──
   const SECTIONS = [['potup', 'Pot up'], ['harden', 'Harden off'], ['plant', 'Plant out'], ['move', 'Move out']];
   const KIND_OF = { potup: 'potup', harden: 'harden', plant: 'field', move: 'move' };
@@ -192,8 +255,10 @@
     }
     const list = [...map.values()];
     for (const line of list) {
-      const open = line.members.filter(m => !m.st.done && !m.st.passed), dated = line.members.filter(m => m.st.done);
+      const open = line.members.filter(m => !m.st.done && !m.st.passed && !m.st.skipped), dated = line.members.filter(m => m.st.done), left = line.members.filter(m => m.st.skipped);
       line.open = open;
+      line.skipped = !open.length && !dated.length && left.length ? left.map(m => m.st.skipped).sort().pop() : null;   // the day it was skipped on, when nothing of it was done
+      line.delayedFrom = open.map(m => m.st.delayedFrom).filter(Boolean).sort()[0] || null;
       line.state = !open.length ? 'done' : open.length === line.members.length ? 'open' : 'part';
       line.passed = !open.length && !dated.length;                       // later work is recorded; this job never got a day
       line.doneOn = dated.length ? dated.map(m => m.st.done).sort().pop() : null;
@@ -213,5 +278,5 @@
     return list;
   }
 
-  return { ORDER, NAME, DID, PUSHES, SECTIONS, KIND_OF, monday, steps, step, lastRecord, pushed, pushFor, record, takeBack, lines };
+  return { ORDER, NAME, DID, PUSHES, MOVES, SECTIONS, KIND_OF, monday, steps, step, lastRecord, pushed, pushFor, record, takeBack, delay, skip, skipOf, delayOf, noteOf, withTask, lines };
 });

@@ -29,9 +29,9 @@
 
   "step3b, compact": 96,
 
-  "step5a, backup": 57,
+  "step5a, backup": 77,
 
-  "step5a, compact": 57,
+  "step5a, compact": 77,
 
   "step5b, backup": 70,
 
@@ -123,7 +123,7 @@
 
   "plain": 47,
 
-  "r1": 66,
+  "r1": 67,
 
   "season": 54,
 
@@ -144,7 +144,7 @@
 
   "mapgeo": 81,
 
-  "r1 @1480": 66,
+  "r1 @1480": 67,
 
   "things": 96
 
@@ -210,7 +210,7 @@
 
   "plain-site": 47,
 
-  "r1-site": 66,
+  "r1-site": 67,
 
   "step5b-site": 63,
 
@@ -234,7 +234,7 @@
  },
  "site4": {
 
-  "r1-site @1480": 66,
+  "r1-site @1480": 67,
 
   "step3a-site @1480": 64,
 
@@ -253,9 +253,9 @@
  },
  "site5": {
 
-  "r1-site @3440": 66,
+  "r1-site @3440": 67,
 
-  "r1-site dark": 66,
+  "r1-site dark": 67,
 
   "step3a-site dark": 64,
 
