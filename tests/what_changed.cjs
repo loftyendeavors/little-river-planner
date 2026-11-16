@@ -76,7 +76,7 @@ const PAGE = ['index.html', 'sw.js', 'manifest.webmanifest', 'css', 'fonts', 'ic
 // under js/, whatever is not one of the scripts compared above: a folder, a file of another kind
 const beside = root => walk(root, 'js').filter(f => !(path.dirname(f) === 'js' && f.endsWith('.js')));
 // and at the root of the site, anything that is not known to stand there: the site serves every file it holds
-const ROOT = [...PAGE, 'js', 'tests', 'tools', 'worker', 'README.md', 'node_modules'];
+const ROOT = [...PAGE, 'js', 'tests', 'tools', 'worker', 'README.md', 'DESIGN.md', 'node_modules'];   // README.md and DESIGN.md are pages about the planner, not of it
 const strange = fs.readdirSync(NOW).filter(f => !f.startsWith('.') && !ROOT.includes(f)).flatMap(f => walk(NOW, f));
 const now = [...PAGE.flatMap(x => walk(NOW, x)), ...beside(NOW), ...strange], was = [...PAGE.flatMap(x => walk(OLD, x)), ...beside(OLD)];
 const bytes = (root, f) => fs.readFileSync(path.join(root, f));
