@@ -2,9 +2,9 @@
 // One scale under every screen: the steps of type, corners and motion, named once in css/app.css (:root) and used everywhere.
 // DESIGN.md says what each step is for. This file is the one place the steps are written as numbers for a program.
 //
-//   node tools/scale.mjs check     every size, corner and speed in css/app.css is a step, or is listed below as left alone;
+//   node tools/scale.mjs check     every size, corner, space and speed in css/app.css is a step, or is listed below as left alone;
 //                                  the last line is {"passed": N, "of": M, "failed": [...]}, as every check prints it
-//   node tools/scale.mjs move      moves every value in css/app.css to its step and prints what moved (safe to run again)
+//   node tools/scale.mjs move      moves every such value in css/app.css to its step and prints what moved (safe to run again)
 //   node tools/scale.mjs table     what "move" would do, changing nothing
 //   A path to another folder may follow (the repository, an app folder, a copy with a fault put in).
 import fs from 'node:fs';
@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 export const SCALE = {
   type: [11, 13, 15, 18, 24, 32],
   corner: [4, 8, 12, 20],                 // and the pill
+  space: [4, 8, 12, 16, 24, 32],
   pill: '999px',
   speed: { press: 120, move: 240 },      // ms: a press or a tick; something that arrives or moves
   ease: 'cubic-bezier(0.22, 0.9, 0.3, 1)',
@@ -22,6 +23,8 @@ export const SCALE = {
 export const typeStep = px => (px < 12 ? 11 : px < 14 ? 13 : px < 16.5 ? 15 : px <= 20 ? 18 : px <= 27 ? 24 : 32);
 export const cornerStep = px => (px <= 5 ? 4 : px <= 9 ? 8 : px <= 15 ? 12 : px < 99 ? 20 : 'pill');
 export const speedStep = ms => (ms < 180 ? 'press' : 'move');
+// the nearest step; a value midway between two goes to the lower, so that nothing grows out of its box
+export const spaceStep = px => SCALE.space.reduce((best, s) => (Math.abs(s - px) < Math.abs(best - px) ? s : best), SCALE.space[0]);
 
 // ---- left alone, each for a reason. An entry that no longer matches anything fails the check: the list cannot go stale. ----
 // Corners of marks on a chart: drawn to the chart's own measure, a day or a foot of bed, not to a control's.
@@ -37,6 +40,12 @@ const SIZED = ['.garden-label', '.bed-label', '.bed-tag', '.thumb.none span', '.
 // Animations that are not an arrival or a press: a wait, a flash that draws the eye, the flourish of a tick. Left as they were.
 const WAITS = ['insp-said 8s', 'wait-flash 0.9s', 'tk-pop 0.5s', 'tk-rise 0.5s'];
 // Sizes in points are the printed sheets' and are left: paper is not a screen.
+// Space inside the parts DESIGN.md says to leave alone: the Timeline, the Harvest table, the bench chart and the supplies table,
+// the seed gallery, the printed week. Their density is their own.
+const DENSE = /\.(tl-|hv-|hv\b|bn-|bn\b|sd-card|wkp)/;
+// Space is a step from 3 px to 32. Up to 2 px is a hair (an edge kept clear, a nudge of the eye); over 32 is a placement
+// (a line set in under a photograph, a column kept for a label), and neither is the scale's to give.
+const SPACE = /^(padding(-(top|right|bottom|left|inline|block)(-(start|end))?)?|gap|row-gap|column-gap)$/;
 
 // ---- reading the style sheet ----
 // Every rule that holds declarations, with where its body lies. Comments are blanked, so nothing inside one is read or changed.
@@ -118,6 +127,18 @@ function read(rule, d) {
     if (moved.includes(null)) return { ...still, off: 'a corner that is not a step' };
     return moved.length ? { to: parts.join(' ') + imp, off: `${moved.map(m => m[1]).join(' ')} is not written as a step`, moved } : still;
   }
+  if (SPACE.test(d.prop)) {
+    if (DENSE.test(rule.sel) || rule.within.some(w => /print/.test(w)) || /printing/.test(rule.sel)) return { ...still, left: 'dense' };
+    const moved = [];
+    const parts = split(v, ' ').map(p => {
+      const px = /^\d*\.?\d+px$/.test(p) ? parseFloat(p) : null;
+      if (px === null || px <= 2 || px > 32) return p;                 // nothing, a hair, a placement, or a figure worked out (calc, %, a name)
+      const token = `var(--space-${spaceStep(px)})`;
+      moved.push(['space', p, spaceStep(px) + 'px']);
+      return token;
+    });
+    return moved.length ? { to: parts.join(' ') + imp, off: `${moved.map(m => m[1]).join(' ')} is not written as a step`, moved } : still;
+  }
   if (d.prop === 'transition' || d.prop === 'animation') {
     if (/^none$/.test(v) || reduced) return still;
     const moved = [];
@@ -169,6 +190,7 @@ function named(css) {
   const want = { '--corner-pill': SCALE.pill, '--speed-press': SCALE.speed.press + 'ms', '--speed-move': SCALE.speed.move + 'ms', '--ease': SCALE.ease };
   for (const n of SCALE.type) want[`--type-${n}`] = n + 'px';
   for (const n of SCALE.corner) want[`--corner-${n}`] = n + 'px';
+  for (const n of SCALE.space) want[`--space-${n}`] = n + 'px';
   const wrong = Object.keys(want).filter(k => got[k] !== want[k]).map(k => `${k} is ${got[k] === undefined ? 'not named' : got[k]}, not ${want[k]}`);
   const twice = Object.keys(want).filter(k => (css.match(new RegExp(`(^|[\\s;{])${k}\\s*:`, 'g')) || []).length > 1).map(k => `${k} is named more than once`);
   return [...wrong, ...twice];
@@ -182,6 +204,7 @@ export function check(folder) {
   const of = (props, kind) => seen.filter(s => props.includes(s.d.prop) && s.off && (!kind || kind(s))).map(where);
   line('every type size in css/app.css is a step of the scale (11 13 15 18 24 32), written by its name', of(['font-size', 'font']));
   line('every corner is a step of the scale (4 8 12 20, the pill), written by its name, or belongs to a mark on a chart that is listed', of(['border-radius']));
+  line('every padding and gap from 3 px to 32 is a step of the scale (4 8 12 16 24 32), written by its name, outside the parts whose density is left alone', seen.filter(s => SPACE.test(s.d.prop) && s.off).map(where));
   line('every transition and every animation runs at one of the two speeds (120 ms, 240 ms) on the one easing, or is a wait that is listed', of(['transition', 'animation', 'transition-duration', 'animation-duration']));
   line('the steps are named once, in :root, with the values DESIGN.md gives', named(css));
   // a list of what is left alone that names something no longer there would hide a new fault behind an old excuse
@@ -200,12 +223,12 @@ export function check(folder) {
   // the page that says what each step is for names the same steps
   const design = path.join(folder, 'DESIGN.md');
   const text = fs.existsSync(design) ? fs.readFileSync(design, 'utf8') : null;
-  const want = [SCALE.type.join(', '), SCALE.corner.join(', '), `${SCALE.speed.press} ms`, `${SCALE.speed.move} ms`];
+  const want = [SCALE.type.join(', '), SCALE.corner.join(', '), SCALE.space.join(', '), `${SCALE.speed.press} ms`, `${SCALE.speed.move} ms`];
   line('DESIGN.md names the same steps as this check', text === null ? ['there is no DESIGN.md beside css/ and js/'] : want.filter(w => !text.includes(w)).map(w => `DESIGN.md does not say "${w}"`));
   const failed = lines.filter(l => l.bad.length);
   for (const l of lines) console.log(`${l.bad.length ? 'FAIL' : 'ok  '} ${l.name}${l.bad.length ? '\n     ' + l.bad.slice(0, 12).join('\n     ') + (l.bad.length > 12 ? `\n     … and ${l.bad.length - 12} more` : '') : ''}`);
   const left = k => seen.filter(s => s.left === k).length;
-  console.log(`left alone: ${left('mark')} corners of marks, ${left('sized')} labels sized to their drawing, ${left('print')} sizes in points, ${left('wait')} waits`);
+  console.log(`left alone: ${left('dense')} paddings and gaps of the dense parts, ${left('mark')} corners of marks, ${left('sized')} labels sized to their drawing, ${left('print')} sizes in points, ${left('wait')} waits`);
   console.log(JSON.stringify({ passed: lines.length - failed.length, of: lines.length, failed: failed.map(l => l.name) }));
   return !failed.length;
 }

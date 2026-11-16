@@ -49,6 +49,25 @@ and what it leaves alone.
 
 ## Parts, made once
 
+Each part is given once, in the last block of `css/app.css` ("Parts, made once"), under a plain name. A page that already
+had a name of its own for the same part is listed beside it there, so the two cannot drift apart.
+
+| Part | Its name | What it is |
+|---|---|---|
+| A card | `.card`; floating, `.card.float` | Corner 20. On the page: the soft shadow (`--shadow-card`), no border. Floating: the strong shadow (`--shadow-float`) |
+| A row | `.row`, with `.row-name`, `.row-detail`, `.row-word` | A photograph 40 square, a name over one line of detail, one word at the right |
+| A tick | `.tick.round`; `.tick.square` or any checkbox | The round one finishes a job; the square one sets a yes or a no, in ink |
+| A button | `.btn`; `.btn.primary` (or `.btn.main`); `.btn.quiet`; `.btn.small` | Standard is bounded, main is ink, quiet has no edge. 13 px, weight 600, corner 8 |
+| A switch | `.seg` | Bordered, the chosen side in ink |
+| A filter pill | `.chip` | A pill; the chosen one in ink |
+| A box to type in or choose from | `.field`, `.fld` | As high as a button beside it |
+| A menu | `.menu-pop` | Floating, corner 12 |
+| A hint and its "?" | `.hint`, `.help-btn` | Floating, corner 12; "?" is a round button of 28 |
+| A sheet and its foot | `.dialog`; `.sheet-foot` (or `.dialog-actions`) | Corner 20, 24 of padding. The foot: the way back at the left (`.back`), then Cancel and the one dark button at the right |
+
+A control's height is one of three, named at the head of the style sheet: `--control` (32, on a page), `--control-in` (28,
+inside a card or a table) and `--control-phone` (44, anything pressed on a phone).
+
 - **A row**: a photograph 40 px square, a name over one line of detail, one word at the right. A variety's photograph stands
   wherever a variety is named.
 - **A date**: one calendar. It says what a day would move before the day is picked.
@@ -65,12 +84,13 @@ glass, no blur.
 
 ## How the scale is held
 
-The steps of type, corners and motion are named once, at the head of `css/app.css` (`--type-13`, `--corner-8`,
-`--speed-press`, `--speed-move`, `--ease`), and every size, corner and speed in the style sheet is written by one of those
-names. `node tools/scale.mjs check` reads the style sheet and fails on one that is not; `node tools/scale.mjs move` puts a
+The steps of type, corners, space and motion are named once, at the head of `css/app.css` (`--type-13`, `--corner-8`,
+`--space-12`, `--speed-press`, `--speed-move`, `--ease`), and every size, corner, padding, gap and speed in the style sheet is
+written by one of those names. `node tools/scale.mjs check` reads the style sheet and fails on one that is not; `node tools/scale.mjs move` puts a
 value that is off the scale on its nearest step (under 12 to 11; 12 to under 14 to 13; 14 to under 16.5 to 15; 16.5 to 20 to
 18; over 20 to 27 to 24; above that 32. Corners: up to 5 to 4; 6 to 9 to 8; 10 to 15 to 12; 16 and over to 20; 50 % and 99
-and over to the pill. A speed under 180 ms to the press, the others to the move). It is safe to run again.
+and over to the pill. A padding or a gap from 3 px to 32 to the nearest step, and to the lower one when it stands midway. A
+speed under 180 ms to the press, the others to the move). It is safe to run again.
 
 What the check leaves alone, each written in a list at the head of `tools/scale.mjs` with its reason, and each failing the
 check on the day it no longer matches anything:
@@ -80,10 +100,13 @@ check on the day it no longer matches anything:
 - **Type sized to the thing it is drawn on**: a label on the map grows with the map; a letter that stands for a photograph
   grows with its tile.
 - **Sizes in points**: the printed sheets. Paper is not a screen.
+- **Space inside the parts listed under "Leave alone"**: the Timeline, the Harvest table, the bench chart and the supplies
+  table, the seed gallery, the printed week. And any padding or gap of 2 px or less (a hair), or over 32 (a placement: a line
+  set in under a photograph, a column kept for a label). A placement that follows a padding has to be kept in step by hand.
 - **Four animations that are not an arrival or a press**: a message that waits before it fades, a flash that draws the eye,
   the flourish of a tick.
 
-What the check does not hold yet: space and the heights of controls (they are on the scale's steps only where a build has
-put them there), colour, and which step a thing takes (it sees that a title is on a step, not that it is on the right one).
+What the check does not hold yet: margins, the heights of controls (no check measures them: the parts above give them, and
+a page's own rule can still say otherwise), colour, and which step a thing takes (it sees that a title is on a step, not that it is on the right one).
 It reads `css/app.css` and looks for a size set by a script in `js/`; it does not look at the page in a browser, so a size
 the browser gives a tag by itself is not seen.

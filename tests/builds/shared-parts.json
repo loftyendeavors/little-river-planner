@@ -1,0 +1,28 @@
+{
+ "build": "Shared parts: the card, the row, the two ticks, the three buttons, the switch, the filter pill, the menu, the hint and the sheet's foot are given once, at the foot of the style sheet, and Tasks' own controls join them. Every padding and gap from 3 px to 32 is on the scale's steps (4 8 12 16 24 32), outside the parts whose density is left alone. A control is 32 high on a page, 28 inside a card or a table, 44 on a phone. Nothing a control does changes: no script changes but for the label.",
+ "words": [
+  "main.js"
+ ],
+ "code": [],
+ "added": [],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html",
+  "sw.js",
+  "DESIGN.md"
+ ],
+ "screens": [
+  "map",
+  "timeline",
+  "forecast",
+  "tasks",
+  "nursery-bench-room",
+  "nursery-live-trays",
+  "nursery-supplies",
+  "nursery-set-up",
+  "seeds",
+  "assumptions-days",
+  "assumptions-yield"
+ ]
+}

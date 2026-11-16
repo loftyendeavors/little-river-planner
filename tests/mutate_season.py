@@ -52,7 +52,7 @@ PAGE = [
  ("a stray line is written with the date", FD, *STRAY),
  ("the peak is cut off beside the new button", SE, "    if (foot.classList.contains('stacked') && peak.scrollWidth > peak.clientWidth + 1) { foot.classList.add('tight'); if (peak.scrollWidth > peak.clientWidth + 1) foot.classList.add('bare'); }\n", ""),
  ("the shortened peak says nothing when pointed at", SE, "    say.title = peak.share ? `Peak ${Math.round(peak.share * 100)}% of spaces planted, week of ${UI.day(peak.d)}` : '';\n", ""),
- ("Apply scrolls out of view under a long list", CSS, ".dialog.bk.fd .dialog-actions { position: sticky; bottom: -20px;", ".dialog.bk.fd .dialog-actions {"),
+ ("Apply scrolls out of view under a long list", CSS, ".dialog.bk.fd .dialog-actions { position: sticky; bottom: calc(-1 * var(--space-24));", ".dialog.bk.fd .dialog-actions {"),
  ("days are said as 2027-05-20", SE, "const plainDays = text => String(text || '').replace(/\\b(\\d{4})-(\\d{2})-(\\d{2})\\b/g, (all, y, m, d) => `${UI.MONTHS[+m - 1]} ${+d}`);", "const plainDays = text => String(text || '');"),
  ("a field takes a day of another year", SE, "min: `${year}-01-01`, max: `${year}-12-31`, ", ""),
  ("several dates changed are named as if one", AP, ": `Change ${keys.length} of the farm’s dates`;", ": `Set ${FD.FIELDS.find(f => f.key === keys[0]).short} to ${FD.word(view.changed[keys[0]])}`;"),
