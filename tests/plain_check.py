@@ -107,31 +107,35 @@ with sync_playwright() as pw:
         check('undone, the plan is what it was', js("return A.contentKey();") == start['key'])
 
     # ── one press for what changes nothing ──
-    js("LRFAssume.setMode('days');"); wait(500)
+    # The note stood above the list until the frame; it is a sheet now, opened from Loose ends in the header (tests/loose_check.py
+    # presses that row). Either of its two buttons closes the sheet first, so what it opens is the one window over the page.
+    def sheet():
+        js("if (!$('asDifferDlg')) LRFAssume.openDiffer();"); wait(300)
+    js("LRFAssume.setMode('days');"); wait(500); sheet()
     note = js("""const host = $('asAudit'), s = A.auditStudy(), ch = Object.fromEntries(s.rows.map(r => [r.key, r.choice])), v = A.auditPreview(s.rows, ch), more = $('asAuditMore');
       return { head: host.querySelector('.au-head b').textContent, tidy: txt('asTidy'), review: txt('asReview'), line: txt('asDiffLine'), more: more ? { open: more.open, figs: more.querySelectorAll('.au-figs span').length } : null,
         step: { plantings: v.step.plantings, taken: v.step.taken, kept: v.step.kept }, quiet: !v.harvest && !v.sowing && !v.yields.length && !v.ground.length && !v.fresh.length, rows: s.rows.length, differ: s.rows.filter(r => r.choice === 'keep').length, own: A.auditSurvey().days.own, worth: Math.round(v.worth[0]) };""")
-    check('above the list: plantings that differ from it, one button for what changes nothing and one to see what differs', note['head'] == 'Plantings that differ from your list' and note['tidy'] is not None and note['tidy'].startswith('Move onto the list what changes nothing') and note['review'] == 'See what differs…' and 'your list does not decide' in (note['line'] or ''), note)
+    check('in its sheet: plantings that differ from the list, one button for what changes nothing and one to see what differs', js("return !!$('asDifferDlg') && $('asDifferDlg').contains($('asAudit')) && !document.querySelector('#assumeView #asAudit');") and note['head'] == 'Plantings that differ from your list' and note['tidy'] is not None and note['tidy'].startswith('Move onto the list what changes nothing') and note['review'] == 'See what differs…' and 'your list does not decide' in (note['line'] or ''), note)
     check('the count kind by kind is folded away, and still there', note['more'] is not None and note['more']['open'] is False and note['more']['figs'] >= 5, note['more'])
     check('there is something to move that changes nothing, and something that differs', note['step']['plantings'] > 0 and note['quiet'] and note['differ'] > 0, note)
-    click('#asTidy'); wait(900)
+    sheet(); click('#asTidy'); wait(900)
     ask = js("const d = document.querySelector('dialog[open]'); return d ? { title: d.querySelector('h2').textContent, body: d.querySelector('p').textContent, ok: d.querySelector('.btn.primary').textContent } : null;")
     check('the press works it out first and says it: how many plantings, how many lines, and that no date, yield or dollar changes', ask is not None and f"{note['step']['plantings']:,} planting" in ask['title'] and f"{note['step']['taken']:,} line" in ask['body'] and 'No harvest date, no sowing date, no yield and no dollar changes' in ask['body'] and f"${note['worth']:,}" in ask['body'] and 'snapshot' in ask['body'] and ask['ok'] == 'Move them', ask)
     check('nothing has changed yet', js("return A.contentKey();") == start['key'])
     click('dialog[open] .btn:not(.primary)'); wait(400)
     check('Cancel leaves the plan as it was', js("return A.contentKey();") == start['key'] and not has('dialog[open]'))
-    click('#asTidy'); wait(900); click('dialog[open] .btn.primary'); wait(1500)
+    sheet(); click('#asTidy'); wait(900); click('dialog[open] .btn.primary'); wait(1500)
     after = js("const s = A.auditStudy(), ch = Object.fromEntries(s.rows.map(r => [r.key, r.choice])), v = A.auditPreview(s.rows, ch); return { key: A.contentKey(), undo: St.undo.length, label: St.undo.length ? St.undo[St.undo.length - 1].label : '', own: A.auditSurvey().days.own, sig: " + SIG + ", left: v.step.plantings, rows: s.rows.length, differ: s.rows.filter(r => r.choice === 'keep').length, tidy: !!$('asTidy'), worth: Math.round(LRFForecast.build(St.engine, { year }).rows.reduce((n, r) => n + r.worth, 0)) };")
     check('agreed to, it is one step: those plantings follow the list', after['key'] != start['key'] and after['undo'] == start['undo'] + 1 and f"{note['step']['plantings']} planting" in after['label'] and after['own'] < note['own'], [after['undo'], after['label'], after['own'], note['own']])
     check('and no planting’s dates, yield or price moved', after['sig'] == start['sig'])
     check('what is left is only what differs: nothing more can be moved without a change', after['left'] == 0 and after['differ'] == note['differ'] and after['rows'] == note['differ'], [after['left'], after['differ'], after['rows'], note['differ']])
     snaps = page.evaluate("LRFApp.snapshots().then(s => s.rows.map(r => r.name))")
     check('the plan as it stood was kept as a snapshot first', any('Before plantings followed the list' in n for n in snaps), snaps[:4])
-    click('#asTidy'); wait(900)
+    sheet(); click('#asTidy'); wait(900)
     check('pressed again, it says there is nothing more to move and changes nothing', 'Nothing can go onto the list' in toast() and not has('dialog[open]') and js("return A.contentKey();") == after['key'], toast())
 
     # ── the window shows what differs, crop by crop ──
-    click('#asReview'); wait(900)
+    sheet(); click('#asReview'); wait(900)
     w = js("""const d = $('auditDlg'); if (!d) return null; const rows = [...d.querySelectorAll('tr.au-row')], secs = [...d.querySelectorAll('tr.au-sec')];
       return { title: d.querySelector('h2').textContent, by: [...d.querySelectorAll('#auBy button')].map(b => [b.dataset.by, b.getAttribute('aria-pressed')]), rows: rows.length, crops: secs.map(s => s.querySelector('b').textContent), allCrop: secs.every(s => s.classList.contains('au-crop')),
         sorted: secs.map(s => s.querySelector('b').textContent).every((x, i, a) => i === 0 || a[i - 1].localeCompare(x) <= 0), first: rows[0] ? rows[0].querySelector('.au-name b').textContent : '', kept: rows.every(r => r.querySelector('select').value === 'keep'), all: !!$('auAll'),
@@ -149,13 +153,13 @@ with sync_playwright() as pw:
     check('one undo takes the whole move back', back['key'] == start['key'] and back['sig'] == start['sig'])
     # the press never trusts the suggestion: handed one that would move a date, it leaves that group out and moves only the rest
     forced = js("const real = A.auditStudy; A.__study = real; let hit = null; A.auditStudy = () => { const s = real(), r = s.rows.find(x => x.choice === 'keep' && x.kind === 'days'); if (r) { r.choice = 'follow'; hit = r.key; } return s; }; A.auditStudy(); return hit;")
-    click('#asTidy'); wait(900)
+    sheet(); click('#asTidy'); wait(900)
     if has('dialog[open] .btn.primary'): click('dialog[open] .btn.primary'); wait(1500)
     f2 = js("const out = { sig: " + SIG + ", undo: St.undo.length }; A.auditStudy = A.__study; delete A.__study; return out;")
     check('handed a suggestion that would move a date, the press leaves that group out: still no date, yield or price moves', forced is not None and f2['undo'] == start['undo'] + 1 and f2['sig'] == start['sig'], [forced, f2['undo']])
     js("A.undo();"); wait(900)
     check('and that too is undone in one step', js("return A.contentKey();") == start['key'])
-    click('#asReview'); wait(900)
+    sheet(); click('#asReview'); wait(900)
     w0 = js("const d = $('auditDlg'); return d ? { rows: d.querySelectorAll('tr.au-row').length, label: $('auAll') ? $('auAll').closest('label').textContent : null, head: txt('auHead') } : null;")
     check('before the move, the window still opens on what differs, and offers the rest', w0 is not None and w0['rows'] == note['differ'] and w0['label'] is not None and f"{note['rows'] - note['differ']} group" in w0['label'] and f"{note['step']['plantings']:,} planting" in (w0['head'] or ''), [w0, note['rows'], note['differ']])
     click('#auAll')

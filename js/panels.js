@@ -655,9 +655,11 @@
       if (renderAgain) { renderAgain = false; render(); }
     }
   }
-  // ── To settle, in the header: the count, and one click to the list from any view ──
-  // Quiet on purpose: it says how many, in the page's own ink, and nothing else. The list and its fixes stay where they were.
-  let settleTimer = 0;
+  // ── Loose ends, in the header: the one list for what needs the grower (DESIGN.md, rule 4) ──
+  // Two kinds. "Needs you" is counted, and its count alone is in orange on the button; "when you have a minute" is listed and
+  // not counted, so the count stays worth looking at. Each row opens where the thing is mended. Ground booked twice is this
+  // file's own row; the others are handed over by the pages that own them (LRFSeeds.loose, LRFAssume.loose).
+  let settleTimer = 0, looseRows = [], looseBox = null;
   // After the click, the list is held at the top of the panel until the panel is touched: a box above it can come or go
   // (pictures still being read after a backup is loaded), and the list must not slide out of sight with it.
   let holdSettle = false;
@@ -666,14 +668,56 @@
     if (!el) { holdSettle = false; return; }
     host.scrollTop += el.getBoundingClientRect().top - host.getBoundingClientRect().top;
   }
+  const LOOSE = { ground: 0, lots: 1, differ: 2, guide: 3, starts: 4 }, KINDS = [['needs', 'Needs you'], ['minute', 'When you have a minute']];
+  /** Every loose end of the plan as it stands: { key, kind: 'needs' | 'minute', name, detail, word, n, open }. */
+  function looseEnds() {
+    if (App.isSample()) return [];
+    const n = settleCount(), rows = n ? [{ key: 'ground', kind: 'needs', name: 'Ground booked twice, or longer than its bed', detail: 'On the Map: each has a fix in one click', word: num(n), n, open: showSettle }] : [];
+    for (const page of [root.LRFSeeds, root.LRFAssume]) if (page && page.loose) rows.push(...page.loose());
+    return rows.sort((a, b) => LOOSE[a.key] - LOOSE[b.key]);
+  }
+  const needsYou = rows => rows.reduce((n, r) => n + (r.kind === 'needs' ? r.n : 0), 0);
+  function fillLoose() {
+    clear(looseBox);
+    for (const [kind, title] of KINDS) {
+      const rows = looseRows.filter(r => r.kind === kind);
+      if (!rows.length) continue;
+      add(looseBox, h('p.loose-kind', { dataset: { kind } }, h('i', { 'aria-hidden': 'true' }), title),
+        rows.map(r => h('button.row.loose-row', { type: 'button', dataset: { loose: r.key }, onclick: () => { closeLoose(); r.open(); } },
+          h('span', h('span.row-name', r.name), h('span.row-detail', r.detail)), h('span.row-word', r.word, h('i', { 'aria-hidden': 'true' }, '›')))));
+    }
+  }
+  const looseAway = e => { if (looseBox && !looseBox.contains(e.target) && !$('settleBadge').contains(e.target)) closeLoose(); };
+  const looseKey = e => { if (e.key === 'Escape' && looseBox) { closeLoose(); $('settleBadge').focus(); } };
+  function closeLoose() {
+    if (!looseBox) return;
+    looseBox.remove(); looseBox = null; $('settleBadge').setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', looseAway, true); document.removeEventListener('keydown', looseKey, true);
+  }
+  function openLoose() {
+    const badge = $('settleBadge');
+    if (looseBox) { closeLoose(); return; }
+    if (!looseRows.length) return;
+    looseBox = h('div.loose', { id: 'looseList', role: 'group', 'aria-label': 'Loose ends' });
+    fillLoose();
+    document.body.append(looseBox);
+    const r = badge.getBoundingClientRect();
+    looseBox.style.left = Math.round(Math.max(12, Math.min(r.right - looseBox.offsetWidth, root.innerWidth - looseBox.offsetWidth - 12))) + 'px';
+    looseBox.style.top = Math.round(r.bottom + 8) + 'px';
+    looseBox.style.maxHeight = Math.round(Math.max(160, root.innerHeight - r.bottom - 24)) + 'px';
+    badge.setAttribute('aria-expanded', 'true');
+    document.addEventListener('pointerdown', looseAway, true); document.addEventListener('keydown', looseKey, true);
+  }
   function drawSettle() {
     const badge = $('settleBadge');
     if (!badge || !App.state.ready) return;
-    const n = App.isSample() ? 0 : settleCount();
-    badge.hidden = !n;
-    if (!n) return;
-    clear(badge); add(badge, h('b', num(n)), ' to settle');
-    badge.title = `${num(n)} ${n === 1 ? 'place' : 'places'} where ground is booked twice, or plantings are longer than their bed. Each has a fix in one click. Click to see ${n === 1 ? 'it' : 'them'}.`;
+    looseRows = looseEnds();
+    const n = needsYou(looseRows);
+    badge.hidden = !looseRows.length;
+    if (!looseRows.length) { closeLoose(); return; }
+    clear(badge); add(badge, 'Loose ends', n ? h('b', num(n)) : null);
+    badge.title = n ? `${num(n)} ${n === 1 ? 'thing needs' : 'things need'} you: ground booked twice, plantings longer than their bed, or seed no row can count. Click for the list, with what can wait under it.` : 'Nothing needs you now. Click for what can wait.';
+    if (looseBox) fillLoose();
   }
   /** Worked out a moment after the plan changes, so a run of changes costs one count and typing is never held up by it. */
   function laterSettle() { clearTimeout(settleTimer); settleTimer = setTimeout(drawSettle, 120); }
@@ -685,7 +729,7 @@
   }
   function initInspector() {
     const badge = $('settleBadge');
-    if (badge) { badge.addEventListener('click', showSettle); App.on('plan', laterSettle); }
+    if (badge) { badge.setAttribute('aria-haspopup', 'true'); badge.setAttribute('aria-expanded', 'false'); badge.addEventListener('click', openLoose); App.on('plan', laterSettle); App.on('view', closeLoose); }
     const host = $('inspectorBody');
     for (const kind of ['wheel', 'touchmove', 'keydown']) host.addEventListener(kind, () => { holdSettle = false; }, { passive: true });
     let press = null;
@@ -717,5 +761,5 @@
     });
   }
 
-  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, sowingBox, settleCount, showSettle, savedLine };
+  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, sowingBox, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle() };
 })(window);

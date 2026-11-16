@@ -576,6 +576,8 @@ def run(page, width):
         js("LRFMapEdit.open({})"); page.wait_for_timeout(150)
         during = js("({ on: LRFMapEdit.on(), there: !!document.getElementById('%s'), panel: %s(%s) })" % (count, shown, json.dumps(panel)))
         js("(() => { const e = document.getElementById('%s'); if (e) e.click(); })()" % count); page.wait_for_timeout(250)
+        # the count to settle is a row of Loose ends since the frame: the button opens the list, and the row opens the panel's own
+        if count == 'settleBadge': js("(() => { const r = document.querySelector('#looseList [data-loose=\"ground\"]'); if (r) r.click(); })()"); page.wait_for_timeout(250)
         after = js("({ on: LRFMapEdit.on(), layout: !!document.body.dataset.layout, panel: %s(%s), view: LRFApp.state.view, list: (() => { const e = document.getElementById('toSettle'); return !!e && e.getClientRects().length > 0; })(), n: window.LRFPanels && LRFPanels.settleCount ? LRFPanels.settleCount() : null })" % (shown, json.dumps(panel)))
         ok = during['on'] and during['there'] and not during['panel'] and not after['on'] and not after['layout'] and after['panel'] and after['view'] == 'map'
         if count == 'settleBadge': ok = ok and (after['list'] or not after['n'])

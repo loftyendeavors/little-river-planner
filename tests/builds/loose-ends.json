@@ -1,0 +1,32 @@
+{
+ "build": "Loose ends, the second stage of the frame: the header's count of what is to settle becomes “Loose ends”, a button whose count alone is orange and counts only what needs the grower, and which opens one list in two kinds (needs you; when you have a minute), each row opening where the thing is mended. The two notices that stood on the Assumptions list (plantings that differ from the list; published guidance not used) are sheets opened from that list, with the words and controls they had. On Seeds the three notices are gone from the side panel: seed on order is a filter beside “Short of seed”, seed no row can count is shown in the panel when it is opened from Loose ends, and supplier days that do not say where they are counted from are a row of Loose ends. Assumptions and Seeds each have one line of figures. No date, yield, price, seed count or bench figure changes.",
+ "words": [
+  "main.js",
+  "mapedit.js"
+ ],
+ "code": [
+  "assume.js",
+  "panels.js",
+  "seeds.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html",
+  "sw.js"
+ ],
+ "screens": [
+  "map",
+  "timeline",
+  "forecast",
+  "tasks",
+  "nursery-bench-room",
+  "nursery-live-trays",
+  "nursery-supplies",
+  "nursery-set-up",
+  "seeds",
+  "assumptions-days",
+  "assumptions-yield"
+ ]
+}

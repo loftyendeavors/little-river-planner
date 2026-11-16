@@ -64,6 +64,8 @@ had a name of its own for the same part is listed beside it there, so the two ca
 | A menu | `.menu-pop` | Floating, corner 12 |
 | A hint and its "?" | `.hint`, `.help-btn`; in a script, `LRFUI.help(lead, from, more)` | Floating, corner 12; "?" is a round button of 28. The hint says what the page's standing paragraph said, then what each of the page's controls does (the words a control shows only under a pointer) |
 | A sheet and its foot | `.dialog`; `.sheet-foot` (or `.dialog-actions`) | Corner 20, 24 of padding. The foot: the way back at the left (`.back`), then Cancel and the one dark button at the right |
+| A page's line of figures | `.frame-figs` | 13 px, the words in grey and each value in ink and bold. In a narrow panel the figures stand one to a line |
+| Loose ends | `#settleBadge`, `.loose`, `.loose-row`; in a script, `LRFPanels.looseEnds()` | The button in the header: the page's own surface, its count alone in orange. The list it opens: floating, corner 12, a row of the parts without its photograph for each loose end, under one of two kinds |
 
 A control's height is one of three, named at the head of the style sheet: `--control` (32, on a page), `--control-in` (28,
 inside a card or a table) and `--control-phone` (44, anything pressed on a phone).
@@ -78,11 +80,28 @@ inside a card or a table) and `--control-phone` (44, anything pressed on a phone
 
 ## Where the frame stands
 
-Tasks was built to it. Nursery, Seeds and Assumptions have its first stage: no eyebrow, no standing paragraph, the title at
-24 with "?" beside it, and on the Nursery one line of figures where four tiles stood (each figure's second line is behind
-"?"). On the Nursery the four tabs stand over the figures, not under them: the figures differ from tab to tab, and over the
-tabs they made the tabs jump. Still to come: the notices off Assumptions and Seeds and into Loose ends in the header; a line
-of figures written for Seeds and Assumptions; Harvest, as the Forecast page.
+Tasks was built to it. Nursery, Seeds and Assumptions stand in it: no eyebrow, no standing paragraph, no standing notice, the
+title at 24 with "?" beside it, and one line of figures. On the Nursery the four tabs stand over the figures, not under them:
+the figures differ from tab to tab, and over the tabs they made the tabs jump. On Seeds the figures are in the side panel
+while nothing is picked, one to a line, because that panel still stands there; they move when the panel becomes the card of
+rule 2. Still to come: Harvest, as the Forecast page.
+
+## Loose ends
+
+The one list for what needs the grower is in the header. Its button says "Loose ends"; its count is orange and counts only the
+first kind.
+
+| Kind | What is listed | Where it opens |
+|---|---|---|
+| Needs you (counted) | Ground booked twice, or plantings longer than their bed | The Map, at its list of fixes |
+| | Seed no row can count | Seeds, with the lots shown in the panel as the thing picked |
+| When you have a minute (not counted) | Plantings that differ from the list | The Assumptions list, with a sheet: one press for what changes nothing, and the window of what differs |
+| | Published guidance not yet used | The Assumptions list on Days to harvest, with a sheet naming the crops |
+| | Supplier days that do not say where they are counted from | Seeds, filtered to them |
+
+A page hands its rows over with a function named `loose` (`LRFSeeds.loose`, `LRFAssume.loose`); the header asks each page and
+sorts what comes back. A state of things is not a loose end: seed on order is a filter of the Seeds list, and late work is on
+Tasks. A new notice is never the way to say that something needs the grower: it is a row here, or a flag on the row it blocks.
 
 ## Leave alone
 

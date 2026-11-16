@@ -119,6 +119,8 @@
 
   "look": 33,
 
+  "loose": 31,
+
   "mixed": 61,
 
   "photo": 13,
@@ -210,6 +212,8 @@
  },
  "site2": {
 
+  "loose-site": 32,
+
   "plain-site": 47,
 
   "r1-site": 67,
@@ -236,6 +240,8 @@
  },
  "site4": {
 
+  "loose-site @1480": 32,
+
   "r1-site @1480": 67,
 
   "step3a-site @1480": 64,
@@ -254,6 +260,8 @@
 
  },
  "site5": {
+
+  "loose-site @3440": 32,
 
   "r1-site @3440": 67,
 

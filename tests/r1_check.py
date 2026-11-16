@@ -75,15 +75,16 @@ with sync_playwright() as pw:
       w.hidden = wasHidden; w.innerHTML = wasHtml; s.textContent = wasText; return out;""")
     check("the bar fits on one line with both counts showing and the longest save note: nothing clipped, nothing off the side", not bar["side"] and bar["clipped"] == [] and not crowd["side"] and crowd["off"] == 0 and crowd["clipped"] == [] and crowd["high"] <= 60 and bar["high"] <= 60, [bar, crowd])
 
-    # ── To settle, in the header ──
+    # ── To settle, in the header: since the frame it is a row of Loose ends (tests/loose_check.py holds the list itself) ──
     st = js("""const b = $('settleBadge'), cs = getComputedStyle(b), w = getComputedStyle($('waitBadge'));
-      return { hidden: b.hidden, text: b.textContent, count: LRFPanels.settleCount(), raw: (() => { const c = LRFRails.cleanup(eng); return { groups: c.groups.length, long: new Set(c.long.map(x => x.r.b.gardenId + '|' + x.want + '|' + x.cap)).size }; })(),
+      return { hidden: b.hidden, text: b.textContent, count: LRFPanels.settleCount(), lots: LRFPanels.looseEnds().filter(r => r.key === 'lots').reduce((n, r) => n + r.n, 0), raw: (() => { const c = LRFRails.cleanup(eng); return { groups: c.groups.length, long: new Set(c.long.map(x => x.r.b.gardenId + '|' + x.want + '|' + x.cap)).size }; })(),
         bg: cs.backgroundColor, flagBg: (() => { const p = document.createElement('i'); p.style.background = 'var(--flag-soft)'; document.body.append(p); const c = getComputedStyle(p).backgroundColor; p.remove(); return c; })(), title: b.title };""")
     n_settle = st["raw"]["groups"] + st["raw"]["long"]
-    check("the header counts what waits under To settle: ground booked twice, and plantings longer than their bed a garden at a time", n_settle > 0 and not st["hidden"] and st["text"] == f"{n_settle} to settle" and st["count"] == n_settle, st)
+    said = lambda n: "Loose ends" + (str(n + st["lots"]) if n + st["lots"] else "")   # what the button reads with n to settle
+    check("the header counts what waits under To settle: ground booked twice, and plantings longer than their bed a garden at a time", n_settle > 0 and not st["hidden"] and st["text"] == said(n_settle) and st["count"] == n_settle, st)
     check("it is quiet: the page's own ink on its own surface, not the colour of a warning, and its tooltip says what it counts", st["bg"] != st["flagBg"] and "booked twice" in st["title"], st)
     page.click('[data-view-btn="sow"]'); wait(500)
-    click("#settleBadge", 600)
+    click("#settleBadge", 300); click('#looseList [data-loose="ground"]', 600)
     went = js("const el = $('toSettle'), host = $('inspectorBody'); return { view: S.view, sel: S.sel, there: !!el, head: el ? el.querySelector('h3').textContent : '', seen: el ? el.getBoundingClientRect().top < innerHeight - 80 && el.getBoundingClientRect().top >= host.getBoundingClientRect().top - 4 : false, fixes: el ? el.querySelectorAll('.fix').length : 0, undo: S.undo.length, key: A.contentKey() };")
     check("a click on it from another view goes to the map with the list in view, whole, and changes nothing", went["view"] == "map" and went["sel"] is None and went["there"] and went["head"] == f"To settle · {n_settle}" and went["seen"] and went["fixes"] == n_settle and went["undo"] == 0 and went["key"] == key0, went)
     # a box above the list comes and goes (pictures being read after a backup is loaded): the list stays where the click put it
@@ -100,7 +101,7 @@ with sync_playwright() as pw:
         less = js("return { text: $('settleBadge').hidden ? '' : $('settleBadge').textContent, count: LRFPanels.settleCount(), undo: S.undo.length };")
         js("A.undo()"); wait(600)
         again = js("return { text: $('settleBadge').textContent, key: A.contentKey() };")
-        check("settling one takes one off the count, and undoing puts it back", less["count"] == n_settle - 1 and less["text"] == (f"{n_settle - 1} to settle" if n_settle > 1 else "") and less["undo"] == 1 and again["text"] == f"{n_settle} to settle" and again["key"] == key0, [less, again])
+        check("settling one takes one off the count, and undoing puts it back", less["count"] == n_settle - 1 and less["text"] in ((said(n_settle - 1),) if n_settle > 1 or st["lots"] else ("Loose ends", "")) and less["undo"] == 1 and again["text"] == said(n_settle) and again["key"] == key0, [less, again])
     else: check("settling one takes one off the count, and undoing puts it back", False, "no fix to press")
     page.screenshot(path=str(shots / f"r1-settle-{WIDTH}.png"))
 
