@@ -2037,8 +2037,7 @@ body.phone .bn-line { display: none; }
 .view-assume[data-way="card"] .as-wrap { display: flex; flex-flow: row wrap; align-items: center; column-gap: var(--space-16); padding-top: var(--space-12); }
 .view-assume[data-way="card"] .as-wrap > * { flex: 0 0 100%; }
 .view-assume[data-way="card"] .as-wrap > .as-head { flex: 0 0 auto; }
-.view-assume[data-way="card"] .as-head .eyebrow, .view-assume[data-way="card"] .as-head #asLead { display: none; }
-.view-assume[data-way="card"] .as-head h2 { font-size: var(--type-24); }
+/* the card's page hid its eyebrow and its lead and set its title at 24 before any other: every page of the list now does (the frame, at the foot of this sheet) */
 .view-assume[data-way="card"] .as-wrap > .as-mode { flex: 0 0 330px; margin: 0; }
 .view-assume[data-way="card"] .as-tools { margin: 10px 0 6px; }
 .view-assume[data-way="card"] .as-places, .view-assume[data-way="card"] .as-audit { order: 3; }
@@ -2221,9 +2220,15 @@ table.as tr.as-thing td { background: var(--surface); }
 
 /* The menu and the hint float, on a corner of 12. "?" is the round button that opens a hint. */
 .menu-pop { border: 0; box-shadow: var(--shadow-float); }
-.hint { position: absolute; z-index: 45; max-width: 320px; background: var(--raised); border-radius: var(--corner-12); box-shadow: var(--shadow-float); padding: var(--space-12); font-size: var(--type-13); line-height: 1.45; color: var(--ink-2); }
+.hint { position: fixed; z-index: 45; max-width: 360px; overflow: auto; background: var(--raised); border-radius: var(--corner-12); box-shadow: var(--shadow-float); padding: var(--space-12); font-size: var(--type-13); line-height: 1.45; color: var(--ink-2); }
 .help-btn { width: var(--control-in); height: var(--control-in); padding: 0; border: 1px solid var(--line); border-radius: var(--corner-pill); background: var(--raised); font: 600 var(--type-13) var(--body); color: var(--ink-2); }
 .help-btn:hover, .help-btn[aria-expanded="true"] { border-color: var(--ink-2); color: var(--ink); }
+.hint p { margin: 0; }
+.hint dl { margin: 0; }
+.hint p + dl { margin-top: var(--space-12); padding-top: var(--space-12); border-top: 1px solid var(--line-soft); }
+.hint dt { font-weight: 600; color: var(--ink); }
+.hint dd { margin: 0 0 var(--space-8); }
+.hint dd:last-child { margin-bottom: 0; }
 
 /* A sheet, and its foot: the way back at the left, then Cancel and the one dark button at the right. */
 .dialog { border: 0; border-radius: var(--corner-20); padding: var(--space-24); box-shadow: var(--shadow-float); }
@@ -2234,3 +2239,29 @@ table.as tr.as-thing td { background: var(--surface); }
 body.phone .top .btn, body.phone .wk-full, body.phone .tk-quiet, body.phone .tk-today, body.phone .tk-soft { min-height: var(--control-phone); }
 body.phone .tk-mode button, body.phone .tk-tabs button { min-height: calc(var(--control-phone) - 2px); }
 body.phone .top { padding-block: var(--space-4); }   /* the header stays one short line round its 44 */
+
+/* ───────────────────────────── The frame (DESIGN.md, rule 1) ─────────────────────────────
+   A title that says what is on screen, with "?" beside it. One line of figures. The page's own controls. Then the work.
+   (On the Nursery the controls are its four tabs, and they stand over the figures: see below.)
+   No eyebrow and no standing paragraph: what a paragraph said is behind "?" (the words stay in the page, unseen, and "?" reads
+   them). Nursery, Seeds and Assumptions stand in it; Tasks was built to it. */
+/* only these three pages: the Harvest page shares the head's name and is not in the frame yet (it becomes the Forecast page) */
+.view-assume .as-head .eyebrow, .nu-head .eyebrow, .sd-title .eyebrow, .view-assume .as-head #asLead, #nuLead { display: none; }
+.view-assume .as-head, .nu-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-8) var(--space-12); max-width: none; }
+.view-assume .as-head h2, .nu-head h2 { font-size: var(--type-24); }
+.sd-title { display: flex; align-items: center; gap: var(--space-8); }
+/* the Nursery's figures: one line under the title, the values in ink and bold; each figure's second line is behind "?" */
+#trWrap { display: flex; flex-direction: column; }
+#trWrap > .nu-head { order: 0; }
+#trWrap > .nu-tabs { order: 1; align-self: flex-start; }   /* the tabs keep their place from one to the next: the figures differ, so they stand under */
+#trWrap > .nu-stats { order: 2; }
+#trWrap > * { order: 3; }
+#trWrap > .nu-head, #trWrap > .nu-stats, #trWrap > .nu-tabs { flex: none; }
+.tr-stats.nu-stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-4) var(--space-24); margin: var(--space-16) 0 0; }
+.nu-stats .tr-stat { display: flex; align-items: baseline; gap: var(--space-8); padding: 0; border: 0; border-radius: 0; background: none; }
+.nu-stats .tr-stat span { font: 400 var(--type-13) var(--body); text-transform: none; letter-spacing: 0; color: var(--muted); }
+.nu-stats .tr-stat strong { font: 700 var(--type-13) var(--body); font-stretch: normal; color: var(--ink); }
+.nu-stats .tr-stat:first-child strong { font-size: var(--type-15); }
+.nu-stats .tr-stat small { display: none; }
+.nu-stats .tr-stat.over small { display: inline; }
+.nu-week .linkish { margin-top: 0; }

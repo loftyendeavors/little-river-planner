@@ -41,7 +41,7 @@ PAGE = [
  ("the count to settle shows on a phone", CSS, "body.phone #settleBadge { display: none !important; }", ""),
  ("the Nursery opens on Live trays", TV, "let tab = 'room', drawn = null;", "let tab = 'live', drawn = null;"),
  ("the Supplies tab is missing", TV, "    ['supplies', 'Supplies', 'What the season uses of trays, rockwool, pots and mix, less what is on the shelf.'],\n", ""),
- ("the tabs move down on Live trays", TV, "h('h2', { id: 'nuTitle' }, title)),", "h('h2', { id: 'nuTitle' }, title), tab === 'live' ? h('p', lead) : null),"),
+ ("the tabs move down on Live trays", TV, "h('h2', { id: 'nuTitle' }, title),", "h('h2', { id: 'nuTitle' }, title), tab === 'live' ? h('p', lead) : null,"),
  ("the week's tile shows the season's fullest day", TV, "heat && heat.used > 1e-9 ? (heat.cap ? `${num(heat.used, 0)} of ${num(heat.cap)}`", "heat && heat.used > 1e-9 ? (heat.cap ? `${num(t.used, 0)} of ${num(heat.cap)}`"),
  ("the nursery's count takes seed sown in the ground too", SV, "tray = sow.filter(l => l.kind !== 'direct').length, direct = sow.length - tray;", "tray = sow.length, direct = sow.length - tray;"),
  ("the nursery's count keeps what is already recorded", SV, "const sow = figures().list.filter(l => l.week === week && l.state !== 'done'), other =", "const sow = figures().list.filter(l => l.week === week), other ="),

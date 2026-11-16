@@ -77,5 +77,40 @@
     });
   }
 
-  root.LRFUI = { h, s, clear, add, day, dayLong, span, num, feet, isoWeek, inkOn, toast, confirm, MONTHS, DAYS };
+  /** "?": the round button that opens a hint under it (DESIGN.md, the frame). What a page used to say in a standing paragraph is said
+   *  here, with what else the caller hands over (a page's figures in full), and what each of the page's own controls does: the
+   *  words a control otherwise shows only to a pointer held over it. `lead` and `more` may be functions, read when it opens;
+   *  `from` is the element whose controls are listed, or a function that gives it. One hint is open at a time. */
+  let hintOpen = null;
+  function help(lead, from, more) {
+    const btn = h('button.help-btn', { type: 'button', 'aria-label': 'What this page is for', 'aria-expanded': 'false' }, '?');
+    let box = null;
+    const away = e => { if (box && !box.contains(e.target) && !btn.contains(e.target)) close(); };
+    const key = e => { if (e.key === 'Escape' && box) { close(); btn.focus(); } };
+    function close() {
+      if (!box) return;
+      box.remove(); box = null; hintOpen = null; btn.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('pointerdown', away, true); document.removeEventListener('keydown', key, true);
+    }
+    btn.addEventListener('click', () => {
+      if (box) { close(); return; }
+      if (hintOpen) hintOpen();
+      const text = typeof lead === 'function' ? lead() : lead, host = typeof from === 'function' ? from() : from, extra = (typeof more === 'function' ? more() : more) || [];
+      const shown = el => !!(el.offsetWidth || el.offsetHeight) && !el.closest('table, [hidden]');
+      const said = host ? [...host.querySelectorAll('button[title], select[title], input[title], summary[title], a[title]')].filter(el => el !== btn && el.title && shown(el))
+        .map(el => [(el.getAttribute('aria-label') || el.textContent || el.placeholder || '').trim().replace(/\s+/g, ' ').slice(0, 48), el.title]) : [];
+      const rows = [...extra, ...said].filter(([name], i, all) => name && all.findIndex(x => x[0] === name) === i).slice(0, 14);
+      box = h('div.hint', { role: 'note' }, text ? h('p', text) : null, rows.length ? h('dl', rows.map(([name, what]) => [h('dt', name), h('dd', what)])) : null);
+      document.body.append(box);
+      const r = btn.getBoundingClientRect(), w = box.offsetWidth;
+      box.style.left = Math.round(Math.max(12, Math.min(r.left, root.innerWidth - w - 12))) + 'px';
+      box.style.top = Math.round(r.bottom + 6) + 'px';
+      box.style.maxHeight = Math.round(Math.max(120, root.innerHeight - r.bottom - 24)) + 'px';
+      btn.setAttribute('aria-expanded', 'true'); hintOpen = close;
+      document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', key, true);
+    });
+    return btn;
+  }
+
+  root.LRFUI = { h, s, clear, add, day, dayLong, span, num, feet, isoWeek, inkOn, toast, confirm, help, MONTHS, DAYS };
 })(window);

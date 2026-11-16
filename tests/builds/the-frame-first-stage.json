@@ -1,0 +1,28 @@
+{
+ "build": "The frame, first stage: on Nursery, Seeds and Assumptions the eyebrow and the standing paragraph are gone from the head, and what the paragraph said is behind a round “?” beside the title, with what each of the page's controls does. The Nursery's four tiles are one line of figures under the title, each figure's second line behind “?”. Titles on these pages are 24. Loose ends in the header, and the notices off Assumptions and Seeds, are the second stage and are not in this build.",
+ "words": [
+  "main.js"
+ ],
+ "code": [
+  "assume.js",
+  "seeds.js",
+  "traysview.js",
+  "ui.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html",
+  "sw.js"
+ ],
+ "screens": [
+  "nursery-bench-room",
+  "nursery-live-trays",
+  "nursery-supplies",
+  "nursery-set-up",
+  "seeds",
+  "assumptions-days",
+  "assumptions-yield"
+ ]
+}

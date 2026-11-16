@@ -62,7 +62,7 @@ had a name of its own for the same part is listed beside it there, so the two ca
 | A filter pill | `.chip` | A pill; the chosen one in ink |
 | A box to type in or choose from | `.field`, `.fld` | As high as a button beside it |
 | A menu | `.menu-pop` | Floating, corner 12 |
-| A hint and its "?" | `.hint`, `.help-btn` | Floating, corner 12; "?" is a round button of 28 |
+| A hint and its "?" | `.hint`, `.help-btn`; in a script, `LRFUI.help(lead, from, more)` | Floating, corner 12; "?" is a round button of 28. The hint says what the page's standing paragraph said, then what each of the page's controls does (the words a control shows only under a pointer) |
 | A sheet and its foot | `.dialog`; `.sheet-foot` (or `.dialog-actions`) | Corner 20, 24 of padding. The foot: the way back at the left (`.back`), then Cancel and the one dark button at the right |
 
 A control's height is one of three, named at the head of the style sheet: `--control` (32, on a page), `--control-in` (28,
@@ -75,6 +75,14 @@ inside a card or a table) and `--control-phone` (44, anything pressed on a phone
   it as the Timeline draws any planting, on the first day it can go. Everything else on the page at half strength.
 - **A sheet**: 520, 760 or 960 wide. A title, one sentence, the boxes, what the change will do. One foot: the way back at the
   left, then Cancel and the one dark button at the right. A sheet that changes nothing closes with "Done". No × as well.
+
+## Where the frame stands
+
+Tasks was built to it. Nursery, Seeds and Assumptions have its first stage: no eyebrow, no standing paragraph, the title at
+24 with "?" beside it, and on the Nursery one line of figures where four tiles stood (each figure's second line is behind
+"?"). On the Nursery the four tabs stand over the figures, not under them: the figures differ from tab to tab, and over the
+tabs they made the tabs jump. Still to come: the notices off Assumptions and Seeds and into Loose ends in the header; a line
+of figures written for Seeds and Assumptions; Harvest, as the Forecast page.
 
 ## Leave alone
 

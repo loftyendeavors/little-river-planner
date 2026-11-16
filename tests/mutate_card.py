@@ -95,7 +95,7 @@ PAGE = [
  ("“All on one page” opens at the top, not at the card's crop", AS, "if (ui.way === 'list' && was === 'card') showRow(root.LRFYieldCard.current());", ""),
  ("the view last chosen is forgotten when the page is loaded again", AS, "if (kept === 'list' || kept === 'card') ui.way = kept;", ""),
  # 8. a laptop's screen
- ("the heading keeps its lead above the card, which starts further down the page", CSS, ".view-assume[data-way=\"card\"] .as-head .eyebrow, .view-assume[data-way=\"card\"] .as-head #asLead { display: none; }", ".view-assume[data-way=\"card\"] .as-head .eyebrow { display: none; }"),
+ ("the heading keeps its lead above the card, which starts further down the page", CSS, ".view-assume .as-head .eyebrow, .nu-head .eyebrow, .sd-title .eyebrow, .view-assume .as-head #asLead, #nuLead { display: none; }", ".view-assume .as-head .eyebrow, .nu-head .eyebrow, .sd-title .eyebrow, #nuLead { display: none; }\n.view-assume .as-head #asLead { flex-basis: 100%; }"),
  ("the grid's rows are tall again, and the facts run under the bar", CSS, ".yc-grid th, .yc-grid td { text-align: left; vertical-align: top; padding: var(--space-4) var(--space-12) var(--space-4) 0;", ".yc-grid th, .yc-grid td { text-align: left; vertical-align: top; padding: 18px 12px 18px 0;"),
  # 3. a backup with no list
  ("the farm's switch is left behind when the list is carried onto a backup", "js/planio.js", "if (prev.settings && prev.settings.houseKeeps === false && !(next.settings && 'houseKeeps' in next.settings)) {", "if (false) {"),
