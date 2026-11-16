@@ -14,12 +14,12 @@ for part in ${@:-node build app1 app2 app3 app4 new off site1 site2 site3 site4 
       sh $T/b.sh offline; (cd $REPO && node tools/sync_client_test.mjs $REPO/js 2>&1 | named "sync client, built site") ;;
     app1) sh $T/b.sh ahead core sowing trays step1 folder step2a numbers windows ;;
     app2) sh $T/b.sh f018 step2b maint sync step3a step3b ;;
-    app3) sh $T/b.sh wide step5a step5b stepF plain r1 bedpanel mixed season photo ask cleanup look card loose ;;
+    app3) sh $T/b.sh wide step5a step5b stepF plain r1 bedpanel mixed season photo ask cleanup look card loose f053 ;;
     app4) sh $T/b.sh mapgeo; WIDTHS=${WIDTHS:-1280,1480,1707,3440} sh $T/b.sh map; sh $T/b.sh map-views; WIDTH=1480 sh $T/b.sh r1; sh $T/b.sh things ;;
     new) sh $T/b.sh sup importer; WIDTH=1480 sh $T/b.sh sup importer; WIDTH=3440 sh $T/b.sh sup importer; sh $T/b.sh sup-site importer-site; WIDTH=1480 sh $T/b.sh sup-site importer-site ;;
     off) sh $T/b.sh offline ahead-off core-off sowing-off trays-off step2a-off f018-off step2b-off map-off ;;
     site1) sh $T/b.sh carry site step3a-site step3b-site wide-site step5a-site ;;
-    site2) sh $T/b.sh step5b-site stepF-site plain-site r1-site sync-site tour loose-site ;;
+    site2) sh $T/b.sh step5b-site stepF-site plain-site r1-site sync-site tour loose-site f053-site ;;
     site3) WIDTHS=${WIDTHS:-1280,1480,1707,3440} sh $T/b.sh map-site; sh $T/b.sh map-views-site; sh $T/b.sh things-site; WIDTH=1480 sh $T/b.sh things-site ;;
     site4) DARK=1 WIDTH=1480 sh $T/b.sh step3a-site step3b-site; WIDTH=1480 sh $T/b.sh step3a-site step3b-site step5a-site step5b-site stepF-site r1-site loose-site ;;
     site5) DARK=1 sh $T/b.sh step3a-site step3b-site step5a-site step5b-site stepF-site r1-site; WIDTH=3440 sh $T/b.sh stepF-site r1-site loose-site ;;

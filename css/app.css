@@ -74,6 +74,12 @@ ul, ol { list-style: none; }
 .brand-name { font: 800 var(--type-24)/1 var(--display); font-stretch: 78%; letter-spacing: -0.01em; white-space: nowrap; }
 .brand-sub { font: 500 var(--type-13) var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
 .brand-sub b { color: var(--ink); font-weight: 600; }
+/* the build that is running, always in view: a press opens what each build changed. A dot when a newer build is ready. */
+.build-chip { align-self: center; flex: none; display: inline-flex; align-items: center; gap: 0; min-height: var(--control-in); border: 1px solid var(--line); border-radius: var(--corner-pill); background: none; padding: 0 var(--space-8); font: 500 var(--type-11) var(--mono); letter-spacing: 0.04em; color: var(--muted); white-space: nowrap; }
+.build-chip span { white-space: pre; }
+.build-chip b { font-weight: 600; color: var(--ink-2); }
+.build-chip:hover { border-color: var(--ink-2); color: var(--ink); }
+.build-chip[data-newer]::after { content: ""; width: 7px; height: 7px; margin-left: 6px; border-radius: var(--corner-pill); background: var(--flag); }
 .views { display: flex; background: var(--paper); border: 1px solid var(--line); border-radius: var(--corner-pill); padding: 2px; }
 .views button { border: 0; background: none; padding: var(--space-4) var(--space-16); border-radius: var(--corner-pill); font-weight: 600; color: var(--ink-2); }
 .views button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
@@ -786,6 +792,7 @@ button.sd-stat.jump:hover { border-color: var(--ink-2); }
 .sd-strayrow small { font: 500 var(--type-11) var(--mono); color: var(--muted); align-self: center; white-space: nowrap; }
 .sd-strayrow p { grid-column: 1 / -1; margin: 0; font-size: var(--type-13); color: var(--ink-2); }
 .sd-strayrow .link { grid-column: 1 / -1; justify-self: start; font-size: var(--type-13); }
+.sd-strayrow .btn { grid-column: 1 / -1; justify-self: start; margin: var(--space-4) 0 0; }
 .sd-odd { grid-column: 1 / -1; margin: 0; font-size: var(--type-13); color: var(--ink-2); }
 .sd-oddbox { grid-column: 1 / -1; display: grid; gap: var(--space-4); justify-items: start; border-left: 2px solid var(--warn); padding: 2px 0 2px var(--space-8); margin: 0 0 4px; }
 .sd-oddbox .link { font-size: var(--type-13); }
@@ -1246,6 +1253,16 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 .hv .hv-name { width: 210px; max-width: 210px; overflow: hidden; }
 /* eight views: below 1400 px the brand keeps its name and the year, and drops the words between */
 @media (max-width: 1400px) { .top { gap: var(--space-12); } .brand-sub { font-size: 0; letter-spacing: 0; } .brand-sub b { font-size: var(--type-13); letter-spacing: 0.08em; } .views button { padding-inline: var(--space-12); } }
+/* there the header has no room to spare, so the build's number takes none: it stands under the year, as plain figures */
+@media (max-width: 1400px) {
+  .brand { display: grid; grid-template-columns: auto auto auto; grid-template-rows: auto auto; gap: 0 var(--space-8); align-items: center; }
+  .brand-mark, .brand-name { grid-row: 1 / 3; }
+  .brand-sub { grid-column: 3; grid-row: 1; align-self: end; line-height: 1.2; }
+  .build-chip { grid-column: 3; grid-row: 2; justify-self: start; align-self: start; min-height: 0; border: 0; padding: 0; line-height: 1.2; }
+  .build-chip span { display: none; }
+  /* and the map's tools, which gained "?", keep clear of the scale at the map's other corner */
+  .map-tools .tool-btn { padding-inline: var(--space-8); }
+}
 
 /* a seed lot in one line, at the top of the seed library */
 .sd-quick { padding: 0 var(--space-16) var(--space-8); }
@@ -1646,8 +1663,6 @@ ul.moves b { font-weight: 600; color: var(--ink); }
 .as.ah .ah-comes b { font-weight: 600; color: var(--ink-2); }
 .as.ah .ah-comes small { display: block; color: var(--muted); font-size: var(--type-11); }
 .as.ah .ah-comes.bad { color: var(--warn); }
-.as-hints.ah-open { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); background: color-mix(in srgb, var(--warn) 7%, var(--raised)); display: grid; gap: 1px; justify-content: start; }
-.as-hints.ah-open[hidden] { display: none; }
 .au-new.au-crops { color: var(--warn); }
 .hv-series { flex: none; }
 .hv-series button { padding-inline: 12px; white-space: nowrap; }
@@ -1708,11 +1723,12 @@ table.od { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .wkp-foot { margin-top: 10pt; font-size: 9pt; color: #333; }
 
 /* ── a phone: the week is the whole page ── */
-body.phone .views, body.phone .library, body.phone .inspector, body.phone .season, body.phone #redoBtn, body.phone #waitBadge, body.phone .brand-sub, body.phone .bn { display: none !important; }
+body.phone .views, body.phone .library, body.phone .inspector, body.phone .season, body.phone #redoBtn, body.phone #waitBadge, body.phone .brand-sub, body.phone .build-chip, body.phone .bn { display: none !important; }
 body.phone .wk-full { display: inline-block; padding: var(--space-4) var(--space-8); font-size: var(--type-13); white-space: nowrap; }
 body.phone .top { gap: var(--space-8); padding: var(--space-8) var(--space-8); flex-wrap: wrap; }
 body.phone .top .btn { font-size: var(--type-13); }   /* a control's own step: at the body's 15 the header's four things no longer fit one line of a phone */
 body.phone .brand-name { display: none; }
+body.phone .brand { display: flex; }   /* only its mark is left: the columns the build's number stands in at narrow widths would hold the header's one line open */
 body.phone .save-state { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; padding: var(--space-4) 0; }
 body.phone .top-actions { gap: var(--space-4); }
 body.phone .menu-pop { position: fixed; left: 8px; right: 8px; top: 52px; width: auto; max-height: calc(100vh - 64px); overflow: auto; }
@@ -2245,11 +2261,30 @@ table.as tr.as-thing td { background: var(--surface); }
 .hint dt { font-weight: 600; color: var(--ink); }
 .hint dd { margin: 0 0 var(--space-8); }
 .hint dd:last-child { margin-bottom: 0; }
+/* a card of two columns: a name, and what it does (the Map's "?") */
+.hint.cols { max-width: min(520px, calc(100vw - 24px)); }
+.hint.cols dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-8) var(--space-16); }
+.hint.cols dd { margin: 0; }
 
 /* A sheet, and its foot: the way back at the left, then Cancel and the one dark button at the right. */
 .dialog { border: 0; border-radius: var(--corner-20); padding: var(--space-24); box-shadow: var(--shadow-float); }
 .sheet-foot, .dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--space-8); margin-top: var(--space-16); }
 .sheet-foot > .back { margin-right: auto; }
+/* What changed: every build, latest first, opened from the header's chip. A sheet 520 wide; its list scrolls between the title and the foot. */
+.dialog.wc { width: min(520px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 40px); }
+.dialog.wc[open] { display: flex; flex-direction: column; }
+.dialog.wc h2 { margin-bottom: var(--space-4); }
+.wc-lead { font-size: var(--type-13); }
+.wc-newer { display: flex; align-items: center; gap: var(--space-12); margin-top: var(--space-12); font-size: var(--type-13); font-weight: 600; }
+.wc-newer span { color: var(--ink); }
+.wc-list { min-height: 0; overflow: auto; margin-top: var(--space-16); padding-right: var(--space-8); display: grid; gap: var(--space-16); align-content: start; }
+.wc-build { display: grid; gap: var(--space-4); padding-top: var(--space-16); border-top: 1px solid var(--line-soft); }
+.wc-build:first-child { border-top: 0; padding-top: 0; }
+.wc-build h3 { display: flex; align-items: baseline; gap: var(--space-8); font: 600 var(--type-15) var(--body); }
+.wc-build h3 small { margin-left: auto; font: 500 var(--type-11) var(--mono); color: var(--muted); white-space: nowrap; }
+.wc-new { font: 600 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--flag-deep); background: var(--flag-soft); border-radius: var(--corner-4); padding: 0 var(--space-4); }
+.wc-build p { font-size: var(--type-13); color: var(--ink); }
+.wc-build ol { list-style: decimal; padding-left: var(--space-24); display: grid; gap: 2px; font-size: var(--type-13); color: var(--ink-2); }
 
 /* On a phone, what is pressed is 44 high. */
 body.phone .top .btn, body.phone .wk-full, body.phone .tk-quiet, body.phone .tk-today, body.phone .tk-soft { min-height: var(--control-phone); }

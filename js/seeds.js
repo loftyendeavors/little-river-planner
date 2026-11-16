@@ -564,7 +564,13 @@
       } else if (v && crop && crop.active !== false && !crop.deleted) {
         row.append(h('p', `${was} was removed from the library, so it has no row.`),
           h('button.link', { type: 'button', onclick: async () => { const after = { ...v, active: true }; delete after.deleted; if (await App.revise(`Bring ${v.name} back to the library`, [{ kind: 'variety', before: v, after }])) toast(`${v.name} is back in the library`, { label: 'Undo', run: App.undo }); } }, `Bring ${was} back under ${cropName(crop)}`));
-      } else row.append(h('p', 'The variety this was bought for is no longer in the library.'));
+      } else {
+        // Nothing is left to bring back or to move it to: the lot can only be let go. It is kept, marked as removed, in the stock's
+        // own record, and Undo puts it back.
+        const said = `${was}: ${lotText(u)} removed from stock`;
+        row.append(h('p', 'The variety this was bought for is no longer in the library, so no row can count it.'),
+          h('button.btn.small', { type: 'button', dataset: { act: 'remove' }, title: 'Take this lot off the stock, so the list stops asking after it. Undo puts it back.', onclick: () => { if (App.editStock(said, (lib, ctx) => SL.deleteLot(lib, u.lot.id, ctx), was)) toast(said, { label: 'Undo', run: App.undo }); } }, 'Remove this lot'));
+      }
       box.append(row);
     }
     return box;

@@ -142,12 +142,36 @@
     }
     return out;
   }
-  /** Both are "when you have a minute": neither is counted on the header's button. */
+  /**
+   * The grower's own crops that stand on a yield nobody has checked (the starting value a new crop is given, or none), and
+   * those with no price: { yields, prices, crops: their ids in the list's order }. Each is marked in its row of "All on one page".
+   */
+  function unchecked(eng, plan) {
+    const used = new Map(), list = plan.settings.cropTypeList || {}, out = { yields: 0, prices: 0, crops: [] };
+    for (const p of plan.plantings) bump(used, p.cropId);
+    for (const c of eng.crops()) {
+      if (!root.LRFPanels.isMine(c, used, c.micro ? [] : eng.varietiesOf(c.id), list)) continue;
+      const hc = eng.harvestFor(c.id), y = hc.open.yield && eng.ENVS.every(e => hc.cells[e].mine == null), p = hc.open.price && hc.price.mine == null;
+      if (y) out.yields++;
+      if (p) out.prices++;
+      if (y || p) out.crops.push(c.id);
+    }
+    return out;
+  }
+  /** Yield and price, all on one page, at the first crop that has a yield to check or a price to set. */
+  function openUnchecked() {
+    const first = unchecked(App.state.engine, App.state.plan).crops[0];
+    if (App.state.view !== 'assume') App.setView('assume');
+    setMode('harvest', 'list', first);
+  }
+  /** All three are "when you have a minute": none is counted on the header's button. */
   function loose() {
-    const s = App.auditSurvey(), hv = s.harvest, figures = s.days.own + s.days.waiting + s.nursery.differ + hv.yield + hv.window + hv.turnover + hv.copy, offers = guidance(App.state.engine, App.state.plan);
+    const s = App.auditSurvey(), hv = s.harvest, figures = s.days.own + s.days.waiting + s.nursery.differ + hv.yield + hv.window + hv.turnover + hv.copy, offers = guidance(App.state.engine, App.state.plan), open = unchecked(App.state.engine, App.state.plan);
     return [
       figures || s.guessed.plantings ? { key: 'differ', kind: 'minute', name: 'Plantings that differ from your list', detail: 'On Assumptions: what moves is shown first', word: figures ? plural(figures, 'figure') : plural(s.guessed.plantings, 'planting'), n: figures, open: openDiffer } : null,
-      offers.length ? { key: 'guide', kind: 'minute', name: 'Published guidance not yet used', detail: 'On Assumptions: where days are counted from', word: plural(offers.length, 'crop'), n: offers.length, open: openGuide } : null
+      offers.length ? { key: 'guide', kind: 'minute', name: 'Published guidance not yet used', detail: 'On Assumptions: where days are counted from', word: plural(offers.length, 'crop'), n: offers.length, open: openGuide } : null,
+      // (it stood as a notice above the list, on "All on one page": N crops stand on a yield nobody has checked · N have no price)
+      open.crops.length ? { key: 'yields', kind: 'minute', name: 'Yields not checked, and crops with no price', detail: `On Assumptions: ${[open.yields ? `${plural(open.yields, 'yield')} to check` : '', open.prices ? `${plural(open.prices, 'price')} to set` : ''].filter(Boolean).join(', ')}`, word: plural(open.crops.length, 'crop'), n: open.crops.length, open: openUnchecked } : null
     ].filter(Boolean);
   }
   // A sheet is in the page only while it is open, like every other window here. What it shows (the summary; the offers) is kept
@@ -403,10 +427,10 @@
     const mainEnv = (m, cells) => { const best = m ? [...m.entries()].sort((a, b) => b[1] - a[1])[0][0] : null; return best && cells[best].used ? best : eng.ENVS.find(e => cells[e].used) || 'field'; };
     harvestHead();
     const body = clear($('ahBody')), crops = eng.crops();
-    let shown = 0, mineCount = 0, openYield = 0, openPrice = 0;
+    let shown = 0, mineCount = 0;
     for (const c of crops) {
       const varieties = c.micro ? [] : eng.varietiesOf(c.id), mine = root.LRFPanels.isMine(c, used, varieties, list), hc = eng.harvestFor(c.id);
-      if (mine) { mineCount++; if (hc.open.yield && eng.ENVS.every(e => hc.cells[e].mine == null)) openYield++; if (hc.open.price && hc.price.mine == null) openPrice++; }
+      if (mine) mineCount++;
       if (ui.scope === 'mine' && !mine && !q) continue;
       const nameHit = !q || String(c.name).toLowerCase().includes(q), hits = q ? varieties.filter(v => String(v.name).toLowerCase().includes(q)) : varieties;
       if (!nameHit && !hits.length) continue;
@@ -470,11 +494,6 @@
     }
     if (!shown) body.append(h('tr', h('td.empty', { colSpan: 13 }, q ? `No crop or variety matches “${ui.query}”.` : 'No crops yet.')));
     for (const [scope, count] of [['mine', mineCount], ['all', crops.length]]) { const el = document.querySelector(`[data-as-scope="${scope}"] small`); if (el) el.textContent = count; }
-    const note = $('ahOpen');
-    note.hidden = !(openYield || openPrice);
-    clear(note);
-    if (openYield || openPrice) note.append(h('b', [openYield ? `${plural(openYield, 'crop')} of yours ${openYield === 1 ? 'stands' : 'stand'} on a yield nobody has checked` : '', openPrice ? `${plural(openPrice, 'crop')} ${openPrice === 1 ? 'has' : 'have'} no price` : ''].filter(Boolean).join(' · ')),
-      h('small', 'They are marked in the list. Until they are set, what the Harvest view says of them is a placeholder.'));
   }
   /** How many figures of the grower's own the list holds, in words. */
   function countLine(plan) {
@@ -497,7 +516,6 @@
     $('asTitle').textContent = HEAD[ui.mode][0]; $('asLead').textContent = HEAD[card ? 'card' : ui.mode][1];
     $('asTitle').title = card ? HEAD.card[1] : '';   // on the card's page the lead gives its room to the card, and is said when the heading is pointed at
     $('asTable').hidden = harvest; $('ahTable').hidden = !harvest || card;
-    if (!harvest || card) $('ahOpen').hidden = true;
     for (const b of document.querySelectorAll('[data-as-mode]')) b.setAttribute('aria-pressed', String(b.dataset.asMode === ui.mode));
     view.dataset.mode = ui.mode;
     // the second half's two ways, and the farm's own switch for what is kept for personal use
@@ -636,5 +654,5 @@
     return true;
   }
 
-  root.LRFAssume = { init, LABEL, loose, openDiffer, openGuide, openAudit, audit: () => audit, auditView: change => Object.assign(auView, change || {}), tidy, setMode, mode: () => ui.mode, way: () => ui.way, fig };
+  root.LRFAssume = { init, LABEL, loose, unchecked, openDiffer, openGuide, openAudit, audit: () => audit, auditView: change => Object.assign(auView, change || {}), tidy, setMode, mode: () => ui.mode, way: () => ui.way, fig };
 })(window);

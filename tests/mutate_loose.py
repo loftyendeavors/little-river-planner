@@ -47,6 +47,17 @@ PAGE = [
  ("the notice of what differs stands on the Assumptions page again", AS, "    document.body.append(kept);", "    $('assumeView').querySelector('.as-tools').before(h('section.as-audit', h('b', 'Plantings that differ from your list'))); document.body.append(kept);"),
  ("at the narrowest desktop width the button pushes the tabs over the year", CSS, "@media (max-width: 1340px) { .settle-badge { padding-inline: var(--space-4); gap: var(--space-4); } .settle-badge b { padding-inline: var(--space-4); } }", ""),
  ("the line of figures is gone from the Assumptions list", CSS, ".view-assume .as-head #asCount { display: block;", ".view-assume .as-head #asCount { display: none;"),
+ ("the button stays in the header when nothing needs the grower", PN, "    badge.hidden = !n;\n    if (!n) { closeLoose(); return; }", "    badge.hidden = !looseRows.length;\n    if (!looseRows.length) { closeLoose(); return; }"),
+ ("with nothing that needs the grower a press still opens the list", PN, "    badge.hidden = !n;\n    if (!n) { closeLoose(); return; }", "    badge.hidden = !n;\n    if (!n) { return; }"),
+ ("yields nobody has checked are no row of Loose ends", AS, "open.crops.length ? { key: 'yields',", "false ? { key: 'yields',"),
+ ("the row of yields counts yields and prices, not crops", AS, "word: plural(open.crops.length, 'crop'), n: open.crops.length, open: openUnchecked }", "word: plural(open.yields + open.prices + 1, 'crop'), n: open.crops.length, open: openUnchecked }"),
+ ("the row of yields opens one crop at a time, not the list", AS, "    setMode('harvest', 'list', first);", "    setMode('harvest', 'card', first);"),
+ ("the row of yields opens the list at its top, not at the first of those crops", AS, "    setMode('harvest', 'list', first);", "    setMode('harvest', 'list');"),
+ ("the notice of yields nobody has checked stands above the list again", AS, "    $('asTable').hidden = harvest; $('ahTable').hidden = !harvest || card;", "    $('asTable').hidden = harvest; $('ahTable').hidden = !harvest || card; if (harvest && !card && !$('ahOpen')) $('ahTable').before(h('p.as-hints', { id: 'ahOpen' }, 'Some crops stand on a yield nobody has checked'));"),
+ ("a lot whose variety is gone has no way to be removed", SE, "}, 'Remove this lot'));", "}, 'Remove this lot').firstChild);"),
+ ("“Remove this lot” removes nothing", SE, "if (App.editStock(said, (lib, ctx) => SL.deleteLot(lib, u.lot.id, ctx), was)) toast(said", "if (App.editStock(said, lib => lib, was)) toast(said"),
+ ("a lot removed offers no Undo", SE, "toast(said, { label: 'Undo', run: App.undo }); } }, 'Remove this lot')", "toast(said); } }, 'Remove this lot')"),
+ ("“Remove this lot” is underlined text, not a button", SE, "h('button.btn.small', { type: 'button', dataset: { act: 'remove' },", "h('button.link', { type: 'button', dataset: { act: 'remove' },"),
 ]
 if mode == "list": print(json.dumps({"page": len(PAGE)})); sys.exit(0)
 faults = PAGE

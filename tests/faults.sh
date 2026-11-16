@@ -12,7 +12,7 @@
 #   {"set": "step5a", "mode": "node", "faults": 30, "caught": 30, "missed": [], "broken": []}
 # The exit status is 0 only when every fault was caught.
 . "$(dirname "$0")/env.sh"
-SETS="step1 f018 step2a step2b step3a step3b step5a step5b stepF plain r1 sup sync maint bedpanel mixed season ask cleanup look map changed screens numbers card things windows scale loose"
+SETS="step1 f018 step2a step2b step3a step3b step5a step5b stepF plain r1 sup sync maint bedpanel mixed season ask cleanup look map changed screens numbers card things windows scale loose f053"
 # the script of a set and what it is given; F is the folder its copies are made in
 script() {
   case $1 in
@@ -45,6 +45,7 @@ script() {
     windows) SCRIPT=$T/mutate_windows.py; ARGS="$APP $REPO $F $T" ;;
     scale) SCRIPT=$T/mutate_scale.py; ARGS="$REPO $F" ;;
     loose) SCRIPT=$T/mutate_loose.py; ARGS="$APP $F $T" ;;
+    f053) SCRIPT=$T/mutate_f053.py; ARGS="$APP $F $T" ;;
     *) return 1 ;;
   esac
 }

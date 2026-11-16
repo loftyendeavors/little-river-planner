@@ -72,6 +72,8 @@ with sync_playwright() as pw:
 
     # ── the map and its panels ──
     look("the map, with the plan's overview")
+    page.click("#mapHelp"); wait(300); look("the Map's “?”"); page.keyboard.press("Escape"); wait(200)
+    page.click("#buildChip"); wait(400); look("What changed"); page.keyboard.press("Escape"); wait(300)
     check("the overview's row of figures reaches both edges of its box", (js("return boxes();") or []) and js("return holes();") == [], js("return holes();"))
     four = js("""const p = S.plan.plantings.find(p => { const r = eng.calc(p), b = S.plan.beds.find(b => b.id === p.bedId); return r && b && !eng.isRack(b) && !eng.isTower(b) && r.cells && !r.ct && !r.tw && !r.rack; });
       if (!p) return null; A.select({ type: 'planting', id: p.id }); return p.id;""")
@@ -187,7 +189,7 @@ with sync_playwright() as pw:
     if not strip["shown"] or strip["words"]: named["A second window"] = strip["words"] or ["the strip of a window that only shows the plan is not there to be read"]
     second.close()
 
-    check("no screen, tooltip or label names the planner's earlier version (%d screens read)" % len(looked), len(looked) >= 29 and not named, named)
+    check("no screen, tooltip or label names the planner's earlier version (%d screens read)" % len(looked), len(looked) >= 31 and not named, named)
     end = js("return { key: A.contentKey(), undo: S.undo.length, n: S.plan.plantings.length };") or {}
     check("looking changed nothing: the same plan, nothing to undo", end.get("key") == start.get("key") and end.get("undo") == 0 and end.get("n") == start.get("n"), [start, end])
     check("no error on the page", not errors, errors[:4])

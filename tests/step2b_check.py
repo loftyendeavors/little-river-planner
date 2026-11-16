@@ -83,7 +83,7 @@ with sync_playwright() as pw:
         radish = ev("(LRFApp.state.engine.crops().find(c => /^Radish$/.test(c.name)) || LRFApp.state.engine.crops().find(c => /radish/i.test(c.name))).id")
 
         # ── the tool opens in place ──
-        page.wait_for_selector('#ovSeries'); page.click('#ovSeries'); page.wait_for_selector('#srForm')
+        page.click('#mapHelp'); page.wait_for_selector('#ovSeries'); page.click('#ovSeries'); page.wait_for_selector('#srForm')   # it stood in the side panel's list "On the map"; that list is the card behind the Map's "?"
         check('"plan a series" opens the tool in the details panel: no page of its own, no sheet over the page', st()['sel'] == 'series' and st()['view'] == 'map' and ev("!document.querySelector('dialog[open]') && !!document.querySelector('#inspectorBody #srForm') && !document.querySelector('#ahSheet')"))
         setv('#srCrop', radish)
         # a garden of the plan that takes the whole series, none left to place: the first of the tool's own choices that does
