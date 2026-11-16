@@ -142,7 +142,7 @@
      * (a backup, a snapshot) has been loaded over it since. Joined with such a plan, every difference would read as a change made here.
      */
     async function keptPlan() {
-      if (!kept || !cfg.base || behind || host.loads() !== st.loads) return null;
+      if (!kept || st.keptOff || !cfg.base || behind || host.loads() !== st.loads) return null;   // a database that did not answer is not waited for again
       try { const k = await answered(kept.get()); return k && k.etag === cfg.base ? k : null; } catch (_) { return null; }
     }
     const forget = () => { st.kept = undefined; st.keptNote = ''; st.keptTried = null; if (kept && !st.keptOff && !quiet()) Promise.resolve().then(() => kept.clear()).catch(() => {}); };

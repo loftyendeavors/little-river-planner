@@ -78,7 +78,7 @@ function keeping(b) {
       if (b.keptFull) throw new Error('The database is full.'); b.keptRec = { etag: r.etag, key: r.key, at: r.at, bytes: r.text.length, text: r.text }; return b.keptRec;
     },
     note: async () => (b.keptRec ? { etag: b.keptRec.etag, key: b.keptRec.key, at: b.keptRec.at, bytes: b.keptRec.bytes } : null),
-    get: async () => (b.keptRec ? { ...b.keptRec } : null),
+    get: async () => { b.keptGets = (b.keptGets || 0) + 1; return b.keptHangs ? new Promise(() => {}) : b.keptRec ? { ...b.keptRec } : null; },
     clear: async () => { b.keptRec = null; return true; } };
   b.make();
   return b;
@@ -358,7 +358,8 @@ const sends = world_ => world_.calls.filter(c => c === 'PUT /plan').length;
     const waited = work => Promise.race([work, new Promise(resolve => setTimeout(() => resolve({ status: 'still waiting for the database' }), 2500))]);   // so that a send left waiting fails this line by name, and the test goes on
     const first = await waited(h.sync.connect(URL_, KEY, 'H')), puts = h.keptPuts, second = await waited(h.change('h-after'));
     check('a database that never answers is waited for once, and the plan is sent and in step all the same', first.status === 'in-step' && first.kept === false && /did not answer/.test(first.keptNote) && second.status === 'in-step' && (await wh.text('plan')).includes('h-after'), [first.status, first.kept, first.keptNote, second.status]);
-    check('and it is not asked again while that page is open', puts === 1 && h.keptPuts === 1 && !h.timers.some(t => t.ms === Sync.timing.kept) && (await h.sync.keptPlan()) === null, [puts, h.keptPuts]); }
+    const asked = await waited(h.sync.keptPlan());
+    check('and it is not asked again while that page is open, for the kept plan either', puts === 1 && h.keptPuts === 1 && !h.timers.some(t => t.ms === Sync.timing.kept) && asked === null && !h.keptGets, [puts, h.keptPuts, asked, h.keptGets]); }
   // the note of being in step is written before the plan is kept: a page that ends between the two is in step, and fetches the plan at its next look
   { const wn = world(), e = keeping(browser(wn, 'ends', planOf(3, 'e'))), noted = [], put = e.env.kept.put;
     e.env.kept.put = async r => { noted.push(JSON.parse(e.saved).base || null); return put(r); };
