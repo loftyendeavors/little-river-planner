@@ -47,7 +47,7 @@ PAGE = [
   ("the empty day's line does not end", 'js/sowview.js', "h('p', 'Nothing is planned for today.')", "h('p', 'Nothing is planned for today')", 'empty day'),
   ("ticks are the browser's blue", 'css/app.css', 'input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); }', 'input[type="checkbox"], input[type="radio"] { }', 'own ink'),
   ("a variety's days are “Not stated: as the crop”", 'js/seeds.js', "['unspecified', 'As the crop']", "['unspecified', 'Not stated: as the crop']", 'As the crop'),
-  ("the variety panel's headings are in the bold face", 'css/app.css', ".sd-review h3 { font: 500 11px var(--mono);", ".sd-review h3 { font: 700 13px var(--body);", 'headings'),
+  ("the variety panel's headings are in the bold face", 'css/app.css', ".sd-review h3 { font: 500 var(--type-11) var(--mono);", ".sd-review h3 { font: 700 13px var(--body);", 'headings'),
   ("the importer's window is “from a supplier page”", 'js/seeds.js', "openDialog('Add a variety from a link',", "openDialog('Add a variety from a supplier page',", 'Add from a link'),
   ("a crop sown in place counts from “sowing”", 'js/assume.js', "sown: ['direct seeding',", "sown: ['sowing',", "own words"),
   # the same sentence stands in index.html too, but the list writes its own over it as it is drawn: a fault there shows nowhere
