@@ -117,14 +117,16 @@ On the plan's own map, a crop keeps the same pots or crates for as long as it st
 
 ## Tasks
 
-- **Tasks** lists the week's work as the acts it is made of, in two halves. **Nursery** is the raising of the plant: a batch of plug trays filled for several beds, rockwool for the towers, the week's live trays, potting up, hardening off. **Field** is planting, wherever the plant goes (beds, tunnels, greenhouses, towers, crates; bulbs, canes and bought-in plants with the transplants), seed sown in the ground, and crates moved out.
-- **Everything, Nursery, Field**, beside the week, shows both halves or one. The title, the tiles, the earlier tasks not recorded and the printed sheet follow it, so the nursery's list can be printed on its own. The choice is remembered in that browser, with how far ahead is listed: the week, two weeks or four.
+- **Tasks** opens on today: what is to do today, and above it whatever is late, in two lists. **Nursery** is the raising of the plant: a batch of plug trays filled for several beds, rockwool for the towers, the week's live trays, potting up, hardening off. **Field** is planting, wherever the plant goes (beds, tunnels, greenhouses, towers, crates; bulbs, canes and bought-in plants with the transplants), seed sown in the ground, and crates moved out. Each row carries the variety's photograph.
+- The week runs across the top, a cell for each day with the number of tasks still to do on it. A press on a day shows that day; **Week** shows the whole week, day by day; the arrows move a week; the date at the top left opens a calendar to go to any day. The left and right arrow keys move a day.
 - Transplants are worked out like this: the plants wanted, plus the buffer, divided by germination, rounded up to whole rows of the plug tray. Plantings of one variety with one schedule are rounded once, as one batch.
-- Varieties of one crop sown the same day share trays, each in whole rows: the list says how many trays the lot takes, draws each tray row by row, and tells each variety its rows. (Nursery, Set-up can count every variety in trays of its own instead.)
-- Tick what was done and record it in one step, on the day it was done. Each planting is dated, and what a sowing or a planting used comes off stock. A transplant sown or hardened off late goes out as many days later: the bar says what would move before anything is recorded, and it can be declined. Work done early moves nothing. One Undo takes the whole step back, and a recorded task can be taken back.
-- A day after today is a plan, not a record: choosing one moves the ticked sowings to that day. Nothing is marked sown and no seed leaves stock.
-- One line under the list says what stands on the benches that week, and leads to Bench room in the Nursery.
-- On a phone the planner is this view and nothing else.
+- Varieties of one crop sown the same day share trays, each in whole rows: a line says how many trays the lot takes, and each variety's row says its tray and its rows. (Nursery, Set-up can count every variety in trays of its own instead.)
+- A tick records the task, at once. The planting is dated, and what a sowing or a planting used comes off stock. A late task is asked the day it was done, in a small calendar that says what each day would move before anything is recorded: a transplant sown or hardened off late goes out as many days later. Work done early moves nothing. Undo takes the step back, and a tick on a done task takes it back.
+- A task still to do can be put off to a later day on purpose (**Delay**). A sowing, hardening off or planting out put off takes its planting and everything after it as many days later; potting up and moving out only change the day they are listed on. A task can also be skipped, which takes it off the list and changes nothing else, and it can carry a note.
+- Work cannot be recorded on a day after today.
+- **Print the week** makes a sheet of the week on screen to carry: a box for each task and a place for the day it was done.
+- One line under the lists says what stands on the benches that week, and leads to Bench room in the Nursery.
+- On a phone the planner is this view and nothing else: one list at a time, Nursery or Field.
 
 ## Openings, series and plantings to place
 

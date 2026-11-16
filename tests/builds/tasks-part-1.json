@@ -5,6 +5,7 @@
  ],
  "code": [
   "app.js",
+  "rails.js",
   "sowview.js",
   "succession.js",
   "week.js"

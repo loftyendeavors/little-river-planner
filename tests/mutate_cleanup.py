@@ -44,7 +44,7 @@ PAGE = [
   ("Harvest says “a week at a time, or all at once”", 'js/harvestview.js', "says it is picked: gradually (a week’s picking each week), clear (all of it the day it is ready) or on demand (evenly over its harvest days).", "says it comes in: evenly over the days it is picked, a week at a time, or all at once.", 'three words'),
   ("the frost words have no ground of their own", 'css/app.css', ".season-frost b { font-weight: inherit; background: var(--surface); padding: 0 2px; }", ".season-frost b { font-weight: inherit; padding: 0 2px; }", 'frost marks'),
   ("the frost words are bare text again", 'js/season.js', "h('i'), h('b', label)));", "h('i'), label));", 'frost marks'),
-  ("the earlier-tasks line runs on", 'js/sowview.js', "'are'} not recorded.`)", "'are'} not recorded`)", 'earlier tasks'),
+  ("the empty day's line does not end", 'js/sowview.js', "h('p', 'Nothing is planned for today.')", "h('p', 'Nothing is planned for today')", 'empty day'),
   ("ticks are the browser's blue", 'css/app.css', 'input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); }', 'input[type="checkbox"], input[type="radio"] { }', 'own ink'),
   ("a variety's days are “Not stated: as the crop”", 'js/seeds.js', "['unspecified', 'As the crop']", "['unspecified', 'Not stated: as the crop']", 'As the crop'),
   ("the variety panel's headings are in the bold face", 'css/app.css', ".sd-review h3 { font: 500 11px var(--mono);", ".sd-review h3 { font: 700 13px var(--body);", 'headings'),

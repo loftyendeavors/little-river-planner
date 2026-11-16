@@ -140,7 +140,7 @@ with sync_playwright() as pw:
     more(); tick(pk["key"])
     page.hover(f'#tkPop [data-pick="{pk["due"]}"]'); wait(250); onday = page.inner_text("#tkHint")
     check("the day it was due is offered, and says nothing moves", "on its day" in onday and "nothing moves" in onday, onday)
-    pick(pk["due"])
+    pick(pk["due"]); wait(1200)   # the plan of record is written after the record: give a second one time to land before counting
     kept = ajs(f"const ps = {json.dumps(pk['ids'])}.map(id => S.engine.planting(id)); return {{ done: ps.every(p => p.done && p.done.harden === '{pk['due']}'), dates: ps.map(p => p.date), toast: (document.querySelector('.toast') || {{}}).textContent || '', snaps: (await A.snapshots()).rows.filter(s => /^Plan of record/.test(s.name)).length, today: [...document.querySelectorAll('.tk-row')].some(r => r.dataset.line === {json.dumps(pk['key'])}) }};")
     check("then the job is dated on that day, nothing moves, and it leaves today's list for the day it was done", kept["done"] and kept["dates"] == pk["dates"] and "→" not in kept["toast"] and "later" not in kept["toast"] and not kept["today"], kept)
     check("the plan of record is not taken a second time", kept["snaps"] == 1, kept)
@@ -192,11 +192,14 @@ with sync_playwright() as pw:
     more(); tick(other["key"]); fut = popup()
     check("a task cannot be recorded on a day after today: the calendar offers none", fut and fut["picks"] and max(fut["picks"]) == first["today"] and other["date"] in fut["picks"], fut)
     page.keyboard.press("Escape"); wait(300)
+    esc = js("return { pop: $('tkPop').hidden, scrim: $('tkScrim').hidden, pending: document.querySelectorAll('.tk-row.pending').length, undo: S.undo.length };")
+    check("Escape leaves the calendar, and nothing is recorded", esc["pop"] and esc["scrim"] and esc["pending"] == 0 and esc["undo"] == mix["undo"], esc)
+    if not esc["pop"]: js("$('tkPop').querySelector('[data-close]').click()"); wait(300)
     row(mix["sow"]["key"]).locator(".tk-put").click(); wait(500); put = popup()
     check("a task put off is offered today and the days after it: none before, and not the day it stands on", put and put["head"] == "Delay it to" and put["mode"] == "delay" and put["quick"].startswith("Tomorrow") and min(put["picks"]) == first["today"] and mix["sow"]["date"] not in put["picks"], put)
     page.click("#tkPop [data-close]"); wait(300)
     cleared = js("return { pop: $('tkPop').hidden, scrim: $('tkScrim').hidden, pending: document.querySelectorAll('.tk-row.pending').length, undo: S.undo.length };")
-    check("Escape and × leave the calendar without doing anything", cleared["pop"] and cleared["scrim"] and cleared["pending"] == 0 and cleared["undo"] == mix["undo"], cleared)
+    check("× leaves the calendar without doing anything", cleared["pop"] and cleared["scrim"] and cleared["pending"] == 0 and cleared["undo"] == mix["undo"], cleared)
 
     # ── late, in full ──
     earl = js("""const today = A.today(), late = V.tasks().filter(t => (t.state === 'open' || t.state === 'part') && t.due < today), rows = [...document.querySelectorAll('.tk-row')].filter(r => r.querySelector('.tk-put.late'));

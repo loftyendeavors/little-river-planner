@@ -177,6 +177,9 @@ with sync_playwright() as pw:
     click('#nuTabs [data-tab="room"]'); click("#nuToTasks", 600)
     to = js("return { view: S.view, scope: V.scope(), title: txt('wkTitle'), where: V.where(), today: A.today() };")
     check("“Open the nursery’s list” on Bench room goes to Tasks, on the week the planner's date is in, with the Nursery's list the one chosen", to["view"] == "sow" and to["scope"] == "nursery" and to["where"]["tab"] == "nursery" and to["where"]["week"] == js("return now") and to["where"]["day"] == to["today"] and to["title"] == "Today", to)
+    js("window.__d0 = S.date; A.setView('trays'); A.setDate(E.addDays(E.s2d(now), 21));"); wait(500); click('#nuTabs [data-tab="room"]'); click("#nuToTasks", 600)
+    far = js("const r = { view: S.view, where: V.where(), title: txt('wkTitle'), want: E.d2s(E.addDays(E.s2d(now), 21)) }; A.setDate(window.__d0); return r;"); wait(400)
+    check("with the planner's date in a later week, the Nursery's way in opens that week, whole", far["view"] == "sow" and far["where"]["week"] == far["want"] and far["where"]["day"] is None and far["title"].startswith("Week of "), far)
     js("V.setScope('all'); V.showWeek(now);"); wait(400)
     for i in range(page.locator(".tk-more").count()): page.locator(".tk-more").first.click(); wait(250)
 

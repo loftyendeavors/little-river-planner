@@ -26,12 +26,15 @@ def alone(cmd, timeout, env=None, cwd=None):
     return out, err
 AS, SV, SE, SY = "js/assume.js", "js/sowview.js", "js/seeds.js", "js/sync.js"
 PAGE = [
- ("two weeks lists one", SV, "const span = phone ? 1 : ui.span, until", "const span = 1, until"),
- ("the range runs a week too far", SV, "until = E.d2s(E.addDays(d(now), 7 * span - 1)), inSpan = l => l.week >= now && l.week <= until, stretch", "until = E.d2s(E.addDays(d(now), 7 * span + 6)), inSpan = l => l.week >= now && l.week <= until, stretch"),
- ("the sheet prints the week whatever is listed", SV, "clear(host); host.append(sheet(fig, now, span));", "clear(host); host.append(sheet(fig, now));"),
- ("the printed sheet's own range is always a week", SV, "sheet: () => sheet(figures(), T.monday(E.d2s(App.state.date)), isPhone() ? 1 : ui.span),", "sheet: () => sheet(figures(), T.monday(E.d2s(App.state.date)), 1),"),
- ("a phone is offered the range", SV, "        phone ? null : h('div.seg.wk-span'", "        false ? null : h('div.seg.wk-span'"),
- ("the view still calls its work jobs", SV, "stat('Other tasks',", "stat('Other jobs',"),
+ ("the arrow to the next week goes two weeks on", SV, "    else if (act === 'week') viewWeek(plus(ui.week, +el.dataset.by));", "    else if (act === 'week') viewWeek(plus(ui.week, 2 * el.dataset.by));"),
+ ("the week's dates run a day too far", SV, "const span = (a, names) => { const x = d(a), y = d(plus(a, 6));", "const span = (a, names) => { const x = d(a), y = d(plus(a, 7));"),
+ ("the sheet prints this week whatever week is listed", SV, "else if (act === 'print') printWeek(figures(), ui.week);", "else if (act === 'print') printWeek(figures(), T.monday(App.today()));"),
+ ("the sheet's own week is always this one", SV, "sheet: () => sheet(figures(), ui.week || T.monday(App.today())),", "sheet: () => sheet(figures(), T.monday(App.today())),"),
+ ("a phone is offered the sheet to print", SV, "framed || phone ? null : h('button.tk-quiet'", "framed ? null : h('button.tk-quiet'"),
+ ("the page still calls its work jobs", SV, "a box for each task and a place for the day it was done", "a box for each job and a place for the day it was done"),
+ ("the page opens on the week, not on today", SV, "arrive = null; ui.week = week; ui.day = week === T.monday(now) ? now : null;", "arrive = null; ui.week = week; ui.day = null;"),
+ ("a press on a day shows the whole week still", SV, "    else if (act === 'go' || act === 'day') viewDay(el.dataset.day);", "    else if (act === 'go' || act === 'day') show(null, T.monday(el.dataset.day));"),
+ ("a day's cell counts the whole week", SV, "else openOn.set(t.due, (openOn.get(t.due) || 0) + 1); }", "else openOn.set(T.monday(t.due), (openOn.get(T.monday(t.due)) || 0) + 1); }"),
  ("Gradually is the total held on demand", AS, "const PATTERN = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' };", "const PATTERN = { spread: 'Gradually', once: 'Clear', weekly: 'On demand' };"),
  ("the step still says how it is picked in the old words", AS, "`${c.name}: ${value === 'unset' ? 'picked as before' : PATTERN_SAY[value]}`", "`${c.name}: picked ${value === 'unset' ? 'as before' : value}`"),
  ("the column keeps its old name", "index.html", ">Days counted from</th>", ">Days start at</th>"),

@@ -200,4 +200,53 @@ if (shared) {
   const others = l2.filter(l => !l.members.some(m => m.p.id === tp.p.id));
   check('recording one job dates that job alone: every other line is as open as it was', others.every(l => l.state === 'open') && l2.filter(l => l.members.some(m => m.p.id === tp.p.id)).every(l => l.members.find(m => m.p.id === tp.p.id).st.done === null));
 }
+// ── 12. put off on purpose, skipped, and a note ──
+{
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const days = (e, q) => { const r = e.calc(q); return [r.plannedSow, r.planned, r.first, r.last].map(x => (x ? iso(new Date(x)) : '')); };
+  const d0 = days(eng, tp.p), kinds = tp.st.map(s => s.kind);
+  // a sowing put off takes its planting with it
+  const put = W.delay(eng, tp.p, 'sow', plus(sowDay, 5)), e1 = E.create(withP(plan, put.planting), Lib), st1 = W.steps(e1, put.planting), d1 = days(e1, put.planting);
+  check('a sowing put off five days goes out, is planted and is picked five days later, and says the day it was first planned for', put.moves && put.days === 5 && put.from === sowDay && put.to === plus(sowDay, 5) && put.planting.date === plus(tp.p.date, 5) && d1.every((x, i) => x === plus(d0[i], 5)) && iso(st1[0].planned) === plus(sowDay, 5) && st1[0].delayedFrom === sowDay && same(put.planting.tasks, { delay: { sow: { from: sowDay, to: plus(sowDay, 5) } } }), [put, d0, d1]);
+  check('the jobs after it are not marked as put off: they only follow', st1.slice(1).every(s => !s.delayedFrom) && st1.map(s => s.kind).join() === kinds.join());
+  const again = W.delay(e1, put.planting, 'sow', plus(sowDay, 9));
+  check('put off a second time, it still says the day it was first planned for', again.days === 4 && again.planting.date === plus(tp.p.date, 9) && same(again.planting.tasks.delay.sow, { from: sowDay, to: plus(sowDay, 9) }), again);
+  const back = W.delay(e1, put.planting, 'sow', sowDay);
+  check('put back on its first day, the planting is as it was, with nothing kept', back.days === -5 && same(back.planting, tp.p), back.planting);
+  check('putting a job off to the day it is on already is nothing', W.delay(eng, tp.p, 'sow', sowDay) === null);
+  check('a day that is no date, or one that takes the planting out of its year, is refused', /real calendar date/.test(throws(() => W.delay(eng, tp.p, 'sow', '2027-02-30')) || '') && /out of 2027/.test(throws(() => W.delay(eng, tp.p, 'sow', plus(sowDay, 400))) || ''), [throws(() => W.delay(eng, tp.p, 'sow', '2027-02-30')), throws(() => W.delay(eng, tp.p, 'sow', plus(sowDay, 400)))]);
+  const sown = W.record(eng, inv0, tp.p, 'sow', { date: sowDay }, ctx()), e3 = E.create(withP(plan, sown.planting), Lib);
+  check('work already recorded cannot be put off, and work a planting does not have cannot either', /already recorded/.test(throws(() => W.delay(e3, sown.planting, 'sow', plus(sowDay, 3))) || '') && /no such work/.test(throws(() => W.delay(eng, all.find(x => !x.st.some(s => s.kind === 'move')).p, 'move', plus(sowDay, 3))) || ''));
+  // hardening off put off is the grower's choice to go out later
+  const hd = iso(tp.st.find(s => s.kind === 'harden').planned), hard = W.delay(eng, tp.p, 'harden', plus(hd, 3)), e4 = E.create(withP(plan, hard.planting), Lib), d4 = days(e4, hard.planting);
+  check('hardening off put off three days plants it out and picks it three days later', hard.moves && hard.planting.date === plus(tp.p.date, 3) && d4[1] === plus(d0[1], 3) && d4[2] === plus(d0[2], 3) && W.steps(e4, hard.planting).find(s => s.kind === 'harden').delayedFrom === hd, [hard, d4]);
+  // potting up moves nothing: only the day it is listed on
+  const potter = all.find(x => x.st.some(s => s.kind === 'potup') && !x.p.tasks && x.p.date.slice(5) < '10-01');
+  if (potter) {
+    const pd = iso(potter.st.find(s => s.kind === 'potup').planned), pot = W.delay(eng, potter.p, 'potup', plus(pd, 2)), e5 = E.create(withP(plan, pot.planting), Lib), st5 = W.steps(e5, pot.planting), k = st5.find(s => s.kind === 'potup');
+    check('potting up put off two days is listed two days later and nothing else moves', !pot.moves && pot.planting.date === potter.p.date && same(days(e5, pot.planting), days(eng, potter.p)) && iso(k.planned) === plus(pd, 2) && k.delayedFrom === pd && iso(k.own) === pd && st5.filter(s => s.kind !== 'potup').every((s, i) => +s.planned === +potter.st.filter(x => x.kind !== 'potup')[i].planned), [pot, pd]);
+    check('put back on the plan’s own day, nothing is kept', same(W.delay(e5, pot.planting, 'potup', pd).planting, potter.p));
+    // the plan moves under it: the day chosen no longer stands
+    const moved = { ...pot.planting, date: plus(pot.planting.date, 14) }, e6 = E.create(withP(plan, moved), Lib), k6 = W.steps(e6, moved).find(s => s.kind === 'potup');
+    check('when the planting is moved afterwards, the day once chosen for potting up is let go: the plan’s new day stands', k6 && !k6.delayedFrom && +k6.planned === +k6.own && iso(k6.planned) !== plus(pd, 2), k6 && [iso(k6.planned), k6.delayedFrom]);
+  }
+  // skipped
+  const skipped = W.skip(tp.p, 'sow', sowDay), e7 = E.create(withP(plan, skipped), Lib), st7 = W.steps(e7, skipped), l7 = W.lines(e7, withP(plan, skipped), year);
+  check('a skipped job says the day it was skipped on, and nothing else about the planting changes', st7[0].skipped === sowDay && st7.slice(1).every(s => !s.skipped) && same(days(e7, skipped), d0) && same({ ...skipped, tasks: undefined }, { ...tp.p, tasks: undefined }) && same(skipped.tasks, { skip: { sow: sowDay } }), skipped.tasks);
+  const hl = l7.filter(l => l.members.some(m => m.p.id === tp.p.id)), sk = W.skip(tp.p, 'harden', hd), e8 = E.create(withP(plan, sk), Lib), l8 = W.lines(e8, withP(plan, sk), year).find(l => l.kind === 'harden' && l.members.some(m => m.p.id === tp.p.id));
+  check('a skipped sowing leaves the planting’s other lines open', hl.length > 0 && hl.every(l => l.state === 'open' && !l.skipped), hl.map(l => [l.kind, l.state, l.skipped]));
+  check('a line all of whose plantings are skipped says so, and one with a planting still to do does not', l8 && (l8.members.length === 1 ? l8.skipped === hd : !l8.skipped), l8 && [l8.members.length, l8.skipped, l8.state]);
+  check('put back, the planting is as it was', same(W.skip(skipped, 'sow', null), tp.p) && /real calendar date/.test(throws(() => W.skip(tp.p, 'sow', 'soon')) || ''));
+  const done7 = W.record(e7, inv0, skipped, 'sow', { date: sowDay }, ctx()), e9 = E.create(withP(plan, done7.planting), Lib);
+  check('a skipped job that is recorded after all is done, not skipped', W.steps(e9, done7.planting)[0].done === sowDay && W.steps(e9, done7.planting)[0].skipped === null);
+  // a note, and what a copy carries
+  const noted = W.withTask(W.withTask(put.planting, 'note', 'sow', 'seed is in the cooler'), 'skip', 'harden', hd);
+  check('a note is kept with its job and read back; cleared, it is gone', W.noteOf(noted, 'sow') === 'seed is in the cooler' && W.noteOf(noted, 'harden') === '' && W.noteOf(W.withTask(noted, 'note', 'sow', ''), 'sow') === '' && !('note' in W.withTask(noted, 'note', 'sow', '').tasks));
+  check('what is kept is read with care: a day that is no day, or a put-off with half its days, counts as nothing', W.skipOf({ tasks: { skip: { sow: 'yes' } } }, 'sow') === null && W.delayOf({ tasks: { delay: { sow: { from: sowDay } } } }, 'sow') === null && W.noteOf({ tasks: 7 }, 'sow') === '' && W.skipOf({}, 'sow') === null);
+  const R = req(app, 'js/rails.js'), e10 = E.create(withP(plan, noted), Lib), at = { bedId: noted.bedId, date: E.s2d(plus(noted.date, 21)) };
+  const copy = R.propose(e10, { plantingId: noted.id, copy: true }, at), move = R.propose(e10, { plantingId: noted.id }, at);
+  check('a copy of a planting starts clean: nothing put off, skipped or noted comes with it, while the planting itself keeps them when moved', copy.p && !('tasks' in copy.p) && copy.p.id !== noted.id && move.p && same(move.p.tasks, noted.tasks), [copy.state, copy.p && copy.p.tasks, move.p && move.p.tasks]);
+  const packed = IO.unpack(IO.pack(withP(plan, noted)));
+  check('what is put off, skipped and noted survives the plan being packed and read back', same((packed.plantings.find(x => x.id === noted.id) || {}).tasks, noted.tasks), (packed.plantings.find(x => x.id === noted.id) || {}).tasks);
+}
 finished = true;
