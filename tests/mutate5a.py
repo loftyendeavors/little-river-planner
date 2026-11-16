@@ -77,7 +77,7 @@ PAGE = [
  ("the calendar offers a day after today for a record", "js/sowview.js", "hi: mode === 'go' ? '9999-12-31' : mode === 'delay' ? last : now };", "hi: mode === 'go' ? '9999-12-31' : last };"),
  ("passed-over lines are drawn as waiting", "js/week.js", "const open = line.members.filter(m => !m.st.done && !m.st.passed && !m.st.skipped), dated", "const open = line.members.filter(m => !m.st.done && !m.st.skipped), dated"),
  ("the phone keeps the planner's other views", "css/app.css", "body.phone .views, body.phone .library,", "body.phone .library,"),
- ("on a phone a row's words run off the screen", "css/app.css", ".tk-sub { display: block; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }", ".tk-sub { display: block; font-size: 13px; color: var(--muted); white-space: nowrap; }"),
+ ("on a phone a row's words run off the screen", "css/app.css", ".tk-sub { display: block; font-size: var(--type-13); color: var(--muted); overflow-wrap: anywhere; }", ".tk-sub { display: block; font-size: 13px; color: var(--muted); white-space: nowrap; }"),
  ("the printed sheet leaves the planner on the page", "css/app.css", ".wkp { white-space: normal;", ".wkp { white-space: pre-wrap;"),
  ("the schedule records the sowing without its seed", "js/panels.js", "!st.done && !st.passed && !st.seed && !open ? h('button.link.job-tick'", "!st.done && !st.passed && !open ? h('button.link.job-tick'"),
  ("unticking a done job does nothing", "js/sowview.js", ": App.takeBackWork(l.members.filter(m => m.st.done).map(m => ({ id: m.p.id, kind: l.kind })));", ": null;"),

@@ -18,6 +18,7 @@ if not same: bad.append('tests/farm/data/thumbs.json has a picture for the varie
 print(json.dumps({'passed': len(names) + 1 - len(bad), 'of': len(names) + 1, 'failed': bad}))
 PY
 # "backup" is the farm as a full backup's plan, "compact" the plan the app folder ships
+node $REPO/tools/scale.mjs check $REPO | named "scale"   # every size, corner and speed of the style sheet is a step of the one scale (DESIGN.md)
 node $T/rockwool_test.cjs $APP $PLAN | named "rockwool"
 node $T/step1_test.cjs $APP $PLAN | named "step1, backup"
 node $T/step1_test.cjs $APP $SHIP | named "step1, compact"

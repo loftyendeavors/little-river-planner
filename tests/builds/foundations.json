@@ -1,0 +1,28 @@
+{
+ "build": "Foundations: one scale under every screen. The steps of type (11 13 15 18 24 32), corners (4 8 12 20 and the pill) and motion (120 ms, 240 ms, one easing) are named once at the head of the style sheet, and every size, corner and speed in it is moved to its nearest step and written by that name. Nothing is added to a screen or taken off one, and no script changes but for the label.",
+ "words": [
+  "main.js"
+ ],
+ "code": [],
+ "added": [],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html",
+  "sw.js",
+  "DESIGN.md"
+ ],
+ "screens": [
+  "map",
+  "timeline",
+  "forecast",
+  "tasks",
+  "nursery-bench-room",
+  "nursery-live-trays",
+  "nursery-supplies",
+  "nursery-set-up",
+  "seeds",
+  "assumptions-days",
+  "assumptions-yield"
+ ]
+}

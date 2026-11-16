@@ -30,7 +30,8 @@ Everything here runs on a made-up farm. No grower's plan is needed to check a bu
 | `mutate*.py` | The faults themselves |
 | `farm/` | The made-up farm: how it is made, and the result |
 
-The map's own checks (`map_check.py`, `map_views_check.py`, `mapgeo_test.cjs`, `mutate_map.py`), the checks of the sync and
+`tools/scale.mjs` holds every size, corner and speed of the style sheet to the one scale (`DESIGN.md`); it is the check
+called `scale` among the fast ones, and it is also the tool that moves a value to its step. The map's own checks (`map_check.py`, `map_views_check.py`, `mapgeo_test.cjs`, `mutate_map.py`), the checks of the sync and
 fetch services and `site_check.py` are in `tools/`, beside the code they belong to. `run.sh` runs them with the rest.
 
 ## Running the checks
@@ -172,8 +173,8 @@ Then let the checks run again on the two together: the merge waits for them.
 ## Deliberate faults
 
 A check that cannot fail proves nothing. Each `mutate*.py` puts one fault at a time into a copy of the app (a rule dropped,
-a word changed back, a figure off by one) and requires that the check then fails where it passed before. Six sets (`changed`,
-`cleanup`, `look`, `map`, `screens`, `windows`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
+a word changed back, a figure off by one) and requires that the check then fails where it passed before. Seven sets (`changed`,
+`cleanup`, `look`, `map`, `scale`, `screens`, `windows`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
 
 ```
 sh tests/faults.sh list             # every set, its modes, how many faults
