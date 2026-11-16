@@ -536,6 +536,7 @@
   function schedule() { cancelAnimationFrame(ui.frame); ui.frame = requestAnimationFrame(render); }
 
   function init() {
+    $('asTitle').after(UI.help(() => $('asLead').textContent, () => $('assumeView')));
     $('asSearch').addEventListener('input', e => { ui.query = e.target.value; render(); });
     for (const button of document.querySelectorAll('[data-as-scope]')) {
       button.addEventListener('click', () => { ui.scope = button.dataset.asScope; for (const b of document.querySelectorAll('[data-as-scope]')) b.setAttribute('aria-pressed', String(b === button)); render(); });
