@@ -83,6 +83,19 @@ FIT = """(() => { const out = []; for (const d of document.querySelectorAll('dia
   return out; })()"""
 PLANTS = "(() => { let x = 2166136261; const t = JSON.stringify(LRFApp.state.plan.plantings.map(p => [p.id, p.bedId, p.date, p.cropId, p.varietyId, p.ft])); for (let i = 0; i < t.length; i++) x = Math.imul(x ^ t.charCodeAt(i), 16777619); return (x >>> 0) + ':' + LRFApp.state.plan.plantings.length; })()"
 STORED = "(() => { const t = localStorage.getItem('lrf-next:plan'); return t ? JSON.parse(t).plantings.length : null; })()"
+# The plan kept to compare with (js/kept.js), read straight from the browser's database, beside what cloud sync says of it. The database is
+# opened only where it already exists: opening it by name here first would make an empty one that the page could not then set up.
+KEPT = """async () => {
+  const names = (await indexedDB.databases()).map(d => d.name), out = { there: names.includes('lrf-next-kept'), etag: null, bytes: null, length: null, n: null, odd: null };
+  out.base = (JSON.parse(localStorage.getItem('lrf-next:sync') || '{}').base) || null; out.says = LRFApp.syncInfo().kept; out.note = LRFApp.syncInfo().keptNote;
+  const viaSync = await LRFApp.sync().keptPlan(); out.via = viaSync ? viaSync.etag : null;
+  if (!out.there) return out;
+  const db = await new Promise((res, rej) => { const r = indexedDB.open('lrf-next-kept'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  const get = k => new Promise((res, rej) => { const q = db.transaction('plan').objectStore('plan').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+  const note = await get('note'), text = await get('text'); db.close();
+  if (note) { out.etag = note.etag; out.bytes = note.bytes; }
+  if (typeof text === 'string') { const plan = JSON.parse(text); out.length = text.length; out.n = plan.plantings.length; out.odd = LRFMerge.unkeyed(plan).filter(x => !(x.pattern in LRFMerge.NO_IDS) || x.why === 'repeated').length; out.self = LRFMerge.merge(plan, plan, plan).plan === plan; }
+  return out; }"""
 
 with sync_playwright() as pw:
     browser = pw.chromium.launch(executable_path='/usr/bin/google-chrome', args=['--no-sandbox'])
@@ -168,6 +181,9 @@ with sync_playwright() as pw:
         everything = A.evaluate("JSON.stringify(Object.entries(localStorage)) + document.documentElement.innerHTML")
         check('the right one connects, and the plan is sent', a1['status'] == 'in-step' and held['plan'] and held['plan']['meta']['plantings'] == n0 and held['plan']['meta']['label'] == 'Work laptop' and held['plan']['meta']['enc'] == 'gzip', [a1['status'], held['plan']])
         check('the passphrase is nowhere in the browser afterwards: not stored, not left in the page', KEY not in everything and '"token":"v1.' in stored, stored[:200])
+        k1 = A.evaluate(KEPT)
+        check('the plan that was sent is kept in the browser\'s database to compare with later, under the cloud\'s stamp for it', k1['there'] and k1['etag'] == held['plan']['etag'] and k1['etag'] == k1['base'] and k1['via'] == k1['etag'] and k1['says'] is True and k1['n'] == n0 and k1['length'] == k1['bytes'] and k1['length'] == held['plan']['meta']['bytes'], k1)
+        check('it is a plan the merge can read: every list of records in it has ids, and joined with itself it comes back as it is', k1['odd'] == 0 and k1['self'] is True, k1)
         check('the photos went with it', held['files']['map'] and held['files']['map']['size'] == os.path.getsize(PHOTO) and held['files']['thumbs'] and held['files']['thumbs']['size'] > 100000, [held['files'], os.path.getsize(PHOTO)])   # the farm photo is sent as it is: the cloud's copy is as large as the file given above, whatever photo the farm has
         dlg = A.evaluate("({ host: document.getElementById('syncHost').innerText, cloud: document.getElementById('syncCloud').innerText.replace(/\\s+/g, ' '), here: document.getElementById('syncHere').innerText.replace(/\\s+/g, ' '), state: document.getElementById('syncState').dataset.state, say: document.getElementById('syncSay').textContent, label: document.getElementById('syncLabel').value })")
         check('the window then says what each side holds', dlg['host'] == SYNC.replace('http://', '') and 'Work laptop' in dlg['cloud'] and str(n0) in dlg['cloud'] and str(n0) in dlg['here'] and 'In step' in dlg['here'] and dlg['state'] == 'in-step' and 'in step' in dlg['say'] and dlg['label'] == 'Work laptop', dlg)
@@ -186,6 +202,8 @@ with sync_playwright() as pw:
         went = appears(A, "LRFApp.contentKey() && LRFApp.syncInfo().cloud && LRFApp.syncInfo().cloud.etag !== '%s' && LRFApp.syncInfo().status === 'in-step'" % e1, 30000)
         s2 = state()
         check('a change made here is in the cloud a moment later', went and s2['plan']['etag'] != e1 and s2['plan']['meta']['plantings'] == n0 - 1, s2['plan'])
+        k2 = A.evaluate(KEPT)
+        check('and the plan kept to compare with has moved with it', k2['etag'] == s2['plan']['etag'] and k2['etag'] == k2['base'] and k2['n'] == n0 - 1 and k2['says'] is True, k2)
         A.evaluate("LRFApp.undo()"); A.wait_for_function("LRFApp.syncInfo().cloud.etag !== '%s' && LRFApp.syncInfo().status === 'in-step' && !LRFApp.syncInfo().busy" % s2['plan']['etag'], timeout=30000)
         check('so is undoing it', state()['plan']['meta']['plantings'] == n0)
         calls = A.evaluate("(async () => { const before = (await LRFApp.sync().run('poll')).cloud.etag; await new Promise(r => setTimeout(r, 900)); return [before, LRFApp.syncInfo().cloud.etag, LRFApp.syncInfo().status]; })()")
@@ -204,6 +222,8 @@ with sync_playwright() as pw:
         got = B.evaluate("({ n: LRFApp.state.plan.plantings.length, sample: LRFApp.isSample(), strip: document.getElementById('firstRun').hidden, toast: document.getElementById('toast').textContent, map: LRFApp.state.mapImageUrl.slice(0, 5), thumbs: LRFThumbs.count(), note: document.getElementById('buildNote').textContent, undo: LRFApp.state.undo.length, stored: %s })" % STORED)
         check('it signs in and the plan opens there: every planting, the farm photo, the variety photos', b1['status'] == 'in-step' and got['n'] == n0 and not got['sample'] and got['strip'] and got['map'] == 'blob:' and got['thumbs'] > 100 and got['stored'] == n0 and 'from the cloud' in got['note'], got)
         check('the two browsers hold the same plantings', A.evaluate(PLANTS) == B.evaluate(PLANTS), [A.evaluate(PLANTS), B.evaluate(PLANTS)])
+        kb = B.evaluate(KEPT)
+        check('the browser that opened the cloud\'s plan keeps that plan to compare with', kb['there'] and kb['etag'] == state()['plan']['etag'] and kb['etag'] == kb['base'] and kb['n'] == n0 and kb['says'] is True, kb)
         same_key = A.evaluate("LRFApp.contentKey()") == B.evaluate("LRFApp.contentKey()")
         check('and the same plan altogether (one fingerprint)', same_key, [A.evaluate("LRFApp.contentKey()"), B.evaluate("LRFApp.contentKey()")])
         e2 = state()['plan']['etag']; B.wait_for_timeout(1500); settled(B)
@@ -240,6 +260,8 @@ with sync_playwright() as pw:
         e4 = state()['plan']['etag']
         change(B, 3); bc = settled(B, 'conflict'); B.wait_for_timeout(1000)
         conflict = B.evaluate("({ n: LRFApp.state.plan.plantings.length, stored: %s, strip: !document.getElementById('syncStrip').hidden, bad: document.getElementById('syncStrip').classList.contains('bad'), text: document.getElementById('syncStripText').innerText.replace(/\\s+/g, ' '), buttons: [...document.querySelectorAll('#syncStrip button')].map(b => b.textContent), save: document.getElementById('saveState').textContent })" % STORED)
+        kc = B.evaluate(KEPT)
+        check('when both have changed, the plan kept is still the one the two computers started from', kc['etag'] == e3 and kc['etag'] == kc['base'] and kc['via'] == e3 and kc['n'] == n0 - 2 and kc['says'] is True, kc)
         check('a change on the computer that is behind is kept there and not sent: the cloud is as the other left it', bc['status'] == 'conflict' and state()['plan']['etag'] == e4 and state()['plan']['meta']['plantings'] == n0 - 3 and conflict['n'] == n0 - 5 and conflict['stored'] == n0 - 5, [bc['status'], conflict])
         check('the page says so in words, with both plans described and both choices', conflict['strip'] and conflict['bad'] and 'different plans' in conflict['text'] and str(n0 - 3) in conflict['text'] and str(n0 - 5) in conflict['text'] and 'Nothing is sent or replaced until you choose' in conflict['text'] and conflict['buttons'] == ['Open the cloud’s plan', 'Keep this plan, and save it over the cloud’s'] and conflict['save'] == 'Cloud holds another plan · click', conflict)
         check('it fits at 1280', B.evaluate(FIT) == [], B.evaluate(FIT))

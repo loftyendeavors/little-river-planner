@@ -57,6 +57,23 @@ NODE = [
   ('client: "keep this plan" does not ask the cloud to keep the other', 'js/sync.js', "return solo(() => push(st.cloud.etag, true));", "return solo(() => push(st.cloud.etag, false));", 'client'),
   ('client: photos are sent every time', 'js/sync.js', "      if (mine === cfg.extrasKey) {\n", "      if (false) {\n", 'client'),
   ('client: photos added on another device are not fetched', 'js/sync.js', "? photosDown(remote) : false;", "? false : false;", 'client'),
+  # the service's version 3, and the plan kept to compare with
+  ('worker: an older planner writes over a newer one\'s plan', 'worker/lrf-plan-sync.js', "if (there && (metaOf(there).m || 0) > (meta.m || 0)) return json(409,", "if (false) return json(409,", 'worker'),
+  ('worker: an older planner is refused with "sign in again"', 'worker/lrf-plan-sync.js', "return json(409, { error: 'This device is running an older planner. Reload the page.'", "return json(401, { error: 'This device is running an older planner. Reload the page.'", 'worker'),
+  ('worker: a planner\'s number is not kept with the plan', 'worker/lrf-plan-sync.js', "  if (Number.isInteger(meta.m) && meta.m > 0 && meta.m < 1000) out.m = meta.m;", "  if (false) out.m = meta.m;", 'worker'),
+  ('worker: a plan\'s line is not kept with it', 'worker/lrf-plan-sync.js', "'name', 'enc', 'why', 'line']", "'name', 'enc', 'why']", 'worker'),
+  ('worker: the plan before a join is not kept', 'worker/lrf-plan-sync.js', "    if (meta.merged === true && !replace) { await copy(", "    if (false) { await copy(", 'worker'),
+  ('worker: the plans before a join are never thinned', 'worker/lrf-plan-sync.js', " await pruneMerges(bucket, now); }", " }", 'worker'),
+  ('worker: of the plans before a join only the last ten are kept, not the first of each hour', 'worker/lrf-plan-sync.js', "if (key >= since && !hours.has(hour)) {", "if (false) {", 'worker'),
+  ('worker: a page can write a "plan before a join" of its own', 'worker/lrf-plan-sync.js', " && !m[2].startsWith('merge-')) {", ") {", 'worker'),
+  ('client: the plan sent is not kept to compare with', 'js/sync.js', "      await keepPlan(done.plan.etag, p.text, p.key);   // what the cloud now holds is this very text\n", "", 'client'),
+  ('client: the plan opened from the cloud is not kept to compare with', 'js/sync.js', "      await keepPlan(etag, text, host.key());\n", "", 'client'),
+  ('client: a browser in step with no plan kept never fetches one', 'js/sync.js', "await ensureKept().catch(", "await Promise.resolve(false).catch(", 'client'),
+  ('client: with a database that refuses, the cloud\'s plan is fetched at every look', 'js/sync.js', "if (st.kept === cfg.base || st.keptTried === cfg.base) return", "if (st.kept === cfg.base) return", 'client'),
+  ('client: a plan kept under another stamp is handed out as the plan to compare with', 'js/sync.js', "return k && k.etag === cfg.base ? k : null;", "return k || null;", 'client'),
+  ('client: a kept plan that cannot be written fails the send', 'js/sync.js', "        st.kept = null; st.keptNote = (error && error.message) || 'The plan to compare with could not be kept.';", "        throw error;", 'client'),
+  ('client: the page says a plan is kept when none is', 'js/sync.js', "kept: !!cfg.base && st.kept === cfg.base, keptNote", "kept: !!cfg.base, keptNote", 'client'),
+  ('client: leaving the cloud leaves the kept plan behind', 'js/sync.js', "if (kept && !quiet()) Promise.resolve().then(() => kept.clear()).catch(() => {});", "", 'client'),
 ]
 PAGE = [
   ('app: a change is not handed to sync', 'js/app.js', "    folderSoon();\n    if (sync) sync.touch();\n    emit('plan');\n  }", "    folderSoon();\n    emit('plan');\n  }"),
@@ -99,7 +116,7 @@ for fault in ([(None, None, None, None)] if faults else []) + faults:
     if mode == 'node':
         work = os.path.join(scratch, 'mut-node'); shutil.rmtree(work, ignore_errors=True)
         os.makedirs(os.path.join(work, 'js')); shutil.copytree(os.path.join(repo, 'worker'), os.path.join(work, 'worker')); shutil.copytree(os.path.join(repo, 'tools'), os.path.join(work, 'tools'), ignore=shutil.ignore_patterns('reader', '*.py'))
-        shutil.copy(os.path.join(app, 'js', 'sync.js'), os.path.join(work, 'js', 'sync.js'))
+        for script in ('sync.js', 'merge.js'): shutil.copy(os.path.join(app, 'js', script), os.path.join(work, 'js', script))
     else:
         work = os.path.join(scratch, 'mut-page'); shutil.rmtree(work, ignore_errors=True); shutil.copytree(app, work)
     if name is not None:
@@ -108,7 +125,7 @@ for fault in ([(None, None, None, None)] if faults else []) + faults:
             out.append({'fault': name, 'broken': True, 'caught': False, 'by': 'THE FAULT DID NOT APPLY (%d places)' % src.count(a)}); print('BROKEN ' + json.dumps(out[-1]), flush=True); continue
         open(path, 'w', encoding='utf-8').write(src.replace(a, b))
     if mode == 'node':
-        seen = fails(run(['node', os.path.join(work, 'tools', 'sync_worker_test.mjs')], 120)) + fails(run(['node', os.path.join(work, 'tools', 'sync_client_test.mjs'), os.path.join(work, 'js')], 120))
+        seen = fails(run(['node', os.path.join(work, 'tools', 'sync_worker_test.mjs')], 120)) + fails(run(['node', os.path.join(work, 'tools', 'sync_client_test.mjs'), os.path.join(work, 'js'), os.path.join(os.path.dirname(app), 'old', 'js')], 120))   # with the build before's client beside it, as the run of every push has it
         if name is None and seen:   # these two print a failing line with its figures after its name, so the lines of two runs cannot be matched by name
             print('with no fault in it the tests already fail: nothing can be shown to be caught: ' + '; '.join(seen)[:500], flush=True); already = None; continue
     else:

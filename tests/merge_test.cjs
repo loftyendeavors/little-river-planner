@@ -6,7 +6,7 @@
 //   2. the five tests a joined plan must pass, each fed a plan that breaks it
 //   3. the farm holds no list of records that the merge does not know how to join
 //   4. some 500 pairs of made-up runs of edits, held to six properties
-// usage: node merge_test.cjs <app-dir> <plan.json: a backup's> <inventory.json>
+// usage: node merge_test.cjs <app-dir> <plan.json: a backup's> <inventory.json>      env LRF_PAIRS=40 for fewer pairs (the deliberate faults use it)
 const path = require('path'), fs = require('fs');
 const [APP, PLAN, STOCK] = process.argv.slice(2);
 const results = [], fail = [];
@@ -289,6 +289,10 @@ tryCase('a plan as a file holds it is joined as the working plan is: the same pl
   const core = M.merge(FARM, m, t), r = M.merge(file(FARM, []), file(m, []), file(t, [w]));
   return [ok(core) && ok(r) && M.same(r.plan.plantings, core.plan.plantings) && M.same(r.plan.seedInventory, core.plan.seedInventory) && r.plan.lrfNextKeep.keep.waiting.length === 1 && r.plan.lrfNextKeep.savedAt === '2027-03-01T01:00:00.000Z' && !r.report.items.length && !!IO.split(r.plan).core, [r.why, r.report]];
 });
+tryCase('a joined plan that fails one of the five tests is not handed back: the answer is no, and why', () => {
+  const r = M.merge(FARM, { ...FARM, settings: { ...FARM.settings, germ: NaN } }, setP(FARM, X1, { note: 't' }));
+  return [r.ok === false && !('plan' in r) && /read back/.test(r.why), [r.ok, r.why]];
+});
 tryCase('something that is not a plan is not joined', () => {
   const a = M.merge(FARM, { ...FARM, plantings: null }, FARM), b = M.merge(null, FARM, FARM), c = M.merge(FARM, setP(FARM, X1, { note: 1 }), 'a plan');
   return [a.ok === false && b.ok === false && c.ok === false && [a, b, c].every(r => typeof r.why === 'string' && r.why.length > 10), [a.why, b.why, c.why]];
@@ -352,7 +356,7 @@ const alike = (a, b) => M.same(sorted(a), sorted(b));
 {
   const rand = rng(20261116), bad = { untouched: [], refused: [], opens: [], both: [], out: [], order: [], settles: [], seed: [], days: [] };
   let apart = 0, together = 0, reported = 0, opened = 0;
-  const PAIRS = 500;
+  const PAIRS = Math.max(20, Math.floor(+process.env.LRF_PAIRS) || 500);
   for (let i = 0; i < PAIRS; i++) {
     const near = i % 2 === 1;   // every other pair draws its subjects from a few, so that the two runs meet
     const editsA = Array.from({ length: 1 + Math.floor(rand() * 4) }, () => pick(rand, near)), editsB = Array.from({ length: 1 + Math.floor(rand() * 4) }, () => pick(rand, near));
@@ -383,7 +387,7 @@ const alike = (a, b) => M.same(sorted(a), sorted(b));
     const out = M.merge(a.plan, START, r.plan);
     if (!out.ok || !alike(out.plan, b.plan)) bad.out.push([i, out.why]);
   }
-  check(`${PAIRS} pairs of runs: enough of them touch nothing in common, enough touch the same thing, and enough have something to report`, apart >= 100 && together >= 100 && reported >= 50 && opened >= 30, { apart, together, reported, opened });
+  check(`pairs of runs (${PAIRS} unless fewer were asked for): enough of them touch nothing in common, enough touch the same thing, and enough have something to report`, apart >= PAIRS * 0.2 && together >= PAIRS * 0.2 && reported >= PAIRS * 0.1 && opened >= PAIRS * 0.06, { apart, together, reported, opened });
   check('a side that changed nothing changes nothing', bad.untouched.length === 0, bad.untouched.slice(0, 5));
   check('no pair is refused: every one is joined and passes the five tests', bad.refused.length === 0, bad.refused.slice(0, 3));
   check('every joined plan opens; one in ten goes into a file and comes back, and its forecast runs', bad.opens.length === 0, bad.opens.slice(0, 3));

@@ -92,7 +92,7 @@ for name, rel, old, new in ([(None, None, None, None)] if faults else []) + faul
         try: d = json.loads(out[out.rfind('{"passed"'):]); names = [x["name"] if isinstance(x, dict) else str(x) for x in d["failed"]]; ran = True
         except Exception: names = []; ran = False
     else:
-        out = subprocess.run(["node", "tools/sync_worker_test.mjs"], cwd=copy, capture_output=True, text=True, timeout=120).stdout + subprocess.run(["node", "tools/sync_client_test.mjs", str(copy / "js")], cwd=copy, capture_output=True, text=True, timeout=120).stdout
+        out = subprocess.run(["node", "tools/sync_worker_test.mjs"], cwd=copy, capture_output=True, text=True, timeout=120).stdout + subprocess.run(["node", "tools/sync_client_test.mjs", str(copy / "js"), str(app.parent / "old" / "js")], cwd=copy, capture_output=True, text=True, timeout=120).stdout
         names = [l[5:85] for l in out.splitlines() if l.startswith("FAIL ") and "the test ran to its end" not in l]; ran = len([l for l in out.splitlines() if l.endswith(" passed") and l.split()[1:2] == ["of"]]) == 2 and "the test ran to its end" not in out   # both tests ended with their count
     if name is None and mode != "page" and names:   # these two print a failing line with its figures after its name, so the lines of two runs cannot be matched by name
         print("with no fault in it the tests already fail: nothing can be shown to be caught: " + "; ".join(names)[:500], flush=True); already = None; continue
