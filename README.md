@@ -27,7 +27,8 @@ The top bar has seven views in three groups.
 | The figures underneath | **Assumptions** | Days to harvest, yield and price, crop by crop |
 
 - **Backup**, at the right, holds saving, the plan folder, Cloud sync, Snapshots and photos.
-- **To place** and **To settle**, beside it, count plantings that have no bed yet and places where ground is booked twice or a planting is longer than its bed. They show only when there is something to count; a click goes to the list.
+- **To place**, beside it, counts plantings that have no bed yet; a click goes to the list.
+- **Loose ends** is the one list for what needs you. Its orange count is only that: places where ground is booked twice or a planting is longer than its bed, and seed that no row of the Seeds list can count. Under those it lists what can wait, uncounted: plantings that differ from your Assumptions list, published guidance not yet used, and supplier days that do not say where they are counted from. Each row opens where the thing is mended. It shows only when there is something to list.
 - There is no settings page. A fact is changed where its effect shows: a bed on the map, a bench under Nursery, Set-up, a crop's figures on the Assumptions list, the frost dates and the field-season dates under **Season…** on the season bar.
 
 ## Reading a variety from a supplier's page

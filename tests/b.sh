@@ -55,6 +55,8 @@ for n in "$@"; do
     look-site) python3 -I $T/look_a_check.py $SITE $S/look-site $ZIP 2>&1 | tally the-maps-look-built-site ;;
     numbers) python3 -I $T/number_boxes_check.py $APP $S/numbers 2>&1 | tally number-boxes ;;
     numbers-site) python3 -I $T/number_boxes_check.py $SITE $S/numbers-site $ZIP 2>&1 | tally number-boxes-built-site ;;
+    loose) python3 -I $T/loose_check.py $APP $S/loose 2>&1 | tally loose-ends ;;
+    loose-site) python3 -I $T/loose_check.py $SITE $S/loose-site $ZIP 2>&1 | tally loose-ends-built-site ;;
     map) WIDTHS=${WIDTHS:-1280,1480,1707,3440} python3 -I $REPO/tools/map_check.py $APP $S/map 2>&1 | tally map ;;
     map-views) WIDTHS=${WIDTHS:-1280,1707,3440} python3 -I $REPO/tools/map_views_check.py $APP $S/map-views 2>&1 | tally map-and-every-other-view ;;
     mapgeo) node $REPO/tools/mapgeo_test.cjs 2>&1 | tally map-geometry ;;

@@ -204,9 +204,9 @@ with sync_playwright() as pw:
         check('undo brings the offer back', ev("!!document.querySelector('#asBody .as-hint[data-hint=\"%s\"]')" % one['id']) and ev("LRFApp.contentKey()") == key0)
     if offers['button']:
         n = ev("document.querySelectorAll('#asBody .as-hint').length")
-        check('above the table: how many of your crops have one, and one button for all', offers['strip'] and ('%d crop' % n) in offers['text'], offers['text'][:120])
+        check('in a sheet opened from Loose ends, no longer above the table: how many of your crops have one, and one button for all', offers['strip'] and ('%d crop' % n) in offers['text'] and ev("!document.querySelector('#assumeView #asHints')"), offers['text'][:120])
         undo1 = ev("LRFApp.state.undo.length")
-        page.click('#asHintsAll'); settle(900)
+        page.evaluate("LRFAssume.openGuide()"); settle(200); page.click('#asHintsAll'); settle(900)
         ask = asking()
         moves = ev("(() => { const before = LRFApp.state.engine; return true; })()")
         check('taking them all asks first, with what moves, crop by crop', ask is not None and 'planting' in ask['body'] and ask['moves'] > 0, ask)
@@ -214,7 +214,7 @@ with sync_playwright() as pw:
         if ask:
             answer(False)
             check('Cancel: nothing changed', ev("LRFApp.contentKey()") == key0 and ev("LRFApp.state.undo.length") == undo1)
-            page.click('#asHintsAll'); settle(900); answer(True)
+            page.evaluate("LRFAssume.openGuide()"); settle(200); page.click('#asHintsAll'); settle(900); answer(True)
             took = ev("""(() => { const e = LRFApp.state.engine, s = LRFApp.state.plan.assumptions.starts || {}; return { set: Object.keys(s).length, right: Object.keys(s).every(id => { const h = LRFGuide.startFor(e.crop(id)); return h && h.from === s[id].from; }), chips: document.querySelectorAll('#asBody .as-hint').length, strip: document.getElementById('asHints').hidden, undo: LRFApp.state.undo.length, guesses: document.querySelectorAll('.as-guess').length }; })()""")
             check('Apply: every offered crop is set as the guide says, in one step, and no offer is left', took['set'] == n and took['right'] and took['chips'] == 0 and took['strip'] and took['undo'] == undo1 + 1, took)
             shot('offers-taken')
@@ -232,7 +232,7 @@ with sync_playwright() as pw:
             elif q: answer(False)
             elif ev("LRFApp.state.undo.length") > depth0 + one_by_one: undo()   # taken without a question: put it back among the rest
         depth1, rest = ev("LRFApp.state.undo.length"), ev("document.querySelectorAll('#asBody .as-hint').length")
-        if ev("!!document.getElementById('asHintsAll')"): page.click('#asHintsAll'); settle(900)
+        if ev("!!document.getElementById('asHintsAll')"): page.evaluate("LRFAssume.openGuide()"); settle(200); page.click('#asHintsAll'); settle(900)
         calm = asking()
         check('a subject is found: offers that move plantings and book no ground twice (%d left, %d taken one by one first)' % (rest, one_by_one), rest >= 2 and calm is not None and 'booked into the same ground' not in calm['body'], [rest, one_by_one, calm])
         check('the one button asks then too, since several lines change at once: it says what moves, crop by crop, and that no ground ends up booked twice', calm is not None and 'No ground ends up booked twice' in calm['body'] and 'planting' in calm['body'] and calm['moves'] > 0, calm)
@@ -241,7 +241,7 @@ with sync_playwright() as pw:
         while ev("LRFApp.state.undo.length") > depth0: undo()
         check('and with the offers taken one by one undone, the plan is exactly as it was', ev("LRFApp.contentKey()") == key0 and ev(DATES) == dates0)
 
-    # ── the summary above the table ──
+    # ── the summary: it stood above the table until the frame, and is a sheet opened from Loose ends now (its figures are read where they are drawn) ──
     sv = ev("LRFApp.auditSurvey()")
     note = ev("({ figs: [...document.querySelectorAll('#asAudit .au-figs span')].map(s => [s.querySelector('i').textContent, s.querySelector('b').textContent.replace(/,/g, '')]), line: document.getElementById('asAuditLine').textContent, review: !document.getElementById('asReview').disabled })")
     want = [['own days', str(sv['days']['own'])], ['own nursery weeks', str(sv['nursery']['differ'])]] + ([['to place', str(sv['days']['waiting'])]] if sv['days']['waiting'] else []) + [['tray batches', str(sv['trays'])]]
@@ -255,14 +255,14 @@ with sync_playwright() as pw:
         study = ev("(() => { const s = LRFApp.auditStudy(); return { rows: s.rows.map(r => ({ key: r.key, kind: r.kind, choice: r.choice, n: r.ids.length, take: !!r.take, agrees: r.agrees })), held: s.held }; })()")
         ev("document.getElementById('toast').classList.remove('show')")
         for way in ('auClose', 'Escape', 'auCancel'):
-            page.evaluate("LRFAssume.auditView({ by: 'kind', all: true })"); page.click('#asReview'); page.wait_for_selector('#auditDlg[open]'); settle(600)
+            page.evaluate("LRFAssume.auditView({ by: 'kind', all: true })"); page.evaluate("LRFAssume.openDiffer()"); settle(200); page.click('#asReview'); page.wait_for_selector('#auditDlg[open]'); settle(600)
             if way == 'Escape':
                 page.keyboard.press('Escape')
             else:
                 page.click('#' + way)
             settle()
             check('the review window closed with %s: nothing done' % ('Escape' if way == 'Escape' else 'the ×' if way == 'auClose' else 'Cancel'), ev("!document.getElementById('auditDlg') && LRFApp.contentKey()") == key0 and ev("LRFApp.state.undo.length") == 0 and toast() == '')
-        page.evaluate("LRFAssume.auditView({ by: 'kind', all: true })"); page.click('#asReview'); page.wait_for_selector('#auditDlg[open]'); settle(600)
+        page.evaluate("LRFAssume.auditView({ by: 'kind', all: true })"); page.evaluate("LRFAssume.openDiffer()"); settle(200); page.click('#asReview'); page.wait_for_selector('#auditDlg[open]'); settle(600)
         dlg = ev("""(() => { const d = document.getElementById('auditDlg'), r = d.getBoundingClientRect(); return { rows: [...d.querySelectorAll('tr.au-row')].map(tr => ({ key: tr.dataset.key, value: tr.querySelector('select').value, effect: tr.querySelector('.au-effect').textContent, options: [...tr.querySelector('select').options].map(o => o.value) })), head: document.getElementById('auHead').textContent, figs: [...document.querySelectorAll('#auFigs b')].map(b => +b.textContent.replace(/,/g, '')), apply: !document.getElementById('auApply').disabled, inside: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, micro: [...d.querySelectorAll('.au-name b')].some(b => /^micro/i.test(b.textContent)), view: LRFApp.state.view }; })()""")
         check('it opens in place over the list, inside the window, one row for each group (%d)' % len(study['rows']), dlg['view'] == 'assume' and dlg['inside'] and [r['key'] for r in dlg['rows']] == [r['key'] for r in study['rows']], [len(dlg['rows']), len(study['rows']), dlg['inside']])
         check('each row opens on the suggested choice, and offers "take" only where the list can take the number', all(d['value'] == s['choice'] and ('take' in d['options']) == s['take'] for d, s in zip(dlg['rows'], study['rows'])))
@@ -322,7 +322,7 @@ with sync_playwright() as pw:
         ev("""(() => { const A = LRFApp, e = A.state.engine, p = e.planting('%s'), w = { ...p, id: 'w-check', wait: {} }; delete w.bedId;
           A.commit('test: one sowing recorded, one planting waiting', [{ before: p, after: { ...p, done: { sow: '2027-01-04' } } }, { kind: 'own', key: 'waiting', before: (A.state.plan.lrfNext || {}).waiting || null, after: [w] }], { unchecked: true }); })()""" % first['id'])
         settle(700)
-        page.evaluate("LRFAssume.auditView({ by: 'kind', all: true })"); page.click('#asReview'); page.wait_for_selector('#auditDlg[open]'); settle(700)
+        page.evaluate("LRFAssume.auditView({ by: 'kind', all: true })"); page.evaluate("LRFAssume.openDiffer()"); settle(200); page.click('#asReview'); page.wait_for_selector('#auditDlg[open]'); settle(700)
         rec = ev("""(() => { const d = document.getElementById('auditDlg'), s = LRFApp.auditStudy(), row = s.rows.find(r => r.key === '%s'); return { inRow: s.rows.some(r => r.ids.includes('%s')), n: row ? row.ids.length : 0, held: s.held, fine: (d.querySelector('.au-sum .au-fine') || {}).textContent || '', wait: [...d.querySelectorAll('tr.au-row[data-kind="wait"]')].map(tr => ({ where: tr.querySelector('.au-where').textContent, value: tr.querySelector('select').value, effect: tr.querySelector('.au-effect').textContent })), sec: [...d.querySelectorAll('tr.au-sec b')].map(b => b.textContent), note: [...document.querySelectorAll('#asAudit .au-figs i')].map(i => i.textContent) }; })()""" % (first['key'], first['id']))
         check('a planting with a sowing recorded is offered in no row, and the window says it is left alone', not rec['inRow'] and rec['n'] == first['n'] - 1 and rec['held'] == 1 and '1 planting with recorded work is left as it is' in rec['fine'], rec)
         check('a waiting planting that carries its own days has a row under "To place"', 'To place' in rec['sec'] and len(rec['wait']) == 1 and len(rec['wait']) > 0 and rec['wait'][0]['where'] == 'To place' and rec['wait'][0]['value'] == 'follow' and 'no bed yet' in rec['wait'][0]['effect'] and 'to place' in rec['note'], rec)

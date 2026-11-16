@@ -273,7 +273,7 @@ with sync_playwright() as pw:
     check('the summary counts plantings with their own yield, harvest days and turnover, and says tower cycles are left alone', summary['figs'].get('own yield') == str(sv['yield']) and summary['figs'].get('own harvest days') == str(sv['window']) and summary['figs'].get('own turnover') == str(sv['turnover']) and (sv['cycles'] == 0 or summary['figs'].get('tower cycles') == str(sv['cycles'])) and 'Still to come' not in summary['fine'], summary)
     study = ev("(() => { const s = LRFApp.auditStudy(), later = s.rows.filter(r => ['yield', 'window', 'turn', 'copy'].includes(r.kind)); return { kinds: Object.fromEntries(['yield', 'window', 'turn', 'copy'].map(k => [k, later.filter(r => r.kind === k).length])), differ: (later.find(r => r.kind === 'yield' && !r.agrees && r.take) || {}).key || '', n: later.length, all: s.rows.length }; })()")
     if study['n']:
-        page.evaluate("LRFAssume.auditView({ by: 'kind', all: true })"); page.click('#asReview'); check('the review window opens', appears('#auditDlg[open]')); settle(900)
+        page.evaluate("LRFAssume.auditView({ by: 'kind', all: true })"); page.evaluate("LRFAssume.openDiffer()"); settle(200); page.click('#asReview'); check('the review window opens', appears('#auditDlg[open]')); settle(900)
         dlg = ev("""(() => { const d = document.getElementById('auditDlg'), secs = [...d.querySelectorAll('tr.au-sec b')].map(b => b.textContent), rows = [...d.querySelectorAll('tr.au-row')];
           const later = rows.filter(r => ['yield', 'window', 'turn', 'copy'].includes(r.dataset.kind));
           return { secs, rows: rows.length, later: later.length, effects: [...new Set(later.map(r => r.querySelector('.au-effect').textContent.replace(/ · .*/, '')))], figs: Object.fromEntries([...d.querySelectorAll('#auFigs span')].map(x => [x.querySelector('i').textContent, x.querySelector('b').textContent])), worth: document.getElementById('auWorth').textContent, moving: later.filter(r => r.querySelector('.au-effect').classList.contains('moves')).length, crops: !!document.getElementById('auCrops') }; })()""")
@@ -294,10 +294,10 @@ with sync_playwright() as pw:
             check('“Suggested” puts the choices back', ev("document.querySelector('#auditDlg select[data-row=\"%s\"]').value" % study['differ'].replace('"', '\\"')) == 'take' and '→' not in ev("document.getElementById('auWorth').textContent"))
         page.click('#auClose'); settle(300)
         check('× closes the window and changes nothing', ev("!document.getElementById('auditDlg')") and ev("LRFApp.contentKey()") == key0)
-        page.evaluate("LRFAssume.auditView({ by: 'kind', all: true })"); page.click('#asReview'); appears('#auditDlg[open]'); settle(500); page.keyboard.press('Escape'); settle(300)
+        page.evaluate("LRFAssume.auditView({ by: 'kind', all: true })"); page.evaluate("LRFAssume.openDiffer()"); settle(200); page.click('#asReview'); appears('#auditDlg[open]'); settle(500); page.keyboard.press('Escape'); settle(300)
         check('Escape does the same', ev("!document.getElementById('auditDlg')") and ev("LRFApp.contentKey()") == key0)
         # apply only the new kinds, as suggested: the days rows are kept, so this part stands apart from step 3a's
-        page.evaluate("LRFAssume.auditView({ by: 'kind', all: true })"); page.click('#asReview'); appears('#auditDlg[open]'); settle(600)
+        page.evaluate("LRFAssume.auditView({ by: 'kind', all: true })"); page.evaluate("LRFAssume.openDiffer()"); settle(200); page.click('#asReview'); appears('#auditDlg[open]'); settle(600)
         ev("(() => { for (const s of document.querySelectorAll('#auditDlg tr.au-row')) { if (['days', 'weeks', 'wait'].includes(s.dataset.kind)) { const sel = s.querySelector('select'); sel.value = 'keep'; sel.dispatchEvent(new Event('change', { bubbles: true })); } } })()"); settle(900)
         head = ev("document.getElementById('auHead').textContent")
         snaps0 = ev("(async () => (await LRFApp.snapshots()).rows.filter(x => x.name === 'Before plantings followed the list').length)()")

@@ -32,7 +32,7 @@ PAGE = [
  ("Harvest has no tooltip", IX, ' title="What the plan gives, week by week">Harvest', '>Harvest'),
  ("the count to settle leaves out plantings longer than their bed", PN, "return todo.count ? longSets(todo).size + todo.groups.length : 0; }", "return todo.count ? todo.groups.length : 0; }"),
  ("the count to settle is in the colour of a warning", CSS, ".settle-badge { border: 1px solid var(--line); background: var(--raised);", ".settle-badge { border: 1px solid var(--line); background: var(--flag-soft);"),
- ("the count to settle is never drawn", PN, "App.on('plan', laterSettle); }", "}"),
+ ("the count to settle is never drawn", PN, "badge.addEventListener('click', openLoose); App.on('plan', laterSettle);", "badge.addEventListener('click', openLoose);"),
  ("a click on the count stays in the view it was pressed in", PN, "    if (!['map', 'timeline'].includes(App.state.view)) App.setView('map');\n    cleanupOpen = true;", "    cleanupOpen = true;"),
  ("the list opens folded after its first three", PN, "    cleanupOpen = true; holdSettle = true;\n    if (App.state.sel) App.select(null); else render();", "    cleanupOpen = false; holdSettle = true;\n    if (App.state.sel) App.select(null); else render();"),
  ("the list slides out of sight when a box above it goes", PN, "if (!overview) holdSettle = false; else if (holdSettle) settleInView(host);", "if (!overview) holdSettle = false;"),

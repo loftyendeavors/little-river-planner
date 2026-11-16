@@ -703,8 +703,6 @@ table.sd td { overflow: hidden; text-overflow: ellipsis; }
 .sd-stat small { font: 500 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .sd-stat b { font: 700 var(--type-18)/1.1 var(--display); font-variant-numeric: tabular-nums; }
 .sd-stat span { font-size: var(--type-11); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sd-task { display: grid; gap: var(--space-4); text-align: left; width: 100%; border: 1px solid var(--line); background: var(--warn-soft); border-radius: var(--corner-8); padding: var(--space-8) var(--space-12); margin-bottom: 12px; }
-.sd-task span { font-size: var(--type-13); color: var(--ink-2); }
 .sd-panel .dlg-hint { color: var(--muted); font-size: var(--type-13); margin-top: 8px; }
 .sd-panel .sd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sd-panel .sd-evidence { font-size: var(--type-13); color: var(--ink-2); margin: 8px 0; }
@@ -776,12 +774,12 @@ button.sd-stat.jump:hover { border-color: var(--ink-2); }
 .sd-lot .icon-btn { border: 0; background: none; color: var(--muted); font-size: var(--type-18); width: 26px; height: 26px; }
 .sd-lot .icon-btn:hover { color: var(--bad); }
 .sd-lot small { grid-column: 1 / -1; color: var(--muted); font-size: var(--type-11); margin-top: -2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sd-task.plain { background: var(--surface); }
 
 /* stock the list cannot count */
 .sd-oddlot { color: var(--warn); }
 .sd-oddlot:hover { color: var(--ink); text-decoration: underline; }
-.sd-stray { display: grid; gap: var(--space-4); border: 1px solid var(--line); background: var(--warn-soft); border-radius: var(--corner-8); padding: var(--space-8) var(--space-12); margin-bottom: 12px; }
+/* seed no row can count: shown in the panel as the thing picked, when it is opened from Loose ends in the header */
+.sd-stray { display: grid; gap: var(--space-4); margin-bottom: 12px; }
 .sd-stray > span { font-size: var(--type-13); color: var(--ink-2); }
 .sd-strayrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px var(--space-8); padding-top: var(--space-8); margin-top: 6px; border-top: 1px solid var(--line); }
 .sd-strayrow strong { font-size: var(--type-13); font-weight: 600; }
@@ -1568,11 +1566,12 @@ body > .work { grid-row: 4; }
 .as-hint { flex: none; border: 1px solid color-mix(in srgb, var(--good) 45%, var(--line)); background: color-mix(in srgb, var(--good) 9%, transparent); color: var(--good); border-radius: var(--corner-pill); padding: 1px var(--space-8); font: 600 var(--type-11) var(--body); white-space: nowrap; }
 .as-hint:hover { background: color-mix(in srgb, var(--good) 18%, transparent); }
 .as-name small.as-guess { color: var(--warn); }
-.as-audit { margin: 12px 0 0; border: 1px solid var(--line); border-radius: var(--corner-12); background: var(--raised); padding: var(--space-8) var(--space-12) var(--space-12); display: grid; gap: var(--space-4); }
-.au-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); }
-.au-head b { font-weight: 700; font-size: var(--type-15); }
-.au-head .btn.small { margin: 0; padding: var(--space-4) var(--space-12); font-size: var(--type-13); }
-.au-head .btn:disabled { opacity: 0.45; cursor: default; }
+/* Plantings that differ from the list, and published guidance not used: two sheets, opened from Loose ends in the header. They
+   stood on the page as notices until the frame (DESIGN.md, rules 1 and 4). A title, one sentence, the actions, the count. */
+.dialog.as-sheet { width: min(520px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 40px); overflow: auto; }
+.as-audit { display: grid; gap: var(--space-8); }
+.as-audit .au-head { margin: 0; }
+.au-acts .btn:disabled { opacity: 0.45; cursor: default; }
 .au-figs { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-24); }
 .au-figs span { display: inline-flex; align-items: baseline; gap: var(--space-4); }
 .au-figs i { font: 500 var(--type-11) var(--mono); font-style: normal; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
@@ -1585,7 +1584,10 @@ body > .work { grid-row: 4; }
 .as-hints span { display: grid; gap: 1px; min-width: 0; }
 .as-hints b { font-weight: 700; font-size: var(--type-13); }
 .as-hints small { font-size: var(--type-13); color: var(--ink-2); }
-.as-hints .btn.small { margin: 0; flex: none; padding: var(--space-4) var(--space-12); font-size: var(--type-13); }
+.as-guide { display: grid; gap: var(--space-8); }
+.as-guide[hidden] { display: none; }
+.as-guide h2 { margin: 0; }
+.as-guide small { font-size: var(--type-13); color: var(--ink); font-weight: 600; }
 .dialog.bk.audit { width: min(980px, calc(100vw - 32px)); }
 .au-scroll { max-height: min(46vh, 430px); overflow: auto; border: 1px solid var(--line-soft); border-radius: var(--corner-8); background: var(--surface); }
 table.au { width: 100%; border-collapse: collapse; font-size: var(--type-13); }
@@ -1880,7 +1882,7 @@ body.phone .tr-stepper { flex: 1 0 100%; }
 .bn-kind { width: 190px; }
 /* the Tasks view: how far ahead is listed */
 /* plantings that differ from the list: one press for what changes nothing, and a window for the rest */
-.au-acts { display: inline-flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; justify-content: flex-end; }
+.au-acts { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; }
 .au-lead { color: var(--ink-2); }
 .au-more > summary { cursor: pointer; font-size: var(--type-13); color: var(--muted); list-style-position: inside; }
 .au-more[open] > summary { margin-bottom: 6px; }
@@ -1895,11 +1897,23 @@ tr.au-none td { padding: var(--space-16) var(--space-12); color: var(--ink-2); f
 .views { align-items: center; }
 .views-sep { flex: none; width: 1px; height: 16px; margin: 0 5px; background: var(--line); }
 body.phone .views-sep { display: none; }
-/* To settle, in the header: the page's own ink, no colour of alarm. It says how many and leads to the list. */
-.settle-badge { border: 1px solid var(--line); background: var(--raised); color: var(--ink-2); border-radius: var(--corner-pill); padding: var(--space-4) var(--space-12); font: 600 var(--type-13) var(--body); white-space: nowrap; }
+/* Loose ends, in the header (DESIGN.md, rule 4): the button is the page's own ink on its own surface, never a coloured panel.
+   Its count alone is orange, and counts only what needs the grower; what can wait is listed and not counted. */
+.settle-badge { border: 1px solid var(--line); background: var(--raised); color: var(--ink-2); border-radius: var(--corner-pill); padding: var(--space-4) var(--space-12); font: 600 var(--type-13) var(--body); white-space: nowrap; display: inline-flex; align-items: center; gap: var(--space-8); }
 .settle-badge[hidden] { display: none; }
-.settle-badge:hover { border-color: var(--ink-2); color: var(--ink); }
-.settle-badge b { font: 700 var(--type-13) var(--mono); color: var(--ink); }
+.settle-badge:hover, .settle-badge[aria-expanded="true"] { border-color: var(--ink-2); color: var(--ink); }
+.settle-badge b { font: 600 var(--type-11)/1.5 var(--mono); color: #fff; background: var(--flag-deep); border-radius: var(--corner-pill); padding: 0 var(--space-8); min-width: 20px; text-align: center; }
+/* the list it opens: a floating card of rows, in two kinds, each row a name over one line of where it is mended */
+.loose { position: fixed; z-index: 45; width: min(480px, calc(100vw - 24px)); overflow: auto; background: var(--raised); border-radius: var(--corner-12); box-shadow: var(--shadow-float); padding: var(--space-4) 0 var(--space-8); }
+.loose-kind { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-12) var(--space-16) var(--space-4); font: 500 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.loose-kind + .loose-row ~ .loose-kind { border-top: 1px solid var(--line-soft); margin-top: var(--space-8); }
+.loose-kind i { width: 8px; height: 8px; border-radius: var(--corner-pill); background: var(--muted); }
+.loose-kind[data-kind="needs"] i { background: var(--flag-deep); }
+/* the row of the parts, without its photograph (the part is given later in this sheet, so its own name is said first here) */
+.row.loose-row { grid-template-columns: minmax(0, 1fr) auto; width: 100%; border: 0; background: none; text-align: left; padding-block: var(--space-8); color: var(--ink); }
+.row.loose-row:hover, .row.loose-row:focus-visible { background: var(--paper); }
+.loose-row .row-word { color: var(--ink-2); font-family: var(--mono); display: inline-flex; align-items: center; gap: var(--space-8); }
+.loose-row .row-word i { font-style: normal; color: var(--muted); }
 body.phone #settleBadge { display: none !important; }
 .cleanup.flash { animation: wait-flash 0.9s ease-out; }
 @media (max-width: 1400px) { .views-sep { margin: 0 3px; } .settle-badge, .wait-badge { padding-inline: var(--space-8); } }
@@ -2040,7 +2054,7 @@ body.phone .bn-line { display: none; }
 /* the card's page hid its eyebrow and its lead and set its title at 24 before any other: every page of the list now does (the frame, at the foot of this sheet) */
 .view-assume[data-way="card"] .as-wrap > .as-mode { flex: 0 0 330px; margin: 0; }
 .view-assume[data-way="card"] .as-tools { margin: 10px 0 6px; }
-.view-assume[data-way="card"] .as-places, .view-assume[data-way="card"] .as-audit { order: 3; }
+.view-assume[data-way="card"] .as-places { order: 3; }
 .view-assume[data-way="card"] .as-key { display: none; }
 .yc { display: grid; grid-template-columns: 292px minmax(0, 1fr); gap: var(--space-16); align-items: start; margin-top: 2px; }
 .yc[hidden] { display: none; }
@@ -2250,6 +2264,13 @@ body.phone .top { padding-block: var(--space-4); }   /* the header stays one sho
 .view-assume .as-head, .nu-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-8) var(--space-12); max-width: none; }
 .view-assume .as-head h2, .nu-head h2 { font-size: var(--type-24); }
 .sd-title { display: flex; align-items: center; gap: var(--space-8); }
+/* a page's one line of figures: the words in grey, each value in ink and bold (the Nursery's is the same line, made of its tiles) */
+.frame-figs { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-4) var(--space-24); margin: 0; font-size: var(--type-13); color: var(--muted); }
+.frame-figs b { font-weight: 700; color: var(--ink); }
+/* in the Seeds panel the room is a column, so the same figures stand one to a line */
+#sdFigs { display: grid; gap: var(--space-4); }
+.sd-arrived { margin: var(--space-16) 0 0; }
+.view-assume .as-head #asCount { display: block; flex-basis: 100%; font-size: var(--type-13); color: var(--muted); }
 /* the Nursery's figures: one line under the title, the values in ink and bold; each figure's second line is behind "?" */
 #trWrap { display: flex; flex-direction: column; }
 #trWrap > .nu-head { order: 0; }

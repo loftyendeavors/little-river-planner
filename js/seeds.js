@@ -461,7 +461,8 @@
   const supplierShort = v => { const s = v.supplier || (v.source === 'Farm entry' ? '' : v.source) || ''; const hit = SUPPLIER_SHORT.find(([re]) => re.test(s)); return hit ? hit[1] : s; };
   // A variety whose printed days have no starting point of their own, in a crop that has none set either.
   const noStart = v => !!v.catalogDtm && (v.catalogMaturityBasis || 'unspecified') === 'unspecified' && !App.state.engine.startRule(v.cropId).set;
-  const FILTERS = [['all', 'All'], ['planted', 'Planted'], ['tosow', 'To sow'], ['short', 'Short of seed'], ['open', 'Days counted from: not said']];
+  // Seed on order is a state of things, not a notice: it is a filter here, beside "Short of seed" (DESIGN.md, rule 4).
+  const FILTERS = [['all', 'All'], ['planted', 'Planted'], ['tosow', 'To sow'], ['short', 'Short of seed'], ['ordered', 'On order'], ['open', 'Days counted from: not said']];
   const SORTS = [['crop', 'By crop'], ['name', 'Name'], ['days', 'Days'], ['tosow', 'Most to sow'], ['first', 'First sowing'], ['supplier', 'Supplier']];
   const amount = r => [h('b', num(r.toSow, r.unit === 'g' ? 1 : 0)), r.unit === 'seeds' ? null : h('small.sd-unitword', SL.UNIT_WORD[r.unit])];
 
@@ -591,7 +592,7 @@
     box.append(h('button.link', { type: 'button', id: 'sdAddLot', onclick: () => { App.editStock(`${name}: add a lot`, (lib, ctx) => SL.addLot(lib, { key, unit, quantity: 0, status: 'usable' }, ctx), name); } }, lots.length ? '+ Add another lot' : '+ Add a lot'));
     return box;
   }
-  const passes = (m, v, id) => { const r = m.byV.get(v.id); return id === 'all' || (id === 'planted' && m.used.has(v.id)) || (id === 'tosow' && !!r && r.toSow > 0) || (id === 'short' && !!r && r.short > 0) || (id === 'open' && noStart(v)); };
+  const passes = (m, v, id) => { const r = m.byV.get(v.id); return id === 'all' || (id === 'planted' && m.used.has(v.id)) || (id === 'tosow' && !!r && r.toSow > 0) || (id === 'short' && !!r && r.short > 0) || (id === 'ordered' && !!r && r.onOrder > 0) || (id === 'open' && noStart(v)); };
   function groupsOf(m, list) {
     const by = new Map();
     for (const v of list) { if (!by.has(v.cropId)) by.set(v.cropId, []); by.get(v.cropId).push(v); }
@@ -607,6 +608,17 @@
     if (next) select({ type: 'variety', id: next.dataset.variety }, true);
   }
 
+  /**
+   * What Loose ends in the header lists for this page (DESIGN.md, rule 4). Seed that no row can count needs the grower: until
+   * it is put right the list asks for that seed again. Supplier days that do not say where they are counted from can wait.
+   */
+  function loose() {
+    const m = model(), open = m.live.filter(noStart).length;
+    return [
+      m.unlisted.length ? { key: 'lots', kind: 'needs', name: 'Seed no row can count', detail: 'On Seeds: the list asks for it again until put right', word: `${num(m.unlisted.length)} lot${m.unlisted.length === 1 ? '' : 's'}`, n: m.unlisted.length, open: () => { App.setView('seeds'); ui.tab = 'list'; select({ type: 'unlisted' }); } } : null,
+      open ? { key: 'starts', kind: 'minute', name: 'Supplier days counted from: not said', detail: 'On Seeds: can move a harvest by the nursery time', word: `${num(open)} variet${open === 1 ? 'y' : 'ies'}`, n: open, open: () => { App.setView('seeds'); ui.filter = 'open'; ui.tab = 'list'; select(null); } } : null
+    ].filter(Boolean);
+  }
   function render() {
     if (!App.state.ready || App.state.view !== 'seeds') { ui.dirty = true; return; }
     ui.dirty = false;
@@ -625,6 +637,7 @@
     if (ui.tab === 'crops') cropsTable(m, q); else if (ui.tab === 'gallery') gallery(m, list, q); else listTable(m, list, q);
     if (ui.sel && ui.sel.type === 'variety' && !m.live.some(v => v.id === ui.sel.id)) ui.sel = null;
     if (ui.sel && ui.sel.type === 'crop' && !m.eng.crop(ui.sel.id)) ui.sel = null;
+    if (ui.sel && ui.sel.type === 'unlisted' && !m.unlisted.length) ui.sel = null;   // the last of them was put right
     panel(m);
     for (const el of document.querySelectorAll('#seedsView [data-variety], #seedsView [data-croprow]')) {
       const on = !!ui.sel && ((ui.sel.type === 'variety' && el.dataset.variety === ui.sel.id) || (ui.sel.type === 'crop' && el.dataset.croprow === ui.sel.id));
@@ -879,13 +892,16 @@
     const { eng, plan } = m, shut = h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => select(null) }, '×');
     const stat = (label, value, small) => h('div.sd-stat', h('small', label), h('b', value), small ? h('span', small) : null);
     if (!ui.sel) {
-      const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), open = m.live.filter(noStart).length, short = [...m.byV.values()].filter(r => r.short > 0).length, onOrder = Object.values(m.stock).filter(x => x.onOrder > 0).length;
+      // with nothing picked the panel holds the page's one line of figures, and one action for the day the box comes. What stood
+      // here as notices is in Loose ends in the header; seed on order is a filter of the list (DESIGN.md, rules 1 and 4)
+      const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), short = [...m.byV.values()].filter(r => r.short > 0).length, onOrder = m.live.filter(v => passes(m, v, 'ordered')).length;
       add(el, h('header.sd-ph.plain', h('div', h('p.eyebrow', `${App.planYear()} season`), h('h2', 'Seed library'))),
-        h('div.sd-stats', stat('Varieties', num(m.live.length), `${m.live.filter(v => m.used.has(v.id)).length} planted`), stat('To sow', num(seeds), 'seeds'), stat('Short', num(short), 'varieties')),
-        onOrder ? h('button.sd-task.plain', { type: 'button', id: 'sdReceiveAll', onclick: receiveAll }, h('b', `Seed for ${onOrder} variet${onOrder === 1 ? 'y' : 'ies'} is on order`), h('span', 'When the box comes, click an order in the list to count it as on hand, or click here to mark every order as arrived.')) : null,
-        m.unlisted.length ? unlistedBox(m) : null,
-        open ? h('button.sd-task', { type: 'button', onclick: () => { ui.filter = 'open'; ui.tab = 'list'; schedule(); } }, h('b', `${open} variet${open === 1 ? 'y has' : 'ies have'} supplier days that do not say where they are counted from`), h('span', 'For a transplanted crop that can move the harvest by the whole nursery time. Set each one in the “Days counted from” column, or set the crop’s once on the Assumptions list.')) : null,
-        null);
+        h('p.frame-figs', { id: 'sdFigs' }, h('span', h('b', num(m.live.length)), ' varieties, ', h('b', num(m.live.filter(v => m.used.has(v.id)).length)), ' planted'), h('span', h('b', num(seeds)), ' seeds to sow'), h('span', h('b', num(short)), ' short of seed'), onOrder ? h('span', h('b', num(onOrder)), ' on order') : null),
+        Object.values(m.stock).some(x => x.onOrder > 0) ? h('p.sd-arrived', h('button.btn.small', { type: 'button', id: 'sdReceiveAll', title: 'When the box comes: every order becomes seed on hand, at the quantity ordered. One Undo puts them back. To count one order, click it in the list.', onclick: receiveAll }, 'All orders arrived…')) : null);
+      return;
+    }
+    if (ui.sel.type === 'unlisted') {
+      add(el, h('header.sd-ph.plain', h('div', h('h2', 'Seed no row can count')), shut), unlistedBox(m));
       return;
     }
     if (ui.sel.type === 'crop') {
@@ -1182,5 +1198,5 @@
     App.on('plan', () => { ui.rev++; schedule(); if (order) order.draw(); }); App.on('view', schedule);
     document.addEventListener('keydown', e => { if (e.key === '/' && App.state.view === 'seeds' && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') && !document.querySelector('dialog[open]')) { e.preventDefault(); $('sdSearch').focus(); } });
   }
-  root.LRFSeeds = { init, render, openImporter, openVariety, openCrop, openSettings, openOrder, order: () => order, service, serviceReady, linkHow, linkFailure, planningLine, select, drawn: () => ({ ...drawn }) };
+  root.LRFSeeds = { init, render, loose, openImporter, openVariety, openCrop, openSettings, openOrder, order: () => order, service, serviceReady, linkHow, linkFailure, planningLine, select, drawn: () => ({ ...drawn }) };
 })(window);

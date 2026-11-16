@@ -948,9 +948,9 @@
     App.on('view', () => { if (S.on && App.state.view !== 'map') close(); });
     App.on('sel', () => { if (S.on && App.state.sel) close(); });
     App.on('armed', () => { if (S.on && App.state.armed) close(); });
-    // The header's two counts (to place, to settle) open a list in a side panel, and while the layout is edited those panels are the
-    // layout's own. So a press on either leaves the layout first: what it opens is then there to see. (In the capture phase, to run ahead
-    // of the count's own listener, wherever in the count the press lands.)
+    // The header's count to place opens a list in a side panel, and so does the ground's row of Loose ends; while the layout is edited
+    // those panels are the layout's own. So a press on either button leaves the layout first: what it opens is then there to see. (In the
+    // capture phase, to run ahead of the button's own listener, wherever in it the press lands.)
     for (const id of ['waitBadge', 'settleBadge']) { const count = $(id); if (count) count.addEventListener('click', () => { if (S.on) close(); }, true); }
   }
   init();
