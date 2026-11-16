@@ -2037,8 +2037,7 @@ body.phone .bn-line { display: none; }
 .view-assume[data-way="card"] .as-wrap { display: flex; flex-flow: row wrap; align-items: center; column-gap: var(--space-16); padding-top: var(--space-12); }
 .view-assume[data-way="card"] .as-wrap > * { flex: 0 0 100%; }
 .view-assume[data-way="card"] .as-wrap > .as-head { flex: 0 0 auto; }
-.view-assume[data-way="card"] .as-head .eyebrow, .view-assume[data-way="card"] .as-head #asLead { display: none; }
-.view-assume[data-way="card"] .as-head h2 { font-size: var(--type-24); }
+/* the card's page hid its eyebrow and its lead and set its title at 24 before any other: every page of the list now does (the frame, at the foot of this sheet) */
 .view-assume[data-way="card"] .as-wrap > .as-mode { flex: 0 0 330px; margin: 0; }
 .view-assume[data-way="card"] .as-tools { margin: 10px 0 6px; }
 .view-assume[data-way="card"] .as-places, .view-assume[data-way="card"] .as-audit { order: 3; }
