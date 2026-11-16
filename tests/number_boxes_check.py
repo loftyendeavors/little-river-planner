@@ -315,6 +315,15 @@ with sync_playwright() as pw:
     undone = js("return saved()")
     check("a figure typed into a box and taken by the plan is undone by Ctrl+Z with the cursor still in a box, as before", bool(cell) and bool(taken) and len(taken["undo"]) == 1 and taken["key"] != key0 and taken["inBox"] and undone["key"] == key0 and undone["undo"] == [], [cell, taken, undone])
     js("if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); S.redo.length = 0;")
+    # the same in a box that stays on the page when its typing is taken (the list above draws its boxes afresh, so the box the cursor
+    # ends in is a new one): the box says its typing was taken, as a browser does on Enter, and the keys are the planner's again
+    js("A.setView('map')"); wait(400)
+    made2 = js("return !!A.editStock('A lot, filed by the check', (lib, ctx) => LRFSeedLib.addLot(lib, { key: 'v:a-variety-of-the-check', unit: 'seeds', quantity: 10, status: 'usable' }, ctx), 'A variety of the check')"); wait(600)
+    page.locator("#libSearch").click(); page.keyboard.type("q"); wait(150)
+    js("$('libSearch').dispatchEvent(new Event('change', { bubbles: true }));"); page.keyboard.press("Control+z"); wait(700)
+    same_box = js("return { focus: document.activeElement === $('libSearch'), value: $('libSearch').value, ...saved() }")
+    check("in a box that stays where it is, once its typing is taken the keys are the planner's again: Ctrl+Z undoes the plan and leaves the box's words", made2 and same_box["focus"] and same_box["value"] == "q" and same_box["key"] == key0 and same_box["undo"] == [], same_box)
+    js("$('libSearch').value = ''; $('libSearch').dispatchEvent(new Event('input', { bubbles: true })); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); S.redo.length = 0;")
 
     js("A.select(null); A.setView('map')"); wait(400)
     end = js("return saved()")
