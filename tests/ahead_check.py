@@ -219,7 +219,7 @@ with sync_playwright() as pw:
     check('the weeks of harvest are shown now and with the series, and the series adds some', strip['cells'] > 20 and strip['then'] >= strip['now'] and strip['added'] >= 1, strip)
     page.screenshot(path=os.path.join(shots, 'series.png'), full_page=False)
     inputs = page.evaluate("[...document.querySelectorAll('#srForm select, #srForm input[type=date], #srForm input[type=number]')].map(e => Math.round(e.getBoundingClientRect().height))")
-    check('the form’s fields are all one height', len(inputs) > 5 and min(inputs) >= 32 and max(inputs) <= 36, inputs)
+    check('the form’s fields are all one height', len(inputs) > 5 and min(inputs) == max(inputs) and min(inputs) in (28, 32), inputs)   # a control's height (DESIGN.md): 28 inside a card, 32 on a page
     expected = page.evaluate("LRFSeries.ghosts().placed.length")
     page.click('#srAdd')
     page.wait_for_selector('#srDone')

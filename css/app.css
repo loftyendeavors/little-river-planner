@@ -2190,7 +2190,10 @@ table.as tr.as-thing td { background: var(--surface); }
 .btn.quiet { border-color: transparent; background: none; color: var(--ink-2); }
 .btn.quiet:not(:disabled):hover { border-color: transparent; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
 .btn.small, .inspector .btn, table .btn, .tk-list .tk-soft, .tk-pop .tk-soft, .tk-week .tk-today, .yc-card .btn { min-height: var(--control-in); }
-.tl-zoom .tl-step { width: var(--control); padding: 0; }
+/* the Timeline's tools belong to the chart: 28, and no wider than they were, so that they keep to two lines at 1280 */
+.tl-tools > button, .tl-zoom button { min-height: var(--control-in); padding: 0 var(--space-8); }
+.tl-tools .seg button { min-height: calc(var(--control-in) - 2px); }
+.tl-zoom .tl-step { width: var(--control-in); padding: 0; }
 .btn.small { padding: 0 var(--space-8); }
 .tk-step button { width: var(--control-in); height: var(--control-in); border-radius: var(--corner-8); }
 
@@ -2230,3 +2233,4 @@ table.as tr.as-thing td { background: var(--surface); }
 /* On a phone, what is pressed is 44 high. */
 body.phone .top .btn, body.phone .wk-full, body.phone .tk-quiet, body.phone .tk-today, body.phone .tk-soft { min-height: var(--control-phone); }
 body.phone .tk-mode button, body.phone .tk-tabs button { min-height: calc(var(--control-phone) - 2px); }
+body.phone .top { padding-block: var(--space-4); }   /* the header stays one short line round its 44 */
