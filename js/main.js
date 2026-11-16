@@ -94,12 +94,18 @@
   document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('file-over'); });
   document.addEventListener('drop', e => { if (!hasFiles(e)) return; e.preventDefault(); document.body.classList.remove('file-over'); if (e.dataTransfer.files.length) App.openFiles(e.dataTransfer.files); });
 
+  // The boxes that hold typing the plan has not taken: from a box's first keystroke until its typing is taken (its "change") or
+  // the box is left. The undo and redo keys below are read against it.
+  const unsent = new WeakSet();
+  document.addEventListener('input', e => { if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName || '')) unsent.add(e.target); }, true);
+  for (const kind of ['change', 'focusout']) document.addEventListener(kind, e => { if (e.target) unsent.delete(e.target); }, true);
   document.addEventListener('keydown', e => {
     const typing = /^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') && e.target.type !== 'range';
     const mod = e.ctrlKey || e.metaKey;
-    // In a box that is typed in, the undo and redo keys are the box's own: they take back typing, never the plan's last change.
-    // (A list box or a tick has no typing to take back, so there the keys are the planner's, as they are anywhere outside a box.)
-    const writing = typing && e.target.tagName !== 'SELECT' && !['checkbox', 'radio', 'button', 'file'].includes(e.target.type);
+    // While a box holds typing the plan has not taken yet, the undo and redo keys are the box's own: they take back that typing,
+    // never the plan's last change. Once the typing is taken (or with a list box or a tick in focus, which hold none) the keys
+    // are the planner's, as they are anywhere outside a box: a figure just typed and taken is still undone from its own box.
+    const writing = typing && unsent.has(e.target);
     if (mod && !writing && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? App.redo() : App.undo(); return; }
     if (mod && !writing && e.key.toLowerCase() === 'y') { e.preventDefault(); App.redo(); return; }
     // Escape with a sheet or dialog open closes that, and nothing behind it
