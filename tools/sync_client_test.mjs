@@ -373,6 +373,12 @@ const sends = world_ => world_.calls.filter(c => c === 'PUT /plan').length;
     c.disk = { plan: { ...c.disk.plan, plantings: c.disk.plan.plantings.slice(0, 2) }, n: c.disk.n - 1 };
     const c2 = c.start(); c2.env.kept = c.env.kept; c2.make(); const ib = await c2.sync.start();
     check('nor for a stored plan that is behind what was noted', ib.status === 'conflict' && !!c.keptRec && (await c2.sync.keptPlan()) === null, [ib.status, !!c.keptRec]); }
+  { // a whole plan is loaded over the open one while the plan just sent is being kept: the next send still says it replaces a different plan
+    const wl = world(), L = keeping(browser(wl, 'loads', planOf(3, 'l'))), put = L.env.kept.put; let bump = false;
+    L.env.kept.put = async r => { if (bump) { bump = false; L.plan = planOf(2, 'backup'); L.loads++; } return put(r); };
+    await L.sync.connect(URL_, KEY, 'L'); bump = true; await L.change('l-sent');
+    L.sync.touch(); const il = await L.tick();
+    check('a whole plan loaded while the sent plan was being kept is still sent as a plan that replaces another: the cloud keeps the one it replaces', il.status === 'in-step' && (await wl.text('plan')).includes('backup-0') && [...wl.store.keys()].some(k => k.startsWith('snap/auto-')), [il.status, [...wl.store.keys()]]); }
   // a window that only shows the plan leaves the kept plan alone, even when it is told to leave the cloud; leaving, in the window that holds the plan, forgets it
   const was = d3.keptRec; d3.held = true; d3.host.readOnly = () => true;
   await d3.sync.run('poll'); d3.sync.disconnect(); await new Promise(resolve => setTimeout(resolve, 5));

@@ -264,6 +264,14 @@ for (const wildcard of [true, false, 'throws']) {
     check('of two joined plans sent at once exactly one lands, and exactly one plan-before is kept: the plan both named, not the other\'s', [a.status, b.status].sort().join() === '200,412' && after.length === n + 1 && bodyOf(after[after.length - 1]) === was && (await held()) === (a.status === 200 ? 'JOINED AT ONCE, A' : 'JOINED AT ONCE, B'), [a.status, b.status, after.length - n, after.map(bodyOf)]);
     p = await landed.json();
   }
+  { // the thinning fails after the plan is stored (the bucket would not list for a moment): the write is still answered as the write it was
+    const list = v.bucket.list; let failed = 0; later(60);
+    v.bucket.list = async opts => { if (opts && opts.prefix === 'snap/merge-' && !failed) { failed++; throw new Error('the bucket did not list'); } return list(opts); };
+    r = await putPlan(v, t, 'JOINED WHILE THE BUCKET WOULD NOT LIST', p.plan.etag, { m: 2, merged: true }); v.bucket.list = list;
+    const said = await r.json();
+    check('a joined plan that is stored is answered as stored, even when thinning the kept plans then fails', failed === 1 && r.status === 200 && said.plan && (await held()) === 'JOINED WHILE THE BUCKET WOULD NOT LIST', [failed, r.status]);
+    p = said.plan ? said : p;
+  }
   r = await ask(v, 'snaps', { token: t }); const listed = (await r.json()).snaps;
   check('the kept plan is listed with the snapshots, and can be fetched', listed.some(x => x.id.startsWith('merge-') && x.meta.auto === true && /before two devices/.test(x.meta.name)) && (await (await ask(v, 'snap/' + listed.filter(x => x.id.startsWith('merge-')).map(x => x.id).sort()[0], { token: t })).text()) === 'NOT A JOINED PLAN, WHATEVER IT SAYS', listed.map(x => x.id));
   r = await ask(v, 'snap/merge-made-up-by-a-page', { method: 'PUT', token: t, body: 'X', headers: { 'x-lrf-meta': metaHeader({ name: 'Mine' }) } });

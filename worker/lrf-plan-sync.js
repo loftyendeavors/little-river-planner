@@ -205,7 +205,7 @@ async function putPlan(request, env, origin, now) {
   }
   const put = await putIf(bucket, 'plan', bytes, there ? there.etag : null, { customMetadata: { m: JSON.stringify({ ...meta, at: new Date(now * 1000).toISOString() }) }, httpMetadata: { contentType: 'application/octet-stream' } });
   if (!put) { if (before) await bucket.delete(before); return json(412, { error: 'changed', plan: stamp(await bucket.head('plan')) }, origin); }
-  if (before) await pruneMerges(bucket, now);
+  if (before) { try { await pruneMerges(bucket, now); } catch (_) { /* the plan is stored: a thinning that failed is done by the next joined plan, and must not turn this answer into an error */ } }
   return json(200, { ok: true, plan: stamp(put) }, origin);
 }
 const send = (obj, origin, extra) => new Response(obj.body, { status: 200, headers: { 'content-type': (obj.httpMetadata && obj.httpMetadata.contentType) || 'application/octet-stream', 'x-lrf-etag': obj.etag, 'x-lrf-meta': encodeURIComponent(JSON.stringify(metaOf(obj))), ...cors(origin), ...(extra || {}) } });

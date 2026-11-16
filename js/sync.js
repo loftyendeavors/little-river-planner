@@ -178,6 +178,7 @@
 
     /** Send the plan open here, on condition that the cloud still holds `base` ('none': holds nothing). */
     async function push(base, replace) {
+      const loads = host.loads();   // with the plan that is taken: a whole plan loaded while this one is on its way is still a plan loaded since
       const was = stored();   // asked in the same turn the plan is taken: whether that very plan is in the browser's storage
       const p = await host.payload(), packed = await pack(p.text);
       set('sending');
@@ -186,8 +187,8 @@
       keep({ base: done.plan.etag, key: p.key, savedAt: p.savedAt });
       const now = stored();   // in storage then, or now (the plan open now is that one or one made from it)
       keep(words(now, (was && was.ok) || (now && now.ok))); noted = true; behind = false;
-      await keepPlan(done.plan.etag, p.text, p.key);   // what the cloud now holds is this very text
-      st.cloud = done.plan; st.first = false; st.snoozed = null; st.loads = host.loads();
+      st.cloud = done.plan; st.first = false; st.snoozed = null; st.loads = loads;
+      await keepPlan(done.plan.etag, p.text, p.key);   // what the cloud now holds is this very text. Last: nothing above waits for the database
       await photosUp(null).catch(error => { st.photoNote = error.message; });
       set('in-step');
       if (host.mode() === 'plan' && host.key() !== p.key) schedule('change', timing.push);   // changed again while it was on its way
@@ -238,8 +239,8 @@
       keep({ base: etag, key: host.key(), savedAt: meta.savedAt || null, ...photos.etags, extrasKey: await host.extrasKey() });
       const now = stored();
       keep(words(now, now && now.ok)); noted = true; behind = false;
-      await keepPlan(etag, text, host.key());
       st.cloud = { ...(st.cloud || {}), etag, meta }; st.first = false; st.snoozed = null; st.loads = host.loads();
+      await keepPlan(etag, text, host.key());
       set('in-step');
       return true;
     }
