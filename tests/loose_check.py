@@ -142,13 +142,13 @@ with sync_playwright() as pw:
     js("A.setView('map')"); wait(300)
     u = js("const u = LRFAssume.unchecked(eng, S.plan); return { yields: u.yields, prices: u.prices, crops: u.crops }")
     y = row("yields", 900) and js("""const tr = arg ? [...document.querySelectorAll('#ahBody tr.as-crop')].find(r => r.dataset.crop === arg) : null, r = tr ? tr.getBoundingClientRect() : null, head = $('ahTable').querySelector('thead').getBoundingClientRect();
-      return { view: S.view, mode: $('assumeView').dataset.mode, way: LRFAssume.way(), table: drawn($('ahTable')), row: !!tr, inView: !!r && r.top >= head.bottom - 2 && r.bottom <= innerHeight, marks: tr ? [...tr.querySelectorAll('small.as-guess')].map(x => x.textContent) : [],
+      return { view: S.view, mode: $('assumeView').dataset.mode, way: LRFAssume.way(), table: drawn($('ahTable')), row: !!tr, at: [...document.querySelectorAll('#ahBody tr.as-at')].map(r => r.dataset.crop), inView: !!r && r.top >= head.bottom - 2 && r.bottom <= innerHeight, marks: tr ? [...tr.querySelectorAll('small.as-guess')].map(x => x.textContent) : [],
         notices: [...document.querySelectorAll('#assumeView .as-hints, #assumeView .ah-open, #ahOpen')].filter(drawn).length, list: !!$('looseList'), ...saved() };""", u["crops"][0] if u["crops"] else None)
     n_open = len(u["crops"])
     check("yields nobody has checked, and crops with no price, are one row that can wait, counting the crops and saying how many of each",
           n_open > 0 and rows.get("yields", {}).get("word") == f"{n_open} crop{'' if n_open == 1 else 's'}" and (u["yields"] == 0 or f"{u['yields']} yield" in rows["yields"]["detail"]) and (u["prices"] == 0 or f"{u['prices']} price" in rows["yields"]["detail"]) and max(u["yields"], u["prices"]) <= n_open <= u["yields"] + u["prices"], [u, rows.get("yields")])
-    check("it opens Yield and price, all on one page, at the first of those crops, which is marked in its row; no notice stands above the list, and nothing has changed",
-          bool(y) and y["view"] == "assume" and y["mode"] == "harvest" and y["way"] == "list" and y["table"] and y["row"] and y["inView"] and len(y["marks"]) > 0 and y["notices"] == 0 and not y["list"] and y["key"] == key0 and y["undo"] == 0, y)
+    check("it opens Yield and price, all on one page, at the first of those crops, whose row is lit and in view and says what it lacks; no notice stands above the list, and nothing has changed",
+          bool(y) and y["view"] == "assume" and y["mode"] == "harvest" and y["way"] == "list" and y["table"] and y["row"] and y["at"] == [u["crops"][0]] and y["inView"] and len(y["marks"]) > 0 and y["notices"] == 0 and not y["list"] and y["key"] == key0 and y["undo"] == 0, y)
     shot("loose-yields")
 
     js("A.setView('map'); LRFAssume.setMode('harvest', 'list');"); wait(300)

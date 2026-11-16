@@ -57,7 +57,7 @@
 
   let running = '', newer = false, dlg = null;
   const when = iso => { const [y, m, d] = String(iso).split('-').map(Number); return UI.day(new Date(y, m - 1, d)); };
-  function close() { if (!dlg) return; dlg.close(); dlg.remove(); dlg = null; const chip = $('buildChip'); if (chip) chip.focus(); }
+  function close() { if (!dlg) return; dlg.close(); dlg.remove(); dlg = null; }   // the browser gives the focus back to the chip that opened it
   /** The sheet: every build, latest first. Builds this browser has not opened the list for are marked. It changes nothing. */
   function open() {
     if (dlg || !h) return;

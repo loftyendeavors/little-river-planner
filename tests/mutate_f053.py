@@ -44,7 +44,6 @@ PAGE = [
  ("a build stays “New” after the list has been opened", CH, "    if (known && later(known, last)) keep(known);\n", ""),
  ("every build is “New” whatever was opened before", CH, "    const last = seen();\n", "    const last = '';\n"),
  ("Done leaves the sheet open", CH, "id: 'changesDone', onclick: close }, 'Done')", "id: 'changesDone' }, 'Done')"),
- ("Done does not give the chip the focus back", CH, "dlg = null; const chip = $('buildChip'); if (chip) chip.focus(); }", "dlg = null; }"),
  ("Escape leaves the sheet open", CH, "oncancel: e => { e.preventDefault(); close(); } },", "oncancel: e => { e.preventDefault(); } },"),
  ("a newer build that is ready is not said on the chip", CH, "if (chip) { chip.dataset.newer = '1'; chip.title = ", "if (chip) { chip.title = "),
  ("a newer build that is ready is not said in the sheet", CH, "      newer ? h('p.wc-newer',", "      false ? h('p.wc-newer',"),
