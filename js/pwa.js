@@ -10,6 +10,7 @@
     if (window.LRFUI) window.LRFUI.toast('A newer version of the planner is ready.', { label: 'Reload', run: () => location.reload() });
     const note = document.getElementById('buildNote');
     if (note && !note.dataset.newer) { note.dataset.newer = '1'; note.prepend('A newer version is ready: reload the page to use it. '); }
+    if (window.LRFChanges) window.LRFChanges.ready();
   });
   window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').then(reg => { setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000); }).catch(() => { /* the app still works online */ }); });
 })();

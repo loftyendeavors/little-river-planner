@@ -770,6 +770,19 @@
     $('mapDimToggle').addEventListener('change', e => { layers.dim = e.currentTarget.checked; try { root.localStorage.setItem(DIM_KEY, layers.dim ? '1' : '0'); } catch (_) { /* as above */ } build(); });
     $('mapLabelToggle').addEventListener('click', e => { layers.labels = !layers.labels; e.currentTarget.setAttribute('aria-pressed', layers.labels); updateLabels(); });
     $('mapSeasonToggle').addEventListener('click', () => setWholeSeason(!wholeSeason));
+    // What can be done on the map is behind "?" at the end of its tools, as a card of two columns (DESIGN.md, rule 1: the
+    // explanation is behind "?"). It stood as a list in the side panel. The tools that carry words of their own are listed under it.
+    const tools = document.querySelector('.map-tools');
+    tools.append(UI.help(null, () => tools, () => [
+      ['Plant', 'Drag a crop from the library onto a bed. It takes the date under the map.'],
+      ['Plan a succession', ['Use “series” beside a crop in the library, or ', h('button.linkish', { type: 'button', id: 'ovSeries', onclick: () => App.openAhead({ mode: 'series' }) }, 'plan one now'), '.']],
+      ['Move', 'Drag a planting to another bed. Its date stays.'],
+      ['Copy', 'Hold Alt while dragging.'],
+      ['Trade', 'Drop a planting on a bed that is taken. The two swap when both fit.'],
+      ['Share a bed', 'Drop a crop from the library on a bed that is taken, then choose to split the bed or replace what is there. Or use “Several varieties…” in a planting’s panel. Push a planting’s end into its neighbour to move the line between them.'],
+      ['Zoom and pan', 'Wheel · drag · Space and drag · click a garden’s name.'],
+      ['Colours', 'Pale: growing · Full: being picked · Hatched: turnover. Click a group in the bar under the map to show only that group.']
+    ], { id: 'mapHelp', label: 'What can be done on the map', cols: true }));
     // A window that changes size (dragged to the other monitor, made full screen) is fitted again, unless the grower has moved the view since.
     new ResizeObserver(() => { if (App.state.ready && App.state.view === 'map' && (!view.fitted || !view.moved)) fit(); if (App.state.ready) fitLegend(); }).observe(svg);
     $('legendMore').addEventListener('click', () => { legendOpen = !legendOpen; fitLegend(); });

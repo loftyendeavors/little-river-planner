@@ -80,10 +80,13 @@
   /** "?": the round button that opens a hint under it (DESIGN.md, the frame). What a page used to say in a standing paragraph is said
    *  here, with what else the caller hands over (a page's figures in full), and what each of the page's own controls does: the
    *  words a control otherwise shows only to a pointer held over it. `lead` and `more` may be functions, read when it opens;
-   *  `from` is the element whose controls are listed, or a function that gives it. One hint is open at a time. */
+   *  `from` is the element whose controls are listed, or a function that gives it. One hint is open at a time.
+   *  `opts`: `id` for the button (its card is that id with "Card"), `label` for what it is called, `cols` for a card in two
+   *  columns (a name, and what it does), where the rows are the whole of it. A row's second part may hold a button: pressing
+   *  one closes the card, since what it opens takes its place. */
   let hintOpen = null;
-  function help(lead, from, more) {
-    const btn = h('button.help-btn', { type: 'button', 'aria-label': 'What this page is for', 'aria-expanded': 'false' }, '?');
+  function help(lead, from, more, opts = {}) {
+    const btn = h('button.help-btn', { type: 'button', id: opts.id || null, 'aria-label': opts.label || 'What this page is for', 'aria-expanded': 'false' }, '?');
     let box = null;
     const away = e => { if (box && !box.contains(e.target) && !btn.contains(e.target)) close(); };
     const key = e => { if (e.key === 'Escape' && box) { close(); btn.focus(); } };
@@ -100,7 +103,8 @@
       const said = host ? [...host.querySelectorAll('button[title], select[title], input[title], summary[title], a[title]')].filter(el => el !== btn && el.title && shown(el))
         .map(el => [(el.getAttribute('aria-label') || el.textContent || el.placeholder || '').trim().replace(/\s+/g, ' ').slice(0, 48), el.title]) : [];
       const rows = [...extra, ...said].filter(([name], i, all) => name && all.findIndex(x => x[0] === name) === i).slice(0, 14);
-      box = h('div.hint', { role: 'note' }, text ? h('p', text) : null, rows.length ? h('dl', rows.map(([name, what]) => [h('dt', name), h('dd', what)])) : null);
+      box = h('div.hint' + (opts.cols ? '.cols' : ''), { role: 'note', id: opts.id ? opts.id + 'Card' : null }, text ? h('p', text) : null, rows.length ? h('dl', rows.map(([name, what]) => [h('dt', name), h('dd', what)])) : null);
+      box.addEventListener('click', e => { if (e.target.closest('button')) close(); });
       document.body.append(box);
       const r = btn.getBoundingClientRect(), w = box.offsetWidth;
       box.style.left = Math.round(Math.max(12, Math.min(r.left, root.innerWidth - w - 12))) + 'px';

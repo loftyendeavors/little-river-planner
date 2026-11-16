@@ -665,7 +665,9 @@
       }
       // what it measures, under it and clear of the beds' own numbers
       const [fx, fy] = corner(box.u, box.v1), [mx, my] = corner(box.u, box.v), len = Math.hypot(fx - mx, fy - my) || 1;
-      const text = d && d.live && d.kind === 'stretch' && d.size ? `${num(d.size.w ?? bed.w, 2)} × ${num(d.size.l ?? bed.l, 2)} ft` : bed ? sizeText(bed) : plural(list.length, 'space');
+      // a bed drawn too small for its grips says why it has none (the ends under 30 px of length, the sides under 46)
+      const closer = bed && kindOf(bed) === 'bed' ? (first.L * z < 30 ? ' · zoom in to drag an end' : first.L * z < 46 ? ' · zoom in to drag a side' : '') : '';
+      const text = d && d.live && d.kind === 'stretch' && d.size ? `${num(d.size.w ?? bed.w, 2)} × ${num(d.size.l ?? bed.l, 2)} ft` : bed ? sizeText(bed) + closer : plural(list.length, 'space');
       if (!(d && d.live && d.kind === 'stretch')) layer.append(word(text, fx + (fx - mx) / len * 27, fy + (fy - my) / len * 27));   // while an end is dragged the card by the pointer says it
     }
     // guide lines: what a drag has lined up with
@@ -795,7 +797,7 @@
         field('Gap between them (ft)', number('leGap', +layout.gapFt || 0, n => setGroup(one, { gapFt: n }), { min: 0, max: 100, step: 0.25 })));
     }
     if (x && !x.round) form.append(field('Turned (°)', number('leTurn', round2(Geo.turn(x.rot)), n => turnTo(n), { min: 0, max: 360, step: 1 }), beds.length > 1 ? 'The whole group turns about its middle.' : 'Clockwise from the top of the photo.'));
-    if (garden && beds.length > 1) form.append(field('Drawn at (% of true size)', number('leDrawn', round2(scaleOf(garden) * 100), n => drawAt(garden, n), { min: 50, max: 200, step: 0.5 }), 'For matching a whole garden to the photo. The beds’ real sizes do not change.'));
+    if (garden && beds.length > 1) form.append(field('Fit to the photo (%)', number('leDrawn', round2(scaleOf(garden) * 100), n => drawAt(garden, n), { min: 50, max: 200, step: 0.5 }), 'How large the garden is drawn, as a percent of its true size, to match it to the photo. The beds’ real sizes do not change.'));
     const F = root.LRFForecast;
     if (F && F.useOfBed && App.setUse) {
       const whole = !!(garden && beds.length > 1), uses = whole ? [garden.use === 'personal' ? 'personal' : 'commercial'] : [...new Set(beds.map(b => F.useOfBed(eng(), b).use))], now = uses.length === 1 ? uses[0] : '';

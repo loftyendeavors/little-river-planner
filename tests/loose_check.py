@@ -1,8 +1,9 @@
 """Loose ends in a real browser: the one list for what needs the grower (DESIGN.md, rule 4).
 The header's button says "Loose ends". Its count alone is orange, and counts only what needs the grower: ground booked twice or
 longer than its bed, and seed no row can count. What can wait (plantings that differ from the list, published guidance not yet
-used, supplier days that do not say where they are counted from) is listed under it and not counted. Each row opens where the
-thing is mended. The notices that stood on the Assumptions list and in the Seeds panel are gone from those pages: two are
+used, yields nobody has checked and crops with no price, supplier days that do not say where they are counted from) is listed
+under it and not counted. Each row opens where the thing is mended. The button is in the header only while something needs the
+grower (0.53); a lot whose variety record is wholly gone can be removed from where it is shown. The notices that stood on the Assumptions list and in the Seeds panel are gone from those pages: two are
 sheets opened from the list, seed on order is a filter of the Seeds list, and each page has one line of figures.
 Every count is read from the plan the page was given; nothing here names a crop, a bed or a number of any plan.
 usage: python3 -I loose_check.py <app-dir-or-built-site> <shots-dir> [backup.zip]     env: WIDTH=1480, DARK=1, STOP_AT_FAIL=1
@@ -85,7 +86,7 @@ with sync_playwright() as pw:
       return { hidden: b.hidden, drawn: drawn(b), text: b.textContent, n: n ? n.textContent : '', title: b.title, settle: LRFPanels.settleCount(), raw: c.groups.length + new Set(c.long.map(x => x.r.b.gardenId + '|' + x.want + '|' + x.cap)).size,
         needs: rows.filter(r => r.kind === 'needs').reduce((t, r) => t + r.n, 0), wait: rows.filter(r => r.kind === 'minute').length, keys: rows.map(r => r.key), said: LRFPanels.needsYou(rows),
         bg: cs.backgroundColor, soft: colour('var(--flag-soft)'), nBg: n ? getComputedStyle(n).backgroundColor : '', orange: colour('var(--flag-deep)'), raised: colour('var(--raised)'), popup: b.getAttribute('aria-haspopup'), open: b.getAttribute('aria-expanded') };""")
-    check("this plan has something of each kind to list: ground to settle, and things that can wait", st["raw"] > 0 and st["wait"] >= 3 and {"ground", "differ", "guide", "starts"} <= set(st["keys"]), st)
+    check("this plan has something of each kind to list: ground to settle, and things that can wait", st["raw"] > 0 and st["wait"] >= 4 and {"ground", "differ", "guide", "yields", "starts"} <= set(st["keys"]), st)
     check("the header says Loose ends, and its count is what needs the grower and nothing that can wait", not st["hidden"] and st["drawn"] and st["text"] == f"Loose ends{st['needs']:,}" and st["n"] == f"{st['needs']:,}" and st["said"] == st["needs"] and st["settle"] == st["raw"] and st["needs"] == st["raw"], st)
     check("the button is the page's own surface, never a coloured panel; its count alone is orange; its tooltip says what is counted", st["bg"] == st["raised"] and st["bg"] != st["soft"] and st["nBg"] == st["orange"] and "booked twice" in st["title"] and "can wait" in st["title"], st)
 
@@ -136,6 +137,19 @@ with sync_playwright() as pw:
     check("Done closes it; on the Assumptions list no notice stands, and one line of figures is under the title, over the page's controls", not frame["sheet"] and frame["kept"] and frame["notices"] == 0 and frame["count"] and frame["under"] and frame["inHead"] and frame["one"] == 1 and frame["key"] == key0 and frame["undo"] == 0, frame)
     check("the list of crops starts within 340 px of the top of a window 900 high", frame["first"] is not None and frame["first"] <= 340, frame)
     shot("loose-assumptions")
+
+    # ══ yields nobody has checked, and crops with no price: the notice that stood above "All on one page" is a row here ══
+    js("A.setView('map')"); wait(300)
+    u = js("const u = LRFAssume.unchecked(eng, S.plan); return { yields: u.yields, prices: u.prices, crops: u.crops }")
+    y = row("yields", 900) and js("""const tr = arg ? [...document.querySelectorAll('#ahBody tr.as-crop')].find(r => r.dataset.crop === arg) : null, r = tr ? tr.getBoundingClientRect() : null, head = $('ahTable').querySelector('thead').getBoundingClientRect();
+      return { view: S.view, mode: $('assumeView').dataset.mode, way: LRFAssume.way(), table: drawn($('ahTable')), row: !!tr, at: [...document.querySelectorAll('#ahBody tr.as-at')].map(r => r.dataset.crop), inView: !!r && r.top >= head.bottom - 2 && r.bottom <= innerHeight, marks: tr ? [...tr.querySelectorAll('small.as-guess')].map(x => x.textContent) : [],
+        notices: [...document.querySelectorAll('#assumeView .as-hints, #assumeView .ah-open, #ahOpen')].filter(drawn).length, list: !!$('looseList'), ...saved() };""", u["crops"][0] if u["crops"] else None)
+    n_open = len(u["crops"])
+    check("yields nobody has checked, and crops with no price, are one row that can wait, counting the crops and saying how many of each",
+          n_open > 0 and rows.get("yields", {}).get("word") == f"{n_open} crop{'' if n_open == 1 else 's'}" and (u["yields"] == 0 or f"{u['yields']} yield" in rows["yields"]["detail"]) and (u["prices"] == 0 or f"{u['prices']} price" in rows["yields"]["detail"]) and max(u["yields"], u["prices"]) <= n_open <= u["yields"] + u["prices"], [u, rows.get("yields")])
+    check("it opens Yield and price, all on one page, at the first of those crops, whose row is lit and in view and says what it lacks; no notice stands above the list, and nothing has changed",
+          bool(y) and y["view"] == "assume" and y["mode"] == "harvest" and y["way"] == "list" and y["table"] and y["row"] and y["at"] == [u["crops"][0]] and y["inView"] and len(y["marks"]) > 0 and y["notices"] == 0 and not y["list"] and y["key"] == key0 and y["undo"] == 0, y)
+    shot("loose-yields")
 
     js("A.setView('map'); LRFAssume.setMode('harvest', 'list');"); wait(300)
     g = row("guide") and js("""const dlg = $('asGuideDlg'), h = $('asHints'); return { view: S.view, mode: document.getElementById('assumeView').dataset.mode, open: !!dlg && dlg.open && dlg.contains(h), head: (h.querySelector('h2') || {}).textContent || '', names: (h.querySelector('small') || {}).textContent || '', chips: new Set([...document.querySelectorAll('#asBody .as-hint')].map(b => b.dataset.hint)).size,
@@ -197,9 +211,35 @@ with sync_playwright() as pw:
     shot("loose-seeds-lots")
     open_list(); order = (js("return list()") or {}).get("order", []); page.keyboard.press("Escape"); wait(200)
     check("in the list it stands after the ground and before everything that can wait", "lots" in order and "#minute" in order and order.index("lots") < order.index("#minute") and order.index("lots") > order.index("#needs"), order)
+    # a lot whose variety record is wholly gone has nothing to be brought back or moved to: it can be removed, with Undo
+    shut(); row("lots", 900)
+    rm = js("const b = $('sdUnlisted') && $('sdUnlisted').querySelector('.sd-strayrow [data-act=remove]'); return b ? { text: b.textContent, button: b.classList.contains('btn') && !b.classList.contains('primary') && !b.classList.contains('link'), high: Math.round(b.getBoundingClientRect().height), lots: A.inventoryNow().lots.filter(l => !l.deleted).length, undo: S.undo.length } : null")
+    took = bool(rm) and press("#sdUnlisted .sd-strayrow [data-act=remove]", 900)
+    gone = js("const t = $('toast'); return { needs: LRFPanels.needsYou(LRFPanels.looseEnds()), keys: LRFPanels.looseEnds().map(r => r.key), box: !!$('sdUnlisted'), figs: !!$('sdFigs'), said: t.classList.contains('show') ? t.querySelector('span').textContent : '', undoes: t.classList.contains('show') && !!t.querySelector('.toast-action') && t.querySelector('.toast-action').textContent === 'Undo', lots: A.inventoryNow().lots.filter(l => !l.deleted).length, kept: A.inventoryNow().lots.filter(l => l.deleted && l.key === 'v:a-variety-that-is-gone').length, undo: S.undo.length }")
+    check("a lot whose variety record is wholly gone has its fix where it is shown: “Remove this lot”, a bounded button. Pressed, the lot is off the stock and kept on record as removed, nothing asks after it, and the answer says so with Undo",
+          bool(rm) and rm["text"] == "Remove this lot" and rm["button"] and rm["high"] == 28 and took and gone["lots"] == rm["lots"] - 1 and gone["kept"] == 1 and "lots" not in gone["keys"] and gone["needs"] == before["needs"] and not gone["box"] and gone["figs"] and "removed from stock" in gone["said"] and gone["undoes"] and gone["undo"] == rm["undo"] + 1, [rm, gone])
+    press("#toast .toast-action", 900)
+    put = js("return { needs: LRFPanels.needsYou(LRFPanels.looseEnds()), keys: LRFPanels.looseEnds().map(r => r.key), lots: A.inventoryNow().lots.filter(l => !l.deleted).length, undo: S.undo.length }")
+    check("Undo puts the lot back, and it is counted again", bool(rm) and put["lots"] == rm["lots"] and "lots" in put["keys"] and put["needs"] == before["needs"] + 1 and put["undo"] == rm["undo"], put)
+
     shut(); js("A.undo()"); wait(900)
     back = js("return { needs: LRFPanels.needsYou(LRFPanels.looseEnds()), keys: LRFPanels.looseEnds().map(r => r.key), text: $('settleBadge').textContent, box: !!$('sdUnlisted'), figs: !!$('sdFigs'), key: A.contentKey() }")
     check("undone, the count is what it was, and the Seeds panel is back to its line of figures", back["needs"] == before["needs"] and "lots" not in back["keys"] and back["text"] == before["text"] and not back["box"] and back["figs"] and back["key"] == key0, back)
+
+    # ══ the button is in the header only while something needs the grower ══
+    # The ground is settled for a moment by taking out the later planting of every collision and every planting longer than its
+    # bed, in one step, which is then undone. What can wait is still there: it does not hold the button in the header.
+    js("A.setView('map'); A.select(null)"); wait(300)
+    ids = js("const c = LRFRails.cleanup(eng); return [...new Set([...c.long.map(x => x.p.id), ...c.groups.map(g => g.late.id)])]")
+    was_open = bool(open_list())   # the list is open when the last of it is settled: it goes with the button
+    js("A.removePlantings(arg, 'The ground settled, by the check')", ids); wait(1200)
+    calm = js("const rows = LRFPanels.looseEnds(), b = $('settleBadge'); return { settle: LRFPanels.settleCount(), needs: LRFPanels.needsYou(rows), wait: rows.filter(r => r.kind === 'minute').length, hidden: b.hidden, drawn: drawn(b), left: !!$('looseList'), undo: S.undo.length }")
+    js("$('settleBadge').click()"); wait(250)
+    calm["list"] = js("return !!$('looseList')")
+    js("A.undo()"); wait(1200)
+    stirred = js("const b = $('settleBadge'); return { text: b.textContent, drawn: drawn(b), key: A.contentKey() }")
+    check("with the ground settled and nothing else that needs the grower, the button is not in the header, the list that was open has gone with it and none can be opened, though things can still wait; when something needs him again it is back with its count",
+          len(ids) > 0 and was_open and calm["settle"] == 0 and calm["needs"] == 0 and calm["wait"] >= 3 and calm["hidden"] and not calm["drawn"] and not calm["left"] and not calm["list"] and stirred["drawn"] and stirred["text"] == before["text"] and stirred["key"] == key0, [len(ids), calm, stirred])
 
     # ══ a phone shows Tasks and nothing else: no loose ends there ══
     page.set_viewport_size({"width": 390, "height": 800}); wait(700)

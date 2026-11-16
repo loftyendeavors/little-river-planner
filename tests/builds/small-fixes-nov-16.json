@@ -1,0 +1,36 @@
+{
+ "build": "The small fixes of Nov 16. The build that is running is said in the header (a pill beside the year; at 1400 wide and under, the number alone under the year), and a press opens “What changed”: every build, latest first, with one line and three things to try at most, from js/changes.js, which every build adds to. On the Map, what can be done is a card of two columns behind “?” at the end of the map's tools, and the list “On the map” is gone from the side panel. Under “Several varieties…” a tick leaves the list where it was scrolled to. In Edit layout a bed drawn too small for its grips says “zoom in to drag an end”, and “Drawn at (% of true size)” reads “Fit to the photo (%)”. Loose ends is in the header only while something needs the grower; the notice above Yield and price, “All on one page”, is one of its rows; a seed lot whose variety record is wholly gone gets “Remove this lot”, with Undo. No date, yield, price, seed count or bench figure changes.",
+ "words": [],
+ "code": [
+  "assume.js",
+  "main.js",
+  "map.js",
+  "mapedit.js",
+  "panels.js",
+  "pwa.js",
+  "seeds.js",
+  "ui.js"
+ ],
+ "added": [
+  "changes.js"
+ ],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html",
+  "sw.js"
+ ],
+ "screens": [
+  "map",
+  "timeline",
+  "forecast",
+  "tasks",
+  "nursery-bench-room",
+  "nursery-live-trays",
+  "nursery-supplies",
+  "nursery-set-up",
+  "seeds",
+  "assumptions-days",
+  "assumptions-yield"
+ ]
+}

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Little River Farm Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e4521b'/%3E%3C/svg%3E">
-<meta name="lrf-build" content="0.52">
+<meta name="lrf-build" content="0.53">
 <meta name="theme-color" content="#13241c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -19,6 +19,7 @@
     <span class="brand-mark" aria-hidden="true"></span>
     <span class="brand-name">Little River</span>
     <span class="brand-sub">Farm planner <b id="seasonYear"></b></span>
+    <button type="button" class="build-chip" id="buildChip" aria-haspopup="dialog" title="The build that is running. Press for what each build changed, with three things to try."></button>
   </div>
   <nav class="views" aria-label="Views">
     <button type="button" data-view-btn="map" aria-pressed="true" title="The plan on the farm: where each crop goes">Map</button>
@@ -174,7 +175,6 @@
           <label class="ah-check as-house" id="ahHouseFarm" title="On: a crop can be marked as partly kept for personal use, and that part is taken off what is sold. Off: everything this farm packs is sold, and the idea is shown on no page. What either does to the season’s worth is shown before it is done." hidden><input type="checkbox" id="ahHouseOn"><span>Part of some crops is for personal use</span></label>
           <p class="as-key"><i class="k-default"></i>unchecked default <i class="k-guide"></i>checked against a guide <i class="k-own"></i>variety’s own <i class="k-mine"></i>yours</p>
         </div>
-        <p class="as-hints ah-open" id="ahOpen" hidden></p>
         <div class="yc" id="ycHost" hidden></div>
         <table class="as ah" id="ahTable" hidden><thead id="ahHead"></thead><tbody id="ahBody"></tbody></table>
         <table class="as" id="asTable">
@@ -290,6 +290,7 @@
 <script src="js/ahead.js"></script>
 <script src="js/series.js"></script>
 <script src="js/backupui.js"></script>
+<script src="js/changes.js"></script>
 <script src="js/main.js"></script>
 <script src="js/pwa.js"></script>
 </body>

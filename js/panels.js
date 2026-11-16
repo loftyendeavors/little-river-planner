@@ -256,15 +256,6 @@
     renderNewer(host);
     renderPhotos(host);
     renderCleanup(host);
-    add(host, h('section.insp-section.howto', h('h3', 'On the map'),
-      h('ul.how',
-        h('li', h('b', 'Plant'), 'Drag a crop from the library onto a bed. It goes in on the date under the map.'),
-        h('li', h('b', 'Series'), h('span', 'One crop every so many days: ', h('button.linkish', { type: 'button', id: 'ovSeries', onclick: () => App.openAhead({ mode: 'series' }) }, 'plan a series'), ', or use “series” beside a crop in the library.')),
-        h('li', h('b', 'Move'), 'Drag a planting to other ground. It keeps its date. Hold Alt to leave a copy.'),
-        h('li', h('b', 'Trade'), 'Drop a planting on ground that is held and the two trade places, when both fit.'),
-        h('li', h('b', 'Share a bed'), 'Drop a crop onto a bed that is held: it asks whether to split the bed or replace what is there, once, and then keeps splitting until you press Done. Or use “Several varieties in this bed…” in a planting’s panel. Push a planting’s end into its neighbour to move the line between them.'),
-        h('li', h('b', 'Look closer'), 'Click a garden name to zoom to it. Wheel zooms, drag pans, Space pans from anywhere.'),
-        h('li', h('b', 'Colours'), 'Pale while a crop is growing, full colour while it is being picked, hatched while the bed turns over. Click a crop in the bar under the map to show only that crop.'))));
   }
 
   function renderBed(host, bed) {
@@ -484,7 +475,17 @@
   let several = null;   // { id: the planting, picked: Set of variety ids, by: 'length' | 'rows' }
   function severalBox(eng, p, r, varieties) {
     const mates = Rails.mates(eng, p), inBed = new Set(mates.filter(x => x.p.cropId === p.cropId).map(x => x.p.varietyId || '')), by = several.by;
-    const redraw = () => render();
+    // The panel is drawn afresh at every tick. The list of varieties scrolls inside it, and a list drawn afresh starts at its
+    // top: so where it stood is read first and given back, and the box that was ticked keeps the keyboard.
+    const redraw = () => {
+      const was = $('mixPickList'), at = was ? was.scrollTop : 0, on = document.activeElement && was && was.contains(document.activeElement) ? document.activeElement.dataset.variety : null;
+      render();
+      const now = $('mixPickList');
+      if (!now) return;
+      now.scrollTop = at;
+      const tick = on ? [...now.querySelectorAll('input[data-variety]')].find(i => i.dataset.variety === on) : null;
+      if (tick) tick.focus({ preventScroll: true });
+    };
     const row = v => {
       const here = v.id === p.varietyId, there = !here && inBed.has(v.id), tick = h('input', { type: 'checkbox', checked: here || there || several.picked.has(v.id), disabled: here || there, dataset: { variety: v.id },
         onchange: e => { if (e.target.checked) several.picked.add(v.id); else several.picked.delete(v.id); redraw(); } });
@@ -668,7 +669,7 @@
     if (!el) { holdSettle = false; return; }
     host.scrollTop += el.getBoundingClientRect().top - host.getBoundingClientRect().top;
   }
-  const LOOSE = { ground: 0, lots: 1, differ: 2, guide: 3, starts: 4 }, KINDS = [['needs', 'Needs you'], ['minute', 'When you have a minute']];
+  const LOOSE = { ground: 0, lots: 1, differ: 2, guide: 3, yields: 4, starts: 5 }, KINDS = [['needs', 'Needs you'], ['minute', 'When you have a minute']];
   /** Every loose end of the plan as it stands: { key, kind: 'needs' | 'minute', name, detail, word, n, open }. */
   function looseEnds() {
     if (App.isSample()) return [];
@@ -697,7 +698,7 @@
   function openLoose() {
     const badge = $('settleBadge');
     if (looseBox) { closeLoose(); return; }
-    if (!looseRows.length) return;
+    if (!needsYou(looseRows)) return;
     looseBox = h('div.loose', { id: 'looseList', role: 'group', 'aria-label': 'Loose ends' });
     fillLoose();
     document.body.append(looseBox);
@@ -713,10 +714,12 @@
     if (!badge || !App.state.ready) return;
     looseRows = looseEnds();
     const n = needsYou(looseRows);
-    badge.hidden = !looseRows.length;
-    if (!looseRows.length) { closeLoose(); return; }
-    clear(badge); add(badge, 'Loose ends', n ? h('b', num(n)) : null);
-    badge.title = n ? `${num(n)} ${n === 1 ? 'thing needs' : 'things need'} you: ground booked twice, plantings longer than their bed, or seed no row can count. Click for the list, with what can wait under it.` : 'Nothing needs you now. Click for what can wait.';
+    // The button is shown only while something needs the grower (his, Nov 16): with nothing counted it is not in the header, and
+    // what can wait is listed under what needs him the next time something does.
+    badge.hidden = !n;
+    if (!n) { closeLoose(); return; }
+    clear(badge); add(badge, 'Loose ends', h('b', num(n)));
+    badge.title = `${num(n)} ${n === 1 ? 'thing needs' : 'things need'} you: ground booked twice, plantings longer than their bed, or seed no row can count. Click for the list, with what can wait under it.`;
     if (looseBox) fillLoose();
   }
   /** Worked out a moment after the plan changes, so a run of changes costs one count and typing is never held up by it. */

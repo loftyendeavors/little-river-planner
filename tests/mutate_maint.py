@@ -36,7 +36,7 @@ FAULTS = [
  ('a crop grown somewhere starts in the first garden instead of its own', 'js/series.js', "P.gardenIds = (planted.length ? planted : gardens.slice(0, 1)).map(g => g.garden.id);", "P.gardenIds = gardens.slice(0, 1).map(g => g.garden.id);"),
  ('the series tool opens on another crop when asked for one it does not plan', 'js/series.js', "if (asked && !seriesCrops(eng).includes(asked)) {", "if (false) {"),
  ('a cover crop planting offers a series', 'js/panels.js', "canSeries(eng, r.c) ? h('button.linkish', { type: 'button', id: 'fSeriesLink'", "true ? h('button.linkish', { type: 'button', id: 'fSeriesLink'"),
- ('the "Series" line of the how-to list breaks into pieces again', 'js/panels.js', "h('li', h('b', 'Series'), h('span', 'One crop every so many days: ',", "h('li', h('b', 'Series'), h('i', 'One crop every so many days: ',"),
+ ('the line on successions behind the Map\'s "?" breaks into pieces again', 'js/ui.js', "rows.map(([name, what]) => [h('dt', name), h('dd', what)])", "rows.map(([name, what]) => [h('dt', name), [what].flat().map(x => h('dd', x))])"),
  ('a folder with no plan in it stays connected', 'js/app.js', "    const name = f.name, broken = !!(f.conflict && f.conflict.broken);\n    await Folder.forget();", "    const name = f.name, broken = !!(f.conflict && f.conflict.broken);"),
  ('"Open my plan folder" works while a plan is open', 'js/app.js', "if (!isSample() && !state.unreadable) { toast('A plan is already open here. Backup has the folder choices.'); return false; }", ""),
  ('the folder route misses a plan this browser wrote itself', 'js/app.js', "    try { held = await Folder.read(); } catch (_) { held = null; }\n", "    try { held = f.conflict ? await Folder.read() : null; } catch (_) { held = null; }\n"),

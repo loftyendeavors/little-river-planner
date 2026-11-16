@@ -117,9 +117,11 @@
 
   "cleanup": 27,
 
+  "f053": 22,
+
   "look": 33,
 
-  "loose": 31,
+  "loose": 36,
 
   "mixed": 61,
 
@@ -212,7 +214,9 @@
  },
  "site2": {
 
-  "loose-site": 32,
+  "f053-site": 22,
+
+  "loose-site": 37,
 
   "plain-site": 47,
 
@@ -240,7 +244,7 @@
  },
  "site4": {
 
-  "loose-site @1480": 32,
+  "loose-site @1480": 37,
 
   "r1-site @1480": 67,
 
@@ -261,7 +265,7 @@
  },
  "site5": {
 
-  "loose-site @3440": 32,
+  "loose-site @3440": 37,
 
   "r1-site @3440": 67,
 

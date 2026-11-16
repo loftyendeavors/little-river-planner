@@ -102,8 +102,11 @@ with sync_playwright() as pw:
         check('a planting still offers the longer series, beside the quick "more, every so many days"', link['plain']['link'] and link['plain']['quick'], link)
         check('a cover crop planting keeps the quick repeat and does not offer a series it cannot have', 'cover' in link and link['cover']['quick'] and not link['cover']['link'], link)
         check('(the cover crop planted for that look is out of the plan again)', ev("LRFApp.state.plan.plantings.length") == full['n'], ev("LRFApp.state.plan.plantings.length"))
-        how = ev("(() => { const a = document.getElementById('ovSeries'), li = a && a.closest('li'); return a ? { inSpan: a.parentElement.tagName === 'SPAN', cells: li.children.length, oneBlock: a.getBoundingClientRect().left > li.querySelector('b').getBoundingClientRect().right } : null; })()")
-        check('the "Series" line of the how-to list reads as one sentence beside its heading', bool(how) and how['inSpan'] and how['cells'] == 2 and how['oneBlock'], how)
+        ev("(() => { LRFApp.select(null); LRFApp.setView('map'); })()"); page.wait_for_timeout(500)
+        page.click('#mapHelp'); page.wait_for_timeout(300)
+        how = ev("(() => { const a = document.getElementById('ovSeries'), dd = a && a.closest('dd'), dl = dd && dd.parentElement; if (!dd) return null; const dt = dd.previousElementSibling; return { inCell: a.parentElement === dd, whole: dd.childNodes.length === 3, name: dt.textContent, pairs: dl.querySelectorAll('dt').length === dl.querySelectorAll('dd').length, oneBlock: a.getBoundingClientRect().left > dt.getBoundingClientRect().right, side: !!document.querySelector('#inspectorBody .howto') }; })()")
+        page.keyboard.press('Escape'); page.wait_for_timeout(200)
+        check('behind the Map\'s "?", the line on successions reads as one sentence beside its name, with its link inside it; the side panel no longer lists what the map does', bool(how) and how['inCell'] and how['whole'] and how['pairs'] and how['oneBlock'] and how['name'] == 'Plan a succession' and not how['side'], how)
         # the plan goes into a folder, the way he keeps it; then this browser forgets everything but the folder's files
         kept = ev("""async () => { const A = LRFApp, F = LRFFolder, dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('Kept plan', { create: true });
           // with a farm photo of its own, as a plan loaded from a backup has
