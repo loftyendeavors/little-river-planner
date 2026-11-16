@@ -231,14 +231,15 @@ with sync_playwright() as pw:
     # bed, in one step, which is then undone. What can wait is still there: it does not hold the button in the header.
     js("A.setView('map'); A.select(null)"); wait(300)
     ids = js("const c = LRFRails.cleanup(eng); return [...new Set([...c.long.map(x => x.p.id), ...c.groups.map(g => g.late.id)])]")
+    was_open = bool(open_list())   # the list is open when the last of it is settled: it goes with the button
     js("A.removePlantings(arg, 'The ground settled, by the check')", ids); wait(1200)
-    calm = js("const rows = LRFPanels.looseEnds(), b = $('settleBadge'); return { settle: LRFPanels.settleCount(), needs: LRFPanels.needsYou(rows), wait: rows.filter(r => r.kind === 'minute').length, hidden: b.hidden, drawn: drawn(b), undo: S.undo.length }")
+    calm = js("const rows = LRFPanels.looseEnds(), b = $('settleBadge'); return { settle: LRFPanels.settleCount(), needs: LRFPanels.needsYou(rows), wait: rows.filter(r => r.kind === 'minute').length, hidden: b.hidden, drawn: drawn(b), left: !!$('looseList'), undo: S.undo.length }")
     js("$('settleBadge').click()"); wait(250)
     calm["list"] = js("return !!$('looseList')")
     js("A.undo()"); wait(1200)
     stirred = js("const b = $('settleBadge'); return { text: b.textContent, drawn: drawn(b), key: A.contentKey() }")
-    check("with the ground settled and nothing else that needs the grower, the button is not in the header and opens no list, though things can still wait; when something needs him again it is back with its count",
-          len(ids) > 0 and calm["settle"] == 0 and calm["needs"] == 0 and calm["wait"] >= 3 and calm["hidden"] and not calm["drawn"] and not calm["list"] and stirred["drawn"] and stirred["text"] == before["text"] and stirred["key"] == key0, [len(ids), calm, stirred])
+    check("with the ground settled and nothing else that needs the grower, the button is not in the header, the list that was open has gone with it and none can be opened, though things can still wait; when something needs him again it is back with its count",
+          len(ids) > 0 and was_open and calm["settle"] == 0 and calm["needs"] == 0 and calm["wait"] >= 3 and calm["hidden"] and not calm["drawn"] and not calm["left"] and not calm["list"] and stirred["drawn"] and stirred["text"] == before["text"] and stirred["key"] == key0, [len(ids), calm, stirred])
 
     # ══ a phone shows Tasks and nothing else: no loose ends there ══
     page.set_viewport_size({"width": 390, "height": 800}); wait(700)
