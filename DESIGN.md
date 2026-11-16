@@ -18,7 +18,7 @@ and what it leaves alone.
    ("?"), a calendar and a right-click menu are the same card, smaller.
 3. **One answer for each action, where the action happened, with Undo.** Never two. Nothing that answers lies over a control.
 4. **One list for what needs the grower.** Loose ends, in the header, in two kinds: needs you (counted, in orange) and when
-   you have a minute (not counted). A state of things (seed on order) is a filter on its own page, not a notice. A flag
+   you have a minute (not counted). The button is in the header only while something is counted. A state of things (seed on order) is a filter on its own page, not a notice. A flag
    stands on the row it blocks and opens where it is mended.
 5. **One scale under everything**, below.
 
