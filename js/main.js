@@ -25,7 +25,7 @@
     $('seasonYear').textContent = App.planYear();
     const plan = App.state.plan, info = plan.lrfNext || {};
     const waits = App.waiting().length;
-    $('buildNote').textContent = `Preview 0.51 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
+    $('buildNote').textContent = `Preview 0.52 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
   });
   // A browser that holds no plan says so across the page, in every view, with the two ways to bring one in.
   // The same strip speaks for a stored plan that would not open: it is kept as it is until he chooses what to do.
@@ -94,11 +94,20 @@
   document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('file-over'); });
   document.addEventListener('drop', e => { if (!hasFiles(e)) return; e.preventDefault(); document.body.classList.remove('file-over'); if (e.dataTransfer.files.length) App.openFiles(e.dataTransfer.files); });
 
+  // The boxes that hold typing the plan has not taken: from a box's first keystroke until its typing is taken (its "change") or
+  // the box is left. The undo and redo keys below are read against it.
+  const unsent = new WeakSet();
+  document.addEventListener('input', e => { if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName || '')) unsent.add(e.target); }, true);
+  for (const kind of ['change', 'focusout']) document.addEventListener(kind, e => { if (e.target) unsent.delete(e.target); }, true);
   document.addEventListener('keydown', e => {
     const typing = /^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') && e.target.type !== 'range';
     const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? App.redo() : App.undo(); return; }
-    if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); App.redo(); return; }
+    // While a box holds typing the plan has not taken yet, the undo and redo keys are the box's own: they take back that typing,
+    // never the plan's last change. Once the typing is taken (or with a list box or a tick in focus, which hold none) the keys
+    // are the planner's, as they are anywhere outside a box: a figure just typed and taken is still undone from its own box.
+    const writing = typing && unsent.has(e.target);
+    if (mod && !writing && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? App.redo() : App.undo(); return; }
+    if (mod && !writing && e.key.toLowerCase() === 'y') { e.preventDefault(); App.redo(); return; }
     // Escape with a sheet or dialog open closes that, and nothing behind it
     if (e.key === 'Escape' && document.querySelector('dialog[open]')) return;
     // (the series tool is a form: Escape leaves it from inside its fields too, and nothing is added)

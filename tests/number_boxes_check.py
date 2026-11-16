@@ -276,6 +276,55 @@ with sync_playwright() as pw:
     check("in a number box of the layout, the wheel and the arrows move no ground and step no figure: the bed, its length and the plan are what they were", bool(w) and a["log"] == ["wheel", "ArrowUp", "ArrowDown", "ArrowDown"] and a["value"] == w["value"] and place() == before and b["key"] == key0 and b["undo"] == [], {"box": w, "at the keys": a if w else None, "after": b if w else None, "bed": [before, place()] if w else None})
     shot("layout"); js("LRFMapEdit.close();"); wait(400); undo_all()
 
+    # ══ (the same rule for two keys) Ctrl+Z and Ctrl+Y: while a box holds typing the plan has not taken, they are the box's own and
+    # take back that typing; anywhere else, and in a box whose typing has been taken, they are the planner's. They used to be taken
+    # before the page asked whether a box had the focus, so the key meant for a slip of typing took back the last change to the
+    # plan. One change is made first, so that there is something to undo. ══
+    js("A.select(null); A.setView('map')"); wait(400)
+    made = js("return !!A.editStock('A lot, filed by the check', (lib, ctx) => LRFSeedLib.addLot(lib, { key: 'v:a-variety-of-the-check', unit: 'seeds', quantity: 10, status: 'usable' }, ctx), 'A variety of the check')"); wait(600)
+    one = js("return saved()")
+    typed = False
+    if page.locator("#libSearch").count() and page.locator("#libSearch").first.is_visible():
+        page.locator("#libSearch").click(); page.keyboard.type("abc"); wait(200); typed = js("return $('libSearch').value") == "abc"
+        page.keyboard.press("Control+z"); wait(500)
+    inbox = js("return { value: $('libSearch').value, focus: document.activeElement === $('libSearch'), ...saved(), redo: S.redo.length }")
+    check("with a change to the plan waiting to be undone, Ctrl+Z in a box that is being typed in takes back the typing and leaves the plan as it is", made and typed and len(one["undo"]) == 1 and inbox["focus"] and inbox["value"] != "abc" and same(inbox, one) and inbox["redo"] == 0, [one, inbox])
+    js("$('libSearch').value = ''; $('libSearch').dispatchEvent(new Event('input', { bubbles: true }));"); away(); page.keyboard.press("Control+z"); wait(700)
+    out = js("return { ...saved(), redo: S.redo.length }")
+    check("outside a box Ctrl+Z is the planner's, as before: the last change to the plan is taken back", out["key"] == key0 and out["undo"] == [] and out["redo"] == 1, out)
+    page.locator("#libSearch").click(); page.keyboard.type("x"); page.keyboard.press("Control+y"); page.keyboard.press("Control+Shift+z"); wait(500)
+    held = js("return { focus: document.activeElement === $('libSearch'), ...saved(), redo: S.redo.length }")
+    check("in a box that is being typed in the redo keys, Ctrl+Y and Ctrl+Shift+Z, put nothing back into the plan", held["focus"] and held["key"] == key0 and held["undo"] == [] and held["redo"] == 1, held)
+    js("$('libSearch').value = ''; $('libSearch').dispatchEvent(new Event('input', { bubbles: true }));"); away(); page.keyboard.press("Control+y"); wait(700)
+    again = js("return { ...saved(), redo: S.redo.length }")
+    check("outside a box Ctrl+Y redoes it", same(again, one) and again["redo"] == 0, again)
+    # a list box has no typing to take back: with one in focus the key is the planner's, as it is on a button or on the page
+    js("A.setView('assume'); document.querySelector('[data-as-mode=days]').click();"); wait(700)
+    on_list = js("const s = [...document.querySelectorAll('#asBody select')].find(drawn); if (!s) return false; s.focus(); return document.activeElement === s && s.tagName === 'SELECT';")
+    page.keyboard.press("Control+z"); wait(700)
+    lst = js("return { ...saved(), redo: S.redo.length }")
+    check("with a list box in focus, which has no typing to take back, Ctrl+Z is the planner's", on_list and lst["key"] == key0 and lst["undo"] == [] and lst["redo"] == 1, [on_list, lst])
+    js("if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); S.redo.length = 0;")
+    # a figure typed and taken is the plan's: Ctrl+Z undoes it with the cursor still in its box, as it always did
+    cell = js("const el = [...document.querySelectorAll('#asBody input[data-key]')].find(drawn); if (!el) return null; el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), key: el.dataset.key, was: el.value || el.placeholder };")
+    taken = None
+    if cell:
+        page.mouse.click(cell["x"], cell["y"]); page.keyboard.press("Control+a"); page.keyboard.type(str(int(float(cell["was"] or 50)) + 3)); page.keyboard.press("Enter"); wait(900)
+        taken = js("return { ...saved(), inBox: !!document.activeElement && document.activeElement.tagName === 'INPUT' }")
+        page.keyboard.press("Control+z"); wait(900)
+    undone = js("return saved()")
+    check("a figure typed into a box and taken by the plan is undone by Ctrl+Z with the cursor still in a box, as before", bool(cell) and bool(taken) and len(taken["undo"]) == 1 and taken["key"] != key0 and taken["inBox"] and undone["key"] == key0 and undone["undo"] == [], [cell, taken, undone])
+    js("if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); S.redo.length = 0;")
+    # the same in a box that stays on the page when its typing is taken (the list above draws its boxes afresh, so the box the cursor
+    # ends in is a new one): the box says its typing was taken, as a browser does on Enter, and the keys are the planner's again
+    js("A.setView('map')"); wait(400)
+    made2 = js("return !!A.editStock('A lot, filed by the check', (lib, ctx) => LRFSeedLib.addLot(lib, { key: 'v:a-variety-of-the-check', unit: 'seeds', quantity: 10, status: 'usable' }, ctx), 'A variety of the check')"); wait(600)
+    page.locator("#libSearch").click(); page.keyboard.type("q"); wait(150)
+    js("$('libSearch').dispatchEvent(new Event('change', { bubbles: true }));"); page.keyboard.press("Control+z"); wait(700)
+    same_box = js("return { focus: document.activeElement === $('libSearch'), value: $('libSearch').value, ...saved() }")
+    check("in a box that stays where it is, once its typing is taken the keys are the planner's again: Ctrl+Z undoes the plan and leaves the box's words", made2 and same_box["focus"] and same_box["value"] == "q" and same_box["key"] == key0 and same_box["undo"] == [], same_box)
+    js("$('libSearch').value = ''; $('libSearch').dispatchEvent(new Event('input', { bubbles: true })); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); S.redo.length = 0;")
+
     js("A.select(null); A.setView('map')"); wait(400)
     end = js("return saved()")
     check("after all of it the plan is the one the check started from, with nothing to undo", end["key"] == key0 and end["undo"] == [], end)

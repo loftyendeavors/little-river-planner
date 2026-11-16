@@ -1,0 +1,14 @@
+{
+ "build": "The undo and redo keys in a box: while a box holds typing the plan has not taken, Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z are left to the box, where they take back that typing. They used to take back or redo the last change to the plan from inside any box. Once the typing is taken, and outside a box, and with a list box or a tick in focus, they are the planner's as before. No date, yield, price, seed count or bench figure changes.",
+ "words": [],
+ "code": [
+  "main.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "index.html",
+  "sw.js"
+ ],
+ "screens": []
+}
