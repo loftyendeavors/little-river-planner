@@ -25,7 +25,7 @@
     $('seasonYear').textContent = App.planYear();
     const plan = App.state.plan, info = plan.lrfNext || {};
     const waits = App.waiting().length;
-    $('buildNote').textContent = `Preview 0.51 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
+    $('buildNote').textContent = `Preview 0.52 · ${plan.plantings.length} plantings${waits ? `, ${waits} more to place` : ''} · ${info.sample ? 'sample plan' : info.from ? `loaded from ${info.from} on ${String(info.importedAt).slice(0, 10)}` : info.backup ? `started from your backup of ${String(info.backup).slice(0, 10)}` : ''} · ${info.lastExport ? `last backup downloaded ${String(info.lastExport).slice(0, 10)}` : 'no backup downloaded yet'}`;
   });
   // A browser that holds no plan says so across the page, in every view, with the two ways to bring one in.
   // The same strip speaks for a stored plan that would not open: it is kept as it is until he chooses what to do.
@@ -97,8 +97,11 @@
   document.addEventListener('keydown', e => {
     const typing = /^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') && e.target.type !== 'range';
     const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? App.redo() : App.undo(); return; }
-    if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); App.redo(); return; }
+    // In a box that is typed in, the undo and redo keys are the box's own: they take back typing, never the plan's last change.
+    // (A list box or a tick has no typing to take back, so there the keys are the planner's, as they are anywhere outside a box.)
+    const writing = typing && e.target.tagName !== 'SELECT' && !['checkbox', 'radio', 'button', 'file'].includes(e.target.type);
+    if (mod && !writing && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? App.redo() : App.undo(); return; }
+    if (mod && !writing && e.key.toLowerCase() === 'y') { e.preventDefault(); App.redo(); return; }
     // Escape with a sheet or dialog open closes that, and nothing behind it
     if (e.key === 'Escape' && document.querySelector('dialog[open]')) return;
     // (the series tool is a form: Escape leaves it from inside its fields too, and nothing is added)

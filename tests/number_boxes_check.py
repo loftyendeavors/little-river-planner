@@ -276,6 +276,35 @@ with sync_playwright() as pw:
     check("in a number box of the layout, the wheel and the arrows move no ground and step no figure: the bed, its length and the plan are what they were", bool(w) and a["log"] == ["wheel", "ArrowUp", "ArrowDown", "ArrowDown"] and a["value"] == w["value"] and place() == before and b["key"] == key0 and b["undo"] == [], {"box": w, "at the keys": a if w else None, "after": b if w else None, "bed": [before, place()] if w else None})
     shot("layout"); js("LRFMapEdit.close();"); wait(400); undo_all()
 
+    # ══ (the same rule for two keys) Ctrl+Z and Ctrl+Y: in a box that is typed in they are the box's own and take back typing; anywhere
+    # else they are the planner's. They used to be taken before the page asked whether a box had the focus, so the key meant for a
+    # slip of typing took back the last change to the plan. One change is made first, so that there is something to undo. ══
+    js("A.select(null); A.setView('map')"); wait(400)
+    made = js("return !!A.editStock('A lot, filed by the check', (lib, ctx) => LRFSeedLib.addLot(lib, { key: 'v:a-variety-of-the-check', unit: 'seeds', quantity: 10, status: 'usable' }, ctx), 'A variety of the check')"); wait(600)
+    one = js("return saved()")
+    typed = False
+    if page.locator("#libSearch").count() and page.locator("#libSearch").first.is_visible():
+        page.locator("#libSearch").click(); page.keyboard.type("abc"); wait(200); typed = js("return $('libSearch').value") == "abc"
+        page.keyboard.press("Control+z"); wait(500)
+    inbox = js("return { value: $('libSearch').value, focus: document.activeElement === $('libSearch'), ...saved(), redo: S.redo.length }")
+    check("with a change to the plan waiting to be undone, Ctrl+Z in a box that is being typed in takes back the typing and leaves the plan as it is", made and typed and len(one["undo"]) == 1 and inbox["focus"] and inbox["value"] != "abc" and same(inbox, one) and inbox["redo"] == 0, [one, inbox])
+    js("$('libSearch').value = ''; $('libSearch').dispatchEvent(new Event('input', { bubbles: true }));"); away(); page.keyboard.press("Control+z"); wait(700)
+    out = js("return { ...saved(), redo: S.redo.length }")
+    check("outside a box Ctrl+Z is the planner's, as before: the last change to the plan is taken back", out["key"] == key0 and out["undo"] == [] and out["redo"] == 1, out)
+    page.locator("#libSearch").click(); page.keyboard.press("Control+y"); page.keyboard.press("Control+Shift+z"); wait(500)
+    held = js("return { focus: document.activeElement === $('libSearch'), ...saved(), redo: S.redo.length }")
+    check("in a box the redo keys, Ctrl+Y and Ctrl+Shift+Z, put nothing back into the plan", held["focus"] and held["key"] == key0 and held["undo"] == [] and held["redo"] == 1, held)
+    away(); page.keyboard.press("Control+y"); wait(700)
+    again = js("return { ...saved(), redo: S.redo.length }")
+    check("outside a box Ctrl+Y redoes it", same(again, one) and again["redo"] == 0, again)
+    # a list box has no typing to take back: with one in focus the key is the planner's, as it is on a button or on the page
+    js("A.setView('assume'); document.querySelector('[data-as-mode=days]').click();"); wait(700)
+    on_list = js("const s = [...document.querySelectorAll('#asBody select')].find(drawn); if (!s) return false; s.focus(); return document.activeElement === s && s.tagName === 'SELECT';")
+    page.keyboard.press("Control+z"); wait(700)
+    lst = js("return { ...saved(), redo: S.redo.length }")
+    check("with a list box in focus, which has no typing to take back, Ctrl+Z is the planner's", on_list and lst["key"] == key0 and lst["undo"] == [] and lst["redo"] == 1, [on_list, lst])
+    js("if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); S.redo.length = 0;")
+
     js("A.select(null); A.setView('map')"); wait(400)
     end = js("return saved()")
     check("after all of it the plan is the one the check started from, with nothing to undo", end["key"] == key0 and end["undo"] == [], end)

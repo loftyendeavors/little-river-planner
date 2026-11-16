@@ -32,6 +32,9 @@ KEYS = "if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && numberBox(e.target
 FREE = "    letGo();   // a key pressed in the same moment as the wheel is typed like any other\n"
 WHICH = "const numberBox = el => !!el && el.tagName === 'INPUT' && el.type === 'number';"
 GUARD = "if (!numberBox(box) || box.readOnly || box !== document.activeElement) return;"
+UNDO = "if (mod && !writing && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? App.redo() : App.undo(); return; }"
+REDO = "if (mod && !writing && e.key.toLowerCase() === 'y') { e.preventDefault(); App.redo(); return; }"
+WRITING = "const writing = typing && e.target.tagName !== 'SELECT' && !['checkbox', 'radio', 'button', 'file'].includes(e.target.type);"
 PAGE = [
  ("the wheel steps a box that has been clicked", MN, HOLD, HOLD.replace("box.readOnly = true; ", "")),
  ("the wheel is stopped at the box: the figure keeps, and the page no longer scrolls under it", MN, HOLD, "e.preventDefault();\n  }, { capture: true, passive: false });"),
@@ -42,6 +45,10 @@ PAGE = [
  ("the arrows are kept from every other handler", MN, KEYS, "if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); }"),
  ("the rule holds only for the boxes of the Assumptions list", MN, WHICH, WHICH.replace("el.type === 'number'", "el.type === 'number' && !!el.dataset.hk")),
  ("the wheel makes a box that cannot be edited into one to type in", MN, GUARD, GUARD.replace("box.readOnly || ", "")),
+ ("Ctrl+Z in a box takes back the plan's last change", MN, UNDO, UNDO.replace("!writing && ", "")),
+ ("Ctrl+Y in a box redoes the plan", MN, REDO, REDO.replace("!writing && ", "")),
+ ("with a list box in focus the undo key is lost", MN, WRITING, WRITING.replace("typing && e.target.tagName !== 'SELECT' && ", "typing && ")),
+ ("the undo and redo keys are lost outside a box too", MN, WRITING, "const writing = true;"),
 ]
 if mode == "list": print(json.dumps({"page": len(PAGE)})); sys.exit(0)
 faults = PAGE
