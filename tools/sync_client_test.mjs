@@ -1,5 +1,6 @@
 // The planner's sync client (js/sync.js) and the sync Worker's own code together, in Node: two or three "browsers" with
-// made-up plans, a stand-in bucket, and no network. usage: node tools/sync_client_test.mjs [dir holding sync.js]
+// made-up plans, a stand-in bucket, and no network.
+// usage: node tools/sync_client_test.mjs [dir holding sync.js and merge.js] [dir holding the build before's sync.js]
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +8,10 @@ import worker from '../worker/lrf-plan-sync.js';
 import { fakeBucket } from './fake_r2.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url)), require = createRequire(import.meta.url);
-const Sync = require(path.resolve(process.argv[2] || path.join(here, '..', 'js'), 'sync.js'));
+const DIR = path.resolve(process.argv[2] || path.join(here, '..', 'js'));
+const Sync = require(path.join(DIR, 'sync.js')), Merge = require(path.join(DIR, 'merge.js'));
+// the build before's client, where it is given: it stands for a page that was not reloaded after a release
+const Before = process.argv[3] ? (() => { const g = globalThis.LRFSync; try { return require(path.resolve(process.argv[3], 'sync.js')); } catch (_) { return null; } finally { globalThis.LRFSync = g; } })() : null;
 const KEY = 'correct horse battery', URL_ = 'https://sync.example', SITE = 'https://loftyendeavors.github.io';
 // The report is printed as the process ends, whatever happens on the way: a line that throws is one failed line, not a silent stop.
 process.on('exit', () => { console.log(results.join('\n')); console.log(results.filter(x => x.startsWith('ok')).length + ' of ' + results.length + ' passed'); });
@@ -26,7 +30,7 @@ function world() {
 }
 const fnv = text => { let x = 2166136261; for (let i = 0; i < text.length; i++) x = Math.imul(x ^ text.charCodeAt(i), 16777619); return (x >>> 0).toString(36); };
 /** A stand-in for the app in one browser. */
-function browser(w, name, plan) {
+function browser(w, name, plan, Impl = Sync) {
   const b = { world: w, name, plan: plan || null, loads: 0, said: [], opened: [], gotPhotos: [], map: null, thumbs: null, held: false, saved: null, timers: [], openOk: true };
   const host = {
     mode: () => (b.held ? 'held' : b.plan ? 'plan' : 'sample'),
@@ -39,7 +43,8 @@ function browser(w, name, plan) {
     loads: () => b.loads, device: () => 'd-' + name, say: m => b.said.push(m)
   };
   const env = { supported: true, fetch: (...args) => w.fetch(...args), storage: { get: () => b.saved, set: v => { b.saved = v; } }, setTimeout: (fn, ms) => { const t = { fn, ms }; b.timers.push(t); return t; }, clearTimeout: t => { b.timers = b.timers.filter(x => x !== t); } };
-  b.make = () => { b.sync = Sync.create(host, env); return b.sync; };
+  b.env = env;
+  b.make = () => { b.sync = Impl.create(host, env); return b.sync; };
   /** Let the waiting timers fire (a send a few seconds after a change, a retry), but not a request's own time limit. */
   b.tick = async () => { for (let i = 0; i < 6; i++) { const due = b.timers.filter(t => t.ms < 400000 && t.ms !== Sync.timing.timeout); if (!due.length) break; b.timers = b.timers.filter(t => !due.includes(t)); for (const t of due) t.fn(); await b.sync.run('settle').catch(() => {}); } return b.sync.info(); };
   b.change = async edit => { b.plan = { ...b.plan, plantings: [...b.plan.plantings, { id: edit }] }; b.sync.touch(); return b.tick(); };
@@ -61,7 +66,19 @@ function stored(b, disk) {
   b.make();
   return b;
 }
-const planOf = (n, tag) => ({ plantings: Array.from({ length: n }, (_, i) => ({ id: `${tag}-${i}`, crop: 'lettuce' })), settings: { year: 2027 } });
+const planOf = (n, tag) => ({ gardens: [], beds: [], plantings: Array.from({ length: n }, (_, i) => ({ id: `${tag}-${i}`, crop: 'lettuce' })), settings: { year: 2027 } });
+/** The same stand-in with a place for the plan kept to compare with (js/kept.js on a page): one record, which a full database refuses. */
+function keeping(b) {
+  b.keptRec = null; b.keptFull = false; b.keptPuts = 0;
+  b.env.kept = {
+    put: async r => { b.keptPuts++; if (b.keptFull) throw new Error('The database is full.'); b.keptRec = { etag: r.etag, key: r.key, at: r.at, bytes: r.text.length, text: r.text }; return b.keptRec; },
+    note: async () => (b.keptRec ? { etag: b.keptRec.etag, key: b.keptRec.key, at: b.keptRec.at, bytes: b.keptRec.bytes } : null),
+    get: async () => (b.keptRec ? { ...b.keptRec } : null),
+    clear: async () => { b.keptRec = null; return true; }
+  };
+  b.make();
+  return b;
+}
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // ── what to do, from what each side holds ──
@@ -212,7 +229,7 @@ await b.sync.dropSnap('snap', 's-abc-123'); check('and deleted', !(await a.sync.
 // ── the seed library's reader borrows the sign-in (since the service's version 2) ──
 {
   const ls = b.sync.linkService(), fresh = browser(w, 'fresh');
-  check('a signed-in device hands the reader the service\'s address, its token and the version the service said', !!ls && ls.base === b.sync.info().url && /^v1\./.test(ls.key) && ls.v === 2 && ls.key !== KEY, ls && { base: ls.base, v: ls.v });
+  check('a signed-in device hands the reader the service\'s address, its token and the version the service said', !!ls && ls.base === b.sync.info().url && /^v1\./.test(ls.key) && ls.v === 3 && ls.key !== KEY, ls && { base: ls.base, v: ls.v });
   check('a device that is not connected hands it nothing', fresh.make().linkService() === null);
 }
 // ── a stored plan that is behind is never sent by itself ──
@@ -269,6 +286,75 @@ const sends = world_ => world_.calls.filter(c => c === 'PUT /plan').length;
   const kept = c4.saved, calls = w9.calls.length; c4.held = true; c4.host.readOnly = () => true;
   c4.sync.rename('Another name'); const i6 = await c4.sync.run('poll'); c4.sync.touch(); await c4.tick();
   check('a window that only shows the plan sends nothing, asks the cloud nothing, and leaves the browser’s note as it was', i6.status === 'held' && c4.saved === kept && w9.calls.length === calls, [i6.status, w9.calls.length - calls]);
+}
+
+// ── the plan kept to compare with: the cloud's plan as it stood when this browser was last in step ──
+{
+  const wk = world(), d = keeping(browser(wk, 'desk', planOf(4, 'k'))), ph = keeping(browser(wk, 'phone'));
+  const fetched = () => wk.calls.filter(c => c === 'GET /plan').length, baseOf = x => JSON.parse(x.saved).base, cloudText = () => wk.text('plan');
+  let i = await d.sync.connect(URL_, KEY, 'Desk');
+  check('the first send keeps the plan as the cloud now holds it, under the cloud\'s stamp', i.status === 'in-step' && i.kept === true && !!d.keptRec && d.keptRec.etag === baseOf(d) && d.keptRec.etag === wk.store.get('plan').etag && d.keptRec.text === (await cloudText()), [i.status, i.kept]);
+  await ph.sync.connect(URL_, KEY, 'Phone');
+  check('a browser that opens the cloud\'s plan keeps that text', !!ph.keptRec && ph.keptRec.etag === baseOf(ph) && ph.keptRec.text === (await cloudText()) && same(JSON.parse(ph.keptRec.text), ph.plan) && ph.sync.info().kept === true);
+  await d.change('k-new');
+  check('each send moves the kept plan with the stamp', d.keptRec.etag === baseOf(d) && d.keptRec.text === (await cloudText()) && JSON.parse(d.keptRec.text).plantings.length === 5 && d.sync.info().kept === true);
+  let n = fetched(); await d.sync.run('poll'); await d.sync.run('poll');
+  check('in step with a plan kept, a look at the cloud fetches no plan', fetched() === n && d.sync.info().status === 'in-step');
+  await ph.sync.run('poll'); await ph.sync.openCloud();
+  const started = ph.keptRec.text, startStamp = ph.keptRec.etag;
+  await d.change('k-desk'); i = await ph.change('k-phone');
+  const k = await ph.sync.keptPlan(), cloudNow = await cloudText();
+  check('when both have changed nothing is sent, and the plan kept is still the one the two started from', i.status === 'conflict' && !!k && k.text === started && k.etag === startStamp && k.etag === baseOf(ph) && !cloudNow.includes('k-phone'), [i.status, !!k]);
+  const joined = Merge.merge(JSON.parse(k.text), ph.plan, JSON.parse(cloudNow)), ids = joined.ok ? joined.plan.plantings.map(x => x.id) : [];
+  check('from it the two plans can be joined: each device\'s change is there, once, and nothing else has moved', joined.ok && ids.filter(x => x === 'k-desk').length === 1 && ids.filter(x => x === 'k-phone').length === 1 && ids.length === JSON.parse(started).plantings.length + 2 && !joined.report.items.length, [joined.ok, joined.why, ids.length]);
+  check('nothing joins them yet: the page still asks which plan to keep, and each plan is as it was', ph.sync.info().status === 'conflict' && (await cloudText()) === cloudNow && !ph.plan.plantings.some(x => x.id === 'k-desk'));
+  await ph.sync.keepMine();
+  check('"keep this plan" keeps what was sent', ph.sync.info().status === 'in-step' && ph.keptRec.etag === baseOf(ph) && ph.keptRec.text === (await cloudText()) && ph.keptRec.text.includes('k-phone'));
+  // a browser that was in step before plans were kept, or whose database was emptied
+  await d.sync.run('poll'); await d.sync.openCloud();
+  const d2 = keeping(browser(wk, 'desk')); d2.saved = d.saved; d2.plan = d.plan; d2.make();
+  n = fetched(); i = await d2.sync.start();
+  check('a browser in step with no plan kept fetches the cloud\'s once, and keeps it', i.status === 'in-step' && i.kept === true && fetched() === n + 1 && !!d2.keptRec && d2.keptRec.etag === baseOf(d2) && d2.keptRec.text === (await cloudText()), [i.status, i.kept, fetched() - n]);
+  await d2.sync.run('poll'); await d2.sync.run('poll');
+  check('and does not fetch it again', fetched() === n + 1);
+  // the page ended between keeping the plan and noting the stamp: what is kept is under another stamp
+  d2.keptRec = { ...d2.keptRec, etag: 'a-stamp-nobody-noted' };
+  check('a plan kept under another stamp than the one this browser is in step with is not the plan to compare with', (await d2.sync.keptPlan()) === null);
+  const d3 = keeping(browser(wk, 'desk')); d3.saved = d2.saved; d3.plan = d2.plan; d3.keptRec = d2.keptRec; d3.make();
+  i = await d3.sync.start();
+  check('at the next start it is replaced by the cloud\'s plan', i.kept === true && d3.keptRec.etag === baseOf(d3) && d3.keptRec.text === (await cloudText()) && !!(await d3.sync.keptPlan()));
+  // the browser's database refuses the write
+  d3.keptFull = true; i = await d3.change('k-no-room');
+  check('a kept plan that cannot be written stops nothing: the change is sent, and the page knows it has no plan to compare with, and why', i.status === 'in-step' && (await cloudText()).includes('k-no-room') && i.kept === false && /full/.test(i.keptNote) && d3.keptRec === null && (await d3.sync.keptPlan()) === null, [i.status, i.kept, i.keptNote]);
+  n = fetched(); await d3.sync.run('poll'); await d3.sync.run('poll'); await d3.sync.run('poll');
+  check('the cloud is asked for the plan once more at most, not at every look', fetched() - n <= 1 && d3.sync.info().status === 'in-step', fetched() - n);
+  d3.keptFull = false; i = await d3.change('k-room-again');
+  check('and the next send keeps it again', i.kept === true && d3.keptRec.text === (await cloudText()) && i.keptNote === '');
+  // a window that only shows the plan keeps nothing; leaving forgets what was kept
+  const puts = d3.keptPuts, was = d3.keptRec; d3.held = true; d3.host.readOnly = () => true;
+  await d3.sync.run('poll'); d3.sync.touch(); await d3.tick();
+  check('a window that only shows the plan writes no kept plan', d3.keptPuts === puts && d3.keptRec === was);
+  d3.held = false; delete d3.host.readOnly; d3.sync.disconnect(); await new Promise(resolve => setTimeout(resolve, 5));
+  check('disconnecting forgets the kept plan', d3.keptRec === null && (await d3.sync.keptPlan()) === null);
+}
+
+// ── a page that was not reloaded after a release meets a plan a newer planner has written (the service's version 3) ──
+for (const [Impl, which] of [[Sync, 'this build'], [Before, 'the build before']]) {
+  const SENTENCE = 'This device is running an older planner. Reload the page.';
+  if (!Impl) { check(`${which}: its client was found`, false, 'give the folder of the build before\'s scripts as the second argument'); continue; }
+  const wo = world(), o = browser(wo, 'old', planOf(3, 'o'), Impl);
+  await o.sync.connect(URL_, KEY, 'Old page');
+  // a newer planner, on another device, writes the plan with its number
+  const note = JSON.parse(o.saved), newer = JSON.stringify({ ...planOf(3, 'o'), plantings: [...planOf(3, 'o').plantings, { id: 'from-the-newer-planner' }] });
+  const res = await wo.fetch(URL_ + '/plan', { method: 'PUT', body: newer, headers: { authorization: 'Bearer ' + note.token, 'x-lrf-base': note.base, 'x-lrf-meta': encodeURIComponent(JSON.stringify({ savedAt: new Date().toISOString(), device: 'd-newer', plantings: 4, m: 99, enc: 'none' })) } });
+  o.plan = { ...o.plan, plantings: [...o.plan.plantings, { id: 'made-on-the-old-page' }] };
+  const sendsBefore = wo.calls.length, info1 = await o.sync.run('change');   // the send a few seconds after a change, and what the page shows right after it
+  check(`${which}, as an older page: its send is refused, the service's sentence is what it shows, and the cloud's plan is untouched`, res.status === 200 && info1.status === 'error' && info1.error === SENTENCE && (await wo.text('plan')) === newer && wo.calls.length > sendsBefore, [res.status, info1.status, info1.error]);
+  check(`${which}, as an older page: it stays signed in, and keeps its own change`, /"token":"v1\./.test(o.saved) && o.sync.info().configured && o.plan.plantings.some(x => x.id === 'made-on-the-old-page'));
+  const info2 = await o.sync.run('poll');
+  const kept = await o.sync.keepMine(), info3 = o.sync.info();
+  check(`${which}, as an older page: at its next look it asks which plan to keep, and "keep this plan" is refused the same way`, info2.status === 'conflict' && kept === false && info3.status === 'error' && info3.error === SENTENCE && (await wo.text('plan')) === newer && ![...wo.store.keys()].some(x => x.startsWith('snap/auto-')), [info2.status, kept, info3.status]);
+  check(`${which}, as an older page: it can still open the cloud's plan`, (await o.sync.openCloud()) === true && o.plan.plantings.some(x => x.id === 'from-the-newer-planner') && o.sync.info().status === 'in-step');
 }
 
 // ── leaving ──

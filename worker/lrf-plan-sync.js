@@ -19,24 +19,30 @@
  *   GET    /snap/<id>   PUT /snap/<id>   DELETE /snap/<id>
  *   GET    /fetch?url=…      a seed supplier's product page (or, with &kind=image, a product photo), for the seed library's reader
  *
- * Three rules:
+ * Four rules:
  *   1. A write never lands on a plan the sender has not seen. Every PUT /plan names the stamp (etag) of the plan
  *      it replaces; if the bucket holds a different one, nothing is written and the sender is told what is there.
  *   2. Nothing is lost by a write. The plan as it stood at the end of each earlier day is kept (30 days), and a
- *      plan replaced on purpose over a different one is kept as a snapshot first.
+ *      plan replaced on purpose over a different one is kept as a snapshot first. Since version 3, so is a plan
+ *      replaced by one that joins two devices' changes (the sender's note says `merged`): the last 10 of those,
+ *      and the first of each hour for a day. That way back does not depend on the joining being right.
  *   3. The passphrase is the only thing between the internet and the plan, so guesses are counted. Five tries in
  *      fifteen minutes, then /login is shut for fifteen minutes, then thirty, doubling to a day. The count is
  *      taken before the answer is given, one request at a time, so a burst of guesses gets no more tries than
  *      a slow one. A device that is already signed in is not affected: it carries a token, not the passphrase.
+ *   4. An older planner does not write over a newer one's plan (since version 3). A planner says how much it knows
+ *      about a plan's book-keeping with a number in its note (`m`; a planner that says nothing is 0). Once the plan
+ *      stored here carries a number, a send that carries a lower one is refused, in a sentence the older page shows
+ *      as it is. It is refused with 409, which leaves that page signed in. Fetching the plan is not refused.
  *
  * Browsers are answered only from the planner's own address. The plan is never logged.
  */
 const PLANNERS = ['https://loftyendeavors.github.io'];
-const LIMITS = { plan: 8 * 1024 * 1024, file: 16 * 1024 * 1024, meta: 1800, days: 30, autos: 20, snaps: 300 };
+const LIMITS = { plan: 8 * 1024 * 1024, file: 16 * 1024 * 1024, meta: 1800, days: 30, autos: 20, snaps: 300, merges: 10, mergeHours: 24 };
 const GUARD = { key: 'guard', tries: 5, window: 15 * 60, lock: 15 * 60, longest: 24 * 3600, forget: 24 * 3600 };
 const TOKEN = { life: 180 * 24 * 3600, renew: 7 * 24 * 3600 };
 const FILES = { map: true, thumbs: true };
-const VERSION = 2;
+const VERSION = 3;
 
 const isLocal = origin => /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 const allowedOrigin = origin => PLANNERS.includes(origin) || isLocal(origin);
@@ -122,9 +128,11 @@ function readMeta(request) {
   try { meta = JSON.parse(decodeURIComponent(raw)); } catch (_) { return null; }
   if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null;
   const out = {};
-  for (const key of ['savedAt', 'device', 'label', 'name', 'enc', 'why']) if (typeof meta[key] === 'string') out[key] = meta[key].slice(0, 120);
-  for (const key of ['plantings', 'waiting', 'year', 'bytes']) if (Number.isFinite(meta[key])) out[key] = meta[key];
+  for (const key of ['savedAt', 'device', 'label', 'name', 'enc', 'why', 'line']) if (typeof meta[key] === 'string') out[key] = meta[key].slice(0, 120);
+  for (const key of ['plantings', 'waiting', 'year', 'bytes', 'n']) if (Number.isFinite(meta[key])) out[key] = meta[key];
+  if (Number.isInteger(meta.m) && meta.m > 0 && meta.m < 1000) out.m = meta.m;   // how much of a plan's book-keeping the sending planner knows (rule 4)
   if (meta.auto === true) out.auto = true;
+  if (meta.merged === true) out.merged = true;                                   // this plan joins two devices' changes (rule 2)
   return JSON.stringify(out).length > LIMITS.meta ? null : out;
 }
 const metaOf = obj => { try { return JSON.parse((obj && obj.customMetadata && obj.customMetadata.m) || '{}'); } catch (_) { return {}; } };
@@ -158,6 +166,18 @@ async function prune(bucket, objects, keep) {
   if (old.length) await bucket.delete(old.slice(0, 40));
 }
 
+/**
+ * The plans kept because a joined plan replaced them: the newest LIMITS.merges stay, and so does the first of each hour of
+ * the last LIMITS.mergeHours. A day of two devices is some hundreds of joins: without the hours, the plan of this morning
+ * would be gone by noon.
+ */
+async function pruneMerges(bucket, now) {
+  const all = (await listAll(bucket, 'snap/merge-')).map(o => o.key).sort(), keep = new Set(all.slice(-LIMITS.merges));
+  const since = 'snap/merge-' + new Date((now - LIMITS.mergeHours * 3600) * 1000).toISOString().replace(/[:.]/g, '-'), hours = new Set();
+  for (const key of all) { const hour = key.slice(0, 'snap/merge-0000-00-00T00'.length); if (key >= since && !hours.has(hour)) { hours.add(hour); keep.add(key); } }
+  const old = all.filter(key => !keep.has(key));
+  for (let i = 0; i < old.length; i += 40) await bucket.delete(old.slice(i, i + 40));
+}
 async function putPlan(request, env, origin, now) {
   const base = request.headers.get('x-lrf-base') || '', replace = request.headers.get('x-lrf-replace') === '1', meta = readMeta(request);
   if (!base) return json(400, { error: 'Say which plan this one replaces (x-lrf-base).' }, origin);
@@ -165,9 +185,13 @@ async function putPlan(request, env, origin, now) {
   const bytes = await body(request, LIMITS.plan);
   if (!bytes) return json(413, { error: 'The plan is empty or larger than this service stores.' }, origin);
   const bucket = env.PLAN, there = await bucket.head('plan');
+  // an older planner does not write over a newer one's plan, whatever it names and even "on purpose": it is told to reload
+  if (there && (metaOf(there).m || 0) > (meta.m || 0)) return json(409, { error: 'This device is running an older planner. Reload the page.', plan: stamp(there) }, origin);
   if ((base === 'none') !== !there || (there && there.etag !== base)) return json(412, { error: 'changed', plan: stamp(there) }, origin);
   if (there) {
-    const was = metaOf(there), wasDay = dayOf(was.savedAt), stampNow = new Date().toISOString().replace(/[:.]/g, '-') + '-' + Math.random().toString(36).slice(2, 6);
+    const was = metaOf(there), wasDay = dayOf(was.savedAt), stampNow = new Date(Date.now()).toISOString().replace(/[:.]/g, '-') + '-' + Math.random().toString(36).slice(2, 6);   // from the same clock as `now`: the kept plans are thinned by their names
+    // a plan replaced by one that joins two devices' changes is kept whole first
+    if (meta.merged === true && !replace) { await copy(bucket, 'plan', `snap/merge-${stampNow}`, { ...was, name: 'The plan in the cloud before two devices’ changes were joined', auto: true, at: new Date(now * 1000).toISOString() }); await pruneMerges(bucket, now); }
     // a plan replaced on purpose over a different one is kept whole, whatever the day
     if (replace) { await copy(bucket, 'plan', `snap/auto-${stampNow}`, { ...was, name: 'The plan in the cloud before it was replaced', auto: true, at: new Date(now * 1000).toISOString() }); await prune(bucket, (await listAll(bucket, 'snap/auto-')), LIMITS.autos); }
     // the first save of a day: the plan as it was left on its last day goes into the daily copies
@@ -260,7 +284,7 @@ async function route(request, env, origin, url, now) {
     const key = `${m[1]}/${m[2]}`;
     if (method === 'GET') { const obj = await bucket.get(key); return obj ? send(obj, origin) : json(404, { error: 'That snapshot is not stored here.' }, origin); }
     if (method === 'DELETE') { await bucket.delete(key); return json(200, { ok: true }, origin); }
-    if (method === 'PUT' && m[1] === 'snap' && !m[2].startsWith('auto-')) {
+    if (method === 'PUT' && m[1] === 'snap' && !m[2].startsWith('auto-') && !m[2].startsWith('merge-')) {
       const meta = readMeta(request), bytes = await body(request, LIMITS.plan);
       if (!meta || !meta.name) return json(400, { error: 'A snapshot needs a name.' }, origin);
       if (!bytes) return json(413, { error: 'The snapshot is empty or larger than this service stores.' }, origin);

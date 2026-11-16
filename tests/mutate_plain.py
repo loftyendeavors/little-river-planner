@@ -60,7 +60,7 @@ WORKER = [
  ("a plain http address is fetched", "worker/lrf-plan-sync.js", "if (u.protocol !== 'https:' || u.username", "if (u.username"),
  ("a picture is handed back as a page", "worker/lrf-plan-sync.js", "if (image ? !type.startsWith('image/') : !/(text\\/html|application\\/xhtml|application\\/json|text\\/plain)/.test(type)) return { status: 415,", "if (false) return { status: 415,"),
  ("the final address is not said", "worker/lrf-plan-sync.js", "'content-type': result.type, 'x-lrf-final-url': result.final } });", "'content-type': result.type } });"),
- ("the service still says it is version 1", "worker/lrf-plan-sync.js", "const VERSION = 2;", "const VERSION = 1;"),
+ ("the service still says it is version 1", "worker/lrf-plan-sync.js", "const VERSION = 3;", "const VERSION = 1;"),
  ("extra sites are ignored", "worker/lrf-plan-sync.js", "return [...SITES, ...extra];", "return [...SITES];"),
  ("the browser may not send the reader's header", "worker/lrf-plan-sync.js", "x-lrf-base, x-lrf-key, x-lrf-meta,", "x-lrf-base, x-lrf-meta,"),
  ("the client hands the reader its passphrase-less token to nobody", "js/sync.js", "const linkService = () => (configured() && cfg.token ? { base: cfg.url, key: cfg.token, v: cfg.v || 0 } : null);", "const linkService = () => null;"),

@@ -18,7 +18,7 @@
   root.LRFBackupUI.init();
   // The build's label, in one place. The header's chip says it from the first moment; the line at the foot of the Backup menu
   // says it with the plan's own facts. The checks read it from this line (tests/env.sh). js/changes.js holds what each build did.
-  const BUILD_NOTE = `Preview 0.53 · `;
+  const BUILD_NOTE = `Preview 0.54 · `;
   root.LRFChanges.init(BUILD_NOTE.replace(' · ', ''));
 
   for (const button of document.querySelectorAll('[data-view-btn]')) button.addEventListener('click', () => App.setView(button.dataset.viewBtn));
