@@ -411,6 +411,140 @@ for (const [Impl, which] of [[Sync, 'this build'], [Before, 'the build before']]
   check(`${which}, as an older page: it can still open the cloud's plan`, (await o.sync.openCloud()) === true && o.plan.plantings.some(x => x.id === 'from-the-newer-planner') && o.sync.info().status === 'in-step');
 }
 
+// ── two devices that both changed the plan: joined, record by record (the switch, the order of taking in, the messages) ──
+/** A device that can join: the merge's own code on the plan it holds, a plan kept first, a save that can be refused, a page that can be busy. */
+function joining(b) {
+  Object.assign(b, { befores: [], took: [], busy: false, saveFails: false, joins: 0 });
+  b.host.idle = () => !b.busy;
+  b.host.join = async (startText, theirsText) => {
+    b.joins++;
+    const r = Merge.joinTexts(startText, JSON.stringify(b.plan), theirsText);
+    if (!r.ok) return { ok: false, why: r.why };
+    b.befores.push(b.plan);                                              // the plan that was here is kept first
+    if (b.saveFails) return { ok: false, stop: true, why: 'There is no room to save the joined plan.' };
+    b.plan = JSON.parse(r.text); if (b.disk) b.disk = { plan: b.plan, n: b.disk.n + 1 };
+    return { ok: true, same: r.same, key: b.host.key(), taken: r.taken, report: r.report };
+  };
+  b.host.taken = t => b.took.push(t);
+  return b;
+}
+const ids = plan => plan.plantings.map(p => p.id);
+const plus = (b, id) => { b.plan = { ...b.plan, plantings: [...b.plan.plantings, { id }] }; };   // a change made here, not yet sent
+const putsOf = wx => wx.calls.filter(c => c === 'PUT /plan').length, noteOf = b => JSON.parse(b.saved || '{}'), metaOf = wx => JSON.parse(wx.store.get('plan').customMetadata.m);
+async function pair(tag, joinA = true, joinB = true) {
+  const wj = world(), ja = joining(keeping(browser(wj, tag + '-laptop', planOf(3, tag)))), jb = joining(keeping(browser(wj, tag + '-phone')));
+  await ja.sync.connect(URL_, KEY, 'Laptop'); await jb.sync.connect(URL_, KEY, 'Phone');
+  if (joinA) await ja.sync.setJoin(true); if (joinB) await jb.sync.setJoin(true);
+  return { wj, ja, jb };
+}
+{
+  const { wj, ja, jb } = await pair('j1');
+  check('a device starts on "Ask me which plan to keep", and the switch is kept with what this browser remembers', browser(world(), 'fresh', planOf(1, 'f')).sync.info().join === false && ja.sync.info().join === true && noteOf(ja).join === true && ja.sync.info().canJoin === true, ja.sync.info());
+  await ja.change('laptop-moved-a-bed');
+  plus(jb, 'phone-ticked-a-sowing'); jb.sync.touch();
+  let i = await jb.tick();
+  const cloud = JSON.parse(await wj.text('plan')), merges = [...wj.store.keys()].filter(k => k.startsWith('snap/merge-'));
+  check('both changed: the two plans are joined, the joined plan is open here and sent, and neither change is lost', i.status === 'in-step' && ['laptop-moved-a-bed', 'phone-ticked-a-sowing'].every(x => ids(jb.plan).includes(x) && ids(cloud).includes(x)) && jb.joins === 1, [i.status, ids(jb.plan), ids(cloud)]);
+  check('the plan that was here is kept before anything is taken in, and what was taken in is said, with the device it came from', jb.befores.length === 1 && !ids(jb.befores[0]).includes('laptop-moved-a-bed') && jb.took.length === 1 && jb.took[0].from === 'Laptop' && jb.took[0].taken.added === 1 && jb.took[0].same === false, jb.took);
+  check('the joined plan says it is one, and the cloud keeps the plan it replaced', metaOf(wj).merged === true && metaOf(wj).m === Sync.KNOWS && merges.length === 1 && ids(JSON.parse(await wj.text(merges[0]))).includes('laptop-moved-a-bed') && !ids(JSON.parse(await wj.text(merges[0]))).includes('phone-ticked-a-sowing'), [metaOf(wj), merges]);
+  check('the plan to compare with is the joined plan the cloud now holds', jb.sync.info().kept === true && jb.keptRec.text === (await wj.text('plan')) && jb.keptRec.etag === noteOf(jb).base);
+  const puts = putsOf(wj);
+  i = await ja.sync.run('poll');
+  check('the other device, unchanged, takes the joined plan in by itself: nothing is opened whole, and nothing is sent', i.status === 'in-step' && ids(ja.plan).includes('phone-ticked-a-sowing') && ja.opened.length === 0 && ja.took.length === 1 && ja.took[0].same === true && putsOf(wj) === puts, [i.status, ja.opened.length, putsOf(wj) - puts]);
+  await ja.sync.run('poll'); await jb.sync.run('poll'); await ja.tick(); await jb.tick();
+  check('after both hold the same joined plan, further looks send nothing and join nothing', putsOf(wj) === puts && ja.joins === 1 && jb.joins === 1, [putsOf(wj) - puts, ja.joins, jb.joins]);
+  // not while the page is busy
+  await ja.change('laptop-again'); jb.busy = true; plus(jb, 'phone-again'); jb.sync.touch();
+  i = await jb.tick();
+  check('while something is being dragged or a window is open, nothing is taken in: it waits', i.status === 'joining' && jb.joins === 1 && !ids(jb.plan).includes('laptop-again'), [i.status, jb.joins]);
+  jb.busy = false; i = await jb.tick();
+  check('and is taken in at the next pause', i.status === 'in-step' && ids(jb.plan).includes('laptop-again') && ids(JSON.parse(await wj.text('plan'))).includes('phone-again'), [i.status, ids(jb.plan)]);
+  // the joined plan cannot be saved here
+  await ja.sync.run('poll'); await ja.change('laptop-third');
+  const baseWas = noteOf(jb).base, putsWas = putsOf(wj), tookWas = jb.took.length; jb.saveFails = true; plus(jb, 'phone-third'); jb.sync.touch();
+  i = await jb.tick();
+  check('a joined plan that cannot be saved here is not noted and not sent: nothing else happens', i.status === 'error' && noteOf(jb).base === baseWas && putsOf(wj) === putsWas && !ids(jb.plan).includes('laptop-third') && jb.took.length === tookWas, [i.status, i.error]);
+  jb.saveFails = false; i = await jb.sync.run('poll');
+  check('and is joined at the next look, once it can be saved', i.status === 'in-step' && ids(jb.plan).includes('laptop-third') && ids(JSON.parse(await wj.text('plan'))).includes('phone-third'), i.status);
+  // a page that ended after the joined plan was saved here and before it was noted: joined again, to the same plan
+  await ja.sync.run('poll'); await ja.change('laptop-fourth');
+  plus(jb, 'phone-fourth');
+  const half = Merge.joinTexts(jb.keptRec.text, JSON.stringify(jb.plan), await wj.text('plan'));
+  jb.plan = JSON.parse(half.text); jb.sync.touch();
+  i = await jb.tick();
+  const after = ids(JSON.parse(await wj.text('plan')));
+  check('a joined plan saved here and not yet noted is joined again to the same plan: nothing twice, nothing lost', i.status === 'in-step' && after.length === new Set(after).size && ['laptop-fourth', 'phone-fourth'].every(x => after.includes(x)), after);
+  // the cloud moves again while the joined plan is on its way
+  await ja.sync.run('poll'); await ja.change('laptop-fifth');
+  plus(jb, 'phone-fifth'); jb.sync.touch();
+  const real = wj.fetch; let once = true;
+  wj.fetch = async (url, init = {}) => { if (once && (init.method || 'GET') === 'PUT' && String(url).endsWith('/plan') && init.headers && /merged/.test(decodeURIComponent(init.headers['x-lrf-meta'] || ''))) { once = false; wj.fetch = real; await ja.change('laptop-sixth'); } return real(url, init); };
+  i = await jb.tick(); wj.fetch = real; i = await jb.tick();
+  const last = ids(JSON.parse(await wj.text('plan')));
+  check('the cloud moved again while the joined plan was on its way: joined once more, and all three changes are kept', i.status === 'in-step' && ['laptop-fifth', 'laptop-sixth', 'phone-fifth'].every(x => last.includes(x) && ids(jb.plan).includes(x)), [i.status, last.slice(-4)]);
+}
+{ // the switch off: as before there was a join
+  const { wj, ja, jb } = await pair('j2', true, false);
+  await ja.change('laptop-1'); plus(jb, 'phone-1'); jb.sync.touch();
+  const i = await jb.tick();
+  check('on a device left on "Ask me", both changed is the question it always was: nothing joined, nothing sent', i.status === 'conflict' && jb.joins === 0 && !ids(JSON.parse(await wj.text('plan'))).includes('phone-1') && i.join === false);
+  const j = await jb.sync.setJoin(true);
+  check('turned on there, the plan that waited for the choice is joined at once', j.status === 'in-step' && jb.joins === 1 && ['laptop-1', 'phone-1'].every(x => ids(jb.plan).includes(x)), j.status);
+  await jb.sync.setJoin(false); await ja.change('laptop-2'); plus(jb, 'phone-2'); jb.sync.touch();
+  check('and turned off again, it asks again', (await jb.tick()).status === 'conflict' && jb.joins === 1 && noteOf(jb).join === undefined);
+}
+{ // no device joins: what is sent is what was sent before
+  const { wj, ja, jb } = await pair('j3', false, false);
+  await ja.change('laptop-1'); await jb.sync.run('poll'); await jb.sync.openCloud(); await jb.change('phone-1');
+  const m = metaOf(wj);
+  check('where no device is set to join, a plan carries no planner\'s number and no line, and a page of the build before can still send', m.m === undefined && m.line === undefined && m.merged === undefined, m);
+}
+{ // nothing to join from, and a whole plan
+  const wj = world(), ja = joining(keeping(browser(wj, 'j4-laptop', planOf(3, 'j4')))), jb = joining(browser(wj, 'j4-phone'));
+  await ja.sync.connect(URL_, KEY, 'Laptop'); await jb.sync.connect(URL_, KEY, 'Phone'); await ja.sync.setJoin(true); await jb.sync.setJoin(true);
+  await ja.change('laptop-1'); plus(jb, 'phone-1'); jb.sync.touch();
+  let i = await jb.tick();
+  check('a device with no plan kept to compare with does not join: it asks, and says why', i.status === 'conflict' && jb.joins === 0 && /started from|no database|compare/.test(i.joinNote), [i.status, i.joinNote]);
+  // a whole plan loaded on one device is never joined with the plan on another
+  const { wj: w2, ja: a2, jb: b2 } = await pair('j5');
+  a2.plan = planOf(4, 'restored'); a2.loads++; a2.sync.touch(); await a2.tick();
+  const line = metaOf(w2).line;
+  plus(b2, 'phone-1'); b2.sync.touch(); i = await b2.tick();
+  check('a whole plan loaded on another device starts a new line, and is never joined: the page asks', typeof line === 'string' && line.length > 6 && i.status === 'conflict' && b2.joins === 0 && /whole plan/i.test(i.joinNote) && !ids(b2.plan).includes('restored-0'), [line, i.status, i.joinNote]);
+  check('choosing the cloud\'s plan there takes its line, and the two devices join again from it', (await b2.sync.openCloud()) === true && noteOf(b2).line === line);
+  await a2.change('laptop-after'); plus(b2, 'phone-after'); b2.sync.touch(); i = await b2.tick();
+  check('and an ordinary send carries the line on', i.status === 'in-step' && b2.joins === 1 && metaOf(w2).line === line && ['laptop-after', 'phone-after'].every(x => ids(b2.plan).includes(x)), [i.status, metaOf(w2).line]);
+}
+{ // a send whose answer was lost is settled before any join
+  const { wj, ja, jb } = await pair('j6');
+  const real = wj.fetch; let lose = true;
+  wj.fetch = async (url, init = {}) => { const out = await real(url, init); if (lose && (init.method || 'GET') === 'PUT' && String(url).endsWith('/plan')) { lose = false; throw new TypeError('Failed to fetch'); } return out; };
+  plus(ja, 'sown-and-sent'); ja.sync.touch();
+  let i = await ja.sync.run('change');
+  check('a send lands and its answer is lost: this browser waits, still noting the plan before it', i.status === 'waiting' && ids(JSON.parse(await wj.text('plan'))).includes('sown-and-sent') && !!noteOf(ja).sent && noteOf(ja).base !== wj.store.get('plan').etag, [i.status, noteOf(ja).sent]);
+  wj.fetch = real;
+  ja.plan = { ...ja.plan, plantings: ja.plan.plantings.filter(p => p.id !== 'sown-and-sent') };   // and the sowing is undone here before the next look
+  i = await ja.sync.run('retry');
+  check('at the next look the cloud\'s plan is known as this browser\'s own send, not another device\'s: nothing is joined, and what was undone here since is sent as undone', i.status === 'in-step' && ja.joins === 0 && !ids(JSON.parse(await wj.text('plan'))).includes('sown-and-sent') && noteOf(ja).sent === undefined && ja.keptRec.text === (await wj.text('plan')), [i.status, ja.joins, ids(JSON.parse(await wj.text('plan')))]);
+  // a send that never landed is forgotten
+  wj.down = true; plus(ja, 'never-sent'); ja.sync.touch(); await ja.sync.run('change'); wj.down = false;
+  await jb.change('phone-1');
+  i = await ja.sync.run('retry');
+  const landed = ids(JSON.parse(await wj.text('plan')));
+  check('a send that never landed is not taken for the cloud\'s plan: the two are joined', i.status === 'in-step' && ja.joins === 1 && ['never-sent', 'phone-1'].every(x => landed.includes(x)), [i.status, ja.joins]);
+}
+if (Before) { // once a device joins, a page of the build before is told to reload; a page of this build that does not join is not
+  const { wj, ja, jb } = await pair('j7', true, false);
+  const old = browser(wj, 'j7-old', null, Before); await old.sync.connect(URL_, KEY, 'Old page');
+  await ja.change('laptop-1');                                        // carries the planner's number
+  const before = await wj.text('plan');
+  let i = await old.change('old-1');
+  check('once a device that joins has sent, a page of the build before is refused in the service\'s own sentence and stays signed in', i.status !== 'in-step' && (await wj.text('plan')) === before && old.sync.info().configured === true, [i.status, i.error]);
+  await jb.sync.run('poll'); await jb.sync.openCloud();
+  i = await jb.change('phone-1');
+  check('a page of this build left on "Ask me" still sends: it says the planner\'s number once the cloud\'s plan carries one', i.status === 'in-step' && ids(JSON.parse(await wj.text('plan'))).includes('phone-1') && metaOf(wj).m === Sync.KNOWS, [i.status, i.error, metaOf(wj)]);
+}
+
 // ── leaving ──
 a.sync.disconnect();
 check('and after disconnecting the reader gets nothing', a.sync.linkService() === null);

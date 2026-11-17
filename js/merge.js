@@ -142,7 +142,7 @@
     for (const keys of TOGETHER[pat] || []) {
       const at = o => keys.map(k => o[k]), ms = same(at(m), at(s)), ts = same(at(t), at(s)), mt = same(at(m), at(t));
       const from = mt || ms ? t : ts ? m : t;
-      if (!mt && !ms && !ts) said(ctx, { kind: 'same-box', path: path.concat(keys.join('+')), mine: Object.fromEntries(keys.filter(k => m[k] !== undefined).map(k => [k, m[k]])), theirs: Object.fromEntries(keys.filter(k => t[k] !== undefined).map(k => [k, t[k]])) });
+      if (!mt && !ms && !ts) said(ctx, { kind: 'same-box', path: path.concat(keys.join('+')), keys, mine: Object.fromEntries(keys.filter(k => m[k] !== undefined).map(k => [k, m[k]])), theirs: Object.fromEntries(keys.filter(k => t[k] !== undefined).map(k => [k, t[k]])) });
       for (const key of keys) special[key] = from[key];
     }
     return special;
@@ -303,7 +303,7 @@
       else if (mt || ms) from = t;
       else if (ts) from = m;
       else if (theirsRecorded) said(ctx, { kind: 'move-not-applied', path, id, what, whose: 'mine', mine: shown(m), theirs: shown(t) });
-      else said(ctx, { kind: 'same-box', path: path.concat(what), mine: shown(m), theirs: shown(t) });
+      else said(ctx, { kind: 'same-box', path: path.concat(what), keys, mine: shown(m), theirs: shown(t) });
       for (const key of keys) special[key] = from[key];
     }
     together(ctx, pat, path, s0, m, t, special);
@@ -684,23 +684,23 @@
   }
   /**
    * What one plan holds that another did not, counted in a grower's kinds: for the line that says what was taken in.
-   * { added, removed, changed, recorded: { sow: n, … }, lists: ['seedInventory', …] } — plantings added, taken out, changed
-   * other than by work recorded; jobs recorded or taken back, by kind; and the other collections that differ.
+   * { added, removed, changed, recorded: { sow: n, … }, takenBack: { … }, lists: ['seedInventory', …] } — plantings added, taken
+   * out, changed other than by work recorded; jobs recorded, and taken back, by kind; and the other collections that differ.
    */
   function tally(before, after) {
-    const B = new Map(listOf(before, 'plantings').map(p => [p.id, p])), seen = new Set(), out = { added: 0, removed: 0, changed: 0, recorded: {}, lists: [] };
+    const B = new Map(listOf(before, 'plantings').map(p => [p.id, p])), seen = new Set(), out = { added: 0, removed: 0, changed: 0, recorded: {}, takenBack: {}, lists: [] };
     for (const p of listOf(after, 'plantings')) {
       seen.add(p.id);
       const b = B.get(p.id);
       let jobs = 0;
-      for (const kind of new Set([...Object.keys(doneOf(p)), ...Object.keys(doneOf(b))])) if (!same(doneOf(p)[kind], doneOf(b)[kind])) { out.recorded[kind] = (out.recorded[kind] || 0) + 1; jobs++; }
+      for (const kind of new Set([...Object.keys(doneOf(p)), ...Object.keys(doneOf(b))])) if (!same(doneOf(p)[kind], doneOf(b)[kind])) { const to = doneOf(p)[kind] == null ? out.takenBack : out.recorded; to[kind] = (to[kind] || 0) + 1; jobs++; }
       if (!b) out.added++; else if (!jobs && !same(b, p)) out.changed++;
     }
     for (const id of B.keys()) if (!seen.has(id)) out.removed++;
     const a = bare(after), b = bare(before), own = plan => (isObj(plan.lrfNextKeep) && isObj(plan.lrfNextKeep.keep) ? plan.lrfNextKeep.keep : plan.lrfNext) || {};
     for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) if (!['plantings', 'lrfNext', 'lrfNextKeep'].includes(key) && !same(a[key], b[key])) out.lists.push(key);
     for (const key of new Set([...Object.keys(own(a)), ...Object.keys(own(b))])) if (!same(own(a)[key], own(b)[key])) out.lists.push('own.' + key);
-    out.any = !!(out.added || out.removed || out.changed || Object.keys(out.recorded).length || out.lists.length);
+    out.any = !!(out.added || out.removed || out.changed || Object.keys(out.recorded).length || Object.keys(out.takenBack).length || out.lists.length);
     return out;
   }
   /**
@@ -717,7 +717,17 @@
     return { ok: true, plan: alike ? theirs : r.plan, text: alike ? theirsText : JSON.stringify(r.plan), same: alike, taken: tally(mine, r.plan), report: r.report };
   }
 
-  const api = { merge, verify, unkeyed, same, tally, bare, joinTexts, WHOLE, NO_IDS, TOGETHER };
+  /**
+   * One record, or one of a plan's collections, joined by the same rules: { value, items }. `place` is where it stands in a plan
+   * ("plantings[]", "assumptions", "lrfNext.groups"). The planner's undo uses it to take one step's changes out of a record
+   * another device has changed since: the record after the step is the start, the record before it one side, the record now the other.
+   */
+  function joinOne(place, start, mine, theirs) {
+    const report = { items: [], dropped: [] }, ctx = { report, rules: RULES, order: [], sowings: new Map() };
+    return { value: join(ctx, place, [place], start, mine, theirs), items: report.items };
+  }
+
+  const api = { merge, verify, unkeyed, same, tally, bare, joinTexts, joinOne, WHOLE, NO_IDS, TOGETHER, PLACE, TIME };
   root.LRFMerge = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -38,17 +38,69 @@
     if (done) UI.toast('The cloud now holds this plan. The one it held is kept there as a snapshot.');
     return done;
   }
+  /** The switch: "Keep both, record by record" on this device, or "Ask me which plan to keep". Turned on, the plan is kept first: a named snapshot (it goes to the cloud) and a backup file. */
+  let switching = false;
+  async function setJoin(on) {
+    if (switching) return false;
+    const c = App.syncInfo();
+    if (on === c.join) return true;
+    if (on) {
+      if (!c.canJoin) { UI.toast('The sync service in your Cloudflare is older than version 3. Plans are joined once it is updated.'); return false; }
+      const ok = await UI.confirm({ title: 'Keep both devices’ changes?', body: 'When this device and another have both changed the plan, the two are joined record by record instead of asking which plan to keep: a sowing ticked on one and a bed moved on the other are both kept. Where both changed the same thing, the other device’s stands and yours is shown, to put back with one press. First a snapshot is taken and a backup file is downloaded. This is set on each device, and can be turned off here at any time.', confirmLabel: 'Take the snapshot and turn it on' });
+      if (!ok) return false;
+      switching = true; drawSync();
+      try {
+        const snap = await App.snapshot(`Before joining plans from two devices, ${UI.day(new Date())}`);
+        if (!snap) { UI.toast('The snapshot could not be taken, so nothing was turned on.'); return false; }
+        await App.exportBackup();
+      } finally { switching = false; }
+    }
+    await sync().setJoin(!!on);
+    UI.toast(on ? 'On this device, plans from two devices are now joined record by record.' : 'On this device, the planner asks which plan to keep again.');
+    drawSync();
+    return true;
+  }
+  /** What the last taking-in could not keep as each device left it, one row a thing. */
+  let diffDlg = null;
+  function openDiffered() {
+    const j = App.joined();
+    if (diffDlg || !j || !j.rows.length) return;
+    const list = h('ul.snap-list', { id: 'joinList', dataset: { hook: 'join-list' } });
+    const close = () => { if (!diffDlg) return; diffDlg = null; el.close(); el.remove(); };
+    const el = h('dialog.dialog.bk.snaps', { id: 'joinDlg', oncancel: e => { e.preventDefault(); close(); } },
+      closeBtn('joinClose', () => close()), h('h2', `Changed on both devices`),
+      h('p.dlg-lead', { id: 'joinLead' }, ''), list,
+      h('p.dlg-hint', 'The plan as it stood here just before is under Backup, Snapshots.'),
+      h('div.dialog-actions', h('button.btn.primary', { type: 'button', id: 'joinDone', onclick: () => { App.doneJoined(); close(); } }, 'Done')));
+    diffDlg = { el, list, close };
+    document.body.append(el); drawDiffered(); el.showModal();
+  }
+  function drawDiffered() {
+    const d = diffDlg, j = App.joined();
+    if (!d) return;
+    if (!j) { d.close(); return; }
+    $('joinLead').textContent = `Taken in from ${j.from} ${when(new Date(j.at).toISOString())}. Where both devices changed the same thing, ${j.from === 'another device' ? 'the other device’s' : j.from + '’s'} stands.`;
+    d.list.replaceChildren(...j.rows.map(r => h('li.snap-row', { dataset: { hook: 'join-row', used: r.used ? '1' : '' } },
+      h('div.snap-what', h('b.snap-name', r.what), h('span.bk-facts', h('span', r.where)),
+        r.note ? h('small.snap-fine', r.note) : h('small.snap-fine', r.used ? `Yours is back: ${r.mine}` : `Now ${r.theirs}. Yours was ${r.mine}.`)),
+      h('div.snap-acts', r.item ? h('button.btn.small', { type: 'button', dataset: { hook: 'join-use' }, title: 'Puts your value back, as a change of its own', onclick: () => { App.useMine(r.item); } }, 'Use mine') : null))));
+  }
   function strip() {
-    const host = $('syncStrip'), c = App.syncInfo(), show = App.state.ready && (c.status === 'conflict' || !!c.offer);
+    const host = $('syncStrip'), c = App.syncInfo(), j = App.joined(), told = App.state.ready && !!j && j.rows.length > 0 && c.status !== 'conflict' && !c.offer, show = App.state.ready && (c.status === 'conflict' || !!c.offer || told);
     if (App.windowState()) { host.hidden = true; host.replaceChildren(); return; }   // not in a window that only shows the plan: nothing can be chosen there
     host.hidden = !show;
     if (!show) { host.replaceChildren(); return; }
     const busy = !!c.busy, btn = (id, label, run, kind) => h('button.btn' + (kind ? '.' + kind : ''), { type: 'button', id, disabled: busy, onclick: run }, label);
     host.classList.toggle('bad', c.status === 'conflict');
-    if (c.status === 'conflict') {
+    if (told) {
+      host.setAttribute('aria-label', 'Changes from another device were taken in');
+      host.replaceChildren(
+        h('p', { id: 'syncStripText' }, h('b', `Changes from ${j.from} were taken in.`), ` ${UI.num(j.rows.length)} thing${j.rows.length === 1 ? ' was' : 's were'} changed on both devices.`),
+        h('div.first-run-actions', btn('stripDiffered', 'See what differed', openDiffered, 'primary'), btn('stripJoinDone', 'Done', () => App.doneJoined())));
+    } else if (c.status === 'conflict') {
       host.setAttribute('aria-label', 'The cloud and this browser hold different plans');
       host.replaceChildren(
-        h('p', { id: 'syncStripText' }, h('b', c.first ? 'The cloud already holds a plan, and so does this browser.' : 'The cloud and this browser hold different plans.'), ' Nothing is sent or replaced until you choose. ',
+        h('p', { id: 'syncStripText' }, h('b', c.first ? 'The cloud already holds a plan, and so does this browser.' : 'The cloud and this browser hold different plans.'), ' Nothing is sent or replaced until you choose. ', c.join && c.joinNote ? h('span', { id: 'syncStripWhy' }, `They were not joined: ${c.joinNote} `) : null,
           h('span.bk-pair', h('span.bk-label', 'In the cloud'), cloudFacts(c.cloud)), h('span.bk-pair', h('span.bk-label', 'Here'), h('span.bk-facts', h('span', h('b', UI.num(hereCount())), ' plantings'), c.first ? null : h('span', 'changed since the last sync')))),
         h('div.first-run-actions', btn('stripOpen', 'Open the cloud’s plan', openCloud), btn('stripKeep', 'Keep this plan, and save it over the cloud’s', keepMine)));
     } else {
@@ -135,12 +187,14 @@
     }
     // set up: what each side holds, and the one thing to do about it
     const here = App.state.unreadable ? 'the stored plan could not be opened' : App.isSample() ? 'no plan of yours yet (the sample)' : null;
-    const stateLine = { 'in-step': 'In step with the cloud', sending: 'Sending the plan…', receiving: 'Opening the cloud’s plan…', checking: 'Looking at the cloud…', waiting: 'Changes are waiting for a connection', conflict: 'A different plan from the cloud’s', newer: 'Older than the cloud’s plan', error: 'Not syncing', empty: 'Nothing sent yet', held: 'Not syncing' }[c.status] || '';
+    const stateLine = { 'in-step': 'In step with the cloud', sending: 'Sending the plan…', joining: 'Taking in another device’s changes…', receiving: 'Opening the cloud’s plan…', checking: 'Looking at the cloud…', waiting: 'Changes are waiting for a connection', conflict: 'A different plan from the cloud’s', newer: 'Older than the cloud’s plan', error: 'Not syncing', empty: 'Nothing sent yet', held: 'Not syncing' }[c.status] || '';
     const row = (name, id, ...value) => h('div.bk-row', h('span.bk-name', name), h('span.bk-value', { id }, value));
     const busy = !!c.busy, act = [];
     let note = null;
     if (c.status === 'conflict') {
-      note = h('p.bk-note.bad', { id: 'syncNote2' }, h('b', c.first ? 'Both hold a plan.' : 'Both have changed.'), ' Plans are never merged. Nothing is sent or replaced until you choose one.');
+      note = h('p.bk-note.bad', { id: 'syncNote2' }, h('b', c.first ? 'Both hold a plan.' : 'Both have changed.'),
+        c.join ? ` They were not joined${c.joinNote ? ': ' + c.joinNote : '.'} Nothing is sent or replaced until you choose one.` : ' Nothing is sent or replaced until you choose one.',
+        !c.join && c.cloudJoined && !c.first ? h('span', { id: 'syncJoinHint' }, ' The cloud’s plan was joined from two devices on another device. ', h('button.btn.small', { type: 'button', id: 'syncJoinHere', disabled: busy || switching, onclick: () => setJoin(true) }, 'Turn it on here')) : null);
       act.push(h('button.btn', { type: 'button', id: 'syncOpen', disabled: busy, onclick: openCloud }, 'Open the cloud’s plan'), h('button.btn', { type: 'button', id: 'syncKeep', disabled: busy, onclick: keepMine }, 'Keep this plan, and save it over the cloud’s'));
     } else if (c.status === 'newer') {
       note = h('p.bk-note', { id: 'syncNote2' }, h('b', 'Another device has saved a newer plan.'), ' Nothing has been changed here since the last sync, so opening it loses nothing.');
@@ -150,16 +204,20 @@
     } else if (c.status === 'waiting') note = h('p.bk-note', { id: 'syncNote2' }, h('b', 'The cloud could not be reached.'), ' The plan is saved in this browser and is sent when there is a connection.');
     else if (c.status === 'error') note = h('p.bk-note.bad', { id: 'syncNote2' }, h('b', 'Cloud sync failed.'), ' ', c.error);
     const label = h('input', { id: 'syncLabel', type: 'text', maxLength: 40, autocomplete: 'off', value: c.label, placeholder: deviceGuess() || 'Work laptop', onchange: e => s.rename(e.target.value) });
+    const way = (id, on, text) => h('button.btn.small' + (c.join === on ? '.primary' : ''), { type: 'button', id, disabled: busy || switching, 'aria-pressed': String(c.join === on), onclick: () => setJoin(on) }, text);
+    const j = App.joined();
     UI.add(UI.clear(body),
       h('div.bk-rows',
         row('Service', 'syncHost', h('span.bk-mono', c.url.replace(/^https?:\/\//, ''))),
         row('In the cloud', 'syncCloud', c.cloud ? cloudFacts(c.cloud) : c.status === 'checking' ? 'looking…' : 'no plan yet'),
         row('In this browser', 'syncHere', here ? here : h('span.bk-facts', h('span', h('b', UI.num(hereCount())), ' plantings')), stateLine ? h('span.bk-state', { id: 'syncState', dataset: { state: c.status } }, stateLine) : null),
-        row('This device', 'syncDevice', label)),
+        row('This device', 'syncDevice', label),
+        row('When two devices have both changed the plan', 'syncJoin', h('span.bk-facts', { role: 'group', 'aria-label': 'When two devices have both changed the plan' }, way('syncJoinOn', true, 'Keep both, record by record'), way('syncJoinOff', false, 'Ask me which plan to keep'))),
+        j ? row('Last taken in', 'syncTaken', h('span.bk-facts', h('span', 'from ', h('b', j.from), ' ', when(new Date(j.at).toISOString())), j.line ? h('span', j.line) : null, j.rows.length ? h('button.btn.small', { type: 'button', id: 'syncDiffered', onclick: openDiffered }, `See what differed (${UI.num(j.rows.length)})`) : null)) : null),
       note,
       act.length ? h('div.bk-choice', act) : null,
       c.photoNote ? h('p.dlg-hint', { id: 'syncPhotoNote' }, `The photos could not be synced this time (${c.photoNote}). The plan itself is not affected.`) : null,
-      h('p.dlg-hint', 'A change made here is sent a few seconds later. If another device has saved in the meantime, nothing is overwritten: the page asks which plan to keep. The cloud also keeps the plan as it stood at the end of each of the last 30 days.'),
+      h('p.dlg-hint', { id: 'syncHow' }, c.join ? 'A change made here is sent a few seconds later. If another device has saved in the meantime, the two plans are joined record by record and what was taken in is said; where that cannot be done safely, the page asks which plan to keep. The plan here is kept as a snapshot before anything is taken in, and the cloud keeps the plan a joined one replaces.' : 'A change made here is sent a few seconds later. If another device has saved in the meantime, nothing is overwritten: the page asks which plan to keep. The cloud also keeps the plan as it stood at the end of each of the last 30 days.'),
       d.status,
       h('div.dialog-actions',
         h('button.btn', { type: 'button', id: 'syncLeave', disabled: busy, onclick: leave }, 'Disconnect…'), h('span.grow'),
@@ -206,7 +264,7 @@
     const got = await App.snapshots();
     if (!snapDlg || turn !== d.turn) return;
     d.take.disabled = App.isSample() || !!App.state.unreadable || !got.available; d.name.disabled = d.take.disabled;
-    $('snapRules').textContent = `The planner also takes one by itself at the start of each day the plan is changed, and before anything that replaces the whole plan. Its newest 20 are kept. A named one is kept until you delete it${c.configured ? ', and is copied to the cloud' : ''}.`;
+    $('snapRules').textContent = `The planner also takes one by itself at the start of each day the plan is changed, and before anything that replaces the whole plan. Its newest 20 are kept${c.join ? ', and beside them the plan as it stood before each taking-in of another device’s changes (the newest 5, and the first of each hour for a day)' : ''}. A named one is kept until you delete it${c.configured ? ', and is copied to the cloud' : ''}.`;
     d.note.textContent = !got.available ? 'This browser gives the page no database to keep snapshots in (a private window does that). Download a backup instead.' : App.isSample() ? 'This is the sample plan. Snapshots are of your own plan.' : got.cloudNote;
     d.note.hidden = !d.note.textContent;
     if (!got.rows.length) { d.list.replaceChildren(h('li.snap-empty', { id: 'snapEmpty' }, 'None yet.')); return; }
@@ -231,7 +289,7 @@
     btn.hidden = !c.supported;
     if ($('firstCloud')) $('firstCloud').hidden = !c.supported;
     note.textContent = !c.configured && c.status === 'signin' ? 'Needs the passphrase again' : !c.configured ? 'Keep a copy off this computer, for a second computer or a phone' :
-      { 'in-step': c.savedAt ? `In step · sent ${when(c.savedAt)}` : 'In step', sending: 'Sending…', receiving: 'Opening the cloud’s plan…', checking: 'Looking…', waiting: 'Waiting for a connection', conflict: 'The cloud holds a different plan: choose', newer: 'A newer plan is in the cloud', error: 'Not syncing: see why', empty: 'Connected · nothing sent yet', held: 'Connected · not syncing' }[c.status] || 'Connected';
+      { 'in-step': c.savedAt ? `In step · sent ${when(c.savedAt)}` : 'In step', sending: 'Sending…', joining: 'Taking in another device’s changes…', receiving: 'Opening the cloud’s plan…', checking: 'Looking…', waiting: 'Waiting for a connection', conflict: 'The cloud holds a different plan: choose', newer: 'A newer plan is in the cloud', error: 'Not syncing: see why', empty: 'Connected · nothing sent yet', held: 'Connected · not syncing' }[c.status] || 'Connected';
     $('snapBtn').hidden = !App.snapshotsKept();
   }
   function init() {
@@ -243,7 +301,8 @@
     App.on('plan', () => { menu(); strip(); windowStrip(); if (syncDlg && App.syncInfo().configured) drawSync(); });
     App.on('window', () => { strip(); windowStrip(); });
     App.on('snaps', drawSnaps);
+    App.on('joined', () => { strip(); drawDiffered(); if (syncDlg && App.syncInfo().configured) drawSync(); });
     menu();
   }
-  root.LRFBackupUI = { init, openSync, openSnaps, openCloud, keepMine };
+  root.LRFBackupUI = { init, openSync, openSnaps, openCloud, keepMine, setJoin, openDiffered };
 })(window);

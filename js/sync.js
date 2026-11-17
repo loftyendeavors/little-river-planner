@@ -4,7 +4,15 @@
  *
  *   a change made here is sent a few seconds later, and lands only if the cloud still holds the plan this browser
  *   last saw there. If another device has saved since, nothing is sent and nothing is replaced: the page says so and
- *   asks which plan to keep. Plans are never merged.
+ *   asks which plan to keep. That is the whole of it on a device set to "Ask me which plan to keep" (as every device starts).
+ *
+ *   on a device set to "Keep both, record by record" (`join`, set on each device), a plan another device has sent is joined
+ *   with the plan here instead (js/merge.js, through the app), from the plan the two started from: taken in when the page is
+ *   idle, said, and what is new here sent on. Whenever that cannot be done safely, the page asks as above: there is no plan to
+ *   compare with, the service is older than version 3, the cloud's plan is of another line (a whole plan was loaded over it on
+ *   another device: a backup, a snapshot), or the joined plan fails one of the merge's tests. One order, always: join against
+ *   the plan as it stands; keep the plan that was here; save the joined plan in this browser, and stop if that fails; only then
+ *   note being in step with the cloud's plan; then send.
  *
  *   a newer plan in the cloud is opened by itself only at start-up, and only when nothing has been changed here since
  *   the last sync (the plan here is kept as a snapshot first). While the page is in use it is offered, never swapped in.
@@ -20,10 +28,15 @@
  * or from another plan than the one noted when `stored` is false, has a plan that is behind: it is never sent by itself.
  * The page asks which plan to keep. A note that lacks the two words says nothing: not known is never behind.
  *
+ * Three more words are kept for joining. `line`: the plan's line. A send that replaces a whole plan (one loaded over the open
+ * one, or "keep this plan" over the cloud's) starts a new line; every other send carries the line on. Two plans are joined only
+ * when they are of one line. `sent`: what is on its way to the cloud (when it was saved, its fingerprint, its length), noted
+ * before the request: a send whose answer was lost is known again by it at the next look, and is then what this browser is in
+ * step with, not a plan from another device. And every send says `m`, how much of a plan's book-keeping this planner knows,
+ * once a device has been set to join or the cloud's plan carries a number: the service then refuses a planner that knows less.
+ *
  * Beside the note, the plan itself is kept as the cloud held it when this browser was last in step (js/kept.js, in the
- * browser's database): the text that was sent, or the text that was opened. Nothing here reads it yet. It is there so that
- * a plan another device sends can one day be joined with the plan here, record by record, and for that the plan the two
- * started from has to be at hand. It is written after the note, and it counts only while its stamp is the note's: a page
+ * browser's database): the text that was sent, or the text that was opened. It is the plan a join starts from. It is written after the note, and it counts only while its stamp is the note's: a page
  * that ends between the two has a kept plan under an older stamp, which nobody trusts, and fetches the cloud's plan once
  * at its next look to keep it, as a device does that has none. A kept plan that cannot be written stops nothing, and a
  * database that does not answer is waited for once, for a few seconds, and then left alone until the page is opened
@@ -39,11 +52,19 @@
  *   stored()        -> { n, ok }: the count beside the stored plan, and whether the plan open here is in the browser's storage;
  *                   null where that is not known. A host without it is one where it is not known.
  *   readOnly()      true in a window that only shows the plan: nothing is written to what this browser remembers
+ *   idle()          may another device's changes be taken in now? (nothing dragged, no window open, no change this last moment)
+ *   join(startText, theirsText, { from })  -> { ok: true, same, key, taken, report }: the joined plan is open and saved here.
+ *                   `same`: it is the cloud's plan (nothing of this device's to send); `key`: its fingerprint as it was adopted.
+ *                   { ok: false, why } when the plans could not be joined (the page then asks), with `stop: true` when the
+ *                   joined plan could not be saved here (nothing else happens).
+ *   taken({ from, savedAt, taken, report, same })   say what was taken in
  */
 (function (root) {
   'use strict';
   const KEY = 'lrf-next:sync';
-  const timing = { push: 4000, poll: 300000, focus: 60000, timeout: 45000, retry: 30000, retryMost: 300000, kept: 8000 };
+  const timing = { push: 4000, poll: 300000, near: 60000, focus: 60000, timeout: 45000, retry: 30000, retryMost: 300000, kept: 8000, idle: 1500 };
+  /** How much of a plan's book-keeping this planner knows: 1, lines and joined plans. The service refuses a send from a planner that knows less than the plan stored. */
+  const KNOWS = 1;
 
   /** What to do, from what each side holds. base: the cloud stamp this browser is in step with; cloud: the stamp there now. */
   function decide({ base, cloud, dirty, sample, behind }) {
@@ -88,7 +109,7 @@
     const listeners = [];
     let cfg = {};
     try { cfg = JSON.parse(store.get() || '{}') || {}; } catch (_) { cfg = {}; }
-    const st = { status: cfg.url && cfg.token ? 'checking' : cfg.url ? 'signin' : 'off', cloud: null, files: null, first: false, error: '', until: null, checkedAt: 0, busy: false, snoozed: null, loads: 0, tries: 0, photoNote: '', kept: undefined, keptNote: '', keptTried: null, keptOff: false };
+    const st = { status: cfg.url && cfg.token ? 'checking' : cfg.url ? 'signin' : 'off', cloud: null, files: null, first: false, error: '', until: null, checkedAt: 0, busy: false, snoozed: null, loads: 0, tries: 0, photoNote: '', kept: undefined, keptNote: '', keptTried: null, keptOff: false, joinNote: '' };
     // the plan as the cloud held it when this browser was last in step (js/kept.js); null where the browser keeps no database
     const kept = env.kept !== undefined ? env.kept : root.LRFKept && root.indexedDB ? root.LRFKept.create('') : null;
     let timer = null, again = null, running = null;
@@ -109,7 +130,8 @@
     function info() {
       return { supported: env.supported !== undefined ? !!env.supported : supported(), configured: configured(), url: cfg.url || '', label: cfg.label || '', status: st.status, cloud: st.cloud, first: st.first, error: st.error, until: st.until,
         savedAt: cfg.savedAt || null, busy: st.busy, checkedAt: st.checkedAt, offer: st.status === 'newer' && !!st.cloud && st.cloud.etag !== st.snoozed, photoNote: st.photoNote,
-        kept: !!cfg.base && st.kept === cfg.base, keptNote: st.keptNote };
+        kept: !!cfg.base && st.kept === cfg.base, keptNote: st.keptNote,
+        join: !!cfg.join, canJoin: (cfg.v || 0) >= 3, joinNote: st.joinNote, cloudJoined: !!(st.cloud && st.cloud.meta && st.cloud.meta.merged) };
     }
     /** What the browser's database answers, or a refusal if it has not answered in time: some browsers have left a page waiting for good. */
     const answered = promise => { let t; return Promise.race([promise, new Promise((_, reject) => { t = later(() => { st.keptOff = true; reject(new Error('The browser’s database did not answer.')); }, timing.kept); })]).finally(() => cancel(t)); };
@@ -170,6 +192,7 @@
       if (res.status === 401) throw problem('signin', 'The cloud needs the passphrase again.');
       if (res.status === 429) throw problem('locked', `Too many wrong passphrases have been tried. The service takes no passphrase until ${clock(said.until)}.`, said);
       if (res.status === 412) throw problem('changed', 'The cloud holds a different plan.', said);
+      if (res.status === 409 && said.plan && typeof said.error === 'string') throw problem('older', said.error, said);   // the plan stored was written by a planner that knows more
       if (res.status === 404 && typeof said.error === 'string' && /stored here/.test(said.error)) throw problem('missing', said.error, said);
       throw problem('server', typeof said.error === 'string' && said.error !== 'signin' ? said.error : res.status === 404 || res.status === 405 ? 'That address did not answer like the plan sync service.' : `The sync service answered with an error (${res.status}).`, said);
     }
@@ -178,14 +201,20 @@
     const readMeta = res => { try { return JSON.parse(decodeURIComponent(res.headers.get('x-lrf-meta') || '%7B%7D')); } catch (_) { return {}; } };
 
     /** Send the plan open here, on condition that the cloud still holds `base` ('none': holds nothing). */
-    async function push(base, replace) {
+    const cloudKnows = () => (st.cloud && st.cloud.meta && Number.isInteger(st.cloud.meta.m) ? st.cloud.meta.m : 0);
+    const newLine = () => 'l-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    async function push(base, replace, joined) {
       const loads = host.loads();   // with the plan that is taken: a whole plan loaded while this one is on its way is still a plan loaded since
       const was = stored();   // asked in the same turn the plan is taken: whether that very plan is in the browser's storage
       const p = await host.payload(), packed = await pack(p.text);
       set('sending');
-      const meta = { savedAt: p.savedAt, device: host.device(), label: cfg.label || '', plantings: p.plantings, waiting: p.waiting, year: p.year, enc: packed.enc, bytes: p.text.length };
-      const done = await call('PUT', '/plan', { body: packed.bytes, headers: { 'x-lrf-base': base || 'none', 'x-lrf-meta': metaHeader(meta), ...(replace || host.loads() !== st.loads ? { 'x-lrf-replace': '1' } : {}) } });
-      keep({ base: done.plan.etag, key: p.key, savedAt: p.savedAt });
+      // a whole plan put over the cloud's starts a new line; any other send carries the line on, and says so when it joins two devices' changes
+      const whole = !!replace || host.loads() !== st.loads, line = whole ? newLine() : cfg.line || null;
+      const meta = { savedAt: p.savedAt, device: host.device(), label: cfg.label || '', plantings: p.plantings, waiting: p.waiting, year: p.year, enc: packed.enc, bytes: p.text.length,
+        ...(line ? { line } : {}), ...(cfg.join || cloudKnows() ? { m: KNOWS } : {}), ...(joined && !whole ? { merged: true } : {}) };
+      keep({ sent: { savedAt: p.savedAt, key: p.key, bytes: p.text.length, line } });   // before the request: should its answer be lost, the next look knows this send again
+      const done = await call('PUT', '/plan', { body: packed.bytes, headers: { 'x-lrf-base': base || 'none', 'x-lrf-meta': metaHeader(meta), ...(whole ? { 'x-lrf-replace': '1' } : {}) } });
+      keep({ base: done.plan.etag, key: p.key, savedAt: p.savedAt, line, sent: null });
       const now = stored();   // in storage then, or now (the plan open now is that one or one made from it)
       keep(words(now, (was && was.ok) || (now && now.ok))); noted = true; behind = false;
       st.cloud = done.plan; st.first = false; st.snoozed = null; st.loads = loads;
@@ -237,12 +266,45 @@
       try { photos = await fetchPhotos(st.files); } catch (error) { st.photoNote = error.message; }
       const ok = await host.open(text, { image: photos.image, thumbs: photos.thumbs, why: why || 'Before opening the plan from the cloud', from: 'the cloud' });
       if (!ok) return false;
-      keep({ base: etag, key: host.key(), savedAt: meta.savedAt || null, ...photos.etags, extrasKey: await host.extrasKey() });
+      keep({ base: etag, key: host.key(), savedAt: meta.savedAt || null, line: typeof meta.line === 'string' ? meta.line : null, sent: null, ...photos.etags, extrasKey: await host.extrasKey() });
       const now = stored();
       keep(words(now, now && now.ok)); noted = true; behind = false;
-      st.cloud = { ...(st.cloud || {}), etag, meta }; st.first = false; st.snoozed = null; st.loads = host.loads();
+      st.cloud = { ...(st.cloud || {}), etag, meta }; st.first = false; st.snoozed = null; st.loads = host.loads(); st.joinNote = '';
       await keepPlan(etag, text, host.key());
       set('in-step');
+      return true;
+    }
+
+    /**
+     * Join the cloud's plan with the plan here, and take the result in. True when that is what happened (or is waiting for
+     * the page to be idle); false when it cannot be done, and the page then does what it did before there was a join.
+     */
+    async function takeIn() {
+      const no = why => { st.joinNote = why || ''; return false; }, lineOf = meta => (meta && typeof meta.line === 'string' ? meta.line : null);
+      if (!cfg.join || typeof host.join !== 'function' || !cfg.base || behind) return no('');
+      if ((cfg.v || 0) < 3) return no('The sync service is older than version 3, so plans are not joined.');
+      if (lineOf(st.cloud && st.cloud.meta) !== (cfg.line || null)) return no('A whole plan was put in the cloud on another device (a backup or a snapshot loaded, or one plan kept over another). Whole plans are not joined.');
+      if (typeof host.idle === 'function' && !host.idle()) { set('joining'); schedule('join', timing.idle); return true; }
+      const start = await keptPlan();
+      if (!start) return no(st.keptNote || 'This browser has no copy of the plan the two devices started from, so there is nothing to join from.');
+      set('joining');
+      const res = await call('GET', '/plan', { raw: true }), meta = readMeta(res), etag = res.headers.get('x-lrf-etag');
+      const text = await unpack(new Uint8Array(await res.arrayBuffer()), meta.enc);
+      if (lineOf(meta) !== (cfg.line || null)) return no('A whole plan was put in the cloud on another device. Whole plans are not joined.');
+      const got = await host.join(start.text, text, { from: meta.label || '', savedAt: meta.savedAt || null });
+      if (!got || !got.ok) {
+        if (got && got.stop) { st.joinNote = got.why || ''; set('error', got.why || 'The joined plan could not be saved in this browser.'); return true; }   // nothing was noted and nothing is sent
+        return no((got && got.why) || 'The two plans could not be joined.');
+      }
+      // The joined plan is open and saved here. Only now is this browser in step with the plan it was joined with.
+      keep({ base: etag, key: got.same ? got.key : 'joined:' + etag, savedAt: got.same ? meta.savedAt || null : cfg.savedAt || null, sent: null });
+      const now = stored();
+      keep(words(now, now && now.ok)); noted = true; behind = false;
+      st.cloud = { ...(st.cloud || {}), etag, meta }; st.first = false; st.snoozed = null; st.joinNote = '';
+      await keepPlan(etag, text, got.same ? got.key : '');
+      try { if (typeof host.taken === 'function') host.taken({ from: meta.label || '', savedAt: meta.savedAt || null, taken: got.taken || null, report: got.report || null, same: !!got.same }); } catch (_) { /* saying it is not the join */ }
+      if (host.key() !== cfg.key) await push(etag, false, true);   // what this device had of its own, and anything changed here since
+      else { await photosUp(st.files).catch(error => { st.photoNote = error.message; }); set('in-step'); }
       return true;
     }
 
@@ -254,7 +316,15 @@
         // the cloud moved between this browser's last look and its write: nothing was stored. Look again and say what is there.
         st.cloud = (error.detail && error.detail.plan) || null;
         if (!st.cloud) { keep({ base: null }); schedule('recheck', 50); set('checking'); return; }
-        st.first = !cfg.base; set('conflict'); return;
+        st.first = !cfg.base; set('conflict');
+        if (cfg.join && cfg.base) schedule('join', 200);   // the cloud moved again while a joined plan was on its way: once more
+        return;
+      }
+      if (kind === 'older') {
+        // The plan stored carries a planner's number and this send carried none or a lower one. A page of this build that had
+        // not yet seen the number looks again and sends it; a page that knows less is told, in the service's own words.
+        const there = error.detail.plan, m = there && there.meta && Number.isInteger(there.meta.m) ? there.meta.m : 0;
+        if (m <= KNOWS && m > cloudKnows()) { st.cloud = there; set('checking'); schedule('recheck', 50); return; }
       }
       set('error', (error && error.message) || 'Cloud sync failed.');
     }
@@ -283,6 +353,14 @@
           emit();
           const remote = await call('GET', '/state');
           st.cloud = remote.plan || null; st.files = remote.files || null; st.checkedAt = Date.now(); st.tries = 0; noteVersion(remote);
+          if (cfg.sent) {
+            // A send was on its way when this browser last heard from the cloud. If the cloud holds that very send (saved by this
+            // device, at that instant, of that length), its answer was lost: this browser is in step with it, and the plan to
+            // compare with is fetched below. If the cloud holds anything else, that send is forgotten.
+            const m = (st.cloud && st.cloud.meta) || {}, sent = cfg.sent;
+            if (st.cloud && st.cloud.etag !== cfg.base && m.device === host.device() && m.savedAt === sent.savedAt && m.bytes === sent.bytes) { keep({ base: st.cloud.etag, key: sent.key, savedAt: sent.savedAt, line: sent.line || null, sent: null }); }
+            else keep({ sent: null });
+          }
           const dirty = mode === 'plan' && host.key() !== cfg.key;
           if (!dirty) behind = false;   // the plan here is the very one that was noted
           const act = decide({ base: cfg.base || null, cloud: st.cloud && st.cloud.etag, dirty, sample: mode === 'sample', behind });
@@ -291,6 +369,7 @@
           else if (act === 'push') await push(cfg.base);
           else if (act === 'pull') { if (await pull('Before opening the plan from the cloud')) host.say(`Your plan was opened from the cloud: ${what(st.cloud)}.`); else set('newer'); }
           else if (act === 'in-step') { st.first = false; await photosUp(st.files).catch(error => { st.photoNote = error.message; }); await ensureKept().catch(error => { st.keptNote = (error && error.message) || ''; }); set('in-step'); }
+          else if ((act === 'newer' || act === 'conflict') && mode === 'plan' && cfg.join && await takeIn()) { /* joined and taken in, or waiting for the page to be idle */ }
           else if (act === 'newer') {
             if (reason === 'start' || reason === 'connect') { if (await pull()) host.say(`A newer plan was opened from the cloud: ${what(st.cloud)}. The plan that was here is under Backup, Snapshots.`); else set('newer'); }
             else set('newer');
@@ -343,6 +422,11 @@
       return solo(() => push(st.cloud.etag, true));
     }
     const snooze = () => { if (st.cloud) st.snoozed = st.cloud.etag; emit(); };
+    /** "Keep both, record by record" on this device, or "Ask me which plan to keep". Turned on, a plan that waits for the choice is joined at once. */
+    function setJoin(on) {
+      keep({ join: on ? true : null }); st.joinNote = ''; emit();
+      return on && configured() ? run('join') : Promise.resolve(info());
+    }
     /** The app says the plan open here has just been written to the browser's storage. A note this page made while that plan was still on its way there is now true of it. */
     function saved() {
       if (!noted || cfg.stored !== false) return;
@@ -363,15 +447,17 @@
         listening = true;
         root.addEventListener('online', () => { if (configured()) run('online'); });
         if (root.document) root.document.addEventListener('visibilitychange', () => { if (root.document.visibilityState === 'visible' && configured() && Date.now() - st.checkedAt > timing.focus) run('focus'); });
-        if (root.setInterval) root.setInterval(() => { if (configured() && (!root.document || root.document.visibilityState === 'visible') && Date.now() - st.checkedAt > timing.poll * 0.9) run('poll'); }, Math.max(1000, Math.min(timing.poll, 60000)));
+        // while another device has saved today, a device that joins looks every minute, not every five
+        const lively = () => { const m = (st.cloud && st.cloud.meta) || {}; return !!cfg.join && !!m.device && m.device !== host.device() && String(m.savedAt || '').slice(0, 10) === new Date().toISOString().slice(0, 10); };
+        if (root.setInterval) root.setInterval(() => { if (configured() && (!root.document || root.document.visibilityState === 'visible') && Date.now() - st.checkedAt > (lively() ? timing.near : timing.poll) * 0.9) run('poll'); }, Math.max(1000, Math.min(timing.poll, timing.near, 60000)));
       }
       if (!configured()) { emit(); return Promise.resolve(info()); }
       return run('start');
     }
-    return { info, linkService, keptPlan, on: fn => listeners.push(fn), start, run, touch, saved, connect, disconnect, rename, openCloud, keepMine, snooze, snaps, putSnap, getSnap, dropSnap, configured, when, describe: what };
+    return { info, linkService, keptPlan, on: fn => listeners.push(fn), start, run, touch, saved, connect, disconnect, rename, openCloud, keepMine, snooze, setJoin, snaps, putSnap, getSnap, dropSnap, configured, when, describe: what };
   }
 
-  const api = { create, decide, address, pack, unpack, supported, timing, KEY };
+  const api = { create, decide, address, pack, unpack, supported, timing, KEY, KNOWS };
   root.LRFSync = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof self !== 'undefined' ? self : globalThis);

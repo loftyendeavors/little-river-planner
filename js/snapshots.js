@@ -4,13 +4,16 @@
  *   named      taken on purpose ("before releasing pins"). Kept until deleted.
  *   automatic  taken by the planner before anything that replaces the whole plan (restoring a snapshot, opening the
  *              cloud's plan, loading a backup file), and at the start of each day the plan is worked on. The newest 20 are kept.
+ *   before changes from another device were taken in (`join`): the plan as it stood here just before. These are kept apart from
+ *              the 20, so that a day of two devices does not push the start-of-day snapshots out: the newest 5, and the first
+ *              of each hour of the last day.
  *
  * They live in the browser's database, not in the plan and not in the browser's text storage: a snapshot is about a megabyte.
  * No page of the app is touched here; the app hands over the text and asks for it back.
  */
 (function (root) {
   'use strict';
-  const DB = 'lrf-next-snaps', KEEP_AUTO = 20;
+  const DB = 'lrf-next-snaps', KEEP_AUTO = 20, KEEP_JOIN = 5, JOIN_HOURS = 24;
   let opened = null;
   function open() {
     if (opened) return opened;
@@ -46,7 +49,7 @@
   /** Keep a snapshot. @param info { name, auto?, why?, plantings, waiting, year, key?, device?, at?, id?, cloud? } */
   async function add(info, text) {
     if (typeof text !== 'string' || !text.length) throw new Error('There is no plan to keep.');
-    const record = { id: info.id || newId(), name: String(info.name || '').trim().slice(0, 80) || 'Snapshot', at: info.at || new Date().toISOString(), auto: !!info.auto, why: info.why || '',
+    const record = { id: info.id || newId(), name: String(info.name || '').trim().slice(0, 80) || 'Snapshot', at: info.at || new Date().toISOString(), auto: !!info.auto, why: info.why || '', ...(info.join ? { join: true } : {}),
       plantings: +info.plantings || 0, waiting: +info.waiting || 0, year: info.year || null, bytes: text.length, key: info.key || '', device: info.device || '', cloud: !!info.cloud };
     await tx('readwrite', (meta, body) => { meta.put(record); body.put(text, record.id); });
     if (record.auto) await prune();
@@ -62,11 +65,19 @@
     await tx('readwrite', meta => { meta.put(next); });
     return next;
   }
-  /** The automatic ones beyond the newest 20 go. Named ones are never removed here. */
+  /** Of the plans kept before changes were taken in (newest first), the ones to keep: the newest 5, and the first of each hour of the last day. */
+  function joinsKept(joins, now = Date.now()) {
+    const keep = new Set(joins.slice(0, KEEP_JOIN).map(s => s.id)), since = new Date(now - JOIN_HOURS * 3600000).toISOString(), hours = new Set();
+    for (const s of joins.slice().reverse()) { const hour = String(s.at).slice(0, 13); if (s.at >= since && !hours.has(hour)) { hours.add(hour); keep.add(s.id); } }   // oldest first: the first of each hour
+    return keep;
+  }
+  /** The automatic ones beyond the newest 20 go, and the plans kept before a taking-in beyond their own few. Named ones are never removed here. */
   async function prune() {
-    const old = (await list()).filter(s => s.auto).slice(KEEP_AUTO);
+    const all = await list(), joins = all.filter(s => s.auto && s.join), keep = joinsKept(joins);
+    const old = [...all.filter(s => s.auto && !s.join).slice(KEEP_AUTO), ...joins.filter(s => !keep.has(s.id))];
     if (old.length) await tx('readwrite', (meta, body) => { for (const s of old) { meta.delete(s.id); body.delete(s.id); } });
     return old.length;
   }
-  root.LRFSnaps = { available, list, add, text, remove, note, prune, newId, KEEP_AUTO };
+  root.LRFSnaps = { available, list, add, text, remove, note, prune, newId, joinsKept, KEEP_AUTO, KEEP_JOIN };
+  if (typeof module === 'object' && module.exports) module.exports = root.LRFSnaps;
 })(typeof self !== 'undefined' ? self : globalThis);
