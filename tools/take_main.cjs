@@ -29,11 +29,13 @@ if (!REPO || !FONTS) { console.error('usage: node tools/take_main.cjs <repositor
 const git = (...a) => execFileSync('git', ['-C', REPO, ...a], { encoding: 'utf8', maxBuffer: 64 << 20, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const tryGit = (...a) => { try { return git(...a); } catch (_) { return null; } };
 const say = (obj, code) => { console.log(JSON.stringify(obj)); process.exit(code); };
+// whether a merge stands open, asked of git: in a linked worktree .git is a file, and the merge is kept in the worktree's own folder
+const merging = () => { const at = tryGit('rev-parse', '--git-path', 'MERGE_HEAD'); return !!at && fs.existsSync(path.resolve(REPO, at)); };
 // a failure while a merge stands open takes it back when asked to, so that the branch is left as it was
-const fail = why => { if (flag('--abort') && fs.existsSync(path.join(REPO, '.git', 'MERGE_HEAD'))) tryGit('merge', '--abort'); say({ took: null, failed: why }, 1); };
+const fail = why => { if (flag('--abort') && merging()) tryGit('merge', '--abort'); say({ took: null, failed: why }, 1); };
 
 if (tryGit('status', '--porcelain', '--untracked-files=no')) fail('the working tree has changes that are not committed: commit them first');
-if (fs.existsSync(path.join(REPO, '.git', 'MERGE_HEAD'))) fail('a merge is already in progress here');
+if (merging()) fail('a merge is already in progress here');
 // main, as it stands now
 const shallow = tryGit('rev-parse', '--is-shallow-repository') === 'true';
 try { git('fetch', '--no-tags', ...(shallow ? ['--depth=200'] : []), 'origin', '+refs/heads/main:refs/remotes/origin/main'); } catch (error) { fail(`main could not be fetched: ${String(error.stderr || error.message).trim()}`); }
@@ -56,7 +58,7 @@ const was = git('merge-base', 'HEAD', take);   // where the two last agreed: the
 
 // the merge, left open
 const merged = spawnSync('git', ['-C', REPO, 'merge', '--no-ff', '--no-commit', take], { encoding: 'utf8' });
-const stillMerging = fs.existsSync(path.join(REPO, '.git', 'MERGE_HEAD'));
+const stillMerging = merging();
 if (merged.status !== 0 && !stillMerging) fail(`git merge stopped: ${String(merged.stderr || merged.stdout).trim().split('\n').slice(-2).join(' ')}`);
 const WRITTEN = ['js/built.js', 'sw.js'];
 const conflicted = () => (tryGit('diff', '--name-only', '--diff-filter=U') || '').split('\n').filter(Boolean);

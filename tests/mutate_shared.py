@@ -28,6 +28,7 @@ FAULTS = [
   ('a check both sides changed takes main\'s count', S, CP, 'else: v = (a or 0) + (b - (a or 0)) + (c - (a or 0));', 'else: v = c;', 'joined check by check'),
   ('on a branch that already holds main, --commit commits nothing', S, TM, "if (dirty && flag('--commit')) {", 'if (false) {', 'already holds main'),
   ('the counts are joined with tests/counts.py in conflict', S, TM, "const real = conflicted().filter(f => f !== 'tests/counts.json');", "const real = conflicted().filter(f => f !== 'tests/counts.json' && f !== 'tests/counts.py');", 'tests/counts.py itself conflicts'),
+  ('whether a merge is open is read from .git as a folder', S, TM, "const merging = () => { const at = tryGit('rev-parse', '--git-path', 'MERGE_HEAD'); return !!at && fs.existsSync(path.resolve(REPO, at)); };", "const merging = () => fs.existsSync(path.join(REPO, '.git', 'MERGE_HEAD'));", 'in a linked worktree'),
   ('--abort leaves the merge open', S, TM, "if (flag('--abort')) { tryGit('merge', '--abort'); say(", "if (flag('--abort')) { say(", 'a real conflict is named'),
   ('a file in real conflict is taken from main without a word', S, TM, "for (const f of conflicted().filter(f => WRITTEN.includes(f))) {", "for (const f of conflicted()) {", 'a real conflict is named'),
   ('the job that merges is given the key', J, WF, "        env:\n          NUMBER: ${{ matrix.pr.number }}", "        env:\n          GH_TOKEN: ${{ github.token }}\n          NUMBER: ${{ matrix.pr.number }}", '"take" may only read'),

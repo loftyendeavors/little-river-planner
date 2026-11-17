@@ -128,6 +128,14 @@ try {
   git('checkout', '-q', 'd'); const atD = git('rev-parse', 'HEAD');
   r = run('take_main.cjs', '--abort');
   check('when tests/counts.py itself conflicts, it is named as a real conflict and with --abort the branch is as it was', r.code === 3 && !!r.said && JSON.stringify(r.said.conflicts) === '["tests/counts.py"]' && !fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')) && git('rev-parse', 'HEAD') === atD && clean() === '', { r, status: clean() });
+  // in a linked worktree, where .git is a file: the merge is still seen, named and taken back
+  const L = path.join(top, 'linked');
+  git('worktree', 'add', '-q', L, 'c');
+  o = spawnSync('node', [path.join(W, 'tools', 'take_main.cjs'), L, FONTS, '--abort'], { encoding: 'utf8', env }); said = null;
+  try { said = JSON.parse(o.stdout.trim().split('\n').pop()); } catch (_) { said = null; }
+  const linkedHead = execFileSync('git', ['-C', L, 'rev-parse', '--git-path', 'MERGE_HEAD'], { encoding: 'utf8' }).trim();
+  check('in a linked worktree the real conflict is named and with --abort taken back', o.status === 3 && !!said && JSON.stringify(said.conflicts) === '["js/seeds.js"]' && !fs.existsSync(path.resolve(L, linkedHead)) && execFileSync('git', ['-C', L, 'status', '--porcelain'], { encoding: 'utf8' }).trim() === '', { code: o.status, said, err: String(o.stderr).slice(0, 300) });
+  git('worktree', 'remove', '--force', L);
   git('checkout', '-q', 'c');
   r = run('take_main.cjs');
   check('without --abort the merge is left open with only that file to settle', r.code === 3 && !!r.said && JSON.stringify(r.said.conflicts) === '["js/seeds.js"]' && fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')), r);
