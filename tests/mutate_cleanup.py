@@ -32,8 +32,8 @@ PAGE = [
   # (what is put back, file, now, as it was, a word of the line that must fail)
   ("the Backup menu loads “a v7 backup”", 'index.html', '<b>Load a backup…</b>', '<b>Load a v7 backup…</b>', 'Backup menu'),
   ("a download is “a plan file the v7 planner can restore”", 'index.html', '<small>The plan as one file, to keep somewhere safe or load again</small>', '<small>A plan file the v7 planner can restore</small>', 'Backup menu'),
-  ("the label says “Rebuild preview”", 'js/main.js', '`Preview ' + LABEL + ' · ', '`Rebuild preview ' + LABEL + ' · ', 'the build says'),
-  ("the label is another build's", 'js/main.js', '`Preview ' + LABEL + ' · ', '`Preview ' + OTHER + ' · ', 'the build says'),
+  ("the label says “Rebuild preview”", 'js/main.js', '`Preview ${(root.LRFBuilt', '`Rebuild preview ${(root.LRFBuilt', 'the build says'),
+  ("the label is another build's", 'js/built.js', 'label: "' + LABEL + '",', 'label: "' + OTHER + '",', 'the build says'),   # the label is written in js/built.js (tools/shared.cjs)
   ("the Assumptions list speaks of the old planner", 'js/assume.js', 'Some plantings still carry figures of their own, so', 'Some plantings still carry figures from the old planner, so', 'names the planner'),
   ("a tooltip on the Assumptions list speaks of the old planner", 'js/assume.js', "'Plantings that carry nursery weeks of their own that differ", "'Plantings that carry nursery weeks from the old planner that differ", 'names the planner'),
   ("the review window has an “Old copy”", 'js/assume.js', "copy: 'Copied value' }", "copy: 'Old copy' }", 'old copy'),

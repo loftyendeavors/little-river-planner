@@ -16,9 +16,10 @@
   root.LRFAhead.init();
   root.LRFSeries.init();
   root.LRFBackupUI.init();
-  // The build's label, in one place. The header's chip says it from the first moment; the line at the foot of the Backup menu
-  // says it with the plan's own facts. The checks read it from this line (tests/env.sh). js/changes.js holds what each build did.
-  const BUILD_NOTE = `Preview 0.54 · `;
+  // The build's label is written by tools/shared.cjs into js/built.js, with what each build did (the checks read it there too,
+  // tests/env.sh). The header's chip says it from the first moment; the line at the foot of the Backup menu says it with the
+  // plan's own facts.
+  const BUILD_NOTE = `Preview ${(root.LRFBuilt && root.LRFBuilt.label) || '?'} · `;
   root.LRFChanges.init(BUILD_NOTE.replace(' · ', ''));
 
   for (const button of document.querySelectorAll('[data-view-btn]')) button.addEventListener('click', () => App.setView(button.dataset.viewBtn));

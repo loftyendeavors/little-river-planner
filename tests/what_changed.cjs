@@ -42,7 +42,10 @@ check('the build has one file of its own under tests/builds, or none if it chang
 const touched = earlier.filter(f => !fs.existsSync(path.join(BUILDS, f)) || !fs.readFileSync(path.join(BUILDS, f)).equals(fs.readFileSync(path.join(BUILDS0, f))));
 check('the files earlier builds left under tests/builds are as they left them', touched.length === 0, touched);
 
-const list = dir => fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.js')).sort() : [];
+// js/built.js and sw.js are written by tools/shared.cjs from the rest and from the build's own file here; the part "build" holds
+// them to what it writes, so they are left out of what a build has to name
+const WRITTEN = ['built.js'];
+const list = dir => fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.js') && !WRITTEN.includes(f)).sort() : [];
 const read = (dir, f) => fs.readFileSync(path.join(dir, f), 'utf8');
 const JS = path.join(NOW, 'js'), JS0 = path.join(OLD, 'js');
 const a = list(JS), b = list(JS0);
@@ -72,11 +75,11 @@ if (wordsOnly.length) {
 check('in every script named under “words”, only the text inside its strings differs from the build before', notWords.length === 0, notWords);
 // the rest of what a browser is served
 const walk = (root, rel) => { const at = path.join(root, rel); if (!fs.existsSync(at)) return []; return fs.statSync(at).isDirectory() ? fs.readdirSync(at).sort().flatMap(f => walk(root, path.join(rel, f))) : [rel]; };
-const PAGE = ['index.html', 'sw.js', 'manifest.webmanifest', 'css', 'fonts', 'icons'];
+const PAGE = ['index.html', 'manifest.webmanifest', 'css', 'fonts', 'icons'];   // and sw.js, written by tools/shared.cjs (above)
 // under js/, whatever is not one of the scripts compared above: a folder, a file of another kind
 const beside = root => walk(root, 'js').filter(f => !(path.dirname(f) === 'js' && f.endsWith('.js')));
 // and at the root of the site, anything that is not known to stand there: the site serves every file it holds
-const ROOT = [...PAGE, 'js', 'tests', 'tools', 'worker', 'README.md', 'DESIGN.md', 'AGENTS.md', 'node_modules'];   // README.md, DESIGN.md and AGENTS.md are pages about the planner, not of it
+const ROOT = [...PAGE, 'sw.js', 'js', 'tests', 'tools', 'worker', 'README.md', 'DESIGN.md', 'AGENTS.md', 'node_modules'];   // README.md, DESIGN.md and AGENTS.md are pages about the planner, not of it
 const strange = fs.readdirSync(NOW).filter(f => !f.startsWith('.') && !ROOT.includes(f)).flatMap(f => walk(NOW, f));
 const now = [...PAGE.flatMap(x => walk(NOW, x)), ...beside(NOW), ...strange], was = [...PAGE.flatMap(x => walk(OLD, x)), ...beside(OLD)];
 const bytes = (root, f) => fs.readFileSync(path.join(root, f));

@@ -16,8 +16,8 @@ FONTS=$W/scratch/node_modules/@fontsource-variable
 SCRATCH=$W/scratch
 S=${LRF_SHOTS:-$W/shots}
 OFF=$W/offline.html
-# The label is read from the page's own script, so no check has it written in.
-LRF_LABEL=${LRF_LABEL:-$(sed -n 's/.*`Preview \([0-9][0-9.]*\) · .*/\1/p' "$REPO/js/main.js" | head -1)}
+# The label is read from the script the page reads it from, js/built.js (written by tools/shared.cjs), so no check has it written in.
+LRF_LABEL=${LRF_LABEL:-$(sed -n 's/^    label: "\([0-9][0-9.]*\)",$/\1/p' "$REPO/js/built.js" | head -1)}
 export LRF_LABEL
 # Gives a check's result the name its lines are counted under in tests/counts.json:   node some_test.cjs … | named "some test"
 # It reads the last line the check printed: a result with "passed" and "of" (or "checks"), or "N of M passed".

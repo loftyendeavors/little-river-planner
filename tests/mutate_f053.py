@@ -27,7 +27,7 @@ def alone(cmd, timeout, env=None, cwd=None):
             if mark.encode() in open("/proc/%s/environ" % pid, "rb").read().split(b"\0"): os.kill(int(pid), signal.SIGKILL)
         except OSError: pass
     return out, err
-PN, MN, CH, UI, MP, ME, CSS = "js/panels.js", "js/main.js", "js/changes.js", "js/ui.js", "js/map.js", "js/mapedit.js", "css/app.css"
+PN, MN, CH, BT, UI, MP, ME, CSS = "js/panels.js", "js/main.js", "js/changes.js", "js/built.js", "js/ui.js", "js/map.js", "js/mapedit.js", "css/app.css"
 PAGE = [
  ("the header says another build's label", MN, "root.LRFChanges.init(BUILD_NOTE.replace(' · ', ''));", "root.LRFChanges.init('Preview 0.01');"),
  ("the chip is not named for what it opens", CH, "chip.setAttribute('aria-label', `Preview ${running}: what changed`);", ""),
@@ -35,9 +35,9 @@ PAGE = [
  ("at narrow widths the chip keeps the word “Preview”", CSS, "  .build-chip span { display: none; }\n", ""),
  ("above 1400 the chip has no edge", CSS, "min-height: var(--control-in); border: 1px solid var(--line); border-radius: var(--corner-pill); background: none; padding: 0 var(--space-8); font: 500 var(--type-11) var(--mono);", "min-height: var(--control-in); border: 0; border-radius: var(--corner-pill); background: none; padding: 0 var(--space-8); font: 500 var(--type-11) var(--mono);"),
  ("the builds are listed oldest first", CH, "BUILDS.map(b => h('section.wc-build',", "BUILDS.slice().reverse().map(b => h('section.wc-build',"),
- ("the newest entry is not this build's", CH, "  const BUILDS = [\n", "  const BUILDS = [\n    { label: '99.0', on: '2026-01-01', did: 'A build that was never made, put first in the list.', steps: ['Nothing to try.'] },\n"),
+ ("the newest entry is not this build's", BT, "    builds: [\n", "    builds: [\n      { label: '99.0', on: '2026-01-01', did: 'A build that was never made, put first in the list.', steps: ['Nothing to try.'] },\n"),
  ("no build is said to be the one running", CH, "b.label === running ? `${when(b.on)} · this build` : when(b.on)", "when(b.on)"),
- ("a build has four things to try", CH, "h('ol', b.steps.map(step => h('li', step)))", "h('ol', [...b.steps, 'And one more.'].map(step => h('li', step)))"),
+ ("a build has four things to try", CH, "h('ol', b.steps.map(step => h('li', { dataset: { hook: 'changes-step' } }, step)))", "h('ol', [...b.steps, 'And one more.'].map(step => h('li', { dataset: { hook: 'changes-step' } }, step)))"),
  ("the sheet has a × as well as Done", CH, "      h('h2', 'What changed'),\n", "      h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: close }, '×'), h('h2', 'What changed'),\n"),
  ("the list does not scroll: the sheet runs off the window", CSS, ".dialog.wc { width: min(520px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 40px); }", ".dialog.wc { width: min(520px, calc(100vw - 32px)); max-width: none; max-height: none; }"),
  ("nothing is marked “New”", CH, "    const last = seen();\n", "    const last = '999';\n"),

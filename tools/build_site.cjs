@@ -64,7 +64,7 @@ files.push(put('js/pwa.js', `/* Little River Farm Planner — keeps a copy of th
 let html = read('index.html');
 const before = html;
 html = html.replace(/^<link rel="preconnect"[^\n]*\n/gm, '').replace(/^<link href="https:\/\/fonts\.googleapis\.com[^\n]*\n/m, '');
-html = html.replace('<link rel="stylesheet" href="css/app.css">', `<meta name="lrf-build" content="${label}">\n<meta name="theme-color" content="#13241c">\n<link rel="manifest" href="manifest.webmanifest">\n<link rel="apple-touch-icon" href="icons/icon-192.png">\n<link rel="stylesheet" href="css/fonts.css">\n<link rel="stylesheet" href="css/app.css">`);
+html = html.replace('<link rel="stylesheet" href="css/app.css">', `<meta name="theme-color" content="#13241c">\n<link rel="manifest" href="manifest.webmanifest">\n<link rel="apple-touch-icon" href="icons/icon-192.png">\n<link rel="stylesheet" href="css/fonts.css">\n<link rel="stylesheet" href="css/app.css">`);
 html = html.replace('<script src="js/main.js"></script>', '<script src="js/main.js"></script>\n<script src="js/pwa.js"></script>');
 if (html === before || /fonts\.g(oogleapis|static)/.test(html) || !html.includes('js/pwa.js')) throw new Error('index.html was not prepared');
 files.push(put('index.html', html));
