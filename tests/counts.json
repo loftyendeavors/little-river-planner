@@ -143,6 +143,8 @@
 
   "r1": 67,
 
+  "room": 35,
+
   "season": 54,
 
   "step5a": 65,
@@ -234,6 +236,8 @@
 
   "r1-site": 67,
 
+  "room-site": 35,
+
   "step5b-site": 63,
 
   "stepF-site": 47,
@@ -260,6 +264,8 @@
 
   "r1-site @1480": 67,
 
+  "room-site @1480": 35,
+
   "step3a-site @1480": 64,
 
   "step3a-site @1480 dark": 64,
@@ -282,6 +288,8 @@
   "r1-site @3440": 67,
 
   "r1-site dark": 67,
+
+  "room-site @3440": 35,
 
   "step3a-site dark": 64,
 

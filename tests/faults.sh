@@ -44,6 +44,7 @@ windows
 scale
 loose
 f053
+room
 merge
 shape
 shared
@@ -84,6 +85,7 @@ script() {
     scale) SCRIPT=$T/mutate_scale.py; ARGS="$REPO $F" ;;
     loose) SCRIPT=$T/mutate_loose.py; ARGS="$APP $F $T" ;;
     f053) SCRIPT=$T/mutate_f053.py; ARGS="$APP $F $T" ;;
+    room) SCRIPT=$T/mutate_room.py; ARGS="$APP $F $T" ;;
     *) return 1 ;;
   esac
 }
