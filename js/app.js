@@ -2089,7 +2089,7 @@
       let newAttic = false;
       try {
         const had = await loadAttic().catch(() => emptyAttic()), extras = await loadExtras(), text = JSON.stringify(attic);
-        newAttic = text !== JSON.stringify({ ...had, varieties: { ...(had.varieties || {}), ...extras.varieties } }) && (Object.keys(attic.rest || {}).length > 0 || Object.keys(attic.varieties || {}).length > 0);
+        newAttic = text !== JSON.stringify({ ...had, varieties: { ...(had.varieties || {}), ...extras.varieties } });   // an attic the join left empty is a change too: kept, or the record the other device took out would come back from here
         if (newAttic && store.backend !== 'memory') { await store.saveBlob('attic', text); await store.clearBlob('attic-new'); core = { ...core, lrfNext: { ...core.lrfNext, attic: 'cloud' } }; }
       } catch (error) { return { ok: false, stop: true, why: 'The records kept beside the plan could not be saved in this browser, so nothing was taken in.' }; }
       if (state.plan !== plan) continue;
