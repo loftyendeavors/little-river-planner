@@ -11,7 +11,7 @@
 
   "map geometry": 81,
 
-  "merge": 87,
+  "merge": 95,
 
   "page reader": 29,
 
@@ -49,7 +49,7 @@
 
   "succession": 31,
 
-  "sync client": 117,
+  "sync client": 118,
 
   "sync service": 139,
 
@@ -68,7 +68,7 @@
  },
  "build": {
 
-  "sync client, built site": 117,
+  "sync client, built site": 118,
 
   "the built site": 1
 

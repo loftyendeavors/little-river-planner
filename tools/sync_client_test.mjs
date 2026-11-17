@@ -369,6 +369,10 @@ const sends = world_ => world_.calls.filter(c => c === 'PUT /plan').length;
   check('with the plan here made from it, the kept plan is the plan to compare with', !!(await d3.sync.keptPlan()));
   d3.loads++; const afterLoad = await d3.sync.keptPlan(); d3.loads--;
   check('after a whole plan is loaded over the open one, the kept plan is not handed out as the plan it came from', afterLoad === null && !!(await d3.sync.keptPlan()));
+  { // a whole plan loaded while the kept plan is being read: it is not handed out either
+    const get = d3.env.kept.get; let release; d3.env.kept.get = () => new Promise(resolve => { release = () => resolve(get()); });
+    const asked = d3.sync.keptPlan(); await new Promise(resolve => setTimeout(resolve, 1)); d3.loads++; release(); const got = await asked; d3.loads--; d3.env.kept.get = get;
+    check('a whole plan loaded while the kept plan is being read: it is not handed out', got === null && !!(await d3.sync.keptPlan()), got && got.etag); }
   { const wb = world(), c = stored(keeping(browser(wb, 'c', planOf(3, 'c')))); await c.sync.connect(URL_, KEY, 'C'); await c.edit('sent-and-stored');
     c.disk = { plan: { ...c.disk.plan, plantings: c.disk.plan.plantings.slice(0, 2) }, n: c.disk.n - 1 };
     const c2 = c.start(); c2.env.kept = c.env.kept; c2.make(); const ib = await c2.sync.start();

@@ -304,6 +304,40 @@ tryCase('two jobs, one on each device, in an order the planner refuses (sown aft
   return [refused && ok(r) && p.done.field === sooner && !p.done.sow && !p.workflow.seedUse && p.workflow.history.length === 1 && lot(r.plan, LOT).quantity === HELD && said.length === 1 && said[0].job === 'sow' && said[0].against === 'field' && said[0].mine === later
     && ok(free) && planting(free.plan, A1.id).done.sow === later, [refused, r.why, p.done, r.report]];
 });
+// what a third reader found (the pull request says who)
+tryCase('a late sowing sent, its answer lost, then taken back here: the day it had pushed goes back with it', () => {
+  const late = E.d2s(E.addDays(E.s2d(DAY), 9)), d = mine(), sent = record(FARM, A1.id, 'sow', late, d), here = takeBack(sent, A1.id, 'sow', d), r = M.merge(FARM, here, sent);
+  return [planting(sent, A1.id).date !== planting(FARM, A1.id).date && ok(r) && !planting(r.plan, A1.id).done && planting(r.plan, A1.id).date === planting(here, A1.id).date && lot(r.plan, LOT).quantity === HELD, [r.why, planting(r.plan || here, A1.id).date, planting(here, A1.id).date, r.report]];
+});
+tryCase('two jobs given back to the cloud\'s side one after the other: the joined jobs are in an order the planner accepts, and a later job can still be recorded', () => {
+  const sow = E.d2s(E.addDays(E.s2d(DAY), 0)), hard = E.d2s(E.addDays(E.s2d(DAY), 15)), d0 = device('before', 6), s = record(record(FARM, A1.id, 'sow', sow, d0, { follow: false }), A1.id, 'harden', hard, d0, { follow: false });
+  const d = mine(), m = record(record(takeBack(takeBack(s, A1.id, 'harden', d), A1.id, 'sow', d), A1.id, 'sow', E.d2s(E.addDays(E.s2d(DAY), 17)), d, { follow: false }), A1.id, 'harden', E.d2s(E.addDays(E.s2d(DAY), 25)), d, { follow: false });
+  const t = record(s, A1.id, 'field', E.d2s(E.addDays(E.s2d(DAY), 20)), theirs(), { follow: false });
+  const r = M.merge(s, m, t, { order: SL.DONE_ORDER }), p = planting(r.plan, A1.id), inOrder = SL.DONE_ORDER.every(([a, b]) => !p.done[a] || !p.done[b] || p.done[a] <= p.done[b]);
+  let later = true; try { takeBack(r.plan, A1.id, 'field', device('later', 20)); } catch (_) { later = false; }
+  return [ok(r) && inOrder && later && items(r, 'recorded-twice').length >= 2, [r.why, p && p.done, r.report]];
+});
+tryCase('a joined plan whose push was refused can be joined again, as this device\'s plan, with the plan it started from', () => {
+  const m = record(FARM, A1.id, 'sow', DAY, mine()), t = record(FARM, A1.id, 'sow', DAY, theirs()), j = M.merge(FARM, m, t), t2 = setP(t, X1, { note: 'moved again' });
+  const again = M.merge(FARM, j.plan, t2), fromCloud = M.merge(t, j.plan, t2);
+  return [ok(j) && ok(again) && ok(fromCloud) && lot(again.plan, LOT).quantity === HELD - A1.need && planting(again.plan, X1).note === 'moved again', [j.why, again.why, fromCloud.why]];
+});
+tryCase('a joined plan in which a lot ran short can be joined again by either device', () => {
+  const m = record(FARM, T1.id, 'sow', T1.planned, mine()), t = record(FARM, T2.id, 'sow', T2.planned, theirs()), j = M.merge(FARM, m, t);
+  const t2 = countLot(t, SMALL, Math.max(0, lot(t, SMALL).quantity - 1), device('theirs2', 16)), m2 = setP(j.plan, X1, { note: 'm' });
+  const a = M.merge(t, t2, j.plan), b = M.merge(j.plan, m2, setP(j.plan, X2, { note: 't' }));
+  return [ok(j) && items(j, 'seed-short').length === 1 && ok(a) && ok(b) && lot(b.plan, SMALL).quantity === 0, [j.why, a.why, b.why]];
+});
+tryCase('sown here and then taken out of the plan, sown there: the planting is kept, sown once, and the report says this device\'s sowing still drew seed', () => {
+  const d = mine(), m = { ...record(FARM, A1.id, 'sow', DAY, d), plantings: record(FARM, A1.id, 'sow', DAY, d).plantings }, mr = { ...m, plantings: m.plantings.filter(p => p.id !== A1.id) };
+  const t = record(FARM, A1.id, 'sow', DAY, theirs()), r = M.merge(FARM, mr, t), said = items(r, 'sowing-of-removed-planting');
+  return [ok(r) && planting(r.plan, A1.id).done.sow === DAY && said.length === 1 && said[0].whose === 'mine' && said[0].planting.includes(A1.id) && items(r, 'kept').length === 1, [r.why, r.report]];
+});
+tryCase('a sowing taken back here and the planting then taken out, the planting\'s note changed there: joined, the planting kept with the cloud\'s sowing and its seed', () => {
+  const s = record(FARM, A1.id, 'sow', DAY, device('before', 6)), m = takeBack(s, A1.id, 'sow', mine()), mr = { ...m, plantings: m.plantings.filter(p => p.id !== A1.id) };
+  const r = M.merge(s, mr, setP(s, A1.id, { note: 't' }));
+  return [ok(r) && planting(r.plan, A1.id).note === 't' && planting(r.plan, A1.id).done.sow === DAY && lot(r.plan, LOT).quantity === HELD - A1.need && items(r, 'kept').length === 1, [r.why, r.report]];
+});
 tryCase('a plan whose plantings are not all records with ids, each id once, is not joined: nothing of this device is lost under one line of the report', () => {
   const m = setP(FARM, X2, { note: 'mine' }), noted = setP(FARM, X1, { note: 't' });
   const a = M.merge(FARM, m, { ...noted, plantings: [...noted.plantings, null] }), b = M.merge(FARM, m, { ...noted, plantings: [...noted.plantings, noted.plantings[0]] }), c = M.merge(FARM, m, { gardens: [], beds: [], plantings: [null] });
@@ -417,6 +451,10 @@ tryCase('something that is not a plan is not joined', () => {
   check('5. a lot drawn below zero that the report does not name fails', ok(over) && /does not say so/.test(M.verify(FARM, record(FARM, T1.id, 'sow', T1.planned, mine()), record(FARM, T2.id, 'sow', T2.planned, theirs()), tight2, { items: [] })), M.verify(FARM, record(FARM, T1.id, 'sow', T1.planned, mine()), record(FARM, T2.id, 'sow', T2.planned, theirs()), tight2, { items: [] }));
   const s5 = record(FARM, A1.id, 'sow', DAY, device('before', 6)), m5 = takeBack(s5, A1.id, 'sow', mine()), t5 = setP(s5, A1.id, { note: 't' }), j5 = M.merge(s5, m5, t5);
   const left = putPlanting(j5.plan, { ...planting(j5.plan, A1.id), workflow: { ...planting(j5.plan, A1.id).workflow, seedUse: planting(s5, A1.id).workflow.seedUse } });
+  const logOff = { ...good.plan, seedInventory: { ...good.plan.seedInventory, adjustments: good.plan.seedInventory.adjustments.filter(e => !/^Reviewed sowing theirs/.test(e.reason || '')) } };
+  check('5. a joined log that the lots do not follow fails', /does not follow the joined record/.test(v(logOff)) || /not in the joined plan/.test(v(logOff)), v(logOff));
+  const logOnly = { ...good.plan, seedInventory: { ...good.plan.seedInventory, adjustments: [...good.plan.seedInventory.adjustments, { id: 'seed_adjustment_extra', lotId: LOT, kind: 'count', reason: '', before: { quantity: 0 }, after: { quantity: 5 } }] } };
+  check('5. and so does a line in the joined log that no lot follows', /does not follow the joined record/.test(v(logOnly)), v(logOnly));
   check('5. seed lines left on a planting whose sowing was taken back, with the seed back on the lot, fail: the lots are worked a second way, from the lines', ok(j5) && M.verify(s5, m5, t5, j5.plan, j5.report) === '' && /does not add up/.test(M.verify(s5, m5, t5, left, j5.report)), M.verify(s5, m5, t5, left, j5.report));
 }
 

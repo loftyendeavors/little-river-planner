@@ -143,7 +143,8 @@
      */
     async function keptPlan() {
       if (!kept || st.keptOff || !cfg.base || behind || host.loads() !== st.loads) return null;   // a database that did not answer is not waited for again
-      try { const k = await answered(kept.get()); return k && k.etag === cfg.base ? k : null; } catch (_) { return null; }
+      const loads = host.loads(), base = cfg.base;
+      try { const k = await answered(kept.get()); return k && k.etag === base && cfg.base === base && !behind && host.loads() === loads && loads === st.loads ? k : null; } catch (_) { return null; }   // asked again after the wait: a plan loaded or sent meanwhile is not the one it comes from
     }
     const forget = () => { st.kept = undefined; st.keptNote = ''; st.keptTried = null; if (kept && !st.keptOff && !quiet()) Promise.resolve().then(() => kept.clear()).catch(() => {}); };
 

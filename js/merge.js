@@ -194,24 +194,27 @@
       if (mineSame || (sameJob(jm, jt) && same(km, kt))) who = 't';
       else if (theirsSame || (carriesOn(ks, kt) && begins(kt, km))) who = 'm';
       else if (!(carriesOn(ks, km) && begins(km, kt)) && !sameJob(jm, js)) said(ctx, { kind: 'recorded-twice', path, id, job: kind, mine: jm ? jm.date : null, theirs: jt ? jt.date : null });
-      side.set(kind, who); jobs.set(kind, { js, jm, jt });
+      side.set(kind, who); jobs.set(kind, { js, jm, jt, mineMoved: !mineSame, theirsMoved: !theirsSame });
     }
     // two jobs that stand from different sides, in an order the planner refuses on one device: the cloud's stands
-    for (const [first, second] of ctx.order) {
+    // until nothing moves: a job given back to the cloud's side can then be out of order with another
+    for (let moved = true; moved;) { moved = false; for (const [first, second] of ctx.order) {
       if (!side.has(first) || !side.has(second) || side.get(first) === side.get(second)) continue;
       const day = kind => { const j = jobs.get(kind), job = side.get(kind) === 'm' ? j.jm : j.jt; return job ? String(job.date) : null; };
       if (day(first) == null || day(second) == null || day(first) <= day(second)) continue;
       const kind = side.get(first) === 'm' ? first : second, j = jobs.get(kind);
       said(ctx, { kind: 'recorded-twice', path, id, job: kind, mine: j.jm ? j.jm.date : null, theirs: j.jt ? j.jt.date : null, against: kind === first ? second : first });
-      side.set(kind, 't');
-    }
+      side.set(kind, 't'); moved = true;
+    } }
     const done = {};
     let mineStands = false, theirsRecorded = false;
     for (const kind of kinds) {
-      const { js, jm, jt } = jobs.get(kind), who = side.get(kind), job = who === 'm' ? jm : jt;
+      const { jm, jt, mineMoved, theirsMoved } = jobs.get(kind), who = side.get(kind), job = who === 'm' ? jm : jt;
       if (job) done[kind] = job.date;
-      if (who === 'm' && jm && !sameJob(jm, js)) mineStands = true;
-      if (who === 't' && jt && !sameJob(jt, js)) theirsRecorded = true;
+      // a side whose story of a job stands, and differs from the start, has the planting's place and day: a job recorded there
+      // may have pushed the day, and one taken back there may have put it back
+      if (who === 'm' && mineMoved) mineStands = true;
+      if (who === 't' && theirsMoved) theirsRecorded = true;
     }
     // which side's record of each sowing stands: the seed lines below follow it, and so do the lots (settleStock)
     const sowing = new Map();
@@ -255,10 +258,11 @@
   const listOf = (obj, key) => (obj && Array.isArray(obj[key]) ? obj[key].filter(isObj) : []);
   /**
    * The sowing an entry of the change log belongs to: a recorded sowing drawing on a lot, or one taken back. These are the
-   * planner's own words for the two (js/seedlib.js); a check holds the two scripts to them.
+   * planner's own words for the two (js/seedlib.js); a check holds the two scripts to them. The third is written here only:
+   * what a sowing drew beyond what a lot held, when two devices together drew more (settleStock).
    */
   function batchIn(e) {
-    const reason = String(e.reason || ''), found = e.kind === 'use' ? /^Reviewed sowing (\S+): /.exec(reason) : e.kind === 'count' ? /^Sowing (\S+) taken back: /.exec(reason) : null;
+    const reason = String(e.reason || ''), found = e.kind === 'use' ? /^Reviewed sowing (\S+): /.exec(reason) : e.kind === 'count' ? /^Sowing (\S+) taken back: /.exec(reason) || /^Joined: sowing (\S+) drew /.exec(reason) : null;
     return found ? found[1] : null;
   }
   const changeOf = e => (isObj(e.before) && isObj(e.after) ? round6(num(e.after.quantity) - num(e.before.quantity)) : 0);
@@ -290,7 +294,7 @@
     const lotsM = new Map(listOf(iM, 'lots').map(l => [l.id, l])), lotsT = new Map(listOf(iT, 'lots').map(l => [l.id, l]));
     const nS = sowingsOf(iS), nM = sowingsOf(iM), nT = sowingsOf(iT), fromTheirs = new Map(), fromMine = new Map();
     for (const key of new Set([...nS.keys(), ...nM.keys(), ...nT.keys()])) {
-      const [batch, lotId] = key.split('\u0000'), s = nS.get(key) || 0, m = nM.get(key) || 0, t = nT.get(key) || 0, stands = sowingStands(batch, lotId, s, m, t);
+      const [batch, lotId] = key.split('\u0000'), s = nS.get(key) || 0, m = nM.get(key) || 0, t = nT.get(key) || 0, said = sowingStands(batch, lotId, s, m, t), stands = said === 'm' ? m : said === 't' ? t : said;
       fromTheirs.set(lotId, round6((fromTheirs.get(lotId) || 0) + stands - t)); fromMine.set(lotId, round6((fromMine.get(lotId) || 0) + stands - m));
     }
     const mineOnly = ownChanges(iM, iT, iS, false), theirsOnly = ownChanges(iT, iM, iS, false);
@@ -316,8 +320,47 @@
       for (const lot of listOf(iM, 'lots')) { const before = was.get(lot.id); if (before && !near(num(lot.quantity), num(before.quantity) + (did.get(lot.id) || 0))) throw new Error('The seed on hand here does not follow its own record of changes.'); }
     }
     let plantings = plan.plantings;
-    const theirsById = new Map(listOf(theirs, 'plantings').map(p => [p.id, p]));
-    const want = counts(start, mine, theirs, plan, (batch, lotId, s, m, t) => (ctx.sowings.get(batch) === 'm' ? m : ctx.sowings.get(batch) === 't' ? t : byLog(s, m, t))), lots = inv.lots.slice();
+    const theirsById = new Map(listOf(theirs, 'plantings').map(p => [p.id, p])), iT = stockOf(theirs);
+    // Whose record of each sowing stands, so that what it took, and the lines of the change log that say so, come from one side.
+    //   its planting was joined in this merge    the side whose story of that job stood (joinPlanting)
+    //   its planting is in the joined plan       the side whose log agrees with the seed lines the planting ended up with
+    //                                            (a planting kept because one side took it out and the other changed it)
+    //   its planting is in no plan               what only one side changed is that side's (a planting removed after it was sown)
+    const net = (inv, batch) => { let n = 0; for (const e of listOf(inv, 'adjustments')) if (batchIn(e) === batch && e.lotId != null) n = round6(n + changeOf(e)); return n; };
+    const home = new Map(), lines = new Map();
+    for (const side of [start, mine, theirs, plan]) for (const p of listOf(side, 'plantings')) for (const x of linesOf(p, 'history')) if (sowingOf(x) != null) home.set(String(sowingOf(x)), p.id);
+    const placed = new Set(listOf(plan, 'plantings').map(p => p.id));
+    for (const p of listOf(plan, 'plantings')) for (const u of linesOf(p, 'seedUse')) if (isObj(u) && u.lotId != null && batchOf(u) != null) lines.set(String(batchOf(u)), round6((lines.get(String(batchOf(u))) || 0) - num(u.quantity)));
+    const startIds = new Set(listOf(iS, 'adjustments').map(e => e.id)), sideOf = new Map(), unlinked = [];
+    for (const e of [...listOf(iS, 'adjustments'), ...listOf(iM, 'adjustments'), ...listOf(iT, 'adjustments')]) {
+      const batch = batchIn(e);
+      if (batch == null || sideOf.has(batch)) continue;
+      const known = ctx.sowings.get(batch), sN = net(iS, batch), mN = net(iM, batch), tN = net(iT, batch);
+      // where both sides' logs would do, the side that has lines of this sowing the start lacks (recorded and taken back there)
+      const fresh = inv => listOf(inv, 'adjustments').some(x => batchIn(x) === batch && !startIds.has(x.id)), tie = () => (fresh(iM) && !fresh(iT) ? 'm' : 't');
+      if (known) sideOf.set(batch, known);
+      else if (placed.has(home.get(batch))) { const want = lines.get(batch) || 0, t = near(tN, want), m = near(mN, want); sideOf.set(batch, t && m ? tie() : t ? 't' : m ? 'm' : 't'); }
+      else {
+        const who = near(mN, sN) && near(tN, sN) ? tie() : near(mN, sN) ? 't' : near(tN, sN) ? 'm' : 't';
+        sideOf.set(batch, who);
+        if (!home.has(batch) && !near(who === 'm' ? mN : tN, sN)) unlinked.push({ batch, whose: who === 'm' ? 'mine' : 'theirs' });
+      }
+    }
+    // a sowing recorded on a planting that its side then took out, where the other side kept the planting: the seed stays used, and it is said
+    const kept = ctx.report.items.filter(x => x.kind === 'kept' && Array.isArray(x.path) && x.path[0] === 'plantings');
+    for (const u of unlinked) if (kept.some(k => k.removedBy === u.whose)) said(ctx, { kind: 'sowing-of-removed-planting', path: ['seedInventory'], batch: u.batch, whose: u.whose, planting: kept.filter(k => k.removedBy === u.whose).map(k => k.id) });
+    const want = counts(start, mine, theirs, plan, batch => sideOf.get(batch) || 't'), lots = inv.lots.slice();
+    // The change log is joined record by record, so it holds both sides' lines for a sowing recorded on both. Only the lines of the
+    // side whose record stands are kept, and a lot counted by hand on both keeps the cloud's count and the cloud's lines: so that the
+    // joined plan's counts follow its own log, as a plan made on one device does, and it can be joined again.
+    const idsIn = inv => new Set(listOf(inv, 'adjustments').map(e => e.id)), mineIds = idsIn(iM), theirIds = idsIn(iT);
+    const clashed = new Set([...want].filter(([, to]) => to.clash).map(([lotId]) => lotId));
+    let log = Array.isArray(inv.adjustments) ? inv.adjustments.filter(e => {
+      if (!isObj(e)) return true;
+      const batch = batchIn(e), keep = batch != null ? ((sideOf.get(batch) || 't') === 'm' ? mineIds.has(e.id) : theirIds.has(e.id)) : !(clashed.has(e.lotId) && mineIds.has(e.id) && !theirIds.has(e.id) && !startIds.has(e.id));
+      if (!keep) ctx.report.dropped.push(e.id);   // the five tests are told, so that a line left out on purpose is not taken for one lost
+      return keep;
+    }) : inv.adjustments;
     for (let i = 0; i < lots.length; i++) {
       const lot = lots[i], to = isObj(lot) ? want.get(lot.id) : null;
       if (!to) continue;
@@ -326,7 +369,7 @@
       if (q < -1e-6) {
         // more was drawn on two devices than the lot held. What this device's sowings took beyond it becomes seed used without a counted lot.
         let short = round6(-q);
-        const whole = short;
+        const whole = short, beyond = new Map();
         plantings = plantings.slice();
         for (let j = plantings.length - 1; j >= 0 && short > 1e-6; j--) {
           const p = plantings[j], uses = linesOf(p, 'seedUse');
@@ -337,17 +380,27 @@
             if (!(short > 1e-6) || !isObj(u) || u.lotId !== lot.id || !added.has(canon(u))) { next.unshift(u); continue; }
             const part = Math.min(short, num(u.quantity)), left = round6(num(u.quantity) - part);
             short = round6(short - part);
+            if (batchOf(u) != null) beyond.set(String(batchOf(u)), round6((beyond.get(String(batchOf(u))) || 0) + part));
             const loose = { ...u, lotId: null, quantity: part, untracked: true };
             if (left > 1e-6) next.unshift({ ...u, quantity: left }, loose); else next.unshift(loose);
           }
           plantings[j] = { ...p, workflow: { ...p.workflow, seedUse: next } };
         }
         said(ctx, { kind: 'seed-short', path: ['seedInventory', 'lots', '#' + lot.id], id: lot.id, short: whole, loose: round6(whole - short) });
+        // And lines in the log, so that the lot's count still follows it: one for each sowing whose seed was made loose, which belongs
+        // to that sowing (so that its draw in the log is its seed lines), and one for what no sowing of this side could take. Their
+        // ids are made from what they record, so that two devices that join the same two plans write the same lines.
+        if (Array.isArray(log)) {
+          const n = log.filter(e => isObj(e) && e.lotId === lot.id).length, line = (tag, amount, reason) => ({ id: `seed_adjustment_joined_${lot.id}_${tag}_${n}_${Math.round(amount * 1e6)}`, lotId: lot.id, at: null, kind: 'count', reason, before: { ...lot, quantity: 0 }, after: { ...lot, quantity: amount } });
+          const lines = [...beyond].map(([batch, amount]) => line(batch, amount, `Joined: sowing ${batch} drew ${amount} beyond the lot`));
+          if (short > 1e-6) lines.push(line('rest', short, `Joined from two devices: more was drawn than the lot held (${short})`));
+          log = [...log, ...lines];
+        }
         q = 0;
       }
       if (!near(num(lot.quantity), q)) lots[i] = { ...lot, quantity: q };
     }
-    return { ...plan, plantings, seedInventory: { ...inv, lots } };
+    return { ...plan, plantings, seedInventory: { ...inv, lots, ...(Array.isArray(log) ? { adjustments: log } : {}) } };
   }
 
   /**
@@ -428,13 +481,13 @@
     lists(plan, (pat, path, list, a, b) => { const twice = repeats(list); if (twice != null && !why && !(a && repeats(a) != null) && !(b && repeats(b) != null)) why = `An id is there twice in the joined plan (${path.join('.') || 'the plan'}: ${twice}).`; });
     if (why) return why;
     // 3
-    const excused = new Set(items.filter(x => x.kind === 'placed-and-waiting').map(x => String(x.id)));
+    const excused = new Set(items.filter(x => x.kind === 'placed-and-waiting').map(x => String(x.id))), droppedLines = new Set(((report && report.dropped) || []).map(String));
     const whole = items.filter(x => x.kind === 'same-box' && Array.isArray(x.path)).map(x => x.path.join('\u0000') + '\u0000'), under = path => { const at = path.join('\u0000') + '\u0000'; return whole.some(w => at.startsWith(w)); };
     for (const side of [mine, theirs]) {
       eachList('', [], side, [start, plan], (pat, path, list, [before, after]) => {
         if (why) return;
         const was = before ? new Map(before.map(x => [x.id, x])) : new Map(), now = after ? new Set(after.map(x => x.id)) : null;
-        for (const rec of list) if ((!was.has(rec.id) || !same(was.get(rec.id), rec)) && !(now && now.has(rec.id)) && !(excused.has(String(rec.id)) && /waiting$/.test(pat)) && !under(path)) { why = `A record one side added or changed is not in the joined plan (${path.concat('#' + rec.id).join('.')}).`; return; }
+        for (const rec of list) if ((!was.has(rec.id) || !same(was.get(rec.id), rec)) && !(now && now.has(rec.id)) && !(excused.has(String(rec.id)) && /waiting$/.test(pat)) && !(pat === 'seedInventory.adjustments' && droppedLines.has(String(rec.id))) && !under(path)) { why = `A record one side added or changed is not in the joined plan (${path.concat('#' + rec.id).join('.')}).`; return; }
       });
       if (why) return why;
     }
@@ -473,6 +526,12 @@
         if (!near(num(lot.quantity), Math.max(0, to.q))) return `The seed on hand does not add up (${lot.id}: ${lot.quantity}, and it should be ${Math.max(0, to.q)}).`;
         if (to.q < -1e-6 && !items.some(x => x.kind === 'seed-short' && x.id === lot.id)) return `A seed lot was drawn below zero and the report does not say so (${lot.id}).`;
       }
+      // and a third way: each lot's count follows the joined change log, as the cloud's follows the cloud's, so that the joined plan can be joined again
+      const iT = stockOf(theirs), logT = new Map(listOf(iT, 'adjustments').map(e => [e.id, e])), logP = new Map(listOf(inv, 'adjustments').map(e => [e.id, e])), lotsT = new Map(listOf(iT, 'lots').map(l => [l.id, l]));
+      const moved = new Map(), add = (e, sign) => { if (e.lotId != null) moved.set(e.lotId, round6((moved.get(e.lotId) || 0) + sign * changeOf(e))); };
+      for (const [id, e] of logP) if (!logT.has(id)) add(e, 1);
+      for (const [id, e] of logT) if (!logP.has(id)) add(e, -1);
+      for (const lot of listOf(inv, 'lots')) { const was = lotsT.get(lot.id); if (was && lot.deleted !== true && was.deleted !== true && !near(num(lot.quantity), num(was.quantity) + (moved.get(lot.id) || 0))) return `A seed lot's count does not follow the joined record of changes (${lot.id}).`; }
     }
     return '';
   }
@@ -502,9 +561,12 @@
    *   { kind: 'move-not-applied', id, what, whose }        work was recorded on a planting the other side moved: the move is not applied
    *   { kind: 'seed-short', id, short, loose }             two devices drew more from a lot than it held
    *   { kind: 'placed-and-waiting', id }                   placed on one side, changed while waiting on the other: placed
+   *   { kind: 'sowing-of-removed-planting', batch, whose, planting }   a side sowed a planting and then took it out, and the other side kept
+   *                                                        it (`kept`): that sowing's seed stays used. It may be the very sowing the other
+   *                                                        side recorded, which then drew seed twice: that is for the grower to say
    */
   function merge(start, mine, theirs, options) {
-    const report = { items: [] };
+    const report = { items: [], dropped: [] };
     try {
       for (const [plan, name] of [[start, 'at the start'], [mine, 'here'], [theirs, 'in the cloud']]) {
         if (!isObj(plan)) throw new Error(`The plan ${name} is not a plan.`);
