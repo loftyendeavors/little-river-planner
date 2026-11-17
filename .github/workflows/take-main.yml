@@ -1,0 +1,68 @@
+# When main moves, every open pull request from this repository takes it in by itself (tools/take_main.cjs): js/built.js, sw.js
+# and the site written again, tests/counts.json joined check by check, the next label given. A pull request whose code conflicts
+# with main is left as it was, and a comment names the files to settle by hand. It can be started by hand for one branch too.
+# A push made here starts no workflow by itself, so the checks are started for the branch afterwards: "All checks" on its newest
+# commit is still what a merge waits for. How it fits with a chat that is building: tests/README.md, "Two builds side by side".
+name: Take main in
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: The branch of an open pull request (empty for every one)
+        required: false
+permissions:
+  contents: write         # to push the taking in to the pull request's branch
+  pull-requests: write    # to say on the pull request what was done
+  actions: write          # to start the checks for the branch
+concurrency:
+  group: take-main
+  cancel-in-progress: false
+jobs:
+  take:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ONLY: ${{ github.event.inputs.branch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Typefaces for the built site
+        run: |
+          mkdir -p "$RUNNER_TEMP/scratch" && cd "$RUNNER_TEMP/scratch"
+          npm i --no-audit --no-fund --silent @fontsource-variable/bricolage-grotesque @fontsource-variable/instrument-sans @fontsource-variable/jetbrains-mono
+      - name: Every open pull request takes main in
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          FONTS="$RUNNER_TEMP/scratch/node_modules/@fontsource-variable"
+          gh pr list --state open --json number,headRefName,isCrossRepository --jq '.[] | select(.isCrossRepository | not) | "\(.number) \(.headRefName)"' > "$RUNNER_TEMP/prs"
+          while read -r number branch; do
+            [ -n "$ONLY" ] && [ "$ONLY" != "$branch" ] && continue
+            echo "== #$number $branch"
+            git reset -q --hard && git clean -qfd
+            git checkout -q -B "$branch" "origin/$branch"
+            set +e
+            out=$(node tools/take_main.cjs . "$FONTS" --commit --abort 2>&1); code=$?
+            set -e
+            echo "$out"; out=$(printf '%s\n' "$out" | tail -1)
+            if [ $code -eq 0 ] && [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$branch")" ]; then
+              if git push -q origin "HEAD:refs/heads/$branch"; then
+                gh workflow run checks.yml --ref "$branch"
+                gh pr comment "$number" --body "main ($(git rev-parse --short origin/main)) was taken into this branch by itself (\`tools/take_main.cjs\`): $(node -e 'const o=JSON.parse(process.argv[1]); console.log(`the label is now ${o.label}` + (o.counts.length ? `; the counts of ${o.counts.join(", ")} were changed on both sides and are to be confirmed by the run` : ""))' "$out"). The checks are running again on the two together. Pull the branch before your next push."
+              else
+                gh pr comment "$number" --body "main ($(git rev-parse --short origin/main)) could be taken into this branch, but the push was refused (a change to a workflow file cannot be pushed from here). Take it in by hand: \`node tools/take_main.cjs . <fonts>\` (tests/README.md, \"Two builds side by side\")."
+              fi
+            elif [ $code -eq 3 ]; then
+              gh pr comment "$number" --body "main ($(git rev-parse --short origin/main)) could not be taken into this branch by itself: $(node -e 'console.log(JSON.parse(process.argv[1]).conflicts.join(", "))' "$out") conflict in the code, not in the files the merge writes. Settle them by hand (tests/README.md, \"Two builds side by side\"). Nothing was pushed."
+            elif [ $code -ne 0 ]; then
+              echo "::warning::#$number: $out"
+            fi
+          done < "$RUNNER_TEMP/prs"

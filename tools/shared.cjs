@@ -16,6 +16,7 @@
  *                 tools/app_folder.cjs makes of this repository. sw.js names every file by its contents, so it is written last.
  *
  * The build before is the commit given; with none, where this branch left origin/main; on main itself, the commit before.
+ * LRF_TODAY=yyyy-mm-dd pretends another day (for the checks).
  * It stops, and writes nothing more, when this build serves something new and has no entry, when it has an entry and serves
  * nothing new, or when it has more than one file of its own under tests/builds.
  */
@@ -93,7 +94,7 @@ if (differ.length) {
   label = next(was.label);
   let kept = null;
   try { kept = readBuilt(fs.readFileSync(path.join(REPO, BUILT), 'utf8')).builds[0]; } catch (_) { kept = null; }
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const today = /^\d{4}-\d\d-\d\d$/.test(process.env.LRF_TODAY || '') ? process.env.LRF_TODAY : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const on = kept && kept.label === label && kept.did === entry.did && /^\d{4}-\d\d-\d\d$/.test(kept.on) ? kept.on : today;
   builds = [{ label, on, did: entry.did, steps: entry.steps }, ...was.builds];
 } else if (entry) {

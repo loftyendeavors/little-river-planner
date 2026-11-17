@@ -16,9 +16,11 @@ const run = (tool, ...a) => { const r = spawnSync('node', [path.join(W, 'tools',
 const read = f => fs.readFileSync(path.join(W, f), 'utf8');
 const write = (f, text) => { fs.mkdirSync(path.dirname(path.join(W, f)), { recursive: true }); fs.writeFileSync(path.join(W, f), text); };
 const append = (f, text) => write(f, read(f) + text);
-const built = () => { const root = {}; require('vm').runInNewContext(read('js/built.js'), { window: root, globalThis: root }); return root.LRFBuilt; };
+// js/built.js as the page reads it; one that cannot be read (a merge left in conflict) is an empty list, so that a line fails by name
+const built = () => { try { const root = {}; require('vm').runInNewContext(read('js/built.js'), { window: root, globalThis: root }); return root.LRFBuilt || { label: null, builds: [] }; } catch (_) { return { label: null, builds: [] }; } };
+const counts_ = () => { try { return JSON.parse(read('tests/counts.json')); } catch (_) { return {}; } };
 const clean = () => git('status', '--porcelain');
-const counts = () => JSON.parse(read('tests/counts.json'));
+const counts = () => counts_();
 const entry = (did) => ({ build: 'a build made by this check', changes: { did, steps: ['Look at it.'] }, words: [], code: [], added: [], removed: [], page: [], screens: [] });
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
@@ -45,11 +47,13 @@ try {
   r = run('shared.cjs');
   const a = built(), next = l => { const p = l.split('.'), last = p.pop(); return [...p, String(+last + 1).padStart(last.length, '0')].join('.'); };
   check('a build that serves something new takes the next label after main’s, with its own entry at the head of the list and today’s day',
-    r.code === 0 && a.label === next(start.label) && a.builds[0].label === a.label && a.builds[0].did === 'Build A: a rule more in the style sheet.' && a.builds[0].on === today && a.builds.length === start.builds.length + 1 && JSON.stringify(a.builds.slice(1)) === JSON.stringify(start.builds), { r, head: a.builds[0], label: a.label });
+    r.code === 0 && a.label === next(start.label) && a.builds.length > 0 && a.builds[0].label === a.label && a.builds[0].did === 'Build A: a rule more in the style sheet.' && a.builds[0].on === today && a.builds.length === start.builds.length + 1 && JSON.stringify(a.builds.slice(1)) === JSON.stringify(start.builds), { r, head: a.builds[0], label: a.label });
   check('the page’s offline copy is written again, and names the new style sheet by its contents', /sw\.js/.test(clean()) && read('sw.js').includes(`(${a.label})`), clean());
   git('add', '-A'); git('commit', '-qm', 'build A');
+  process.env.LRF_TODAY = '2031-02-03'; env.LRF_TODAY = '2031-02-03';   // a later day
   r = run('shared.cjs');
-  check('run again, it writes nothing: the day the label was given is kept', r.code === 0 && clean() === '', { r, status: clean() });
+  delete env.LRF_TODAY; delete process.env.LRF_TODAY;
+  check('run again on a later day, it writes nothing: the day the label was given is kept', r.code === 0 && clean() === '', { r, status: clean() });
 
   // 3. what stops it
   write('tests/builds/zz-check-a.json', JSON.stringify({ ...entry(''), changes: undefined }, null, 1));
@@ -87,12 +91,12 @@ try {
   const b = built(), c = counts();
   check('B takes main in by itself: no conflict is left and the merge is committed', r.code === 0 && r.said && r.said.conflicts.length === 0 && r.said.committed && clean() === '', { r, status: clean() });
   check('B has the next label after A’s, its entry first and A’s second, and every build before as it was',
-    b.label === next(a.label) && b.builds[0].label === b.label && /Build B/.test(b.builds[0].did) && b.builds[1].label === a.label && /Build A/.test(b.builds[1].did) && JSON.stringify(b.builds.slice(2)) === JSON.stringify(start.builds), b.builds.slice(0, 3));
+    b.label === next(a.label) && b.builds.length > 1 && b.builds[0].label === b.label && /Build B/.test(b.builds[0].did) && b.builds[1].label === a.label && /Build A/.test(b.builds[1].did) && JSON.stringify(b.builds.slice(2)) === JSON.stringify(start.builds), b.builds.slice(0, 3));
   check('B holds A’s work and its own', read('css/app.css').includes('from build A') && read('js/seeds.js').includes('from build B'));
-  check('the counts are joined check by check: each side’s line kept, and a check both changed carries what each added', c[p0][keys[0]] === c0[p0][keys[0]] + 5 && c[p0][keys[1]] === c0[p0][keys[1]] + 1 && c[p0][keys[2]] === c0[p0][keys[2]] + 1 && r.said.counts.length === 1, { joined: [keys[0], keys[1], keys[2]].map(k => c[p0][k]), before: [keys[0], keys[1], keys[2]].map(k => c0[p0][k]), both: r.said.counts });
+  check('the counts are joined check by check: each side’s line kept, and a check both changed carries what each added', !!c[p0] && c[p0][keys[0]] === c0[p0][keys[0]] + 5 && c[p0][keys[1]] === c0[p0][keys[1]] + 1 && c[p0][keys[2]] === c0[p0][keys[2]] + 1 && !!r.said && r.said.counts.length === 1, { joined: [keys[0], keys[1], keys[2]].map(k => (c[p0] || {})[k]), before: [keys[0], keys[1], keys[2]].map(k => c0[p0][k]), both: r.said.counts });
   check('the counts are laid out as tests/counts.py lays them, one check a line', /\n\n {2}"[^"]+": \d+,\n\n/.test(read('tests/counts.json')) && !/<<<<<<<|>>>>>>>/.test(read('tests/counts.json')));
   r = run('shared.cjs');
-  check('after the taking in, the shared files are what the tool writes from main', r.code === 0 && clean() === '' && r.said.label === b.label, { r, status: clean() });
+  check('after the taking in, the shared files are what the tool writes from main', r.code === 0 && clean() === '' && !!r.said && r.said.label === b.label, { r, status: clean() });
 
   // 7. B merged; C, made beside B, changes the same line of the same script: a real conflict, left for a hand, or taken back
   git('checkout', '-q', '-b', 'c', 'main');
@@ -106,7 +110,7 @@ try {
   check('a real conflict is named, the written files are not among the conflicts, and with --abort the branch is as it was',
     r.code === 3 && r.said && JSON.stringify(r.said.conflicts) === '["js/seeds.js"]' && !fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')) && git('rev-parse', 'HEAD') === before && clean() === '', { r, status: clean() });
   r = run('take_main.cjs');
-  check('without --abort the merge is left open with only that file to settle', r.code === 3 && JSON.stringify(r.said.conflicts) === '["js/seeds.js"]' && fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')), r);
+  check('without --abort the merge is left open with only that file to settle', r.code === 3 && !!r.said && JSON.stringify(r.said.conflicts) === '["js/seeds.js"]' && fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')), r);
   done = true;
 } catch (error) {
   check('the check ran to its end', false, String(error.stack || error).slice(0, 1500));
