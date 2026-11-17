@@ -40,7 +40,7 @@ PAGE = [
  ("a lit opening has a green dashed edge", CSS, ".tl-open.fit { border: 1px solid var(--flag);", ".tl-open.fit { border: 1.5px dashed var(--good);"),
  ("the words stand past the end of the opening", TL, "      const beside = (end - z) * ppd - 14, under = (end - a) * ppd - 10;", "      const beside = (end - z) * ppd + 400, under = (end - a) * ppd + 400;"),
  ("the line in the tools counts the farm twice", TL, "const farm = room.fits.size, name", "const farm = room.fits.size * 2, name"),
- ("the line stands beside the key, and the tools change height", CSS, ".tl-tools:has(.tl-room-line:not([hidden])) .tl-key { display: none; }\n", ""),
+ ("the line stands beside the key, and the tools change height", CSS, ".tl-end:has(.tl-room-line:not([hidden])) .tl-key { display: none; }\n", ""),
  ("the hint never shows", TL, "    hint.hidden = false;\n    const at = bar.getBoundingClientRect()", "    hint.hidden = true;\n    const at = bar.getBoundingClientRect()"),
  ("the hint leaves out when it is picked", TL, "      h('p', goes, ' · Pick ', B(r.first), ' to ', B(r.last), free),", "      h('p', goes, free),"),
  ("x leaves the crop carried", TL, "onclick: () => App.arm(null) }, '×')", "onclick: () => {} }, '×')"),
