@@ -226,6 +226,20 @@ def run(pw):
     check("with nothing left waiting, To place keeps its place, with no count, and says nothing waits", not empty["count"] and empty["rows"] == 0 and "Nothing waits" in empty["lead"] and empty["chosen"] == "true", empty)
     press(page, '[data-lib-scope="mine"]', 200)
     page.screenshot(path=os.path.join(shots, "room-end.png"))
+    # a crop with varieties, picked and opened: everything on its row stays light on the ink, the pointer on it or not
+    js(page, "A.arm(null); const b = document.querySelector('#libList .lib-crop:not(.open) > .lib-row button.lib-more'); if (b) b.closest('.lib-row').scrollIntoView({ block: 'center' }); return null;"); page.wait_for_timeout(200)
+    crop = js(page, "const b = document.querySelector('#libList .lib-crop:not(.open) > .lib-row button.lib-more'); return b ? b.closest('.lib-row').dataset.crop : null;")
+    if crop:
+        press(page, '#libList .lib-row[data-crop="%s"]:not(.lib-var) .lib-name' % crop, 200)
+        press(page, '#libList .lib-row[data-crop="%s"]:not(.lib-var) button.lib-more' % crop, 200)
+    LIGHT = "const r = document.querySelector('#libList .lib-row.armed:not(.lib-var)'), light = colour('var(--surface)'); return r ? { open: !!r.closest('.lib-crop.open'), hover: r.matches(':hover'), parts: [...r.querySelectorAll('.lib-name, .lib-count, button.lib-more')].map(e => getComputedStyle(e).color === light) } : null;"
+    page.mouse.move(5, 5); page.wait_for_timeout(150)
+    away = js(page, LIGHT)
+    box = page.locator('#libList .lib-row.armed:not(.lib-var)').first.bounding_box() if crop else None
+    if box: page.mouse.move(box["x"] + 30, box["y"] + box["height"] / 2); page.wait_for_timeout(150)
+    over = js(page, LIGHT)
+    check("a picked crop opened to its varieties keeps its name, count and triangle light on the ink, the pointer on it or away", crop and away and over and away["open"] and over["hover"] and all(away["parts"]) and all(over["parts"]) and len(away["parts"]) == 3, [crop, away, over])
+    js(page, "A.arm(null); return null;"); page.wait_for_timeout(200)
     check("no error on the page", not errors, errors[:3])
     check("the check ran to its end", True)
 

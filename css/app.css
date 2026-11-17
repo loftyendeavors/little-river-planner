@@ -123,7 +123,7 @@ body[data-view="map"] .view-map, body[data-view="timeline"] .view-timeline, body
 .lib-row { display: flex; align-items: center; gap: var(--space-8); height: 30px; padding: 0 var(--space-4) 0 var(--space-8); border-radius: var(--corner-8); cursor: grab; user-select: none; -webkit-user-select: none; border: 1px solid transparent; touch-action: pan-y; }
 .lib-row:hover { background: var(--raised); border-color: var(--line-soft); }
 .lib-row.armed { background: var(--ink); border-color: var(--ink); color: var(--surface); }
-.lib-row.armed .lib-name, .lib-row.armed .lib-count, .lib-row.armed .lib-more { color: var(--surface); }
+.lib-row.armed .lib-name, .lib-row.armed .lib-count { color: var(--surface); }
 .p-text { display: grid; min-width: 0; flex: 1; }
 .p-text b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p-text small { color: var(--muted); font-size: var(--type-13); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -131,6 +131,8 @@ body[data-view="map"] .view-map, body[data-view="timeline"] .view-timeline, body
 .lib-count { flex: none; font: 500 var(--type-11) var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .lib-more { border: 0; background: none; color: var(--muted); font-size: var(--type-13); width: 22px; height: 22px; padding: 0; border-radius: var(--corner-4); flex: none; }
 .lib-row:hover .lib-more, .lib-crop.open .lib-more { color: var(--ink-2); }
+/* a crop picked to carry: its triangle stays light on the ink, open or not, under the pointer or not */
+.lib-row.armed .lib-more, .lib-row.armed:hover .lib-more { color: var(--surface); }
 .lib-more:hover { background: var(--paper); color: var(--ink); }
 .lib-vars { margin: 0 0 7px 11px; padding-left: var(--space-4); border-left: 2px solid var(--line-soft); }
 .lib-meta { font: 500 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: var(--space-4) var(--space-8) var(--space-4); }
