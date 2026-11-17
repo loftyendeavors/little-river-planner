@@ -2086,17 +2086,24 @@
       if (state.plan !== plan) continue;
       if (!idle()) return { ok: false, later: true, why: '' };   // a window was opened or a drag begun during the wait: at the next pause
       // The records the planner does not edit travel in the plan's file: where the joined file's differ from the ones kept here, they are kept first.
-      let newAttic = false;
+      // They are written before the plan, and put back as they were if the plan is then not saved or not swapped in: neither
+      // a joined plan beside the old records nor the old plan beside the joined records is left behind.
+      let newAttic = false, putBack = async () => true;
       try {
         const had = await loadAttic().catch(() => emptyAttic()), extras = await loadExtras(), text = JSON.stringify(attic);
         newAttic = text !== JSON.stringify({ ...had, varieties: { ...(had.varieties || {}), ...extras.varieties } });   // an attic the join left empty is a change too: kept, or the record the other device took out would come back from here
-        if (newAttic && store.backend !== 'memory') { await store.saveBlob('attic', text); await store.clearBlob('attic-new'); core = { ...core, lrfNext: { ...core.lrfNext, attic: 'cloud' } }; }
-      } catch (error) { return { ok: false, stop: true, why: 'The records kept beside the plan could not be saved in this browser, so nothing was taken in.' }; }
-      if (state.plan !== plan) continue;
+        if (newAttic && store.backend !== 'memory') {
+          const wasAttic = await store.loadBlob('attic').catch(() => null), wasNew = await store.loadBlob('attic-new').catch(() => null);
+          putBack = async () => { try { if (wasAttic) await store.saveBlob('attic', wasAttic); else await store.clearBlob('attic'); if (wasNew) await store.saveBlob('attic-new', wasNew); else await store.clearBlob('attic-new'); return true; } catch (_) { return false; } };
+          await store.saveBlob('attic', text); await store.clearBlob('attic-new'); core = { ...core, lrfNext: { ...core.lrfNext, attic: 'cloud' } };
+        }
+      } catch (error) { await putBack(); return { ok: false, stop: true, why: 'The records kept beside the plan could not be saved in this browser, so nothing was taken in.' }; }
+      const lost = { ok: false, stop: true, why: 'The records kept beside the plan could not be put back as they were after a joined plan was not saved. Download a backup now, from Backup.' };
+      if (state.plan !== plan) { if (!(await putBack())) return lost; continue; }
       try { await store.saveNow(core); }
-      catch (error) { store.save(state.plan); return { ok: false, stop: true, why: `The joined plan could not be saved in this browser (${(error && error.message) || 'the browser refused'}), so nothing was taken in.` }; }
-      if (state.plan !== plan) { store.save(state.plan); continue; }   // changed during the save: what is stored follows the plan open here, and the two are joined again
-      if (loaded() || !idle()) { store.save(state.plan); return loaded() || { ok: false, later: true, why: '' }; }   // asked once more, in the same turn the plan is swapped: nothing is open over a record that is about to change
+      catch (error) { store.save(state.plan); if (!(await putBack())) return lost; return { ok: false, stop: true, why: `The joined plan could not be saved in this browser (${(error && error.message) || 'the browser refused'}), so nothing was taken in.` }; }
+      if (state.plan !== plan) { store.save(state.plan); if (!(await putBack())) return lost; continue; }   // changed during the save: what is stored follows the plan open here, and the two are joined again
+      if (loaded() || !idle()) { store.save(state.plan); if (!(await putBack())) return lost; return loaded() || { ok: false, later: true, why: '' }; }   // asked once more before the plan is swapped: nothing is open over a record that is about to change
       const twiceBefore = bookedTwice(state.engine);
       state.plan = core; if (newAttic) { state.attic = attic; state.extras = emptyExtras(); }
       state.redo.length = 0; state.last = null;
