@@ -530,7 +530,8 @@
   /**
    * One row of a demand plan and one delivery week is one batch. Two devices that each widen a demand plan the same way each make
    * a planting for the new week, under an id of its own: joined record by record both would stand, and that week would hold
-   * twice the trays wanted. Of such twins, made since the start, one stays: the one with work recorded on it; where none has,
+   * twice the trays wanted. Of such twins, not all of them the start's, one stays: the one with work recorded on it (and no other,
+   * not even one the start held and this device has changed since: its change is in the report's `dropped`); where none has,
    * the one the start held, or else the cloud's. Where work is recorded on more than one, each of those stays, with its
    * history and the seed it drew, and the report says so (`conflict`): which is the true record is for the grower to say.
    */
@@ -542,7 +543,7 @@
     for (const twins of groups.values()) {
       if (twins.length < 2 || twins.every(p => S.has(p.id))) continue;   // one batch, or twins the start already held: not this join's to settle
       const worked = twins.filter(p => Object.keys(doneOf(p)).length || linesOf(p, 'history').length || linesOf(p, 'seedUse').length), old = twins.filter(p => S.has(p.id));
-      const stay = worked.length ? [...new Set([...worked, ...old])] : old.length ? old : [twins.find(p => T.has(p.id)) || twins[0]];
+      const stay = worked.length ? worked : old.length ? old : [twins.find(p => T.has(p.id)) || twins[0]];   // work recorded stands alone: a twin the start held, changed here but never sown, goes with the rest
       const dropped = twins.filter(p => !stay.includes(p)).map(p => p.id);
       for (const id of dropped) gone.add(id);
       said(ctx, { kind: 'tray-batch-twice', path: ['plantings', '#' + stay[0].id], id: stay[0].id, planId: stay[0].liveTray.planId, key: stay[0].liveTray.key, kept: stay.map(p => p.id), dropped, conflict: worked.length > 1 });
