@@ -88,7 +88,9 @@
     }
     return Object.assign(next, lists);
   }
+  let lastTouch = 0;   // when the plan was last changed here, or a key or the pointer last pressed: another device's changes wait for a pause
   function adopt(plan, engine) {
+    lastTouch = Date.now();
     startOfDay();   // the plan as it stood before the first change of a day is kept as a snapshot
     state.plan = plan; state.engine = engine || E.create(plan, Lib);
     store.save(state.plan);
@@ -140,15 +142,51 @@
     if (!l) return null;
     return l.kind === 'saved' ? { kind: 'saved', label: l.label, at: l.at, canUndo: state.undo[state.undo.length - 1] === l.step } : { kind: 'refused', text: l.text, at: l.at };
   }
+  /**
+   * How a step is undone. While every record it touched is still as the step left it: as it was made ({ ops: the step's own }).
+   * Once another device's changes have been taken in, a record may have moved on. Then only what the step itself changed is
+   * taken back out of it, by the merge's own rules (the record after the step is the start, the record before it one side, the
+   * record now the other): { ops, kept }, `kept` counting what stays as the other device left it. A step that recorded work or
+   * seed is not taken out of a record that has moved on: null.
+   */
+  function undoWay(step) {
+    const M = root.LRFMerge, plan = state.plan, lists = { bed: 'beds', garden: 'gardens', variety: 'varieties', crop: 'crops' };
+    const whole = { assume: 'assumptions', settings: 'settings', map: 'map', inventory: 'seedInventory', trays: 'liveTrayPlans', nursery: 'nursery' };
+    const listOf = op => lists[op.kind] || 'plantings';
+    const now = op => (op.kind === 'own' ? (plan.lrfNext || {})[op.key] : whole[op.kind] ? plan[whole[op.kind]] : (plan[listOf(op)] || []).find(x => x.id === (op.after || op.before).id));
+    const alike = (a, b) => (M ? M.same(a == null ? null : a, b == null ? null : b) : JSON.stringify(a == null ? null : a) === JSON.stringify(b == null ? null : b));
+    const left = op => (op.kind === 'map' ? op.after || {} : op.after);
+    if (step.ops.every(op => alike(now(op), left(op)))) return { ops: step.ops, kept: 0 };
+    if (!M || !M.joinOne) return null;
+    const worked = p => JSON.stringify([(p && p.done) || null, (p && p.workflow) || null]);
+    const ops = [];
+    let kept = 0;
+    for (const op of step.ops) {
+      const is = now(op);
+      if (alike(is, left(op))) { ops.push(op); continue; }
+      if (op.kind === 'inventory' || (!op.kind && worked(op.before) !== worked(op.after))) return null;
+      if (is == null || op.before == null || op.after == null) { kept++; continue; }   // made or taken out by the step, and changed or gone since: it stays as it is now
+      const place = op.kind === 'own' ? 'lrfNext.' + op.key : whole[op.kind] || listOf(op) + '[]', joined = M.joinOne(place, op.after, op.before, is);
+      kept += joined.items.length;
+      if (!alike(joined.value, is)) ops.push({ ...op, before: joined.value, after: is });
+    }
+    return { ops, kept };
+  }
   function undo() {
     if (elsewhere()) { refuse(elsewhere()); return; }
     const step = state.undo.pop();
     if (!step) return;
+    const way = undoWay(step);
+    if (!way) { state.undo.push(step); refuse(`“${step.label}” cannot be undone by itself: it recorded work or seed, and another device has changed the same records since. Take the work back where it was recorded.`); return; }
     state.last = null;
-    state.redo.push(step); adopt(withOps(state.plan, step.ops, 'undo'));
+    if (way.ops === step.ops) state.redo.push(step); else state.redo.length = 0;   // a step taken out part by part is not one to do again whole
+    const twiceWas = state.joined ? bookedTwice(state.engine) : 0;   // counted only once another device's changes are in: before that a step cannot undo into taken ground
+    if (way.ops.length) adopt(withOps(state.plan, way.ops, 'undo'));
     if (state.sel && state.sel.type === 'planting' && !state.engine.planting(state.sel.id)) select(null);
     if (state.sel && state.sel.type === 'waiting' && !waitingOne(state.sel.id)) select(null);
-    toast(`Undid: ${step.label}`);
+    const more = state.joined ? Math.max(0, bookedTwice(state.engine) - twiceWas) : 0;
+    if (more) { toast(`Undid: ${step.label}. Another device has planted that ground since: ${UI.num(more)} more to settle.`); return; }
+    toast(way.kept ? `Undid: ${step.label}. ${way.kept} part${way.kept === 1 ? '' : 's'} of it stay${way.kept === 1 ? 's' : ''} as another device changed ${way.kept === 1 ? 'it' : 'them'}.` : `Undid: ${step.label}`);
   }
   function redo() {
     if (elsewhere()) { refuse(elsewhere()); return; }
@@ -1590,13 +1628,15 @@
       const planOnly = !(state.plan.lrfNext && state.plan.lrfNext.attic === 'cloud');
       const done = planOnly ? 'Plan file saved. It holds the plan only: not the saved supplier pages or the photos.' : 'Backup saved.';
       const noted = () => adopt({ ...state.plan, lrfNext: { ...(state.plan.lrfNext || {}), lastExport: new Date().toISOString() } }, state.engine);
-      if (downloads) { await downloads.save({ filename, data: new Blob([text], { type: 'application/json' }) }); noted(); toast(done); return; }
+      if (downloads) { await downloads.save({ filename, data: new Blob([text], { type: 'application/json' }) }); noted(); toast(done); return true; }
       const url = URL.createObjectURL(new Blob([text], { type: 'application/json' })), a = h('a', { href: url, download: filename });
       document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
       noted(); toast('Backup download started.');
+      return true;
     } catch (error) {
-      if (error && error.code === 'declined') return;
+      if (error && error.code === 'declined') return false;
       toast(`Backup not saved: ${(error && error.message) || 'downloads are not available in this view'}`);
+      return false;
     }
   }
   /** .zip (complete backup) or .json (plan only) -> { plan, image } */
@@ -1644,6 +1684,7 @@
     } catch (_) { /* the plan is still usable without its photo */ }
   }
   async function importBackup(file, extra = {}) {
+    while (joinBusy) await joinBusy;   // another device's changes are being taken in: a whole plan is loaded after that, never across it
     if (elsewhere()) return refuse(elsewhere());   // a whole plan is never loaded in a window that only shows the plan: nothing is kept, replaced or saved
     let parsed;
     try { parsed = await readBackupFile(file); IO.assertPlan(parsed.plan); } catch (error) { toast(`That file could not be read: ${error.message}`); return false; }
@@ -1895,7 +1936,7 @@
         if (options.skipSame && kept[0] && kept[0].key === key) return kept[0];
       }
       const made = await planText(plan);
-      const record = await Snaps.add({ name, auto: !!options.auto, why: options.daily ? 'day:' + options.daily : options.why || '', plantings: plan.plantings.length, waiting: ((plan.lrfNext || {}).waiting || []).length, year: +(plan.settings && plan.settings.year) || null, key, device: Folder ? Folder.device() : '', at: made.savedAt }, made.text);
+      const record = await Snaps.add({ name, auto: !!options.auto, join: !!options.join, why: options.daily ? 'day:' + options.daily : options.why || '', plantings: plan.plantings.length, waiting: ((plan.lrfNext || {}).waiting || []).length, year: +(plan.settings && plan.settings.year) || null, key, device: Folder ? Folder.device() : '', at: made.savedAt }, made.text);
       emit('snaps');
       if (!record.auto) sendSnapshot(record, made.text);
       return record;
@@ -2009,9 +2050,162 @@
     }
     emit('plan'); folderSoon();
   }
+  // ───────────── another device's changes, taken in (js/sync.js says when and keeps the order; js/merge.js joins) ─────────────
+  /** May another device's changes be taken in now? Not in the middle of a drag, with a window open, or within a moment of a change, a key or a press. */
+  const idle = () => !document.body.classList.contains('dragging') && !document.querySelector('dialog[open]') && Date.now() - lastTouch >= 1500;
+  for (const type of ['keydown', 'input', 'pointerdown']) root.addEventListener(type, () => { lastTouch = Date.now(); }, true);
+  /** Pairs of plantings booked on the same ground at the same time, as the overview counts them. */
+  function bookedTwice(eng) { const set = new Set(); for (const p of eng.plan.plantings) { const r = eng.calc(p); if (r) for (const o of eng.conflicts(p, r)) if (!o.rest) set.add([p.id, o.p.id].sort().join('|')); } return set.size; }
+  /**
+   * Join the plan here with the plan the cloud holds, from the plan the two started from, and take the result in: the plan that
+   * was here is kept first (or nothing happens), the joined plan is saved in this browser (or nothing happens), and only then
+   * is it the plan open here. Undo, and what is selected, are kept. What js/sync.js is told: see its `host.join`.
+   */
+  let joinBusy = null;   // while a join is writing: a whole plan is not loaded over it (importBackup waits), so the two never write the plan's records in turn
+  async function joinPlans(startText, theirsText, o = {}) {
+    while (joinBusy) await joinBusy;
+    let done;
+    joinBusy = new Promise(resolve => { done = resolve; });
+    try { return await joinPlansNow(startText, theirsText, o); } finally { joinBusy = null; done(); }
+  }
+  async function joinPlansNow(startText, theirsText, o = {}) {
+    const Merge = root.LRFMerge;
+    if (!Merge || !Merge.joinTexts || elsewhere() || isSample() || state.unreadable) return { ok: false, why: '' };
+    // The records the planner does not edit are part of the plan's file. If they cannot be read now, the file made below would
+    // lack them, and the join would take that for this device having removed them: nothing is joined.
+    try { await loadAttic(); if (!state.extras && store.backend !== 'memory') await store.loadBlob('attic-new'); await loadExtras(); } catch (error) { return { ok: false, why: `The records kept beside the plan could not be read (${(error && error.message) || 'the browser refused'}), so nothing was joined.` }; }
+    const loads = planLoads, loaded = () => (planLoads !== loads ? { ok: false, why: 'A whole plan was loaded here while the two were being joined. Whole plans are not joined.' } : null);
+    for (let turn = 0; turn < 4; turn++) {
+      if (loaded()) return loaded();   // the plan open now does not come from the plan the two devices shared
+      const plan = state.plan, made = await planText(plan);
+      if (state.plan !== plan) continue;   // changed while its text was made: join the plan as it stands now
+      const r = Merge.joinTexts(startText, made.text, theirsText, { order: SL.DONE_ORDER });
+      if (!r.ok) return { ok: false, why: r.why };
+      // the cloud's plan says nothing the plan here does not (it was sent again as it was, or with only its sender's own notes changed): there is nothing to take in
+      if (r.same && !r.taken.any) return { ok: true, same: true, key: contentKey(plan), taken: r.taken, report: r.report, twice: 0 };
+      let core, attic;
+      try {
+        const file = JSON.parse(r.text), own = (file.lrfNextKeep && file.lrfNextKeep.keep) || {};
+        delete file.lrfNextKeep; IO.assertPlan(file);
+        const split = IO.split(file), mine = plan.lrfNext || {}, note = {};
+        for (const key of Object.keys(mine)) if (!OWN_KEYS.includes(key)) note[key] = mine[key];   // what this device notes for itself stays its own
+        for (const key of OWN_KEYS) if (own[key] != null) note[key] = own[key];
+        attic = split.attic; core = tidy({ ...split.core, lrfNext: note });
+      } catch (error) { return { ok: false, why: `The joined plan could not be opened (${(error && error.message) || 'unreadable'}).` }; }
+      const before = await snapshot(`Before taking in changes from ${o.from || 'another device'}`, { auto: true, join: true, plan });
+      if (!before) return { ok: false, why: 'The plan here could not be kept first (this browser gives the page no database for snapshots), so nothing was taken in.' };
+      if (state.plan !== plan) continue;
+      if (!idle()) return { ok: false, later: true, why: '' };   // a window was opened or a drag begun during the wait: at the next pause
+      // The records the planner does not edit travel in the plan's file: where the joined file's differ from the ones kept here, they are kept first.
+      // They are written before the plan, and put back as they were if the plan is then not saved or not swapped in: neither
+      // a joined plan beside the old records nor the old plan beside the joined records is left behind.
+      let newAttic = false, putBack = async () => true;
+      try {
+        const had = await loadAttic().catch(() => emptyAttic()), extras = await loadExtras(), text = JSON.stringify(attic);
+        newAttic = text !== JSON.stringify({ ...had, varieties: { ...(had.varieties || {}), ...extras.varieties } });   // an attic the join left empty is a change too: kept, or the record the other device took out would come back from here
+        if (newAttic && store.backend !== 'memory') {
+          const wasAttic = await store.loadBlob('attic'), wasNew = await store.loadBlob('attic-new');   // a read that fails stops the join here, before anything is written: it is never taken for "nothing was kept"
+          putBack = async () => { try { if (wasAttic) await store.saveBlob('attic', wasAttic); else await store.clearBlob('attic'); if (wasNew) await store.saveBlob('attic-new', wasNew); else await store.clearBlob('attic-new'); return true; } catch (_) { return false; } };
+          await store.saveBlob('attic', text); await store.clearBlob('attic-new'); core = { ...core, lrfNext: { ...core.lrfNext, attic: 'cloud' } };
+        }
+      } catch (error) { await putBack(); return { ok: false, stop: true, why: 'The records kept beside the plan could not be saved in this browser, so nothing was taken in.' }; }
+      const lost = { ok: false, stop: true, why: 'The records kept beside the plan could not be put back as they were after a joined plan was not saved. Download a backup now, from Backup.' };
+      if (state.plan !== plan) { if (!(await putBack())) return lost; continue; }
+      try { await store.saveNow(core); }
+      catch (error) { store.save(state.plan); if (!(await putBack())) return lost; return { ok: false, stop: true, why: `The joined plan could not be saved in this browser (${(error && error.message) || 'the browser refused'}), so nothing was taken in.` }; }
+      if (state.plan !== plan) { store.save(state.plan); if (!(await putBack())) return lost; continue; }   // changed during the save: what is stored follows the plan open here, and the two are joined again
+      if (loaded() || !idle()) { store.save(state.plan); if (!(await putBack())) return lost; return loaded() || { ok: false, later: true, why: '' }; }   // asked once more before the plan is swapped: nothing is open over a record that is about to change
+      const twiceBefore = bookedTwice(state.engine);
+      state.plan = core; if (newAttic) { state.attic = attic; state.extras = emptyExtras(); }
+      state.redo.length = 0; state.last = null;
+      rebuild(); Thumbs.index(state.plan);
+      if (state.sel && state.sel.type === 'planting' && !state.engine.planting(state.sel.id)) select(null);
+      if (state.sel && state.sel.type === 'waiting' && !waitingOne(state.sel.id)) select(null);
+      folderSoon(); emit('plan');
+      return { ok: true, same: r.same, key: contentKey(core), taken: r.taken, report: r.report, twice: Math.max(0, bookedTwice(state.engine) - twiceBefore) };
+    }
+    return { ok: false, why: 'The plan here kept changing while the two were being joined. It is tried again at the next look.' };
+  }
+  const WORDS = { seedInventory: 'seed on hand', assumptions: 'the assumptions', beds: 'the layout', gardens: 'the layout', map: 'the layout', containers: 'the layout', varieties: 'the crop library', crops: 'the crop library', cropUnits: 'the crop library',
+    nursery: 'the nursery', liveTrayPlans: 'tray demand', settings: 'the farm’s settings', customers: 'customers', planningPreferences: 'planning settings', 'own.waiting': 'what waits to be placed', 'own.supplies': 'supplies' };
+  /** What was taken in, as a line: "1 sowing recorded, 2 plantings changed". */
+  function takenLine(t) {
+    const parts = [], n = (count, one, many) => `${UI.num(count)} ${count === 1 ? one : many}`;
+    if (!t) return '';
+    for (const [kind, count] of Object.entries(t.recorded || {})) { const w = SL.DONE_WORD[kind] || 'job'; parts.push(`${n(count, w, w + 's')} recorded`); }
+    for (const [kind, count] of Object.entries(t.takenBack || {})) { const w = SL.DONE_WORD[kind] || 'job'; parts.push(`${n(count, w, w + 's')} taken back`); }
+    if (t.added) parts.push(`${n(t.added, 'planting', 'plantings')} added`);
+    if (t.removed) parts.push(`${n(t.removed, 'planting', 'plantings')} taken out`);
+    if (t.changed) parts.push(`${n(t.changed, 'planting', 'plantings')} changed`);
+    const worked = Object.keys(t.recorded || {}).length || Object.keys(t.takenBack || {}).length;
+    const other = [...new Set((t.lists || []).filter(k => !(k === 'seedInventory' && worked)).map(k => WORDS[k] || (k.startsWith('own.') ? 'the planner’s notes' : 'other records')))];
+    if (other.length) parts.push(`changes to ${other.join(', ')}`);
+    return parts.join(', ');
+  }
+  /** What the last join could not keep as each device left it, for the Cloud sync window: one row a thing, with "Use mine" where this device's value can be put back by one change. */
+  function differed(report) {
+    const rows = [], keep = new Set(), items = ((report && report.items) || []).filter(x => !(Array.isArray(x.path) && x.path[0] === 'lrfNext'));   // a file says the planner's own record twice: once is enough
+    const eng = state.engine, plantingName = id => { const p = eng.planting(id); return p ? `${cropLabel(p)}${eng.bedOf(p.bedId) ? ', ' + bedLabel(eng.bedOf(p.bedId)) : ''}` : 'a planting no longer in the plan'; };
+    const short = v => { const text = v === undefined ? 'nothing' : typeof v === 'string' ? `“${v}”` : JSON.stringify(v); return text.length > 90 ? text.slice(0, 88) + '…' : text; };
+    for (const x of items) {
+      const path = Array.isArray(x.path) ? x.path : [], top = path[0] === 'lrfNextKeep' ? 'own.' + path[2] : path[0], id = String(path[1] || '').startsWith('#') ? path[1].slice(1) : x.id;
+      const what = top === 'plantings' ? plantingName(id) : WORDS[top] || 'the plan';
+      const key = JSON.stringify([x.kind, path]);
+      if (keep.has(key)) continue; keep.add(key);
+      if (x.kind === 'same-box') rows.push({ what, where: path.slice(top === 'plantings' ? 2 : 1).filter(s => !String(s).startsWith('#')).join(' · ') || 'the whole record', theirs: short(x.theirs), mine: short(x.mine), item: usable(x) ? x : null });
+      else if (x.kind === 'move-not-applied') rows.push({ what, where: x.what === 'day' ? 'its day' : 'its place', note: x.whose === 'mine' ? 'Work was recorded on it on the other device, so the move made here was not applied.' : 'Work was recorded on it here, so the move made on the other device was not applied.' });
+      else if (x.kind === 'recorded-twice') rows.push({ what: plantingName(x.id), where: SL.DONE_WORD[x.job] || x.job, note: `Recorded on both devices${x.theirs ? ` (there on ${x.theirs}${x.mine ? `, here on ${x.mine}` : ''})` : ''}: the other device’s record stands, and seed was drawn once.` });
+      else if (x.kind === 'kept') rows.push({ what, where: 'kept', note: x.removedBy === 'mine' ? 'Taken out here and changed on the other device: it stays, as changed.' : 'Taken out on the other device and changed here: it stays, as changed.' });
+      else if (x.kind === 'seed-short') rows.push({ what: 'seed on hand', where: 'a lot ran short', note: `The two devices together drew ${UI.num(x.short)} more than the lot held. The lot is at zero, and that seed is counted as used without a counted lot.` });
+      else if (x.kind === 'placed-and-waiting') rows.push({ what: plantingName(x.id), where: 'placed', note: 'Put on a bed on one device and changed while it waited on the other: it is on its bed.' });
+      else if (x.kind === 'tray-batches') rows.push({ what: 'tray demand', where: 'weekly batches', note: x.whose === 'mine' ? 'A demand plan changed here was taken out on the other device: it stays as it is here, with its weekly batches.' : `A demand plan changed on both devices, or taken out here and changed there: the other device’s stands, with its weekly batches${(x.dropped || []).length ? ` (${UI.num(x.dropped.length)} made here went)` : ''}${(x.reset || []).length ? ` (${UI.num(x.reset.length)} changed here ${x.reset.length === 1 ? 'is' : 'are'} as the other device has ${x.reset.length === 1 ? 'it' : 'them'})` : ''}.` });
+      else if (x.kind === 'tray-batch-twice') rows.push({ what: plantingName(x.id), where: 'one week of tray demand', note: x.conflict ? 'Each device made this week’s batch and recorded work on its own: both are kept, so the week shows twice the trays. Take the work back on the one that is not the true record, and remove it.' : 'Each device made this week’s batch: one is kept, the one with work recorded on it.' });
+      else if (x.kind === 'sowing-of-removed-planting') rows.push({ what: 'seed on hand', where: 'a sowing', note: 'A planting was sown on one device and then taken out there, and kept on the other: its seed stays used. If both devices recorded that one sowing, count the lot by hand.' });
+    }
+    return rows;
+  }
+  /** Can this device's value be put back by one change? A box, or keys read together, of a planting, a bed, a garden, a variety, a crop, the assumptions, the settings or the nursery. */
+  function usable(x) {
+    const p = x.path || [], top = p[0];
+    if (['plantings', 'beds', 'gardens', 'varieties', 'crops'].includes(top)) return String(p[1] || '').startsWith('#') && p.length >= 3;
+    return ['assumptions', 'settings', 'nursery'].includes(top) && p.length >= 2;
+  }
+  /** `value` put at `path` in a copy of `node`: '#id' finds a record of a list; `keys` are keys of the last record, set (or taken away) together. */
+  function putAt(node, path, i, value, keys) {
+    if (i === path.length - (keys ? 1 : 0)) { if (!keys) return value; const out = { ...node }; for (const k of keys) { if (value && value[k] !== undefined) out[k] = value[k]; else delete out[k]; } return out; }
+    const seg = path[i];
+    if (Array.isArray(node)) { const id = String(seg).slice(1); if (!node.some(x => x && String(x.id) === id)) throw new Error('That record is no longer in the plan.'); return node.map(x => (x && String(x.id) === id ? putAt(x, path, i + 1, value, keys) : x)); }
+    const out = { ...(node || {}) }, next = putAt(out[seg], path, i + 1, value, keys);
+    if (next === undefined) delete out[seg]; else out[seg] = next;
+    return out;
+  }
+  /** "Use mine": this device's value put back over the other device's, as one change of its own (undone like any other, and sent on). */
+  function useMine(x) {
+    if (!x || !usable(x)) return false;
+    const top = x.path[0], kinds = { beds: 'bed', gardens: 'garden', varieties: 'variety', crops: 'crop' };
+    let ops;
+    try {
+      const after = putAt(state.plan[top], x.path, 1, x.mine, Array.isArray(x.keys) ? x.keys : null);
+      if (Array.isArray(state.plan[top])) { const id = String(x.path[1]).slice(1), was = state.plan[top].find(r => String(r.id) === id), now = after.find(r => String(r.id) === id); ops = [{ ...(kinds[top] ? { kind: kinds[top] } : {}), before: was, after: now }]; }
+      else ops = [{ kind: top === 'assumptions' ? 'assume' : top, before: state.plan[top], after }];
+    } catch (error) { return refuse(error.message); }
+    const done = commit('Used this device’s value', ops);
+    if (done && state.joined) { state.joined = { ...state.joined, rows: state.joined.rows.map(r => (r.item === x ? { ...r, item: null, used: true } : r)) }; emit('joined'); }
+    return done;
+  }
+  /** js/sync.js says changes were taken in: said once in a toast, and kept for the Cloud sync window while anything in it could not be kept as left. */
+  function sayTaken(info) {
+    const who = info.from || 'another device', line = takenLine(info.taken), rows = differed(info.report), twice = info.twice || 0;
+    state.joined = { from: who, at: Date.now(), line, rows, twice };
+    const tail = `${rows.length ? ` ${UI.num(rows.length)} thing${rows.length === 1 ? ' was' : 's were'} changed on both devices: see what differed.` : ''}${twice ? ` ${UI.num(twice)} more to settle: ground is booked twice.` : ''}`;
+    if (line || rows.length || twice) toast(`Taken in from ${who}${line ? `: ${line}` : ''}.${tail}`);
+    emit('joined');
+  }
   function startSync(photosReady) {
     if (!Sync || sync) return;
+    let lastJoin = null;
     sync = Sync.create({
+      idle, join: async (start, theirs, o) => { lastJoin = await joinPlans(start, theirs, o); return lastJoin; }, taken: info => sayTaken({ ...info, twice: lastJoin && lastJoin.twice }),
       mode: () => (state.unreadable || elsewhere() ? 'held' : isSample() ? 'sample' : 'plan'),   // a window that only shows the plan sends and opens nothing by itself
       stored: () => (store.backend === 'device' ? { n: store.count, ok: !store.pending } : null), readOnly: () => !!elsewhere(),
       key: () => contentKey(),
@@ -2060,6 +2254,7 @@
       else if (c.status === 'error') { text = 'Cloud sync failed · click'; state2 = 'error'; ask = 'cloud'; title = c.error; }
       else if (c.status === 'sending') { text = 'Sending to the cloud…'; state2 = 'saving'; }
       else if (c.status === 'receiving') { text = 'Opening from the cloud…'; state2 = 'saving'; }
+      else if (c.status === 'joining') { text = 'Taking in changes…'; state2 = 'saving'; title = 'Another device has saved. Its changes are joined with the plan here when you pause.'; }
       else if (c.status === 'waiting' && info.state === 'saved') { text = filed ? `Saved · ${f.name} · cloud waiting` : 'Saved here · cloud waiting'; title = 'The cloud could not be reached. The plan is saved in this browser and is sent when there is a connection.'; }
       else if (c.status === 'in-step' && info.state === 'saved' && c.savedAt) { text = filed ? `Saved · folder + cloud ${clock(c.savedAt)}` : `Saved · cloud ${clock(c.savedAt)}`; title = `Kept in this browser${filed ? `, written to the folder “${f.name}” at ${clock(f.savedAt)}` : ''}, and sent to the cloud at ${clock(c.savedAt)}.`; }
     }
@@ -2161,6 +2356,6 @@
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (elsewhere()) { refuse(elsewhere()); return null; } if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
     saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, editNursery, setSupply, setLiveSow, traysToMonday: () => applyTrayStart(),
-    snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, windowState: () => (store ? store.readOnly : ''), useThisWindow, sync: () => sync, syncInfo, linkService: () => (sync && sync.linkService ? sync.linkService() : null), snapshotsKept: () => !!Snaps
+    snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, joined: () => state.joined || null, useMine, doneJoined: () => { state.joined = null; emit('joined'); }, windowState: () => (store ? store.readOnly : ''), useThisWindow, sync: () => sync, syncInfo, linkService: () => (sync && sync.linkService ? sync.linkService() : null), snapshotsKept: () => !!Snaps
   };
 })(window);

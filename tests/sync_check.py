@@ -9,7 +9,7 @@ first. DARK=1 runs the second browser in the dark theme.
 The rules under test:
   - the plan open in a browser is the one worked on, connection or none; a change is sent a moment after it is made;
   - a write never lands on a plan the sender has not seen: when both have changed, nothing is sent and nothing is replaced,
-    the page says so in every view, and the choice is his; plans are never merged;
+    the page says so in every view, and the choice is his (on a device left on "Ask me which plan to keep", as every device starts; joining is tests/join_check.py);
   - a newer plan is opened by itself only at start-up and only over a plan that has not been changed; while the page is in
     use it is offered;
   - whatever replaces a whole plan (the cloud's plan, a snapshot, a backup file), the plan that was open is kept as a
@@ -278,7 +278,7 @@ with sync_playwright() as pw:
         check('neither a look at the cloud nor Ctrl+S sends it', state()['plan']['etag'] == e4 and 'Not sent to the cloud' in toast(B), toast(B))
         B.click('#saveState'); B.wait_for_timeout(250)
         cw = B.evaluate("({ note: document.getElementById('syncNote2').innerText, buttons: [...document.querySelectorAll('.bk-choice button')].map(b => b.textContent), now: document.getElementById('syncNow').disabled, fit: %s })" % FIT)
-        check('the window offers the same two choices, and "Sync now" is off until one is taken', 'never merged' in cw['note'] and cw['buttons'] == ['Open the cloud’s plan', 'Keep this plan, and save it over the cloud’s'] and cw['now'] and cw['fit'] == [], cw)
+        check('the window offers the same two choices, and "Sync now" is off until one is taken', 'Nothing is sent or replaced until you choose one' in cw['note'] and 'never merged' not in cw['note'] and cw['buttons'] == ['Open the cloud’s plan', 'Keep this plan, and save it over the cloud’s'] and cw['now'] and cw['fit'] == [], cw)
         B.screenshot(path=os.path.join(shots, 'conflict-window.png'))
         B.click('#syncKeep'); asked = answer(B, False)
         check('"Keep this plan" asks first, in figures; Cancel changes nothing', asked and str(n0 - 6) in asked and str(n0 - 3) in asked and 'keeps the replaced plan as a snapshot' in asked and state()['plan']['etag'] == e4 and B.evaluate("LRFApp.syncInfo().status") == 'conflict', asked)

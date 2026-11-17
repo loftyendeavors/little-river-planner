@@ -1,6 +1,6 @@
 #!/bin/sh
 # The deliberate faults: each puts one fault into a copy of the app and requires that the check then fails where it passed before
-# (nine sets name the line that has to fail: changed, cleanup, look, map, merge, scale, screens, shape, windows). They prove that the checks can fail. One way in for all of them:
+# (ten sets name the line that has to fail: changed, cleanup, join, look, map, merge, scale, screens, shape, windows). They prove that the checks can fail. One way in for all of them:
 #   sh tests/faults.sh <set> [mode] [words…]      FROM=0 TO=12 in front runs a part; WIDTH= and DARK= reach the page checks
 #   sh tests/faults.sh list                        every set, its modes and the number of faults in each
 # With no mode a set runs its first one, which is its fast one where it has one (node, worker: seconds a fault; the page modes
@@ -46,6 +46,7 @@ loose
 f053
 room
 merge
+join
 shape
 shared
 "
@@ -80,6 +81,7 @@ script() {
     numbers) SCRIPT=$T/mutate_numbers.py; ARGS="$APP $F $T" ;;
     windows) SCRIPT=$T/mutate_windows.py; ARGS="$APP $REPO $F $T" ;;
     merge) SCRIPT=$T/mutate_merge.py; ARGS="$APP $F $T $PLAN $FARM/inventory.json" ;;
+    join) SCRIPT=$T/mutate_join.py; ARGS="$APP $REPO $F $T" ;;
     shape) SCRIPT=$T/mutate_shape.py; ARGS="$APP $F $T $PLAN $FARM/inventory.json $SCRATCH" ;;
     shared) SCRIPT=$T/mutate_shared.py; ARGS="$REPO $F $FONTS" ;;
     scale) SCRIPT=$T/mutate_scale.py; ARGS="$REPO $F" ;;

@@ -30,6 +30,7 @@ for part in ${@:-node build app1 app2 app3 app4 new off site1 site2 site3 site4 
       step2b \
       maint \
       sync \
+      join \
       step3a \
       step3b \
       ;;
@@ -56,7 +57,7 @@ for part in ${@:-node build app1 app2 app3 app4 new off site1 site2 site3 site4 
     new) sh $T/b.sh sup importer; WIDTH=1480 sh $T/b.sh sup importer; WIDTH=3440 sh $T/b.sh sup importer; sh $T/b.sh sup-site importer-site; WIDTH=1480 sh $T/b.sh sup-site importer-site ;;
     off) sh $T/b.sh offline ahead-off core-off sowing-off trays-off step2a-off f018-off step2b-off map-off ;;
     site1) sh $T/b.sh carry site step3a-site step3b-site wide-site step5a-site ;;
-    site2) sh $T/b.sh step5b-site stepF-site plain-site r1-site sync-site tour loose-site f053-site room-site ;;
+    site2) sh $T/b.sh step5b-site stepF-site plain-site r1-site sync-site join-site tour loose-site f053-site room-site ;;
     site3) WIDTHS=${WIDTHS:-1280,1480,1707,3440} sh $T/b.sh map-site; sh $T/b.sh map-views-site; sh $T/b.sh things-site; WIDTH=1480 sh $T/b.sh things-site ;;
     site4) DARK=1 WIDTH=1480 sh $T/b.sh step3a-site step3b-site; WIDTH=1480 sh $T/b.sh step3a-site step3b-site step5a-site step5b-site stepF-site r1-site loose-site room-site ;;
     site5) DARK=1 sh $T/b.sh step3a-site step3b-site step5a-site step5b-site stepF-site r1-site; WIDTH=3440 sh $T/b.sh stepF-site r1-site loose-site room-site ;;

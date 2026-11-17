@@ -20,7 +20,7 @@ global.window = global;
 const E = require(path.join(APP, 'js/engine.js')), IO = require(path.join(APP, 'js/planio.js'));
 const L = require(path.join(APP, 'js/library.js')), Lib = global.LRFLibrary || L; require(path.join(APP, 'js/guide.js'));
 const F = require(path.join(APP, 'js/forecast.js')), SL = require(path.join(APP, 'js/seedlib.js')), W = require(path.join(APP, 'js/week.js'));
-const M = require(path.join(APP, 'js/merge.js'));
+const M = require(path.join(APP, 'js/merge.js')), TR = require(path.join(APP, 'js/trays.js'));
 const clone = x => JSON.parse(JSON.stringify(x));
 const split = IO.split(JSON.parse(fs.readFileSync(PLAN, 'utf8')));
 const FARM = Object.freeze({ ...split.core, seedInventory: JSON.parse(fs.readFileSync(STOCK, 'utf8')) });
@@ -71,6 +71,7 @@ const BED = FARM.beds.find(b => b.px), GARDEN = FARM.gardens.find(g => g.bedOrde
 const mine = () => device('mine', 9), theirs = () => device('theirs', 14);
 const DAY = A1.planned;
 const ok = r => r && r.ok === true;
+const same = M.same;
 
 // ───────────────────────────── 1. the rules ─────────────────────────────
 // by shape
@@ -132,15 +133,153 @@ tryCase('a bed changed in different boxes, its place among them: both kept', () 
   return [ok(r) && b.px.x === 11 && b.note === 'wet end' && !r.report.items.length, b];
 });
 tryCase('a stamp: the later one, and nothing is said', () => {
-  const stamp = (plan, at, name) => ({ ...plan, liveTrayPlans: plan.liveTrayPlans.map(t => (t.id === TRAYS.id ? { ...t, updatedAt: at, ...(name ? { name } : {}) } : t)) });
+  const stamp = (plan, at, note) => ({ ...plan, seedInventory: { ...plan.seedInventory, lots: plan.seedInventory.lots.map(l => (l.id === LOT ? { ...l, updatedAt: at, ...(note ? { note } : {}) } : l)) } });
   const r = M.merge(FARM, stamp(FARM, '2027-03-02T10:00:00.000Z', 'Mine'), stamp(FARM, '2027-03-01T10:00:00.000Z'));
-  const t = r.plan.liveTrayPlans.find(x => x.id === TRAYS.id);
-  return [ok(r) && t.updatedAt === '2027-03-02T10:00:00.000Z' && t.name === 'Mine' && !r.report.items.length, [t.updatedAt, r.report]];
+  const l = lot(r.plan, LOT);
+  return [ok(r) && l.updatedAt === '2027-03-02T10:00:00.000Z' && l.note === 'Mine' && !r.report.items.length, [l.updatedAt, r.report]];
 });
-tryCase('records inside a record are joined record by record too: two rows of one tray plan', () => {
-  const row = (plan, i, price) => ({ ...plan, liveTrayPlans: plan.liveTrayPlans.map(t => (t.id === TRAYS.id ? { ...t, rows: t.rows.map((x, j) => (j === i ? { ...x, price } : x)) } : t)) });
-  const r = M.merge(FARM, row(FARM, 0, 91), row(FARM, 1, 92)), rows = r.plan.liveTrayPlans.find(x => x.id === TRAYS.id).rows;
-  return [ok(r) && rows[0].price === 91 && rows[1].price === 92 && !r.report.items.length, rows.slice(0, 2)];
+// things whose parts are read together: taken whole, or their keys joined as one value
+const trayPlan = (plan, change) => ({ ...plan, liveTrayPlans: plan.liveTrayPlans.map(t => (t.id === TRAYS.id ? change(t) : t)) });
+const rowPrice = (i, price) => t => ({ ...t, rows: t.rows.map((x, j) => (j === i ? { ...x, price } : x)) });
+tryCase('a live-tray demand plan is taken whole: two rows changed one on each device, the cloud\'s plan stands and this device\'s is reported', () => {
+  const r = M.merge(FARM, trayPlan(FARM, rowPrice(0, 91)), trayPlan(FARM, rowPrice(1, 92))), rows = r.plan.liveTrayPlans.find(x => x.id === TRAYS.id).rows;
+  const one = M.merge(FARM, trayPlan(FARM, rowPrice(0, 91)), setP(FARM, X1, { note: 't' }));
+  return [ok(r) && rows[0].price === TRAYS.rows[0].price && rows[1].price === 92 && items(r, 'same-box').length === 1 && items(r, 'same-box')[0].path[0] === 'liveTrayPlans'
+    && ok(one) && one.plan.liveTrayPlans.find(x => x.id === TRAYS.id).rows[0].price === 91 && !one.report.items.length, [rows.slice(0, 2), r.report.items.map(x => x.kind)]];
+});
+tryCase('the weekly batches follow the demand plan that stands: this device\'s new batch goes, one it took out comes back, one it changed is the cloud\'s; a batch sown here stays', () => {
+  const batches = FARM.plantings.filter(p => p.liveTray && p.liveTray.planId === TRAYS.id && !p.done);
+  if (batches.length < 4) return [false, 'the farm has too few open batches of one demand plan: ' + batches.length];
+  const [gone, changed, sown, quiet] = batches;
+  let m = trayPlan(FARM, rowPrice(0, 91));
+  m = { ...m, plantings: [...m.plantings.filter(p => p.id !== gone.id).map(p => (p.id === changed.id ? { ...p, trays: (p.trays || 0) + 5 } : p.id === sown.id ? { ...p, done: { sow: '2027-03-03' }, workflow: { history: [{ action: 'complete', kind: 'sow', date: '2027-03-03', at: '2027-03-03T09:00:00.000Z', note: '' }] } } : p)),
+    { ...quiet, id: 'mine-new-batch', liveTray: { ...quiet.liveTray, key: quiet.liveTray.rowId + ':2027-12-27', week: '2027-12-27' } },
+    { ...quiet, id: 'mine-sown-batch', liveTray: { ...quiet.liveTray, key: quiet.liveTray.rowId + ':2027-12-20', week: '2027-12-20' }, done: { sow: '2027-03-04' }, workflow: { history: [{ action: 'complete', kind: 'sow', date: '2027-03-04', at: '2027-03-04T09:00:00.000Z', note: '' }] } }] };
+  const t = trayPlan(FARM, rowPrice(1, 92)), r = M.merge(FARM, m, t), at = id => r.ok && r.plan.plantings.find(p => p.id === id), told = items(r, 'tray-batches')[0];
+  const twice = r.ok ? M.merge(t, r.plan, t) : null;   // and joined again, as this device, against the cloud's: nothing more moves
+  return [ok(r) && !at('mine-new-batch') && !!at('mine-sown-batch') && !!at(gone.id) && at(changed.id).trays === changed.trays && at(sown.id).done && at(sown.id).done.sow === '2027-03-03'
+    && !!told && same(told.dropped, ['mine-new-batch']) && same(told.back, [gone.id]) && same(told.reset, [changed.id]) && told.whose === 'theirs' && ok(twice) && !!twice.plan.plantings.find(p => p.id === sown.id).done, [r.ok ? r.report.items : r.why]];
+});
+tryCase('a demand plan taken out on one device and changed on the other stays, as changed, with all of that device\'s batches: none is left out, either way round', () => {
+  const batches = FARM.plantings.filter(p => p.liveTray && p.liveTray.planId === TRAYS.id), n = batches.length;
+  const without = { ...FARM, liveTrayPlans: FARM.liveTrayPlans.filter(t => t.id !== TRAYS.id), plantings: FARM.plantings.filter(p => !(p.liveTray && p.liveTray.planId === TRAYS.id)) };
+  const changed = trayPlan(FARM, rowPrice(0, 91)), count = r => r.ok && r.plan.plantings.filter(p => p.liveTray && p.liveTray.planId === TRAYS.id).length;
+  const a = M.merge(FARM, without, changed), b = M.merge(FARM, changed, without);
+  return [n > 3 && ok(a) && count(a) === n && ok(b) && count(b) === n && a.plan.liveTrayPlans.some(t => t.id === TRAYS.id) && b.plan.liveTrayPlans.some(t => t.id === TRAYS.id) && items(b, 'tray-batches')[0].whose === 'mine' && items(a, 'tray-batches')[0].back.length === n, [n, count(a), count(b), a.ok ? '' : a.why, b.ok ? '' : b.why]];
+});
+tryCase('a batch this device took off its demand plan while the cloud\'s version of that plan stands is the cloud\'s batch again, once: no id twice', () => {
+  const b1 = FARM.plantings.find(p => p.liveTray && p.liveTray.planId === TRAYS.id && !p.done);
+  const m = trayPlan(FARM, rowPrice(0, 91)), off = { ...m, plantings: m.plantings.map(p => { if (p.id !== b1.id) return p; const q = { ...p }; delete q.liveTray; return q; }) };
+  const r = M.merge(FARM, off, trayPlan(FARM, rowPrice(1, 92))), got = r.ok ? r.plan.plantings.filter(p => p.id === b1.id) : [];
+  return [ok(r) && got.length === 1 && same(got[0].liveTray, b1.liveTray) && same(items(r, 'tray-batches')[0].reset, [b1.id]), r.ok ? got : r.why];
+});
+tryCase('keys read together are one value on a planting that waits to be placed too, in the plan and in what a file keeps of it', () => {
+  const wait = (plan, change) => { const w = [{ id: 'w1', cropId: 'c', date: '2027-05-01', yield: 10, yieldBasis: 'plant', wait: { s: 's1', k: 1, of: 2, every: 7 }, ...change }]; return { ...plan, lrfNext: { ...(plan.lrfNext || {}), waiting: w }, lrfNextKeep: { v: 1, savedAt: '2027-03-01T08:00:00.000Z', device: 'd', keep: { waiting: w } } }; };
+  const s = wait(FARM, {}), r = M.merge(s, wait(s, { yield: 20 }), wait(s, { yieldBasis: 'container' })), a = r.ok && r.plan.lrfNext.waiting[0], b = r.ok && r.plan.lrfNextKeep.keep.waiting[0];
+  return [ok(r) && a.yield === 10 && a.yieldBasis === 'container' && b.yield === 10 && b.yieldBasis === 'container' && items(r, 'same-box').length === 2, [a, b, r.report]];
+});
+// One demand row and one delivery week is one batch (found by Codex on #64): made with the planner's own functions, the demand
+// plan by Trays.apply as the Trays page does, the sowing by the week's record as Tasks does.
+const TWIN = (() => {
+  const row = { id: 'row-twin', name: 'Twin Shoots', days: 14, price: 18, spring: 3, summer: 3, fall: 3 };
+  const demand = through => ({ v: 1, year: 2027, name: 'Twin demand', customerId: '', from: '2027-05-03', through, summer: '2027-07-01', fall: '2027-09-16', rows: [row] });
+  const apply = (farm, input, dev) => TR.apply(farm, input, { uid: dev.uid, now: dev.now(), crop: id => eng(farm).crop(id), keepRecorded: true }).plan;
+  const start = apply(FARM, demand('2027-05-03'), device('first', 8)), id = start.liveTrayPlans.find(t => t.name === 'Twin demand').id;
+  const widen = (farm, dev) => apply(farm, { ...farm.liveTrayPlans.find(t => t.id === id), through: '2027-05-10' }, dev);
+  const batches = plan => plan.plantings.filter(p => p.liveTray && p.liveTray.planId === id), week = (plan, w) => batches(plan).filter(p => p.liveTray.week === w);
+  const sow = (plan, dev, day) => record(plan, week(plan, '2027-05-10')[0].id, 'sow', day, dev);
+  // what Harvest shows for the crop: its trays in the week of May 10, and in the season
+  const harvest = plan => { const en = eng(plan), r = F.build(en).rows.find(x => x.cropId === batches(plan)[0].cropId), at = Math.round(E.dayDiff(E.s2d('2027-05-10'), new Date(2027, 0, 1))); let n = 0; for (let d = at; d < at + 7; d++) n += r.days[d] || 0; return [n, r.total]; };
+  const open = plan => week(plan, '2027-05-10').filter(p => { const sw = SL.sowing(eng(plan), p); return sw && !(p.done || {}).sow; }).length;
+  return { start, widen, batches, week, sow, harvest, open, join: (s, m, t) => M.merge(s, m, t, { order: SL.DONE_ORDER }) };
+})();
+tryCase('one demand row and one week is one batch: a phone and a laptop each widen the same demand to a new week and the phone sows it; joined either way round there is one batch of three trays, sown, and Harvest shows three', () => {
+  const X = TWIN, phone = X.sow(X.widen(X.start, mine()), mine(), '2027-04-26'), laptop = X.widen(X.start, theirs());
+  const made = X.week(phone, '2027-05-10')[0].id !== X.week(laptop, '2027-05-10')[0].id && same(X.harvest(phone), [3, 6]) && same(X.harvest(laptop), [3, 6]);
+  const out = [];
+  for (const [me, cloud, name] of [[phone, laptop, 'the phone joins'], [laptop, phone, 'the laptop joins']]) {
+    const r = X.join(X.start, me, cloud);
+    if (!ok(r)) { out.push([name, r.why]); continue; }
+    const w = X.week(r.plan, '2027-05-10'), told = items(r, 'tray-batch-twice');
+    const good = w.length === 1 && w[0].trays === 3 && (w[0].done || {}).sow === '2027-04-26' && w[0].id === X.week(phone, '2027-05-10')[0].id && w[0].workflow.history.filter(h => h.kind === 'sow' && h.action === 'complete').length === 1
+      && X.open(r.plan) === 0 && same(X.harvest(r.plan), [3, 6]) && told.length === 1 && told[0].conflict === false && same(told[0].dropped, [X.week(laptop, '2027-05-10')[0].id]) && X.batches(r.plan).length === 2
+      && new Set(r.plan.plantings.flatMap(p => ((p.workflow || {}).seedUse || []).map(u => u.batchId))).size === new Set(phone.plantings.flatMap(p => ((p.workflow || {}).seedUse || []).map(u => u.batchId))).size;
+    // the joined plan goes to the cloud; the other device takes it in from the plan it sent; the first looks again; and once more round
+    const other = X.join(cloud, cloud, r.plan), back = other.ok ? X.join(r.plan, r.plan, other.plan) : other, again = back.ok ? X.join(other.plan, other.plan, back.plan) : back;
+    const steady = [other, back, again].every(j => ok(j) && X.week(j.plan, '2027-05-10').length === 1 && same(X.harvest(j.plan), [3, 6]) && !items(j, 'tray-batch-twice').length);
+    if (!good || !steady) out.push([name, good, steady, w.map(p => [p.id, p.trays, p.done]), X.harvest(r.plan), r.report.items.map(x => x.kind)]);
+  }
+  return [made && out.length === 0, [made, out]];
+});
+tryCase('the same when neither device has sown it: one batch, the cloud\'s, and nothing is said of the demand plan each stamped at its own moment', () => {
+  const X = TWIN, a = X.widen(X.start, mine()), b = X.widen(X.start, theirs()), r = X.join(X.start, a, b), w = r.ok ? X.week(r.plan, '2027-05-10') : [];
+  return [ok(r) && w.length === 1 && w[0].id === X.week(b, '2027-05-10')[0].id && same(X.harvest(r.plan), [3, 6]) && !items(r, 'same-box').length && items(r, 'tray-batch-twice').length === 1, r.ok ? [w.map(p => p.id), r.report.items] : r.why];
+});
+tryCase('both devices sowed their own batch of that row and week: both records stay, with their days, and the report says the two conflict', () => {
+  const X = TWIN, phone = X.sow(X.widen(X.start, mine()), mine(), '2027-04-26'), laptop = X.sow(X.widen(X.start, theirs()), theirs(), '2027-04-27');
+  const r = X.join(X.start, phone, laptop), w = r.ok ? X.week(r.plan, '2027-05-10') : [], told = items(r, 'tray-batch-twice')[0];
+  return [ok(r) && w.length === 2 && same(w.map(p => p.done.sow).sort(), ['2027-04-26', '2027-04-27']) && !!told && told.conflict === true && told.dropped.length === 0 && told.kept.length === 2, r.ok ? [w.map(p => [p.id, p.done]), told] : r.why];
+});
+tryCase('a job put off is taken whole, whatever the job: a from, a to and its own day never come half from each device', () => {
+  const put = (plan, kind, delay) => { const p = planting(plan, X1); return putPlanting(plan, { ...p, tasks: { ...(p.tasks || {}), delay: { ...((p.tasks || {}).delay || {}), [kind]: delay } } }); };
+  const s = put(FARM, 'sow', { from: '2027-06-01', to: '2027-06-03', own: '2027-06-01' });
+  const r = M.merge(s, put(s, 'sow', { from: '2027-06-02', to: '2027-06-04', own: '2027-06-02' }), put(s, 'sow', { from: '2027-06-01', to: '2027-06-05', own: '2027-06-01' }));
+  const other = M.merge(s, put(s, 'field', { from: '2027-07-01', to: '2027-07-04', own: '2027-07-01' }), put(s, 'sow', { from: '2027-06-01', to: '2027-06-05', own: '2027-06-01' }));
+  const d = r.ok && planting(r.plan, X1).tasks.delay, o = other.ok && planting(other.plan, X1).tasks.delay;
+  return [ok(r) && same(d.sow, { from: '2027-06-01', to: '2027-06-05', own: '2027-06-01' }) && items(r, 'same-box').length === 1 && ok(other) && o.sow.to === '2027-06-05' && o.field.to === '2027-07-04' && !other.report.items.length, [d, o]];
+});
+tryCase('keys of one record that are read together are one value: a nursery space\'s from and to, while its name is still joined beside them', () => {
+  const SPACE = (FARM.nursery && FARM.nursery.spaces || [])[0];
+  if (!SPACE) return [false, 'the farm has no nursery space'];
+  const sp = (plan, change) => ({ ...plan, nursery: { ...plan.nursery, spaces: plan.nursery.spaces.map(x => (x.id === SPACE.id ? { ...x, ...change } : x)) } });
+  const s = sp(FARM, { from: '01-01', to: '03-01' });
+  const r = M.merge(s, sp(s, { from: '02-01', name: 'Mine' }), sp(s, { to: '04-01' })), x = r.ok && r.plan.nursery.spaces.find(y => y.id === SPACE.id);
+  const one = M.merge(s, sp(s, { from: '02-01' }), sp(s, { holds: 7 })), y = one.ok && one.plan.nursery.spaces.find(z => z.id === SPACE.id);
+  return [ok(r) && x.from === '01-01' && x.to === '04-01' && x.name === 'Mine' && items(r, 'same-box').length === 1 && same(items(r, 'same-box')[0].mine, { from: '02-01', to: '03-01' })
+    && ok(one) && y.from === '02-01' && y.to === '03-01' && y.holds === 7 && !one.report.items.length, [x, r.report, y]];
+});
+tryCase('a yield is one value with its basis: on a crop and on a planting, the basis from one device never meets the yield from the other', () => {
+  const CROP = FARM.crops[0];
+  const crop = (plan, change) => ({ ...plan, crops: plan.crops.map(c => (c.id === CROP.id ? { ...c, ...change } : c)) });
+  const s = setP(crop(FARM, { yield: 2, yBasis: 'plant' }), X1, { yield: 2, yieldBasis: 'plant' });
+  const r = M.merge(s, setP(crop(s, { yBasis: 'ft', note: 'mine' }), X1, { yieldBasis: 'container' }), setP(crop(s, { yield: 9 }), X1, { yield: 9 }));
+  const c = r.ok && r.plan.crops.find(x => x.id === CROP.id), p = r.ok && planting(r.plan, X1);
+  return [ok(r) && c.yield === 9 && c.yBasis === 'plant' && c.note === 'mine' && p.yield === 9 && p.yieldBasis === 'plant' && items(r, 'same-box').length === 2, [c && [c.yield, c.yBasis], p && [p.yield, p.yieldBasis], r.report]];
+});
+tryCase('a crop\'s selling line is taken whole: a unit from one device never meets a price from the other; two crops\' lines are still joined', () => {
+  const sell = (plan, id, line) => ({ ...plan, assumptions: { ...(plan.assumptions || {}), sell: { ...((plan.assumptions || {}).sell || {}), [id]: line } } });
+  const s = sell(sell(FARM, 'crop.a', { unit: 'lb', price: 4 }), 'crop-b', { unit: 'lb', price: 3 });
+  const r = M.merge(s, sell(s, 'crop.a', { unit: 'bunch', price: 4 }), sell(s, 'crop.a', { unit: 'lb', price: 5 })), a = r.ok && r.plan.assumptions.sell['crop.a'];
+  const two = M.merge(s, sell(s, 'crop.a', { unit: 'bunch', price: 2 }), sell(s, 'crop-b', { unit: 'lb', price: 6 }));
+  return [ok(r) && same(a, { unit: 'lb', price: 5 }) && items(r, 'same-box').length === 1 && ok(two) && two.plan.assumptions.sell['crop.a'].unit === 'bunch' && two.plan.assumptions.sell['crop-b'].price === 6 && !two.report.items.length, [a, r.report]];
+});
+tryCase('where a crop\'s days start and how many days less are two boxes: each device\'s stands', () => {
+  const st = (plan, line) => ({ ...plan, assumptions: { ...(plan.assumptions || {}), starts: { ...((plan.assumptions || {}).starts || {}), 'crop-b': line } } });
+  const s = st(FARM, { from: 'transplant', less: 14 }), r = M.merge(s, st(s, { from: 'sowing', less: 14 }), st(s, { from: 'transplant', less: 10 }));
+  return [ok(r) && same(r.plan.assumptions.starts['crop-b'], { from: 'sowing', less: 10 }) && !r.report.items.length, r.ok ? r.plan.assumptions.starts['crop-b'] : r.why];
+});
+tryCase('what the planner noted of an edit is taken whole, in the plan and in what a file keeps of it; a variety\'s photo is one file with its type', () => {
+  const V = FARM.varieties[0];
+  const fact = (plan, f) => ({ ...plan, lrfNext: { ...(plan.lrfNext || {}), facts: { varieties: { [V.id]: f } } }, lrfNextKeep: { v: 1, savedAt: '2027-03-01T08:00:00.000Z', device: 'd', keep: { facts: { varieties: { [V.id]: f } } } },
+    varieties: plan.varieties.map(v => (v.id === V.id ? { ...v, photo: f.photo } : v)) });
+  const s = fact(FARM, { name: V.name, set: { dtm: 60 }, was: { dtm: 55 }, photo: { sha256: 'aa', mime: 'image/jpeg' } });
+  const m = fact(s, { name: V.name, set: { dtm: 62 }, was: { dtm: 55 }, photo: { sha256: 'bb', mime: 'image/jpeg' } }), t = fact(s, { name: V.name, set: { dtm: 60, germ: 80 }, was: { dtm: 55, germ: 85 }, photo: { sha256: 'aa', mime: 'image/png' } });
+  const r = M.merge(s, m, t), f = r.ok && r.plan.lrfNext.facts.varieties[V.id], k = r.ok && r.plan.lrfNextKeep.keep.facts.varieties[V.id], ph = r.ok && r.plan.varieties.find(v => v.id === V.id).photo;
+  return [ok(r) && same(f.set, { dtm: 60, germ: 80 }) && same(f.was, { dtm: 55, germ: 85 }) && same(k, f) && same(ph, { sha256: 'aa', mime: 'image/png' }) && items(r, 'same-box').length === 3, [f, k, ph, r.report.items.map(x => x.path.join('.'))]];
+});
+tryCase('what a device notes for itself about the plan it holds is never reported: when it was loaded and from where, whether it has the farm photo', () => {
+  const own = (plan, at, from, sha) => ({ ...plan, lrfNext: { ...(plan.lrfNext || {}), importedAt: at, from, attic: 'cloud', mapImage: { mime: 'image/jpeg', sha256: sha } } });
+  const s = own(FARM, '2027-03-01T08:00:00.000Z', 'a.zip', 'aa'), r = M.merge(s, setP(own(s, '2027-03-02T08:00:00.000Z', 'the cloud', 'bb'), X1, { note: 'mine' }), setP(own(s, '2027-03-03T08:00:00.000Z', 'b.zip', 'cc'), X2, { note: 'theirs' }));
+  return [ok(r) && !r.report.items.length && planting(r.plan, X1).note === 'mine' && planting(r.plan, X2).note === 'theirs' && r.plan.lrfNext.mapImage.sha256 === 'cc', r.report];
+});
+tryCase('three plans as files hold them: with nothing of its own to add, this device gets the cloud\'s very text; what was taken in is counted', () => {
+  const file = (plan, at, dev) => JSON.stringify({ ...plan, lrfNext: { ...(plan.lrfNext || {}), importedAt: at }, lrfNextKeep: { v: 1, savedAt: at, device: dev, keep: {} } });
+  const t = record(setP(FARM, X2, { note: 'theirs' }), A1.id, 'sow', DAY, theirs()), tText = file(t, '2027-03-03T08:00:00.000Z', 'd-theirs');
+  const quiet = M.joinTexts(file(FARM, '2027-03-01T08:00:00.000Z', 'd-mine'), file(FARM, '2027-03-04T08:00:00.000Z', 'd-mine'), tText, { order: SL.DONE_ORDER });
+  const busy = M.joinTexts(file(FARM, '2027-03-01T08:00:00.000Z', 'd-mine'), file(setP(FARM, X1, { note: 'mine' }), '2027-03-02T08:00:00.000Z', 'd-mine'), tText, { order: SL.DONE_ORDER });
+  const bad = M.joinTexts('{', tText, tText);
+  return [ok(quiet) && quiet.same === true && quiet.text === tText && quiet.taken.recorded.sow === 1 && quiet.taken.changed === 1 && quiet.taken.lists.includes('seedInventory') && quiet.taken.any
+    && ok(busy) && busy.same === false && JSON.parse(busy.text).plantings.find(p => p.id === X1).note === 'mine' && busy.taken.recorded.sow === 1 && bad.ok === false, [quiet.same, quiet.taken, busy.same, busy.taken, bad.why]];
 });
 tryCase('a list of plain values is one value: an order of beds changed on both sides is the cloud\'s, and reported', () => {
   const order = (plan, ids) => ({ ...plan, gardens: plan.gardens.map(g => (g.id === GARDEN.id ? { ...g, bedOrder: { ...g.bedOrder, ids } } : g)) });
