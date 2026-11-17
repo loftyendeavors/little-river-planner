@@ -245,7 +245,7 @@
     // side's day is measured from. (A sowing day set by hand goes when a recording pushes the planting, js/week.js.)
     // The last such push in the cloud's history is where the shared state left the day.
     let pushedTo = null;
-    const sharedLines = [...kinds].map(kind => jobs.get(kind)).filter(j => j.alike && j.jt && j.jt.line).map(j => j.jt.line);
+    const sharedLines = [...kinds].map(kind => jobs.get(kind)).filter(j => j.alike && j.jt && j.jt.line && !hs.some(x => same(x, j.jt.line))).map(j => j.jt.line);   // added since the start: a push the start holds is in the start's day already
     for (const x of ht) if (sharedLines.some(line => same(line, x)) && isObj(x.follow) && x.follow.to && !same(x.follow.from, x.follow.to)) pushedTo = x.follow.to;
     const shared = pushedTo ? { ...s0, date: pushedTo, sowOn: undefined } : s0;
     for (const [keys, what] of [[PLACE, 'place'], [TIME, 'day']]) {
