@@ -18,6 +18,20 @@ How a build is made and checked is in `tests/README.md`. The rules below are for
 - Flag a save or a send whose failure is swallowed.
 - For each finding here, give two input plans and the wrong result.
 
+### The plan's shape (tests/plan_shape.cjs)
+- Flag a field a change writes into a plan (on a planting, a bed, a garden,
+  a crop, a variety, a seed lot, the list of assumptions, the settings, the
+  nursery, or the planner's own record under lrfNext) that
+  tests/plan_shape.cjs does not name.
+  Why: the checks see only the fields the made-up farm and their tour reach.
+  A field named nowhere is joined by shape when two devices' plans meet,
+  which can keep half of a thing from each device.
+- Flag an object whose parts only make sense together (a from and a to,
+  an x and a y) entered without "whole".
+  Safe path: its entry in tests/plan_shape.cjs, and, for "whole", the same
+  place in js/merge.js WHOLE. A change to js/merge.js is a change to saving
+  and sync, with the rules above.
+
 ### Privacy
 - Flag any added line holding a real name, address, email, passphrase,
   service address, or a garden or variety name from a real farm.
