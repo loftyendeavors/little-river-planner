@@ -213,8 +213,90 @@ for (const wildcard of [true, false, 'throws']) {
   r = await ask(s, q('https://extra-seeds.example/p'), { token: t, e: { ...s.env, LRF_SITES: 'extra-seeds.example' } }); check('a site added in LRF_SITES is fetched', r.status === 200, r.status);
   r = await ask(s, q(page), { token: t, method: 'POST' }); check('nothing is posted through it', r.status >= 400, r.status);
   r = await ask(s, q(page), { token: t, origin: 'https://someone-else.example' }); check('another website cannot use it', r.status === 403);
-  r = await ask(s, 'state', { token: t }); check('the service says it is version 2', (await r.json()).v === 2);
+  r = await ask(s, 'state', { token: t }); check('the service says it is version 3', (await r.json()).v === 3);
   r = await ask(s, 'fetch', { method: 'OPTIONS' }); check('the preflight allows the reader\'s header', /x-lrf-key/.test(r.headers.get('access-control-allow-headers')));
   check('nothing fetched is kept in the bucket', ![...(s.store ? s.store.keys() : [])].some(k => /fetch|johnny/.test(k)));
   globalThis.fetch = real;
+}
+
+// ── version 3: an older planner does not write over a newer one's plan; the plan before a join is kept ──
+{
+  const v = make(), t = (await login(v)).token, held = async () => (await ask(v, 'plan', { token: t })).text();
+  const keys = prefix => [...v.store.keys()].filter(k => k.startsWith(prefix)).sort(), bodyOf = key => new TextDecoder().decode(v.store.get(key).bytes);
+  r = await putPlan(v, t, 'FROM A PLANNER THAT SAYS NOTHING', 'none'); let p = await r.json();
+  check('a planner that names no number is stored as before, and the plan carries none', r.status === 200 && !('m' in p.plan.meta) && !('merged' in p.plan.meta), p.plan.meta);
+  r = await putPlan(v, t, 'FROM A NEWER PLANNER', p.plan.etag, { m: 1, line: 'line-one', n: 7 }); p = await r.json();
+  check('a newer planner\'s number, and its plan\'s line and count, are kept with the plan', r.status === 200 && p.plan.meta.m === 1 && p.plan.meta.line === 'line-one' && p.plan.meta.n === 7, p.plan.meta);
+  state = await (await ask(v, 'state', { token: t })).json();
+  check('and the state says them without the plan being fetched', state.plan.meta.m === 1 && state.plan.meta.line === 'line-one' && state.plan.meta.n === 7 && state.v === 3, state.plan.meta);
+  r = await putPlan(v, t, 'FROM THE OLDER PAGE', p.plan.etag); let no = await r.json();
+  check('an older planner\'s send is then refused in a sentence it can show, and nothing is stored', r.status === 409 && no.error === 'This device is running an older planner. Reload the page.' && (await held()) === 'FROM A NEWER PLANNER', [r.status, no.error]);
+  check('refused with a status that is not "sign in again", "a different plan" or "locked"', ![401, 412, 429].includes(r.status) && r.status >= 400);
+  r = await putPlan(v, t, 'FROM THE OLDER PAGE, ON PURPOSE', p.plan.etag, {}, { 'x-lrf-replace': '1' });
+  check('"keep mine" from an older planner is refused too, and no snapshot is made of it', r.status === 409 && (await held()) === 'FROM A NEWER PLANNER' && keys('snap/auto-').length === 0, r.status);
+  r = await putPlan(v, t, 'FROM THE OLDER PAGE, BEHIND AS WELL', 'stale-stamp'); no = await r.json();
+  check('an older planner that is also behind is told to reload, not offered a choice of plans', r.status === 409 && /Reload/.test(no.error), [r.status, no.error]);
+  r = await ask(v, 'plan', { token: t }); check('an older planner may still fetch the plan', r.status === 200 && (await r.text()) === 'FROM A NEWER PLANNER');
+  r = await ask(v, 'state', { token: t }); check('and its sign-in still stands', r.status === 200);
+  r = await putPlan(v, t, 'A NUMBER THAT IS NOT ONE', p.plan.etag, { m: 'two' }); check('a number that is not a whole number counts as none', r.status === 409);
+  r = await putPlan(v, t, 'A NUMBER OUT OF ALL REASON', p.plan.etag, { m: 1000 }); check('and so does one of a thousand or more: a planner\'s number is small', r.status === 409 && (await held()) === 'FROM A NEWER PLANNER');
+  r = await putPlan(v, t, 'FROM THE NEWER PLANNER AGAIN', p.plan.etag, { m: 1 }); p = await r.json();
+  check('the newer planner goes on writing', r.status === 200 && (await held()) === 'FROM THE NEWER PLANNER AGAIN');
+  r = await putPlan(v, t, 'FROM A NEWER ONE STILL', p.plan.etag, { m: 2 }); p = await r.json();
+  r = await putPlan(v, t, 'FROM THE ONE BEFORE IT', p.plan.etag, { m: 1 });
+  check('and the number only goes up: a planner behind the newest is refused in its turn', p.plan.meta.m === 2 && r.status === 409 && (await held()) === 'FROM A NEWER ONE STILL');
+
+  // the plan before a join
+  check('no plan is kept "before a join" by an ordinary send', keys('snap/merge-').length === 0);
+  r = await putPlan(v, t, 'NOT A JOINED PLAN, WHATEVER IT SAYS', p.plan.etag, { m: 2, merged: 'yes' }); p = await r.json();
+  check('nor by a send whose note says "merged" in any way but the one', r.status === 200 && keys('snap/merge-').length === 0 && !('merged' in p.plan.meta), p.plan.meta);
+  r = await putPlan(v, t, 'JOINED 0', p.plan.etag, { m: 2, merged: true }); p = await r.json();
+  check('a joined plan replaces the plan it names, and the plan it replaced is kept whole first', r.status === 200 && keys('snap/merge-').length === 1 && bodyOf(keys('snap/merge-')[0]) === 'NOT A JOINED PLAN, WHATEVER IT SAYS' && JSON.parse(v.store.get(keys('snap/merge-')[0]).customMetadata.m).auto === true, keys('snap/'));
+  r = await putPlan(v, t, 'JOINED OVER A PLAN IT HAS NOT SEEN', 'stale-stamp', { m: 2, merged: true });
+  check('a joined plan still lands only on the plan its sender saw, and keeps nothing when it does not land', r.status === 412 && keys('snap/merge-').length === 1 && (await held()) === 'JOINED 0');
+  { // two joined plans sent at the same moment over the same plan, both having looked before either writes: one lands, and one plan-before is kept, which is the plan both named
+    later(60);   // the kept plans are named by the clock: a later minute, so that the one made here is the last of them by name
+    const head = v.bucket.head, was = await held(), n = keys('snap/merge-').length;
+    v.bucket.head = async key => { const found = await head(key); await new Promise(resolve => setTimeout(resolve, 25)); return found; };
+    const [a, b] = await Promise.all([putPlan(v, t, 'JOINED AT ONCE, A', p.plan.etag, { m: 2, merged: true }), putPlan(v, t, 'JOINED AT ONCE, B', p.plan.etag, { m: 2, merged: true })]);
+    v.bucket.head = head;
+    const after = keys('snap/merge-'), landed = a.status === 200 ? a : b;
+    check('of two joined plans sent at once exactly one lands, and exactly one plan-before is kept: the plan both named, not the other\'s', [a.status, b.status].sort().join() === '200,412' && after.length === n + 1 && bodyOf(after[after.length - 1]) === was && (await held()) === (a.status === 200 ? 'JOINED AT ONCE, A' : 'JOINED AT ONCE, B'), [a.status, b.status, after.length - n, after.map(bodyOf)]);
+    p = await landed.json();
+  }
+  { // of two joined plans at once, the one that does not land cannot take its copy away (the bucket would not delete): it is still told "changed", not given an error
+    const head = v.bucket.head, del = v.bucket.delete; let failed = 0; later(60);
+    v.bucket.head = async key => { const found = await head(key); await new Promise(resolve => setTimeout(resolve, 25)); return found; };
+    v.bucket.delete = async keys => { if ([].concat(keys).some(k => String(k).startsWith('snap/merge-')) && !failed) { failed++; throw new Error('the bucket did not delete'); } return del(keys); };
+    const [a, b] = await Promise.all([putPlan(v, t, 'AT ONCE AGAIN, A', p.plan.etag, { m: 2, merged: true }), putPlan(v, t, 'AT ONCE AGAIN, B', p.plan.etag, { m: 2, merged: true })]);
+    v.bucket.head = head; v.bucket.delete = del;
+    check('a joined plan that did not land is told so even when its copy cannot be taken away', failed === 1 && [a.status, b.status].sort().join() === '200,412', [failed, a.status, b.status]);
+    p = await (a.status === 200 ? a : b).json();
+  }
+  { // the thinning fails after the plan is stored (the bucket would not list for a moment): the write is still answered as the write it was
+    const list = v.bucket.list; let failed = 0; later(60);
+    v.bucket.list = async opts => { if (opts && opts.prefix === 'snap/merge-' && !failed) { failed++; throw new Error('the bucket did not list'); } return list(opts); };
+    r = await putPlan(v, t, 'JOINED WHILE THE BUCKET WOULD NOT LIST', p.plan.etag, { m: 2, merged: true }); v.bucket.list = list;
+    const said = await r.json();
+    check('a joined plan that is stored is answered as stored, even when thinning the kept plans then fails', failed === 1 && r.status === 200 && said.plan && (await held()) === 'JOINED WHILE THE BUCKET WOULD NOT LIST', [failed, r.status]);
+    p = said.plan ? said : p;
+  }
+  r = await ask(v, 'snaps', { token: t }); const listed = (await r.json()).snaps;
+  check('the kept plan is listed with the snapshots, and can be fetched', listed.some(x => x.id.startsWith('merge-') && x.meta.auto === true && /before two devices/.test(x.meta.name)) && (await (await ask(v, 'snap/' + listed.filter(x => x.id.startsWith('merge-')).map(x => x.id).sort()[0], { token: t })).text()) === 'NOT A JOINED PLAN, WHATEVER IT SAYS', listed.map(x => x.id));
+  r = await ask(v, 'snap/merge-made-up-by-a-page', { method: 'PUT', token: t, body: 'X', headers: { 'x-lrf-meta': metaHeader({ name: 'Mine' }) } });
+  check('a page cannot write a snapshot under that kind of name', r.status === 404 && !v.store.has('snap/merge-made-up-by-a-page'), r.status);
+  const first = keys('snap/merge-')[0];
+  for (let i = 1; i <= 40; i++) { later(45); r = await putPlan(v, t, 'JOINED ' + i, p.plan.etag, { m: 2, merged: true }); p = await r.json(); }
+  let kept = keys('snap/merge-');
+  check('after 40 more joins inside one hour: the last 10 plans-before are kept, and the plan before the first join is still there', r.status === 200 && kept.includes(first) && kept.length === 11 && bodyOf(kept[kept.length - 1]) === 'JOINED 39' && bodyOf(kept[1]) === 'JOINED 30', [kept.length, kept.includes(first), kept.map(bodyOf).slice(0, 3)]);
+  for (let h = 0; h < 5; h++) { later(3600); for (let i = 0; i < 12; i++) { later(60); r = await putPlan(v, t, `HOUR ${h} JOIN ${i}`, p.plan.etag, { m: 2, merged: true }); p = await r.json(); } }
+  kept = keys('snap/merge-');
+  const hours = new Set(kept.map(k => k.slice(0, 'snap/merge-0000-00-00T00'.length)));
+  check('over a morning of joins the first of each hour is kept beside the last 10', kept.includes(first) && hours.size >= 6 && kept.length <= 10 + hours.size && kept.length >= 14, [kept.length, hours.size]);
+  later(26 * 3600); r = await putPlan(v, t, 'THE NEXT DAY', p.plan.etag, { m: 2, merged: true }); p = await r.json();
+  kept = keys('snap/merge-');
+  check('a day later only the last 10 are left of them', r.status === 200 && kept.length === 10 && !kept.includes(first) && bodyOf(kept[9]) === 'HOUR 4 JOIN 11', kept.length);
+  check('and the daily copy was made as for any other send', keys('day/').length >= 1);
+  r = await putPlan(v, t, 'MINE, ON PURPOSE, AND JOINED', p.plan.etag, { m: 2, merged: true }, { 'x-lrf-replace': '1' });
+  check('a plan replaced on purpose is kept once, as that, and not as the plan before a join', r.status === 200 && keys('snap/auto-').length === 1 && bodyOf(keys('snap/auto-')[0]) === 'THE NEXT DAY' && keys('snap/merge-').length === 10 && !keys('snap/merge-').some(k => bodyOf(k) === 'THE NEXT DAY'), keys('snap/merge-').map(bodyOf).slice(-2));
 }

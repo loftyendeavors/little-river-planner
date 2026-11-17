@@ -11,6 +11,8 @@
 
   "map geometry": 81,
 
+  "merge": 99,
+
   "page reader": 29,
 
   "rails": 31,
@@ -47,9 +49,9 @@
 
   "succession": 31,
 
-  "sync client": 81,
+  "sync client": 118,
 
-  "sync service": 112,
+  "sync service": 139,
 
   "the made-up farm": 7,
 
@@ -66,7 +68,7 @@
  },
  "build": {
 
-  "sync client, built site": 81,
+  "sync client, built site": 118,
 
   "the built site": 1
 
@@ -104,7 +106,7 @@
 
   "step3b": 67,
 
-  "sync": 87
+  "sync": 92
 
  },
  "app3": {
@@ -226,7 +228,7 @@
 
   "stepF-site": 47,
 
-  "sync-site": 87,
+  "sync-site": 92,
 
   "tour": 4
 

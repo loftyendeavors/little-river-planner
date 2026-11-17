@@ -60,7 +60,7 @@ WORKER = [
  ("a plain http address is fetched", "worker/lrf-plan-sync.js", "if (u.protocol !== 'https:' || u.username", "if (u.username"),
  ("a picture is handed back as a page", "worker/lrf-plan-sync.js", "if (image ? !type.startsWith('image/') : !/(text\\/html|application\\/xhtml|application\\/json|text\\/plain)/.test(type)) return { status: 415,", "if (false) return { status: 415,"),
  ("the final address is not said", "worker/lrf-plan-sync.js", "'content-type': result.type, 'x-lrf-final-url': result.final } });", "'content-type': result.type } });"),
- ("the service still says it is version 1", "worker/lrf-plan-sync.js", "const VERSION = 2;", "const VERSION = 1;"),
+ ("the service still says it is version 1", "worker/lrf-plan-sync.js", "const VERSION = 3;", "const VERSION = 1;"),
  ("extra sites are ignored", "worker/lrf-plan-sync.js", "return [...SITES, ...extra];", "return [...SITES];"),
  ("the browser may not send the reader's header", "worker/lrf-plan-sync.js", "x-lrf-base, x-lrf-key, x-lrf-meta,", "x-lrf-base, x-lrf-meta,"),
  ("the client hands the reader its passphrase-less token to nobody", "js/sync.js", "const linkService = () => (configured() && cfg.token ? { base: cfg.url, key: cfg.token, v: cfg.v || 0 } : null);", "const linkService = () => null;"),
@@ -92,7 +92,7 @@ for name, rel, old, new in ([(None, None, None, None)] if faults else []) + faul
         try: d = json.loads(out[out.rfind('{"passed"'):]); names = [x["name"] if isinstance(x, dict) else str(x) for x in d["failed"]]; ran = True
         except Exception: names = []; ran = False
     else:
-        out = subprocess.run(["node", "tools/sync_worker_test.mjs"], cwd=copy, capture_output=True, text=True, timeout=120).stdout + subprocess.run(["node", "tools/sync_client_test.mjs", str(copy / "js")], cwd=copy, capture_output=True, text=True, timeout=120).stdout
+        out = subprocess.run(["node", "tools/sync_worker_test.mjs"], cwd=copy, capture_output=True, text=True, timeout=120).stdout + subprocess.run(["node", "tools/sync_client_test.mjs", str(copy / "js"), str(app.parent / "old" / "js")], cwd=copy, capture_output=True, text=True, timeout=120).stdout
         names = [l[5:85] for l in out.splitlines() if l.startswith("FAIL ") and "the test ran to its end" not in l]; ran = len([l for l in out.splitlines() if l.endswith(" passed") and l.split()[1:2] == ["of"]]) == 2 and "the test ran to its end" not in out   # both tests ended with their count
     if name is None and mode != "page" and names:   # these two print a failing line with its figures after its name, so the lines of two runs cannot be matched by name
         print("with no fault in it the tests already fail: nothing can be shown to be caught: " + "; ".join(names)[:500], flush=True); already = None; continue

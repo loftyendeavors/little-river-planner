@@ -67,7 +67,7 @@ def copy():
     work = os.path.join(scratch, 'fault'); shutil.rmtree(work, ignore_errors=True)
     if mode == 'node':
         os.makedirs(os.path.join(work, 'js'))
-        for name in ('store.js', 'sync.js'): shutil.copy(os.path.join(app, 'js', name), os.path.join(work, 'js', name))
+        for name in ('store.js', 'sync.js', 'merge.js'): shutil.copy(os.path.join(app, 'js', name), os.path.join(work, 'js', name))
         shutil.copytree(os.path.join(repo, 'worker'), os.path.join(work, 'worker')); shutil.copytree(os.path.join(repo, 'tools'), os.path.join(work, 'tools'), ignore=shutil.ignore_patterns('reader', '*.py'))
     else:
         shutil.copytree(app, work)
@@ -75,7 +75,7 @@ def copy():
 def run(work):
     """Every line that failed, and whether each check gave a report at all."""
     if mode == 'node':
-        runs = [alone(['node', os.path.join(tests, 'store_test.cjs'), work], 120)[0], alone(['node', os.path.join(work, 'tools', 'sync_client_test.mjs'), os.path.join(work, 'js')], 120)[0]]
+        runs = [alone(['node', os.path.join(tests, 'store_test.cjs'), work], 120)[0], alone(['node', os.path.join(work, 'tools', 'sync_client_test.mjs'), os.path.join(work, 'js'), os.path.join(os.path.dirname(app), 'old', 'js')], 120)[0]]
     else:
         runs = [alone([sys.executable, '-I', os.path.join(tests, 'two_windows_check.py'), work, os.path.join(scratch, 'fault-shots'), repo], 420)[0]]
     got = [failed_lines(out) for out in runs]

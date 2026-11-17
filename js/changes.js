@@ -14,6 +14,10 @@
 (function (root) {
   'use strict';
   const BUILDS = [
+    { label: '0.54', on: '2026-11-16', did: 'Nothing looks different. With Cloud sync on, this browser now also keeps the plan as the cloud last held it. It is groundwork for recording on two devices; the planner still asks which plan to keep when both have changed.',
+      steps: ['Change something with Cloud sync on: “Saved” and the cloud’s line under Backup read as before.',
+        'Open the planner in a second window of this browser: it only shows the plan, as before.',
+        'Until the next build, keep to one computer at a time.'] },
     { label: '0.53', on: '2026-11-16', did: 'The build’s number is in the header, with what each build changed behind it. Loose ends is in the header only while something needs you. On the Map, what can be done is behind “?”.',
       steps: ['Press the build’s number beside the farm’s name: this list, with the builds not yet opened in this browser marked “New”.',
         'On the Map, press “?” at the end of the tools: what can be done on the map, in two columns. The side panel no longer carries that list.',

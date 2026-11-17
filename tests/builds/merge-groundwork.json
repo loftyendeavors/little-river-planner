@@ -1,0 +1,20 @@
+{
+ "build": "The groundwork for recording on two devices (the second of three stages; nothing is joined yet and no screen changes). js/merge.js: two copies of one plan joined record by record, with five tests a joined plan must pass; nothing on the page calls it. js/kept.js: with Cloud sync on, the plan as the cloud held it when this browser was last in step is kept in the browser's database, beside the stamp it belongs to, so that there is a plan to compare with when the joining is turned on; js/sync.js writes it after each send and each opening, and fetches it once on a browser that has none. The sync service, version 3 (worker/, not served): an older planner's send is refused in a sentence once a newer one has written, and the plan a joined plan replaces is kept. When two devices have both changed the plan, the planner still asks which plan to keep. No date, yield, price, seed count or bench figure changes.",
+ "words": [
+  "main.js"
+ ],
+ "code": [
+  "changes.js",
+  "sync.js"
+ ],
+ "added": [
+  "kept.js",
+  "merge.js"
+ ],
+ "removed": [],
+ "page": [
+  "index.html",
+  "sw.js"
+ ],
+ "screens": []
+}

@@ -173,8 +173,8 @@ Then let the checks run again on the two together: the merge waits for them.
 ## Deliberate faults
 
 A check that cannot fail proves nothing. Each `mutate*.py` puts one fault at a time into a copy of the app (a rule dropped,
-a word changed back, a figure off by one) and requires that the check then fails where it passed before. Seven sets (`changed`,
-`cleanup`, `look`, `map`, `scale`, `screens`, `windows`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
+a word changed back, a figure off by one) and requires that the check then fails where it passed before. Eight sets (`changed`,
+`cleanup`, `look`, `map`, `merge`, `scale`, `screens`, `windows`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
 
 ```
 sh tests/faults.sh list             # every set, its modes, how many faults

@@ -105,6 +105,8 @@ def take(pw_browser, url, width, height, wanted):
                 await document.fonts.ready;
                 await Promise.all([...document.images].filter(i => !i.complete).map(i => new Promise(r => { i.onload = i.onerror = r; setTimeout(r, 4000); })));
                 for (const t of document.querySelectorAll('.toast, .toasts > *')) t.remove();
+                // the build's number in the header is meant to differ from the build before's: it keeps its room and is not drawn
+                const chip = document.getElementById('buildChip'); if (chip) chip.style.visibility = 'hidden';
                 if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
                 await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
             }""")

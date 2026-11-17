@@ -57,6 +57,42 @@ NODE = [
   ('client: "keep this plan" does not ask the cloud to keep the other', 'js/sync.js', "return solo(() => push(st.cloud.etag, true));", "return solo(() => push(st.cloud.etag, false));", 'client'),
   ('client: photos are sent every time', 'js/sync.js', "      if (mine === cfg.extrasKey) {\n", "      if (false) {\n", 'client'),
   ('client: photos added on another device are not fetched', 'js/sync.js', "? photosDown(remote) : false;", "? false : false;", 'client'),
+  # the service's version 3, and the plan kept to compare with
+  ('worker: an older planner writes over a newer one\'s plan', 'worker/lrf-plan-sync.js', "if (there && (metaOf(there).m || 0) > (meta.m || 0)) return json(409,", "if (false) return json(409,", 'worker'),
+  ('worker: an older planner is refused with "sign in again"', 'worker/lrf-plan-sync.js', "return json(409, { error: 'This device is running an older planner. Reload the page.'", "return json(401, { error: 'This device is running an older planner. Reload the page.'", 'worker'),
+  ('worker: a planner\'s number is not kept with the plan', 'worker/lrf-plan-sync.js', "  if (Number.isInteger(meta.m) && meta.m > 0 && meta.m < 1000) out.m = meta.m;", "  if (false) out.m = meta.m;", 'worker'),
+  ('worker: a plan\'s line is not kept with it', 'worker/lrf-plan-sync.js', "'name', 'enc', 'why', 'line']", "'name', 'enc', 'why']", 'worker'),
+  ('worker: the plan before a join is not kept', 'worker/lrf-plan-sync.js', "    if (meta.merged && !replace) {   // `merged` is true or absent: readMeta keeps nothing else\n", "    if (false) {\n", 'worker'),
+  ('worker: the plans before a join are never thinned', 'worker/lrf-plan-sync.js', "  if (before) { try { await pruneMerges(bucket, now); } catch (_) {", "  if (before) { try { } catch (_) {", 'worker'),
+  ('worker: a joined plan that did not land leaves its "plan before" behind', 'worker/lrf-plan-sync.js', "if (before) { try { await bucket.delete(before); } catch (_) {", "if (before) { try { } catch (_) {", 'worker'),
+  ('worker: of the plans before a join only the last ten are kept, not the first of each hour', 'worker/lrf-plan-sync.js', "if (key >= since && !hours.has(hour)) {", "if (false) {", 'worker'),
+  ('worker: a plan replaced on purpose by a joined plan is kept twice', 'worker/lrf-plan-sync.js', "    if (meta.merged && !replace) {", "    if (meta.merged) {", 'worker'),
+  ('worker: any word under "merged" counts as a joined plan', 'worker/lrf-plan-sync.js', "  if (meta.merged === true) out.merged = true;", "  if (meta.merged) out.merged = true;", 'worker'),
+  ('worker: a planner\'s number has no ceiling', 'worker/lrf-plan-sync.js', "meta.m > 0 && meta.m < 1000) out.m = meta.m;", "meta.m > 0) out.m = meta.m;", 'worker'),
+  ('worker: a page can write a "plan before a join" of its own', 'worker/lrf-plan-sync.js', " && !m[2].startsWith('merge-')) {", ") {", 'worker'),
+  ('client: the plan sent is not kept to compare with', 'js/sync.js', "      await keepPlan(done.plan.etag, p.text, p.key);   // what the cloud now holds is this very text. Last: nothing above waits for the database\n", "", 'client'),
+  ('client: the plan opened from the cloud is not kept to compare with', 'js/sync.js', "      await keepPlan(etag, text, host.key());\n", "", 'client'),
+  ('client: a browser in step with no plan kept never fetches one', 'js/sync.js', "await ensureKept().catch(", "await Promise.resolve(false).catch(", 'client'),
+  ('client: with a database that refuses, the cloud\'s plan is fetched at every look', 'js/sync.js', "if (st.kept === cfg.base || st.keptTried === cfg.base) return", "if (st.kept === cfg.base) return", 'client'),
+  ('client: a kept plan that cannot be written fails the send', 'js/sync.js', "        st.kept = null; st.keptNote = (error && error.message) || 'The plan to compare with could not be kept.';", "        throw error;", 'client'),
+  ('client: the page says a plan is kept when none is', 'js/sync.js', "kept: !!cfg.base && st.kept === cfg.base, keptNote", "kept: !!cfg.base, keptNote", 'client'),
+  ('client: leaving the cloud leaves the kept plan behind', 'js/sync.js', "if (kept && !st.keptOff && !quiet()) Promise.resolve().then(() => kept.clear()).catch(() => {});", "", 'client'),
+  ('client: a window that only shows the plan empties the kept plan', 'js/sync.js', "if (kept && !st.keptOff && !quiet()) Promise.resolve()", "if (kept && !st.keptOff) Promise.resolve()", 'client'),
+  ('client: a fetch of the plan to keep that fails is not tried again', 'js/sync.js', "      const res = await call('GET', '/plan', { raw: true }), meta = readMeta(res), etag = res.headers.get('x-lrf-etag');   // a fetch that fails is tried again at the next look\n", "      st.keptTried = cfg.base;\n      const res = await call('GET', '/plan', { raw: true }), meta = readMeta(res), etag = res.headers.get('x-lrf-etag');\n", 'client'),
+  ('client: a plan fetched after the cloud moved is kept all the same', 'js/sync.js', "      if (etag !== cfg.base) return false;   // the cloud moved between the look and the fetch: the next look says so\n", "", 'client'),
+  ('client: a plan the database refused is fetched again at the next look', 'js/sync.js', "        st.keptTried = etag;   // refused for this very plan: the look that follows does not fetch it to be refused again\n", "", 'client'),
+  ('client: the kept plan is asked of a database that did not answer', 'js/sync.js', "if (!kept || st.keptOff || !cfg.base || behind", "if (!kept || !cfg.base || behind", 'client'),
+  ('client: a plan loaded while the sent plan is being kept is not marked as loaded', 'js/sync.js', "st.snoozed = null; st.loads = loads;\n      await keepPlan(done.plan.etag, p.text, p.key);", "st.snoozed = null;\n      await keepPlan(done.plan.etag, p.text, p.key); st.loads = host.loads();", 'client'),
+  ('worker: a copy that cannot be taken away turns "changed" into an error', 'worker/lrf-plan-sync.js', "if (before) { try { await bucket.delete(before); } catch (_) {", "if (before) { await bucket.delete(before); try { } catch (_) {", 'worker'),
+  ('worker: a thinning that fails turns a stored plan into an error', 'worker/lrf-plan-sync.js', "  if (before) { try { await pruneMerges(bucket, now); } catch (_) {", "  if (before) { await pruneMerges(bucket, now); try { } catch (_) {", 'worker'),
+  ('client: the kept plan is handed out after a whole plan was loaded over the open one', 'js/sync.js', "if (!kept || st.keptOff || !cfg.base || behind || host.loads() !== st.loads) return null;   // a database that did not answer is not waited for again\n      const loads = host.loads(), base = cfg.base;\n      try { const k = await answered(kept.get()); return k && k.etag === base && cfg.base === base && !behind && host.loads() === loads && loads === st.loads ? k : null; }", "if (!kept || st.keptOff || !cfg.base || behind) return null;\n      const loads = host.loads(), base = cfg.base;\n      try { const k = await answered(kept.get()); return k && k.etag === base && cfg.base === base && !behind ? k : null; }", 'whole plan is loaded over the open one, the kept plan is not handed out'),
+  ('client: the kept plan is handed out for a stored plan that is behind', 'js/sync.js', "if (!kept || st.keptOff || !cfg.base || behind || host.loads() !== st.loads) return null;   // a database that did not answer is not waited for again\n      const loads = host.loads(), base = cfg.base;\n      try { const k = await answered(kept.get()); return k && k.etag === base && cfg.base === base && !behind && host.loads()", "if (!kept || st.keptOff || !cfg.base || host.loads() !== st.loads) return null;\n      const loads = host.loads(), base = cfg.base;\n      try { const k = await answered(kept.get()); return k && k.etag === base && cfg.base === base && host.loads()", 'stored plan that is behind'),
+  ('client: a plan kept under another stamp is handed out as the plan to compare with', 'js/sync.js', "return k && k.etag === base && cfg.base === base", "return k && cfg.base === base", 'kept under another stamp than the one'),
+  ('client: the kept plan is handed out after a plan was loaded while it was read', 'js/sync.js', "&& cfg.base === base && !behind && host.loads() === loads && loads === st.loads ? k : null;", "? k : null;", 'while the kept plan is being read'),
+  ('client: a page opened again does not read what it has kept', 'js/sync.js', "st.kept = n ? n.etag : null; }", "st.kept = null; }", 'client'),
+  ('client: a database that never answers leaves the send waiting', 'js/sync.js', "try { await answered(kept.put({ etag, text, key, at: new Date().toISOString() }));", "try { await kept.put({ etag, text, key, at: new Date().toISOString() });", 'client'),
+  ('client: a database that did not answer is asked again at every send', 'js/sync.js', "t = later(() => { st.keptOff = true; reject(", "t = later(() => { reject(", 'client'),
+  ('client: the plan is kept before the stamp it is kept under is noted', 'js/sync.js', "      keep({ base: done.plan.etag, key: p.key, savedAt: p.savedAt });\n", "      await keepPlan(done.plan.etag, p.text, p.key); keep({ base: done.plan.etag, key: p.key, savedAt: p.savedAt });\n", 'client'),
 ]
 PAGE = [
   ('app: a change is not handed to sync', 'js/app.js', "    folderSoon();\n    if (sync) sync.touch();\n    emit('plan');\n  }", "    folderSoon();\n    emit('plan');\n  }"),
@@ -74,6 +110,8 @@ PAGE = [
   ('app: going back cannot be taken back', 'js/app.js', "    const before = state.lastAuto;   // the plan as it was a moment ago, kept by importBackup", "    const before = null;"),
   ('app: deleting a snapshot leaves the cloud\'s copy', 'js/app.js', "      if (row.cloud && sync && sync.info().configured) await sync.dropSnap(row.kind, row.id);", ""),
   ('app: automatic snapshots are never thinned', 'js/snapshots.js', "    if (record.auto) await prune();", ""),
+  ('kept: the plan is kept under a stamp of its own making, not the cloud\'s', 'js/kept.js', "const note = { etag: record.etag, key:", "const note = { etag: 'x' + record.etag, key:"),
+  ('kept: the text is not written with its stamp', 'js/kept.js', "store.put(record.text, 'text'); return store.put(note, 'note');", "return store.put(note, 'note');"),
   ('app: a stored plan that will not open: sync is not even started', 'js/app.js', "      startSync();   // nothing is sent or opened by itself in this state; the cloud's plan can be asked for\n", ""),
 ]
 
@@ -99,7 +137,7 @@ for fault in ([(None, None, None, None)] if faults else []) + faults:
     if mode == 'node':
         work = os.path.join(scratch, 'mut-node'); shutil.rmtree(work, ignore_errors=True)
         os.makedirs(os.path.join(work, 'js')); shutil.copytree(os.path.join(repo, 'worker'), os.path.join(work, 'worker')); shutil.copytree(os.path.join(repo, 'tools'), os.path.join(work, 'tools'), ignore=shutil.ignore_patterns('reader', '*.py'))
-        shutil.copy(os.path.join(app, 'js', 'sync.js'), os.path.join(work, 'js', 'sync.js'))
+        for script in ('sync.js', 'merge.js'): shutil.copy(os.path.join(app, 'js', script), os.path.join(work, 'js', script))
     else:
         work = os.path.join(scratch, 'mut-page'); shutil.rmtree(work, ignore_errors=True); shutil.copytree(app, work)
     if name is not None:
@@ -108,7 +146,7 @@ for fault in ([(None, None, None, None)] if faults else []) + faults:
             out.append({'fault': name, 'broken': True, 'caught': False, 'by': 'THE FAULT DID NOT APPLY (%d places)' % src.count(a)}); print('BROKEN ' + json.dumps(out[-1]), flush=True); continue
         open(path, 'w', encoding='utf-8').write(src.replace(a, b))
     if mode == 'node':
-        seen = fails(run(['node', os.path.join(work, 'tools', 'sync_worker_test.mjs')], 120)) + fails(run(['node', os.path.join(work, 'tools', 'sync_client_test.mjs'), os.path.join(work, 'js')], 120))
+        seen = fails(run(['node', os.path.join(work, 'tools', 'sync_worker_test.mjs')], 120)) + fails(run(['node', os.path.join(work, 'tools', 'sync_client_test.mjs'), os.path.join(work, 'js'), os.path.join(os.path.dirname(app), 'old', 'js')], 120))   # with the build before's client beside it, as the run of every push has it
         if name is None and seen:   # these two print a failing line with its figures after its name, so the lines of two runs cannot be matched by name
             print('with no fault in it the tests already fail: nothing can be shown to be caught: ' + '; '.join(seen)[:500], flush=True); already = None; continue
     else:

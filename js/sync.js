@@ -20,6 +20,15 @@
  * or from another plan than the one noted when `stored` is false, has a plan that is behind: it is never sent by itself.
  * The page asks which plan to keep. A note that lacks the two words says nothing: not known is never behind.
  *
+ * Beside the note, the plan itself is kept as the cloud held it when this browser was last in step (js/kept.js, in the
+ * browser's database): the text that was sent, or the text that was opened. Nothing here reads it yet. It is there so that
+ * a plan another device sends can one day be joined with the plan here, record by record, and for that the plan the two
+ * started from has to be at hand. It is written after the note, and it counts only while its stamp is the note's: a page
+ * that ends between the two has a kept plan under an older stamp, which nobody trusts, and fetches the cloud's plan once
+ * at its next look to keep it, as a device does that has none. A kept plan that cannot be written stops nothing, and a
+ * database that does not answer is waited for once, for a few seconds, and then left alone until the page is opened
+ * again: `info().kept` says there is none, and `info().keptNote` why.
+ *
  * No page of the app is touched here. The app is reached through `host`:
  *   mode()          'plan' | 'sample' | 'held'      a real plan, the sample, or a stored plan that would not open
  *   key()           a fingerprint of the plan's content
@@ -34,7 +43,7 @@
 (function (root) {
   'use strict';
   const KEY = 'lrf-next:sync';
-  const timing = { push: 4000, poll: 300000, focus: 60000, timeout: 45000, retry: 30000, retryMost: 300000 };
+  const timing = { push: 4000, poll: 300000, focus: 60000, timeout: 45000, retry: 30000, retryMost: 300000, kept: 8000 };
 
   /** What to do, from what each side holds. base: the cloud stamp this browser is in step with; cloud: the stamp there now. */
   function decide({ base, cloud, dirty, sample, behind }) {
@@ -79,7 +88,9 @@
     const listeners = [];
     let cfg = {};
     try { cfg = JSON.parse(store.get() || '{}') || {}; } catch (_) { cfg = {}; }
-    const st = { status: cfg.url && cfg.token ? 'checking' : cfg.url ? 'signin' : 'off', cloud: null, files: null, first: false, error: '', until: null, checkedAt: 0, busy: false, snoozed: null, loads: 0, tries: 0, photoNote: '' };
+    const st = { status: cfg.url && cfg.token ? 'checking' : cfg.url ? 'signin' : 'off', cloud: null, files: null, first: false, error: '', until: null, checkedAt: 0, busy: false, snoozed: null, loads: 0, tries: 0, photoNote: '', kept: undefined, keptNote: '', keptTried: null, keptOff: false };
+    // the plan as the cloud held it when this browser was last in step (js/kept.js); null where the browser keeps no database
+    const kept = env.kept !== undefined ? env.kept : root.LRFKept && root.indexedDB ? root.LRFKept.create('') : null;
     let timer = null, again = null, running = null;
     const quiet = () => { try { return typeof host.readOnly === 'function' && !!host.readOnly(); } catch (_) { return false; } };
     const keep = change => { cfg = { ...cfg, ...change }; for (const k of Object.keys(cfg)) if (cfg[k] == null) delete cfg[k]; if (!quiet()) store.set(Object.keys(cfg).length ? JSON.stringify(cfg) : null); };
@@ -97,8 +108,45 @@
     const configured = () => !!(cfg.url && cfg.token);
     function info() {
       return { supported: env.supported !== undefined ? !!env.supported : supported(), configured: configured(), url: cfg.url || '', label: cfg.label || '', status: st.status, cloud: st.cloud, first: st.first, error: st.error, until: st.until,
-        savedAt: cfg.savedAt || null, busy: st.busy, checkedAt: st.checkedAt, offer: st.status === 'newer' && !!st.cloud && st.cloud.etag !== st.snoozed, photoNote: st.photoNote };
+        savedAt: cfg.savedAt || null, busy: st.busy, checkedAt: st.checkedAt, offer: st.status === 'newer' && !!st.cloud && st.cloud.etag !== st.snoozed, photoNote: st.photoNote,
+        kept: !!cfg.base && st.kept === cfg.base, keptNote: st.keptNote };
     }
+    /** What the browser's database answers, or a refusal if it has not answered in time: some browsers have left a page waiting for good. */
+    const answered = promise => { let t; return Promise.race([promise, new Promise((_, reject) => { t = later(() => { st.keptOff = true; reject(new Error('The browser’s database did not answer.')); }, timing.kept); })]).finally(() => cancel(t)); };
+    /**
+     * Keep the plan the cloud holds under `etag`, to compare with later. Called once the note of being in step is written.
+     * A failure is not the sync's: the plan was sent or opened all the same. It is noted, and there is then no plan to compare with.
+     */
+    async function keepPlan(etag, text, key) {
+      if (!kept || st.keptOff || !etag) return false;
+      try { await answered(kept.put({ etag, text, key, at: new Date().toISOString() })); st.kept = etag; st.keptNote = ''; return true; }
+      catch (error) {
+        st.kept = null; st.keptNote = (error && error.message) || 'The plan to compare with could not be kept.';
+        st.keptTried = etag;   // refused for this very plan: the look that follows does not fetch it to be refused again
+        if (!st.keptOff) { try { await answered(kept.clear()); } catch (_) { /* what is left there is under an older stamp, and counts for nothing */ } }
+        return false;
+      }
+    }
+    /** In step, and no plan kept under that stamp (a browser that synced before plans were kept, or whose database was emptied): fetch the cloud's once, and keep it. */
+    async function ensureKept() {
+      if (!kept || st.keptOff || !cfg.base) return false;
+      if (st.kept === undefined) { try { const n = await answered(kept.note()); st.kept = n ? n.etag : null; } catch (error) { st.kept = null; st.keptNote = (error && error.message) || ''; if (st.keptOff) return false; } }
+      if (st.kept === cfg.base || st.keptTried === cfg.base) return st.kept === cfg.base;   // one try a stamp: a database that refuses is not asked again at every look
+      const res = await call('GET', '/plan', { raw: true }), meta = readMeta(res), etag = res.headers.get('x-lrf-etag');   // a fetch that fails is tried again at the next look
+      if (etag !== cfg.base) return false;   // the cloud moved between the look and the fetch: the next look says so
+      return keepPlan(etag, await unpack(new Uint8Array(await res.arrayBuffer()), meta.enc), cfg.key);
+    }
+    /**
+     * The plan to compare with: { etag, key, at, bytes, text }, or null when none is kept under the stamp this browser is in
+     * step with. Null too when the plan open here does not come from that plan: it is behind what was noted, or a whole plan
+     * (a backup, a snapshot) has been loaded over it since. Joined with such a plan, every difference would read as a change made here.
+     */
+    async function keptPlan() {
+      if (!kept || st.keptOff || !cfg.base || behind || host.loads() !== st.loads) return null;   // a database that did not answer is not waited for again
+      const loads = host.loads(), base = cfg.base;
+      try { const k = await answered(kept.get()); return k && k.etag === base && cfg.base === base && !behind && host.loads() === loads && loads === st.loads ? k : null; } catch (_) { return null; }   // asked again after the wait: a plan loaded or sent meanwhile is not the one it comes from
+    }
+    const forget = () => { st.kept = undefined; st.keptNote = ''; st.keptTried = null; if (kept && !st.keptOff && !quiet()) Promise.resolve().then(() => kept.clear()).catch(() => {}); };
 
     // The service also reads seed suppliers' pages for the seed library, from its version 2 on. A device that is signed in hands the
     // library's reader the service's address and its own token (never the passphrase); `v` is the version the service last said.
@@ -131,6 +179,7 @@
 
     /** Send the plan open here, on condition that the cloud still holds `base` ('none': holds nothing). */
     async function push(base, replace) {
+      const loads = host.loads();   // with the plan that is taken: a whole plan loaded while this one is on its way is still a plan loaded since
       const was = stored();   // asked in the same turn the plan is taken: whether that very plan is in the browser's storage
       const p = await host.payload(), packed = await pack(p.text);
       set('sending');
@@ -139,7 +188,8 @@
       keep({ base: done.plan.etag, key: p.key, savedAt: p.savedAt });
       const now = stored();   // in storage then, or now (the plan open now is that one or one made from it)
       keep(words(now, (was && was.ok) || (now && now.ok))); noted = true; behind = false;
-      st.cloud = done.plan; st.first = false; st.snoozed = null; st.loads = host.loads();
+      st.cloud = done.plan; st.first = false; st.snoozed = null; st.loads = loads;
+      await keepPlan(done.plan.etag, p.text, p.key);   // what the cloud now holds is this very text. Last: nothing above waits for the database
       await photosUp(null).catch(error => { st.photoNote = error.message; });
       set('in-step');
       if (host.mode() === 'plan' && host.key() !== p.key) schedule('change', timing.push);   // changed again while it was on its way
@@ -191,6 +241,7 @@
       const now = stored();
       keep(words(now, now && now.ok)); noted = true; behind = false;
       st.cloud = { ...(st.cloud || {}), etag, meta }; st.first = false; st.snoozed = null; st.loads = host.loads();
+      await keepPlan(etag, text, host.key());
       set('in-step');
       return true;
     }
@@ -239,7 +290,7 @@
           else if (act === 'push-first') await push('none');
           else if (act === 'push') await push(cfg.base);
           else if (act === 'pull') { if (await pull('Before opening the plan from the cloud')) host.say(`Your plan was opened from the cloud: ${what(st.cloud)}.`); else set('newer'); }
-          else if (act === 'in-step') { st.first = false; await photosUp(st.files).catch(error => { st.photoNote = error.message; }); set('in-step'); }
+          else if (act === 'in-step') { st.first = false; await photosUp(st.files).catch(error => { st.photoNote = error.message; }); await ensureKept().catch(error => { st.keptNote = (error && error.message) || ''; }); set('in-step'); }
           else if (act === 'newer') {
             if (reason === 'start' || reason === 'connect') { if (await pull()) host.say(`A newer plan was opened from the cloud: ${what(st.cloud)}. The plan that was here is under Backup, Snapshots.`); else set('newer'); }
             else set('newer');
@@ -267,12 +318,12 @@
       catch (error) { if (error.kind === 'locked') st.until = error.detail && error.detail.until; throw error; }
       if (!got || typeof got.token !== 'string') throw problem('server', 'That address did not answer like the plan sync service.');
       const sameHome = cfg.url === at;
-      if (!sameHome) { cfg = {}; behind = false; noted = false; }
+      if (!sameHome) { cfg = {}; behind = false; noted = false; }   // a plan kept for the other service stays under its own stamp, which is no longer the note's, until the next one replaces it
       keep({ url: at, token: got.token, label: String(label == null ? cfg.label || '' : label).trim().slice(0, 40) });
       st.until = null; st.status = 'checking'; st.loads = host.loads();
       return run('connect');
     }
-    function disconnect() { cancel(timer); timer = null; cfg = {}; if (!quiet()) store.set(null); behind = false; noted = false; Object.assign(st, { status: 'off', cloud: null, files: null, first: false, error: '', snoozed: null, tries: 0 }); emit(); }
+    function disconnect() { cancel(timer); timer = null; cfg = {}; if (!quiet()) store.set(null); behind = false; noted = false; forget(); Object.assign(st, { status: 'off', cloud: null, files: null, first: false, error: '', snoozed: null, tries: 0 }); emit(); }
     const rename = label => { keep({ label: String(label || '').trim().slice(0, 40) }); emit(); };
     /** The user's answer to "which plan": the cloud's. */
     function openCloud() {
@@ -317,7 +368,7 @@
       if (!configured()) { emit(); return Promise.resolve(info()); }
       return run('start');
     }
-    return { info, linkService, on: fn => listeners.push(fn), start, run, touch, saved, connect, disconnect, rename, openCloud, keepMine, snooze, snaps, putSnap, getSnap, dropSnap, configured, when, describe: what };
+    return { info, linkService, keptPlan, on: fn => listeners.push(fn), start, run, touch, saved, connect, disconnect, rename, openCloud, keepMine, snooze, snaps, putSnap, getSnap, dropSnap, configured, when, describe: what };
   }
 
   const api = { create, decide, address, pack, unpack, supported, timing, KEY };
