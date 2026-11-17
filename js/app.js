@@ -1684,6 +1684,7 @@
     } catch (_) { /* the plan is still usable without its photo */ }
   }
   async function importBackup(file, extra = {}) {
+    while (joinBusy) await joinBusy;   // another device's changes are being taken in: a whole plan is loaded after that, never across it
     if (elsewhere()) return refuse(elsewhere());   // a whole plan is never loaded in a window that only shows the plan: nothing is kept, replaced or saved
     let parsed;
     try { parsed = await readBackupFile(file); IO.assertPlan(parsed.plan); } catch (error) { toast(`That file could not be read: ${error.message}`); return false; }
@@ -2060,9 +2061,19 @@
    * was here is kept first (or nothing happens), the joined plan is saved in this browser (or nothing happens), and only then
    * is it the plan open here. Undo, and what is selected, are kept. What js/sync.js is told: see its `host.join`.
    */
+  let joinBusy = null;   // while a join is writing: a whole plan is not loaded over it (importBackup waits), so the two never write the plan's records in turn
   async function joinPlans(startText, theirsText, o = {}) {
+    while (joinBusy) await joinBusy;
+    let done;
+    joinBusy = new Promise(resolve => { done = resolve; });
+    try { return await joinPlansNow(startText, theirsText, o); } finally { joinBusy = null; done(); }
+  }
+  async function joinPlansNow(startText, theirsText, o = {}) {
     const Merge = root.LRFMerge;
     if (!Merge || !Merge.joinTexts || elsewhere() || isSample() || state.unreadable) return { ok: false, why: '' };
+    // The records the planner does not edit are part of the plan's file. If they cannot be read now, the file made below would
+    // lack them, and the join would take that for this device having removed them: nothing is joined.
+    try { await loadAttic(); if (!state.extras && store.backend !== 'memory') await store.loadBlob('attic-new'); await loadExtras(); } catch (error) { return { ok: false, why: `The records kept beside the plan could not be read (${(error && error.message) || 'the browser refused'}), so nothing was joined.` }; }
     const loads = planLoads, loaded = () => (planLoads !== loads ? { ok: false, why: 'A whole plan was loaded here while the two were being joined. Whole plans are not joined.' } : null);
     for (let turn = 0; turn < 4; turn++) {
       if (loaded()) return loaded();   // the plan open now does not come from the plan the two devices shared
