@@ -56,7 +56,7 @@ NODE = [
 PAGE = [
   ('page: the switch turns on without a snapshot or a backup', 'js/backupui.js', "        const snap = await App.snapshot(`Before joining plans from two devices, ${UI.day(new Date())}`);\n        if (!snap) { UI.toast('The snapshot could not be taken, so nothing was turned on.'); return false; }\n        await App.exportBackup();\n", "", 'a named snapshot is taken and a backup file downloaded first'),
   ('page: the switch turns on without asking', 'js/backupui.js', "      if (!ok) return false;\n      switching = true; drawSync();", "      switching = true; drawSync();", 'Cancel leaves it off'),
-  ('app: the plan that was here is not kept before changes are taken in', 'js/app.js', "      if (!before) return { ok: false, why: 'The plan here could not be kept first", "      if (false) return { ok: false, why: 'The plan here could not be kept first", 'kept as a snapshot before anything is taken in'),
+  ('app: the plan that was here is not kept before changes are taken in', 'js/app.js', "      if (!before) return { ok: false, why: 'The plan here could not be kept first", "      if (false) return { ok: false, why: 'The plan here could not be kept first", 'cannot be kept first'),
   ('snapshots: a plan kept packed cannot be read back', 'js/snapshots.js', "    try { return new TextDecoder().decode(await viaStream(body.gz, new DecompressionStream('gzip'))); } catch (_) { return null; }", "    return null;", 'that snapshot reads back as the plan'),
   ('app: taking in empties undo', 'js/app.js', "      state.redo.length = 0; state.last = null;\n      rebuild(); Thumbs.index(state.plan);", "      state.redo.length = 0; state.undo.length = 0; state.last = null;\n      rebuild(); Thumbs.index(state.plan);", 'undo and what was selected are kept'),
   ('app: changes are taken in with a window open', 'js/app.js', "&& !document.querySelector('dialog[open]') && Date.now() - lastTouch >= 1500;", "&& Date.now() - lastTouch >= 1500;", 'with a window open on the page nothing is taken in'),
@@ -64,7 +64,7 @@ PAGE = [
   ('app: undo puts a record back whole though another device has changed it', 'js/app.js', "    if (step.ops.every(op => alike(now(op), left(op)))) return { ops: step.ops, kept: 0 };", "    if (step.ops.length) return { ops: step.ops, kept: 0 };", 'takes out only what the step changed'),
   ('page: no strip when something was changed on both devices', 'js/backupui.js', "told = App.state.ready && !!j && j.rows.length > 0 && c.status !== 'conflict' && !c.offer,", "told = false,", 'a strip says something was changed on both devices'),
   ('app: "Use mine" leaves the other device\'s value', 'js/app.js', "    const done = commit('Used this device’s value', ops);", "    const done = true;", 'puts this device\'s value back'),
-  ('app: this device\'s own notes about its plan are taken from the joined file', 'js/app.js', "        for (const key of Object.keys(mine)) if (!OWN_KEYS.includes(key)) note[key] = mine[key];   // what this device notes for itself stays its own\n", "", 'no error on either page'),
+  ('app: this device\'s own notes about its plan are taken from the joined file', 'js/app.js', "        for (const key of Object.keys(mine)) if (!OWN_KEYS.includes(key)) note[key] = mine[key];   // what this device notes for itself stays its own\n", "", 'what this device notes for itself'),
 ]
 if mode == 'list': print(json.dumps({'node': len(NODE), 'page': len(PAGE)})); sys.exit(0)
 

@@ -110,8 +110,11 @@ with sync_playwright() as pw:
         if PLAN_FILE:
             A.set_input_files('#importFile', PLAN_FILE); A.wait_for_function("!LRFApp.isSample()", timeout=60000)
             A.wait_for_function("document.getElementById('saveState').dataset.state === 'saved'", timeout=180000); A.wait_for_timeout(1500)
-        # the seed on hand is the plan's own from the first change made to it: one lot added, so that both devices count from the same lots
-        A.evaluate("(() => { const lots = (LRFApp.inventoryNow().lots || []).filter(l => l.deleted !== true); return lots.length ? LRFApp.editStock('Add', (inv, ctx) => LRFSeedLib.addLot(inv, { key: lots[0].key, unit: 'seeds', quantity: 1, status: 'ordered' }, ctx)) : null; })()")
+        # Seed on hand is the plan's own from the first change made to it, so that both devices count from the same lots: a lot is
+        # added here for a sowing that has none (the built site's plan comes with no seed on hand at all).
+        A.evaluate("""(() => { const A = LRFApp, SL = LRFSeedLib; for (const p of A.state.plan.plantings) { if (p.liveTray || p.done) continue; const s = A.sowingOf(p);
+          if (!s || s.kind !== 'sow' || s.stockUnit !== 'seeds' || !(s.estimate > 0) || SL.lotsFor(A.inventoryNow(), s.key).length) continue;
+          return A.editStock('Add', (inv, ctx) => SL.addLot(inv, { key: s.key, unit: 'seeds', quantity: Math.ceil(s.estimate * 3), status: 'usable' }, ctx)); } return null; })()"""); A.wait_for_timeout(300)
         A.evaluate("([u, k]) => LRFApp.sync().connect(u, k, 'Work laptop')", [SYNC, KEY]); settled(A, 'in-step')
         B.goto(url); ready(B)
         B.evaluate("([u, k]) => LRFApp.sync().connect(u, k, 'Phone')", [SYNC, KEY]); settled(B, 'in-step')
@@ -131,12 +134,13 @@ with sync_playwright() as pw:
         A.screenshot(path=os.path.join(shots, 'switch-off.png'))
         A.click('#syncJoinOn'); said = answer(A, yes=False); A.wait_for_timeout(300)
         check('turning it on asks first, in words that say what it does, and Cancel leaves it off', bool(said) and 'record by record' in said and 'snapshot' in said and A.evaluate("LRFApp.syncInfo().join") is False, said)
-        with A.expect_download(timeout=60000) as dl:
-            A.click('#syncJoinOn'); answer(A, yes=True)
-        A.wait_for_function("LRFApp.syncInfo().join === true", timeout=30000); A.wait_for_timeout(500)
+        files = []
+        A.on('download', lambda d: files.append(d.suggested_filename))
+        A.click('#syncJoinOn'); answer(A, yes=True)
+        A.wait_for_function("LRFApp.syncInfo().join === true", timeout=60000); A.wait_for_timeout(1500)
         named = [s for s in snaps(A) if s['name'].startswith('Before joining plans from two devices') and not s['auto']]
         on = A.evaluate("({ on: document.getElementById('syncJoinOn').getAttribute('aria-pressed'), kept: JSON.parse(localStorage.getItem('lrf-next:sync')).join, how: document.getElementById('syncHow').textContent })")
-        check('turned on: a named snapshot is taken and a backup file downloaded first, and the switch is kept in this browser', len(named) == 1 and bool(dl.value.suggested_filename) and on['on'] == 'true' and on['kept'] is True and 'joined record by record' in on['how'], [named, on])
+        check('turned on: a named snapshot is taken and a backup file downloaded first, and the switch is kept in this browser', len(named) == 1 and len(files) == 1 and bool(files[0]) and on['on'] == 'true' and on['kept'] is True and 'joined record by record' in on['how'], [named, files, on])
         A.screenshot(path=os.path.join(shots, 'switch-on.png'))
         A.click('#syncDone'); A.wait_for_timeout(200)
         B.evaluate("void LRFApp.sync().setJoin(true)"); settled(B, 'in-step')
@@ -145,12 +149,15 @@ with sync_playwright() as pw:
         where = 'both kept'
         A.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'moved on the laptop' }, 'A note')", X1); settled(A, 'in-step')
         B.evaluate("(id) => LRFApp.select({ type: 'planting', id })", X2)
+        OWN = "(() => { const n = LRFApp.state.plan.lrfNext || {}; return JSON.stringify([n.attic, n.from, n.importedAt, n.backup, n.mapImage || null]); })()"
+        own_was = B.evaluate(OWN)
         B.evaluate("(s) => LRFApp.recordSowing(s.id, { date: s.day })", sub)
         info = settled(B, 'in-step')
         b = { 'x1': B.evaluate(P, X1), 'sub': B.evaluate(P, sub['id']), 'lot': B.evaluate(LOT, sub['lot']), 'toast': toast(B), 'sel': B.evaluate("LRFApp.state.sel"), 'undo': B.evaluate("LRFApp.state.undo.length") }
         check('the device that sowed takes the other device\'s change in: the note is here and so is the sowing', b['x1']['note'] == 'moved on the laptop' and b['sub']['sown'] == sub['day'] and b['lot'] < sub['held'], b)
         check('and says what was taken in, and from which device', 'Taken in from Work laptop' in b['toast'] and '1 planting changed' in b['toast'], b['toast'])
         check('undo and what was selected are kept through it', b['undo'] == 1 and b['sel'] and b['sel'].get('id') == X2, [b['undo'], b['sel']])
+        check('what this device notes for itself about the plan it holds is still its own: where it came from, where its records are kept, its farm photo', B.evaluate(OWN) == own_was and '"cloud"' in own_was, [own_was, B.evaluate(OWN)])
         before = [s for s in snaps(B) if s['name'] == 'Before taking in changes from Work laptop' and s['auto']]
         check('the plan that was here is kept as a snapshot before anything is taken in', len(before) == 1, snaps(B)[:4])
         kept = B.evaluate("LRFSnaps.list().then(async l => { const s = l.find(x => x.join); if (!s) return null; const t = await LRFSnaps.text(s.id), plan = t ? JSON.parse(t) : null; return { read: !!plan, bytes: s.bytes, same: !!t && t.length === s.bytes, note: plan ? (plan.plantings.find(p => p.id === '%s') || {}).note || '' : null, sown: plan ? !!(plan.plantings.find(p => p.id === '%s') || {}).done : null }; })" % (X1, sub['id']))
@@ -209,6 +216,19 @@ with sync_playwright() as pw:
         check('a step undone after another device changed the same planting takes out only what the step changed: the note goes, the price stays', got['note'] == 'a note to undo' and got['price'] == 7.25 and undone['p']['note'] == '' and undone['p']['price'] == 7.25 and undone['redo'] == 0, [got, undone])
         settled(B, 'in-step'); look(A)
         check('and the other device ends with the same planting', A.evaluate(P, X4) == undone['p'], A.evaluate(P, X4))
+
+        # ── 5b. the plan here cannot be kept first: nothing is taken in ──
+        where = 'kept first'
+        B.evaluate("(() => { window.__add = LRFSnaps.add; LRFSnaps.add = () => Promise.reject(new Error('The database is full.')); })()")
+        A.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'laptop, while the phone cannot keep a snapshot' }, 'A note')", X1); settled(A, 'in-step')
+        B.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'phone, no snapshot' }, 'A note')", X2)
+        B.wait_for_function("(() => { const c = LRFApp.syncInfo(); return !c.busy && (c.status === 'conflict' || (c.status === 'in-step' && LRFApp.contentKey() === JSON.parse(localStorage.getItem('lrf-next:sync') || '{}').key)); })()", timeout=40000)
+        nok = B.evaluate("LRFApp.syncInfo()")
+        check('when the plan here cannot be kept first, nothing is taken in: the page asks, and says why', nok['status'] == 'conflict' and 'kept first' in nok['joinNote'] and B.evaluate(P, X1)['note'] != 'laptop, while the phone cannot keep a snapshot' and 'not joined' in B.evaluate("document.getElementById('syncStrip').innerText"), [nok['status'], nok['joinNote']])
+        B.evaluate("(() => { LRFSnaps.add = window.__add; })()")
+        look(B)
+        check('and once it can be kept, the two are joined', B.evaluate(P, X1)['note'] == 'laptop, while the phone cannot keep a snapshot' and B.evaluate(P, X2)['note'] == 'phone, no snapshot')
+        look(A)
 
         # ── 6. turned off: the question it always was ──
         where = 'off'
