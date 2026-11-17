@@ -42,6 +42,7 @@ node $T/things_test.cjs $APP $SHIP $OLD | named "things, compact"
 node $T/rails_test.cjs $APP $PLAN | named "rails"
 node $T/assume_test.cjs $APP $PLAN | named "assume"
 node $T/merge_test.cjs $APP $PLAN $FARM/inventory.json | named "merge"   # two copies of one plan joined, record by record: the rules, the five tests, 500 pairs of runs of edits
+node $T/shape_test.cjs $APP $PLAN $FARM/inventory.json $SCRATCH | named "shape"   # the plan's shape written down (plan_shape.cjs), held to itself, to the merge's own rules and to the farm and the planner's own edits
 node $T/store_test.cjs $APP | named "store"   # saving with two windows of one browser open: the count beside the plan, the one window that holds it
 node $REPO/tools/mapgeo_test.cjs | named "map geometry"
 (cd $REPO && node tools/reader_test.mjs 2>&1 | named "page reader"; node tools/worker_test.mjs 2>&1 | named "fetch service"; node tools/sync_worker_test.mjs 2>&1 | named "sync service"; node tools/sync_client_test.mjs $APP/js $OLD 2>&1 | named "sync client")

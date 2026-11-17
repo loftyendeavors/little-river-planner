@@ -8,6 +8,7 @@ Everything here runs on a made-up farm. No grower's plan is needed to check a bu
 - [The made-up farm](#the-made-up-farm)
 - [What a build changed](#what-a-build-changed)
 - [Two builds side by side](#two-builds-side-by-side)
+- [The plan's shape](#the-plans-shape)
 - [Deliberate faults](#deliberate-faults)
 - [Making a build](#making-a-build)
 - [Writing a check](#writing-a-check)
@@ -28,6 +29,7 @@ Everything here runs on a made-up farm. No grower's plan is needed to check a bu
 | `*_test.cjs` | Checks of the planner's arithmetic, without a browser |
 | `*_check.py` | Checks of the page in a real browser |
 | `mutate*.py` | The faults themselves |
+| `plan_shape.cjs`, `shape_test.cjs`, `shape_check.py` | The plan's shape written down, and the two checks that hold the farm, the planner and the merge to it ("The plan's shape") |
 | `farm/` | The made-up farm: how it is made, and the result |
 
 `tools/scale.mjs` holds every size, corner and speed of the style sheet to the one scale (`DESIGN.md`); it is the check
@@ -170,11 +172,34 @@ What every build writes, so that the second to merge has to do again after takin
 
 Then let the checks run again on the two together: the merge waits for them.
 
+## The plan's shape
+
+`plan_shape.cjs` is the list of what a plan may hold: every place the planner writes (`plantings[].tasks.delay.*.to`), its type,
+and how `js/merge.js` joins it when two devices' plans meet: taken whole, the later stamp, a planting's place or time, a
+recording, a rule of its own, or (with no word) by shape. Its head says each word. It is not served: nothing in it changes what
+the planner does.
+
+- `shape_test.cjs` (fast) holds the list to itself; to the merge's own tables, read from `js/merge.js`'s code, both ways, so a
+  rule changed on one side alone fails; and to the farm as the planner holds it and as a file holds it, and to the plans the
+  planner's own functions make of it: every kind of job recorded and taken back, put off, skipped and noted; seed lots
+  added, counted, received, moved and deleted; a variety saved by the variety editor's own functions and a crop added to the
+  library (the screens that call them are not on the page's tour).
+- `shape_check.py` (in a browser, part `app1`) takes a tour of the page's own functions that change a plan, one for every kind
+  of step `withOps` in `js/app.js` applies (a new kind fails a line until the tour makes it), on a pretended day in the season,
+  and holds every record each step wrote, the plan the page holds, the plan the browser stores and the plan as a file to the list.
+
+**A build that writes a new field adds its entry**, with the word for how it is joined. An object whose parts only make sense
+together (a from and a to) is `whole`, and goes into `WHOLE` in `js/merge.js` in the same build: that is a change to saving.
+The checks see the fields the farm and the tour reach; a field written on a path neither takes is the reviewer's to catch
+(`AGENTS.md`). What a plan of one's own holds that the list does not name: `node tests/shape_test.cjs --plan <plan file> <app
+folder>`, on the computer that holds it (it prints, and checks nothing). The records the planner does not edit, which a file
+carries beside the plan, are passed over.
+
 ## Deliberate faults
 
 A check that cannot fail proves nothing. Each `mutate*.py` puts one fault at a time into a copy of the app (a rule dropped,
-a word changed back, a figure off by one) and requires that the check then fails where it passed before. Eight sets (`changed`,
-`cleanup`, `look`, `map`, `merge`, `scale`, `screens`, `windows`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
+a word changed back, a figure off by one) and requires that the check then fails where it passed before. Nine sets (`changed`,
+`cleanup`, `look`, `map`, `merge`, `scale`, `screens`, `shape`, `windows`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
 
 ```
 sh tests/faults.sh list             # every set, its modes, how many faults

@@ -55,6 +55,7 @@ for n in "$@"; do
     look-site) python3 -I $T/look_a_check.py $SITE $S/look-site $ZIP 2>&1 | tally the-maps-look-built-site ;;
     numbers) python3 -I $T/number_boxes_check.py $APP $S/numbers 2>&1 | tally number-boxes ;;
     numbers-site) python3 -I $T/number_boxes_check.py $SITE $S/numbers-site $ZIP 2>&1 | tally number-boxes-built-site ;;
+    shape) python3 -I $T/shape_check.py $APP $S/shape $REPO 2>&1 | tally shape ;;   # the plan's shape (plan_shape.cjs) held to what the page writes
     loose) python3 -I $T/loose_check.py $APP $S/loose 2>&1 | tally loose-ends ;;
     loose-site) python3 -I $T/loose_check.py $SITE $S/loose-site $ZIP 2>&1 | tally loose-ends-built-site ;;
     f053) python3 -I $T/fixes_053_check.py $APP $S/f053 2>&1 | tally fixes-0.53 ;;
