@@ -42,5 +42,6 @@ const runs = commands.match(/\bnode\b|python3?\b|\bsh tests|\bbash tests|tools\/
 check('"send" runs nothing of any branch or of the repository', runs.length === 0 && /sparse-checkout:/.test(job('send')) && !/\bref:/.test(job('send')), runs);
 check('"send" takes the pull request, its branch and its commit from "list", and pushes only onto that commit',
   /PRS: \$\{\{ needs\.list\.outputs\.prs \}\}/.test(job('send')) && /branch=\$\(printf '%s' "\$pr" \| jq -r \.branch\)/.test(job('send')) && /--force-with-lease="refs\/heads\/\$branch:\$at"/.test(job('send')) && !/branch=[^\n]*\$IN/.test(job('send')));
+check('"send" goes on to tell each pull request when nothing at all was handed on', /download-artifact@v4\n\s+continue-on-error: true/.test(job('send')) && /if: always\(\)/.test(job('send')));
 check('"send" pushes with no hook of the repository run', /core\.hooksPath=\/dev\/null push --no-verify/.test(job('send')));
 done = true;

@@ -32,7 +32,9 @@ const say = (obj, code) => { console.log(JSON.stringify(obj)); process.exit(code
 // whether a merge stands open, asked of git: in a linked worktree .git is a file, and the merge is kept in the worktree's own folder
 const merging = () => { const at = tryGit('rev-parse', '--git-path', 'MERGE_HEAD'); return !!at && fs.existsSync(path.resolve(REPO, at)); };
 // a failure while a merge stands open takes it back when asked to, so that the branch is left as it was
-const fail = why => { if (flag('--abort') && merging()) tryGit('merge', '--abort'); say({ took: null, failed: why }, 1); };
+// (only a merge this run began: one that was open before it, with what a hand has settled in it, is never taken back)
+let began = false;
+const fail = why => { if (flag('--abort') && began && merging()) tryGit('merge', '--abort'); say({ took: null, failed: why }, 1); };
 
 if (tryGit('status', '--porcelain', '--untracked-files=no')) fail('the working tree has changes that are not committed: commit them first');
 if (merging()) fail('a merge is already in progress here');
@@ -58,6 +60,7 @@ const was = git('merge-base', 'HEAD', take);   // where the two last agreed: the
 
 // the merge, left open
 const merged = spawnSync('git', ['-C', REPO, 'merge', '--no-ff', '--no-commit', take], { encoding: 'utf8' });
+began = true;
 const stillMerging = merging();
 if (merged.status !== 0 && !stillMerging) fail(`git merge stopped: ${String(merged.stderr || merged.stdout).trim().split('\n').slice(-2).join(' ')}`);
 const WRITTEN = ['js/built.js', 'sw.js'];

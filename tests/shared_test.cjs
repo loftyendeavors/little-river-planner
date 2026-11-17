@@ -139,6 +139,11 @@ try {
   git('checkout', '-q', 'c');
   r = run('take_main.cjs');
   check('without --abort the merge is left open with only that file to settle', r.code === 3 && !!r.said && JSON.stringify(r.said.conflicts) === '["js/seeds.js"]' && fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')), r);
+  // a merge a hand was settling: run again, even with --abort, the tool stops and leaves it, and what was settled stays
+  write('js/seeds.js', read('js/seeds.js').replace(/<<<<<<<[^\n]*\n|=======\n|>>>>>>>[^\n]*\n/g, ''));
+  const settled = read('js/seeds.js');
+  r = run('take_main.cjs', '--abort');
+  check('a merge that was already open is left as it was, with what was settled in it, even with --abort', r.code === 1 && fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')) && read('js/seeds.js') === settled, { r, open: fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')) });
   done = true;
 } catch (error) {
   check('the check ran to its end', false, String(error.stack || error).slice(0, 1500));

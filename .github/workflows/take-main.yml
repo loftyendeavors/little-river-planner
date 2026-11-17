@@ -113,6 +113,7 @@ jobs:
         with:
           sparse-checkout: README.md   # the repository to push from: nothing of it is run here
       - uses: actions/download-artifact@v4
+        continue-on-error: true   # with no artifact at all (every taking in failed early), each pull request is still told
         with:
           pattern: taken-*
           path: ${{ runner.temp }}/in   # each in a folder of its own, by its name: taken-<number>
