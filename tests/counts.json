@@ -13,7 +13,7 @@
 
   "map geometry": 81,
 
-  "merge": 108,
+  "merge": 114,
 
   "page reader": 29,
 
@@ -55,7 +55,7 @@
 
   "succession": 31,
 
-  "sync client": 147,
+  "sync client": 154,
 
   "sync service": 139,
 
@@ -78,7 +78,7 @@
  },
  "build": {
 
-  "sync client, built site": 118,
+  "sync client, built site": 154,
 
   "the built site": 1
 
@@ -109,6 +109,8 @@
  "app2": {
 
   "f018": 30,
+
+  "join": 33,
 
   "maint": 55,
 
@@ -229,6 +231,8 @@
  "site2": {
 
   "f053-site": 22,
+
+  "join-site": 33,
 
   "loose-site": 37,
 

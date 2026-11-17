@@ -126,7 +126,7 @@
   }
   const STARRED = [...WHOLE].filter(p => p.includes('*')).map(p => p.split('.'));
   /** What a file keeps of the planner's own record is that record, and a planting waiting to be placed is a planting: each is held to the other's rules. */
-  const alike = pat => { const out = [pat]; let p = pat; if (p === 'lrfNextKeep.keep' || p.startsWith('lrfNextKeep.keep.')) { p = 'lrfNext' + p.slice('lrfNextKeep.keep'.length); out.push(p); } if (p.startsWith('lrfNext.waiting[].')) out.push('plantings[].' + p.slice('lrfNext.waiting[].'.length)); return out; };
+  const alike = pat => { const out = [pat]; let p = pat; if (p === 'lrfNextKeep.keep' || p.startsWith('lrfNextKeep.keep.')) { p = 'lrfNext' + p.slice('lrfNextKeep.keep'.length); out.push(p); } if (p === 'lrfNext.waiting[]' || p.startsWith('lrfNext.waiting[].')) out.push('plantings[]' + p.slice('lrfNext.waiting[]'.length)); return out; };
   /** Is the thing at this place taken whole? By its place as written, or by one written with * for a key the data chose. */
   function wholeAt(pat) {
     for (const p of alike(pat)) {
@@ -138,8 +138,9 @@
     return false;
   }
   /** The keys of a record that are read together, joined as one value each group: into `special`, for joinObject. */
+  const groupsOf = pat => { for (const p of alike(pat)) if (TOGETHER[p]) return TOGETHER[p]; return null; };
   function together(ctx, pat, path, s, m, t, special) {
-    for (const keys of TOGETHER[pat] || []) {
+    for (const keys of groupsOf(pat) || []) {
       const at = o => keys.map(k => o[k]), ms = same(at(m), at(s)), ts = same(at(t), at(s)), mt = same(at(m), at(t));
       const from = mt || ms ? t : ts ? m : t;
       if (!mt && !ms && !ts) said(ctx, { kind: 'same-box', path: path.concat(keys.join('+')), keys, mine: Object.fromEntries(keys.filter(k => m[k] !== undefined).map(k => [k, m[k]])), theirs: Object.fromEntries(keys.filter(k => t[k] !== undefined).map(k => [k, t[k]])) });
@@ -157,9 +158,11 @@
     if (STAMPS.has(key) && typeof m === 'string' && typeof t === 'string') return m > t ? m : t;
     if (alike(pat).some(p => QUIET.has(p))) return t;
     if (!wholeAt(pat)) {
-      if (isObj(m) && isObj(t) && (s === undefined || s === null || isObj(s))) return joinObject(ctx, pat, path, s || {}, m, t, TOGETHER[pat] ? together(ctx, pat, path, s || {}, m, t, {}) : undefined);
+      if (isObj(m) && isObj(t) && (s === undefined || s === null || isObj(s))) return joinObject(ctx, pat, path, s || {}, m, t, groupsOf(pat) ? together(ctx, pat, path, s || {}, m, t, {}) : undefined);
       if (recordLists(s, m, t) && Array.isArray(m) && Array.isArray(t)) return joinRecords(ctx, pat, path, s || [], m, t);
     }
+    // a thing taken whole that the two sides changed to the same thing, each stamping it at its own moment: the later, and nothing is said
+    if (isObj(m) && isObj(t)) { const bare = o => { const out = { ...o }; for (const k of STAMPS) delete out[k]; return out; }, stamp = o => { for (const k of STAMPS) if (typeof o[k] === 'string') return o[k]; return ''; }; if (same(bare(m), bare(t))) return stamp(m) > stamp(t) ? m : t; }
     said(ctx, { kind: 'same-box', path, mine: m, theirs: t });
     return t;
   }
@@ -486,31 +489,67 @@
   }
 
   /**
-   * The weekly batches of a live-tray demand plan follow the demand plan that stands. Where both devices changed one demand
-   * plan the cloud's stands whole (WHOLE), and so do the cloud's batches of it: each is as the cloud holds it, one this device
-   * made for its own version goes, and one this device took out comes back. A batch with work recorded on it here that the
-   * cloud does not hold stays as joined. Without this, two devices that each changed the trays wanted would leave both sets.
+   * The weekly batches of a live-tray demand plan follow the demand plan that stands. A demand plan is taken whole (WHOLE):
+   * where both devices changed one, the cloud's stands; where one took it out and the other changed it, the changed one stays.
+   * Its batches are then that side's, each as that side holds it: one the other side made for its own version goes, one the
+   * other side took out comes back, one the other side changed is put back as it was (said: `reset`). A batch with work
+   * recorded on it that the side that stands does not hold stays as joined. Without this, two devices that each changed the
+   * trays wanted would leave both sets of batches, or a demand plan with part of its batches.
    */
   function settleTrays(ctx, start, mine, theirs, plan) {
-    const ids = new Set(ctx.report.items.filter(x => x.kind === 'same-box' && Array.isArray(x.path) && x.path.length === 2 && x.path[0] === 'liveTrayPlans').map(x => String(x.path[1]).slice(1)));
-    if (!ids.size || !Array.isArray(plan.plantings)) return plan;
-    const planOf = p => (isObj(p) && isObj(p.liveTray) && ids.has(String(p.liveTray.planId)) ? String(p.liveTray.planId) : null);
-    const T = new Map(listOf(theirs, 'plantings').map(p => [p.id, p])), work = p => [doneOf(p), linesOf(p, 'history'), linesOf(p, 'seedUse')];
-    const told = new Map(), tell = (id, key, pid) => { if (!told.has(id)) told.set(id, { kind: 'tray-batches', path: ['liveTrayPlans', '#' + id], id, dropped: [], back: [] }); told.get(id)[key].push(pid); };
+    const stands = new Map();   // demand plan id -> the side whose version stands
+    for (const x of ctx.report.items) {
+      if (!Array.isArray(x.path) || x.path.length !== 2 || x.path[0] !== 'liveTrayPlans') continue;
+      if (x.kind === 'same-box') stands.set(String(x.path[1]).slice(1), 't');
+      else if (x.kind === 'kept') stands.set(String(x.path[1]).slice(1), x.removedBy === 'mine' ? 't' : 'm');
+    }
+    if (!stands.size || !Array.isArray(plan.plantings)) return plan;
+    const planOf = p => (isObj(p) && isObj(p.liveTray) && stands.has(String(p.liveTray.planId)) ? String(p.liveTray.planId) : null);
+    const T = new Map(listOf(theirs, 'plantings').map(p => [p.id, p])), M = new Map(listOf(mine, 'plantings').map(p => [p.id, p])), work = p => [doneOf(p), linesOf(p, 'history'), linesOf(p, 'seedUse')];
+    const sideOf = id => (stands.get(id) === 'm' ? M : T);
+    const told = new Map(), tell = (id, key, pid) => { if (!told.has(id)) told.set(id, { kind: 'tray-batches', path: ['liveTrayPlans', '#' + id], id, whose: stands.get(id) === 'm' ? 'mine' : 'theirs', dropped: [], back: [], reset: [] }); told.get(id)[key].push(pid); };
     const out = [], here = new Set();
     for (const p of plan.plantings) {
-      const id = planOf(p), t = id == null ? null : T.get(p.id);
+      // a batch of the plan as joined, or one the side that stands still holds as a batch (the other side may have taken it off the plan)
+      let id = planOf(p);
+      if (id == null) for (const side of [T, M]) { const q = side.get(p.id), qid = planOf(q); if (qid != null && sideOf(qid) === side) id = qid; }
       if (id == null) { out.push(p); continue; }
-      if (t) { out.push(same(work(p), work(t)) ? t : p); here.add(p.id); }
-      else if (Object.keys(doneOf(p)).length) { out.push(p); here.add(p.id); }   // work recorded on a batch the cloud's version does not have: it stays
+      const own = sideOf(id).get(p.id);
+      if (own && planOf(own) === id) { const keep = same(work(p), work(own)) ? own : p; if (keep === own && !same(p, own)) tell(id, 'reset', p.id); out.push(keep); here.add(p.id); }
+      else if (Object.keys(doneOf(p)).length) { out.push(p); here.add(p.id); }   // work recorded on a batch the version that stands does not have: it stays
       else tell(id, 'dropped', p.id);
     }
-    for (const t of listOf(theirs, 'plantings')) { const id = planOf(t); if (id != null && !here.has(t.id)) { out.push(t); tell(id, 'back', t.id); } }
-    if (!told.size && out.every((p, i) => p === plan.plantings[i])) return plan;
+    for (const [id, who] of stands) for (const q of listOf(who === 'm' ? mine : theirs, 'plantings')) if (planOf(q) === id && !here.has(q.id)) { out.push(q); here.add(q.id); tell(id, 'back', q.id); }
+    if (!told.size && out.length === plan.plantings.length && out.every((p, i) => p === plan.plantings[i])) return plan;
     const gone = new Set([...told.values()].flatMap(x => x.dropped));
     ctx.report.items = ctx.report.items.filter(x => !(x.kind === 'kept' && Array.isArray(x.path) && x.path[0] === 'plantings' && gone.has(x.id)));   // said once, by the batches' own line
     for (const item of told.values()) said(ctx, item);
     return { ...plan, plantings: out };
+  }
+
+  /**
+   * One row of a demand plan and one delivery week is one batch. Two devices that each widen a demand plan the same way each make
+   * a planting for the new week, under an id of its own: joined record by record both would stand, and that week would hold
+   * twice the trays wanted. Of such twins, made since the start, one stays: the one with work recorded on it; where none has,
+   * the one the start held, or else the cloud's. Where work is recorded on more than one, each of those stays, with its
+   * history and the seed it drew, and the report says so (`conflict`): which is the true record is for the grower to say.
+   */
+  function settleTwins(ctx, start, mine, theirs, plan) {
+    if (!Array.isArray(plan.plantings)) return plan;
+    const groups = new Map();
+    for (const p of plan.plantings) { const lt = isObj(p) && isObj(p.liveTray) ? p.liveTray : null; if (lt && lt.planId != null && lt.key != null) { const k = lt.planId + '\u0000' + lt.key; groups.set(k, [...(groups.get(k) || []), p]); } }
+    const S = new Set(listOf(start, 'plantings').map(p => p.id)), T = new Set(listOf(theirs, 'plantings').map(p => p.id)), gone = new Set();
+    for (const twins of groups.values()) {
+      if (twins.length < 2 || twins.every(p => S.has(p.id))) continue;   // one batch, or twins the start already held: not this join's to settle
+      const worked = twins.filter(p => Object.keys(doneOf(p)).length || linesOf(p, 'history').length || linesOf(p, 'seedUse').length), old = twins.filter(p => S.has(p.id));
+      const stay = worked.length ? [...new Set([...worked, ...old])] : old.length ? old : [twins.find(p => T.has(p.id)) || twins[0]];
+      const dropped = twins.filter(p => !stay.includes(p)).map(p => p.id);
+      for (const id of dropped) gone.add(id);
+      said(ctx, { kind: 'tray-batch-twice', path: ['plantings', '#' + stay[0].id], id: stay[0].id, planId: stay[0].liveTray.planId, key: stay[0].liveTray.key, kept: stay.map(p => p.id), dropped, conflict: worked.length > 1 });
+    }
+    if (!gone.size) return plan;
+    ctx.report.items = ctx.report.items.filter(x => !(x.kind === 'kept' && Array.isArray(x.path) && x.path[0] === 'plantings' && gone.has(x.id)));
+    return { ...plan, plantings: plan.plantings.filter(p => !gone.has(p.id)) };
   }
 
   // ───────────────────────────── the five tests ─────────────────────────────
@@ -566,7 +605,7 @@
     lists(plan, (pat, path, list, a, b) => { const twice = repeats(list); if (twice != null && !why && !(a && repeats(a) != null) && !(b && repeats(b) != null)) why = `An id is there twice in the joined plan (${path.join('.') || 'the plan'}: ${twice}).`; });
     if (why) return why;
     // 3
-    const batches = new Set(items.filter(x => x.kind === 'tray-batches').flatMap(x => x.dropped || []).map(String));
+    const batches = new Set(items.filter(x => x.kind === 'tray-batches' || x.kind === 'tray-batch-twice').flatMap(x => x.dropped || []).map(String));
     const excused = new Set(items.filter(x => x.kind === 'placed-and-waiting').map(x => String(x.id))), droppedLines = new Set(((report && report.dropped) || []).map(String));
     const whole = items.filter(x => x.kind === 'same-box' && Array.isArray(x.path)).map(x => x.path.join('\u0000') + '\u0000'), under = path => { const at = path.join('\u0000') + '\u0000'; return whole.some(w => at.startsWith(w)); };
     for (const side of [mine, theirs]) {
@@ -647,8 +686,11 @@
    *   { kind: 'move-not-applied', id, what, whose }        work was recorded on a planting the other side moved: the move is not applied
    *   { kind: 'seed-short', id, short, loose }             two devices drew more from a lot than it held
    *   { kind: 'placed-and-waiting', id }                   placed on one side, changed while waiting on the other: placed
-   *   { kind: 'tray-batches', id, dropped, back }          both sides changed one live-tray demand plan: the cloud's stands, and its weekly
-   *                                                        batches with it. `dropped`: batches this device had made; `back`: ones it had taken out
+   *   { kind: 'tray-batches', id, whose, dropped, back, reset }   one live-tray demand plan stands whole from one side (`whose`), and its weekly
+   *                                                        batches with it. `dropped`: batches the other side had made; `back`: ones it had
+   *                                                        taken out; `reset`: ones it had changed, put back as the side that stands holds them
+   *   { kind: 'tray-batch-twice', id, planId, key, kept, dropped, conflict }   each side made a batch for one demand row and week: one stays (`kept`),
+   *                                                        the one with work recorded. `conflict`: work is recorded on more than one, and each stays
    *   { kind: 'sowing-of-removed-planting', batch, whose, planting }   a side sowed a planting and then took it out, and the other side kept
    *                                                        it (`kept`): that sowing's seed stays used. It may be the very sowing the other
    *                                                        side recorded, which then drew seed twice: that is for the grower to say
@@ -665,7 +707,7 @@
       const ctx = { report, rules: RULES, order, sowings: new Map() };
       let plan = join(ctx, '', [], start, mine, theirs);
       if (plan === mine || plan === theirs) return { ok: true, plan, report };   // one side changed nothing: the other's plan, as it is
-      plan = settleWaiting(ctx, start, mine, theirs, settleStock(ctx, start, mine, theirs, settleTrays(ctx, start, mine, theirs, plan)));
+      plan = settleWaiting(ctx, start, mine, theirs, settleStock(ctx, start, mine, theirs, settleTwins(ctx, start, mine, theirs, settleTrays(ctx, start, mine, theirs, plan))));
       const why = verify(start, mine, theirs, plan, report);
       return why ? { ok: false, why, report } : { ok: true, plan, report };
     } catch (error) {

@@ -210,6 +210,7 @@
       set('sending');
       // a whole plan put over the cloud's starts a new line; any other send carries the line on, and says so when it joins two devices' changes
       const whole = !!replace || host.loads() !== st.loads, line = whole ? newLine() : cfg.line || null;
+      joined = joined || String(cfg.key || '').startsWith('joined:');   // taken in, and not yet sent: said again at every try
       const meta = { savedAt: p.savedAt, device: host.device(), label: cfg.label || '', plantings: p.plantings, waiting: p.waiting, year: p.year, enc: packed.enc, bytes: p.text.length,
         ...(line ? { line } : {}), ...(cfg.join || cloudKnows() ? { m: KNOWS } : {}), ...(joined && !whole ? { merged: true } : {}) };
       keep({ sent: { savedAt: p.savedAt, key: p.key, bytes: p.text.length, line } });   // before the request: should its answer be lost, the next look knows this send again
@@ -283,6 +284,8 @@
       const no = why => { st.joinNote = why || ''; return false; }, lineOf = meta => (meta && typeof meta.line === 'string' ? meta.line : null);
       if (typeof host.join !== 'function' || !cfg.base || behind) return no('');   // (whether this device joins at all is asked by whoever calls)
       if ((cfg.v || 0) < 3) return no('The sync service is older than version 3, so plans are not joined.');
+      // A plan that carries no planner's number may have been sent by a page that knows nothing of lines, and may be a whole plan loaded there.
+      if (cloudKnows() < KNOWS) return no('The cloud’s plan was sent by an older planner, which does not say whether it is a whole plan loaded there. Reload the planner on the other device.');
       if (lineOf(st.cloud && st.cloud.meta) !== (cfg.line || null)) return no('A whole plan was put in the cloud on another device (a backup or a snapshot loaded, or one plan kept over another). Whole plans are not joined.');
       if (typeof host.idle === 'function' && !host.idle()) { set('joining'); schedule('join', timing.idle); return true; }
       const start = await keptPlan();
@@ -290,9 +293,11 @@
       set('joining');
       const res = await call('GET', '/plan', { raw: true }), meta = readMeta(res), etag = res.headers.get('x-lrf-etag');
       const text = await unpack(new Uint8Array(await res.arrayBuffer()), meta.enc);
-      if (lineOf(meta) !== (cfg.line || null)) return no('A whole plan was put in the cloud on another device. Whole plans are not joined.');
+      if (lineOf(meta) !== (cfg.line || null) || !(Number.isInteger(meta.m) && meta.m >= KNOWS)) return no('A whole plan was put in the cloud on another device. Whole plans are not joined.');
+      if (host.loads() !== st.loads) return no('A whole plan was loaded here while the cloud’s was being fetched. Whole plans are not joined.');   // asked again after the waits
       const got = await host.join(start.text, text, { from: meta.label || '', savedAt: meta.savedAt || null });
       if (!got || !got.ok) {
+        if (got && got.later) { set('joining'); schedule('join', timing.idle); return true; }   // the page was no longer idle when the joined plan was ready: at the next pause
         if (got && got.stop) { st.joinNote = got.why || ''; set('error', got.why || 'The joined plan could not be saved in this browser.'); return true; }   // nothing was noted and nothing is sent
         return no((got && got.why) || 'The two plans could not be joined.');
       }
@@ -344,6 +349,7 @@
     function run(reason) {
       if (!configured()) return Promise.resolve(info());
       if (running) { again = again || reason; return running.then(info); }
+      if (reason === 'join' && st.status === 'joining' && cfg.join && typeof host.idle === 'function' && !host.idle()) { schedule('join', timing.idle); return Promise.resolve(info()); }   // still busy: wait, without asking the cloud again
       cancel(timer); timer = null;
       return solo(async () => {
           const mode = host.mode();
@@ -369,6 +375,7 @@
           else if (act === 'push-first') await push('none');
           else if (act === 'push') await push(cfg.base);
           else if (act === 'pull') { if (await pull('Before opening the plan from the cloud')) host.say(`Your plan was opened from the cloud: ${what(st.cloud)}.`); else set('newer'); }
+          else if (act === 'in-step' && mode === 'plan' && cfg.join && (cfg.v || 0) >= 3 && cloudKnows() < KNOWS) await push(cfg.base);   // a device that joins says the planner's number at once: from then on a page that knows nothing of lines is refused, and this device can tell a whole plan from a change
           else if (act === 'in-step') { st.first = false; await photosUp(st.files).catch(error => { st.photoNote = error.message; }); await ensureKept().catch(error => { st.keptNote = (error && error.message) || ''; }); set('in-step'); }
           else if ((act === 'newer' || act === 'conflict') && mode === 'plan' && cfg.join && await takeIn()) { /* joined and taken in, or waiting for the page to be idle */ }
           else if (act === 'newer') {

@@ -49,11 +49,13 @@
       const ok = await UI.confirm({ title: 'Keep both devices’ changes?', body: 'When this device and another have both changed the plan, the two are joined record by record instead of asking which plan to keep: a sowing ticked on one and a bed moved on the other are both kept. Where both changed the same thing, the other device’s stands and yours is shown, to put back with one press. First a snapshot is taken and a backup file is downloaded. This is set on each device, and can be turned off here at any time.', confirmLabel: 'Take the snapshot and turn it on' });
       if (!ok) return false;
       switching = true; drawSync();
+      let why = '';
       try {
         const snap = await App.snapshot(`Before joining plans from two devices, ${UI.day(new Date())}`);
-        if (!snap) { UI.toast('The snapshot could not be taken, so nothing was turned on.'); return false; }
-        await App.exportBackup();
+        if (!snap) why = 'The snapshot could not be taken, so nothing was turned on.';
+        else if (!(await App.exportBackup())) why = 'The backup file was not saved, so nothing was turned on.';
       } finally { switching = false; }
+      if (why) { UI.toast(why); drawSync(); return false; }
     }
     await sync().setJoin(!!on);
     UI.toast(on ? 'On this device, plans from two devices are now joined record by record.' : 'On this device, the planner asks which plan to keep again.');

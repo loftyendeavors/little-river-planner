@@ -422,6 +422,7 @@ function joining(b) {
     if (!r.ok) return { ok: false, why: r.why };
     b.befores.push(b.plan);                                              // the plan that was here is kept first
     if (b.saveFails) return { ok: false, stop: true, why: 'There is no room to save the joined plan.' };
+    if (b.busyLate) return { ok: false, later: true };                    // a window was opened while the plans were being joined
     b.plan = JSON.parse(r.text); if (b.disk) b.disk = { plan: b.plan, n: b.disk.n + 1 };
     return { ok: true, same: r.same, key: b.host.key(), taken: r.taken, report: r.report };
   };
@@ -535,6 +536,44 @@ async function pair(tag, joinA = true, joinB = true) {
   i = await ja.sync.run('retry');
   const landed = ids(JSON.parse(await wj.text('plan')));
   check('a send that never landed is not taken for the cloud\'s plan: the two are joined, and that send is forgotten', i.status === 'in-step' && ja.joins === 1 && ['never-sent', 'phone-1'].every(x => landed.includes(x)) && noteOf(ja).sent === undefined, [i.status, ja.joins, noteOf(ja).sent]);
+}
+{ // what the review of this build found
+  const { wj, ja, jb } = await pair('j8', true, false);
+  check('a device set to join says the planner\'s number at once, before any change is made: from then on a planner that knows nothing of lines cannot write', metaOf(wj).m === Sync.KNOWS && ja.sync.info().status === 'in-step', metaOf(wj));
+  // a plan in the cloud that carries no number (sent by a page that knows nothing of lines, perhaps a whole plan loaded there) is never joined
+  const whole = await Sync.pack(JSON.stringify(planOf(2, 'backup-from-an-old-page')));
+  await wj.bucket.put('plan', whole.bytes, { customMetadata: { m: JSON.stringify({ savedAt: new Date().toISOString(), device: 'd-old', label: 'Old page', plantings: 2, enc: whole.enc }) } });
+  plus(ja, 'made-here'); ja.sync.touch();
+  let i = await ja.tick();
+  check('a plan in the cloud that carries no planner\'s number is never joined, though neither it nor this browser names a line: the page asks', i.status === 'conflict' && ja.joins === 0 && /older planner/.test(i.joinNote) && !ids(ja.plan).includes('backup-from-an-old-page-0'), [i.status, ja.joins, i.joinNote]);
+  // a whole plan loaded here while the cloud's plan is being fetched
+  const { wj: w2, ja: a2, jb: b2 } = await pair('j9');
+  await a2.change('laptop-1'); plus(b2, 'phone-1');
+  let real = w2.fetch;
+  w2.fetch = async (url, init = {}) => { const out = await real(url, init); if ((init.method || 'GET') === 'GET' && String(url).endsWith('/plan')) { w2.fetch = real; b2.plan = planOf(2, 'loaded-here'); b2.loads++; } return out; };
+  i = await b2.sync.run('poll'); w2.fetch = real;
+  check('a whole plan loaded here while the cloud\'s was being fetched is not joined with it', i.status === 'conflict' && b2.joins === 0 && /whole plan/i.test(i.joinNote), [i.status, b2.joins, i.joinNote]);
+  // the page stopped being idle while the plans were joined; and a busy page does not ask the cloud again and again
+  const { wj: w3, ja: a3, jb: b3 } = await pair('j10');
+  await a3.change('laptop-1'); plus(b3, 'phone-1'); b3.busyLate = true;
+  i = await b3.sync.run('poll');
+  check('a window opened while the plans were being joined: nothing is noted or sent, and it waits for the next pause', i.status === 'joining' && !ids(JSON.parse(await w3.text('plan'))).includes('phone-1') && b3.timers.some(t => t.ms === Sync.timing.idle), [i.status, b3.timers.map(t => t.ms)]);
+  b3.busy = true;
+  const looks = () => w3.calls.filter(c => c === 'GET /state').length, looksWas = looks();
+  for (let n = 0; n < 5; n++) { const due = b3.timers.filter(t => t.ms === Sync.timing.idle); b3.timers = b3.timers.filter(t => !due.includes(t)); for (const t of due) t.fn(); await new Promise(r => setTimeout(r, 5)); }
+  check('while the page stays busy the cloud is not asked again: it waits, and looks once the page is idle', looks() === looksWas && b3.sync.info().status === 'joining' && b3.timers.some(t => t.ms === Sync.timing.idle), [looks() - looksWas, b3.sync.info().status]);
+  b3.busy = false; b3.busyLate = false; i = await b3.tick();
+  check('and then joins', i.status === 'in-step' && ['laptop-1', 'phone-1'].every(x => ids(b3.plan).includes(x)), i.status);
+  // a joined plan whose send failed for want of a connection is still sent as a joined plan
+  await a3.sync.run('poll'); await a3.change('laptop-2'); plus(b3, 'phone-2');
+  const mergesWas = [...w3.store.keys()].filter(k => k.startsWith('snap/merge-')).length;
+  real = w3.fetch;
+  w3.fetch = async (url, init = {}) => { if ((init.method || 'GET') === 'PUT' && String(url).endsWith('/plan')) throw new TypeError('Failed to fetch'); return real(url, init); };
+  i = await b3.sync.run('poll'); w3.fetch = real;
+  const waited = i.status;
+  i = await b3.sync.run('retry');
+  const landed3 = ids(JSON.parse(await w3.text('plan')));
+  check('a joined plan that could not be sent at once is sent as a joined plan when the connection is back: the cloud keeps the plan it replaces', waited === 'waiting' && i.status === 'in-step' && metaOf(w3).merged === true && [...w3.store.keys()].filter(k => k.startsWith('snap/merge-')).length === mergesWas + 1 && ['laptop-2', 'phone-2'].every(x => landed3.includes(x)), [waited, i.status, metaOf(w3).merged]);
 }
 if (Before) { // once a device joins, a page of the build before is told to reload; a page of this build that does not join is not
   const { wj, ja, jb } = await pair('j7', true, false);

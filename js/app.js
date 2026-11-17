@@ -180,9 +180,12 @@
     if (!way) { state.undo.push(step); refuse(`“${step.label}” cannot be undone by itself: it recorded work or seed, and another device has changed the same records since. Take the work back where it was recorded.`); return; }
     state.last = null;
     if (way.ops === step.ops) state.redo.push(step); else state.redo.length = 0;   // a step taken out part by part is not one to do again whole
+    const twiceWas = state.joined ? bookedTwice(state.engine) : 0;   // counted only once another device's changes are in: before that a step cannot undo into taken ground
     if (way.ops.length) adopt(withOps(state.plan, way.ops, 'undo'));
     if (state.sel && state.sel.type === 'planting' && !state.engine.planting(state.sel.id)) select(null);
     if (state.sel && state.sel.type === 'waiting' && !waitingOne(state.sel.id)) select(null);
+    const more = state.joined ? Math.max(0, bookedTwice(state.engine) - twiceWas) : 0;
+    if (more) { toast(`Undid: ${step.label}. Another device has planted that ground since: ${UI.num(more)} more to settle.`); return; }
     toast(way.kept ? `Undid: ${step.label}. ${way.kept} part${way.kept === 1 ? '' : 's'} of it stay${way.kept === 1 ? 's' : ''} as another device changed ${way.kept === 1 ? 'it' : 'them'}.` : `Undid: ${step.label}`);
   }
   function redo() {
@@ -1625,13 +1628,15 @@
       const planOnly = !(state.plan.lrfNext && state.plan.lrfNext.attic === 'cloud');
       const done = planOnly ? 'Plan file saved. It holds the plan only: not the saved supplier pages or the photos.' : 'Backup saved.';
       const noted = () => adopt({ ...state.plan, lrfNext: { ...(state.plan.lrfNext || {}), lastExport: new Date().toISOString() } }, state.engine);
-      if (downloads) { await downloads.save({ filename, data: new Blob([text], { type: 'application/json' }) }); noted(); toast(done); return; }
+      if (downloads) { await downloads.save({ filename, data: new Blob([text], { type: 'application/json' }) }); noted(); toast(done); return true; }
       const url = URL.createObjectURL(new Blob([text], { type: 'application/json' })), a = h('a', { href: url, download: filename });
       document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
       noted(); toast('Backup download started.');
+      return true;
     } catch (error) {
-      if (error && error.code === 'declined') return;
+      if (error && error.code === 'declined') return false;
       toast(`Backup not saved: ${(error && error.message) || 'downloads are not available in this view'}`);
+      return false;
     }
   }
   /** .zip (complete backup) or .json (plan only) -> { plan, image } */
@@ -2049,7 +2054,7 @@
   const idle = () => !document.body.classList.contains('dragging') && !document.querySelector('dialog[open]') && Date.now() - lastTouch >= 1500;
   for (const type of ['keydown', 'input', 'pointerdown']) root.addEventListener(type, () => { lastTouch = Date.now(); }, true);
   /** Pairs of plantings booked on the same ground at the same time, as the overview counts them. */
-  const bookedTwice = eng => { const set = new Set(); for (const p of eng.plan.plantings) { const r = eng.calc(p); if (r) for (const o of eng.conflicts(p, r)) if (!o.rest) set.add([p.id, o.p.id].sort().join('|')); } return set.size; };
+  function bookedTwice(eng) { const set = new Set(); for (const p of eng.plan.plantings) { const r = eng.calc(p); if (r) for (const o of eng.conflicts(p, r)) if (!o.rest) set.add([p.id, o.p.id].sort().join('|')); } return set.size; }
   /**
    * Join the plan here with the plan the cloud holds, from the plan the two started from, and take the result in: the plan that
    * was here is kept first (or nothing happens), the joined plan is saved in this browser (or nothing happens), and only then
@@ -2058,11 +2063,15 @@
   async function joinPlans(startText, theirsText, o = {}) {
     const Merge = root.LRFMerge;
     if (!Merge || !Merge.joinTexts || elsewhere() || isSample() || state.unreadable) return { ok: false, why: '' };
+    const loads = planLoads, loaded = () => (planLoads !== loads ? { ok: false, why: 'A whole plan was loaded here while the two were being joined. Whole plans are not joined.' } : null);
     for (let turn = 0; turn < 4; turn++) {
+      if (loaded()) return loaded();   // the plan open now does not come from the plan the two devices shared
       const plan = state.plan, made = await planText(plan);
       if (state.plan !== plan) continue;   // changed while its text was made: join the plan as it stands now
       const r = Merge.joinTexts(startText, made.text, theirsText, { order: SL.DONE_ORDER });
       if (!r.ok) return { ok: false, why: r.why };
+      // the cloud's plan says nothing the plan here does not (it was sent again as it was, or with only its sender's own notes changed): there is nothing to take in
+      if (r.same && !r.taken.any) return { ok: true, same: true, key: contentKey(plan), taken: r.taken, report: r.report, twice: 0 };
       let core, attic;
       try {
         const file = JSON.parse(r.text), own = (file.lrfNextKeep && file.lrfNextKeep.keep) || {};
@@ -2075,6 +2084,7 @@
       const before = await snapshot(`Before taking in changes from ${o.from || 'another device'}`, { auto: true, join: true, plan });
       if (!before) return { ok: false, why: 'The plan here could not be kept first (this browser gives the page no database for snapshots), so nothing was taken in.' };
       if (state.plan !== plan) continue;
+      if (!idle()) return { ok: false, later: true, why: '' };   // a window was opened or a drag begun during the wait: at the next pause
       // The records the planner does not edit travel in the plan's file: where the joined file's differ from the ones kept here, they are kept first.
       let newAttic = false;
       try {
@@ -2086,6 +2096,7 @@
       try { await store.saveNow(core); }
       catch (error) { store.save(state.plan); return { ok: false, stop: true, why: `The joined plan could not be saved in this browser (${(error && error.message) || 'the browser refused'}), so nothing was taken in.` }; }
       if (state.plan !== plan) { store.save(state.plan); continue; }   // changed during the save: what is stored follows the plan open here, and the two are joined again
+      if (loaded() || !idle()) { store.save(state.plan); return loaded() || { ok: false, later: true, why: '' }; }   // asked once more, in the same turn the plan is swapped: nothing is open over a record that is about to change
       const twiceBefore = bookedTwice(state.engine);
       state.plan = core; if (newAttic) { state.attic = attic; state.extras = emptyExtras(); }
       state.redo.length = 0; state.last = null;
@@ -2129,7 +2140,8 @@
       else if (x.kind === 'kept') rows.push({ what, where: 'kept', note: x.removedBy === 'mine' ? 'Taken out here and changed on the other device: it stays, as changed.' : 'Taken out on the other device and changed here: it stays, as changed.' });
       else if (x.kind === 'seed-short') rows.push({ what: 'seed on hand', where: 'a lot ran short', note: `The two devices together drew ${UI.num(x.short)} more than the lot held. The lot is at zero, and that seed is counted as used without a counted lot.` });
       else if (x.kind === 'placed-and-waiting') rows.push({ what: plantingName(x.id), where: 'placed', note: 'Put on a bed on one device and changed while it waited on the other: it is on its bed.' });
-      else if (x.kind === 'tray-batches') rows.push({ what: 'tray demand', where: 'weekly batches', note: `Both devices changed one demand plan: the other device’s stands, with its batches${(x.dropped || []).length ? ` (${UI.num(x.dropped.length)} made here went)` : ''}.` });
+      else if (x.kind === 'tray-batches') rows.push({ what: 'tray demand', where: 'weekly batches', note: x.whose === 'mine' ? 'A demand plan changed here was taken out on the other device: it stays as it is here, with its weekly batches.' : `A demand plan changed on both devices, or taken out here and changed there: the other device’s stands, with its weekly batches${(x.dropped || []).length ? ` (${UI.num(x.dropped.length)} made here went)` : ''}${(x.reset || []).length ? ` (${UI.num(x.reset.length)} changed here ${x.reset.length === 1 ? 'is' : 'are'} as the other device has ${x.reset.length === 1 ? 'it' : 'them'})` : ''}.` });
+      else if (x.kind === 'tray-batch-twice') rows.push({ what: plantingName(x.id), where: 'one week of tray demand', note: x.conflict ? 'Each device made this week’s batch and recorded work on its own: both are kept, so the week shows twice the trays. Take the work back on the one that is not the true record, and remove it.' : 'Each device made this week’s batch: one is kept, the one with work recorded on it.' });
       else if (x.kind === 'sowing-of-removed-planting') rows.push({ what: 'seed on hand', where: 'a sowing', note: 'A planting was sown on one device and then taken out there, and kept on the other: its seed stays used. If both devices recorded that one sowing, count the lot by hand.' });
     }
     return rows;
