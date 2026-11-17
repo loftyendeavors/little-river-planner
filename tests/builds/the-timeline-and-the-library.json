@@ -1,0 +1,27 @@
+{
+ "build": "Redesign build 4, the Timeline and the library. Room for a crop: a crop clicked in the library and carried onto the Timeline puts every other bar at half strength, lights each opening of a whole bed it fits (white, a 1 px orange edge) and draws the planting in it with the Timeline's own bar, on the first day it can go in, with one line of what it gives and when it is picked; a hint card under the pointer says where, the days it could go in, when it is picked and when the ground is free; a click plants it there through App.place, the step a drop takes, with Undo. One line in the tools says where it fits on the page and on the farm, with x to put it down. A garden that is shut shows an 8 px band of how full its ground is week by week, and while a crop is carried an orange line under the weeks it could start there and how many openings it fits. To place is a third side of the library's switch, beside My crops and All crops, with an orange count while anything waits; the box that stood above the library is gone, and the count in the header opens To place. The two crop counts leave the switch. An opening's words stand in the part of it before the nursery line of the planting after it, \"N d\" where that part is narrow; the nursery line is 2 px at the foot of its bar's row. A crop picked in the library is marked in ink. No date, yield, price, seed count or bench figure changes.",
+ "changes": {
+  "did": "On the Timeline, a crop clicked in the library is drawn in every opening it fits, ready to plant with a click. A garden that is shut shows how full it is. To place is now the third side of the library's switch.",
+  "steps": [
+   "On the Timeline, click a crop in the library: the other plantings fade, each opening it fits is lit with the crop drawn in it, and the line beside the scale says how many. Point at one to read its days; click it to plant it there, then Undo.",
+   "Close a garden by its name: a thin band shows how full its ground is week by week, and while a crop is carried, an orange line under the weeks it could start.",
+   "If anything waits for a bed, To place beside My crops and All crops carries an orange count; click it to list them."
+  ]
+ },
+ "words": [],
+ "code": [
+  "panels.js",
+  "series.js",
+  "timeline.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html"
+ ],
+ "screens": [
+  "map",
+  "timeline"
+ ]
+}

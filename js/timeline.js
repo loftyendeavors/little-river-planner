@@ -11,6 +11,11 @@
  * crate space is one row per crop until a crop is opened to its plantings, and
  * live trays are one strip of trays standing each week.
  *
+ * A crop carried from the library (clicked there, and not yet dropped) is drawn where it would grow: every other bar goes to half
+ * strength, each opening of a whole bed it fits is lit, and the planting is drawn in it as any planting is, on the first day it can
+ * go in, with one line of what it gives. A click there plants it, through the same step as a drop. A garden that is shut shows a thin
+ * band of how full its ground is, week by week, and, while a crop is carried, the weeks it could start there.
+ *
  * Two kinds of bar are not plantings in a bed. While the series tool is open, what it would add is drawn
  * as ghost bars in the rows it would go to: nothing is in the plan until its button is pressed. And
  * plantings that have no bed yet wait on a row of their own at the top, each on its own date, to be
@@ -80,6 +85,37 @@
     openCache.set(eng, map);
     return map;
   }
+  // beds with nothing planned all year: drawn with no opening, but a carried crop can go in them
+  const emptyCache = new WeakMap();
+  function emptyBeds(eng) {
+    if (!emptyCache.has(eng)) emptyCache.set(eng, root.LRFSuccession ? root.LRFSuccession.openings(eng, { empty: true }).filter(o => o.whole && !o.planted) : []);
+    return emptyCache.get(eng);
+  }
+  /**
+   * Room for a crop: the crop carried from the library, and every opening of a whole bed whose days it fits, a bed with nothing planned
+   * all year included, worked out by the same test the opening's own panel uses (LRFSuccession.tryCrop: the first day it may go in, the
+   * last, what it gives). Null when nothing from the library is carried. Worked out once per plan state and crop.
+   */
+  const roomCache = new WeakMap();
+  function roomFor(eng) {
+    const armed = App.state.armed, S = root.LRFSuccession;
+    if (!S || !armed || !armed.cropId || armed.plantingId || armed.waitingId) return null;
+    const crop = eng.crop(armed.cropId);
+    if (!crop) return null;
+    const key = `${crop.id}|${armed.varietyId || ''}`;
+    let kept = roomCache.get(eng);
+    if (!kept) { kept = new Map(); roomCache.set(eng, kept); }
+    if (kept.has(key)) return kept.get(key);
+    const fits = new Map();
+    for (const o of [...[...openingsBy(eng).values()].flat(), ...emptyBeds(eng)]) {
+      if (!S.suits(eng, crop, o.bed)) continue;
+      const t = S.tryCrop(eng, o, crop, armed.varietyId ? { varietyId: armed.varietyId } : {});
+      if (t.ok) fits.set(o.id, { o, t });
+    }
+    const out = { crop, varietyId: armed.varietyId || '', fits };
+    kept.set(key, out);
+    return out;
+  }
 
   // ── labels: measured in their own typeface, each text once ──
   let ruler = null;
@@ -90,9 +126,9 @@
     if (w !== undefined) return w;
     if (!ruler) ruler = document.createElement('canvas').getContext('2d');
     if (!fonts[kind]) {
-      const probe = kind === 'open' ? h('div.tl-open', { style: { visibility: 'hidden' } }) : kind === 'cell' ? h('div.tl-cell', { style: { visibility: 'hidden' } }, 'x') : kind === 'tray' ? h('div.tl-row.tl-pool', { style: { visibility: 'hidden' } }, h('div.tl-bar', h('span.tl-name', 'x'))) : h('div.tl-bar', { style: { visibility: 'hidden' } }, h('span.tl-name', 'x'));
+      const probe = kind === 'room' ? h('div.tl-room-say', { style: { visibility: 'hidden' } }, h('b', 'x')) : kind === 'open' ? h('div.tl-open', { style: { visibility: 'hidden' } }) : kind === 'cell' ? h('div.tl-cell', { style: { visibility: 'hidden' } }, 'x') : kind === 'tray' ? h('div.tl-row.tl-pool', { style: { visibility: 'hidden' } }, h('div.tl-bar', h('span.tl-name', 'x'))) : h('div.tl-bar', { style: { visibility: 'hidden' } }, h('span.tl-name', 'x'));
       $('tlBody').append(probe);
-      const cs = getComputedStyle(kind === 'bar' ? probe.firstChild : kind === 'tray' ? probe.querySelector('.tl-name') : probe);
+      const cs = getComputedStyle(kind === 'bar' || kind === 'room' ? probe.firstChild : kind === 'tray' ? probe.querySelector('.tl-name') : probe);
       fonts[kind] = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
       probe.remove();
     }
@@ -253,20 +289,113 @@
     return h('div.tl-group', h('button.tl-group-name', { type: 'button', 'aria-expanded': String(expanded), title: title || '', onclick: toggle }, h('span.caret', expanded ? '▾' : '▸'), name, h('small', small)));
   }
   const flip = (bag, key) => () => { if (bag[key]) delete bag[key]; else bag[key] = true; savePrefs(); render(); };
+  // the crop carried from the library, worked out for this drawing, and how many of the openings it fits are drawn on the page
+  let room = null, roomHere = 0;
   function bedRow(body, eng, bed, items, open, label, small, extra) {
     const lanes = lanesFor(items), lane = laneEl(lanes), sel = App.state.sel;
     // an opening is drawn under the bars: ground free before, after or between what is planned
     for (const o of open || []) {
       const a = idx(o.from), n = idx(o.to) - a + 1, next = o.before ? `before the ${o.before.r.c.name.toLowerCase()}` : o.after ? `after the ${o.after.r.c.name.toLowerCase()}` : 'open';
+      const fit = room && room.fits.get(o.id);
+      // The words stand in the part of the opening before the nursery line of a planting that comes after it, so the line never
+      // crosses them: the days up to the first such line that reaches into the opening.
+      let clear = n;
+      for (const x of items) {
+        const r = x.r;
+        if (!r || !r.sow || !(r.sow < r.field)) continue;
+        const s0 = idx(clampDay(r.sow)), f0 = idx(clampDay(r.field));
+        if (f0 > a && s0 < a + n) clear = Math.min(clear, Math.max(0, s0 - a));
+      }
       const full = `${num(o.days)} days open`, short = `${num(o.days)} d`, text = document.createTextNode('');
-      const box = h('div.tl-open' + (sel && sel.type === 'opening' && sel.id === o.id ? '.sel' : ''), { style: at(a, n), dataset: { opening: o.id }, title: `Open ${span(o.from, o.to)}: ${num(o.days)} days ${next}. Click to see what fits.`, 'aria-label': `${num(o.days)} days open, ${span(o.from, o.to)}` }, h('span', text));
-      // never cut off: the words in full where the box is wide enough, "26 d" where it is not, nothing where even that will not fit
-      fitList.push(() => { const w = Math.max(6, n * ppd - 1), label = measure('open', full) + OPEN_PAD <= w ? full : measure('open', short) + OPEN_PAD <= w ? short : ''; if (text.data !== label) { text.data = label; box.classList.toggle('bare', !label); } });
+      const box = h('div.tl-open' + (sel && sel.type === 'opening' && sel.id === o.id ? '.sel' : '') + (fit ? '.fit' : ''), { style: at(a, n), dataset: fit ? { opening: o.id, room: o.id, hook: 'room-opening' } : { opening: o.id },
+        title: fit ? '' : `Open ${span(o.from, o.to)}: ${num(o.days)} days ${next}. Click to see what fits.`, 'aria-label': `${num(o.days)} days open, ${span(o.from, o.to)}` }, h('span.tl-ow', { style: { '--c': clear } }, h('span', text)));
+      // never cut off: the words in full where the clear part is wide enough, "26 d" where it is not, nothing where even that will not fit
+      fitList.push(() => {
+        const w = Math.max(0, clear * ppd - 1), label = fit ? '' : measure('open', full) + OPEN_PAD <= w ? full : measure('open', short) + OPEN_PAD <= w ? short : '';
+        if (text.data !== label) { text.data = label; box.classList.toggle('bare', !label); }
+      });
       lane.append(box);
+      if (fit) roomIn(lane, eng, o, fit, a, n, lanes);
     }
     for (const item of items) { const el = plantingBar(item, item.lane); if (el) lane.append(el); }
     const selBed = sel && ((sel.type === 'bed' && sel.id === bed.id) || (sel.type === 'opening' && sel.bedId === bed.id));
     body.append(rowEl('div.tl-row' + (selBed ? '.sel' : '') + (extra && extra.cls || ''), { dataset: { bed: bed.id, ...(extra && extra.dataset || {}) } }, h('div.tl-label', label, small ? h('small', small) : null), lane, !!extra));
+  }
+  /** What a carried crop would give, in the unit it is sold in: "85 bunches". */
+  function roomAmount(eng, t) {
+    const F = root.LRFForecast;
+    if (!F || !(t.units > 0)) return '';
+    return F.amount(t.units, t.unit, F.groupOf(t.r.c, t.unit, (eng.plan.lrfNext || {}).groups));
+  }
+  const pickWords = r => +r.first === +r.last ? `pick ${day(r.first)}` : r.first.getMonth() === r.last.getMonth() ? `pick ${day(r.first)} to ${r.last.getDate()}` : `pick ${day(r.first)} to ${day(r.last)}`;
+  /**
+   * The carried crop drawn in an opening it fits: the Timeline's own bar, at the crop's days, on the first day it can go in; and one
+   * line of words, beside the bar where the opening has room, under it where the row is tall enough, and otherwise left to the hint.
+   */
+  function roomIn(lane, eng, o, fit, a0, n0, lanes) {
+    const t = fit.t, r = t.r, through = t.through, from = eng.occupancyFrom(t.p, r);
+    const bar = barEl({ from, to: through === Infinity ? yearEnd() : through, through, field: r.field, first: r.first, last: r.last, sow: r.sow, lane: 0, color: eng.cropColor(r.c),
+      cls: '.tl-room', dataset: { room: o.id, hook: 'room-bar' }, tries: namesOf(r.c), pictured: pictureOf(t.p), alt: r.c.name });
+    if (!bar) return;
+    roomHere++;
+    lane.append(bar);
+    const amount = roomAmount(eng, t), when = pickWords(r), a = idx(clampDay(from)), z = idx(through === Infinity ? yearEnd() : clampDay(through)) + 1, end = a0 + n0;
+    const tall = lanes * LANE_H + 6 >= 3 + 16 + 4 + 14, b = h('b'), rest = document.createTextNode(''), say = h('div.tl-room-say', { dataset: { hook: 'room-words', room: o.id }, hidden: true }, b, rest);
+    lane.append(say);
+    // a crop started in trays says the day its trays are sown first, where there is room for it
+    const sown = r.sow && r.sow < r.field ? `sow ${day(r.sow)} · ` : '', tries = amount ? [...(sown ? [[amount, ` ${sown}${when}`]] : []), [amount, ` ${when}`], [amount, '']] : [['', sown + when], ['', when]];
+    let shown = null;
+    fitList.push(() => {
+      const beside = (end - z) * ppd - 14, under = (end - a) * ppd - 10;
+      let pick = null;
+      for (const words of tries) {
+        const w = measure('room', words[0] + words[1]);
+        if (w <= beside) { pick = { words, at: 'beside' }; break; }
+        if (tall && w <= under) { pick = { words, at: 'under' }; break; }
+      }
+      const key = pick ? pick.at + '|' + pick.words.join('') : '';
+      if (key === shown) return;
+      shown = key;
+      say.hidden = !pick;
+      if (!pick) return;
+      b.textContent = pick.words[0]; rest.data = pick.words[1];
+      say.classList.toggle('under', pick.at === 'under');
+      say.style.setProperty('--x', pick.at === 'under' ? a : z);
+    });
+  }
+  /**
+   * A garden that is shut: an 8 px band of how full its ground is, week by week (the feet held on each day of the week, over the
+   * feet it has, as an amount in ink), and while a crop is carried an orange line under the weeks it could start there. What holds
+   * the ground is what the openings and the guard rails count (eng.holders): each planting by its footprint, and a bed set to rest.
+   */
+  function shutBand(head, eng, spaces) {
+    const days = yearDays(), feet = spaces.map(b => +eng.capOf(b) || 0), cap = feet.reduce((t, f) => t + f, 0);
+    if (!(cap > 0)) return;
+    const held = new Float64Array(days);
+    spaces.forEach((bed, k) => {
+      const L = feet[k], mine = new Float64Array(days);
+      for (const x of eng.holders(bed, yearStart(), yearEnd(), null)) {
+        const f = x.rect, i0 = Math.max(0, idx(clampDay(x.from))), i1 = x.through === Infinity ? days - 1 : Math.min(days - 1, idx(clampDay(x.through)));
+        const ft = Math.min(L, f ? Math.max(0, f.a1 - f.a0) * Math.max(0, f.x1 - f.x0) : +x.len || L);
+        for (let i = i0; i <= i1; i++) mine[i] += ft;
+      }
+      for (let i = 0; i < days; i++) held[i] += Math.min(L, mine[i]);
+    });
+    const band = h('div.tl-band', { dataset: { hook: 'garden-band' }, 'aria-hidden': 'true' });
+    for (let i = 0; i < days;) {
+      let j = i; while (j + 1 < days && E.addDays(yearStart(), j + 1).getDay() !== 1) j++;
+      let sum = 0; for (let k = i; k <= j; k++) sum += held[k];
+      const share = sum / (j - i + 1) / cap, pct = Math.round(share * 100);
+      band.append(h('i', { style: { ...at(i, j - i + 1), '--p': share > 0 ? Math.round(6 + 50 * share) + '%' : '0%' }, title: `Week of ${day(E.addDays(yearStart(), i))}: ${pct}% of its ground held` }));
+      i = j + 1;
+    }
+    if (room) {
+      const ids = new Set(spaces.map(b => b.id)), here = [...room.fits.values()].filter(f => ids.has(f.o.bed.id));
+      for (const f of here) { const s0 = idx(clampDay(f.t.earliest)), s1 = idx(clampDay(f.t.latest || f.t.earliest)); band.append(h('b', { style: at(s0, s1 - s0 + 1), dataset: { hook: 'band-start' } })); }
+      if (here.length) head.querySelector('small').append(' · ', h('b.tl-fits', { dataset: { hook: 'band-fits' } }, `${plainCrop(room.crop.name)} fits ${num(here.length)}`));
+    }
+    head.classList.add('banded');
+    head.append(band);
   }
 
   /** A bank of towers: one row, the towers that are planted alike drawn as one bar, until it is opened to single towers. */
@@ -379,8 +508,15 @@
 
   function render() {
     if (!App.state.ready || App.state.view !== 'timeline') { dirty = true; return; }
-    dirty = false; fitList = []; sums.clear();
-    const eng = App.state.engine, plan = App.state.plan, body = clear($('tlBody')), open = prefs.openings ? openingsBy(eng) : new Map();
+    dirty = false; fitList = []; sums.clear(); hideHint();
+    const eng = App.state.engine, plan = App.state.plan, body = clear($('tlBody'));
+    // the openings: all of them while Openings is on; while a crop is carried, the ones it fits whether or not
+    room = roomFor(eng); roomHere = 0;
+    const open = new Map();
+    for (const [id, list] of openingsBy(eng)) { const shown = prefs.openings ? list : room ? list.filter(o => room.fits.has(o.id)) : []; if (shown.length) open.set(id, shown); }
+    // a bed with nothing planned all year has no opening drawn; one the carried crop fits is drawn lit, as any other it fits
+    if (room) for (const { o } of room.fits.values()) if (!o.planted) open.set(o.bed.id, [...(open.get(o.bed.id) || []), o]);
+    body.classList.toggle('room', !!room);
     const ghosts = root.LRFSeries ? root.LRFSeries.ghosts() : null;
     ghostBy = new Map();
     for (const x of (ghosts && ghosts.placed) || []) { if (!ghostBy.has(x.bed.id)) ghostBy.set(x.bed.id, []); ghostBy.get(x.bed.id).push({ p: x.p, r: x.r, ghost: true }); }
@@ -407,9 +543,9 @@
         const key = `${s}:${group.garden.id}`;
         if (s === 'trays') { trayRows(body, eng, group, key); continue; }
         if (s === 'tower') { bankRows(body, eng, group, key); continue; }
-        const shut = !!prefs.shut[key];
-        body.append(groupHead(group.garden.name, `${plural(group.spaces.length, 'space')} · ${plural(group.count, 'planting')}`, !shut, flip(prefs.shut, key)));
-        if (shut) continue;
+        const shut = !!prefs.shut[key], head = groupHead(group.garden.name, `${plural(group.spaces.length, 'space')} · ${plural(group.count, 'planting')}`, !shut, flip(prefs.shut, key));
+        body.append(head);
+        if (shut) { if (s === 'field' || s === 'cover') shutBand(head, eng, group.spaces); continue; }
         for (const bed of group.spaces) {
           const items = itemsOf(eng, bed);
           if (eng.isCt(bed) && items.length > CROWDED && new Set(items.map(x => x.p.cropId)).size > 1) { crateRows(body, eng, bed, items); continue; }
@@ -418,7 +554,21 @@
       }
     }
     if (!body.querySelector('.tl-group, .tl-row[data-bed]')) body.append(h('p.tl-none', all ? 'No growing space is set up yet.' : `This plan has no ${SECTION_NAME[prefs.filter].toLowerCase()}.`));
+    roomLine(eng);
     refit(); cursor();
+  }
+  /** One line beside Openings while a crop is carried: its picture, where it fits, and × to put it down. */
+  function roomLine(eng) {
+    const host = $('tlRoomLine');
+    if (!host) return;
+    clear(host);
+    host.hidden = !room;
+    if (!room) return;
+    const farm = room.fits.size, name = App.cropLabel({ cropId: room.crop.id, ...(room.varietyId ? { varietyId: room.varietyId } : {}) });
+    const says = !farm ? 'fits no opening on the farm' : `fits ${roomHere ? num(roomHere) : 'none'} here · ${num(farm)} on the farm`;
+    host.append(root.LRFThumbs.el({ ...(room.varietyId ? { varietyId: room.varietyId } : {}), cropId: room.crop.id, color: eng.cropColor(room.crop), label: room.crop.name, size: 20 }),
+      h('b', name), h('span', { dataset: { hook: 'room-count' } }, says),
+      h('button.tl-room-x', { type: 'button', 'aria-label': `Put ${name} down`, title: `Put ${name} down`, onclick: () => App.arm(null) }, '×'));
   }
   /** Show what is selected without drawing the chart again: the bar (or the summary that holds it), the bed's rows, the opening. */
   function markSel() {
@@ -534,6 +684,45 @@
     return first;
   }
 
+  /** Plant the carried crop in an opening it fits, on the first day it can go in. The same step as a drop: App.place. */
+  function plantRoom(openingId) {
+    const fit = room && room.fits.get(openingId);
+    if (!fit || !App.state.armed) return;
+    hideHint();
+    App.place(App.state.armed, fit.o.bed.id, E.s2d(fit.t.p.date));
+  }
+  let hint = null, hintFor = '';
+  function hideHint() {
+    if (hint) hint.hidden = true;
+    hintFor = '';
+    for (const el of document.querySelectorAll('#tlBody .tl-room.on')) el.classList.remove('on');
+  }
+  /** What a carried crop would be in one opening: where, the days it would go in, when it is picked, when the ground is free, what it gives. */
+  function showHint(el) {
+    const id = el.dataset.room, fit = room && room.fits.get(id);
+    if (!fit) { hideHint(); return; }
+    if (hintFor === id && hint && !hint.hidden) return;
+    hideHint();
+    hintFor = id;
+    const eng = App.state.engine, { o, t } = fit, r = t.r, bar = document.querySelector(`#tlBody .tl-room[data-room="${CSS.escape(id)}"]`);
+    if (!bar) return;
+    bar.classList.add('on');
+    if (!hint) { hint = h('div.hint.tl-room-hint', { id: 'tlRoomHint', role: 'tooltip', dataset: { hook: 'room-hint' } }); document.body.append(hint); }
+    const B = d => h('b', day(d)), later = t.latest && +t.latest > +t.earliest ? [', or any day to ', B(t.latest)] : [];
+    const goes = r.sow && r.sow < r.field ? ['Sow in trays ', B(r.sow), ' · Plant out ', B(r.field), ...later] : ['Sow ', B(r.field), ...later];
+    const free = t.through === Infinity ? ' · Holds it to the season’s end' : [' · Free ', B(E.addDays(t.through, 1))], amount = roomAmount(eng, t), name = App.cropLabel(t.p);
+    clear(hint);
+    hint.append(h('div.tl-rh-head', root.LRFThumbs.el({ ...(t.p.varietyId ? { varietyId: t.p.varietyId } : {}), cropId: r.c.id, color: eng.cropColor(r.c), label: r.c.name, size: 40 }),
+      h('div', h('b', name.charAt(0).toUpperCase() + name.slice(1)), h('small', `${App.bedLabel(o.bed)} · not planted yet`))),
+      h('p', goes, ' · Pick ', B(r.first), ' to ', B(r.last), free),
+      h('p', `${num(+r.physicalLength || +r.len, 1)} ft${amount ? ' · ' + amount : ''}`),
+      h('p.tl-rh-foot', 'Click to plant it here · Undo follows'));
+    hint.hidden = false;
+    const at = bar.getBoundingClientRect(), box = hint.getBoundingClientRect(), left = Math.max(8, Math.min(at.left, innerWidth - box.width - 8));
+    const below = at.bottom + 8, top = below + box.height > innerHeight - 8 ? Math.max(8, at.top - box.height - 8) : below;
+    hint.style.left = Math.round(left) + 'px'; hint.style.top = Math.round(top) + 'px';
+  }
+
   function init() {
     loadPrefs();
     const scroll = $('tlScroll');
@@ -580,6 +769,9 @@
     scroll.addEventListener('click', e => {
       if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 4) return;
       if (e.target.closest('button')) return;
+      // a carried crop, clicked where it is drawn: planted there on the first day it can go, as a drop there plants it
+      const roomEl = App.state.armed && e.target.closest('[data-room]');
+      if (roomEl) { plantRoom(roomEl.dataset.room); return; }
       const barEl = e.target.closest('.tl-bar'), row = e.target.closest('.tl-row');
       if (barEl && barEl.dataset.planting) { App.select({ type: 'planting', id: barEl.dataset.planting }); return; }
       if (barEl && barEl.dataset.waiting) { App.select({ type: 'waiting', id: barEl.dataset.waiting }); return; }
@@ -610,6 +802,11 @@
     toggle.addEventListener('click', () => { prefs.openings = !prefs.openings; savePrefs(); toggle.setAttribute('aria-pressed', String(prefs.openings)); render(); });
     App.on('plan', render);
     App.on('ghost', render);
+    App.on('armed', () => { hideHint(); if (App.state.view === 'timeline') render(); else dirty = true; });
+    // the one hint card for a carried crop's planting, under the pointer
+    scroll.addEventListener('pointerover', e => { const el = e.target.closest && e.target.closest('[data-room]'); if (el) showHint(el); else hideHint(); });
+    scroll.addEventListener('pointerleave', hideHint);
+    scroll.addEventListener('scroll', hideHint, { passive: true });
     App.on('sel', () => {
       if (App.state.view !== 'timeline') { dirty = true; return; }
       // a planting chosen somewhere else (the panel, a list) is brought out of whatever summary holds it
