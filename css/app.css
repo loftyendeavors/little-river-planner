@@ -1472,7 +1472,7 @@ body[data-view="sow"] .wait-badge .wb-more, body[data-view="harvest"] .wait-badg
 .wait-row .lib-name { font-size: var(--type-13); }
 .lib-row.armed .wait-what small { color: color-mix(in srgb, var(--surface) 75%, transparent); }
 .wait-row .lib-count { color: var(--ink-2); }
-.wait-row:hover { background: var(--surface); border-color: var(--line); }
+.wait-row:not(.armed):hover { background: var(--surface); border-color: var(--line); }
 .lib-list.flash { animation: wait-flash 0.9s ease-out; }
 @keyframes wait-flash { 0%, 40% { box-shadow: 0 0 0 4px var(--flag); } 100% { box-shadow: 0 0 0 0 transparent; } }
 .lib-series { display: none; flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: var(--corner-pill); padding: 1px var(--space-8) 2px; font: 600 var(--type-11) var(--mono); color: var(--ink-2); }

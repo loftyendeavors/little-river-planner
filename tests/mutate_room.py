@@ -51,6 +51,7 @@ PAGE = [
  ("the count in the header no longer opens To place", SR, "      if (root.LRFPanels) root.LRFPanels.setScope('wait');\n", ""),
  ("To place lists what waits with small pictures", SR, "label: c.name, size: 40, cls: 'key' }),\n        h('div.wait-what'", "label: c.name, size: 24, cls: 'key' }),\n        h('div.wait-what'"),
  ("To place lists nothing", PN, "    if (lib.scope === 'wait' && root.LRFSeries) { root.LRFSeries.fillWaiting(clear($('libList')), lib.query);", "    if (lib.scope === 'wait' && root.LRFSeries) { clear($('libList'));"),
+ ("a waiting row picked turns light under the pointer, its light words lost", CSS, ".wait-row:not(.armed):hover { background: var(--surface);", ".wait-row:hover { background: var(--surface);"),
  ("a crop picked in the library is marked in orange, not in ink", CSS, ".lib-row.armed { background: var(--ink); border-color: var(--ink); color: var(--surface); }", ".lib-row.armed { background: var(--flag-soft); border-color: var(--flag); }"),
 ]
 if mode == "list": print(json.dumps({"page": len(PAGE)})); sys.exit(0)
