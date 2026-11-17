@@ -603,6 +603,7 @@
     'varieties': 'records',
     'varieties[]': 'object',
     'varieties[]._basisFromText': 'text',
+    'varieties[]._determinate': 'bool',   // written by planio.js pack for a variety whose notes say determinate, kept by unpack
     'varieties[]._catalogTextBasis': 'text',
     'varieties[]._pageTextBasis': 'text',
     'varieties[].active': 'bool',

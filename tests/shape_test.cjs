@@ -194,6 +194,13 @@ tryCase('a variety saved from a supplier page, one with no days given, and one e
   const rs = [fromPage, noDays, byHand].map(x => SH.check(x, 'varieties[]')), bad = rs.flatMap(r => r.unknown.concat(r.wrong));
   return [noDays.catalogDtm === null && fromPage.description === page.description && byHand.notes === 'kept by hand' && bad.length === 0, bad.slice(0, 8)];
 });
+tryCase('the farm packed as the plan that ships with the page, and opened again, fits (a variety noted determinate among it)', () => {
+  const v = FARM.varieties.find(x => x.active !== false);
+  if (!v) return [false, 'the farm has no variety'];
+  const marked = { ...FARM, varieties: FARM.varieties.map(x => (x.id === v.id ? { ...x, notes: 'A determinate tomato.' } : x)) };
+  const back = IO.unpack(IO.pack(marked)), r = SH.check(back), mark = (back.varieties.find(x => x.id === v.id) || {})._determinate;
+  return [mark === true && !r.unknown.length && !r.wrong.length, { mark, ...short(r) }];
+});
 tryCase('a crop added to the library by the planner\'s own function fits', () => {
   const c = SL.newCrop({ name: 'A New Crop', family: 'Asteraceae', method: 'TP', material: 'seed' }, 'c_shape-new-crop');
   const r = SH.check(c, 'crops[]');
