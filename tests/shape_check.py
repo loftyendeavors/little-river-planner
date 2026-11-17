@@ -55,7 +55,7 @@ TOUR = r"""
   await step('the farm\'s dates changed', () => { const d = A.farmDates().dates; return A.setFarmDates({ ...d, frostLast: d.frostLast === '05-12' ? '05-13' : '05-12' }); });
   await step('a garden\'s kind changed', () => { const g = S.plan.gardens[2]; return A.setGardenType(g.id, g.type === 'field' ? 'tunnel' : 'field'); });
   await step('days to harvest set for a crop and a variety', async () => { if (!sold) return 'no subject'; must(await A.setAssumption('crops', sold.id, 'field', 55, 'Days')); return A.setAssumption('varieties', vOf(sold).id, 'field', 57, 'Days'); });
-  await step('a yield set', () => sold ? A.setYield('crops', sold.id, 'field', 3.5, 'Yield') : 'no subject');
+  await step('a yield set for a crop and a variety', async () => { if (!sold) return 'no subject'; must(await A.setYield('crops', sold.id, 'field', 3.5, 'Yield')); return A.setYield('varieties', vOf(sold).id, 'field', 3.25, 'Yield'); });
   await step('a crop\'s price and personal use set', () => sold ? A.setSell(sold.id, { price: 4.25, keep: 5 }, 'Price') : 'no subject');
   await step('a variety\'s price set', () => sold ? A.setSellV(vOf(sold).id, { price: 5.5 }, 'Price') : 'no subject');
   await step('a crop looked at', () => sold ? A.setLooked(sold.id, true) : 'no subject');
@@ -79,6 +79,7 @@ TOUR = r"""
   await step('a seed lot added and one counted', async () => { const lots = (A.inventoryNow().lots || []).filter(l => l.deleted !== true); if (!lots.length) return 'no subject'; must(A.editStock('Add', (inv, ctx) => LRFSeedLib.addLot(inv, { key: lots[0].key, unit: 'seeds', quantity: 50, status: 'ordered' }, ctx))); return A.editStock('Count', (inv, ctx) => LRFSeedLib.updateLot(inv, lots[0].id, { quantity: 3 }, 'count', ctx)); });
   await step('a crop sown from seed', () => { const own = (S.plan.crops || []).find(c => !c.micro); return own ? A.revise('From seed', [{ kind: 'crop', before: own, after: { ...own, plantingMaterial: 'seed' } }]) : 'no subject'; });
   await step('where a variety\'s days are counted from', () => { const v = S.plan.varieties.find(x => x.active !== false); return v ? A.revise('Counted from', [{ kind: 'variety', before: v, after: { ...v, catalogMaturityBasis: 'transplant', catalogSourceChoice: v.catalogSourceChoice || 'url' } }]) : 'no subject'; });
+  await step('the farm sells everything it packs', () => (S.plan.settings || {}).houseKeeps === false ? 'no subject' : A.setHouseFarm(false));
   await step('the photo\'s scale', () => { const m = S.plan.map || {}; return m.ftPerPx ? A.commit('Scale', [{ kind: 'map', before: m, after: { ...m, ftPerPx: m.ftPerPx * 1.01 } }]) : 'no subject'; });
   await step('a variety chosen for a row of a live-tray plan', () => { const t = (S.plan.liveTrayPlans || []).slice(-1)[0], r = t && t.rows.find(x => x.cropId && S.plan.varieties.some(v => v.cropId === x.cropId)); if (!r) return 'no subject'; const v = S.plan.varieties.find(x => x.cropId === r.cropId); return A.saveTrays('Variety', { ...t, rows: t.rows.map(x => x.id === r.id ? { ...x, varietyId: v.id } : x) }); });
   await step('a live-tray plan deleted', () => { const t = (S.plan.liveTrayPlans || [])[0]; return t ? A.removeTrays(t.id) : 'no subject'; });

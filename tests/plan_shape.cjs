@@ -87,6 +87,7 @@
     'assumptions.varieties.*': 'map',
     'assumptions.varieties.*.*': 'object',
     'assumptions.varieties.*.*.dtm': 'number',
+    'assumptions.varieties.*.*.yield': 'number',
 
     'beds': 'records',
     'beds[]': 'object',
@@ -571,6 +572,7 @@
     'settings.frostFirst': 'text',
     'settings.frostLast': 'text',
     'settings.germ': 'number',
+    'settings.houseKeeps': 'bool',
     'settings.lastOutdoorField': 'text',
     'settings.microV2': 'bool',
     'settings.overheadFt': 'number',
