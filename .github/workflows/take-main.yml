@@ -4,9 +4,10 @@
 #
 # Three jobs, so that no code from a branch runs where there is a key that can write:
 #   list   reads the open pull requests, with a key that can only read them
-#   take   takes main into each branch with no key at all. The merge runs the branch's own helpers (tools/shared.cjs and what it
-#          calls, tests/counts.py), so this is the branch's code running. What it makes is handed on as a git bundle and a list
-#          of outcomes: data, which the next job reads and never runs
+#   take   takes main into each branch with no key at all, one job a pull request, each on a machine of its own. The merge runs
+#          the branch's own helpers (tools/shared.cjs and what it calls, tests/counts.py), so this is the branch's code running.
+#          What it makes is handed on as an artifact of its own, taken-<number>: a git bundle and its outcome, data that the next
+#          job reads and never runs
 #   send   for each pull request of the list (its number, branch and commit taken from "list", not from what "take" handed on),
 #          pushes the commit "take" made, only onto the commit the branch was read at (--force-with-lease: a chat's push since
 #          then wins), starts the checks for it, and says on the pull request what was done. It runs nothing of any branch
@@ -48,6 +49,13 @@ jobs:
   take:
     needs: list
     if: needs.list.outputs.prs != '[]'
+    # one job a pull request, each on a machine of its own: one branch's code cannot touch what another's taking in hands on
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        pr: ${{ fromJSON(needs.list.outputs.prs) }}
+    name: take (#${{ matrix.pr.number }})
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -64,42 +72,36 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/scratch" && cd "$RUNNER_TEMP/scratch"
           npm i --no-audit --no-fund --silent @fontsource-variable/bricolage-grotesque @fontsource-variable/instrument-sans @fontsource-variable/jetbrains-mono
-      - name: Each branch takes main in, with no key
+      - name: The branch takes main in, with no key
         shell: bash
         env:
-          PRS: ${{ needs.list.outputs.prs }}
+          NUMBER: ${{ matrix.pr.number }}
+          AT: ${{ matrix.pr.at }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           FONTS="$RUNNER_TEMP/scratch/node_modules/@fontsource-variable"
-          # the tool as main has it, run on each branch: a branch's own copy may be older, changed, or not there at all
+          # the tool as main has it: the branch's own copy may be older, changed, or not there at all
           TOOL="$RUNNER_TEMP/take_main.cjs"; cp tools/take_main.cjs "$TOOL"
-          OUT="$RUNNER_TEMP/out"; mkdir -p "$OUT"; : > "$OUT/outcomes.jsonl"
+          OUT="$RUNNER_TEMP/out"; mkdir -p "$OUT"
           git rev-parse --short origin/main > "$OUT/main"
-          printf '%s' "$PRS" | jq -c '.[]' > "$RUNNER_TEMP/prs.jsonl"
-          while read -r pr; do
-            number=$(printf '%s' "$pr" | jq -r .number); at=$(printf '%s' "$pr" | jq -r .at)
-            echo "== #$number"
-            git reset -q --hard && git clean -qfd
-            if ! git checkout -q -B "take/$number" "$at"; then
-              jq -nc --argjson n "$number" '{number: $n, code: 1, head: "", said: "the branch could not be read"}' >> "$OUT/outcomes.jsonl"; continue
-            fi
-            set +e
-            out=$(node "$TOOL" . "$FONTS" --commit --abort 2>&1); code=$?
-            set -e
-            echo "$out"
-            jq -nc --argjson n "$number" --arg head "$(git rev-parse HEAD)" --argjson code "$code" --arg said "$(printf '%s\n' "$out" | tail -1)" \
-              '{number: $n, head: $head, code: $code, said: $said}' >> "$OUT/outcomes.jsonl"
-          done < "$RUNNER_TEMP/prs.jsonl"
-          refs=$(git for-each-ref --format='%(refname)' 'refs/heads/take/*')
-          if [ -n "$refs" ]; then git bundle create "$OUT/taken.bundle" $refs; fi
+          if ! git checkout -q -B take "$AT"; then
+            jq -nc '{code: 1, said: "the branch could not be read"}' > "$OUT/outcome.json"; exit 0
+          fi
+          set +e
+          out=$(node "$TOOL" . "$FONTS" --commit --abort 2>&1); code=$?
+          set -e
+          echo "$out"
+          jq -nc --argjson code "$code" --arg said "$(printf '%s\n' "$out" | tail -1)" '{code: $code, said: $said}' > "$OUT/outcome.json"
+          git bundle create "$OUT/taken.bundle" refs/heads/take
       - uses: actions/upload-artifact@v4
         with:
-          name: taken
+          name: taken-${{ matrix.pr.number }}
           path: ${{ runner.temp }}/out
           retention-days: 3
   send:
     needs: [list, take]
+    if: always() && needs.list.result == 'success' && needs.list.outputs.prs != '[]'   # a pull request whose taking in failed is said, not left out
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -112,23 +114,23 @@ jobs:
           sparse-checkout: README.md   # the repository to push from: nothing of it is run here
       - uses: actions/download-artifact@v4
         with:
-          name: taken
-          path: ${{ runner.temp }}/in
+          pattern: taken-*
+          path: ${{ runner.temp }}/in   # each in a folder of its own, by its name: taken-<number>
       - name: Push, start the checks, and say so
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           PRS: ${{ needs.list.outputs.prs }}
         run: |
-          IN="$RUNNER_TEMP/in"; main=$(head -c 12 "$IN/main" | tr -cd '0-9a-f')
-          if [ -f "$IN/taken.bundle" ]; then git fetch -q "$IN/taken.bundle" 'refs/heads/take/*:refs/take/*' || true; fi
           printf '%s' "$PRS" | jq -c '.[]' > "$RUNNER_TEMP/prs.jsonl"
           while read -r pr; do
-            # from the list: trusted. From what "take" handed on: only the commit it made, its exit code and what it said
+            # from the list: trusted. From the pull request's own "take" job (its own folder, made on its own machine): only the
+            # commit it made, its exit code and what it said
             number=$(printf '%s' "$pr" | jq -r .number); branch=$(printf '%s' "$pr" | jq -r .branch); at=$(printf '%s' "$pr" | jq -r .at)
-            line=$(jq -c --argjson n "$number" 'select(.number == $n)' "$IN/outcomes.jsonl" 2>/dev/null | head -1)
-            code=$(printf '%s' "$line" | jq -r '.code // 1' 2>/dev/null || echo 1); said=$(printf '%s' "$line" | jq -r '.said // "no outcome was handed on"' 2>/dev/null || echo "no outcome was handed on")
-            made=$(git rev-parse -q --verify "refs/take/$number" || true)
+            IN="$RUNNER_TEMP/in/taken-$number"; main=$(head -c 12 "$IN/main" 2>/dev/null | tr -cd '0-9a-f')
+            code=$(jq -r '.code // 1' "$IN/outcome.json" 2>/dev/null || echo 1); said=$(jq -r '.said // "no outcome was handed on"' "$IN/outcome.json" 2>/dev/null || echo "no outcome was handed on")
+            made=""
+            if [ -f "$IN/taken.bundle" ] && git fetch -q "$IN/taken.bundle" "+refs/heads/take:refs/take/$number" 2>/dev/null; then made=$(git rev-parse -q --verify "refs/take/$number" || true); fi
             body="$RUNNER_TEMP/body-$number.md"; rm -f "$body"
             if [ "$code" = 0 ] && [ -n "$made" ] && [ "$made" != "$at" ]; then
               if git -c core.hooksPath=/dev/null push --no-verify -q --force-with-lease="refs/heads/$branch:$at" origin "$made:refs/heads/$branch"; then

@@ -180,8 +180,8 @@ those, then `node tools/shared.cjs . <fonts> origin/main`, `git add -A` and comm
 
 **On GitHub it happens by itself.** When main moves, `.github/workflows/take-main.yml` takes it into every open pull request
 from this repository that it can take in without a hand, pushes, starts the checks for the branch and says so on the pull request.
-Where the code conflicts it pushes nothing and names the files there. The merge runs a branch's own helpers, so it runs in a job
-with no key; the job that pushes runs nothing of any branch, and pushes only onto the commit the branch was read at
+Where the code conflicts it pushes nothing and names the files there. The merge runs a branch's own helpers, so it runs with no key,
+one job a pull request on a machine of its own; the job that pushes runs nothing of any branch, and pushes only onto the commit the branch was read at
 (`take_main_job_test.cjs` holds this). So a chat that is still building may find its branch
 moved: **fetch it before each push**, and if the push is refused, `node tools/take_main.cjs . <fonts> --from origin/<branch>
 --commit` takes the branch as GitHub holds it in, settled the same way.

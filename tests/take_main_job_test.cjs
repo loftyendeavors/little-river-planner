@@ -32,12 +32,15 @@ check('the three jobs are there, and nothing is given to the workflow as a whole
 check('"list" may only read the pull requests, and checks nothing out', JSON.stringify(perms('list')) === '{"pull-requests":"read"}' && !/actions\/checkout/.test(job('list')), perms('list'));
 check('"take" may only read the repository, has no key in it, and its checkout leaves none behind',
   JSON.stringify(perms('take')) === '{"contents":"read"}' && !KEY.test(job('take')) && /persist-credentials:\s*false/.test(job('take')), { perms: perms('take'), key: (job('take').match(KEY) || [])[0] || null });
+check('"take" is one job a pull request, from the list, each handing on an artifact named for its own pull request',
+  /matrix:\n\s+pr: \$\{\{ fromJSON\(needs\.list\.outputs\.prs\) \}\}/.test(job('take')) && /name: taken-\$\{\{ matrix\.pr\.number \}\}/.test(job('take')) && /AT: \$\{\{ matrix\.pr\.at \}\}/.test(job('take')));
+check('"send" reads each pull request’s outcome and commit only from that pull request’s own artifact', /IN="\$RUNNER_TEMP\/in\/taken-\$number"/.test(job('send')) && !/outcomes\.jsonl/.test(job('send')));
 check('"take" runs the tool kept from main, not the branch’s own copy', /cp tools\/take_main\.cjs "\$TOOL"/.test(job('take')) && /node "\$TOOL"/.test(job('take')) && !/node tools\//.test(job('take')));
 // what "send" runs: its lines without comments and without the words it writes (inside single quotes)
 const commands = job('send').split('\n').filter(l => !/^\s*#/.test(l)).map(l => l.replace(/'[^']*'/g, "''").replace(/\s#\s.*$/, '')).join('\n');
 const runs = commands.match(/\bnode\b|python3?\b|\bsh tests|\bbash tests|tools\/|tests\/\w+\.(cjs|py|sh)|npm |npx /g) || [];
 check('"send" runs nothing of any branch or of the repository', runs.length === 0 && /sparse-checkout:/.test(job('send')) && !/\bref:/.test(job('send')), runs);
 check('"send" takes the pull request, its branch and its commit from "list", and pushes only onto that commit',
-  /PRS: \$\{\{ needs\.list\.outputs\.prs \}\}/.test(job('send')) && /branch=\$\(printf '%s' "\$pr" \| jq -r \.branch\)/.test(job('send')) && /--force-with-lease="refs\/heads\/\$branch:\$at"/.test(job('send')) && !/jq -r \.branch\)[^\n]*\$IN/.test(job('send')));
+  /PRS: \$\{\{ needs\.list\.outputs\.prs \}\}/.test(job('send')) && /branch=\$\(printf '%s' "\$pr" \| jq -r \.branch\)/.test(job('send')) && /--force-with-lease="refs\/heads\/\$branch:\$at"/.test(job('send')) && !/branch=[^\n]*\$IN/.test(job('send')));
 check('"send" pushes with no hook of the repository run', /core\.hooksPath=\/dev\/null push --no-verify/.test(job('send')));
 done = true;
