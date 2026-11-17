@@ -99,7 +99,7 @@ try {
   // a file git does not hold among the scripts: the tool stops before anything, and the file is left as it was
   write('js/not-yet-added.js', '// a script not yet added\n');
   r = run('take_main.cjs', '--commit');
-  check('a file git does not hold among the scripts stops the tool before anything is merged or built, and is left as it was', r.code === 1 && read('js/not-yet-added.js') === '// a script not yet added\n' && !fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')) && clean() === '?? js/not-yet-added.js', { r, status: clean() });
+  check('a file git does not hold among the scripts stops the tool before anything is merged or built, and is left as it was', r.code === 1 && !!r.said && /git does not hold/.test(r.said.failed || '') && read('js/not-yet-added.js') === '// a script not yet added\n' && !fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')) && clean() === '?? js/not-yet-added.js', { r, status: clean() });
   fs.rmSync(path.join(W, 'js/not-yet-added.js'));
   // a branch that already holds main, whose written files were left stale: --commit writes and commits them
   const keep = read('js/built.js');
