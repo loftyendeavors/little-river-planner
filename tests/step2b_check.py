@@ -208,6 +208,7 @@ with sync_playwright() as pw:
 
         # ── a waiting planting in the details panel ──
         ev("LRFApp.setView('map'); LRFApp.setDate(new Date(LRFApp.planYear(), 3, 20))"); page.wait_for_timeout(250)
+        if page.get_attribute('[data-hook="lib-to-place"]', 'aria-pressed') != 'true': page.click('[data-hook="lib-to-place"]'); page.wait_for_timeout(150)   # a reload opens the library on My crops
         page.click('[data-hook="waiting-row"]'); page.wait_for_selector('#wtHomes')
         w1 = ev("LRFApp.waitingOne(LRFApp.state.sel.id)")
         check('a click on one shows it in the details panel and turns the map to its day', st()['sel'] == 'waiting' and ev("LRFEngine.d2s(LRFApp.state.date)") == w1['date'] and 'counts toward nothing' in page.inner_text('#wtNote'), [st(), w1['date']])

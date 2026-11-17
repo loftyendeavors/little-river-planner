@@ -58,6 +58,8 @@ for n in "$@"; do
     shape) python3 -I $T/shape_check.py $APP $S/shape $REPO 2>&1 | tally shape ;;   # the plan's shape (plan_shape.cjs) held to what the page writes
     loose) python3 -I $T/loose_check.py $APP $S/loose 2>&1 | tally loose-ends ;;
     loose-site) python3 -I $T/loose_check.py $SITE $S/loose-site $ZIP 2>&1 | tally loose-ends-built-site ;;
+    room) python3 -I $T/room_check.py $APP $S/room 2>&1 | tally room-for-a-crop ;;   # the Timeline and the library: room for a crop, a shut garden's band, To place
+    room-site) python3 -I $T/room_check.py $SITE $S/room-site $ZIP 2>&1 | tally room-for-a-crop-built-site ;;
     f053) python3 -I $T/fixes_053_check.py $APP $S/f053 2>&1 | tally fixes-0.53 ;;
     f053-site) python3 -I $T/fixes_053_check.py $SITE $S/f053-site $ZIP 2>&1 | tally fixes-0.53-built-site ;;
     map) WIDTHS=${WIDTHS:-1280,1480,1707,3440} python3 -I $REPO/tools/map_check.py $APP $S/map 2>&1 | tally map ;;
