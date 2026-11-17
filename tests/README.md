@@ -32,6 +32,7 @@ Everything here runs on a made-up farm. No grower's plan is needed to check a bu
 | `mutate*.py` | The faults themselves |
 | `shared_test.cjs` | The files the merge writes (`tools/shared.cjs`) and the taking of main into a branch (`tools/take_main.cjs`), on a copy of the repository with a main of its own ("Two builds side by side") |
 | `take_main_job_test.cjs` | The job that takes main in, read as text: no code of a branch runs where a key can write |
+| `join_check.py`, `snaps_test.cjs`, `mutate_join.py` | Two devices that both changed the plan, joined record by record, in two real browsers against the sync service's own code (the switch, taking in, undo after it, "Use mine"); which snapshots stay; and their faults. The join rules themselves are `merge_test.cjs`, and the order of taking in is in `tools/sync_client_test.mjs` |
 | `hooks_test.cjs` | Every hook a check reads is written by the planner, and nothing styles one ("Hooks") |
 | `plan_shape.cjs`, `shape_test.cjs`, `shape_check.py` | The plan's shape written down, and the two checks that hold the farm, the planner and the merge to it ("The plan's shape") |
 | `farm/` | The made-up farm: how it is made, and the result |
@@ -197,7 +198,7 @@ What each build still writes of its own, and settles by hand when two builds mee
 
 `plan_shape.cjs` is the list of what a plan may hold: every place the planner writes (`plantings[].tasks.delay.*.to`), its type,
 and how `js/merge.js` joins it when two devices' plans meet: taken whole, the later stamp, a planting's place or time, a
-recording, a rule of its own, or (with no word) by shape. Its head says each word. It is not served: nothing in it changes what
+recording, keys of one record joined as one value, a rule of its own, or (with no word) by shape. Its head says each word. It is not served: nothing in it changes what
 the planner does.
 
 - `shape_test.cjs` (fast) holds the list to itself; to the merge's own tables, read from `js/merge.js`'s code, both ways, so a
@@ -210,7 +211,8 @@ the planner does.
   and holds every record each step wrote, the plan the page holds, the plan the browser stores and the plan as a file to the list.
 
 **A build that writes a new field adds its entry**, with the word for how it is joined. An object whose parts only make sense
-together (a from and a to) is `whole`, and goes into `WHOLE` in `js/merge.js` in the same build: that is a change to saving.
+together (a from and a to) is `whole`, and goes into `WHOLE` in `js/merge.js` in the same build (a place under a key the data
+chooses is written with `*`); keys of a record that are read together are `together`, and go into `TOGETHER`. Either is a change to saving.
 The checks see the fields the farm and the tour reach; a field written on a path neither takes is the reviewer's to catch
 (`AGENTS.md`). What a plan of one's own holds that the list does not name: `node tests/shape_test.cjs --plan <plan file> <app
 folder>`, on the computer that holds it (it prints, and checks nothing). The records the planner does not edit, which a file
@@ -235,8 +237,8 @@ the hook with the thing, so that the checks of that thing do not change.
 ## Deliberate faults
 
 A check that cannot fail proves nothing. Each `mutate*.py` puts one fault at a time into a copy of the app (a rule dropped,
-a word changed back, a figure off by one) and requires that the check then fails where it passed before. Ten sets (`changed`,
-`cleanup`, `look`, `map`, `merge`, `scale`, `screens`, `shape`, `shared`, `windows`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
+a word changed back, a figure off by one) and requires that the check then fails where it passed before. Eleven sets (`changed`,
+`cleanup`, `join`, `look`, `map`, `merge`, `scale`, `screens`, `shape`, `shared`, `windows`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
 
 ```
 sh tests/faults.sh list             # every set, its modes, how many faults

@@ -40,6 +40,18 @@
     });
   }
   const available = () => open().then(() => true, () => false);
+  // A plan kept before a taking-in is kept packed, where the browser can pack: there may be a few dozen of them in a day, each
+  // the size of the plan. Every other snapshot is kept as text, as it always was.
+  const viaStream = async (bytes, stream) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+  async function packed(text) {
+    if (typeof CompressionStream !== 'function') return text;
+    try { return { gz: await viaStream(new TextEncoder().encode(text), new CompressionStream('gzip')) }; } catch (_) { return text; }
+  }
+  async function unpacked(body) {
+    if (typeof body === 'string') return body;
+    if (!body || !body.gz || typeof DecompressionStream !== 'function') return null;
+    try { return new TextDecoder().decode(await viaStream(body.gz, new DecompressionStream('gzip'))); } catch (_) { return null; }
+  }
   const newId = () => 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
   /** Newest first. Each: { id, name, at, auto, why, plantings, waiting, year, bytes, key, device, cloud }. */
   async function list() {
@@ -51,11 +63,12 @@
     if (typeof text !== 'string' || !text.length) throw new Error('There is no plan to keep.');
     const record = { id: info.id || newId(), name: String(info.name || '').trim().slice(0, 80) || 'Snapshot', at: info.at || new Date().toISOString(), auto: !!info.auto, why: info.why || '', ...(info.join ? { join: true } : {}),
       plantings: +info.plantings || 0, waiting: +info.waiting || 0, year: info.year || null, bytes: text.length, key: info.key || '', device: info.device || '', cloud: !!info.cloud };
-    await tx('readwrite', (meta, body) => { meta.put(record); body.put(text, record.id); });
+    const kept = record.join ? await packed(text) : text;
+    await tx('readwrite', (meta, body) => { meta.put(record); body.put(kept, record.id); });
     if (record.auto) await prune();
     return record;
   }
-  const text = id => tx('readonly', (meta, body) => body.get(id)).then(t => (typeof t === 'string' ? t : null));
+  const text = id => tx('readonly', (meta, body) => body.get(id)).then(unpacked);
   const remove = id => tx('readwrite', (meta, body) => { meta.delete(id); body.delete(id); });
   /** Change what is noted about a snapshot (its name, whether the cloud has it). The plan inside is never changed. */
   async function note(id, change) {
@@ -72,12 +85,16 @@
     return keep;
   }
   /** The automatic ones beyond the newest 20 go, and the plans kept before a taking-in beyond their own few. Named ones are never removed here. */
+  /** Of every snapshot (newest first), the ones that go. */
+  function outgrown(all, now) {
+    const joins = all.filter(s => s.auto && s.join), keep = joinsKept(joins, now);
+    return [...all.filter(s => s.auto && !s.join).slice(KEEP_AUTO), ...joins.filter(s => !keep.has(s.id))];
+  }
   async function prune() {
-    const all = await list(), joins = all.filter(s => s.auto && s.join), keep = joinsKept(joins);
-    const old = [...all.filter(s => s.auto && !s.join).slice(KEEP_AUTO), ...joins.filter(s => !keep.has(s.id))];
+    const old = outgrown(await list());
     if (old.length) await tx('readwrite', (meta, body) => { for (const s of old) { meta.delete(s.id); body.delete(s.id); } });
     return old.length;
   }
-  root.LRFSnaps = { available, list, add, text, remove, note, prune, newId, joinsKept, KEEP_AUTO, KEEP_JOIN };
+  root.LRFSnaps = { available, list, add, text, remove, note, prune, newId, joinsKept, outgrown, KEEP_AUTO, KEEP_JOIN };
   if (typeof module === 'object' && module.exports) module.exports = root.LRFSnaps;
 })(typeof self !== 'undefined' ? self : globalThis);

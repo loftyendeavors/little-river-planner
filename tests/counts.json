@@ -13,7 +13,7 @@
 
   "map geometry": 81,
 
-  "merge": 99,
+  "merge": 108,
 
   "page reader": 29,
 
@@ -23,7 +23,9 @@
 
   "scale": 8,
 
-  "shape": 27,
+  "shape": 28,
+
+  "snapshots kept": 4,
 
   "step1, backup": 35,
 
@@ -53,7 +55,7 @@
 
   "succession": 31,
 
-  "sync client": 118,
+  "sync client": 147,
 
   "sync service": 139,
 

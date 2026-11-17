@@ -281,7 +281,7 @@
      */
     async function takeIn() {
       const no = why => { st.joinNote = why || ''; return false; }, lineOf = meta => (meta && typeof meta.line === 'string' ? meta.line : null);
-      if (!cfg.join || typeof host.join !== 'function' || !cfg.base || behind) return no('');
+      if (typeof host.join !== 'function' || !cfg.base || behind) return no('');   // (whether this device joins at all is asked by whoever calls)
       if ((cfg.v || 0) < 3) return no('The sync service is older than version 3, so plans are not joined.');
       if (lineOf(st.cloud && st.cloud.meta) !== (cfg.line || null)) return no('A whole plan was put in the cloud on another device (a backup or a snapshot loaded, or one plan kept over another). Whole plans are not joined.');
       if (typeof host.idle === 'function' && !host.idle()) { set('joining'); schedule('join', timing.idle); return true; }
@@ -316,8 +316,9 @@
         // the cloud moved between this browser's last look and its write: nothing was stored. Look again and say what is there.
         st.cloud = (error.detail && error.detail.plan) || null;
         if (!st.cloud) { keep({ base: null }); schedule('recheck', 50); set('checking'); return; }
-        st.first = !cfg.base; set('conflict');
-        if (cfg.join && cfg.base) schedule('join', 200);   // the cloud moved again while a joined plan was on its way: once more
+        st.first = !cfg.base;
+        // on a device that joins, the plans are joined at the next look (200 ms on): the question is asked only if that cannot be done
+        if (cfg.join && cfg.base && !behind) { set('joining'); schedule('join', 200); } else set('conflict');
         return;
       }
       if (kind === 'older') {

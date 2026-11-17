@@ -29,7 +29,8 @@ How a build is made and checked is in `tests/README.md`. The rules below are for
 - Flag an object whose parts only make sense together (a from and a to,
   an x and a y) entered without "whole".
   Safe path: its entry in tests/plan_shape.cjs, and, for "whole", the same
-  place in js/merge.js WHOLE. A change to js/merge.js is a change to saving
+  place in js/merge.js WHOLE (keys of one record read together: "together",
+  and js/merge.js TOGETHER). A change to js/merge.js is a change to saving
   and sync, with the rules above.
 
 ### Privacy
