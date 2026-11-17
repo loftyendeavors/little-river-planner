@@ -79,7 +79,7 @@ with sync_playwright() as pw:
     try:
         year = ev('LRFApp.planYear()')
         s0, base = st(), ev(FIGURES)
-        check('the plan opens with nothing waiting, and no count of it anywhere', s0['n'] > 100 and s0['w'] == 0 and ev("document.getElementById('waitBadge').hidden && document.getElementById('waitBox').hidden"), s0)
+        check('the plan opens with nothing waiting, and no count of it anywhere', s0['n'] > 100 and s0['w'] == 0 and ev("document.getElementById('waitBadge').hidden && document.querySelector('[data-hook=\"lib-to-place-count\"]').hidden"), s0)
         radish = ev("(LRFApp.state.engine.crops().find(c => /^Radish$/.test(c.name)) || LRFApp.state.engine.crops().find(c => /radish/i.test(c.name))).id")
 
         # ── the tool opens in place ──
@@ -161,8 +161,9 @@ with sync_playwright() as pw:
         check('the timeline’s own counts are the plan’s plantings, with the four that wait in none of them', len(counts) == 5 and counts[0] == figures['inBeds'] and counts[0] == s0['n'], [counts, figures['inBeds']])
         badge = ev("(() => { const b = document.getElementById('waitBadge'), r = b.getBoundingClientRect(), top = document.querySelector('header.top').getBoundingClientRect(), nav = document.querySelector('nav.views').getBoundingClientRect(); return { hidden: b.hidden, text: b.textContent, inside: r.right <= top.right && r.left >= nav.right, more: getComputedStyle(b.querySelector('.wb-more')).display }; })()")
         check('the header says how many are waiting', not badge['hidden'] and badge['text'].startswith('4 to place') and badge['inside'] and badge['more'] == 'none', badge)
-        box = ev("({ hidden: document.getElementById('waitBox').hidden, rows: [...document.querySelectorAll('#waitList .wait-row')].map(r => r.textContent), head: document.getElementById('waitHead').textContent })")
-        check('above the crop library a list of them: the crop and the day each goes in', not box['hidden'] and len(box['rows']) == 4 and all('Radish' in r for r in box['rows']) and 'Jul 6' in box['rows'][0] and '4' in box['head'] and 'not counted' in box['head'], box)
+        page.click('[data-hook="lib-to-place"]'); page.wait_for_timeout(200)
+        box = ev("({ count: (() => { const c = document.querySelector('[data-hook=\"lib-to-place-count\"]'); return c.hidden ? '' : c.textContent; })(), chosen: document.querySelector('[data-hook=\"lib-to-place\"]').getAttribute('aria-pressed'), rows: [...document.querySelectorAll('[data-hook=\"waiting-row\"]')].map(r => r.textContent), lead: (document.querySelector('[data-hook=\"waiting-lead\"]') || {}).textContent || '' })")
+        check('To place, beside My crops and All crops, counts them and lists them: the crop and the day each goes in, and that they are not in the forecast', box['count'] == '4' and box['chosen'] == 'true' and len(box['rows']) == 4 and all('Radish' in r for r in box['rows']) and 'Jul 6' in box['rows'][0] and 'not in the forecast' in box['lead'], box)
         bars = ev("[...document.querySelectorAll('#tlBody .tl-wait .tl-bar')].map(b => ({ w: b.dataset.waiting || null, ghost: b.classList.contains('tl-ghost-bar'), cursor: getComputedStyle(b).cursor }))")
         check('on the timeline they are bars now, to be picked up', len(bars) == 4 and all(b['w'] and not b['ghost'] and b['cursor'] == 'grab' for b in bars), bars)
         check('the heading says they are counted nowhere until placed', 'not counted' in ev("document.querySelector('.tl-waithead').textContent") or 'counted nowhere' in ev("document.querySelector('.tl-waithead').textContent"))
@@ -207,7 +208,7 @@ with sync_playwright() as pw:
 
         # ── a waiting planting in the details panel ──
         ev("LRFApp.setView('map'); LRFApp.setDate(new Date(LRFApp.planYear(), 3, 20))"); page.wait_for_timeout(250)
-        page.click('#waitList .wait-row'); page.wait_for_selector('#wtHomes')
+        page.click('[data-hook="waiting-row"]'); page.wait_for_selector('#wtHomes')
         w1 = ev("LRFApp.waitingOne(LRFApp.state.sel.id)")
         check('a click on one shows it in the details panel and turns the map to its day', st()['sel'] == 'waiting' and ev("LRFEngine.d2s(LRFApp.state.date)") == w1['date'] and 'counts toward nothing' in page.inner_text('#wtNote'), [st(), w1['date']])
         homes = ev("LRFSuccession.homes(LRFApp.state.engine, LRFApp.waitingOne(LRFApp.state.sel.id)).map(h => h.bed.id)")
@@ -219,7 +220,7 @@ with sync_playwright() as pw:
         check('its date can be changed while it waits, as a step that can be undone', ev("LRFApp.waitingOne('%s').date" % w1['id']) == '%d-07-09' % year and st()['undo'] == u0 + 1 and st()['w'] == 4)
         ev('LRFApp.undo()'); page.wait_for_timeout(250)
         check('undo puts the date back', ev("LRFApp.waitingOne('%s').date" % w1['id']) == w1['date'])
-        page.click('#waitList .wait-row'); page.wait_for_selector('#wtHomes [data-home]')
+        page.click('[data-hook="waiting-row"]'); page.wait_for_selector('#wtHomes [data-home]')
         page.click('#wtHomes [data-home]'); page.wait_for_timeout(500)
         placed = ev("(() => { const A = LRFApp, p = A.state.engine.planting('%s'), r = p && A.state.engine.calc(p); return p ? { bed: p.bedId, date: p.date, whole: r.physicalLength >= r.cap - 1e-6 || r.tw, wait: 'wait' in p, sel: A.state.sel && A.state.sel.id, trouble: LRFRails.cleanup(A.state.engine).count } : null; })()" % w1['id'])
         check('a click on a free space puts it there whole, on its own date', placed is not None and placed['bed'] == homes[0] and placed['date'] == w1['date'] and placed['whole'] and not placed['wait'] and placed['sel'] == w1['id'] and placed['trouble'] == base['settle'], placed)
@@ -251,7 +252,7 @@ with sync_playwright() as pw:
         states = {}
         def survey():
             states.update(ev("({ ok: document.querySelectorAll('#map .bed.drop-ok').length, split: document.querySelectorAll('#map .bed.drop-split').length, blocked: document.querySelectorAll('#map .bed.drop-blocked').length })"))
-        seen = drag('#waitList .wait-row[data-waiting="%s"]' % w2['id'], spot, survey)
+        seen = drag('[data-hook="waiting-row"][data-waiting="%s"]' % w2['id'], spot, survey)
         p2 = ev("(() => { const p = LRFApp.state.engine.planting('%s'), r = p && LRFApp.state.engine.calc(p); return p ? { bed: p.bedId, date: p.date, whole: r.physicalLength >= r.cap - 1e-6 } : null; })()" % w2['id'])
         check('dragged from the list onto a free bed on the map, it takes the whole bed', spot is not None and p2 is not None and p2['bed'] == spot['bed'] and p2['whole'], [spot, p2, seen])
         check('it keeps its own date, though the map stood on another day', p2 is not None and p2['date'] == w2['date'] and ev("LRFEngine.d2s(LRFApp.state.date)") != w2['date'], [p2, w2['date']])
@@ -425,6 +426,7 @@ with sync_playwright() as pw:
         ev("LRFApp.setDate(LRFEngine.s2d('%s'))" % day0); page.wait_for_timeout(250)
         spot = ev("""(crop) => { const A = LRFApp, eng = A.state.engine, box = document.getElementById('map').getBoundingClientRect(); for (const g of document.querySelectorAll('#map .bed')) { const id = g.dataset.bed; if (!eng.isSoilBed(eng.bedOf(id)) || A.preview({ cropId: crop }, { bedId: id, date: A.state.date }).state !== 'ok') continue; const r = g.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
           if (x > box.left + 30 && x < box.right - 30 && y > box.top + 30 && y < box.bottom - 120) { const at = document.elementFromPoint(x, y); if (at && at.closest('[data-bed]') && at.closest('[data-bed]').dataset.bed === id) return { bed: id, x, y }; } } return null; }""", radish)
+        page.click('[data-lib-scope="mine"]'); page.wait_for_timeout(150)
         seen = drag('#libList .lib-row[data-crop="%s"]:not(.lib-var) .lib-name' % radish, spot)
         lib = ev("(() => { const s = LRFApp.state.sel, p = s && s.type === 'planting' ? LRFApp.state.engine.planting(s.id) : null; return p ? { bed: p.bedId, date: p.date, crop: p.cropId } : null; })()")
         check('a crop dragged from the library onto a bed still plants it on the planning date, as before', lib is not None and lib['bed'] == spot['bed'] and lib['date'] == day0 and lib['crop'] == radish and st()['n'] == s0['n'] + 1 and st()['w'] == 4, [lib, spot, seen])
@@ -446,13 +448,14 @@ with sync_playwright() as pw:
         ev("LRFApp.select(null)"); page.wait_for_timeout(200)
 
         # ── taking them off the list ──
-        page.click('#waitList .wait-row'); page.wait_for_selector('#wtRemove')
+        page.click('[data-hook="lib-to-place"]'); page.wait_for_timeout(150)
+        page.click('[data-hook="waiting-row"]'); page.wait_for_selector('#wtRemove')
         check('one of a series offers to remove just it, or all of its series still waiting', 'all 4' in page.inner_text('#wtRemoveAll'))
         page.click('#wtRemove'); page.wait_for_timeout(300)
         check('Remove takes one off, as a step that can be undone', st()['w'] == 3 and st()['undo'] == u0 + 1 and st()['sel'] is None and ev("document.getElementById('waitBadge').textContent").startswith('3 to place'))
         ev('LRFApp.undo()'); page.wait_for_timeout(250)
-        page.click('#waitList .wait-row'); page.wait_for_selector('#wtRemoveAll'); page.click('#wtRemoveAll'); page.wait_for_timeout(350)
-        gone = ev("({ badge: document.getElementById('waitBadge').hidden, box: document.getElementById('waitBox').hidden })")
+        page.click('[data-hook="waiting-row"]'); page.wait_for_selector('#wtRemoveAll'); page.click('#wtRemoveAll'); page.wait_for_timeout(350)
+        gone = ev("({ badge: document.getElementById('waitBadge').hidden, box: document.querySelector('[data-hook=\"lib-to-place-count\"]').hidden && !document.querySelector('[data-hook=\"waiting-row\"]') })")
         ev("LRFApp.setView('timeline')"); page.wait_for_timeout(400)
         check('with all of them removed the count, the list and the timeline’s row are gone', st()['w'] == 0 and gone['badge'] and gone['box'] and page.query_selector('#tlBody .tl-wait') is None and page.query_selector('#tlBody .tl-waithead') is None and ev(FIGURES) == base, [st(), gone])
         ev('LRFApp.undo()'); page.wait_for_timeout(350)
@@ -479,7 +482,7 @@ with sync_playwright() as pw:
             ev("LRFApp.setView('timeline'); LRFApp.openAhead({ mode: 'series', cropId: '%s' })" % radish); page.wait_for_selector('#srForm'); page.wait_for_timeout(350)
             lay = ev("""() => { const box = document.querySelector('.inspector').getBoundingClientRect(), top = document.querySelector('header.top').getBoundingClientRect(), b = document.getElementById('waitBadge').getBoundingClientRect(), nav = document.querySelector('nav.views').getBoundingClientRect();
               const inside = [...document.querySelectorAll('#srForm select, #srForm input:not([type=checkbox]), #srForm .seg, #srOut button, #srWaves li, #srTitle')].filter(e => e.getClientRects().length).every(e => { const r = e.getBoundingClientRect(); return r.left >= box.left - 0.5 && r.right <= box.right + 0.5; });
-              const head = document.querySelector('.tl-waithead span'), hr = head.getBoundingClientRect(), view = document.getElementById('tlScroll').getBoundingClientRect(), wh = document.getElementById('waitHead'), lib = document.querySelector('.library').getBoundingClientRect();
+              const head = document.querySelector('.tl-waithead span'), hr = head.getBoundingClientRect(), view = document.getElementById('tlScroll').getBoundingClientRect(), wh = document.querySelector('[data-hook="lib-to-place"]'), lib = document.querySelector('.library').getBoundingClientRect();
               return { inside, badge: b.left >= nav.right - 0.5 && b.right <= top.right, sideways: document.documentElement.scrollWidth > innerWidth, head: hr.right <= view.right + 0.5, waitHead: [...wh.children].every(c => c.getBoundingClientRect().right <= lib.right + 0.5) && wh.scrollWidth <= wh.clientWidth + 1, title: document.getElementById('srTitle').scrollWidth <= document.getElementById('srTitle').clientWidth + 1 }; }""")
             check('at %s wide the tool, the count in the header and both "To place" headings fit, and the page does not scroll sideways' % name, lay['inside'] and lay['badge'] and not lay['sideways'] and lay['head'] and lay['waitHead'] and lay['title'], lay)
             page.screenshot(path=os.path.join(shots, 'series-%s.png' % name))

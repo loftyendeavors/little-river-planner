@@ -19,14 +19,15 @@
   }
   function renderLibrary() {
     if (!App.state.ready) return;
+    // the third side of the switch: the plantings that wait for a bed, drawn by the series tool that made them
+    if (lib.scope === 'wait' && root.LRFSeries) { root.LRFSeries.fillWaiting(clear($('libList')), lib.query); $('libHint').textContent = 'Click one to see where it is free, or drag it onto a bed. It keeps its date.'; return; }
     const eng = App.state.engine, plan = App.state.plan, host = clear($('libList')), q = lib.query.trim().toLowerCase();
     const used = new Map();
     for (const p of plan.plantings) used.set(p.cropId, (used.get(p.cropId) || 0) + 1);
     const list = plan.settings.cropTypeList || {}, crops = eng.crops();
-    let shown = 0, mineCount = 0;
+    let shown = 0;
     for (const c of crops) {
       const varieties = eng.varietiesOf(c.id), mine = isMine(c, used, varieties, list);
-      if (mine) mineCount++;
       if (lib.scope === 'mine' && !mine && !q) continue;
       const nameHit = !q || String(c.name).toLowerCase().includes(q) || String(c.family || '').toLowerCase().includes(q);
       const varietyHits = q ? varieties.filter(v => String(v.name).toLowerCase().includes(q)) : varieties;
@@ -54,8 +55,14 @@
       host.append(row);
     }
     if (!shown) host.append(h('p.empty', q ? `No crop or variety matches “${lib.query}”.` : 'No crops yet.'));
-    $('libHint').textContent = App.state.armed ? 'Click beds to plant. Press Esc when done.' : 'Drag a crop onto a bed. Or click it, then click beds.';
-    for (const [scope, count] of [['mine', mineCount], ['all', crops.length]]) { const el = document.querySelector(`[data-lib-scope="${scope}"] small`); if (el) el.textContent = count; }
+    $('libHint').textContent = App.state.armed ? (App.state.view === 'timeline' ? 'Click where it fits, or on any row at a date. Press Esc when done.' : 'Click beds to plant. Press Esc when done.') : 'Drag a crop onto a bed. Or click it, then click beds.';
+  }
+  /** Turn the library's switch: 'mine', 'all', or 'wait' (To place). */
+  function setScope(scope) {
+    if (!['mine', 'all', 'wait'].includes(scope)) return;
+    lib.scope = scope;
+    for (const b of document.querySelectorAll('[data-lib-scope]')) b.setAttribute('aria-pressed', String(b.dataset.libScope === scope));
+    renderLibrary();
   }
   const canSeries = (eng, c) => !c.micro && !eng.isCoverCrop(c) && +c.dtm > 0;
   function libraryPayload(row) {
@@ -69,6 +76,11 @@
       const row = e.target.closest('.lib-row');
       press = { x: e.clientX, y: e.clientY };
       if (!row || e.target.closest('.lib-more, .lib-series')) return;
+      if (row.dataset.waiting) {
+        const w = App.waitingOne(row.dataset.waiting), c = w && App.state.engine.crop(w.cropId);
+        if (c) root.LRFDrag.watch(e, { payload: { waitingId: w.id }, label: App.cropLabel(w), color: App.state.engine.cropColor(c) });
+        return;
+      }
       const spec = libraryPayload(row);
       if (spec) root.LRFDrag.watch(e, spec);
     });
@@ -79,6 +91,8 @@
       if (toggle) { const id = toggle.dataset.toggle; lib.open.has(id) ? lib.open.delete(id) : lib.open.add(id); renderLibrary(); return; }
       const row = e.target.closest('.lib-row');
       if (!row) return;
+      // a planting that waits: shown in the details panel, with the map or the Timeline turned to its day, so what is free then can be seen
+      if (row.dataset.waiting) { const w = App.waitingOne(row.dataset.waiting); if (w) { App.setDate(E.s2d(w.date)); App.select({ type: 'waiting', id: w.id }); } return; }
       const spec = libraryPayload(row), armed = App.state.armed;
       if (!spec) return;
       const same = armed && armed.cropId === spec.payload.cropId && (armed.varietyId || '') === (spec.payload.varietyId || '');
@@ -88,10 +102,11 @@
     host.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.lib-row') && !e.target.closest('.lib-more, .lib-series')) { e.preventDefault(); activate(e); } });
     $('libSearch').addEventListener('input', e => { lib.query = e.target.value; renderLibrary(); });
     for (const button of document.querySelectorAll('[data-lib-scope]')) {
-      button.addEventListener('click', () => { lib.scope = button.dataset.libScope; for (const b of document.querySelectorAll('[data-lib-scope]')) b.setAttribute('aria-pressed', String(b === button)); renderLibrary(); });
+      button.addEventListener('click', () => setScope(button.dataset.libScope));
     }
     App.on('plan', renderLibrary);
     App.on('armed', renderLibrary);
+    App.on('view', () => { if (App.state.armed) renderLibrary(); });
   }
 
   // ═════════════════════════════ inspector ═════════════════════════════
@@ -764,5 +779,5 @@
     });
   }
 
-  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, sowingBox, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle() };
+  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, setScope, scope: () => lib.scope, renderLibrary, sowingBox, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle() };
 })(window);

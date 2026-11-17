@@ -76,11 +76,11 @@
       <h2>Crop library</h2>
       <input type="search" id="libSearch" placeholder="Search crops and varieties" autocomplete="off">
       <div class="seg" role="group" aria-label="Which crops to list">
-        <button type="button" data-lib-scope="mine" aria-pressed="true" title="Crops you have planted this season, or keep varieties of">My crops <small></small></button>
-        <button type="button" data-lib-scope="all" aria-pressed="false" title="Every crop the planner knows, including ones you have never grown">All crops <small></small></button>
+        <button type="button" data-lib-scope="mine" aria-pressed="true" title="Crops you have planted this season, or keep varieties of">My crops</button>
+        <button type="button" data-lib-scope="all" aria-pressed="false" title="Every crop the planner knows, including ones you have never grown">All crops</button>
+        <button type="button" data-lib-scope="wait" aria-pressed="false" data-hook="lib-to-place" title="Plantings a series made that have no bed yet">To place<small class="lib-wait-n" data-hook="lib-to-place-count" hidden></small></button>
       </div>
     </header>
-    <div class="wait-box" id="waitBox" aria-label="Plantings with no bed yet" hidden></div>
     <div class="lib-list" id="libList"></div>
     <p class="lib-hint" id="libHint">Drag a crop onto a bed. Or click it, then click beds.</p>
   </aside>
@@ -131,6 +131,7 @@
           <button type="button" data-tl-zoom="days" aria-pressed="false">Days</button>
           <button type="button" class="tl-step" id="tlZoomIn" aria-label="Zoom in">+</button>
         </div>
+        <span class="tl-room-line" id="tlRoomLine" data-hook="room-line" hidden></span>
         <span class="tl-key"><i class="k-nursery"></i>nursery <i class="k-grow"></i>growing <i class="k-pick"></i>harvest <i class="k-turn"></i>turnover <i class="k-open"></i>open</span>
       </div>
       <div class="tl-scroll" id="tlScroll">

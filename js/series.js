@@ -413,44 +413,45 @@
     return true;
   }
 
-  // ───────────────────────────── "To place": the list above the crop library, and the count in the header ─────────────────────────────
-  let boxOpen = true;
+  // ───────────────────────────── "To place": the third side of the library's switch, and the count in the header ─────────────────────────────
+  // The plantings that wait for a bed are listed where crops are picked, as a third choice beside My crops and All crops: not a box that
+  // stands above the library. The choice carries an orange count while anything waits, seen from either list of crops.
   function drawBox() {
-    const box = $('waitBox'), badge = $('waitBadge');
-    if (!box || !App.state.ready) return;
-    const eng = App.state.engine, list = App.waiting().slice().sort((a, b) => a.date.localeCompare(b.date) || natural((eng.crop(a.cropId) || {}).name, (eng.crop(b.cropId) || {}).name)), n = list.length, sel = App.state.sel;
+    const badge = $('waitBadge'), count = document.querySelector('.lib-wait-n');
+    if (!badge || !App.state.ready) return;
+    const n = App.waiting().length;
     badge.hidden = !n;
     if (n) { clear(badge); add(badge, h('b', num(n)), ' to place', h('span.wb-more', ' · not counted here')); badge.title = `${plural(n, 'planting')} of a series ${n === 1 ? 'has' : 'have'} no bed yet. ${n === 1 ? 'It is' : 'They are'} not counted in seeds required, the sowing lists, bench load or the forecast until placed. Click to see ${n === 1 ? 'it' : 'them'}.`; }
-    box.hidden = !n; clear(box);
-    if (!n) return;
-    add(box, h('button.wait-head', { type: 'button', id: 'waitHead', 'aria-expanded': String(boxOpen), title: 'Plantings a series made that have no bed yet', onclick: () => { boxOpen = !boxOpen; drawBox(); } },
-      h('span.caret', boxOpen ? '▾' : '▸'), h('b', 'To place'), h('small', num(n)), h('em', 'not counted until placed')));
-    if (!boxOpen) return;
-    const rows = h('div.wait-list', { id: 'waitList' });
+    if (count) { count.hidden = !n; count.textContent = n ? num(n) : ''; }
+    // the list itself is drawn by the library; what is picked in it changes with the selection
+    const P2 = root.LRFPanels;
+    if (P2 && P2.scope && P2.scope() === 'wait') P2.renderLibrary();
+  }
+  /** The waiting plantings as rows of the library, soonest first: a picture, the name over what it wants, its date at the right. `query` narrows by name. */
+  function fillWaiting(host, query) {
+    const eng = App.state.engine, q = String(query || '').trim().toLowerCase(), sel = App.state.sel;
+    const list = App.waiting().slice().sort((a, b) => a.date.localeCompare(b.date) || natural((eng.crop(a.cropId) || {}).name, (eng.crop(b.cropId) || {}).name));
+    if (!list.length) { add(host, h('p.empty.lib-wait-lead', { dataset: { hook: 'waiting-lead' } }, 'Nothing waits for a bed. A series sends a planting here when no bed is free for it.')); return; }
+    add(host, h('p.lib-wait-lead', { dataset: { hook: 'waiting-lead' } }, 'Until it is placed it is not in the forecast, and takes no seed.'));
+    let shown = 0;
     for (const w of list) {
-      const c = eng.crop(w.cropId) || { name: 'Crop' }, v = eng.variety(w.varietyId), wait = w.wait || {};
-      rows.append(h('div.lib-row.wait-row' + (sel && sel.type === 'waiting' && sel.id === w.id ? '.armed' : ''), { dataset: { waiting: w.id }, role: 'button', tabindex: 0, title: `${App.cropLabel(w)} · goes in ${day(E.s2d(w.date))}${wait.of > 1 ? ` · ${num(wait.k)} of ${num(wait.of)}` : ''}\nDrag onto a bed. It keeps its date.` },
-        T.el({ varietyId: w.varietyId, cropId: w.cropId, color: eng.cropColor(c), label: c.name, size: 24, cls: 'key' }),
-        h('b.lib-name', v && v.name ? `${c.name} · ${v.name}` : c.name), h('span.lib-count', day(E.s2d(w.date)))));
+      const c = eng.crop(w.cropId) || { name: 'Crop' }, v = eng.variety(w.varietyId), wait = w.wait || {}, name = v && v.name ? `${c.name} · ${v.name}` : c.name;
+      if (q && !name.toLowerCase().includes(q)) continue;
+      shown++;
+      const from = wait.from && eng.bedOf(wait.from), size = w.ft > 0 ? `${num(w.ft, 1)} ft` : '', nth = wait.of > 1 ? `${num(wait.k)} of ${num(wait.of)} of a series` : from ? `taken out of ${App.bedLabel(from)}` : '';
+      add(host, h('div.lib-row.wait-row' + (sel && sel.type === 'waiting' && sel.id === w.id ? '.armed' : ''), { dataset: { waiting: w.id, hook: 'waiting-row' }, role: 'button', tabindex: 0, title: `${App.cropLabel(w)} · goes in ${day(E.s2d(w.date))}${wait.of > 1 ? ` · ${num(wait.k)} of ${num(wait.of)}` : ''}\nDrag onto a bed. It keeps its date.` },
+        T.el({ varietyId: w.varietyId, cropId: w.cropId, color: eng.cropColor(c), label: c.name, size: 40, cls: 'key' }),
+        h('div.wait-what', h('b.lib-name', name), h('small', [size, nth].filter(Boolean).join(' · '))),
+        h('span.lib-count', day(E.s2d(w.date)))));
     }
-    add(box, rows);
+    if (!shown) add(host, h('p.empty', `No planting waiting matches “${query}”.`));
   }
   function initBox() {
-    const box = $('waitBox');
-    let press = null;
-    box.addEventListener('pointerdown', e => {
-      press = { x: e.clientX, y: e.clientY };
-      const row = e.target.closest('.wait-row'), w = row && App.waitingOne(row.dataset.waiting), c = w && App.state.engine.crop(w.cropId);
-      if (c) root.LRFDrag.watch(e, { payload: { waitingId: w.id }, label: App.cropLabel(w), color: App.state.engine.cropColor(c) });
-    });
-    // a click shows it in the details panel and turns the map to its day, so what is free then can be seen
-    const pick = e => { const row = e.target.closest('.wait-row'), w = row && App.waitingOne(row.dataset.waiting); if (!w) return; App.setDate(E.s2d(w.date)); App.select({ type: 'waiting', id: w.id }); };
-    box.addEventListener('click', e => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) return; pick(e); });
-    box.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.wait-row')) { e.preventDefault(); pick(e); } });
+    // the count in the header opens To place in the library, on the Map or the Timeline
     $('waitBadge').addEventListener('click', () => {
       if (!['map', 'timeline'].includes(App.state.view)) App.setView('timeline');
-      boxOpen = true; drawBox();
-      const el = $('waitBox'); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+      if (root.LRFPanels) root.LRFPanels.setScope('wait');
+      const el = $('libList'); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
       if (App.state.view === 'timeline') { const s = $('tlScroll'); if (s) s.scrollTop = 0; }
     });
   }
@@ -503,5 +504,5 @@
     App.on('sel', () => { drawBox(); const now = isOpen(); if (now !== was) { was = now; App.emit('ghost'); } if (!now) redrawPanel = null; });
     App.on('view', () => { if (isOpen() && !['map', 'timeline'].includes(App.state.view)) App.select(null); });
   }
-  root.LRFSeries = { init, open, panel, waitingPanel, ghosts, picking, toggleBed, share, drawBox, state: { P } };
+  root.LRFSeries = { init, open, panel, waitingPanel, ghosts, picking, toggleBed, share, drawBox, fillWaiting, state: { P } };
 })(window);

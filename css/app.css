@@ -122,7 +122,8 @@ body[data-view="map"] .view-map, body[data-view="timeline"] .view-timeline, body
 .lib-list { flex: 1; overflow-y: auto; padding: 0 var(--space-4) var(--space-8); min-height: 0; }
 .lib-row { display: flex; align-items: center; gap: var(--space-8); height: 30px; padding: 0 var(--space-4) 0 var(--space-8); border-radius: var(--corner-8); cursor: grab; user-select: none; -webkit-user-select: none; border: 1px solid transparent; touch-action: pan-y; }
 .lib-row:hover { background: var(--raised); border-color: var(--line-soft); }
-.lib-row.armed { background: var(--flag-soft); border-color: var(--flag); }
+.lib-row.armed { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.lib-row.armed .lib-name, .lib-row.armed .lib-count, .lib-row.armed .lib-more { color: var(--surface); }
 .p-text { display: grid; min-width: 0; flex: 1; }
 .p-text b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p-text small { color: var(--muted); font-size: var(--type-13); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -377,7 +378,7 @@ body[data-view="timeline"] .view-timeline { display: grid; grid-template-rows: a
 .tl-bar .ph-grow { background: color-mix(in srgb, var(--crop) 48%, var(--surface)); border-radius: 3px 0 0 3px; }
 .tl-bar .ph-pick { background: var(--crop); }
 .tl-bar .ph-turn { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--crop) 70%, transparent) 0 2px, transparent 2px 5px); border-radius: 0 3px 3px 0; }
-.tl-bar .ph-nursery { top: -3px; height: 3px; bottom: auto; background: var(--crop); border-radius: 2px; opacity: 0.85; }
+.tl-bar .ph-nursery { top: 17px; height: 2px; bottom: auto; background: var(--crop); border-radius: 2px; opacity: 0.85; }
 .tl-name { position: relative; padding: 0 5px; display: block; overflow: hidden; text-overflow: ellipsis; color: var(--ink); mix-blend-mode: normal; }
 .tl-bar.sel { box-shadow: 0 0 0 1.5px #fff, 0 0 0 4px var(--flag), 0 1px 6px 4px rgba(19, 36, 28, 0.3); z-index: 3; }
 .tl-cursor { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--flag); z-index: 5; pointer-events: none; }
@@ -1362,9 +1363,48 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 .tl-name.pic { display: inline-flex; }
 /* the words keep a halo of the bar's own pale colour, so they read over the harvest stretch and the hatched turnover as well */
 .tl-bar .tl-name { --halo: color-mix(in srgb, var(--crop) 30%, var(--surface)); text-shadow: 0 0 1px var(--halo), 0 0 1.5px var(--halo), 0 0 2.5px var(--halo); }
-.tl-open span { position: sticky; left: 154px; }
 .tl-open { left: calc(var(--a) * var(--ppd) * 1px); width: max(6px, calc(var(--n) * var(--ppd) * 1px - 1px)); }
 .tl-open.sel { border-style: solid; border-color: var(--flag); background: color-mix(in srgb, var(--flag) 14%, transparent); color: var(--ink); }
+/* an opening's words stand in its clear part: the days before the nursery line of the planting that comes after it */
+.tl-open .tl-ow { display: block; flex: none; width: max(0px, calc(var(--c) * var(--ppd) * 1px - 14px)); }
+.tl-open .tl-ow > span { position: sticky; left: 154px; }
+/* Room for a crop: the crop carried from the library. Everything else at half strength; an opening it fits lit white with a
+   1 px orange edge (orange: where a drop will land), and the planting drawn in it as any planting is */
+.tl-body.room .tl-bar:not(.tl-room) { opacity: 0.5; }
+.tl-body.room .tl-open:not(.fit) { opacity: 0.4; }
+.tl-open.fit { border: 1px solid var(--flag); background: var(--raised); box-shadow: 0 1px 4px rgba(19, 36, 28, 0.08); }
+.tl-open.fit:hover { background: var(--raised); }
+.tl-open.fit .tl-ow { display: none; }
+.tl-bar.tl-room { cursor: pointer; z-index: 3; box-shadow: 0 0 0 2px var(--raised), 0 3px 10px rgba(19, 36, 28, 0.28); }
+.tl-bar.tl-room.on { box-shadow: 0 0 0 2px var(--raised), 0 0 0 3.5px var(--flag), 0 3px 10px rgba(19, 36, 28, 0.2); }
+.tl-room-say { position: absolute; top: 3px; left: calc(var(--x) * var(--ppd) * 1px + 8px); z-index: 2; font: 500 var(--type-11)/16px var(--body); color: var(--muted); white-space: nowrap; pointer-events: none; }
+.tl-room-say.under { top: 23px; left: calc(var(--x) * var(--ppd) * 1px + 4px); }
+.tl-room-say[hidden] { display: none; }
+.tl-room-say b { color: var(--ink); font-weight: 600; }
+.tl-room-line { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-8); min-height: var(--control-in); padding: 0 var(--space-4); border-radius: var(--corner-8); background: var(--raised); box-shadow: inset 0 0 0 1px var(--line); font-size: var(--type-13); color: var(--muted); white-space: nowrap; }
+.tl-room-line[hidden] { display: none; }
+/* while a crop is carried its line takes the key's place, at the key's height, so the chart does not move under the pointer */
+.tl-tools:has(.tl-room-line:not([hidden])) .tl-key { display: none; }
+.tl-tools .tl-key { min-height: var(--control-in); }
+.tl-room-line b { color: var(--ink); font-weight: 600; }
+.tl-room-line .thumb { border-radius: var(--corner-4); }
+.tl-room-x { width: 20px; height: 20px; border: 0; border-radius: var(--corner-pill); background: var(--paper); color: var(--muted); display: grid; place-items: center; padding: 0; font-size: var(--type-13); line-height: 1; }
+.tl-room-x:hover { color: var(--ink); }
+.tl-room-hint { pointer-events: none; width: 320px; }
+.tl-room-hint[hidden] { display: none; }
+.tl-rh-head { display: flex; gap: var(--space-12); align-items: center; }
+.tl-rh-head .thumb { border-radius: var(--corner-12); }
+.tl-rh-head b { display: block; font-size: var(--type-15); color: var(--ink); }
+.tl-rh-head small { font-size: var(--type-13); color: var(--muted); }
+.tl-room-hint p { margin-top: var(--space-8); }
+.tl-room-hint p b { color: var(--ink); }
+.tl-room-hint .tl-rh-foot { font: var(--type-11) var(--mono); color: var(--muted); }
+/* a garden that is shut: a band of how full its ground is, week by week, under its name; orange under the weeks a carried crop could start */
+.tl-group.banded { padding-bottom: 16px; }
+.tl-band { position: absolute; left: 148px; bottom: 6px; height: 8px; width: calc(var(--ppd) * var(--days) * 1px); border-radius: var(--corner-4); background: rgba(19, 36, 28, 0.03); box-shadow: inset 0 0 0 1px rgba(19, 36, 28, 0.08); pointer-events: none; }
+.tl-band i { position: absolute; top: 0; bottom: 0; left: calc(var(--a) * var(--ppd) * 1px); width: calc(var(--n) * var(--ppd) * 1px); background: color-mix(in srgb, var(--ink) var(--p), transparent); pointer-events: auto; }
+.tl-band b { position: absolute; bottom: -5px; height: 3px; left: calc(var(--a) * var(--ppd) * 1px); width: max(4px, calc(var(--n) * var(--ppd) * 1px)); border-radius: var(--corner-pill); background: var(--flag); }
+.tl-group-name .tl-fits { color: var(--ink); font-weight: 700; }
 .tl-cursor { left: calc(148px + (var(--a) + 0.5) * var(--ppd) * 1px); }
 .tl-cursor::before { top: 42px; }
 .tl-scroll.panning, .tl-scroll.panning .tl-open, .tl-scroll.panning .tl-label { cursor: grabbing; user-select: none; -webkit-user-select: none; }
@@ -1415,22 +1455,25 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 
 /* ── step 2b: the series tool, ghost bars, and plantings with no bed yet ("To place") ── */
 .wait-badge { border: 1px solid color-mix(in srgb, var(--flag) 60%, var(--line)); background: var(--flag-soft); color: var(--ink); border-radius: var(--corner-pill); padding: var(--space-4) var(--space-12); font: 600 var(--type-13) var(--body); white-space: nowrap; }
-.wait-badge[hidden], .wait-box[hidden] { display: none; }
+.wait-badge[hidden] { display: none; }
 .wait-badge:hover { border-color: var(--flag); }
 .wait-badge b { font: 700 var(--type-13) var(--mono); }
 .wait-badge .wb-more { display: none; font-weight: 500; color: var(--ink-2); }
 body[data-view="sow"] .wait-badge .wb-more, body[data-view="harvest"] .wait-badge .wb-more, body[data-view="seeds"] .wait-badge .wb-more, body[data-view="trays"] .wait-badge .wb-more { display: inline; }
-.wait-box { flex: none; max-height: 38%; min-height: 0; margin: 0 6px 6px; display: flex; flex-direction: column; border: 1px solid color-mix(in srgb, var(--flag) 55%, var(--line)); border-radius: var(--corner-8); background: var(--flag-soft); }
-.wait-head { flex: none; display: flex; align-items: baseline; gap: var(--space-4); width: 100%; border: 0; background: none; padding: var(--space-4) var(--space-8) var(--space-4); text-align: left; color: var(--ink); }
-.wait-head .caret { width: 10px; color: var(--ink-2); font-size: var(--type-11); }
-.wait-head b { font: 700 var(--type-13) var(--display); font-stretch: 80%; text-transform: uppercase; letter-spacing: 0.05em; }
-.wait-head small { font: 600 var(--type-11) var(--mono); }
-.wait-head em { margin-left: auto; font: 500 var(--type-11) var(--body); font-style: normal; color: var(--ink-2); white-space: nowrap; }
-.wait-list { overflow-y: auto; min-height: 0; padding: 0 var(--space-4) var(--space-4); }
+/* To place: the third side of the library's switch. Its count is orange while anything waits; the rows are the parts' row */
+.seg button .lib-wait-n { display: inline-block; margin-left: var(--space-4); min-width: 16px; padding: 0 var(--space-4); border-radius: var(--corner-pill); background: var(--flag-deep); color: var(--flag-ink); font: 700 var(--type-11)/16px var(--mono); opacity: 1; text-align: center; }
+.seg button .lib-wait-n[hidden] { display: none; }
+.library .seg button { white-space: nowrap; padding: 0 var(--space-4); }
+.lib-wait-lead { margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-8); font-size: var(--type-13); line-height: 1.4; color: var(--muted); }
+.lib-row.wait-row { height: auto; min-height: 52px; padding: var(--space-4) var(--space-8) var(--space-4) var(--space-4); gap: var(--space-12); }
+.wait-row .thumb { border-radius: var(--corner-12); }
+.wait-what { flex: 1; min-width: 0; display: grid; }
+.wait-what small { font-size: var(--type-11); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wait-row .lib-name { font-size: var(--type-13); }
+.lib-row.armed .wait-what small { color: color-mix(in srgb, var(--surface) 75%, transparent); }
 .wait-row .lib-count { color: var(--ink-2); }
 .wait-row:hover { background: var(--surface); border-color: var(--line); }
-.wait-box.flash { animation: wait-flash 0.9s ease-out; }
+.lib-list.flash { animation: wait-flash 0.9s ease-out; }
 @keyframes wait-flash { 0%, 40% { box-shadow: 0 0 0 4px var(--flag); } 100% { box-shadow: 0 0 0 0 transparent; } }
 .lib-series { display: none; flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: var(--corner-pill); padding: 1px var(--space-8) 2px; font: 600 var(--type-11) var(--mono); color: var(--ink-2); }
 .lib-row:hover .lib-series, .lib-series:focus-visible { display: inline-block; }
