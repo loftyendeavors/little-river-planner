@@ -57,6 +57,10 @@ try {
   check('run again on a later day, it writes nothing: the day the label was given is kept', r.code === 0 && clean() === '', { r, status: clean() });
 
   // 3. what stops it
+  write('css/not-yet-added.css', '/* a style sheet not yet added */\n');
+  r = run('shared.cjs');
+  check('a file git does not hold in css/, which the build empties, stops the tool, and is left as it was', r.code === 1 && /css\/not-yet-added\.css/.test(r.err) && read('css/not-yet-added.css') === '/* a style sheet not yet added */\n', r.err);
+  fs.rmSync(path.join(W, 'css/not-yet-added.css'));
   write('tests/builds/zz-check-a.json', JSON.stringify({ ...entry(''), changes: undefined }, null, 1));
   r = run('shared.cjs');
   check('a build that serves something new and has no entry is stopped, with what to write', r.code === 1 && /"changes"/.test(r.err), r.err);

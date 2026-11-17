@@ -27,6 +27,11 @@ const git = (...args) => execFileSync('git', ['-C', REPO, ...args], { encoding: 
 const tryGit = (...args) => { try { return execFileSync('git', ['-C', REPO, ...args], { encoding: 'utf8', maxBuffer: 64 << 20, stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch (_) { return null; } };
 const stop = why => { console.error(`shared.cjs: ${why}`); process.exit(1); };
 
+// tools/build_site.cjs empties css/ and fonts/ before it writes them again: a file there that git does not hold would be lost.
+// (A new script under js/ and this build's new file under tests/builds are taken as they are: a build runs this before its first commit.)
+const loose = tryGit('status', '--porcelain', '--untracked-files=all', '--', 'css', 'fonts');
+if (loose && loose.split('\n').some(l => l.startsWith('??'))) stop(`files git does not hold stand in css/ or fonts/, which the build empties: ${loose.split('\n').filter(l => l.startsWith('??')).map(l => l.slice(3)).slice(0, 5).join(', ')}. Add them to git, or move them away, first`);
+
 // the build before
 let base = given;
 if (!base || base === 'none') {

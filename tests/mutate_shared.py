@@ -21,6 +21,7 @@ FAULTS = [
   ('a build may have two files of its own', S, SH, 'if (mine.length > 1) stop(', 'if (mine.length > 9) stop(', 'two files of its own'),
   ('an entry is let through for a build that serves nothing new', S, SH, '} else if (entry) {\n  stop(', '} else if (false) {\n  stop(', 'serves nothing new is stopped'),
   ('sw.js is not written again once the list is', S, SH, "build(label);   // again", "// build(label);   // again", 'offline copy is written again'),
+  ('a file git does not hold in css/ is thrown away by the build', S, SH, "if (loose && loose.split('\\n').some(l => l.startsWith('??'))) stop(", "if (false) stop(", 'in css/, which the build empties'),
   ('the label is read from the build the branch left, not from main', S, TM, "const base = [git('merge-base', head, 'origin/main'), git('merge-base', take, 'origin/main')].reduce(", "const base = [was].reduce(", 'the next label after A'),
   ('the written files are left in conflict when main is taken in', S, TM, "for (const f of conflicted().filter(f => WRITTEN.includes(f))) { git('checkout', '--theirs', '--', f); git('add', '--', f); }", '', 'takes main in by itself'),
   ('the merge is not committed with --commit', S, TM, "if (flag('--commit')) {", 'if (false) {', 'takes main in by itself'),
