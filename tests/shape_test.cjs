@@ -144,6 +144,14 @@ tryCase('every kind of job, recorded by the planner\'s own function, leaves a pl
   const a = fitsPlan(worked), b = fitsFile(worked);
   return [missing.length === 0 && done.length === KINDS.length && a[0] && b[0], { missing, done, plan: a[1], file: b[1] }];
 });
+tryCase('a job recorded days after its plan, which pushes its planting later, leaves a plan that fits', () => {
+  const j = open.get('sow') || open.get('field');
+  if (!j) return [false, 'the farm has no open job to record late'];
+  const kind = open.get('sow') ? 'sow' : 'field', p = FARM.plantings.find(q => q.id === j.id);
+  const r = W.record(eng(FARM), FARM.seedInventory, p, kind, { date: E.d2s(E.addDays(E.s2d(j.date), 3)) }, ctx), plan = put(FARM, r);
+  const a = fitsPlan(plan), b = fitsFile(plan);
+  return [!!r.moved && a[0] && b[0], { moved: r.moved, held: r.held, plan: a[1], file: b[1] }];
+});
 tryCase('each of those jobs taken back leaves a plan that fits', () => {
   let plan = worked, back = 0;
   for (const kind of KINDS) { const p = plan.plantings.find(q => q.done && q.done[kind]); if (p) { plan = put(plan, W.takeBack(eng(plan), plan.seedInventory, p, kind, ctx)); back++; } }
