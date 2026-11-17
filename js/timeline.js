@@ -85,10 +85,16 @@
     openCache.set(eng, map);
     return map;
   }
+  // beds with nothing planned all year: drawn with no opening, but a carried crop can go in them
+  const emptyCache = new WeakMap();
+  function emptyBeds(eng) {
+    if (!emptyCache.has(eng)) emptyCache.set(eng, root.LRFSuccession ? root.LRFSuccession.openings(eng, { empty: true }).filter(o => o.whole && !o.planted) : []);
+    return emptyCache.get(eng);
+  }
   /**
-   * Room for a crop: the crop carried from the library, and every opening of a whole bed whose days it fits, worked out by the same
-   * test the opening's own panel uses (LRFSuccession.tryCrop: the first day it may go in, the last, what it gives). Null when nothing
-   * from the library is carried. Worked out once per plan state and crop.
+   * Room for a crop: the crop carried from the library, and every opening of a whole bed whose days it fits, a bed with nothing planned
+   * all year included, worked out by the same test the opening's own panel uses (LRFSuccession.tryCrop: the first day it may go in, the
+   * last, what it gives). Null when nothing from the library is carried. Worked out once per plan state and crop.
    */
   const roomCache = new WeakMap();
   function roomFor(eng) {
@@ -101,7 +107,7 @@
     if (!kept) { kept = new Map(); roomCache.set(eng, kept); }
     if (kept.has(key)) return kept.get(key);
     const fits = new Map();
-    for (const list of openingsBy(eng).values()) for (const o of list) {
+    for (const o of [...[...openingsBy(eng).values()].flat(), ...emptyBeds(eng)]) {
       if (!S.suits(eng, crop, o.bed)) continue;
       const t = S.tryCrop(eng, o, crop, armed.varietyId ? { varietyId: armed.varietyId } : {});
       if (t.ok) fits.set(o.id, { o, t });
@@ -508,6 +514,8 @@
     room = roomFor(eng); roomHere = 0;
     const open = new Map();
     for (const [id, list] of openingsBy(eng)) { const shown = prefs.openings ? list : room ? list.filter(o => room.fits.has(o.id)) : []; if (shown.length) open.set(id, shown); }
+    // a bed with nothing planned all year has no opening drawn; one the carried crop fits is drawn lit, as any other it fits
+    if (room) for (const { o } of room.fits.values()) if (!o.planted) open.set(o.bed.id, [...(open.get(o.bed.id) || []), o]);
     body.classList.toggle('room', !!room);
     const ghosts = root.LRFSeries ? root.LRFSeries.ghosts() : null;
     ghostBy = new Map();

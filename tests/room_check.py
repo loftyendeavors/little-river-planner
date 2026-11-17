@@ -33,7 +33,7 @@ PRE = ("const A = LRFApp, S = A.state, E = LRFEngine, Su = LRFSuccession, $ = id
        "const drawn = el => !!el && !el.hidden && el.getClientRects().length > 0 && getComputedStyle(el).display !== 'none';"
        "const colour = v => { const p = document.createElement('i'); p.style.color = v; document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; };"
        # the crop's fits worked out here, apart from the Timeline: every opening of a whole bed, the opening's own test
-       "const fitsOf = (cropId, varietyId) => { const c = eng.crop(cropId), out = new Map(); for (const o of Su.openings(eng)) { if (!o.whole || !Su.suits(eng, c, o.bed)) continue; const t = Su.tryCrop(eng, o, c, varietyId ? { varietyId } : {}); if (t.ok) out.set(o.id, { o, t }); } return out; };")
+       "const fitsOf = (cropId, varietyId) => { const c = eng.crop(cropId), out = new Map(); for (const o of Su.openings(eng, { empty: true })) { if (!o.whole || !Su.suits(eng, c, o.bed)) continue; const t = Su.tryCrop(eng, o, c, varietyId ? { varietyId } : {}); if (t.ok) out.set(o.id, { o, t }); } return out; };")
 def js(page, body, arg=None):
     return page.evaluate("(arg) => { %s %s }" % (PRE, body), arg)
 def press(page, selector, ms=300):
@@ -110,6 +110,8 @@ def run(pw):
     check("a crop clicked in the library is carried, its row in ink like the chosen side of a switch", lit["carried"] and lit["rowInk"], lit)
     check("every opening lit is one the crop fits by the opening's own test, and each holds the crop's bar", lit["lit"] and not lit["extra"] and not lit["off"], {k: lit[k] for k in ("lit", "extra", "off")})
     check("the bar in each stands on the first day the crop can go in (in some it could go later), for the days it holds the ground", lit["lit"] and lit["late"] > 0 and not lit["wrongDay"] and not lit["wrongLen"], {k: lit[k] for k in ("late", "wrongDay", "wrongLen")})
+    empty = js(page, "const f = [...fitsOf(arg, '').values()].filter(x => !x.o.planted), lit = new Set(hooks('room-opening').map(b => b.dataset.opening)); return { empty: f.length, lit: f.filter(x => lit.has(x.o.id)).length, bars: f.filter(x => document.querySelector('[data-hook=\"room-bar\"][data-room=\"' + CSS.escape(x.o.id) + '\"]')).length };", pick["crop"])
+    check("a bed with nothing planned all year that the crop fits is lit too, with the crop drawn in it", empty["empty"] > 0 and empty["lit"] == empty["empty"] and empty["bars"] == empty["empty"], empty)
     check("one line in the tools, in the key's place, says how many it fits here and on the farm", lit["line"] and not lit["key"] and ("fits %d here" % len(lit["lit"]) in lit["count"] or (not lit["lit"] and "none here" in lit["count"])) and ("%d on the farm" % lit["farm"]) in lit["count"], lit)
     look = js(page, """const flag = colour('var(--flag)'), raised = getComputedStyle(document.body).getPropertyValue('--raised'), white = colour('var(--raised)');
       const box = hook('room-opening'), bar = hook('room-bar'), other = document.querySelector('#tlBody .tl-bar[data-planting]'), dim = document.querySelector('#tlBody .tl-open:not(.fit)');

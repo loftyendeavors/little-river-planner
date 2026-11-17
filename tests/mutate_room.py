@@ -30,6 +30,8 @@ def alone(cmd, timeout, env=None, cwd=None):
 TL, PN, SR, CSS = "js/timeline.js", "js/panels.js", "js/series.js", "css/app.css"
 PAGE = [
  ("a carried crop is drawn nowhere", TL, "    if (!S || !armed || !armed.cropId || armed.plantingId || armed.waitingId) return null;\n    const crop = eng.crop(armed.cropId);", "    return null;\n    const crop = eng.crop(armed.cropId);"),
+ ("a bed with nothing planned all year is never lit", TL, "    for (const o of [...[...openingsBy(eng).values()].flat(), ...emptyBeds(eng)]) {", "    for (const o of [...openingsBy(eng).values()].flat()) {"),
+ ("an empty bed the crop fits is counted on the farm but not drawn", TL, "    if (room) for (const { o } of room.fits.values()) if (!o.planted) open.set(", "    if (false) for (const { o } of room.fits.values()) if (!o.planted) open.set("),
  ("an opening is lit whether or not the crop fits it", TL, "      if (t.ok) fits.set(o.id, { o, t });", "      if (t.r) fits.set(o.id, { o, t });"),
  ("the planting is drawn on the last day it could go in, not the first", TL, "const t = fit.t, r = t.r, through = t.through, from = eng.occupancyFrom(t.p, r);", "const t = fit.t, r = t.r, through = t.through, from = t.latest || eng.occupancyFrom(t.p, r);"),
  ("a click plants it on the last day it could go in, not the first", TL, "App.place(App.state.armed, fit.o.bed.id, E.s2d(fit.t.p.date));", "App.place(App.state.armed, fit.o.bed.id, fit.t.latest || E.s2d(fit.t.p.date));"),
