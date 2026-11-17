@@ -22,6 +22,8 @@
  * The rules, each matched one for one to js/merge.js by tests/shape_test.cjs:
  *   whole       taken whole from one side, never half from each (merge.js WHOLE)
  *   kept        lines without ids whose new lines from each side are kept (merge.js NO_IDS)
+ *   one         lines without ids the merge takes as one value, by its own default (the cloud's stands when both sides change
+ *               them): said outright, so that no such list is left to the default by accident; never in WHOLE or NO_IDS
  *   stamp       "last changed at": the later stands, and nothing is said (merge.js STAMPS, by the key's name)
  *   quiet       who saved a file and with what: the cloud's, and nothing is said (merge.js QUIET)
  *   place       where a planting is: one value with the others (merge.js PLACE)
@@ -161,6 +163,7 @@
     'crops[].rowsPerBed': 'null|number',
     'crops[].seed1000': 'number',
     'crops[].seedG': 'null|number',
+    'crops[].seedLb': 'null|number',
     'crops[].seedsFt': 'number',
     'crops[].spc': 'number',
     'crops[].tower': 'bool',
@@ -251,6 +254,7 @@
     'liveTrayPlans[].rows[].price': 'number',
     'liveTrayPlans[].rows[].spring': 'number',
     'liveTrayPlans[].rows[].summer': 'number',
+    'liveTrayPlans[].rows[].varietyId': 'null|text',
     'liveTrayPlans[].summer': 'text',
     'liveTrayPlans[].through': 'text',
     'liveTrayPlans[].updatedAt': 'text stamp',
@@ -279,22 +283,28 @@
     'lrfNext.sample': 'bool|text',
     'lrfNext.source': 'text',
     'lrfNext.startedAt': 'text',
-    'lrfNext.supplies': 'map',
-    'lrfNext.supplies.*': 'map',
-    'lrfNext.supplies.*.*': 'number',
+    'lrfNext.supplies': 'object',
+    'lrfNext.supplies.cuft': 'map',
+    'lrfNext.supplies.cuft.*': 'number',
+    'lrfNext.supplies.have': 'map',
+    'lrfNext.supplies.have.*': 'number',
+    'lrfNext.supplies.mix': 'map',
+    'lrfNext.supplies.mix.*': 'number',
+    'lrfNext.supplies.pockets': 'number',
     'lrfNext.trays': 'text',
     'lrfNext.trayStart': 'text',
     'lrfNext.waiting': 'records',
-    'lrfNext.waiting[]': 'object',
-    'lrfNext.waiting[].cropId': 'text',
-    'lrfNext.waiting[].date': 'text',
-    'lrfNext.waiting[].dtm': 'number',
-    'lrfNext.waiting[].id': 'text',
-    'lrfNext.waiting[].note': 'text',
-    'lrfNext.waiting[].timingMode': 'text',
-    'lrfNext.waiting[].varietyId': 'text',
+    'lrfNext.waiting[]': 'object',   // a copy of a planting: every other key is read as plantings[] (ALIAS)
     'lrfNext.waiting[].wait': 'object',
+    'lrfNext.waiting[].wait.beds': 'list',
+    'lrfNext.waiting[].wait.beds[]': 'text',
+    'lrfNext.waiting[].wait.every': 'number',
     'lrfNext.waiting[].wait.from': 'text',
+    'lrfNext.waiting[].wait.gardens': 'list',
+    'lrfNext.waiting[].wait.gardens[]': 'text',
+    'lrfNext.waiting[].wait.k': 'number',
+    'lrfNext.waiting[].wait.of': 'number',
+    'lrfNext.waiting[].wait.s': 'text',
     'lrfNext.waiting[].wait.why': 'text',
 
     'lrfNextKeep': 'object',
@@ -321,6 +331,13 @@
     'nursery.benchAreas[].l': 'number',
     'nursery.benchAreas[].name': 'text',
     'nursery.benchAreas[].w': 'number',
+    'nursery.cool': 'lines one',
+    'nursery.cool[]': 'object',
+    'nursery.cool[].after': 'number',
+    'nursery.cool[].cropId': 'text',
+    'nursery.cool[].from': 'text',
+    'nursery.cool[].to': 'text',
+    'nursery.harden': 'number',
     'nursery.lrfEdited': 'bool',
     'nursery.packing': 'number|text',
     'nursery.spaces': 'records',
@@ -332,6 +349,7 @@
     'nursery.spaces[].benchLayout.x': 'number',
     'nursery.spaces[].benchLayout.y': 'number',
     'nursery.spaces[].from': 'text',
+    'nursery.spaces[].holds': 'number',
     'nursery.spaces[].id': 'text',
     'nursery.spaces[].kind': 'text',
     'nursery.spaces[].l': 'number',
@@ -384,6 +402,7 @@
     'plantings[].growingDefaults.cropId': 'text',
     'plantings[].growingDefaults.v': 'number',
     'plantings[].harvestMode': 'text',
+    'plantings[].harvestEnd': 'text',
     'plantings[].hw': 'number',
     'plantings[].id': 'text',
     'plantings[].inRow': 'number|text',
@@ -640,10 +659,14 @@
     'varieties[].webImport': 'any whole',
     'varieties[].webImportHistory': 'any',
   };
-  /** What a file keeps of the planner's own record (app.js withOwn) has the shape of that record. */
-  const ALIAS = { 'lrfNextKeep.keep': 'lrfNext' };
+  /**
+   * Places that have the shape of another: what a file keeps of the planner's own record (app.js withOwn) is that record, and a
+   * planting waiting to be placed is a copy of a planting (app.js sendToWait, succession.js heldFor). An entry of the place's own
+   * (the waiting planting's `wait`) stands over the other's.
+   */
+  const ALIAS = { 'lrfNextKeep.keep': 'lrfNext', 'lrfNext.waiting[]': 'plantings[]' };
   const TYPES = ['text', 'number', 'bool', 'null', 'object', 'map', 'records', 'lines', 'list', 'any'];
-  const RULES = ['whole', 'kept', 'stamp', 'quiet', 'place', 'time', 'recording', 'rule'];
+  const RULES = ['whole', 'kept', 'one', 'stamp', 'quiet', 'place', 'time', 'recording', 'rule'];
   const CONTAINERS = ['object', 'map', 'records', 'lines', 'list'];
 
   /** An entry read: { types: [...], rules: [...] }, or null when there is none for the place. */
@@ -654,7 +677,11 @@
     return { types: types.split('|'), rules };
   }
   /** The place of a key inside an object or map at `place`, and of a member of a list at `place`. */
-  const keyPlace = (place, key, isMap) => (isMap ? place + '.*' : ALIAS[place] ? ALIAS[place] + '.' + key : place ? place + '.' + key : key);
+  const keyPlace = (place, key, isMap) => {
+    if (isMap) return place + '.*';
+    const own = place ? place + '.' + key : key;
+    return ALIAS[place] && !(own in SHAPE) ? ALIAS[place] + '.' + key : own;
+  };
   const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
   const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'list' : isObj(v) ? 'object' : typeof v === 'string' ? 'text' : typeof v === 'boolean' ? 'bool' : typeof v === 'number' && Number.isFinite(v) ? 'number' : typeof v);
   const usable = id => typeof id === 'string' || typeof id === 'number';

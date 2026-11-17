@@ -80,8 +80,8 @@ tryCase('every entry hangs from a place that holds it: a key of an object, any k
   }
   return [bad.length === 0, bad];
 });
-tryCase('a list of objects without ids is taken whole or keeps each side\'s lines: none is joined as one value by default', () => {
-  const bad = all.filter(e => e.types.includes('lines') && !e.rules.includes('whole') && !e.rules.includes('kept')).map(e => e.place);
+tryCase('a list of objects without ids says how it is joined, in one word: whole, kept or one (one value, the merge\'s default)', () => {
+  const bad = all.filter(e => e.types.includes('lines') && ['whole', 'kept', 'one'].filter(r => e.rules.includes(r)).length !== 1).map(e => e.place);
   return [bad.length === 0, bad];
 });
 

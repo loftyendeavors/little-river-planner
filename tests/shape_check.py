@@ -73,11 +73,14 @@ TOUR = r"""
   await step('the planner\'s own record changed', () => A.setOwn('trays', (S.plan.lrfNext || {}).trays ? null : 'variety', 'Trays'));
   await step('supplies on hand', () => A.setSupply('mix', '72', 0.5));
   await step('the benches changed', () => A.editNursery('Packing', n => ({ ...n, packing: (n && n.packing) === 'tight' ? 'loose' : 'tight' })));
+  await step('days of hardening off, a bench\'s trays, and a crop grown on without heat', () => { const N = LRFNursery, b = ((S.plan.nursery || {}).spaces || [])[0], c = plain.map(p => eng().crop(p.cropId)).find(x => x && !x.micro); if (!b || !c) return 'no subject'; return A.editNursery('Benches', n => N.setCool(N.setBench(N.setOptions(n, { harden: 6 }), b.id, { holds: 40 }), c.id, { from: '06-01', to: '08-31', after: 4 })); });
+  await step('the pots a carrying tray holds', () => A.setSupply('pockets', null, LRFNursery.POCKETS[1]));
   await step('how a live-tray crop is sown', () => { const m = (S.plan.crops || []).find(c => c.micro); return m ? A.setLiveSow(m.id, { how: 'cells', cells: 98, perCell: 3, grams: 12 }) : 'no subject'; });
   await step('a seed lot added and one counted', async () => { const lots = (A.inventoryNow().lots || []).filter(l => l.deleted !== true); if (!lots.length) return 'no subject'; must(A.editStock('Add', (inv, ctx) => LRFSeedLib.addLot(inv, { key: lots[0].key, unit: 'seeds', quantity: 50, status: 'ordered' }, ctx))); return A.editStock('Count', (inv, ctx) => LRFSeedLib.updateLot(inv, lots[0].id, { quantity: 3 }, 'count', ctx)); });
   await step('a crop sown from seed', () => { const own = (S.plan.crops || []).find(c => !c.micro); return own ? A.revise('From seed', [{ kind: 'crop', before: own, after: { ...own, plantingMaterial: 'seed' } }]) : 'no subject'; });
   await step('where a variety\'s days are counted from', () => { const v = S.plan.varieties.find(x => x.active !== false); return v ? A.revise('Counted from', [{ kind: 'variety', before: v, after: { ...v, catalogMaturityBasis: 'transplant', catalogSourceChoice: v.catalogSourceChoice || 'url' } }]) : 'no subject'; });
   await step('the photo\'s scale', () => { const m = S.plan.map || {}; return m.ftPerPx ? A.commit('Scale', [{ kind: 'map', before: m, after: { ...m, ftPerPx: m.ftPerPx * 1.01 } }]) : 'no subject'; });
+  await step('a variety chosen for a row of a live-tray plan', () => { const t = (S.plan.liveTrayPlans || []).slice(-1)[0], r = t && t.rows.find(x => x.cropId && S.plan.varieties.some(v => v.cropId === x.cropId)); if (!r) return 'no subject'; const v = S.plan.varieties.find(x => x.cropId === r.cropId); return A.saveTrays('Variety', { ...t, rows: t.rows.map(x => x.id === r.id ? { ...x, varietyId: v.id } : x) }); });
   await step('a live-tray plan deleted', () => { const t = (S.plan.liveTrayPlans || [])[0]; return t ? A.removeTrays(t.id) : 'no subject'; });
   // the week's work, on plantings found on the farm with that job open
   const jobs = [];
@@ -92,8 +95,9 @@ TOUR = r"""
   await step('a job put off, and one that moves its planting', async () => { const a = first('potup', used), b = first('field', used); if (!a || !b) return 'no subject'; must(await A.delayWork([{ id: a.id, kind: 'potup' }], E.d2s(E.addDays(E.s2d(a.day), 2)))); return A.delayWork([{ id: b.id, kind: 'field' }], E.d2s(E.addDays(E.s2d(b.day), 2))); });
   await step('a job skipped and one given a note', () => { const j = jobs.filter(x => !used.includes(x.id)); if (j.length < 12) return 'no subject'; must(A.skipWork([{ id: j[10].id, kind: j[10].kind }], year + '-04-01')); return A.noteWork([{ id: j[11].id, kind: j[11].kind }], 'a note'); });
   // plantings made, sent to wait, placed and taken away
-  await step('a planting sent to wait, and changed while it waits', () => { must(A.sendToWait(plain[30].id)); const w = (A.waiting() || [])[0]; return w ? A.updateWaiting(w.id, { note: 'a note' }, 'A note') : 'no subject'; });
+  await step('a planting with figures of its own sent to wait, and changed while it waits', () => { const p = plain.slice(20).find(q => q.yield != null || q.price != null || q.dtm != null); if (!p) return 'no subject'; must(A.sendToWait(p.id)); const w = (A.waiting() || [])[0]; return w ? A.updateWaiting(w.id, { note: 'a note' }, 'A note') : 'no subject'; });
   await step('a succession added', () => A.addSuccessions(plain[40].id, 1, 14));
+  await step('a series left waiting to be placed', () => { if (!sold) return 'no subject'; const r = LRFSuccession.series(eng(), { cropId: sold.id, from: year + '-05-04', every: 14, count: 2, amount: 1, place: 'hold' }); return r && !r.error && r.held && r.held.length ? A.addSeries(r, 'Series to place') : 'no subject'; });
   await step('a variety added to a bed', () => { const p = plain.find(q => S.plan.varieties.some(v => v.cropId === q.cropId && v.id !== q.varietyId)); return p ? A.addVarieties(p.id, [S.plan.varieties.find(v => v.cropId === p.cropId && v.id !== p.varietyId).id]) : 'no subject'; });
   await step('a planting taken away', () => A.removePlantings([plain[60].id]));
   clearInterval(yes);

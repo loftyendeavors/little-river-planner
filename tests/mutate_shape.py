@@ -34,7 +34,7 @@ NODE = [
   # the shape losing what it says, or the check what it is for
   ('the shape loses the day a delayed task stood on', SHAPE, "    'plantings[].tasks.delay.*.own': 'text',\n", "", 'a job put off'),
   ('the shape says a planting\'s length is text', SHAPE, "'plantings[].ft': 'number place',", "'plantings[].ft': 'text place',", 'the farm, as the planner holds it'),
-  ('the shape lets a list of objects without ids be joined as one value', SHAPE, "'varieties[].supplierPacks': 'lines whole',", "'varieties[].supplierPacks': 'lines',", 'a list of objects without ids'),
+  ('the shape leaves a list of objects without ids with no word for how it is joined', SHAPE, "'varieties[].supplierPacks': 'lines whole',", "'varieties[].supplierPacks': 'lines',", 'a list of objects without ids'),
   ('the shape names a type nobody knows', SHAPE, "'plantings[].note': 'text',", "'plantings[].note': 'words',", 'the written shape can be read'),
   ('an entry hangs from nothing', SHAPE, "    'plantings[].tasks': 'object',\n", "", 'every entry hangs from a place'),
   ('the check passes a field named nowhere', SHAPE, "      if (!e) { say(unknown, { path, place: at }); return; }", "      if (!e) return;", 'and a field named nowhere is found'),
@@ -44,6 +44,7 @@ NODE = [
 PAGE = [
   ('a planting edited by the page takes a field named nowhere', 'js/app.js', "  const changed = (record, change) => { const after = { ...record };", "  const changed = (record, change) => { const after = { ...record, touched: true };", 'every record each step of the tour wrote'),
   ('the page learns a kind of step the tour does not make', 'js/app.js', "      if (op.kind === 'settings') { next.settings = to; continue; }", "      if (op.kind === 'settings') { next.settings = to; continue; }\n      if (op.kind === 'notes') { next.notes = to; continue; }", 'every kind of step withOps applies'),
+  ('a planting waiting to be placed is no longer read as a planting', SHAPE, "'lrfNext.waiting[]': 'plantings[]' };", "};", 'the plan as the page holds it fits'),
   ('the benches, when changed, carry a field named nowhere', 'js/app.js', "    const after = { ...changed, lrfEdited: true };", "    const after = { ...changed, lrfEdited: true, editedOn: 'device' };", 'the plan as the page holds it fits'),
 ]
 if mode == 'list': print(json.dumps({'node': len(NODE), 'page': len(PAGE)})); sys.exit(0)
