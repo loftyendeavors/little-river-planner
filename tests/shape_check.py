@@ -42,37 +42,39 @@ TOUR = r"""
   const A = LRFApp, S = A.state, E = LRFEngine, eng = () => S.engine, out = {}, year = A.planYear();
   LRFUI.confirm = async () => true;   // every window that asks first is answered yes, as a grower who goes ahead
   const yes = setInterval(() => { const b = document.querySelector('dialog[open] .dialog-actions .btn.primary'); if (b) b.click(); }, 100);   // and the page's own windows
-  const step = async (name, run) => { const n = S.undo.length; let r; try { r = await Promise.race([run(), new Promise((_, no) => setTimeout(() => no(new Error('no answer in 10 seconds')), 10000))]); } catch (e) { out[name] = { took: false, why: String(e && e.message || e).slice(0, 200) }; return; } out[name] = { took: S.undo.length > n, why: r === 'no subject' ? r : undefined }; };
+  const step = async (name, run) => { const n = S.undo.length; let r; try { r = await Promise.race([run(), new Promise((_, no) => setTimeout(() => no(new Error('no answer in 10 seconds')), 10000))]); } catch (e) { out[name] = { took: false, why: String(e && e.message || e).slice(0, 200) }; return; } out[name] = { took: S.undo.length > n && r !== 'no subject' && r !== false && r !== null, why: r === 'no subject' ? r : r === false || r === null ? 'its last action did not take' : undefined }; };
+  /** An action of a step that takes more than one: one that did not take fails the step, rather than leaving the next to pass it. */
+  const must = r => { if (r === false || r === null || r === undefined || r === 'no subject') throw new Error('an earlier action of this step did not take'); return r; };
   const P = () => S.plan.plantings, plain = P().filter(p => !p.liveTray && !p.bedLayout && !p.towerCycle && !p.done);
   const sold = plain.map(p => eng().crop(p.cropId)).find(c => c && eng().harvestFor(c.id) && !eng().harvestFor(c.id).micro && !eng().isCoverCrop(c) && eng().harvestFor(c.id).house.farm);
   const vOf = c => S.plan.varieties.find(v => v.cropId === c.id && v.active !== false) || S.plan.varieties[0];
   await step('a planting edited', () => A.updatePlanting(plain[1].id, { note: 'a note' }, 'A note'));
   await step('a planting given its own sowing day', () => { const p = plain.find(q => LRFSeedLib.sowing(eng(), q)); return p ? A.updatePlanting(p.id, { sowOn: year + '-03-03' }, 'Sow on') : 'no subject'; });
-  await step('a planting, a bed and a garden marked for personal use', async () => { await A.setUse('planting', [plain[3].id], 'personal'); await A.setUse('bed', [plain[4].bedId], 'personal'); return A.setUse('garden', [S.plan.gardens[1].id], 'personal'); });
+  await step('a planting, a bed and a garden marked for personal use', async () => { must(await A.setUse('planting', [plain[3].id], 'personal')); must(await A.setUse('bed', [plain[4].bedId], 'personal')); return A.setUse('garden', [S.plan.gardens[1].id], 'personal'); });
   await step('a bed edited', () => A.updateBeds([S.plan.beds[2].id], { note: 'a note' }, 'A note'));
   await step('the farm\'s dates changed', () => { const d = A.farmDates().dates; return A.setFarmDates({ ...d, frostLast: d.frostLast === '05-12' ? '05-13' : '05-12' }); });
   await step('a garden\'s kind changed', () => { const g = S.plan.gardens[2]; return A.setGardenType(g.id, g.type === 'field' ? 'tunnel' : 'field'); });
-  await step('days to harvest set for a crop and a variety', async () => { if (!sold) return 'no subject'; await A.setAssumption('crops', sold.id, 'field', 55, 'Days'); return A.setAssumption('varieties', vOf(sold).id, 'field', 57, 'Days'); });
+  await step('days to harvest set for a crop and a variety', async () => { if (!sold) return 'no subject'; must(await A.setAssumption('crops', sold.id, 'field', 55, 'Days')); return A.setAssumption('varieties', vOf(sold).id, 'field', 57, 'Days'); });
   await step('a yield set', () => sold ? A.setYield('crops', sold.id, 'field', 3.5, 'Yield') : 'no subject');
   await step('a crop\'s price and personal use set', () => sold ? A.setSell(sold.id, { price: 4.25, keep: 5 }, 'Price') : 'no subject');
   await step('a variety\'s price set', () => sold ? A.setSellV(vOf(sold).id, { price: 5.5 }, 'Price') : 'no subject');
   await step('a crop looked at', () => sold ? A.setLooked(sold.id, true) : 'no subject');
   await step('a crop grown for sale and personal use', () => sold ? A.setHouse(sold.id, true) : 'no subject');
-  await step('something else sold from a crop, added and priced', async () => { if (!sold) return 'no subject'; const id = A.addThing(sold.id, { from: 'harvest', name: 'Second thing', unit: 'bunch' }); return id ? A.setThing(sold.id, id, { price: 3, share: 10 }, 'Price') : 'no subject'; });
+  await step('something else sold from a crop, added and priced', async () => { if (!sold) return 'no subject'; const id = must(A.addThing(sold.id, { from: 'harvest', name: 'Second thing', unit: 'bunch' })); return id ? A.setThing(sold.id, id, { price: 3, share: 10 }, 'Price') : 'no subject'; });
   await step('where a crop\'s days start', () => sold ? A.setStarts([{ cropId: sold.id, from: 'seed', less: 10 }], 'Days start') : 'no subject');
   await step('a planting grown for one of the things its crop sells', async () => {
     const p = plain.find(q => { const c = eng().crop(q.cropId), h = c && eng().harvestFor(c.id); return c && c !== sold && h && !h.micro && !eng().isCoverCrop(c); });
     if (!p) return 'no subject';
     const id = A.addThing(p.cropId, { from: 'bed', name: 'Out of the bed', unit: 'bunch' });
     if (!id) return 'no subject';
-    await A.setThing(p.cropId, id, { price: 2, share: 20, yield: 1 }, 'Second thing');
+    must(await A.setThing(p.cropId, id, { price: 2, share: 20, yield: 1 }, 'Second thing'));
     return A.setGives(p.id, id);
   });
   await step('the planner\'s own record changed', () => A.setOwn('trays', (S.plan.lrfNext || {}).trays ? null : 'variety', 'Trays'));
   await step('supplies on hand', () => A.setSupply('mix', '72', 0.5));
   await step('the benches changed', () => A.editNursery('Packing', n => ({ ...n, packing: (n && n.packing) === 'tight' ? 'loose' : 'tight' })));
   await step('how a live-tray crop is sown', () => { const m = (S.plan.crops || []).find(c => c.micro); return m ? A.setLiveSow(m.id, { how: 'cells', cells: 98, perCell: 3 }) : 'no subject'; });
-  await step('a seed lot added and one counted', async () => { const lots = (A.inventoryNow().lots || []).filter(l => l.deleted !== true); if (!lots.length) return 'no subject'; A.editStock('Add', (inv, ctx) => LRFSeedLib.addLot(inv, { key: lots[0].key, unit: 'seeds', quantity: 50, status: 'ordered' }, ctx)); return A.editStock('Count', (inv, ctx) => LRFSeedLib.updateLot(inv, lots[0].id, { quantity: 3 }, 'count', ctx)); });
+  await step('a seed lot added and one counted', async () => { const lots = (A.inventoryNow().lots || []).filter(l => l.deleted !== true); if (!lots.length) return 'no subject'; must(A.editStock('Add', (inv, ctx) => LRFSeedLib.addLot(inv, { key: lots[0].key, unit: 'seeds', quantity: 50, status: 'ordered' }, ctx))); return A.editStock('Count', (inv, ctx) => LRFSeedLib.updateLot(inv, lots[0].id, { quantity: 3 }, 'count', ctx)); });
   await step('a crop sown from seed', () => { const own = (S.plan.crops || []).find(c => !c.micro); return own ? A.revise('From seed', [{ kind: 'crop', before: own, after: { ...own, plantingMaterial: 'seed' } }]) : 'no subject'; });
   await step('where a variety\'s days are counted from', () => { const v = S.plan.varieties.find(x => x.active !== false); return v ? A.revise('Counted from', [{ kind: 'variety', before: v, after: { ...v, catalogMaturityBasis: 'transplant', catalogSourceChoice: v.catalogSourceChoice || 'url' } }]) : 'no subject'; });
   await step('the photo\'s scale', () => { const m = S.plan.map || {}; return m.ftPerPx ? A.commit('Scale', [{ kind: 'map', before: m, after: { ...m, ftPerPx: m.ftPerPx * 1.01 } }]) : 'no subject'; });
@@ -85,12 +87,12 @@ TOUR = r"""
   const chain = [...new Set(jobs.map(j => j.id))].find(id => ['sow', 'potup', 'harden', 'field'].every(k => jobs.some(j => j.id === id && j.kind === k)));
   const used = chain ? [chain] : [];
   for (const kind of ['sow', 'potup', 'harden', 'field']) await step('recorded: ' + kind, () => { const j = chain && jobs.find(x => x.id === chain && x.kind === kind); return j ? A.recordWork([{ id: j.id, kind }], { date: j.day }) : 'no subject'; });
-  await step('recorded: move', async () => { const id = [...new Set(jobs.map(j => j.id))].find(x => !used.includes(x) && jobs.some(j => j.id === x && j.kind === 'move') && jobs.some(j => j.id === x && j.kind === 'field')); if (!id) return 'no subject'; used.push(id); for (const kind of ['sow', 'potup', 'harden', 'field']) { const j = jobs.find(x => x.id === id && x.kind === kind); if (j) await A.recordWork([{ id, kind }], { date: j.day }); } const m = jobs.find(x => x.id === id && x.kind === 'move'); return A.recordWork([{ id, kind: 'move' }], { date: m.day }); });
+  await step('recorded: move', async () => { const id = [...new Set(jobs.map(j => j.id))].find(x => !used.includes(x) && jobs.some(j => j.id === x && j.kind === 'move') && jobs.some(j => j.id === x && j.kind === 'field')); if (!id) return 'no subject'; used.push(id); for (const kind of ['sow', 'potup', 'harden', 'field']) { const j = jobs.find(x => x.id === id && x.kind === kind); if (j) must(await A.recordWork([{ id, kind }], { date: j.day })); } const m = jobs.find(x => x.id === id && x.kind === 'move'); return A.recordWork([{ id, kind: 'move' }], { date: m.day }); });
   await step('a job taken back', () => { const p = P().find(q => q.done && q.done.harden); return p ? A.takeBackWork([{ id: p.id, kind: 'harden' }]) : 'no subject'; });
-  await step('a job put off, and one that moves its planting', async () => { const a = first('potup', used), b = first('field', used); if (!a || !b) return 'no subject'; await A.delayWork([{ id: a.id, kind: 'potup' }], E.d2s(E.addDays(E.s2d(a.day), 2))); return A.delayWork([{ id: b.id, kind: 'field' }], E.d2s(E.addDays(E.s2d(b.day), 2))); });
-  await step('a job skipped and one given a note', () => { const j = jobs.filter(x => !used.includes(x.id)); if (j.length < 12) return 'no subject'; A.skipWork([{ id: j[10].id, kind: j[10].kind }], year + '-04-01'); return A.noteWork([{ id: j[11].id, kind: j[11].kind }], 'a note'); });
+  await step('a job put off, and one that moves its planting', async () => { const a = first('potup', used), b = first('field', used); if (!a || !b) return 'no subject'; must(await A.delayWork([{ id: a.id, kind: 'potup' }], E.d2s(E.addDays(E.s2d(a.day), 2)))); return A.delayWork([{ id: b.id, kind: 'field' }], E.d2s(E.addDays(E.s2d(b.day), 2))); });
+  await step('a job skipped and one given a note', () => { const j = jobs.filter(x => !used.includes(x.id)); if (j.length < 12) return 'no subject'; must(A.skipWork([{ id: j[10].id, kind: j[10].kind }], year + '-04-01')); return A.noteWork([{ id: j[11].id, kind: j[11].kind }], 'a note'); });
   // plantings made, sent to wait, placed and taken away
-  await step('a planting sent to wait, and changed while it waits', () => { if (!A.sendToWait(plain[30].id)) return 'no subject'; const w = (A.waiting() || [])[0]; return w ? A.updateWaiting(w.id, { note: 'a note' }, 'A note') : 'no subject'; });
+  await step('a planting sent to wait, and changed while it waits', () => { must(A.sendToWait(plain[30].id)); const w = (A.waiting() || [])[0]; return w ? A.updateWaiting(w.id, { note: 'a note' }, 'A note') : 'no subject'; });
   await step('a succession added', () => A.addSuccessions(plain[40].id, 1, 14));
   await step('a variety added to a bed', () => { const p = plain.find(q => S.plan.varieties.some(v => v.cropId === q.cropId && v.id !== q.varietyId)); return p ? A.addVarieties(p.id, [S.plan.varieties.find(v => v.cropId === p.cropId && v.id !== p.varietyId).id]) : 'no subject'; });
   await step('a planting taken away', () => A.removePlantings([plain[60].id]));
