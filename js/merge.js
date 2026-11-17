@@ -194,7 +194,9 @@
       if (mineSame || (sameJob(jm, jt) && same(km, kt))) who = 't';
       else if (theirsSame || (carriesOn(ks, kt) && begins(kt, km))) who = 'm';
       else if (!(carriesOn(ks, km) && begins(km, kt)) && !sameJob(jm, js)) said(ctx, { kind: 'recorded-twice', path, id, job: kind, mine: jm ? jm.date : null, theirs: jt ? jt.date : null });
-      side.set(kind, who); jobs.set(kind, { js, jm, jt, mineMoved: !mineSame, theirsMoved: !theirsSame });
+      // the same story on both sides (a recording sent, its answer lost, the page then carried on) is one that both have seen
+      const alike = sameJob(jm, jt) && same(km, kt);
+      side.set(kind, who); jobs.set(kind, { js, jm, jt, mineMoved: !mineSame && !alike, theirsMoved: !theirsSame && !alike });
     }
     // two jobs that stand from different sides, in an order the planner refuses on one device: the cloud's stands
     // until nothing moves: a job given back to the cloud's side can then be out of order with another
