@@ -122,6 +122,12 @@ try {
   let o = spawnSync('node', [path.join(top, 'take_main.cjs'), W, FONTS, '--abort'], { encoding: 'utf8', env });
   let said = null; try { said = JSON.parse(o.stdout.trim().split('\n').pop()); } catch (_) { said = null; }
   check('a branch with no copy of the tool is taken in by the tool kept from main: here, as C, only the real conflict is named', o.status === 3 && !!said && JSON.stringify(said.conflicts) === '["js/seeds.js"]' && clean() === '', { code: o.status, said, err: String(o.stderr).slice(0, 300) });
+  // the tool's own helper in conflict: named as a real conflict before anything runs from the merged tree, and taken back
+  git('checkout', '-q', '-b', 'd', 'main'); append('tests/counts.py', '# a line from build D\n'); git('commit', '-qam', 'D');
+  git('checkout', '-q', 'main'); append('tests/counts.py', '# a line from main\n'); git('commit', '-qam', 'main moves'); git('push', '-q', 'origin', 'main');
+  git('checkout', '-q', 'd'); const atD = git('rev-parse', 'HEAD');
+  r = run('take_main.cjs', '--abort');
+  check('when tests/counts.py itself conflicts, it is named as a real conflict and with --abort the branch is as it was', r.code === 3 && !!r.said && JSON.stringify(r.said.conflicts) === '["tests/counts.py"]' && !fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')) && git('rev-parse', 'HEAD') === atD && clean() === '', { r, status: clean() });
   git('checkout', '-q', 'c');
   r = run('take_main.cjs');
   check('without --abort the merge is left open with only that file to settle', r.code === 3 && !!r.said && JSON.stringify(r.said.conflicts) === '["js/seeds.js"]' && fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')), r);

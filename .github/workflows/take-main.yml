@@ -66,5 +66,6 @@ jobs:
               gh pr comment "$number" --body "main ($(git rev-parse --short origin/main)) could not be taken into this branch by itself: $(node -e 'console.log(JSON.parse(process.argv[1]).conflicts.join(", "))' "$out") conflict in the code, not in the files the merge writes. Settle them by hand (tests/README.md, \"Two builds side by side\"). Nothing was pushed."
             elif [ $code -ne 0 ]; then
               echo "::warning::#$number: $out"
+              gh pr comment "$number" --body "main ($(git rev-parse --short origin/main)) could not be taken into this branch by itself, and nothing was pushed: $(printf '%s' "$out" | cut -c1-600). Take it in by hand (tests/README.md, \"Two builds side by side\")."
             fi
           done < "$RUNNER_TEMP/prs"

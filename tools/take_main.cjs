@@ -29,7 +29,8 @@ if (!REPO || !FONTS) { console.error('usage: node tools/take_main.cjs <repositor
 const git = (...a) => execFileSync('git', ['-C', REPO, ...a], { encoding: 'utf8', maxBuffer: 64 << 20, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const tryGit = (...a) => { try { return git(...a); } catch (_) { return null; } };
 const say = (obj, code) => { console.log(JSON.stringify(obj)); process.exit(code); };
-const fail = why => say({ took: null, failed: why }, 1);
+// a failure while a merge stands open takes it back when asked to, so that the branch is left as it was
+const fail = why => { if (flag('--abort') && fs.existsSync(path.join(REPO, '.git', 'MERGE_HEAD'))) tryGit('merge', '--abort'); say({ took: null, failed: why }, 1); };
 
 if (tryGit('status', '--porcelain', '--untracked-files=no')) fail('the working tree has changes that are not committed: commit them first');
 if (fs.existsSync(path.join(REPO, '.git', 'MERGE_HEAD'))) fail('a merge is already in progress here');
@@ -61,6 +62,15 @@ const WRITTEN = ['js/built.js', 'sw.js'];
 const conflicted = () => (tryGit('diff', '--name-only', '--diff-filter=U') || '').split('\n').filter(Boolean);
 for (const f of conflicted().filter(f => WRITTEN.includes(f))) { git('checkout', '--theirs', '--', f); git('add', '--', f); }
 
+// a conflict anywhere but in the files written here is a real one: said before anything is run from the merged tree, which may
+// be the very file in conflict (tests/counts.py)
+const real = conflicted().filter(f => f !== 'tests/counts.json');
+if (real.length) {
+  if (flag('--abort')) { tryGit('merge', '--abort'); say({ took: take.slice(0, 7), conflicts: real, aborted: true, counts: [] }, 3); }
+  for (const f of conflicted().filter(f => f === 'tests/counts.json')) real.push(f);
+  say({ took: take.slice(0, 7), conflicts: real, counts: [], next: `settle ${real.join(', ')}; then node tools/shared.cjs . <fonts> origin/main, git add -A, git commit` }, 3);
+}
+
 // the counts, check by check, from the three
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lrf-counts-'));
 const side = (ref, name) => { const text = tryGit('show', `${ref}:tests/counts.json`); const f = path.join(tmp, name); fs.writeFileSync(f, text === null ? '{}' : text); return f; };
@@ -69,12 +79,6 @@ fs.rmSync(tmp, { recursive: true, force: true });
 if (joined.status !== 0) fail(`tests/counts.py join: ${String(joined.stderr).trim().split('\n').pop()}`);
 git('add', '--', 'tests/counts.json');
 const counts = JSON.parse(joined.stdout.trim().split('\n').pop()).both;
-
-const real = conflicted();
-if (real.length) {
-  if (flag('--abort')) { tryGit('merge', '--abort'); say({ took: take.slice(0, 7), conflicts: real, aborted: true, counts }, 3); }
-  say({ took: take.slice(0, 7), conflicts: real, counts, next: `settle ${real.join(', ')}; then node tools/shared.cjs . <fonts> origin/main, git add -A, git commit` }, 3);
-}
 
 // the label and the site: from main's list, as this branch will be merged onto it
 const base = [git('merge-base', head, 'origin/main'), git('merge-base', take, 'origin/main')].reduce((a, b) => (tryGit('merge-base', '--is-ancestor', a, b) !== null ? b : a));
