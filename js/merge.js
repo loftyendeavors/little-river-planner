@@ -243,8 +243,10 @@
     const recorder = theirsRecorded && !mineStands ? 't' : mineStands && !theirsRecorded ? 'm' : '';
     // A recording both sides hold that pushed the planting out moved its day on both: that day, and not the start's, is what each
     // side's day is measured from. (A sowing day set by hand goes when a recording pushes the planting, js/week.js.)
+    // The last such push in the cloud's history is where the shared state left the day.
     let pushedTo = null;
-    for (const kind of kinds) { const j = jobs.get(kind), f = j.alike && j.jt && j.jt.line && isObj(j.jt.line.follow) ? j.jt.line.follow : null; if (f && f.to && same(f.to, t.date) && !same(f.from, f.to)) pushedTo = f.to; }
+    const sharedLines = [...kinds].map(kind => jobs.get(kind)).filter(j => j.alike && j.jt && j.jt.line).map(j => j.jt.line);
+    for (const x of ht) if (sharedLines.some(line => same(line, x)) && isObj(x.follow) && x.follow.to && !same(x.follow.from, x.follow.to)) pushedTo = x.follow.to;
     const shared = pushedTo ? { ...s0, date: pushedTo, sowOn: undefined } : s0;
     for (const [keys, what] of [[PLACE, 'place'], [TIME, 'day']]) {
       const s1 = what === 'day' ? shared : s0, at = p => keys.map(k => p[k]), ms = same(at(m), at(s1)), ts = same(at(t), at(s1)), mt = same(at(m), at(t)), shown = p => Object.fromEntries(keys.filter(k => p[k] !== undefined).map(k => [k, p[k]]));

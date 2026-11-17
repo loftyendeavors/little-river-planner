@@ -319,6 +319,13 @@ tryCase('a late sowing sent, its answer lost, then the day moved here: the day s
   const r = M.merge(FARM, here, sent), p = planting(r.plan, A1.id);
   return [planting(sent, A1.id).date !== planting(FARM, A1.id).date && ok(r) && p.date === '2027-07-07' && p.done.sow === late && !r.report.items.length, [r.why, p && p.date, r.report]];
 });
+tryCase('two shared recordings that each pushed the planting out: the day after the last of them is the base, so a day changed on both sides is reported', () => {
+  const day = kind => W.steps(e0, POT).find(st => st.kind === kind).planned, d = mine();
+  const sown = record(FARM, POT.id, 'sow', E.d2s(E.addDays(day('sow'), 5)), d), first = planting(sown, POT.id).date;
+  const hard = record(sown, POT.id, 'harden', E.d2s(E.addDays(W.steps(eng(sown), planting(sown, POT.id)).find(st => st.kind === 'harden').planned, 6)), d), last = planting(hard, POT.id).date;
+  const r = M.merge(FARM, setP(hard, POT.id, { date: '2027-12-01' }), setP(hard, POT.id, { date: first })), p = planting(r.plan, POT.id), said = items(r, 'same-box').concat(items(r, 'move-not-applied'));
+  return [first !== planting(FARM, POT.id).date && last !== first && ok(r) && p.date === first && said.length === 1, [first, last, r.why, p && p.date, r.report]];
+});
 tryCase('two jobs given back to the cloud\'s side one after the other: the joined jobs are in an order the planner accepts, and a later job can still be recorded', () => {
   const sow = E.d2s(E.addDays(E.s2d(DAY), 0)), hard = E.d2s(E.addDays(E.s2d(DAY), 15)), d0 = device('before', 6), s = record(record(FARM, A1.id, 'sow', sow, d0, { follow: false }), A1.id, 'harden', hard, d0, { follow: false });
   const d = mine(), m = record(record(takeBack(takeBack(s, A1.id, 'harden', d), A1.id, 'sow', d), A1.id, 'sow', E.d2s(E.addDays(E.s2d(DAY), 17)), d, { follow: false }), A1.id, 'harden', E.d2s(E.addDays(E.s2d(DAY), 25)), d, { follow: false });
