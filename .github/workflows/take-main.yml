@@ -43,14 +43,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           FONTS="$RUNNER_TEMP/scratch/node_modules/@fontsource-variable"
-          gh pr list --state open --json number,headRefName,isCrossRepository --jq '.[] | select(.isCrossRepository | not) | "\(.number) \(.headRefName)"' > "$RUNNER_TEMP/prs"
+          # the tool as main has it, run on each branch: a branch's own copy may be older, changed, or not there at all
+          TOOL="$RUNNER_TEMP/take_main.cjs"; cp tools/take_main.cjs "$TOOL"
+          gh pr list --state open --limit 500 --json number,headRefName,isCrossRepository --jq '.[] | select(.isCrossRepository | not) | "\(.number) \(.headRefName)"' > "$RUNNER_TEMP/prs"
           while read -r number branch; do
             [ -n "$ONLY" ] && [ "$ONLY" != "$branch" ] && continue
             echo "== #$number $branch"
             git reset -q --hard && git clean -qfd
             git checkout -q -B "$branch" "origin/$branch"
             set +e
-            out=$(node tools/take_main.cjs . "$FONTS" --commit --abort 2>&1); code=$?
+            out=$(node "$TOOL" . "$FONTS" --commit --abort 2>&1); code=$?
             set -e
             echo "$out"; out=$(printf '%s\n' "$out" | tail -1)
             if [ $code -eq 0 ] && [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$branch")" ]; then

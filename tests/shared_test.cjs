@@ -33,6 +33,7 @@ try {
   git('init', '-q', '-b', 'main'); git('add', '-A'); git('commit', '-qm', 'main'); git('remote', 'add', 'origin', O); git('push', '-q', 'origin', 'main');
   git('fetch', '-q', 'origin');
   const start = built();
+  fs.copyFileSync(path.join(W, 'tools', 'take_main.cjs'), path.join(top, 'take_main.cjs.kept'));   // the tool as main has it, kept outside
 
   // 1. on main, nothing new: nothing is written
   let r = run('shared.cjs', 'HEAD');
@@ -95,6 +96,12 @@ try {
   check('B holds A’s work and its own', read('css/app.css').includes('from build A') && read('js/seeds.js').includes('from build B'));
   check('the counts are joined check by check: each side’s line kept, and a check both changed carries what each added', !!c[p0] && c[p0][keys[0]] === c0[p0][keys[0]] + 5 && c[p0][keys[1]] === c0[p0][keys[1]] + 1 && c[p0][keys[2]] === c0[p0][keys[2]] + 1 && !!r.said && r.said.counts.length === 1, { joined: [keys[0], keys[1], keys[2]].map(k => (c[p0] || {})[k]), before: [keys[0], keys[1], keys[2]].map(k => c0[p0][k]), both: r.said.counts });
   check('the counts are laid out as tests/counts.py lays them, one check a line', /\n\n {2}"[^"]+": \d+,\n\n/.test(read('tests/counts.json')) && !/<<<<<<<|>>>>>>>/.test(read('tests/counts.json')));
+  // a branch that already holds main, whose written files were left stale: --commit writes and commits them
+  const keep = read('js/built.js');
+  write('js/built.js', keep.replace(/\n {4}\]\n/, ',\n      {"label":"0.01","on":"2000-01-01","did":"A stale line.","steps":["None."]}\n    ]\n'));
+  git('commit', '-qam', 'a stale list');
+  r = run('take_main.cjs', '--commit');
+  check('on a branch that already holds main, with --commit the written files are written again and committed', r.code === 0 && !!r.said && r.said.committed === true && clean() === '' && read('js/built.js') === keep, { r, status: clean() });
   r = run('shared.cjs');
   check('after the taking in, the shared files are what the tool writes from main', r.code === 0 && clean() === '' && !!r.said && r.said.label === b.label, { r, status: clean() });
 
@@ -109,6 +116,13 @@ try {
   r = run('take_main.cjs', '--abort');
   check('a real conflict is named, the written files are not among the conflicts, and with --abort the branch is as it was',
     r.code === 3 && r.said && JSON.stringify(r.said.conflicts) === '["js/seeds.js"]' && !fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')) && git('rev-parse', 'HEAD') === before && clean() === '', { r, status: clean() });
+  // a branch made before the tool, run with the tool from main kept outside the repository, as the job runs it
+  git('checkout', '-q', '-b', 'old', 'c'); git('rm', '-q', 'tools/take_main.cjs'); git('commit', '-qm', 'no tool here yet');
+  fs.copyFileSync(path.join(W, '..', 'take_main.cjs.kept'), path.join(top, 'take_main.cjs'));
+  let o = spawnSync('node', [path.join(top, 'take_main.cjs'), W, FONTS, '--abort'], { encoding: 'utf8', env });
+  let said = null; try { said = JSON.parse(o.stdout.trim().split('\n').pop()); } catch (_) { said = null; }
+  check('a branch with no copy of the tool is taken in by the tool kept from main: here, as C, only the real conflict is named', o.status === 3 && !!said && JSON.stringify(said.conflicts) === '["js/seeds.js"]' && clean() === '', { code: o.status, said, err: String(o.stderr).slice(0, 300) });
+  git('checkout', '-q', 'c');
   r = run('take_main.cjs');
   check('without --abort the merge is left open with only that file to settle', r.code === 3 && !!r.said && JSON.stringify(r.said.conflicts) === '["js/seeds.js"]' && fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')), r);
   done = true;

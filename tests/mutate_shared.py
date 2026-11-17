@@ -25,6 +25,7 @@ FAULTS = [
   ('the merge is not committed with --commit', S, TM, "if (flag('--commit')) {", 'if (false) {', 'takes main in by itself'),
   ('the counts are taken from main alone', S, TM, "side(head, 'here.json')", "side(take, 'here.json')", 'joined check by check'),
   ('a check both sides changed takes main\'s count', S, CP, 'else: v = (a or 0) + (b - (a or 0)) + (c - (a or 0));', 'else: v = c;', 'joined check by check'),
+  ('on a branch that already holds main, --commit commits nothing', S, TM, "if (dirty && flag('--commit')) {", 'if (false) {', 'already holds main'),
   ('--abort leaves the merge open', S, TM, "if (flag('--abort')) { tryGit('merge', '--abort'); say(", "if (flag('--abort')) { say(", 'a real conflict is named'),
   ('a file in real conflict is taken from main without a word', S, TM, "for (const f of conflicted().filter(f => WRITTEN.includes(f))) {", "for (const f of conflicted()) {", 'a real conflict is named'),
   ('a hook a check reads is no longer written', H, CH, "h('span.wc-new', { dataset: { hook: 'changes-new' } }, 'New')", "h('span.wc-new', 'New')", 'every hook a check reads'),

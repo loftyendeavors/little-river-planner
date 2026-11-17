@@ -15,6 +15,9 @@
  * With --commit the merge is committed when it is whole. --from takes another ref in (this branch as another place holds it,
  * after the job took main into it there); the label is still read from main.
  *
+ * The job runs a copy of this file kept from main, so that a branch whose own copy is older, changed or missing is taken in the
+ * same way: everything else it runs (tools/shared.cjs, tests/counts.py) is read from the branch once main is merged into it.
+ *
  * It prints one line: {"took": …, "label": …, "conflicts": […], "counts": […]} and ends 0 when the branch holds main and its
  * shared files are written, 3 when real conflicts are left, 1 on any other failure.
  */
@@ -41,8 +44,12 @@ if (tryGit('merge-base', '--is-ancestor', take, head) !== null) {
   // nothing to take in; the shared files are still written, so that a run of this alone leaves them right
   const out = spawnSync('node', [path.join(REPO, 'tools/shared.cjs'), REPO, FONTS, git('merge-base', 'HEAD', 'origin/main')], { encoding: 'utf8' });
   if (out.status !== 0) fail(String(out.stderr).trim());
-  const dirty = tryGit('status', '--porcelain', '--untracked-files=no');
-  say({ took: null, already: FROM, label: JSON.parse(out.stdout.trim().split('\n').pop()).label, written: dirty ? dirty.split('\n').map(l => l.slice(3)) : [] }, 0);
+  const dirty = tryGit('status', '--porcelain', '--untracked-files=no'), label = JSON.parse(out.stdout.trim().split('\n').pop()).label;
+  if (dirty && flag('--commit')) {
+    git('add', '-A', '--', 'js', 'css', 'fonts', 'icons', 'index.html', 'sw.js', 'manifest.webmanifest', '.nojekyll');
+    git('commit', '--no-verify', '-m', `The files the merge writes, written again (the label is ${label})\n\nBy tools/take_main.cjs: the branch already held ${FROM}, and js/built.js or the site were not what tools/shared.cjs writes.`);
+  }
+  say({ took: null, already: FROM, label, written: dirty ? dirty.split('\n').map(l => l.slice(3)) : [], committed: !!dirty && flag('--commit') }, 0);
 }
 const was = git('merge-base', 'HEAD', take);   // where the two last agreed: the counts are joined from it
 
