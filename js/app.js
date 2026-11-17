@@ -2093,7 +2093,7 @@
         const had = await loadAttic().catch(() => emptyAttic()), extras = await loadExtras(), text = JSON.stringify(attic);
         newAttic = text !== JSON.stringify({ ...had, varieties: { ...(had.varieties || {}), ...extras.varieties } });   // an attic the join left empty is a change too: kept, or the record the other device took out would come back from here
         if (newAttic && store.backend !== 'memory') {
-          const wasAttic = await store.loadBlob('attic').catch(() => null), wasNew = await store.loadBlob('attic-new').catch(() => null);
+          const wasAttic = await store.loadBlob('attic'), wasNew = await store.loadBlob('attic-new');   // a read that fails stops the join here, before anything is written: it is never taken for "nothing was kept"
           putBack = async () => { try { if (wasAttic) await store.saveBlob('attic', wasAttic); else await store.clearBlob('attic'); if (wasNew) await store.saveBlob('attic-new', wasNew); else await store.clearBlob('attic-new'); return true; } catch (_) { return false; } };
           await store.saveBlob('attic', text); await store.clearBlob('attic-new'); core = { ...core, lrfNext: { ...core.lrfNext, attic: 'cloud' } };
         }

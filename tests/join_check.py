@@ -73,6 +73,8 @@ with sync_playwright() as pw:
         page = ctx.new_page(); page.set_default_timeout(25000)
         # the page's clock: late in the plan's year, so that the season's work can be recorded (work that has not happened yet is refused)
         page.add_init_script("(() => { const R = Date, off = new R(2027, 11, 20, 10).getTime() - R.now(); class D extends R { constructor(...a) { if (a.length) super(...a); else super(R.now() + off); } static now() { return R.now() + off; } } window.Date = D; })();")
+        # a browser whose storage is full, for as long as the check says so (it holds over a reload): the plan cannot be written, everything else can
+        page.add_init_script("(() => { const set = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (sessionStorage.getItem('check-full') && String(k).startsWith('lrf-next:plan')) throw new DOMException('full', 'QuotaExceededError'); return set.call(this, k, v); }; })();")
         page.errors = []
         page.on('pageerror', lambda e: page.errors.append(str(e)[:300]))
         if sample:
@@ -233,6 +235,31 @@ with sync_playwright() as pw:
         B.evaluate("(() => { LRFSnaps.add = window.__add; })()")
         look(B)
         check('and once it can be kept, the two are joined', B.evaluate(P, X1)['note'] == 'laptop, while the phone cannot keep a snapshot' and B.evaluate(P, X2)['note'] == 'phone, no snapshot')
+        look(A)
+
+        # ── 5c. the records kept beside the plan (the ones the planner does not edit) travel with it, and are put back when a joined plan is not saved ──
+        where = 'records beside the plan'
+        BESIDE = "(async () => { const s = await LRFApp.snapshot('for the check ' + Date.now()); const t = await LRFSnaps.text(s.id); await LRFSnaps.remove(s.id); return Object.prototype.hasOwnProperty.call(JSON.parse(t), 'checkLog'); })()"
+        # one device gains a record of that kind; the other takes it in
+        A.evaluate("(async (id) => { const a = await LRFApp.snapshot('warm ' + Date.now()); await LRFSnaps.remove(a.id); LRFApp.state.attic.rest.checkLog = { picked: 3 }; LRFApp.updatePlanting(id, { note: 'with a record beside the plan' }, 'A note'); })(%s)" % json.dumps(X1)); settled(A, 'in-step')
+        look(B)
+        check('a record the planner does not edit, gained on one device, is taken in on the other with the plan', B.evaluate(P, X1)['note'] == 'with a record beside the plan' and B.evaluate(BESIDE) is True)
+        B.reload(); ready(B); settled(B, 'in-step')
+        check('and is still there after the page is opened again: it was kept in the browser, not only held', B.evaluate(BESIDE) is True)
+        # the first device loses it again; on the other the joined plan cannot be saved: the record must still be there
+        A.evaluate("(id) => { delete LRFApp.state.attic.rest.checkLog; LRFApp.updatePlanting(id, { note: 'and without it again' }, 'A note'); }", X1); settled(A, 'in-step')
+        B.evaluate("(() => { sessionStorage.setItem('check-full', '1'); })()")
+        B.wait_for_timeout(1700); B.evaluate("void LRFApp.sync().run('poll')")
+        B.wait_for_function("(() => { const c = LRFApp.syncInfo(); return !c.busy && (c.status === 'error' || c.status === 'in-step'); })()", timeout=40000)
+        full = B.evaluate("LRFApp.syncInfo()")
+        note_then = B.evaluate(P, X1)['note']
+        B.reload(); ready(B); B.wait_for_timeout(3000)   # opened again, its storage still full: what is kept in the browser is read afresh
+        kept_beside = B.evaluate(BESIDE); note_again = B.evaluate(P, X1)['note']
+        check('a joined plan that cannot be saved here is not taken in, and the records kept beside the plan are as they were: nothing of them is lost with it', full['status'] == 'error' and note_then == 'with a record beside the plan' and note_again == 'with a record beside the plan' and kept_beside is True, [full['status'], full['error'], note_then, note_again, kept_beside])
+        B.evaluate("(() => { sessionStorage.removeItem('check-full'); })()")
+        B.reload(); ready(B)
+        look(B)
+        check('once it can be saved the plan is taken in, and the record the other device took out is gone here too', B.evaluate(P, X1)['note'] == 'and without it again' and B.evaluate(BESIDE) is False)
         look(A)
 
         # ── 6. turned off: the question it always was ──
