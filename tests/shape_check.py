@@ -73,7 +73,7 @@ TOUR = r"""
   await step('the planner\'s own record changed', () => A.setOwn('trays', (S.plan.lrfNext || {}).trays ? null : 'variety', 'Trays'));
   await step('supplies on hand', () => A.setSupply('mix', '72', 0.5));
   await step('the benches changed', () => A.editNursery('Packing', n => ({ ...n, packing: (n && n.packing) === 'tight' ? 'loose' : 'tight' })));
-  await step('how a live-tray crop is sown', () => { const m = (S.plan.crops || []).find(c => c.micro); return m ? A.setLiveSow(m.id, { how: 'cells', cells: 98, perCell: 3 }) : 'no subject'; });
+  await step('how a live-tray crop is sown', () => { const m = (S.plan.crops || []).find(c => c.micro); return m ? A.setLiveSow(m.id, { how: 'cells', cells: 98, perCell: 3, grams: 12 }) : 'no subject'; });
   await step('a seed lot added and one counted', async () => { const lots = (A.inventoryNow().lots || []).filter(l => l.deleted !== true); if (!lots.length) return 'no subject'; must(A.editStock('Add', (inv, ctx) => LRFSeedLib.addLot(inv, { key: lots[0].key, unit: 'seeds', quantity: 50, status: 'ordered' }, ctx))); return A.editStock('Count', (inv, ctx) => LRFSeedLib.updateLot(inv, lots[0].id, { quantity: 3 }, 'count', ctx)); });
   await step('a crop sown from seed', () => { const own = (S.plan.crops || []).find(c => !c.micro); return own ? A.revise('From seed', [{ kind: 'crop', before: own, after: { ...own, plantingMaterial: 'seed' } }]) : 'no subject'; });
   await step('where a variety\'s days are counted from', () => { const v = S.plan.varieties.find(x => x.active !== false); return v ? A.revise('Counted from', [{ kind: 'variety', before: v, after: { ...v, catalogMaturityBasis: 'transplant', catalogSourceChoice: v.catalogSourceChoice || 'url' } }]) : 'no subject'; });

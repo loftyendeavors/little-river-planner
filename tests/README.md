@@ -181,8 +181,9 @@ the planner does.
 
 - `shape_test.cjs` (fast) holds the list to itself; to the merge's own tables, read from `js/merge.js`'s code, both ways, so a
   rule changed on one side alone fails; and to the farm as the planner holds it and as a file holds it, and to the plans the
-  planner's own functions make of it: every kind of job recorded and taken back, put off, skipped and noted, and seed lots
-  added, counted, received, moved and deleted.
+  planner's own functions make of it: every kind of job recorded and taken back, put off, skipped and noted; seed lots
+  added, counted, received, moved and deleted; a variety saved by the variety editor's own functions and a crop added to the
+  library (the screens that call them are not on the page's tour).
 - `shape_check.py` (in a browser, part `app1`) takes a tour of the page's own functions that change a plan, one for every kind
   of step `withOps` in `js/app.js` applies (a new kind fails a line until the tour makes it), on a pretended day in the season,
   and holds every record each step wrote, the plan the page holds, the plan the browser stores and the plan as a file to the list.

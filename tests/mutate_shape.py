@@ -28,6 +28,8 @@ NODE = [
   # the planner's own functions writing a field named nowhere
   ('a recorded job writes a field named nowhere on its planting', 'js/seedlib.js', "return { planting: { ...p, done, workflow }", "return { planting: { ...p, done, workflow, recordedOn: 'device' }", 'every kind of job, recorded'),
   ('a task put off writes a field named nowhere', 'js/week.js', "    if (Object.keys(tasks).length) out.tasks = tasks; else delete out.tasks;", "    if (Object.keys(tasks).length) out.tasks = { ...tasks, seen: true }; else delete out.tasks;", 'a job put off'),
+  ('the variety editor writes a field named nowhere', 'js/seedlib.js', "latin: facts.latin || '', depth:", "latin: facts.latin || '', pageLanguage: 'en', depth:", 'a variety saved from a supplier page'),
+  ('a crop added to the library carries a field named nowhere', 'js/seedlib.js', "rockwoolDays: 0, towerDays: 0 };", "rockwoolDays: 0, towerDays: 0, addedFrom: 'library' };", 'a crop added to the library'),
   ('a seed lot added writes a field named nowhere', 'js/seedlib.js', "    if (status !== 'ordered') lot.reviewedForYear = ctx.year;", "    if (status !== 'ordered') lot.reviewedForYear = ctx.year;\n    lot.addedBy = 'device';", 'seed lots added'),
   # the shape losing what it says, or the check what it is for
   ('the shape loses the day a delayed task stood on', SHAPE, "    'plantings[].tasks.delay.*.own': 'text',\n", "", 'a job put off'),

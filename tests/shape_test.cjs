@@ -174,6 +174,24 @@ tryCase('seed lots added, counted, received, moved and deleted by the planner\'s
   return [changes >= 4 && a[0], { changes, plan: a[1] }];
 });
 
+// the variety editor and the crop editor: the screens that call them are not on the page's tour, so their own functions are called here
+tryCase('a variety saved from a supplier page, one with no days given, and one edited by hand, by the planner\'s own functions, fit', () => {
+  const v = FARM.varieties.find(x => x.active !== false && x.cropId);
+  if (!v) return [false, 'the farm has no variety'];
+  const page = { url: 'https://supplier.example/variety', supplier: 'A Supplier', description: 'A line of text.', facts: { latin: 'Planta exempli', depth: '1/4 in', seedsPerLb: 120000, seedsPerG: 260 }, prices: [{ label: '1 g', price: 3.5, seeds: 250 }] };
+  const form = { name: v.name, cropId: v.cropId, supplier: 'A Supplier', sku: 'AB-1', dtmMin: 50, dtmMax: 55, basis: 'transplant', stage: 'mature', nurseryDays: 28, inRow: 9, rowSp: 12, germ: 85, rowsPerBed: 3, seedsPerPacket: 250, seedsPerOz: 7000, dtm: 52 };
+  const fromPage = SL.apply(v, SL.fields(page, form));
+  const noDays = SL.apply(v, SL.fields(page, { ...form, dtmMin: '', dtmMax: '' }));
+  const byHand = SL.apply(v, SL.fields(null, { ...form, notes: 'kept by hand', inRow: '', germ: '' }, { edit: true }));
+  const rs = [fromPage, noDays, byHand].map(x => SH.check(x, 'varieties[]')), bad = rs.flatMap(r => r.unknown.concat(r.wrong));
+  return [noDays.catalogDtm === null && fromPage.description === page.description && byHand.notes === 'kept by hand' && bad.length === 0, bad.slice(0, 8)];
+});
+tryCase('a crop added to the library by the planner\'s own function fits', () => {
+  const c = SL.newCrop({ name: 'A New Crop', family: 'Asteraceae', method: 'TP', material: 'seed' }, 'c_shape-new-crop');
+  const r = SH.check(c, 'crops[]');
+  return [!!c && !!c.id && !r.unknown.length && !r.wrong.length, short(r)];
+});
+
 // ── the check itself finds what it is there for ──
 const P0 = FARM.plantings[0];
 const withPlanting = change => ({ ...FARM, plantings: [{ ...P0, ...change }, ...FARM.plantings.slice(1)] });
