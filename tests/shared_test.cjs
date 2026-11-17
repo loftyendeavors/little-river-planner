@@ -96,6 +96,11 @@ try {
   check('B holds A’s work and its own', read('css/app.css').includes('from build A') && read('js/seeds.js').includes('from build B'));
   check('the counts are joined check by check: each side’s line kept, and a check both changed carries what each added', !!c[p0] && c[p0][keys[0]] === c0[p0][keys[0]] + 5 && c[p0][keys[1]] === c0[p0][keys[1]] + 1 && c[p0][keys[2]] === c0[p0][keys[2]] + 1 && !!r.said && r.said.counts.length === 1, { joined: [keys[0], keys[1], keys[2]].map(k => (c[p0] || {})[k]), before: [keys[0], keys[1], keys[2]].map(k => c0[p0][k]), both: r.said.counts });
   check('the counts are laid out as tests/counts.py lays them, one check a line', /\n\n {2}"[^"]+": \d+,\n\n/.test(read('tests/counts.json')) && !/<<<<<<<|>>>>>>>/.test(read('tests/counts.json')));
+  // a file git does not hold among the scripts: the tool stops before anything, and the file is left as it was
+  write('js/not-yet-added.js', '// a script not yet added\n');
+  r = run('take_main.cjs', '--commit');
+  check('a file git does not hold among the scripts stops the tool before anything is merged or built, and is left as it was', r.code === 1 && read('js/not-yet-added.js') === '// a script not yet added\n' && !fs.existsSync(path.join(W, '.git', 'MERGE_HEAD')) && clean() === '?? js/not-yet-added.js', { r, status: clean() });
+  fs.rmSync(path.join(W, 'js/not-yet-added.js'));
   // a branch that already holds main, whose written files were left stale: --commit writes and commits them
   const keep = read('js/built.js');
   write('js/built.js', keep.replace(/\n {4}\]\n/, ',\n      {"label":"0.01","on":"2000-01-01","did":"A stale line.","steps":["None."]}\n    ]\n'));

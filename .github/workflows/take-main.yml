@@ -84,14 +84,15 @@ jobs:
           # the tool as main has it: the branch's own copy may be older, changed, or not there at all
           TOOL="$RUNNER_TEMP/take_main.cjs"; cp tools/take_main.cjs "$TOOL"
           OUT="$RUNNER_TEMP/out"; mkdir -p "$OUT"
-          git rev-parse --short origin/main > "$OUT/main"
           if ! git checkout -q -B take "$AT"; then
+            git rev-parse --short origin/main > "$OUT/main"
             jq -nc '{code: 1, said: "the branch could not be read"}' > "$OUT/outcome.json"; exit 0
           fi
           set +e
           out=$(node "$TOOL" . "$FONTS" --commit --abort 2>&1); code=$?
           set -e
           echo "$out"
+          git rev-parse --short origin/main > "$OUT/main"   # main as the tool fetched it, which is what was taken in
           jq -nc --argjson code "$code" --arg said "$(printf '%s\n' "$out" | tail -1)" '{code: $code, said: $said}' > "$OUT/outcome.json"
           git bundle create "$OUT/taken.bundle" refs/heads/take
       - uses: actions/upload-artifact@v4

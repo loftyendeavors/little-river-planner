@@ -37,6 +37,9 @@ let began = false;
 const fail = why => { if (flag('--abort') && began && merging()) tryGit('merge', '--abort'); say({ took: null, failed: why }, 1); };
 
 if (tryGit('status', '--porcelain', '--untracked-files=no')) fail('the working tree has changes that are not committed: commit them first');
+// nor files git does not hold where the site is written from or to: tools/shared.cjs would build them into the site, or throw them away
+const loose = tryGit('status', '--porcelain', '--untracked-files=all', '--', 'js', 'css', 'fonts', 'icons', 'index.html', 'sw.js', 'manifest.webmanifest', 'tests/builds', 'tests/counts.json');
+if (loose) fail(`files git does not hold stand where the site is written: ${loose.split('\n').map(l => l.slice(3)).slice(0, 5).join(', ')}. Commit them or move them away first`);
 if (merging()) fail('a merge is already in progress here');
 // main, as it stands now
 const shallow = tryGit('rev-parse', '--is-shallow-repository') === 'true';
