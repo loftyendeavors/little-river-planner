@@ -7,6 +7,9 @@
  * the merge's own tables to it, so a build that writes a field named nowhere here fails a check, and has to say here how
  * that field is joined. It is not served to a browser: nothing here changes what the planner does.
  *
+ * In js/merge.js a place written with "*" is matched for any key (WHOLE: "plantings[].tasks.delay.*" is every job put off), and
+ * the two places under ALIAS below are held to the rules of the place they have the shape of.
+ *
  * An entry is   'place': 'types [rules]'.   A place is written as js/merge.js writes it: "plantings[].bedLayout" is the key
  * bedLayout of any record of the list plantings, and "*" stands for a key chosen by the data (a crop's key, a job's kind).
  *
@@ -25,7 +28,10 @@
  *   one         lines without ids the merge takes as one value, by its own default (the cloud's stands when both sides change
  *               them): said outright, so that no such list is left to the default by accident; never in WHOLE or NO_IDS
  *   stamp       "last changed at": the later stands, and nothing is said (merge.js STAMPS, by the key's name)
- *   quiet       who saved a file and with what: the cloud's, and nothing is said (merge.js QUIET)
+ *   quiet       who saved a file and with what, and what a device notes for itself about the plan it holds: the cloud's, and
+ *               nothing is said (merge.js QUIET)
+ *   together    a key of a record read together with others of the same record (a from and a to, a yield and its basis): the
+ *               group is one value (merge.js TOGETHER)
  *   place       where a planting is: one value with the others (merge.js PLACE)
  *   time        when a planting is: one value (merge.js TIME)
  *   recording   a job recorded on a planting is one unit with its history and the seed it drew (merge.js joinPlanting)
@@ -47,7 +53,7 @@
     'assumptions.crops.*.*.dtm': 'number',
     'assumptions.crops.*.*.yield': 'number',
     'assumptions.sell': 'map',
-    'assumptions.sell.*': 'object',
+    'assumptions.sell.*': 'object whole',
     'assumptions.sell.*.days': 'number',
     'assumptions.sell.*.house': 'bool',
     'assumptions.sell.*.keep': 'number',
@@ -75,7 +81,7 @@
     'assumptions.sell.*.turnover': 'number',
     'assumptions.sell.*.unit': 'text',
     'assumptions.sellV': 'map',
-    'assumptions.sellV.*': 'object',
+    'assumptions.sellV.*': 'object whole',
     'assumptions.sellV.*.price': 'number',
     'assumptions.sellV.*.unit': 'text',
     'assumptions.starts': 'map',
@@ -142,7 +148,7 @@
     'crops[].id': 'text',
     'crops[].inRow': 'number',
     'crops[].k': 'number',
-    'crops[].liveSow': 'object',
+    'crops[].liveSow': 'object whole',
     'crops[].liveSow.cells': 'number',
     'crops[].liveSow.how': 'text',
     'crops[].liveSow.perCell': 'number',
@@ -170,12 +176,12 @@
     'crops[].tower': 'bool',
     'crops[].towerDays': 'number',
     'crops[].tray': 'number',
-    'crops[].yBasis': 'text',
-    'crops[].yield': 'number',
+    'crops[].yBasis': 'text together',
+    'crops[].yield': 'number together',
     'crops[].yieldDays': 'number',
 
     'cropUnits': 'map',
-    'cropUnits.*': 'object',
+    'cropUnits.*': 'object whole',
     'cropUnits.*.base': 'text',
     'cropUnits.*.units': 'list',
     'cropUnits.*.units[]': 'list',
@@ -204,7 +210,7 @@
     'gardens[].frost': 'bool',
     'gardens[].frostOffset': 'number',
     'gardens[].gapMode': 'text',
-    'gardens[].growingEnvironment': 'object',
+    'gardens[].growingEnvironment': 'object whole',
     'gardens[].growingEnvironment.kind': 'text',
     'gardens[].growingEnvironment.minTempF': 'null|number',
     'gardens[].growingEnvironment.v': 'number',
@@ -239,7 +245,7 @@
     'gardens[].use': 'text',
 
     'liveTrayPlans': 'records',
-    'liveTrayPlans[]': 'object',
+    'liveTrayPlans[]': 'object whole',
     'liveTrayPlans[].customerId': 'text',
     'liveTrayPlans[].fall': 'text',
     'liveTrayPlans[].from': 'text',
@@ -263,28 +269,28 @@
     'liveTrayPlans[].year': 'number',
 
     'lrfNext': 'object',
-    'lrfNext.attic': 'text',
-    'lrfNext.backup': 'null|text',
+    'lrfNext.attic': 'text quiet',
+    'lrfNext.backup': 'null|text quiet',
     'lrfNext.crates': 'text',
     'lrfNext.facts': 'map',
     'lrfNext.facts.*': 'map',
-    'lrfNext.facts.*.*': 'object',
+    'lrfNext.facts.*.*': 'object whole',
     'lrfNext.facts.*.*.create': 'any',   // a built-in record the grower changed before the plan had one of its own: the whole record, as made
     'lrfNext.facts.*.*.name': 'text',
     'lrfNext.facts.*.*.set': 'any',
     'lrfNext.facts.*.*.was': 'any',
-    'lrfNext.from': 'text',
+    'lrfNext.from': 'text quiet',
     'lrfNext.groups': 'map',
     'lrfNext.groups.*': 'text',
-    'lrfNext.importedAt': 'text',
-    'lrfNext.lastExport': 'text',
-    'lrfNext.mapImage': 'object',
+    'lrfNext.importedAt': 'text quiet',
+    'lrfNext.lastExport': 'text quiet',
+    'lrfNext.mapImage': 'object quiet',
     'lrfNext.mapImage.mime': 'text',
     'lrfNext.mapImage.sha256': 'text',
-    'lrfNext.passedOver': 'text',
+    'lrfNext.passedOver': 'text quiet',
     'lrfNext.sample': 'bool|text',
-    'lrfNext.source': 'text',
-    'lrfNext.startedAt': 'text',
+    'lrfNext.source': 'text quiet',
+    'lrfNext.startedAt': 'text quiet',
     'lrfNext.supplies': 'object',
     'lrfNext.supplies.cuft': 'map',
     'lrfNext.supplies.cuft.*': 'number',
@@ -297,7 +303,7 @@
     'lrfNext.trayStart': 'text',
     'lrfNext.waiting': 'records',
     'lrfNext.waiting[]': 'object',   // a copy of a planting: every other key is read as plantings[] (ALIAS)
-    'lrfNext.waiting[].wait': 'object',
+    'lrfNext.waiting[].wait': 'object whole',
     'lrfNext.waiting[].wait.beds': 'list',
     'lrfNext.waiting[].wait.beds[]': 'text',
     'lrfNext.waiting[].wait.every': 'number',
@@ -350,13 +356,13 @@
     'nursery.spaces[].benchLayout.rotated': 'bool',
     'nursery.spaces[].benchLayout.x': 'number',
     'nursery.spaces[].benchLayout.y': 'number',
-    'nursery.spaces[].from': 'text',
+    'nursery.spaces[].from': 'text together',
     'nursery.spaces[].holds': 'number',
     'nursery.spaces[].id': 'text',
     'nursery.spaces[].kind': 'text',
     'nursery.spaces[].l': 'number',
     'nursery.spaces[].name': 'text',
-    'nursery.spaces[].to': 'text',
+    'nursery.spaces[].to': 'text together',
     'nursery.spaces[].w': 'number',
 
     'planningPreferences': 'object',
@@ -430,7 +436,7 @@
     'plantings[].startFt': 'number place',
     'plantings[].tasks': 'object',
     'plantings[].tasks.delay': 'map',
-    'plantings[].tasks.delay.*': 'object',
+    'plantings[].tasks.delay.*': 'object whole',
     'plantings[].tasks.delay.*.from': 'text',
     'plantings[].tasks.delay.*.own': 'text',
     'plantings[].tasks.delay.*.to': 'text',
@@ -439,7 +445,7 @@
     'plantings[].tasks.skip': 'map',
     'plantings[].tasks.skip.*': 'text',
     'plantings[].timingMode': 'text',
-    'plantings[].towerCycle': 'object',
+    'plantings[].towerCycle': 'object whole',
     'plantings[].towerCycle.days': 'number',
     'plantings[].towerCycle.replantSameDay': 'bool',
     'plantings[].towerCycle.v': 'number',
@@ -475,8 +481,8 @@
     'plantings[].workflow.seedUse[].source': 'text',
     'plantings[].workflow.seedUse[].unit': 'text',
     'plantings[].workflow.seedUse[].untracked': 'bool',
-    'plantings[].yield': 'number',
-    'plantings[].yieldBasis': 'text',
+    'plantings[].yield': 'number together',
+    'plantings[].yieldBasis': 'text together',
 
     'salesMix': 'map',
     'salesMix.*': 'any',
@@ -508,7 +514,7 @@
     'seedInventory.lots[].createdAt': 'text',
     'seedInventory.lots[].deleted': 'bool',
     'seedInventory.lots[].deletedAt': 'text',
-    'seedInventory.lots[].germination': 'object',
+    'seedInventory.lots[].germination': 'object whole',
     'seedInventory.lots[].germination.date': 'text',
     'seedInventory.lots[].germination.percent': 'null|number',
     'seedInventory.lots[].id': 'text',
@@ -624,7 +630,7 @@
     'varieties[].depth': 'text',
     'varieties[].description': 'text',
     'varieties[].dtm': 'number',
-    'varieties[].environmentDefaults': 'object',
+    'varieties[].environmentDefaults': 'object whole',
     'varieties[].environmentDefaults.field': 'object',
     'varieties[].environmentDefaults.field.gh': 'number',
     'varieties[].environmentDefaults.greenhouse': 'object',
@@ -638,7 +644,7 @@
     'varieties[].maturitySource': 'text',
     'varieties[].name': 'text',
     'varieties[].notes': 'text',
-    'varieties[].photo': 'object',
+    'varieties[].photo': 'object whole',
     'varieties[].photo.credit': 'text',
     'varieties[].photo.importedAt': 'text',
     'varieties[].photo.mime': 'text',
@@ -675,7 +681,7 @@
    */
   const ALIAS = { 'lrfNextKeep.keep': 'lrfNext', 'lrfNext.waiting[]': 'plantings[]' };
   const TYPES = ['text', 'number', 'bool', 'null', 'object', 'map', 'records', 'lines', 'list', 'any'];
-  const RULES = ['whole', 'kept', 'one', 'stamp', 'quiet', 'place', 'time', 'recording', 'rule'];
+  const RULES = ['whole', 'kept', 'one', 'stamp', 'quiet', 'together', 'place', 'time', 'recording', 'rule'];
   const CONTAINERS = ['object', 'map', 'records', 'lines', 'list'];
 
   /** An entry read: { types: [...], rules: [...] }, or null when there is none for the place. */

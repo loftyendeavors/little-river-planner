@@ -20,7 +20,7 @@ NODE = [
   ('a record the cloud added is dropped', "      else if (!S.has(rec.id)) out.push(rec);                                    // the cloud added it", "      else if (!S.has(rec.id)) { /* dropped */ }", 'a record added on each side'),
   ('a bed\'s place on the map is joined half from each side', "const WHOLE = new Set(['beds[].px', ", "const WHOLE = new Set([", 'a thing taken whole'),
   ('of two stamps the earlier is kept', "return m > t ? m : t;", "return m > t ? t : m;", 'a stamp: the later one'),
-  ('who saved a file is reported as a box changed on both sides', "const QUIET = new Set(['lrfNextKeep.device', 'lrfNextKeep.v']);", "const QUIET = new Set([]);", 'a plan as a file holds it'),
+  ('who saved a file is reported as a box changed on both sides', "    if (alike(pat).some(p => QUIET.has(p))) return t;\n", "", 'a plan as a file holds it'),
   ('a key named __proto__ is lost', "if (key === '__proto__') Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true }); else out[key] = value;", "out[key] = value;", 'a key of any name'),
   # a planting, its place and its day
   ('a planting\'s place is joined box by box', "const PLACE = ['bedId', 'ft', 'startFt', 'bedLayout', 'seat'], TIME", "const PLACE = [], TIME", 'a planting\'s place is one value'),
@@ -84,6 +84,22 @@ NODE = [
   ('a joined plan that fails a test is handed back all the same', "      return why ? { ok: false, why, report } : { ok: true, plan, report };", "      return { ok: true, plan, report };", 'fails one of the five tests is not handed back'),
   ('a list without ids goes unseen', "        if (objects.length && !idsOf(node)) {", "        if (false) {", 'a list added without ids'),
   ('a side that changed nothing: the plan is built again all the same', "      if (plan === mine || plan === theirs) return { ok: true, plan, report };   // one side changed nothing: the other's plan, as it is\n", "      if (plan === mine || plan === theirs) return { ok: true, plan: JSON.parse(JSON.stringify(plan)), report };\n", 'a side that changed nothing changes nothing: the other side'),
+  # things read together (S1c)
+  ('a place written with * is matched only by a key named *', "(x === '*' ? !mine[i].endsWith('[]') : x === mine[i])", "(x === mine[i])", 'a job put off is taken whole'),
+  ('a key that holds a dot is read as two keys', "join(ctx, pat ? pat + '.' + esc(key) : esc(key), path.concat(key), s[key], m[key], t[key]);", "join(ctx, pat ? pat + '.' + key : key, path.concat(key), s[key], m[key], t[key]);", 'a crop\'s selling line is taken whole'),
+  ('what a file keeps of the planner\'s own record is not held to that record\'s rules', "{ p = 'lrfNext' + p.slice('lrfNextKeep.keep'.length); out.push(p); }", "{ p = 'lrfNext' + p.slice('lrfNextKeep.keep'.length); }", 'what the planner noted of an edit is taken whole'),
+  ('a demand plan is joined row by row', ", 'liveTrayPlans[]']);", "]);", 'a live-tray demand plan is taken whole'),
+  ('a nursery space\'s from and to are joined apart', "TOGETHER[pat] ? together(ctx, pat, path, s || {}, m, t, {}) : undefined);", "undefined);", 'keys of one record that are read together'),
+  ('keys read together, changed on both sides: nothing is said', "      if (!mt && !ms && !ts) said(ctx, { kind: 'same-box', path: path.concat(keys.join('+')),", "      if (false) said(ctx, { kind: 'same-box', path: path.concat(keys.join('+')),", 'keys of one record that are read together'),
+  ('keys read together, changed on both sides: this device\'s stand', "      const from = mt || ms ? t : ts ? m : t;", "      const from = mt || ms ? t : m;", 'keys of one record that are read together'),
+  ('a planting\'s yield is joined apart from its basis', "    together(ctx, pat, path, s0, m, t, special);\n", "", 'a yield is one value with its basis'),
+  ('a device\'s own note of when it loaded the plan is reported', "'lrfNext.importedAt', ", "", 'what a device notes for itself'),
+  ('the batches of a demand plan are left as joined', "settleStock(ctx, start, mine, theirs, settleTrays(ctx, start, mine, theirs, plan))", "settleStock(ctx, start, mine, theirs, plan)", 'the weekly batches follow the demand plan'),
+  ('a batch sown here goes with the demand plan that did not stand', "      else if (Object.keys(doneOf(p)).length) { out.push(p); here.add(p.id); }", "      else if (false) { out.push(p); }", 'the weekly batches follow the demand plan'),
+  ('a batch this device took out stays out though the cloud\'s plan stands', "if (id != null && !here.has(t.id)) { out.push(t); tell(id, 'back', t.id); }", "if (false) { out.push(t); }", 'the weekly batches follow the demand plan'),
+  ('a batch this device changed keeps its change though the cloud\'s plan stands', "out.push(same(work(p), work(t)) ? t : p);", "out.push(p);", 'the weekly batches follow the demand plan'),
+  ('a joined plan that is the cloud\'s is not known as the cloud\'s', "    const alike = same(bare(r.plan), bare(theirs));", "    const alike = false;", 'three plans as files hold them'),
+  ('who saved a file makes a joined plan differ from the cloud\'s', "    if (isObj(plan.lrfNextKeep)) out.lrfNextKeep = { keep: plan.lrfNextKeep.keep };\n", "", 'three plans as files hold them'),
 ]
 if mode == 'list': print(json.dumps({'node': len(NODE)})); sys.exit(0)
 

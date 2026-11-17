@@ -82,9 +82,23 @@
   // record of the list plantings.
   /** Taken whole from one side, never half from each. */
   const WHOLE = new Set(['beds[].px', 'beds[].potLayout', 'gardens[].bedOrder', 'gardens[].mapLayout', 'map.imageFile', 'nursery.spaces[].benchLayout',
-    'plantings[].bedLayout', 'plantings[].growingDefaults', 'plantings[].liveTray', 'varieties[].supplierPacks', 'varieties[].prices', 'varieties[].webImport']);
-  /** Who saved a file and with what: the cloud's, and nothing is said. */
-  const QUIET = new Set(['lrfNextKeep.device', 'lrfNextKeep.v']);
+    'plantings[].bedLayout', 'plantings[].growingDefaults', 'plantings[].liveTray', 'varieties[].supplierPacks', 'varieties[].prices', 'varieties[].webImport',
+    // a thing written in one act, or whose parts are read together: a job put off (from, to), what the planner noted of an edit (set, was),
+    // a photo's file and its type, a crop's selling line (its price, yield and weight are by its unit), a demand plan (its editor checks it whole)
+    'plantings[].tasks.delay.*', 'plantings[].towerCycle', 'lrfNext.facts.*.*', 'lrfNext.waiting[].wait', 'varieties[].photo', 'varieties[].environmentDefaults',
+    'assumptions.sell.*', 'assumptions.sellV.*', 'cropUnits.*', 'crops[].liveSow', 'gardens[].growingEnvironment', 'seedInventory.lots[].germination', 'liveTrayPlans[]']);
+  /**
+   * Who saved a file and with what, and what a device notes for itself about the plan it holds (when it was loaded, from which
+   * file, whether it has the farm photo): the cloud's, and nothing is said. A device that takes a joined plan in keeps its own.
+   */
+  const QUIET = new Set(['lrfNextKeep.device', 'lrfNextKeep.v',
+    'lrfNext.attic', 'lrfNext.backup', 'lrfNext.from', 'lrfNext.importedAt', 'lrfNext.lastExport', 'lrfNext.mapImage', 'lrfNext.passedOver', 'lrfNext.source', 'lrfNext.startedAt']);
+  /**
+   * Keys of one record that are read together, joined as one value: changed on one side, that side's, all of them; changed on
+   * both to different values, the cloud's, and this device's are reported once. (A planting's place and its day are two more
+   * such groups, with rules of their own below.)
+   */
+  const TOGETHER = { 'nursery.spaces[]': [['from', 'to']], 'crops[]': [['yield', 'yBasis']], 'plantings[]': [['yield', 'yieldBasis']] };
   const STAMPS = new Set(['updatedAt', 'savedAt']);
   /**
    * Lists that hold records with no id and are still joined line by line, and what answers for each. Any other list whose
@@ -100,6 +114,39 @@
 
   // ───────────────────────────── by shape ─────────────────────────────
   const said = (ctx, item) => { ctx.report.items.push(item); };
+  /** A key as it stands in a pattern: one chosen by the data may hold a dot, a bracket or a star, and is never read as two keys or as a list. */
+  const esc = key => String(key).replace(/[\\.*[\]]/g, '\\$&');
+  /** A pattern cut at its dots: "plantings[].tasks.delay.sow" is four parts. */
+  function parts(pat) {
+    const out = [];
+    let part = '';
+    for (let i = 0; i < pat.length; i++) { const c = pat[i]; if (c === '\\') { part += c + (pat[i + 1] || ''); i++; } else if (c === '.') { out.push(part); part = ''; } else part += c; }
+    out.push(part);
+    return out;
+  }
+  const STARRED = [...WHOLE].filter(p => p.includes('*')).map(p => p.split('.'));
+  /** What a file keeps of the planner's own record is that record, and a planting waiting to be placed is a planting: each is held to the other's rules. */
+  const alike = pat => { const out = [pat]; let p = pat; if (p === 'lrfNextKeep.keep' || p.startsWith('lrfNextKeep.keep.')) { p = 'lrfNext' + p.slice('lrfNextKeep.keep'.length); out.push(p); } if (p.startsWith('lrfNext.waiting[].')) out.push('plantings[].' + p.slice('lrfNext.waiting[].'.length)); return out; };
+  /** Is the thing at this place taken whole? By its place as written, or by one written with * for a key the data chose. */
+  function wholeAt(pat) {
+    for (const p of alike(pat)) {
+      if (WHOLE.has(p)) return true;
+      if (!STARRED.length) continue;
+      const mine = parts(p);
+      if (STARRED.some(w => w.length === mine.length && w.every((x, i) => (x === '*' ? !mine[i].endsWith('[]') : x === mine[i])))) return true;
+    }
+    return false;
+  }
+  /** The keys of a record that are read together, joined as one value each group: into `special`, for joinObject. */
+  function together(ctx, pat, path, s, m, t, special) {
+    for (const keys of TOGETHER[pat] || []) {
+      const at = o => keys.map(k => o[k]), ms = same(at(m), at(s)), ts = same(at(t), at(s)), mt = same(at(m), at(t));
+      const from = mt || ms ? t : ts ? m : t;
+      if (!mt && !ms && !ts) said(ctx, { kind: 'same-box', path: path.concat(keys.join('+')), mine: Object.fromEntries(keys.filter(k => m[k] !== undefined).map(k => [k, m[k]])), theirs: Object.fromEntries(keys.filter(k => t[k] !== undefined).map(k => [k, t[k]])) });
+      for (const key of keys) special[key] = from[key];
+    }
+    return special;
+  }
   function join(ctx, pat, path, s, m, t) {
     if (same(m, t) || same(s, m)) return t;
     if (same(s, t)) return m;
@@ -108,9 +155,9 @@
     if (rule) return rule(ctx, pat, path, s, m, t);
     const key = path[path.length - 1];
     if (STAMPS.has(key) && typeof m === 'string' && typeof t === 'string') return m > t ? m : t;
-    if (QUIET.has(pat)) return t;
-    if (!WHOLE.has(pat)) {
-      if (isObj(m) && isObj(t) && (s === undefined || s === null || isObj(s))) return joinObject(ctx, pat, path, s || {}, m, t);
+    if (alike(pat).some(p => QUIET.has(p))) return t;
+    if (!wholeAt(pat)) {
+      if (isObj(m) && isObj(t) && (s === undefined || s === null || isObj(s))) return joinObject(ctx, pat, path, s || {}, m, t, TOGETHER[pat] ? together(ctx, pat, path, s || {}, m, t, {}) : undefined);
       if (recordLists(s, m, t) && Array.isArray(m) && Array.isArray(t)) return joinRecords(ctx, pat, path, s || [], m, t);
     }
     said(ctx, { kind: 'same-box', path, mine: m, theirs: t });
@@ -119,7 +166,7 @@
   function joinObject(ctx, pat, path, s, m, t, special) {
     const out = {};
     for (const key of [...Object.keys(t), ...Object.keys(m).filter(k => !Object.prototype.hasOwnProperty.call(t, k))]) {
-      const value = special && Object.prototype.hasOwnProperty.call(special, key) ? special[key] : join(ctx, pat ? pat + '.' + key : key, path.concat(key), s[key], m[key], t[key]);
+      const value = special && Object.prototype.hasOwnProperty.call(special, key) ? special[key] : join(ctx, pat ? pat + '.' + esc(key) : esc(key), path.concat(key), s[key], m[key], t[key]);
       if (value !== undefined) { if (key === '__proto__') Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true }); else out[key] = value; }
     }
     return out;
@@ -259,6 +306,7 @@
       else said(ctx, { kind: 'same-box', path: path.concat(what), mine: shown(m), theirs: shown(t) });
       for (const key of keys) special[key] = from[key];
     }
+    together(ctx, pat, path, s0, m, t, special);
     return joinObject(ctx, pat, path, s0, m, t, special);
   }
 
@@ -437,6 +485,34 @@
     return out;
   }
 
+  /**
+   * The weekly batches of a live-tray demand plan follow the demand plan that stands. Where both devices changed one demand
+   * plan the cloud's stands whole (WHOLE), and so do the cloud's batches of it: each is as the cloud holds it, one this device
+   * made for its own version goes, and one this device took out comes back. A batch with work recorded on it here that the
+   * cloud does not hold stays as joined. Without this, two devices that each changed the trays wanted would leave both sets.
+   */
+  function settleTrays(ctx, start, mine, theirs, plan) {
+    const ids = new Set(ctx.report.items.filter(x => x.kind === 'same-box' && Array.isArray(x.path) && x.path.length === 2 && x.path[0] === 'liveTrayPlans').map(x => String(x.path[1]).slice(1)));
+    if (!ids.size || !Array.isArray(plan.plantings)) return plan;
+    const planOf = p => (isObj(p) && isObj(p.liveTray) && ids.has(String(p.liveTray.planId)) ? String(p.liveTray.planId) : null);
+    const T = new Map(listOf(theirs, 'plantings').map(p => [p.id, p])), work = p => [doneOf(p), linesOf(p, 'history'), linesOf(p, 'seedUse')];
+    const told = new Map(), tell = (id, key, pid) => { if (!told.has(id)) told.set(id, { kind: 'tray-batches', path: ['liveTrayPlans', '#' + id], id, dropped: [], back: [] }); told.get(id)[key].push(pid); };
+    const out = [], here = new Set();
+    for (const p of plan.plantings) {
+      const id = planOf(p), t = id == null ? null : T.get(p.id);
+      if (id == null) { out.push(p); continue; }
+      if (t) { out.push(same(work(p), work(t)) ? t : p); here.add(p.id); }
+      else if (Object.keys(doneOf(p)).length) { out.push(p); here.add(p.id); }   // work recorded on a batch the cloud's version does not have: it stays
+      else tell(id, 'dropped', p.id);
+    }
+    for (const t of listOf(theirs, 'plantings')) { const id = planOf(t); if (id != null && !here.has(t.id)) { out.push(t); tell(id, 'back', t.id); } }
+    if (!told.size && out.every((p, i) => p === plan.plantings[i])) return plan;
+    const gone = new Set([...told.values()].flatMap(x => x.dropped));
+    ctx.report.items = ctx.report.items.filter(x => !(x.kind === 'kept' && Array.isArray(x.path) && x.path[0] === 'plantings' && gone.has(x.id)));   // said once, by the batches' own line
+    for (const item of told.values()) said(ctx, item);
+    return { ...plan, plantings: out };
+  }
+
   // ───────────────────────────── the five tests ─────────────────────────────
   /** Every list of records in a plan, with the same list on the other plans beside it: fn(pattern, path, list, ...others). */
   function eachList(pat, path, node, others, fn) {
@@ -452,12 +528,12 @@
   function unkeyed(plan) {
     const out = new Map();
     (function walk(pat, node) {
-      if (WHOLE.has(pat)) return;   // taken whole: what is inside it is never joined
+      if (wholeAt(pat)) return;   // taken whole: what is inside it is never joined
       if (Array.isArray(node)) {
         const objects = node.filter(isObj);
         if (objects.length && !idsOf(node)) { const why = objects.every(x => usable(x.id)) && objects.length === node.length ? 'repeated' : 'no-id', key = pat + '|' + why; out.set(key, { pattern: pat, why, n: ((out.get(key) || {}).n || 0) + 1 }); }
         for (const x of node) walk(pat + '[]', x);
-      } else if (isObj(node)) for (const key of Object.keys(node)) walk(pat ? pat + '.' + key : key, node[key]);
+      } else if (isObj(node)) for (const key of Object.keys(node)) walk(pat ? pat + '.' + esc(key) : esc(key), node[key]);
     })('', plan);
     return [...out.values()];
   }
@@ -490,13 +566,14 @@
     lists(plan, (pat, path, list, a, b) => { const twice = repeats(list); if (twice != null && !why && !(a && repeats(a) != null) && !(b && repeats(b) != null)) why = `An id is there twice in the joined plan (${path.join('.') || 'the plan'}: ${twice}).`; });
     if (why) return why;
     // 3
+    const batches = new Set(items.filter(x => x.kind === 'tray-batches').flatMap(x => x.dropped || []).map(String));
     const excused = new Set(items.filter(x => x.kind === 'placed-and-waiting').map(x => String(x.id))), droppedLines = new Set(((report && report.dropped) || []).map(String));
     const whole = items.filter(x => x.kind === 'same-box' && Array.isArray(x.path)).map(x => x.path.join('\u0000') + '\u0000'), under = path => { const at = path.join('\u0000') + '\u0000'; return whole.some(w => at.startsWith(w)); };
     for (const side of [mine, theirs]) {
       eachList('', [], side, [start, plan], (pat, path, list, [before, after]) => {
         if (why) return;
         const was = before ? new Map(before.map(x => [x.id, x])) : new Map(), now = after ? new Set(after.map(x => x.id)) : null;
-        for (const rec of list) if ((!was.has(rec.id) || !same(was.get(rec.id), rec)) && !(now && now.has(rec.id)) && !(excused.has(String(rec.id)) && /waiting$/.test(pat)) && !(pat === 'seedInventory.adjustments' && droppedLines.has(String(rec.id))) && !under(path)) { why = `A record one side added or changed is not in the joined plan (${path.concat('#' + rec.id).join('.')}).`; return; }
+        for (const rec of list) if ((!was.has(rec.id) || !same(was.get(rec.id), rec)) && !(now && now.has(rec.id)) && !(excused.has(String(rec.id)) && /waiting$/.test(pat)) && !(pat === 'seedInventory.adjustments' && droppedLines.has(String(rec.id))) && !(pat === 'plantings' && batches.has(String(rec.id))) && !under(path)) { why = `A record one side added or changed is not in the joined plan (${path.concat('#' + rec.id).join('.')}).`; return; }
       });
       if (why) return why;
     }
@@ -570,6 +647,8 @@
    *   { kind: 'move-not-applied', id, what, whose }        work was recorded on a planting the other side moved: the move is not applied
    *   { kind: 'seed-short', id, short, loose }             two devices drew more from a lot than it held
    *   { kind: 'placed-and-waiting', id }                   placed on one side, changed while waiting on the other: placed
+   *   { kind: 'tray-batches', id, dropped, back }          both sides changed one live-tray demand plan: the cloud's stands, and its weekly
+   *                                                        batches with it. `dropped`: batches this device had made; `back`: ones it had taken out
    *   { kind: 'sowing-of-removed-planting', batch, whose, planting }   a side sowed a planting and then took it out, and the other side kept
    *                                                        it (`kept`): that sowing's seed stays used. It may be the very sowing the other
    *                                                        side recorded, which then drew seed twice: that is for the grower to say
@@ -586,7 +665,7 @@
       const ctx = { report, rules: RULES, order, sowings: new Map() };
       let plan = join(ctx, '', [], start, mine, theirs);
       if (plan === mine || plan === theirs) return { ok: true, plan, report };   // one side changed nothing: the other's plan, as it is
-      plan = settleWaiting(ctx, start, mine, theirs, settleStock(ctx, start, mine, theirs, plan));
+      plan = settleWaiting(ctx, start, mine, theirs, settleStock(ctx, start, mine, theirs, settleTrays(ctx, start, mine, theirs, plan)));
       const why = verify(start, mine, theirs, plan, report);
       return why ? { ok: false, why, report } : { ok: true, plan, report };
     } catch (error) {
@@ -594,7 +673,51 @@
     }
   }
 
-  const api = { merge, verify, unkeyed, same, WHOLE, NO_IDS };
+  // ───────────────────────────── for whoever takes a joined plan in ─────────────────────────────
+  /** A plan without what a device notes for itself and without who saved it: two plans alike in this are the same plan to a grower. */
+  function bare(plan) {
+    if (!isObj(plan)) return plan;
+    const out = { ...plan };
+    if (isObj(plan.lrfNext)) { out.lrfNext = { ...plan.lrfNext }; for (const pat of QUIET) if (pat.startsWith('lrfNext.')) delete out.lrfNext[pat.slice('lrfNext.'.length)]; }
+    if (isObj(plan.lrfNextKeep)) out.lrfNextKeep = { keep: plan.lrfNextKeep.keep };
+    return out;
+  }
+  /**
+   * What one plan holds that another did not, counted in a grower's kinds: for the line that says what was taken in.
+   * { added, removed, changed, recorded: { sow: n, … }, lists: ['seedInventory', …] } — plantings added, taken out, changed
+   * other than by work recorded; jobs recorded or taken back, by kind; and the other collections that differ.
+   */
+  function tally(before, after) {
+    const B = new Map(listOf(before, 'plantings').map(p => [p.id, p])), seen = new Set(), out = { added: 0, removed: 0, changed: 0, recorded: {}, lists: [] };
+    for (const p of listOf(after, 'plantings')) {
+      seen.add(p.id);
+      const b = B.get(p.id);
+      let jobs = 0;
+      for (const kind of new Set([...Object.keys(doneOf(p)), ...Object.keys(doneOf(b))])) if (!same(doneOf(p)[kind], doneOf(b)[kind])) { out.recorded[kind] = (out.recorded[kind] || 0) + 1; jobs++; }
+      if (!b) out.added++; else if (!jobs && !same(b, p)) out.changed++;
+    }
+    for (const id of B.keys()) if (!seen.has(id)) out.removed++;
+    const a = bare(after), b = bare(before), own = plan => (isObj(plan.lrfNextKeep) && isObj(plan.lrfNextKeep.keep) ? plan.lrfNextKeep.keep : plan.lrfNext) || {};
+    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) if (!['plantings', 'lrfNext', 'lrfNextKeep'].includes(key) && !same(a[key], b[key])) out.lists.push(key);
+    for (const key of new Set([...Object.keys(own(a)), ...Object.keys(own(b))])) if (!same(own(a)[key], own(b)[key])) out.lists.push('own.' + key);
+    out.any = !!(out.added || out.removed || out.changed || Object.keys(out.recorded).length || out.lists.length);
+    return out;
+  }
+  /**
+   * Three plans as files hold them, joined: { ok: true, plan, text, same, taken, report } or { ok: false, why, report }.
+   * `same`: the joined plan is the cloud's (this device had nothing of its own to add), and `text` is then the cloud's very text.
+   * `taken`: what the joined plan holds that the plan here did not (tally).
+   */
+  function joinTexts(startText, mineText, theirsText, options) {
+    let start, mine, theirs;
+    try { start = JSON.parse(startText); mine = JSON.parse(mineText); theirs = JSON.parse(theirsText); } catch (_) { return { ok: false, why: 'One of the plans could not be read.', report: { items: [], dropped: [] } }; }
+    const r = merge(start, mine, theirs, options);
+    if (!r.ok) return r;
+    const alike = same(bare(r.plan), bare(theirs));
+    return { ok: true, plan: alike ? theirs : r.plan, text: alike ? theirsText : JSON.stringify(r.plan), same: alike, taken: tally(mine, r.plan), report: r.report };
+  }
+
+  const api = { merge, verify, unkeyed, same, tally, bare, joinTexts, WHOLE, NO_IDS, TOGETHER };
   root.LRFMerge = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof self !== 'undefined' ? self : globalThis);
