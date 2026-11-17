@@ -1,5 +1,5 @@
 """Deliberate faults for the files the merge writes (tests/shared_test.cjs: tools/shared.cjs, tools/take_main.cjs, the counts'
-join in tests/counts.py) and for the hooks (tests/hooks_test.cjs): each is put into a copy of the repository, and a named line
+join in tests/counts.py), for the hooks (tests/hooks_test.cjs) and for the job that takes main in (tests/take_main_job_test.cjs): each is put into a copy of the repository, and a named line
 of the check must then fail where it passed before.
 usage: python3 -I mutate_shared.py <the repository> <scratch> <fontsource dir> [node | list] [words…]     env FROM=, TO= to run a part
 """
@@ -7,7 +7,8 @@ import json, os, shutil, subprocess, sys
 repo, scratch, fonts = [os.path.abspath(x) for x in sys.argv[1:4]]
 mode = sys.argv[4] if len(sys.argv) > 4 else 'node'; words = [w.lower() for w in sys.argv[5:]]
 SH, TM, CP, CH, CSS = 'tools/shared.cjs', 'tools/take_main.cjs', 'tests/counts.py', 'js/changes.js', 'css/app.css'
-S, H = 'shared', 'hooks'
+S, H, J = 'shared', 'hooks', 'job'
+WF = '.github/workflows/take-main.yml'
 
 # (what the fault is, which check, the file, the text as it is, the text as the fault has it, words of the line that must fail)
 FAULTS = [
@@ -29,6 +30,12 @@ FAULTS = [
   ('the counts are joined with tests/counts.py in conflict', S, TM, "const real = conflicted().filter(f => f !== 'tests/counts.json');", "const real = conflicted().filter(f => f !== 'tests/counts.json' && f !== 'tests/counts.py');", 'tests/counts.py itself conflicts'),
   ('--abort leaves the merge open', S, TM, "if (flag('--abort')) { tryGit('merge', '--abort'); say(", "if (flag('--abort')) { say(", 'a real conflict is named'),
   ('a file in real conflict is taken from main without a word', S, TM, "for (const f of conflicted().filter(f => WRITTEN.includes(f))) {", "for (const f of conflicted()) {", 'a real conflict is named'),
+  ('the job that merges is given the key', J, WF, "        env:\n          PRS: ${{ needs.list.outputs.prs }}\n        run: |\n          git config", "        env:\n          GH_TOKEN: ${{ github.token }}\n          PRS: ${{ needs.list.outputs.prs }}\n        run: |\n          git config", '"take" may only read'),
+  ('the merging job\'s checkout leaves its key behind', J, WF, "          persist-credentials: false   # no key", "          persist-credentials: true   # no key", '"take" may only read'),
+  ('the job that merges runs the branch\'s own copy of the tool', J, WF, 'out=$(node "$TOOL" . "$FONTS"', 'out=$(node tools/take_main.cjs . "$FONTS"', 'runs the tool kept from main'),
+  ('the job that pushes runs a script of the repository', J, WF, '          IN="$RUNNER_TEMP/in";', '          node tools/shared.cjs . . || true\n          IN="$RUNNER_TEMP/in";', '"send" runs nothing'),
+  ('the job that pushes takes the branch from what was handed on', J, WF, "branch=$(printf '%s' \"$pr\" | jq -r .branch)", "branch=$(jq -r .branch \"$IN/outcomes.jsonl\" | head -1)", 'takes the pull request, its branch'),
+  ('the job that pushes pushes over whatever the branch holds now', J, WF, '--force-with-lease="refs/heads/$branch:$at" ', '--force ', 'takes the pull request, its branch'),
   ('a hook a check reads is no longer written', H, CH, "h('span.wc-new', { dataset: { hook: 'changes-new' } }, 'New')", "h('span.wc-new', 'New')", 'every hook a check reads'),
   ('the style sheet styles a thing by its hook', H, CSS, '.dialog.wc {', '[data-hook="changes-new"] { color: inherit; }\n.dialog.wc {', 'no style sheet rule reads a hook'),
   ('a script of the planner finds a thing by its hook', H, CH, "  const $ = id => document.getElementById(id);\n", "  const $ = id => document.getElementById(id);\n  const fresh = () => document.querySelector('[data-hook=\"changes-new\"]');\n", 'no script of the planner finds'),
@@ -45,7 +52,7 @@ def failed_lines(out):
     except Exception: return None
     return [x if isinstance(x, str) else x.get('name', '') for x in d.get('failed') or []]
 def run(work, which):
-    cmd = ['node', os.path.join(work, 'tests', 'shared_test.cjs'), work, fonts] if which == S else ['node', os.path.join(work, 'tests', 'hooks_test.cjs'), work]
+    cmd = ['node', os.path.join(work, 'tests', 'shared_test.cjs'), work, fonts] if which == S else ['node', os.path.join(work, 'tests', 'hooks_test.cjs' if which == H else 'take_main_job_test.cjs'), work]
     try: out = subprocess.run(cmd, capture_output=True, text=True, timeout=300).stdout
     except subprocess.TimeoutExpired: out = ''
     return failed_lines(out)

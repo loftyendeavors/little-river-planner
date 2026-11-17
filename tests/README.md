@@ -31,6 +31,7 @@ Everything here runs on a made-up farm. No grower's plan is needed to check a bu
 | `*_check.py` | Checks of the page in a real browser |
 | `mutate*.py` | The faults themselves |
 | `shared_test.cjs` | The files the merge writes (`tools/shared.cjs`) and the taking of main into a branch (`tools/take_main.cjs`), on a copy of the repository with a main of its own ("Two builds side by side") |
+| `take_main_job_test.cjs` | The job that takes main in, read as text: no code of a branch runs where a key can write |
 | `hooks_test.cjs` | Every hook a check reads is written by the planner, and nothing styles one ("Hooks") |
 | `plan_shape.cjs`, `shape_test.cjs`, `shape_check.py` | The plan's shape written down, and the two checks that hold the farm, the planner and the merge to it ("The plan's shape") |
 | `farm/` | The made-up farm: how it is made, and the result |
@@ -179,7 +180,9 @@ those, then `node tools/shared.cjs . <fonts> origin/main`, `git add -A` and comm
 
 **On GitHub it happens by itself.** When main moves, `.github/workflows/take-main.yml` takes it into every open pull request
 from this repository that it can take in without a hand, pushes, starts the checks for the branch and says so on the pull request.
-Where the code conflicts it pushes nothing and names the files there. So a chat that is still building may find its branch
+Where the code conflicts it pushes nothing and names the files there. The merge runs a branch's own helpers, so it runs in a job
+with no key; the job that pushes runs nothing of any branch, and pushes only onto the commit the branch was read at
+(`take_main_job_test.cjs` holds this). So a chat that is still building may find its branch
 moved: **fetch it before each push**, and if the push is refused, `node tools/take_main.cjs . <fonts> --from origin/<branch>
 --commit` takes the branch as GitHub holds it in, settled the same way.
 
