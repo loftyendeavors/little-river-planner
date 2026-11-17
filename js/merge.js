@@ -196,7 +196,7 @@
       else if (!(carriesOn(ks, km) && begins(km, kt)) && !sameJob(jm, js)) said(ctx, { kind: 'recorded-twice', path, id, job: kind, mine: jm ? jm.date : null, theirs: jt ? jt.date : null });
       // the same story on both sides (a recording sent, its answer lost, the page then carried on) is one that both have seen
       const alike = sameJob(jm, jt) && same(km, kt);
-      side.set(kind, who); jobs.set(kind, { js, jm, jt, mineMoved: !mineSame && !alike, theirsMoved: !theirsSame && !alike });
+      side.set(kind, who); jobs.set(kind, { js, jm, jt, alike, mineMoved: !mineSame && !alike, theirsMoved: !theirsSame && !alike });
     }
     // two jobs that stand from different sides, in an order the planner refuses on one device: the cloud's stands
     // until nothing moves: a job given back to the cloud's side can then be out of order with another
@@ -241,8 +241,13 @@
     // other side made is reported, not applied. Where it was recorded on neither side, or on both (two different jobs), a
     // value only one side changed is that side's, and one both changed is the cloud's, reported.
     const recorder = theirsRecorded && !mineStands ? 't' : mineStands && !theirsRecorded ? 'm' : '';
+    // A recording both sides hold that pushed the planting out moved its day on both: that day, and not the start's, is what each
+    // side's day is measured from. (A sowing day set by hand goes when a recording pushes the planting, js/week.js.)
+    let pushedTo = null;
+    for (const kind of kinds) { const j = jobs.get(kind), f = j.alike && j.jt && j.jt.line && isObj(j.jt.line.follow) ? j.jt.line.follow : null; if (f && f.to && same(f.to, t.date) && !same(f.from, f.to)) pushedTo = f.to; }
+    const shared = pushedTo ? { ...s0, date: pushedTo, sowOn: undefined } : s0;
     for (const [keys, what] of [[PLACE, 'place'], [TIME, 'day']]) {
-      const at = p => keys.map(k => p[k]), ms = same(at(m), at(s0)), ts = same(at(t), at(s0)), mt = same(at(m), at(t)), shown = p => Object.fromEntries(keys.filter(k => p[k] !== undefined).map(k => [k, p[k]]));
+      const s1 = what === 'day' ? shared : s0, at = p => keys.map(k => p[k]), ms = same(at(m), at(s1)), ts = same(at(t), at(s1)), mt = same(at(m), at(t)), shown = p => Object.fromEntries(keys.filter(k => p[k] !== undefined).map(k => [k, p[k]]));
       let from = t;
       if (recorder === 't') { if (!mt && !ms) said(ctx, { kind: 'move-not-applied', path, id, what, whose: 'mine', mine: shown(m), theirs: shown(t) }); }
       else if (recorder === 'm') { from = m; if (!mt && !ts) said(ctx, { kind: 'move-not-applied', path, id, what, whose: 'theirs', mine: shown(m), theirs: shown(t) }); }
