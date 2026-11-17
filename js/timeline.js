@@ -359,7 +359,8 @@
   }
   /**
    * A garden that is shut: an 8 px band of how full its ground is, week by week (the feet held on each day of the week, over the
-   * feet it has, as an amount in ink), and while a crop is carried an orange line under the weeks it could start there.
+   * feet it has, as an amount in ink), and while a crop is carried an orange line under the weeks it could start there. What holds
+   * the ground is what the openings and the guard rails count (eng.holders): each planting by its footprint, and a bed set to rest.
    */
   function shutBand(head, eng, spaces) {
     const days = yearDays(), feet = spaces.map(b => +eng.capOf(b) || 0), cap = feet.reduce((t, f) => t + f, 0);
@@ -367,13 +368,9 @@
     const held = new Float64Array(days);
     spaces.forEach((bed, k) => {
       const L = feet[k], mine = new Float64Array(days);
-      for (const p of eng.plantingsIn(bed.id)) {
-        const r = eng.calc(p);
-        if (!r) continue;
-        const from = eng.occupancyFrom(p, r), through = eng.occupancyThrough(p, r);
-        if (through !== Infinity && through < yearStart()) continue;
-        if (from > yearEnd()) continue;
-        const i0 = Math.max(0, idx(clampDay(from))), i1 = through === Infinity ? days - 1 : Math.min(days - 1, idx(clampDay(through))), ft = Math.min(L, +r.physicalLength || +r.len || L);
+      for (const x of eng.holders(bed, yearStart(), yearEnd(), null)) {
+        const f = x.rect, i0 = Math.max(0, idx(clampDay(x.from))), i1 = x.through === Infinity ? days - 1 : Math.min(days - 1, idx(clampDay(x.through)));
+        const ft = Math.min(L, f ? Math.max(0, f.a1 - f.a0) * Math.max(0, f.x1 - f.x0) : +x.len || L);
         for (let i = i0; i <= i1; i++) mine[i] += ft;
       }
       for (let i = 0; i < days; i++) held[i] += Math.min(L, mine[i]);

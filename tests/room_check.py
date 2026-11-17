@@ -173,6 +173,23 @@ def run(pw):
     check("a garden shut by its name shows an 8 px band under its name, one mark a week, in the lanes", band and band["cells"] == band["weeks"] and band["height"] == 8 and band["under"] and band["inLanes"] and band["some"] and band["titled"], band)
     check("while the crop is carried, an orange line under the weeks it could start for each opening it fits there, and how many on the garden's own line", band and band["starts"] == pick["inGarden"] and ("fits %d" % pick["inGarden"]) in band["fits"], [band, pick["inGarden"]])
     page.screenshot(path=os.path.join(shots, "room-shut.png"))
+    # every week of the band is what holds the garden's ground, counted here by the guard rails' own list (plantings by their
+    # footprint, and a bed set to rest), and a bed set to rest over weeks it held nothing in fills them
+    AGREE = """const g = [...document.querySelectorAll('#tlBody .tl-group')].find(x => x.textContent.includes(arg.name) && x.querySelector('[data-hook="garden-band"]')); if (!g) return null;
+      const garden = eng.plan.gardens.find(x => x.name === arg.name), beds = eng.plan.beds.filter(x => x.gardenId === garden.id && x.active !== false), y = A.planYear(), y0 = new Date(y, 0, 1), y1 = new Date(y, 11, 31), n = E.dayDiff(y1, y0) + 1;
+      const held = new Float64Array(n), cap = beds.reduce((t, b) => t + (+eng.capOf(b) || 0), 0);
+      for (const b of beds) { const L = +eng.capOf(b) || 0, mine = new Float64Array(n); for (const x of eng.holders(b, y0, y1, null)) { const f = x.rect, a = Math.max(0, E.dayDiff(x.from < y0 ? y0 : x.from, y0)), z = x.through === Infinity || x.through > y1 ? n - 1 : E.dayDiff(x.through, y0), ft = Math.min(L, f ? (f.a1 - f.a0) * (f.x1 - f.x0) : +x.len || L); for (let i = a; i <= z; i++) mine[i] += ft; } for (let i = 0; i < n; i++) held[i] += Math.min(L, mine[i]); }
+      const want = []; for (let i = 0; i < n;) { let j = i; while (j + 1 < n && E.addDays(y0, j + 1).getDay() !== 1) j++; let t = 0; for (let k = i; k <= j; k++) t += held[k]; const sh = t / (j - i + 1) / cap; want.push(sh > 0 ? Math.round(6 + 50 * sh) : 0); i = j + 1; }
+      const got = [...g.querySelector('[data-hook="garden-band"]').querySelectorAll('i')].map(c => parseFloat(c.style.getPropertyValue('--p')) || 0);
+      return { got, want, off: got.map((v, i) => v === want[i] ? null : [i, v, want[i]]).filter(Boolean).slice(0, 4) };"""
+    agree = js(page, AGREE, {"name": pick["gardenName"]})
+    check("each week of the band is the share of the garden's ground held then, as the guard rails count it", agree and agree["got"] and not agree["off"] and len(agree["got"]) == len(agree["want"]), agree)
+    rest = js(page, """const g = eng.plan.gardens.find(x => x.name === arg.name), y = A.planYear(), beds = eng.plan.beds.filter(b => b.gardenId === g.id && b.active !== false && eng.isSoilBed(b));
+      for (const b of beds) { const hs = eng.holders(b, new Date(y, 0, 1), new Date(y, 11, 31), null); for (let m = 0; m < 11; m++) { const a = new Date(y, m, 1), z = new Date(y, m + 1, 0); if (!hs.some(h => h.from <= z && (h.through === Infinity || h.through >= a))) { A.updateBeds([b.id], { restPeriods: [{ from: E.d2s(a), to: E.d2s(z) }] }, 'Rest a bed'); return { bed: b.id, month: m }; } } } return null;""", {"name": pick["gardenName"]})
+    page.wait_for_timeout(400)
+    rested = js(page, AGREE, {"name": pick["gardenName"]}) if rest else None
+    check("a bed set to rest fills the weeks it rests, as a planting does", rest and rested and not rested["off"] and sum(rested["got"]) > sum(agree["got"]), [rest, rested and rested["off"], rested and sum(rested["got"]), agree and sum(agree["got"])])
+    if rest: js(page, "A.undo(); return null;"); page.wait_for_timeout(300)
     tools = js(page, "return { line: hook('room-line').getBoundingClientRect().height, wrap: document.querySelector('.tl-tools').getBoundingClientRect().height };")
 
     # ── Openings off: only the openings the crop fits ──

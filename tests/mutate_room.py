@@ -44,6 +44,8 @@ PAGE = [
  ("the hint never shows", TL, "    hint.hidden = false;\n    const at = bar.getBoundingClientRect()", "    hint.hidden = true;\n    const at = bar.getBoundingClientRect()"),
  ("the hint leaves out when it is picked", TL, "      h('p', goes, ' · Pick ', B(r.first), ' to ', B(r.last), free),", "      h('p', goes, free),"),
  ("x leaves the crop carried", TL, "onclick: () => App.arm(null) }, '×')", "onclick: () => {} }, '×')"),
+ ("the band counts plantings only, and a bed set to rest reads as empty", TL, "      for (const x of eng.holders(bed, yearStart(), yearEnd(), null)) {", "      for (const x of eng.holders(bed, yearStart(), yearEnd(), null).filter(x => !x.rest)) {"),
+ ("the band counts every planting as the whole bed", TL, "const ft = Math.min(L, f ? Math.max(0, f.a1 - f.a0) * Math.max(0, f.x1 - f.x0) : +x.len || L);", "const ft = L;"),
  ("a garden that is shut has no band", TL, "        if (shut) { if (s === 'field' || s === 'cover') shutBand(head, eng, group.spaces); continue; }", "        if (shut) continue;"),
  ("the band counts every week as empty", TL, "'--p': share > 0 ? Math.round(6 + 50 * share) + '%' : '0%'", "'--p': '0%'"),
  ("the band marks no week the crop could start", TL, "band.append(h('b', { style: at(s0, s1 - s0 + 1), dataset: { hook: 'band-start' } }));", "void s1;"),
