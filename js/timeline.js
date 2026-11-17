@@ -334,7 +334,7 @@
     roomHere++;
     lane.append(bar);
     const amount = roomAmount(eng, t), when = pickWords(r), a = idx(clampDay(from)), z = idx(through === Infinity ? yearEnd() : clampDay(through)) + 1, end = a0 + n0;
-    const tall = lanes * LANE_H + 6 >= 3 + 16 + 4 + 14, b = h('b'), rest = document.createTextNode(''), say = h('div.tl-room-say', { dataset: { hook: 'room-words' }, hidden: true }, b, rest);
+    const tall = lanes * LANE_H + 6 >= 3 + 16 + 4 + 14, b = h('b'), rest = document.createTextNode(''), say = h('div.tl-room-say', { dataset: { hook: 'room-words', room: o.id }, hidden: true }, b, rest);
     lane.append(say);
     // a crop started in trays says the day its trays are sown first, where there is room for it
     const sown = r.sow && r.sow < r.field ? `sow ${day(r.sow)} · ` : '', tries = amount ? [...(sown ? [[amount, ` ${sown}${when}`]] : []), [amount, ` ${when}`], [amount, '']] : [['', sown + when], ['', when]];

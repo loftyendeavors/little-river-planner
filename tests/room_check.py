@@ -117,15 +117,15 @@ def run(pw):
       return { edge: cs ? cs.borderTopColor === flag && parseFloat(cs.borderTopWidth) === 1 : false, fill: cs ? cs.backgroundColor === white : false, bar: bar ? +getComputedStyle(bar).opacity : null, other: other ? +getComputedStyle(other).opacity : null, dim: dim ? +getComputedStyle(dim).opacity : null };""")
     check("an opening it fits is lit white with a 1 px orange edge; the crop's bar at full strength, every other bar at half, the openings it does not fit fainter", look["edge"] and look["fill"] and look["bar"] == 1 and look["other"] == 0.5 and (look["dim"] is None or look["dim"] < 0.5), look)
     words = js(page, """const out = { shown: 0, outside: [], overBar: [], said: [] }, F = LRFForecast;
-      for (const w of hooks('room-words')) { if (!drawn(w)) continue; out.shown++; const lane = w.parentElement, bar = w.previousElementSibling, id = bar && bar.dataset.room;
-        const box = id && lane.querySelector('.tl-open[data-opening="' + CSS.escape(id) + '"]'); if (!box || !bar) { out.outside.push('no opening for ' + w.textContent); continue; }
+      for (const w of hooks('room-words')) { if (!drawn(w)) continue; out.shown++; const id = w.dataset.room || '', bar = document.querySelector('[data-hook="room-bar"][data-room="' + CSS.escape(id) + '"]');
+        const box = document.querySelector('[data-hook="room-opening"][data-opening="' + CSS.escape(id) + '"]'); if (!box || !bar) { out.outside.push('no opening for ' + w.textContent); continue; }
         const r = w.getBoundingClientRect(), o = box.getBoundingClientRect(), b = bar.getBoundingClientRect();
         if (r.right > o.right + 0.5 || r.left < o.left - 0.5 || r.bottom > o.bottom + 0.5) out.outside.push(w.textContent);
         if (r.left < b.right - 0.5 && r.right > b.left + 0.5 && r.top < b.bottom - 0.5 && r.bottom > b.top + 0.5) out.overBar.push(w.textContent);
         if (out.said.length < 3) out.said.push(w.textContent); }
       return out;""")
     check("the words of what it gives stand inside their opening and clear of its bar, beside it or under it", words["shown"] > 0 and not words["outside"] and not words["overBar"], words)
-    said = js(page, """const f = fitsOf(arg, ''), first = hook('room-words') && hooks('room-words').find(drawn); if (!first) return null; const lane = first.parentElement, bar = first.previousElementSibling, t = f.get(bar.dataset.room).t, F = LRFForecast;
+    said = js(page, """const f = fitsOf(arg, ''), first = hooks('room-words').find(drawn), fit = first && f.get(first.dataset.room); if (!fit) return null; const t = fit.t, F = LRFForecast;
       return { text: first.textContent, amount: F.amount(t.units, t.unit, F.groupOf(t.r.c, t.unit, (eng.plan.lrfNext || {}).groups)) };""", pick["crop"])
     check("they say what it would give in the unit it is sold in, and when it is picked", said and said["amount"] and said["text"].startswith(said["amount"]) and ("pick" in said["text"] or said["text"] == said["amount"]), said)
 
