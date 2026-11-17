@@ -1,0 +1,21 @@
+{
+ "build": "The files every build used to rewrite by hand are written by one tool, tools/shared.cjs, from the code and from each build's own file here. The label and the list behind \"What changed\" leave js/main.js and js/changes.js for a script of their own, js/built.js, which the tool writes: the build before's list, and at its head this build's entry (\"changes\" in this file) with the next label and the day. index.html no longer carries the label; sw.js is written by the same tool. tools/take_main.sh takes main into a branch and settles these files, and tests/counts.json check by check, by itself; .github/workflows/take-main.yml does it for every open pull request when main moves. The checks find the \"What changed\" sheet by hooks (data-hook), which no style uses. Nothing looks different, and no date, yield, price, seed count or bench figure changes.",
+ "changes": {
+  "did": "Nothing looks different. The build’s number and this list are now written by the step that merges a build, so that two builds can be made side by side.",
+  "steps": [
+   "Press the build’s number beside the farm’s name: this build is at the head of the list, marked “New”, and every build before it is listed as before, latest first.",
+   "Open Backup: its last line says the same number."
+  ]
+ },
+ "words": [],
+ "code": [
+  "changes.js",
+  "main.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "index.html"
+ ],
+ "screens": []
+}

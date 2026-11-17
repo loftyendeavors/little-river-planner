@@ -5,6 +5,9 @@
 # Each result is given the name its lines are counted under in tests/counts.json ("named", in env.sh).
 . "$(dirname "$0")/env.sh"
 node $T/what_changed.cjs $REPO $W/old $SCRATCH | named "what the build changed"
+node $T/shared_test.cjs $REPO $FONTS | named "the files the merge writes"   # tools/shared.cjs and tools/take_main.cjs, on a copy with a main of its own
+node $T/take_main_job_test.cjs $REPO | named "the job that takes main in"   # no code of a branch runs where a key can write
+node $T/hooks_test.cjs $REPO | named "hooks"   # every hook a check reads is written by the planner, and nothing styles one
 # the farm kept in the repository is what its generator writes
 rm -rf $W/farm-again && mkdir -p $W/farm-again && cp $FARM/farm-map.jpg $W/farm-again/ && node $T/farm/make_farm.cjs $REPO/js $W/farm-again > /dev/null 2>&1
 python3 -I $T/farm/make_pictures.py $W/farm-again > /dev/null 2>&1   # the pictures are compared by which varieties have one, not byte for byte: a newer drawing library may pack a picture differently

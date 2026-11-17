@@ -70,7 +70,7 @@ PAGE = [
  ("the worth tile does not say it is commercial only", HV, "${marked ? ' · commercial plantings only' : ''}", ""),
  ("Harvest has no note of what is marked", HV, "      marked ? h('p.hv-note', { id: 'hvOwnNote' }", "      false ? h('p.hv-note', { id: 'hvOwnNote' }"),
  ("the weekly amount does not say personal use is left out", SR, "${ownUse(eng, P.cropId) ? '. Plantings for personal use are not counted as giving any' : ''}", ""),
- ("the label is another build's", MN, "Preview " + LABEL, "Preview " + OTHER),
+ ("the label is another build's", "js/built.js", 'label: "' + LABEL + '",', 'label: "' + OTHER + '",'),   # the label is written in js/built.js (tools/shared.cjs)
 ]
 if mode == "list": print(json.dumps({"page": len(PAGE)})); sys.exit(0)
 faults = PAGE

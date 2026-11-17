@@ -3,50 +3,18 @@
  * The header says which build is running. A press on it opens "What changed": every build, latest first, with one line on
  * what it did and three things to try.
  *
- * EVERY BUILD ADDS ITS OWN ENTRY AT THE HEAD OF `BUILDS`, in the commit that sets its label in js/main.js. The checks fail a
- * build whose label is not the first entry here. An entry is written for a grower who has not read the code:
- *   label   the build's label, as js/main.js has it after "Preview"
- *   on      the day it was merged, year-month-day
- *   did     one line: what is different on the page
- *   steps   three things to try at most, each saying what should be seen
- * Nothing of any grower's plan goes in here: no garden, bed, variety or figure. The file is public.
+ * The label and the list are not written here, nor by hand: tools/shared.cjs writes them into js/built.js, from the build
+ * before's list and the entry each build writes in its own file under tests/builds ("changes": { did, steps }). An entry is
+ * written for a grower who has not read the code: "did" is one line on what is different on the page, "steps" three things to
+ * try at most, each saying what should be seen. Nothing of any grower's plan goes in one: no garden, bed, variety or figure.
+ *
+ * The checks find the sheet's parts by their hooks (data-hook), which say what a thing is and are never styled: a change of
+ * look keeps them where they are.
  */
 (function (root) {
   'use strict';
-  const BUILDS = [
-    { label: '0.54', on: '2026-11-16', did: 'Nothing looks different. With Cloud sync on, this browser now also keeps the plan as the cloud last held it. It is groundwork for recording on two devices; the planner still asks which plan to keep when both have changed.',
-      steps: ['Change something with Cloud sync on: “Saved” and the cloud’s line under Backup read as before.',
-        'Open the planner in a second window of this browser: it only shows the plan, as before.',
-        'Until the next build, keep to one computer at a time.'] },
-    { label: '0.53', on: '2026-11-16', did: 'The build’s number is in the header, with what each build changed behind it. Loose ends is in the header only while something needs you. On the Map, what can be done is behind “?”.',
-      steps: ['Press the build’s number beside the farm’s name: this list, with the builds not yet opened in this browser marked “New”.',
-        'On the Map, press “?” at the end of the tools: what can be done on the map, in two columns. The side panel no longer carries that list.',
-        'On a planting, press “Several varieties…”, scroll the list and tick one: the list stays where it was.'] },
-    { label: '0.52', on: '2026-11-16', did: 'Ctrl+Z in a box takes back the typing in that box, not the plan’s last change.',
-      steps: ['Change something on the Map, type in the library’s search box and press Ctrl+Z: the letters go, the change stays.',
-        'Click on empty page and press Ctrl+Z: the change goes back, and Ctrl+Y brings it again.',
-        'On Assumptions type a number of days, press Enter, then Ctrl+Z: it goes back, as before.'] },
-    { label: '0.51', on: '2026-11-16', did: 'Loose ends in the header: one list for what needs you, each row opening where it is mended. The notices are off Assumptions and Seeds.',
-      steps: ['Top right, press Loose ends: what needs you first, in orange, and what can wait under it.',
-        'Press “Plantings that differ from your list”: the Assumptions list opens with a sheet. Done, and the page is its title, one line of figures and the list.',
-        'On Seeds, press “On order” beside “Short of seed”.'] },
-    { label: '0.50', on: '2026-11-16', did: 'On Nursery, Seeds and Assumptions the standing paragraph is behind a round “?” beside the title, and the Nursery’s four tiles are one line of figures.',
-      steps: ['Nursery: the tabs stand right under the title, with one line of figures under them.',
-        'Press “?” beside “Bench room”: the paragraph, each figure with its second line, and what each control does.',
-        'Assumptions, Days to harvest: the title, “?”, and the list sooner.'] },
-    { label: '0.49', on: '2026-11-16', did: 'One card, row, tick and switch, and three kinds of button, on every screen. Boxes are one height in a panel and one on a page.',
-      steps: ['Tasks: the Day and Week switch is bordered with the chosen side dark, and “Delay…” in a row is a bounded button.',
-        'On the Map click a planted bed, then a planting: the boxes are lower, and “Expected” is in view without scrolling.',
-        'Press “Season…”: the sheet has a rounder corner, and its foot keeps to the edge.'] },
-    { label: '0.48', on: '2026-11-15', did: 'One scale of type, corners and motion under every screen. Nothing was added to a screen or taken off one.',
-      steps: ['On the Timeline scroll the gardens: no name is cut that was whole.',
-        'On the Map click a planted bed: the panel reads as before, in slightly larger words.',
-        'Tasks on a phone: the header is one line, and a late task ticked brings the calendar up as before.'] },
-    { label: '0.47', on: '2026-11-15', did: 'Tasks opens on today, with what is late above it. A tick records the work; a late task is asked its day; Delay, Skip and a note are in each row.',
-      steps: ['Open Tasks: a day, then Week, then the date at the top left.',
-        'Tick one task, read the message, and press Undo.',
-        'Open a row: “Delay…” to another day, Undo; then “Skip this task”, Undo.'] }
-  ];
+  // The list is written by tools/shared.cjs into js/built.js, from each build's own file under tests/builds.
+  const BUILDS = (root.LRFBuilt && root.LRFBuilt.builds) || [];
 
   const UI = root.LRFUI, h = UI && UI.h;
   const $ = id => document.getElementById(id);
@@ -68,12 +36,12 @@
     const last = seen();
     dlg = h('dialog.dialog.wc', { id: 'changesDlg', oncancel: e => { e.preventDefault(); close(); } },
       h('h2', 'What changed'),
-      h('p.wc-lead', 'Every build, latest first: what it did, and three things to try on your own plan.'),
-      newer ? h('p.wc-newer', { id: 'changesNewer' }, h('span', 'A newer build than this one is ready.'), h('button.btn', { type: 'button', onclick: () => root.location.reload() }, 'Reload')) : null,
-      h('div.wc-list', { id: 'changesList' }, BUILDS.map(b => h('section.wc-build', { dataset: { build: b.label, fresh: later(b.label, last) ? '1' : '' } },
-        h('h3', `Preview ${b.label}`, later(b.label, last) ? h('span.wc-new', 'New') : null, h('small', b.label === running ? `${when(b.on)} · this build` : when(b.on))),
-        h('p', b.did),
-        h('ol', b.steps.map(step => h('li', step)))))),
+      h('p.wc-lead', { dataset: { hook: 'changes-lead' } }, 'Every build, latest first: what it did, and three things to try on your own plan.'),
+      newer ? h('p.wc-newer', { id: 'changesNewer', dataset: { hook: 'changes-newer' } }, h('span', 'A newer build than this one is ready.'), h('button.btn', { type: 'button', onclick: () => root.location.reload() }, 'Reload')) : null,
+      h('div.wc-list', { id: 'changesList' }, BUILDS.map(b => h('section.wc-build', { dataset: { hook: 'changes-build', build: b.label, fresh: later(b.label, last) ? '1' : '' } },
+        h('h3', { dataset: { hook: 'changes-head' } }, `Preview ${b.label}`, later(b.label, last) ? h('span.wc-new', { dataset: { hook: 'changes-new' } }, 'New') : null, h('small', { dataset: { hook: 'changes-when' } }, b.label === running ? `${when(b.on)} · this build` : when(b.on))),
+        h('p', { dataset: { hook: 'changes-did' } }, b.did),
+        h('ol', b.steps.map(step => h('li', { dataset: { hook: 'changes-step' } }, step)))))),
       h('div.sheet-foot', h('button.btn.primary', { type: 'button', id: 'changesDone', onclick: close }, 'Done')));
     document.body.append(dlg);
     dlg.showModal();

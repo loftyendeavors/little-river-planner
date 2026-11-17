@@ -121,7 +121,7 @@ PAGE = [
  ("the shares the grower typed are not listed", YC, "return !hc.micro && hc.share.mine != null; });", "return false; });"),
  # the list
  ("the list shows a yield for every place, planted or not", AS, "const away = !!planted && planted.size > 0 && !planted.has(env) && cell.mine == null;", "const away = false;"),
- ("the label is another build's", MN, "Preview " + LABEL, "Preview " + OTHER),
+ ("the label is another build's", "js/built.js", 'label: "' + LABEL + '",', 'label: "' + OTHER + '",'),   # the label is written in js/built.js (tools/shared.cjs)
 ]
 if mode == "list": print(json.dumps({"page": len(PAGE)})); sys.exit(0)
 faults = PAGE

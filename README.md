@@ -2,7 +2,7 @@
 
 A crop planner that works on a map of the farm. Drag crops onto beds, move plantings, share beds, and keep one list of the assumptions the plan rests on.
 
-This repository holds the app and its checks. It contains no plan, no farm photo and no farm records: the checks run on a made-up farm (`tests/farm`), and `tests/README.md` says how they are run and how a build is made. The page's Backup menu says which preview is running (0.39 at the time of writing).
+This repository holds the app and its checks. It contains no plan, no farm photo and no farm records: the checks run on a made-up farm (`tests/farm`), and `tests/README.md` says how they are run and how a build is made. The page says which preview is running, beside the year and in its Backup menu.
 
 ## Using it
 
@@ -27,7 +27,7 @@ The top bar has seven views in three groups.
 | The figures underneath | **Assumptions** | Days to harvest, yield and price, crop by crop |
 
 - **Backup**, at the right, holds saving, the plan folder, Cloud sync, Snapshots and photos.
-- **The build that is running** is said beside the year (“Preview 0.53”; on a window 1400 wide or under, the number alone under the year). A press opens **What changed**: every build, latest first, with one line on what it did and three things to try, and a mark on the builds this browser has not opened the list for. A dot on it means a newer build is ready: reload. Each build adds its own entry to `js/changes.js`.
+- **The build that is running** is said beside the year (“Preview” and its number; on a window 1400 wide or under, the number alone under the year). A press opens **What changed**: every build, latest first, with one line on what it did and three things to try, and a mark on the builds this browser has not opened the list for. A dot on it means a newer build is ready: reload. Each build writes its own entry in its file under `tests/builds`; the number and the list are written into `js/built.js` by `tools/shared.cjs` when the build is merged.
 - On the Map, **?** at the end of the map's tools says what can be done there.
 - **To place**, beside it, counts plantings that have no bed yet; a click goes to the list.
 - **Loose ends** is the one list for what needs you. Its orange count is only that: places where ground is booked twice or a planting is longer than its bed, and seed that no row of the Seeds list can count. Under those it lists what can wait, uncounted: plantings that differ from your Assumptions list, published guidance not yet used, yields nobody has checked and crops with no price, and supplier days that do not say where they are counted from. Each row opens where the thing is mended. It is in the header only while something needs you: with nothing counted the button is not there, and what can wait is listed again the next time something does.

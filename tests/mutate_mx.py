@@ -72,7 +72,7 @@ PAGE = [
  ("a planting no longer trades places", AP, "payload.plantingId && !target.noSwap) res = Rails.swap(eng, payload, target) || res;", "payload.plantingId && !target.noSwap && false) res = Rails.swap(eng, payload, target) || res;"),
  # Not a fault any more: "on the Timeline the drop is not asked" (the question kept to the Map at the place it is put). Since the question
  # is asked only of a crop brought from the library onto the Map, which is decided earlier, that second test changes nothing.
- ("the label is another build's", MN, "Preview " + LABEL, "Preview " + OTHER),
+ ("the label is another build's", "js/built.js", 'label: "' + LABEL + '",', 'label: "' + OTHER + '",'),   # the label is written in js/built.js (tools/shared.cjs)
  ("the outline is drawn before the map is built again, as 0.35 went live", MP, "    App.on('plan', build);\n    // after the map is built again, not before: building draws every bed afresh, and the bed being mixed must keep its outline\n    App.on('plan', drawMixing);", "    App.on('plan', drawMixing);\n    App.on('plan', build);\n   "),
  ("the outline is lost on the second drop", MP, "    App.on('plan', drawMixing); App.on('mixing', drawMixing);", "    App.on('mixing', drawMixing);"),
  ("a bed booked twice is called a shared bed", PN, "const twice = eng.conflicts(p, eng.calc(p)).some(o => !o.rest);", "const twice = false;"),

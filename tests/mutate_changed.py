@@ -25,7 +25,7 @@ def unread(js, said, free): said.clear(); said["unreadable"] = True
 # a build may itself name the style sheet or the page: then the fault goes into a served file it does not name
 def styles(js, said, free): f = js.parent / "css" / ("app.css" if "css/app.css" not in (said.get("page") or []) else "one-more.css"); f.write_text((f.read_text(encoding="utf-8") if f.exists() else "") + "\n/* one rule more */\n", encoding="utf-8")
 def page(js, said, free):
-    name = next((n for n in ("index.html", "sw.js", "manifest.webmanifest") if n not in (said.get("page") or [])), None)
+    name = next((n for n in ("index.html", "manifest.webmanifest") if n not in (said.get("page") or [])), None)   # sw.js is written by tools/shared.cjs, and held by the part "build"
     f = js.parent / (name or "icons/one-more.txt"); f.write_text((f.read_text(encoding="utf-8") if f.exists() else "") + "\n", encoding="utf-8")
 def spoke(js, said, free):   # a file an earlier build left names a script, in the build before and now alike, and this build changes that script without naming it
     for root in (js.parent, scratch / "changed-before"): (root / "tests" / "builds" / EARLIER).write_text(json.dumps({"build": "an earlier build", "code": [free]}), encoding="utf-8")

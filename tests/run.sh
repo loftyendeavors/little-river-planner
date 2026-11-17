@@ -8,13 +8,49 @@ for part in ${@:-node build app1 app2 app3 app4 new off site1 site2 site3 site4 
   echo "== $part"
   case $part in
     node) sh $T/quick.sh ;;
-    build) node $REPO/tools/build_site.cjs $APP $FONTS $REPO "$LRF_LABEL" > $W/build.out 2>&1 || echo "build NO RESULT $(tail -2 $W/build.out | cut -c1-300)"; tail -1 $W/build.out | cut -c1-300
-      # the site kept in the repository is what its own code builds to: a build that left it stale, or edited it by hand, shows here
-      if [ -z "$(git -C $REPO status --porcelain -- index.html sw.js manifest.webmanifest css js fonts icons)" ]; then echo '{"passed":1,"of":1,"failed":[]}' | named "the built site"; else echo '{"passed":0,"of":1,"failed":["the built site in the repository is what the code builds to"]}' | named "the built site"; git -C $REPO status --porcelain -- index.html sw.js manifest.webmanifest css js fonts icons | head -5; fi
+    build) node $REPO/tools/shared.cjs $REPO $FONTS "$(cat $W/old/BASE)" > $W/build.out 2>&1 || echo "build NO RESULT $(tail -2 $W/build.out | cut -c1-300)"; tail -1 $W/build.out | cut -c1-300
+      # the site kept in the repository, and js/built.js, are what tools/shared.cjs writes from the code, the build before and this
+      # build's own file under tests/builds: a build that left them stale, or edited one by hand, shows here
+      if [ -z "$(git -C $REPO status --porcelain -- index.html sw.js manifest.webmanifest css js fonts icons)" ]; then echo '{"passed":1,"of":1,"failed":[]}' | named "the built site"; else echo '{"passed":0,"of":1,"failed":["the built site and js/built.js in the repository are what tools/shared.cjs writes"]}' | named "the built site"; git -C $REPO status --porcelain -- index.html sw.js manifest.webmanifest css js fonts icons | head -5; fi
       sh $T/b.sh offline; (cd $REPO && node tools/sync_client_test.mjs $REPO/js $OLD 2>&1 | named "sync client, built site") ;;
-    app1) sh $T/b.sh ahead core sowing trays step1 folder step2a numbers windows shape ;;
-    app2) sh $T/b.sh f018 step2b maint sync step3a step3b ;;
-    app3) sh $T/b.sh wide step5a step5b stepF plain r1 bedpanel mixed season photo ask cleanup look card loose f053 ;;
+    app1) sh $T/b.sh \
+      ahead \
+      core \
+      sowing \
+      trays \
+      step1 \
+      folder \
+      step2a \
+      numbers \
+      windows \
+      shape \
+      ;;
+    app2) sh $T/b.sh \
+      f018 \
+      step2b \
+      maint \
+      sync \
+      step3a \
+      step3b \
+      ;;
+    app3) sh $T/b.sh \
+      wide \
+      step5a \
+      step5b \
+      stepF \
+      plain \
+      r1 \
+      bedpanel \
+      mixed \
+      season \
+      photo \
+      ask \
+      cleanup \
+      look \
+      card \
+      loose \
+      f053 \
+      ;;
     app4) sh $T/b.sh mapgeo; WIDTHS=${WIDTHS:-1280,1480,1707,3440} sh $T/b.sh map; sh $T/b.sh map-views; WIDTH=1480 sh $T/b.sh r1; sh $T/b.sh things ;;
     new) sh $T/b.sh sup importer; WIDTH=1480 sh $T/b.sh sup importer; WIDTH=3440 sh $T/b.sh sup importer; sh $T/b.sh sup-site importer-site; WIDTH=1480 sh $T/b.sh sup-site importer-site ;;
     off) sh $T/b.sh offline ahead-off core-off sowing-off trays-off step2a-off f018-off step2b-off map-off ;;

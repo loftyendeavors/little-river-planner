@@ -12,7 +12,42 @@
 #   {"set": "step5a", "mode": "node", "faults": 30, "caught": 30, "missed": [], "broken": []}
 # The exit status is 0 only when every fault was caught.
 . "$(dirname "$0")/env.sh"
-SETS="step1 f018 step2a step2b step3a step3b step5a step5b stepF plain r1 sup sync maint bedpanel mixed season ask cleanup look map changed screens numbers card things windows scale loose f053 merge shape"
+# one set a line, so that two builds that each add a set add two lines and git puts them together by itself
+SETS="
+step1
+f018
+step2a
+step2b
+step3a
+step3b
+step5a
+step5b
+stepF
+plain
+r1
+sup
+sync
+maint
+bedpanel
+mixed
+season
+ask
+cleanup
+look
+map
+changed
+screens
+numbers
+card
+things
+windows
+scale
+loose
+f053
+merge
+shape
+shared
+"
 # the script of a set and what it is given; F is the folder its copies are made in
 script() {
   case $1 in
@@ -45,6 +80,7 @@ script() {
     windows) SCRIPT=$T/mutate_windows.py; ARGS="$APP $REPO $F $T" ;;
     merge) SCRIPT=$T/mutate_merge.py; ARGS="$APP $F $T $PLAN $FARM/inventory.json" ;;
     shape) SCRIPT=$T/mutate_shape.py; ARGS="$APP $F $T $PLAN $FARM/inventory.json $SCRATCH" ;;
+    shared) SCRIPT=$T/mutate_shared.py; ARGS="$REPO $F $FONTS" ;;
     scale) SCRIPT=$T/mutate_scale.py; ARGS="$REPO $F" ;;
     loose) SCRIPT=$T/mutate_loose.py; ARGS="$APP $F $T" ;;
     f053) SCRIPT=$T/mutate_f053.py; ARGS="$APP $F $T" ;;
@@ -61,7 +97,7 @@ if [ "$1" = list ]; then
   exit 0
 fi
 set=$1; [ $# -gt 0 ] && shift
-if ! script "$set"; then echo "usage: sh tests/faults.sh <set> [mode] [words…]   or   sh tests/faults.sh list      sets: $SETS"; exit 2; fi
+if ! script "$set"; then echo "usage: sh tests/faults.sh <set> [mode] [words…]   or   sh tests/faults.sh list      sets: $(echo $SETS)"; exit 2; fi
 # the mode: the word after the set if the set offers it, else the set's first
 mode=$(offers $set | python3 -I -c "import json,sys; d=json.loads(sys.stdin.read() or '{}'); w=sys.argv[1]; print(w if w in d else '+' + next(iter(d), ''))" "$1")
 case $mode in +*) mode=${mode#+} ;; *) shift ;; esac

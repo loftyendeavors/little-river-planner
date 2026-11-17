@@ -44,7 +44,7 @@ PAGE = [
  ("a planting no longer trades places at all", AP, SWAP, SWAP.replace("!target.noSwap)", "!target.noSwap && false)")),
  ("a moved planting on a bed being mixed splits it again", AP, GATE, GATE.replace("asksToShare(payload)", "(asksToShare(payload) || mixingHere)")),
  ("while a planting is in the air the beds are drawn as ones that would ask", AP, GATE, GATE.replace("asksToShare(payload)", "(asksToShare(payload) || target.survey)")),
- ("the label is another build's", MN, "Preview " + LABEL, "Preview " + OTHER),
+ ("the label is another build's", "js/built.js", 'label: "' + LABEL + '",', 'label: "' + OTHER + '",'),   # the label is written in js/built.js (tools/shared.cjs)
 ]
 if mode == "list": print(json.dumps({"page": len(PAGE)})); sys.exit(0)
 faults = PAGE

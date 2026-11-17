@@ -9,6 +9,7 @@ Everything here runs on a made-up farm. No grower's plan is needed to check a bu
 - [What a build changed](#what-a-build-changed)
 - [Two builds side by side](#two-builds-side-by-side)
 - [The plan's shape](#the-plans-shape)
+- [Hooks](#hooks)
 - [Deliberate faults](#deliberate-faults)
 - [Making a build](#making-a-build)
 - [Writing a check](#writing-a-check)
@@ -29,6 +30,9 @@ Everything here runs on a made-up farm. No grower's plan is needed to check a bu
 | `*_test.cjs` | Checks of the planner's arithmetic, without a browser |
 | `*_check.py` | Checks of the page in a real browser |
 | `mutate*.py` | The faults themselves |
+| `shared_test.cjs` | The files the merge writes (`tools/shared.cjs`) and the taking of main into a branch (`tools/take_main.cjs`), on a copy of the repository with a main of its own ("Two builds side by side") |
+| `take_main_job_test.cjs` | The job that takes main in, read as text: no code of a branch runs where a key can write |
+| `hooks_test.cjs` | Every hook a check reads is written by the planner, and nothing styles one ("Hooks") |
 | `plan_shape.cjs`, `shape_test.cjs`, `shape_check.py` | The plan's shape written down, and the two checks that hold the farm, the planner and the merge to it ("The plan's shape") |
 | `farm/` | The made-up farm: how it is made, and the result |
 
@@ -55,8 +59,8 @@ python3 -I tests/verdict.py /tmp/part.log app1    # exit 0: every line passed, a
   the check loads the farm's backup file first. A name ending in `-off` runs on the single offline file, which the name
   `offline` builds. `screens` is the pictures (below, "What a build changed").
 - Nothing may change the repository or the work folder while a part runs: the page is served from them.
-- The parts: `node`, `build` (builds the site into the repository and fails if that changes a file: the site kept here must be
-  what the code builds to), `app1` to `app4` and `new` (the app folder), `off` (the offline file), `site1` to `site10` (the
+- The parts: `node`, `build` (writes the site and `js/built.js` into the repository with `tools/shared.cjs`, and fails if
+  that changes a file: what is kept here must be what the code and the build's own file write), `app1` to `app4` and `new` (the app folder), `off` (the offline file), `site1` to `site10` (the
   built site, the other window widths, a computer set to dark), `screens` (the pictures).
 - On a small computer the whole run takes an hour or more, and a check that measures timing can stumble while something else
   is running. Run it again alone before believing it. On GitHub the parts run side by side.
@@ -121,7 +125,9 @@ A change to the farm changes what every check sees. Run them all after it.
 2. **The files.** A build adds one file of its own under `tests/builds/` (`tests/builds/the-bed-panel.json`), which names
    what it changes in what a browser is served: under `words` the scripts in which only the text inside strings, or a
    comment, differs, under `code` those whose program differs, `added` and `removed`, and under `page` any other served file
-   (`index.html`, `sw.js`, `css/app.css`, a typeface, an icon). `what_changed.cjs` holds the build to it: a file named nowhere
+   (`index.html`, `css/app.css`, a typeface, an icon; not `sw.js` nor `js/built.js`, which `tools/shared.cjs` writes from the
+   rest and the part `build` holds). It also holds the build's entry for "What changed", under `changes` ("Making a build").
+   `what_changed.cjs` holds the build to it: a file named nowhere
    must be the build before's byte for byte, and a script under `words` must be the same program once its strings are set
    aside (both are parsed and compared; one line answers for all of them, so the check runs as many lines for every build). **Which file is this build's is written nowhere: it is the one the build before does
    not have.** So a file another build left cannot speak for this one, no build writes a file another build writes, and
@@ -150,27 +156,42 @@ The same proof can be run on a real plan, on the computer that holds it: `node t
 
 ## Two builds side by side
 
-Two builds made at once on two branches collide where they change the same thing, and in the few places listed here.
-What each writes of its own:
+Two builds made at once on two branches collide where they change the same thing. The files every build used to rewrite by
+hand are written by a tool instead, so that they never need a hand:
+
+- **`js/built.js`**: the label, and the list behind "What changed". `tools/shared.cjs` writes it from the build before's list
+  and the build's own entry (`changes` in its file under `tests/builds`), giving the entry the next label after the build
+  before's and the day. Nothing else names the label: the page reads it there, and so do the checks (`LRF_LABEL`, in `env.sh`).
+- **the built site** (`index.html`, `sw.js`, `js/pwa.js`, the typefaces, the manifest): written by the same tool, from the code.
+  `index.html` no longer carries the label, so it changes only where a build changes the page.
+- **`tests/counts.json`**: joined check by check (`python3 -I tests/counts.py join`). A check's line comes from the side that
+  changed it; where both changed the same check, each by its own lines, both are counted, and the run on the two together
+  says whether that is right.
+
+**Taking main in** is one command, which does all of that and leaves only a conflict in the code for a hand:
+
+```
+node tools/take_main.cjs . $LRF_WORK/scratch/node_modules/@fontsource-variable --commit
+```
+
+It fetches main, merges it, settles `js/built.js`, `sw.js` and `tests/counts.json`, runs `tools/shared.cjs` and commits. It
+ends 0 when the branch holds main; 3 when a file of the code or of a note conflicts, which it names and leaves open: settle
+those, then `node tools/shared.cjs . <fonts> origin/main`, `git add -A` and commit. Push, and the checks run on the two together.
+
+**On GitHub it happens by itself.** When main moves, `.github/workflows/take-main.yml` takes it into every open pull request
+from this repository that it can take in without a hand, pushes, starts the checks for the branch and says so on the pull request.
+Where the code conflicts it pushes nothing and names the files there. The merge runs a branch's own helpers, so it runs with no key,
+one job a pull request on a machine of its own; the job that pushes runs nothing of any branch, and pushes only onto the commit the branch was read at
+(`take_main_job_test.cjs` holds this). So a chat that is still building may find its branch
+moved: **fetch it before each push**, and if the push is refused, `node tools/take_main.cjs . <fonts> --from origin/<branch>
+--commit` takes the branch as GitHub holds it in, settled the same way.
+
+What each build still writes of its own, and settles by hand when two builds meet in it:
 
 - its file under `tests/builds/`, which no other build writes;
-- in `tests/counts.json`, the lines of the checks it changed. The file is laid out so that git puts two builds' lines
-  together by itself (one check a line, a line left empty between two). It cannot where both change the same check; where
-  each adds a check whose name falls in the same gap; where one adds or takes out a check and the other changes the check
-  that comes right after it in the order of names; or where one adds a check after the last of a part or takes the last
-  out. Then whichever merges second takes `main` in, runs the checks, and writes those lines from the run of the two
-  together (`tests/counts.py`);
-- its faults and checks. A list that every build adds a word to (`SETS` in `faults.sh`, a part's line in `run.sh`) is one
-  line, so two builds that each add a check to the same part settle that line by hand, keeping both.
-
-What every build writes, so that the second to merge has to do again after taking `main` in:
-
-- **the built site** (`index.html`, `sw.js`): they are written by `tools/build_site.cjs` from the code, so a conflict in
-  them is never settled by hand. Take either side, build the site again, and commit what it writes;
-- **the label**, one line in `js/main.js`: read the next free one from `main` and build the site with it. The checks read
-  the label from that line, so nothing else names it.
-
-Then let the checks run again on the two together: the merge waits for them.
+- its code. The lists every build adds a word to (the sets in `faults.sh`, a part's checks in `run.sh`) are one name a line, so
+  two builds that each add one add two lines; where both add at the same place git asks, and both are kept;
+- `README.md` and the other notes, which are kept by hand and name no label.
 
 ## The plan's shape
 
@@ -195,11 +216,27 @@ The checks see the fields the farm and the tour reach; a field written on a path
 folder>`, on the computer that holds it (it prints, and checks nothing). The records the planner does not edit, which a file
 carries beside the plan, are passed over.
 
+## Hooks
+
+A check finds a thing on the page by its **hook**, a `data-hook` attribute that says what the thing is
+(`data-hook="changes-build"`: one build in the list "What changed"), and not by its classes, its place among the others or its
+look. The planner writes the hook on the thing (`dataset: { hook: 'changes-build' }`), and a build that changes the look moves
+the hook with the thing, so that the checks of that thing do not change.
+
+- A hook names a kind of thing, in words of the planner: `changes-build`, `changes-when`. Several things may carry one hook.
+- **No style reads a hook, and no script of the planner finds a thing by one.** Hooks are for the checks, so that neither the
+  look nor the code comes to lean on them.
+- `hooks_test.cjs` (fast) holds the three ends together: every hook a check reads is written by the planner, nothing styles
+  one, no script finds by one. A build that drops a hook a check reads fails there, by name, before any browser starts.
+- **Most checks still read classes.** The "What changed" sheet is the first thing read by hooks (`fixes_053_check.py`). A
+  build that changes the look of something, and so breaks a check that reads it by its classes, gives the thing its hooks and
+  moves that check onto them, rather than onto the new classes: the cost is paid once.
+
 ## Deliberate faults
 
 A check that cannot fail proves nothing. Each `mutate*.py` puts one fault at a time into a copy of the app (a rule dropped,
-a word changed back, a figure off by one) and requires that the check then fails where it passed before. Nine sets (`changed`,
-`cleanup`, `look`, `map`, `merge`, `scale`, `screens`, `shape`, `windows`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
+a word changed back, a figure off by one) and requires that the check then fails where it passed before. Ten sets (`changed`,
+`cleanup`, `look`, `map`, `merge`, `scale`, `screens`, `shape`, `shared`, `windows`) name the line that has to fail; the others count any line that passed with no fault in it and fails with it.
 
 ```
 sh tests/faults.sh list             # every set, its modes, how many faults
@@ -214,20 +251,23 @@ piece of the planner runs the faults of the checks that cover it before it asks 
 ## Making a build
 
 1. **Branch** from an up-to-date `main`. One build to a branch.
-2. **The code** is edited where it is served from: `js/`, `css/app.css`. `index.html`, `sw.js`, `fonts/` and the manifest are
-   written by `tools/build_site.cjs` from the app folder, so after any change:
+2. **The code** is edited where it is served from: `js/`, `css/app.css`. `index.html`, `sw.js`, `fonts/`, the manifest and
+   `js/built.js` are written by `tools/shared.cjs` from the code, so after any change:
    ```
    export LRF_WORK=/tmp/lrf-work
-   sh tests/setup.sh                                                                  # the app folder, from the repository
-   node tools/build_site.cjs $LRF_WORK/app $LRF_WORK/scratch/node_modules/@fontsource-variable . "0.41"
+   sh tests/setup.sh                                                          # the work folder, from the repository
+   node tools/shared.cjs . $LRF_WORK/scratch/node_modules/@fontsource-variable  # the label, "What changed" and the site
    ```
-   The last argument is the label the page shows in its Backup menu. It is written in one place, `js/main.js`
-   ("Preview 0.41 ·" and so on); the checks read it from there (`LRF_LABEL`, in `env.sh`). A build that changes nothing a
-   browser is served keeps the label. **Read the next free label from `main` at the moment of the merge.**
-   A new script is added to the app folder's `index.html` in load order (`tools/app_folder.cjs` and `tools/README.md` say
-   how the two pages relate). `README.md` is kept by hand.
+   It gives the build the next label after the build before's when the build changes what a browser is served, and stops
+   when such a build has no entry (step 3). The label is written nowhere by hand. A build that changes nothing a browser is
+   served keeps the label and has no file under `tests/builds`. A new script is added to `index.html` in load order
+   (`tools/app_folder.cjs` and `tools/README.md` say how the app folder's page and the site's relate). `README.md` is kept by
+   hand.
 3. **Say what the build changes** in a new file under `tests/builds/`, named for the build: the scripts, the other served
-   files, and the screens that will look different ("What a build changed"). Leave the files already there alone.
+   files, and the screens that will look different ("What a build changed"), and, under `changes`, its entry in "What
+   changed", written for a grower who has not read the code: `{ "did": "one line on what is different on the page", "steps":
+   ["three things to try at most, each saying what should be seen"] }`, with nothing of any grower's plan in it. Leave the
+   files already there alone.
 4. **Checks.** Add the build's own; a new screen gets a line in `cleanup_check.py`, which reads every screen for words that
    do not belong on it, and an entry in `screens_check.py`. Push: GitHub runs everything. Write the new numbers of the
    checks the build changed into `counts.json` (the run's "counts" has them). Look at the run's "screens": a picture named
@@ -235,8 +275,8 @@ piece of the planner runs the faults of the checks that cover it before it asks 
    Run the deliberate faults for what was touched.
 5. **Nothing private.** No plan, photo, garden or variety name, address, email or service address goes into this
    repository. Search the lines the build adds before asking for a merge.
-6. **Take `main` in** before the merge if it has moved ("Two builds side by side" says what to do again), and let the checks
-   run again on the two together.
+6. **Take `main` in** before the merge if it has moved: `node tools/take_main.cjs . <fonts> --commit` ("Two builds side by
+   side"; on GitHub the job does it by itself), and let the checks run again on the two together.
 7. **Merge** as one commit (squash) or as a merge commit, never by rebase: on `main` the build before is the commit before.
    Then confirm that the Pages run for the merge succeeded. A push to `main` is a release: the site is served from it.
 
@@ -244,6 +284,8 @@ piece of the planner runs the faults of the checks that cover it before it asks 
 
 What has gone wrong before, so that it does not again.
 
+- **A check finds a thing on the page by its hook** where it has one, and gives it one where a change of look broke the
+  check ("Hooks").
 - **A check finds its subject on the plan it is given** and names nothing from any plan: not a date, a bed, a crop's place
   in a list. Where it needs a week with a shared batch, it looks for one (see `WEEK0` in `sowing_view_check.py`).
 - **A check that finds no subject fails a named line.** The older checks do not all do this yet: some skip a block of lines

@@ -62,7 +62,7 @@ PAGE = [
  ("the window does not say that nothing is flagged or moved", SE, ": the planner moves nothing and flags nothing. It would not offer", ". It would not offer"),
  ("the window opens on what was typed last time", SE, "const start = App.farmDates(), year = start.year, draft = { ...start.dates }, inputs = {}, notes = {};", "const start = App.farmDates(), year = start.year, draft = (root.fdLast = root.fdLast || { ...start.dates }), inputs = {}, notes = {};"),
  ("a description is missing from a date", FD, "does: 'The last day it offers anything a place outdoors.'", "does: ''"),
- ("the label is another build's", MN, "Preview " + LABEL, "Preview " + OTHER),
+ ("the label is another build's", "js/built.js", 'label: "' + LABEL + '",', 'label: "' + OTHER + '",'),   # the label is written in js/built.js (tools/shared.cjs)
  ("the changed date is not marked", SE, "inputs[f.key].closest('.fd-row').dataset.changed = String(moved);", "inputs[f.key].closest('.fd-row').dataset.changed = 'false';"),
  ("the window says nothing of setting the date back", SE, "No planting is touched, so setting ${keys.length === 1 ? 'it' : 'them'} back puts everything back, and one undo does the same.", "No planting is touched."),
 ]

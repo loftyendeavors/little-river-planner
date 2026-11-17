@@ -14,7 +14,7 @@ const [REPO, OUT] = process.argv.slice(2);
 if (!REPO || !OUT) { console.error('usage: node tools/app_folder.cjs <repository> <app folder>'); process.exit(2); }
 const FONTS = ['<link rel="preconnect" href="https://fonts.googleapis.com">', '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
   '<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,500..800&family=Instrument+Sans:wdth,wght@85..100,400..700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">'];
-const SITE_ONLY = [/^<meta name="lrf-build" content="[^"]*">$/, /^<meta name="theme-color" content="[^"]*">$/, /^<link rel="manifest" href="manifest\.webmanifest">$/, /^<link rel="apple-touch-icon" href="[^"]*">$/, /^<link rel="stylesheet" href="css\/fonts\.css">$/, /^<script src="js\/pwa\.js"><\/script>$/];
+const SITE_ONLY = [/^<meta name="theme-color" content="[^"]*">$/, /^<link rel="manifest" href="manifest\.webmanifest">$/, /^<link rel="apple-touch-icon" href="[^"]*">$/, /^<link rel="stylesheet" href="css\/fonts\.css">$/, /^<script src="js\/pwa\.js"><\/script>$/];
 const lines = fs.readFileSync(path.join(REPO, 'index.html'), 'utf8').split('\n');
 const kept = lines.filter(line => !SITE_ONLY.some(re => re.test(line)));
 if (lines.length - kept.length !== SITE_ONLY.length) { console.error(`index.html: expected ${SITE_ONLY.length} lines that only the site has, found ${lines.length - kept.length}`); process.exit(1); }
