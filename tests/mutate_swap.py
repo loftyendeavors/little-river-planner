@@ -29,7 +29,7 @@ def alone(cmd, timeout, env=None, cwd=None):
     return out, err
 SW, SD, CSS = "js/swap.js", "js/seeds.js", "css/app.css"
 NODE = [
- ("a sowing day moves where the nursery weeks differ", SW, "      if (!was || !now || dayOf(was) === dayOf(now) || !r.sow || p.sowOn || p.liveTray) continue;", "      continue;"),
+ ("a sowing day moves where the nursery weeks differ", SW, "      if (!was || !now || dayOf(was) === dayOf(now) || p.sowOn || p.liveTray) continue;", "      continue;"),
  ("the day in the bed moves the wrong way", SW, "date: E.d2s(E.addDays(E.s2d(p.date), E.dayDiff(was, now)))", "date: E.d2s(E.addDays(E.s2d(p.date), E.dayDiff(now, was)))"),
  ("plantings with days of their own are ticked by default", SW, "(ask ? ask.has(x.p.id) : x.state === 'swap')", "(ask ? ask.has(x.p.id) : true)"),
  ("an unticked planting is swapped all the same", SW, "(ask ? ask.has(x.p.id) : x.state === 'swap')", "x.state === 'swap'"),
@@ -44,6 +44,9 @@ NODE = [
  ("another crop's variety may take its place", SW, "(!to || to.cropId !== from.cropId || to.id", "(!to || to.id"),
  ("looking changes the plan", SW, "const after = { ...p, varietyId: to.id }; delete after.variety;", "const after = Object.assign(p, { varietyId: to.id }); delete after.variety;"),
  ("a planting with days of its own loses them when ticked", SW, "const after = { ...p, varietyId: to.id }; delete after.variety;", "const after = { ...p, varietyId: to.id }; delete after.variety; delete after.dtm;"),
+ ("a transplant whose new variety has no nursery weeks is left out", SW, "dayOf(was) === dayOf(now) || p.sowOn || p.liveTray) continue;", "dayOf(was) === dayOf(now) || !r.sow || p.sowOn || p.liveTray) continue;"),
+ ("a harvest whose end alone moves is not counted", SW, "return { moves: start.length + endOnly.length,", "return { moves: start.length,"),
+ ("a harvest whose end alone moves is not said", SW, "    if (endOnly.length) parts.push(", "    if (false) parts.push("),
 ]
 PAGE = [
  ("the way in is not there", SD, "can = !!W && n > 0 && W.choices(App.state.engine, v.id).length > 0;", "can = false;"),

@@ -103,6 +103,15 @@ if (tp) {
   check('where the new variety’s nursery weeks are longer, the day it goes in moves by the difference and the sowing day stays', !!op && gh === weeks * 7 && iso(r1.sow) === iso(r0.sow) && op.after.date === E.d2s(E.addDays(E.s2d(tp.date), gh - E.dayDiff(r0.field, r0.sow))) && lv.rows[0] && lv.rows.find(r => r.id === tp.id).outMoved === gh - E.dayDiff(r0.field, r0.sow), { op: op && [op.before.date, op.after.date], gh, was: E.dayDiff(r0.field, r0.sow) });
 } else check('where the new variety’s nursery weeks are longer, the day it goes in moves by the difference and the sowing day stays', false, 'no transplanted planting among those swapped');
 
+// a nursery of none: a transplant that becomes a planting set out on its sowing day is still taken, on its sowing day
+if (tp) {
+  const none = { ...core, varieties: core.varieties.map(v => v.id === to.id ? { ...v, environmentDefaults: { v: 1, field: { gh: 0 }, greenhouse: { gh: 0 } } } : v) };
+  const engN = E.create(none, Lib), nv = W.preview(engN, from.id, to.id, { ticked: [tp.id] }), op = nv.ops[0], afterN = E.create(apply(none, nv.ops), Lib), r0 = engN.calc(tp), r1 = op && afterN.calc(afterN.planting(tp.id));
+  check('where the new variety has no nursery weeks, the planting is still taken, and goes in on its old sowing day', !!op && nv.rows.find(r => r.id === tp.id).state === 'swap' && iso(sowDay(r1)) === iso(sowDay(r0)) && op.after.date === iso(r0.sow), { op: op && [op.before.date, op.after.date], sow: iso(r0.sow), state: nv.rows.find(r => r.id === tp.id).state });
+} else check('where the new variety has no nursery weeks, the planting is still taken, and goes in on its old sowing day', false, 'no transplanted planting among those swapped');
+// what the sheet says of the harvests: a harvest that starts on the same day and ends on another is a move, and is said
+const said = W.harvestSaid([{ ticked: true, shift: 0, endShift: 5 }, { ticked: true, shift: 3, endShift: 3 }, { ticked: false, shift: 9, endShift: 9 }, { ticked: true, shift: 0, endShift: 0 }]);
+check('a harvest whose end alone moves is counted as a move and said, and an unticked one is not', said.moves === 2 && /in 1, harvest 3 days later/.test(said.said) && /ends on another/.test(said.said) && W.harvestSaid([{ ticked: true, shift: 0, endShift: 0 }]).said === 'no harvest moves', said);
 check('the same question gives the same answer', JSON.stringify(W.preview(eng, from.id, to.id).ops) === JSON.stringify(view.ops));
 check('nothing above changed the plan', JSON.stringify(core) === text);
 finished = true;

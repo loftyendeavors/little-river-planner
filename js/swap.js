@@ -64,7 +64,7 @@
     const first = E.create(withPlantings(eng.plan, swapped), Lib), moved = [];
     for (const p of list) {
       const was = sowDay(eng.calc(p)), r = first.calc(swapped.get(p.id)), now = sowDay(r);
-      if (!was || !now || dayOf(was) === dayOf(now) || !r.sow || p.sowOn || p.liveTray) continue;
+      if (!was || !now || dayOf(was) === dayOf(now) || p.sowOn || p.liveTray) continue;   // a nursery of none, or a new one, moves the day in the bed too
       const after = { ...swapped.get(p.id), date: E.d2s(E.addDays(E.s2d(p.date), E.dayDiff(was, now))) };
       swapped.set(p.id, after); moved.push(p.id);
     }
@@ -79,6 +79,20 @@
     const row = { id: p.id, bedId: p.bedId, sow: sowDay(r0), field: r0.field, first: r0.first, last: r0.last };
     if (after && r1) Object.assign(row, { fieldNow: r1.field, firstNow: r1.first, lastNow: r1.last, shift: E.dayDiff(r1.first, r0.first), endShift: E.dayDiff(r1.last, r0.last), outMoved: E.dayDiff(r1.field, r0.field) });
     return row;
+  }
+
+  /**
+   * What the ticked plantings' harvests do, in words, for the sheet: { moves (plantings whose first or last picking moves), said }.
+   * A harvest whose first day stays and whose end moves is a move too, and is said.
+   */
+  function harvestSaid(rows) {
+    const num = n => Number(n).toLocaleString('en-US'), days = n => `${num(n)} day${n === 1 ? '' : 's'}`;
+    const ticked = rows.filter(r => r.ticked), start = ticked.filter(r => r.shift), endOnly = ticked.filter(r => !r.shift && r.endShift);
+    const lo = start.length ? Math.min(...start.map(r => r.shift)) : 0, hi = start.length ? Math.max(...start.map(r => r.shift)) : 0, a = Math.min(Math.abs(lo), Math.abs(hi)), z = Math.max(Math.abs(lo), Math.abs(hi));
+    const parts = [];
+    if (start.length) parts.push(`${start.length === ticked.length ? '' : `in ${num(start.length)}, `}harvest ${lo === hi ? `${days(z)} ${hi > 0 ? 'later' : 'sooner'}` : lo > 0 || hi < 0 ? `${num(a)} to ${days(z)} ${hi > 0 ? 'later' : 'sooner'}` : `up to ${days(z)} either way`}`);
+    if (endOnly.length) parts.push(`in ${num(endOnly.length)}, the harvest starts on the same day and ends on another`);
+    return { moves: start.length + endOnly.length, said: parts.length ? parts.join('; ') : 'no harvest moves' };
   }
 
   function preview(eng, fromId, toId, options = {}) {
@@ -212,17 +226,16 @@
       leftLine.hidden = !leftLine.textContent;
       clear(sum);
       if (!to) { add(sum, h('p.sw-say', 'Pick the variety that takes its place to see what moves.')); apply.disabled = true; apply.textContent = 'Put it in their place'; return; }
-      const moved = view.rows.filter(r => r.ticked && r.shift), lo = moved.length ? Math.min(...moved.map(r => r.shift)) : 0, hi = moved.length ? Math.max(...moved.map(r => r.shift)) : 0;
-      const by = !moved.length ? 'no harvest moves' : lo === hi ? `harvest ${plural(Math.abs(hi), 'day')} ${hi > 0 ? 'later' : 'sooner'}` : lo > 0 || hi < 0 ? `harvest ${Math.min(Math.abs(lo), Math.abs(hi))} to ${plural(Math.max(Math.abs(lo), Math.abs(hi)), 'day')} ${hi > 0 ? 'later' : 'sooner'}` : `harvest up to ${plural(Math.max(Math.abs(lo), Math.abs(hi)), 'day')} either way`;
+      const harvest = harvestSaid(view.rows);
       const sd = view.seed, worthMoved = Math.abs(view.worth[1] - view.worth[0]) >= 0.5;
       const fig = (label, value, dataset, marked) => h('span' + (marked ? '.warn' : ''), { dataset }, h('i', label), h('b', value));
       add(sum,
         h('p.frame-figs.sw-figs',
           fig('plantings', `${num(view.ticked)} of ${num(view.rows.filter(r => TICKABLE.includes(r.state)).length)}`, { hook: 'swap-count' }),
-          fig('harvest', view.ticked ? `${num(moved.length)} move${moved.length === 1 ? 's' : ''}` : '—', { hook: 'swap-moves' }),
+          fig('harvest', view.ticked ? `${num(harvest.moves)} move${harvest.moves === 1 ? 's' : ''}` : '—', { hook: 'swap-moves' }),
           fig('season’s worth', worthMoved ? `${money(view.worth[0])} → ${money(view.worth[1])}` : `${money(view.worth[0])}, the same`, { hook: 'swap-worth' }),
           fig('overlaps', num(view.overlaps.length), { hook: 'swap-overlaps' }, view.overlaps.length > 0)),
-        view.ticked ? h('p.sw-say', { dataset: { hook: 'swap-by' } }, `Every sowing day stays. In ${plural(view.ticked, 'planting')}, ${by}.`) : h('p.sw-say', 'Nothing is ticked, so nothing would change.'),
+        view.ticked ? h('p.sw-say', { dataset: { hook: 'swap-by' } }, `Every sowing day stays. In ${plural(view.ticked, 'planting')}: ${harvest.said}.`) : h('p.sw-say', 'Nothing is ticked, so nothing would change.'),
         h('p.sw-say' + (sd.short > 0 ? '.warn' : ''), { dataset: { hook: 'swap-seed' } }, `Seed of ${to.name}: ${amount(sd.toNow, sd.unit)} to sow${sd.toWas ? ` (${amount(sd.toWas, sd.unit)} now)` : ''}, ${amount(sd.onHand, sd.unit)} on hand${sd.onOrder ? `, ${amount(sd.onOrder, sd.unit)} ordered` : ''}${sd.short > 0 ? `, ${amount(sd.short, sd.unit)} short` : sd.toNow ? ', enough' : ''}. ${from.name} then needs ${amount(sd.fromNow, sd.unit)}.`),
         view.overlaps.length ? h('ul.sw-overlaps', { dataset: { hook: 'swap-overlap-list' } }, view.overlaps.slice(0, 6).map(o => {
           const b = eng.bedOf(o.bedId), other = eng.planting(o.other);
@@ -274,5 +287,5 @@
     return { text: said.text, canUndo: App.state.undo[App.state.undo.length - 1] === said.step };
   }
 
-  return { choices, preview, open, swap, answer, isOpen: () => !!sheet, close: () => { if (sheet) sheet.close(); } };
+  return { choices, preview, harvestSaid, open, swap, answer, isOpen: () => !!sheet, close: () => { if (sheet) sheet.close(); } };
 });
