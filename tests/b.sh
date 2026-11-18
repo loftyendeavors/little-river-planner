@@ -34,6 +34,8 @@ for n in "$@"; do
     sup) python3 -I $T/sup_check.py $APP $S/sup 2>&1 | tally supplies ;;
     sup-site) python3 -I $T/sup_check.py $SITE $S/sup-site $ZIP 2>&1 | tally supplies-built-site ;;
     r1) python3 -I $T/r1_check.py $APP $S/r1 2>&1 | tally where-things-live ;;
+    bed-season) python3 -I $T/bed_season_check.py $APP $S/bed-season 2>&1 | tally bed-season ;;
+    bed-season-site) python3 -I $T/bed_season_check.py $SITE $S/bed-season-site $ZIP 2>&1 | tally bed-season-built-site ;;
     bedpanel) python3 -I $T/bedpanel_check.py $APP $S/bedpanel 2>&1 | tally bed-panel ;;
     bedpanel-site) python3 -I $T/bedpanel_check.py $SITE $S/bedpanel-site $ZIP 2>&1 | tally bed-panel-built-site ;;
     mixed) python3 -I $T/mixed_check.py $APP $S/mixed 2>&1 | tally mixed-beds ;;

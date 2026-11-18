@@ -27,11 +27,12 @@
       return all ? on / all : 0;
     };
   }
+  const fitsIn = (eng, o) => S.fits(eng, o, { mine: O.mine, covered: pickedShare(forecast(eng)) });
 
   // ───────────────────────────── an opening, in the details panel ─────────────────────────────
   const stat = (label, value) => h('div.stat', h('span', label), h('b', value));
   const labelFor = (o, crop) => `Plant ${lower(crop)} ${o.before ? 'before the ' + lower(o.before.r.c) : o.after ? 'after the ' + lower(o.after.r.c) : 'in open ground'}`;
-  const find = (eng, sel) => S.openings(eng, { bedId: sel.bedId }).find(o => o.id === sel.id) || null;
+  const find = (eng, sel) => S.openings(eng, { bedId: sel.bedId, empty: true }).find(o => o.id === sel.id) || null;
   /** What makes a crop fit, behind "?" beside "What fits" (DESIGN.md, rule 1). */
   const fitsHelp = () => UI.help(null, null, [['What fits', 'A crop that goes in whole, in season: its growing days, its harvest window and its turnover. A green edge: the plan has little or none of it then. Dashed: it would follow its own family.']], { label: 'What makes a crop fit', hook: 'fits-help', card: { hook: 'fits-help-card' } });
   function addFit(o, t, crop) {
@@ -78,7 +79,7 @@
     const eng = App.state.engine, o = find(eng, sel);
     if (!o) return false;
     if (O.key !== o.id) Object.assign(O, { key: o.id, pick: null, all: false });
-    const fits = S.fits(eng, o, { mine: O.mine, covered: pickedShare(forecast(eng)) }), shown = O.all ? fits : fits.slice(0, 8);
+    const fits = fitsIn(eng, o), shown = O.all ? fits : fits.slice(0, 8);
     const chips = shown.map(t => h('button.ah-fit' + (t.rotation ? '.rot' : t.covered != null && t.covered < 0.25 ? '.gap' : ''), { type: 'button', 'aria-pressed': String(!!(O.pick && O.pick.cropId === t.crop.id)), style: { '--crop': eng.cropColor(t.crop) }, dataset: { crop: t.crop.id },
       title: `${t.crop.name}: in ${day(t.r.field)}, harvest ${span(t.r.first, t.r.last)}${t.rotation ? '. Follows its own family here.' : t.covered != null && t.covered < 0.25 ? '. The plan has little or none of it then.' : ''}`,
       onclick: () => { O.pick = O.pick && O.pick.cropId === t.crop.id ? null : { cropId: t.crop.id, varietyId: '', date: '', ft: '' }; redraw(); } },
@@ -102,5 +103,5 @@
   }
 
   function init() { /* nothing to wire: an opening is drawn by the details panel, when one is selected */ }
-  root.LRFAhead = { init, opening, state: { O } };
+  root.LRFAhead = { init, opening, fitsIn, state: { O } };
 })(window);
