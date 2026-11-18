@@ -197,7 +197,7 @@ def run(pw):
     js(page, """const t = V.tasks().find(t => open(t) && t.due < now && t.sow && t.id === 'plugs'); if (!t || SL.lotsToUse(A.inventoryNow(), t.line.stockKey, t.line.stockUnit).length) return null;
       A.editStock('Seed counted', (inv, c) => SL.addLot(inv, { key: t.line.stockKey, unit: t.line.stockUnit, quantity: 5000, status: 'usable' }, c)); return null;""")
     seed0 = js(page, "return JSON.stringify((A.inventoryNow().lots || []).map(l => [l.id, l.quantity]));")
-    made = js(page, """const late = V.tasks().filter(t => open(t) && t.due < now);
+    made = js(page, """const arg0 = arg; const late = V.tasks().filter(t => open(t) && t.due < now);
       const inv = A.inventoryNow(), stocked = t => SL.lotsToUse(inv, t.line.stockKey, t.line.stockUnit).length > 0;
       const sows = late.filter(t => t.sow && t.id === 'plugs' && stocked(t)).slice(0, 2).concat(late.filter(t => t.sow && t.id === 'plugs' && !stocked(t)).slice(0, 1)), jobs = late.filter(t => !t.sow && t.id === 'plant').slice(0, 2), later = V.tasks().filter(t => open(t) && t.due > plus(now, 3) && !t.sow);
       A.recordWork(sows.flatMap(t => t.items()), { date: now, follow: true }); A.recordWork(jobs.flatMap(t => t.items()), { date: now, follow: true });
@@ -207,8 +207,13 @@ def run(pw):
       const pushed = sows.flatMap(t => t.items()).map(i => S.engine.planting(i.id)).find(p => W.pushed(p, 'sow') && W.steps(S.engine, p).some(st => st.kind === 'harden' && !st.done));
       if (pushed) A.delayWork([{ id: pushed.id, kind: 'harden' }], plus(E.d2s(W.step(S.engine, pushed, 'harden').planned), 3));
       const stacked = pushed ? pushed.id : null;
+      // and another planting, put off and then marked failed: its put-off goes back all the same, and the mark stays
+      const lost = sows.flatMap(t => t.items()).map(i => S.engine.planting(i.id)).find(p => p.id !== stacked && W.steps(S.engine, p).some(st => st.kind === 'harden' && !st.done));
+      let lostDay = null;
+      if (lost) { lostDay = S.engine.planting(lost.id).date; A.delayWork([{ id: lost.id, kind: 'harden' }], plus(E.d2s(W.step(S.engine, lost, 'harden').planned), 4)); A.markFailed(lost.id, now); }
+      const failedOne = lost && S.engine.planting(lost.id).failed ? { id: lost.id, date: JSON.parse(arg0).plantings.find(p => p.id === lost.id).date } : null;
       const note = V.tasks().find(t => open(t) && t !== put && t !== skip); A.noteWork(note.items(), 'kept note');
-      return { stacked, n: A.seasonRecords(), note: note.items().map(i => i.id), seed: JSON.stringify((A.inventoryNow().lots || []).map(l => [l.id, l.quantity])) };""")
+      return { stacked, failedOne, n: A.seasonRecords(), note: note.items().map(i => i.id), seed: JSON.stringify((A.inventoryNow().lots || []).map(l => [l.id, l.quantity])) };""", before["plan"])
     recorded = snap(page)
     check("the sowings recorded took seed off its lots, for the check of its return", made["seed"] != seed0)
     check("sowings, other tasks, a task put off, one skipped and a note are recorded through the page's own steps, for the check", made["n"]["sowings"] >= 1 and made["n"]["jobs"] >= 1 and made["n"]["delays"] >= 1 and made["n"]["skips"] >= 1, made["n"])
@@ -229,8 +234,12 @@ def run(pw):
     back = js(page, """const rec = S.plan.plantings.filter(p => (p.done && Object.keys(p.done).length) || (p.tasks && (p.tasks.delay || p.tasks.skip))).length;
       return { rec, n: A.seasonRecords(), notes: arg.map(id => S.engine.planting(id).tasks && S.engine.planting(id).tasks.note), seed: JSON.stringify((A.inventoryNow().lots || []).map(l => [l.id, l.quantity])), undo: S.undo.length };""", made["note"])
     snaps1 = page.evaluate("async () => (await LRFApp.snapshots()).rows.map(s => s.name)")
-    dates = js(page, "const e0 = E.create(JSON.parse(arg), LRFLibrary); return S.plan.plantings.filter(p => { const q = e0.planting(p.id), a = q && e0.calc(q), b = S.engine.calc(p); return a && b && [a.sow, a.field, a.first, a.last].map(String).join() !== [b.sow, b.field, b.first, b.last].map(String).join(); }).length;", before["plan"])
+    dates = js(page, "const e0 = E.create(JSON.parse(arg), LRFLibrary); return S.plan.plantings.filter(p => { if (p.failed) return false; const q = e0.planting(p.id), a = q && e0.calc(q), b = S.engine.calc(p); return a && b && [a.sow, a.field, a.first, a.last].map(String).join() !== [b.sow, b.field, b.first, b.last].map(String).join(); }).length;", before["plan"])
+    if made["failedOne"]:
+        kept = js(page, "const p = S.engine.planting(arg.id); return { date: p.date, failed: !!p.failed, delay: !!(p.tasks && p.tasks.delay) };", made["failedOne"])
+        check("the planting put off and then marked failed is back on its first day, its put-off gone and its failed mark kept", kept["date"] == made["failedOne"]["date"] and kept["failed"] and not kept["delay"], {"kept": kept, "want": made["failedOne"]["date"]})
     check("a planting pushed by a late sowing and then put off is among them, for the check of the order things go back in", made["stacked"], made["n"])
+    check("a planting put off and then marked failed is among them", made["failedOne"], made["n"])
     check("everything recorded is taken back: no work, nothing put off, nothing skipped", back["rec"] == 0 and back["n"]["sowings"] + back["n"]["jobs"] + back["n"]["delays"] + back["n"]["skips"] == 0, back)
     check("every planting is back on the days it had before anything was recorded, and the seed is back on its lots", dates == 0 and back["seed"] == seed0, {"dates": dates})
     check("the note is kept", all(x and "kept note" in json.dumps(x) for x in back["notes"]), back["notes"])

@@ -1205,8 +1205,9 @@
     let inventory = inventoryNow(), touched = false, returned = 0, lost = 0, sowings = 0, jobs = 0, delays = 0, skips = 0;
     for (const p0 of state.plan.plantings) {
       if (String(p0.date).slice(0, 4) !== year) continue;
-      // one planting at a time, its seed carried in a copy that is kept only when the whole planting went back
-      let p = p0, inv = inventory, back = { returned: 0, lost: 0, sowings: 0, jobs: 0, delays: 0, skips: 0, inv: false };
+      // one planting at a time, its seed carried in a copy that is kept only when the whole planting went back. A planting marked
+      // failed lists no work, so its work is undone with the mark set aside, and the mark put back after: failed marks stay
+      let p = p0.failed ? Week.fail(p0, null) : p0, inv = inventory, back = { returned: 0, lost: 0, sowings: 0, jobs: 0, delays: 0, skips: 0, inv: false };
       try {
         // Work is undone last first, whatever kind it was: a put-off that still stands where it was put goes back by its days, and
         // otherwise the latest recorded job is taken back (a planting it pushed returns to its day). Each undo can let an earlier
@@ -1234,6 +1235,8 @@
         for (const kind of Object.keys(t.delay || {})) { p = Week.withTask(p, 'delay', kind, null); back.delays++; }
         for (const kind of Object.keys(t.skip || {})) { p = Week.withTask(p, 'skip', kind, null); back.skips++; }
       } catch (error) { failed.push({ id: p0.id, label: cropLabel(p0), why: error.message || 'It could not be taken back.' }); continue; }
+      if (p0.failed) p = { ...p, failed: p0.failed };
+      if (!(back.sowings + back.jobs + back.delays + back.skips)) p = p0;
       inventory = inv; if (back.inv) touched = true;
       returned += back.returned; lost += back.lost; sowings += back.sowings; jobs += back.jobs; delays += back.delays; skips += back.skips;
       if (p !== p0) ops.push({ before: p0, after: p });

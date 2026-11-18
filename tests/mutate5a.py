@@ -66,12 +66,12 @@ NODE = [
  ("a put-off with half its days is read as one", "js/week.js", "return x && isDay(x.from) && isDay(x.to) ? x : null; };", "return x && isDay(x.from) ? x : null; };"),
  ("a note cleared is kept as an empty one", "js/week.js", "if (value == null || value === '') delete group[kind]; else group[kind] = value;", "if (value == null) delete group[kind]; else group[kind] = value;"),
  ("a skip with no real day is kept", "js/week.js", "    if (day != null && !isDay(day)) throw new Error('Choose a real calendar date.');\n    return withTask(p, 'skip', kind, day);", "    return withTask(p, 'skip', kind, day);"),
- ("a copy of a planting carries what was put off, skipped and noted", "js/rails.js", " delete next.standId; delete next.tasks; }", " delete next.standId; }"),
+ ("a copy of a planting carries what was put off, skipped and noted", "js/rails.js", " delete next.standId; delete next.tasks; delete next.failed; }", " delete next.standId; delete next.failed; }"),
  ("a skipped job is still listed as open", "js/week.js", "const open = line.members.filter(m => !m.st.done && !m.st.passed && !m.st.skipped), dated", "const open = line.members.filter(m => !m.st.done && !m.st.passed), dated"),
 ]
 PAGE = [
  ("the calendar does not say what a late job pushes", "js/sowview.js", "${!moved.length ? 'nothing moves' : pairs.length === 1", "${true ? 'nothing moves' : pairs.length === 1"),
- ("a late job recorded from the calendar pushes nothing", "js/sowview.js", "const done = App.recordWork(items, { date, follow: true });", "const done = App.recordWork(items, { date, follow: false });"),
+ ("a late job recorded from the calendar pushes nothing", "js/sowview.js", "const items = t.items(), now = App.today(), before = where(items.map(i => i.id)), off = diff(date, t.due), unit = stockUnitOf(t);\n    const done = App.recordWork(items, { date, follow: true });", "const items = t.items(), now = App.today(), before = where(items.map(i => i.id)), off = diff(date, t.due), unit = stockUnitOf(t);\n    const done = App.recordWork(items, { date, follow: false });"),
  ("the plan of record is taken every time", "js/app.js", "const same = options.why ? kept.find(s => s.why === options.why) : null;", "const same = null;"),
  ("the plan of record is never taken", "js/app.js", "if (done && first) { done.planOfRecord = true; keepPlanOfRecord(before); }", "if (false) { done.planOfRecord = true; keepPlanOfRecord(before); }"),
  ("the calendar offers a day after today for a record", "js/sowview.js", "hi: mode === 'go' ? '9999-12-31' : mode === 'delay' ? last : now };", "hi: mode === 'go' ? '9999-12-31' : last };"),

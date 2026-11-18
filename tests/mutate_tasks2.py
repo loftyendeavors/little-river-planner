@@ -72,6 +72,7 @@ PAGE = [
  ("Not yet records it all the same", SV, "dataset: { close: '1', hook: 'tasks-ahead-no' } }, 'Not yet')", "dataset: { ahead: 'yes', hook: 'tasks-ahead-no' } }, 'Not yet')"),
  ("the take-back sheet does not count what was skipped", SV, "n.skips ? `${plural(n.skips, 'skipped task')} back on the list` : ''].filter(Boolean);", "''].filter(Boolean);"),
  ("Take back everything undoes what was put off before the late work under it", AP, "          if (standing) {", "          if (standing && false) {"),
+ ("a failed planting's put-off is cleared and not taken back", AP, "      let p = p0.failed ? Week.fail(p0, null) : p0, inv = inventory,", "      let p = p0, inv = inventory,"),
  ("Take back everything clears the notes too", AP, "        for (const kind of Object.keys(t.skip || {})) { p = Week.withTask(p, 'skip', kind, null); back.skips++; }", "        for (const kind of Object.keys(t.skip || {})) { p = Week.withTask(p, 'skip', kind, null); back.skips++; }\n        delete p.tasks;"),
  ("Take back everything keeps no snapshot", AP, "    const kept = await snapshot(`Before everything recorded in ${year} was taken back`);\n    if (!kept && Snaps && !isSample()) { toast('The snapshot could not be kept, so nothing was taken back.'); return null; }\n", "    const kept = null;\n"),
  ("Take back everything is a step for each planting", AP, "    if (!commit(`Everything recorded in ${year} taken back`, ops, { unchecked: true })) return null;", "    for (const op of ops) commit(`Everything recorded in ${year} taken back`, [op], { unchecked: true });"),
