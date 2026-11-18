@@ -55,6 +55,10 @@
 
   "succession": 31,
 
+  "swap, backup": 32,
+
+  "swap, compact": 32,
+
   "sync client": 154,
 
   "sync service": 139,
@@ -157,6 +161,8 @@
 
   "stepF": 47,
 
+  "swap": 32,
+
   "trycard": 50,
 
   "wide": 28
@@ -250,6 +256,8 @@
 
   "stepF-site": 47,
 
+  "swap-site": 32,
+
   "sync-site": 92,
 
   "tour": 4,
@@ -314,6 +322,8 @@
   "stepF-site @3440": 47,
 
   "stepF-site dark": 47,
+
+  "swap-site @3440": 32,
 
   "trycard-site @3440": 50
 

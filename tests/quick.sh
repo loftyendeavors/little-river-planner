@@ -42,6 +42,8 @@ node $T/look_a_test.cjs $APP $PLAN | named "look-a, backup"
 node $T/look_a_test.cjs $APP $SHIP | named "look-a, compact"
 node $T/things_test.cjs $APP $PLAN $OLD | named "things, backup"
 node $T/things_test.cjs $APP $SHIP $OLD | named "things, compact"
+node $T/swap_test.cjs $APP $PLAN | named "swap, backup"   # the variety swap: the sowing days kept, the harvest moved by the difference in days
+node $T/swap_test.cjs $APP $SHIP | named "swap, compact"
 node $T/rails_test.cjs $APP $PLAN | named "rails"
 node $T/assume_test.cjs $APP $PLAN | named "assume"
 node $T/merge_test.cjs $APP $PLAN $FARM/inventory.json | named "merge"   # two copies of one plan joined, record by record: the rules, the five tests, 500 pairs of runs of edits
