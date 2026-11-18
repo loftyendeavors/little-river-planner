@@ -1,6 +1,20 @@
-# For agents that read or review this repository
+# For agents that work on this repository
 
-How a build is made and checked is in `tests/README.md`. The rules below are for a reviewer of a pull request.
+Follow `tests/README.md` for builds and checks and `DESIGN.md` for screen changes.
+
+## Claude and Codex development workflow
+
+- **Small changes** such as wording or local visual polish use one implementer and a focused check in the app. Keep the usual checks that apply. No separate design review or GPT Zoom Out by default.
+- **Contained features and fixes** use one implementer and an independent pull request reviewer. Choose the builder with the strongest context for the task. The reviewer verifies the actual change on the current branch and runs or checks evidence for the relevant grower workflow.
+- **Consequential changes** to grower workflows, shared behavior across builds or views, planning figures, or saved data and sync get a short Claude–Codex design review first. On the issue or pull request, record the goal in the grower's words, baseline, scope, overlapping builds or files, and the expected result in a realistic example. Prefer one round of feedback. Assign one owner per change and agree on merge order for overlapping work. The later change owns verification of the combined behavior. Resolve factual disagreements against the running app, code or a reproducible test. Bring material product tradeoffs to the owner in one decision with a recommendation.
+
+## GPT Zoom Out
+
+For consequential changes, Codex owns a read-only GPT Zoom Out before the preview or merge decision. The owner can also ask for **“Zoom out”** at any time to review a proposal, a build or a set of changes. Delegate the check to a fresh GPT reviewer where supported. Use the strongest available GPT with high reasoning or higher (currently GPT-6.2 Astra on this Codex workspace). Record the actual model and any verification gaps. Keep this pass distinct from code review and use a test plan or authorized private preview.
+
+Compare the current app, the proposal or preview, relevant design decisions, nearby builds and unresolved findings from earlier reviews. Walk through a real grower job end to end on the affected views and devices. Check that the next action is clear under field conditions, terminology and figures agree across views, recorded work stays distinct from plans, and mistakes are visible and reversible. Only check data, sync and devices relevant to the change. Look for duplicate controls, extra steps, missing handoffs and changes that should be sequenced or deferred.
+
+Put a short verdict in the shared handoff. Choose **Ready**, **Revise** or **Needs an owner decision**. Give the example walked, the most important findings and what should happen next. Carry forward open issues with an owner or a linked follow-up. Keep private farm data and previews out of public handoffs. The owner decides product tradeoffs and approvals under the existing release process.
 
 ## Code Review Rules
 
