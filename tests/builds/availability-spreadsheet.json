@@ -1,5 +1,5 @@
 {
-  "code": ["js/forecast.js", "js/harvestview.js"],
+  "code": ["forecast.js", "harvestview.js"],
   "changes": {
     "did": "The availability spreadsheet follows the list you review, including crop kind, dates, varieties and prices.",
     "steps": ["In Forecast, open A list to send and choose Flowers only.", "Choose a stretch and whether to include varieties or prices.", "Download the spreadsheet and compare it with the list."]
