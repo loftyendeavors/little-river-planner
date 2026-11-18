@@ -37,14 +37,14 @@ PRE = ("const A = LRFApp, S = A.state, E = LRFEngine, F = LRFForecast, $ = id =>
        "const ownW = o => !!o && (o.harvestMode === 'season' || o.harvestMode === 'window' || (o.hw != null && o.hw !== '' && +o.hw >= 0));"
        "const placeOf = (e, p) => { const b = e.bedOf(p.bedId); return !b || e.isRack(b) ? null : e.envOf(b); };"
        "const followsP = (e, p) => { const v = e.variety(p.varietyId); return !ownW(p) && !p.harvestEnd && !(v && v.cropId === p.cropId && ownW(v)); };"
-       "const ends = (e, id) => { const out = {}; for (const p of e.plan.plantings) { if (p.cropId !== id || !followsP(e, p)) continue; const env = placeOf(e, p), r = env ? e.calc(p) : null; if (!r) continue; const x = out[env] || (out[env] = { from: E.d2s(r.last), to: E.d2s(r.last), n: 0 }); const d = E.d2s(r.last); if (d < x.from) x.from = d; if (d > x.to) x.to = d; x.n++; } return out; };"
+       "const ends = (e, id) => { const out = {}; for (const p of e.plan.plantings) { if (p.cropId !== id || !followsP(e, p)) continue; const env = placeOf(e, p), r = env ? e.calc(p) : null; if (!r || !(r.harvestDays > 0)) continue; const x = out[env] || (out[env] = { from: E.d2s(r.last), to: E.d2s(r.last), n: 0 }); const d = E.d2s(r.last); if (d < x.from) x.from = d; if (d > x.to) x.to = d; x.n++; } return out; };"
        "const ownN = (e, id) => e.plan.plantings.filter(p => p.cropId === id && placeOf(e, p) && e.calc(p) && !followsP(e, p)).length;"
        # the plan with a change made here by hand, and its engine
        "const copy = () => JSON.parse(JSON.stringify(S.plan)), engineOf = plan => E.create(plan, LRFLibrary);"
        "const withDays = (id, n) => { const p = copy(); p.assumptions = p.assumptions || { v: 1, crops: {}, varieties: {} }; p.assumptions.sell = p.assumptions.sell || {}; p.assumptions.sell[id] = { ...(p.assumptions.sell[id] || {}), days: n }; return p; };"
        "const withSeason = id => { const p = copy(); const sell = ((p.assumptions || {}).sell || {})[id]; if (sell) delete sell.days; p.crops = p.crops || []; const i = p.crops.findIndex(c => c.id === id); if (i >= 0) p.crops[i] = { ...p.crops[i], harvestMode: 'season' }; else p.crops.push({ id, harvestMode: 'season' }); return p; };"
        # each place's last picking that moves between two engines, for the plantings that follow the line
-       "const moves = (a, b, id) => { const out = {}; for (const p of a.plan.plantings) { if (p.cropId !== id || !followsP(a, p)) continue; const env = placeOf(a, p), r = env ? a.calc(p) : null, q = b.planting(p.id), s = r && q ? b.calc(q) : null; if (!r || !s || +r.last === +s.last) continue; const x = out[env] || (out[env] = { wasFrom: E.d2s(r.last), wasTo: E.d2s(r.last), nowFrom: E.d2s(s.last), nowTo: E.d2s(s.last), n: 0 }); const w = E.d2s(r.last), v = E.d2s(s.last); if (w < x.wasFrom) x.wasFrom = w; if (w > x.wasTo) x.wasTo = w; if (v < x.nowFrom) x.nowFrom = v; if (v > x.nowTo) x.nowTo = v; x.n++; } return out; };"
+       "const moves = (a, b, id) => { const out = {}; for (const p of a.plan.plantings) { if (p.cropId !== id || !followsP(a, p)) continue; const env = placeOf(a, p), r = env ? a.calc(p) : null, q = b.planting(p.id), s = r && q ? b.calc(q) : null; if (!r || !s || +r.last === +s.last || (!(r.harvestDays > 0) && !(s.harvestDays > 0))) continue; const x = out[env] || (out[env] = { wasFrom: E.d2s(r.last), wasTo: E.d2s(r.last), nowFrom: E.d2s(s.last), nowTo: E.d2s(s.last), n: 0 }); const w = E.d2s(r.last), v = E.d2s(s.last); if (w < x.wasFrom) x.wasFrom = w; if (w > x.wasTo) x.wasTo = w; if (v < x.nowFrom) x.nowFrom = v; if (v > x.nowTo) x.nowTo = v; x.n++; } return out; };"
        "const twice = (a, b) => { const pairs = e => { const m = new Map(); for (const p of e.plan.plantings) { const r = e.calc(p); if (r) for (const o of e.conflicts(p, r)) if (!o.rest) m.set([p.id, o.p.id].sort().join('|'), p.bedId); } return m; }; const was = pairs(a); return [...new Set([...pairs(b)].filter(([k]) => !was.has(k)).map(([, bed]) => A.bedLabel(b.bedOf(bed), b)))].sort(); };"
        # the forecast's rows, each with its total, worth and day-by-day amounts: what "the forecast" is when two are compared
        "const rowsOf = e => Object.fromEntries(F.build(e).rows.map(r => [r.key, { crop: r.cropId, total: r.total, worth: r.worth, days: [...r.days].map(x => Math.round(x * 1e6) / 1e6).join(',') }]));"
@@ -219,6 +219,15 @@ with sync_playwright() as pw:
         undo_to(0)
     else: kv, shv = Missing(), Missing()
     check("a planting whose variety carries harvest days of its own keeps them: Last picking leaves it out, and the sheet counts it among those that do not move", isinstance(vv, str) and kv["undo"] == 1 and kv["card"] == kv["engine"] and bool(shv) and shv["own"] == kv["own"] and js("return snap();")["key"] == snap0["key"], {"card": kv.get("card"), "engine": kv.get("engine"), "own": [shv.get("own") if shv else None, kv.get("own")]})
+
+    # ── a planting ripe only after its season's end is never picked: it is not in the forecast, and gives Last picking no date ──
+    zz = js("""const id = %s, fol = S.plan.plantings.filter(p => p.cropId === id && placeOf(S.engine, p) && followsP(S.engine, p)).map(p => S.engine.calc(p)).filter(r => r && r.harvestDays > 0).map(r => r.first).sort((a, b) => a - b);
+      if (!fol.length) return null; const last = E.addDays(fol[fol.length - 1], -1), md = String(last.getMonth() + 1).padStart(2, '0') + '-' + String(last.getDate()).padStart(2, '0'), own = (S.plan.crops || []).find(c => c.id === id) || null;
+      A.revise('A season that ends before a planting is ripe', [{ kind: 'crop', before: own, after: { ...(own || { id }), harvestUntil: md } }]); return md;""" % json.dumps(cid))
+    wait(900); open_crop(sub["plant"], 200); open_crop(cid, 300)
+    kz = js("const id = %s, never = S.plan.plantings.filter(p => p.cropId === id && placeOf(S.engine, p) && followsP(S.engine, p) && S.engine.calc(p) && !(S.engine.calc(p).harvestDays > 0)).length; return { card: cardEnds(), engine: ends(S.engine, id), never, undo: S.undo.length };" % json.dumps(cid))
+    undo_to(0)
+    check("a planting ripe only after its season's end is never picked: Last picking gives it no date, as the forecast counts nothing of it", isinstance(zz, str) and kz["undo"] == 1 and kz["never"] > 0 and kz["card"] == kz["engine"] and js("return snap();")["key"] == snap0["key"], {"card": kz.get("card"), "engine": kz.get("engine"), "never": kz.get("never")})
 
     # ── the same, typed on the list ──
     click('[data-ah-way="list"]', 700)

@@ -35,6 +35,7 @@ PAGE = [
  ("the number offered is the days a total is spoken of over, not the crop's own days", YC, "offer = Math.max(1, Math.round(+c.hw > 0 ? +c.hw : hc.nominal || 1));", "offer = Math.max(1, Math.round(hc.nominal || 1));"),
  ("the season's end is never pressed", YC, "h('button.yc-hw-end', { type: 'button', 'aria-pressed': String(w.season),", "h('button.yc-hw-end', { type: 'button', 'aria-pressed': 'false',"),
  ("last picking counts the plantings that keep their own days", YC, "      if (p.cropId !== c.id || !follows(eng, p)) continue;\n      const env = envOfP(eng, p), r = env ? eng.calc(p) : null;", "      if (p.cropId !== c.id) continue;\n      const env = envOfP(eng, p), r = env ? eng.calc(p) : null;"),
+ ("last picking gives a date to a planting that is never picked", YC, "      if (!r || !(r.harvestDays > 0) || !root.LRFEngine.validDate(r.last)) continue;", "      if (!r || !root.LRFEngine.validDate(r.last)) continue;"),
  ("last picking says the earliest date as the latest", YC, "to: iso(ends.get(env).hi), n: String(ends.get(env).n)", "to: iso(ends.get(env).lo), n: String(ends.get(env).n)"),
  ("a variety's own days are not seen", YC, "return !owns(p) && !p.harvestEnd && !(v && v.cropId === p.cropId && owns(v)) && !!b && !eng.isRack(b);", "return !owns(p) && !p.harvestEnd && !!b && !eng.isRack(b);"),
  ("nothing is asked before the change is taken", YC, "    if (m.n || moved || m.beds.length || m.things) {", "    if (false) {"),

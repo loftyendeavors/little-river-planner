@@ -211,13 +211,13 @@
     const season = hc.days.mine == null && hc.season, offer = Math.max(1, Math.round(+c.hw > 0 ? +c.hw : hc.nominal || 1));
     return { season, days: season ? null : hc.days.value, offer: season ? offer : hc.days.value };
   }
-  /** Each place's last picking under the line as it stands: the dates of the plantings there that follow it, earliest and latest. */
+  /** Each place's last picking under the line as it stands: the dates of the plantings there that follow it and are picked at all, earliest and latest. */
   function endsOf(eng, c) {
     const out = new Map();
     for (const p of eng.plan.plantings || []) {
       if (p.cropId !== c.id || !follows(eng, p)) continue;
       const env = envOfP(eng, p), r = env ? eng.calc(p) : null;
-      if (!r || !root.LRFEngine.validDate(r.last)) continue;
+      if (!r || !(r.harvestDays > 0) || !root.LRFEngine.validDate(r.last)) continue;   // ripe after its season's end: never picked, and not in the forecast
       const at = out.get(env) || { lo: r.last, hi: r.last, n: 0 };
       if (r.last < at.lo) at.lo = r.last;
       if (r.last > at.hi) at.hi = r.last;
@@ -238,7 +238,7 @@
       const env = envOfP(eng, p), a = env ? eng.calc(p) : null, q = next.planting(p.id), b = a && q ? next.calc(q) : null;
       if (!a || !b) continue;
       if (!follows(eng, p)) { own++; continue; }
-      if (+a.last === +b.last) continue;
+      if (+a.last === +b.last || (!(a.harvestDays > 0) && !(b.harvestDays > 0))) continue;
       n++;
       const at = places.get(env) || { n: 0, was: [a.last, a.last], now: [b.last, b.last] };
       at.n++;
