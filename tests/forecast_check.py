@@ -415,6 +415,18 @@ with sync_playwright() as pw:
         if (!ops || Math.abs(worthOf(A.engineAfter(ops)) - was) < 1) continue;
         LRFYieldCard.setWindow(c, to, () => {}); return row.cropId; }
       return false;""")
+    # E2c: a last picking set for a place, on a crop picked to the season's end: the first, by worth, where a date a month before its
+    # season ends there moves the season's worth (worked out on the plan with the step, nothing kept)
+    follows_change("a place's last picking set", """const eng = S.engine, year = A.planYear(), m = F.build(eng, { year }), rows = m.rows.filter(r => !r.thing && r.total > 0).sort((a, b) => b.worth - a.worth);
+      const worthOf = e => F.build(e, { year }).rows.reduce((n, r) => n + r.worth, 0), was = worthOf(eng);
+      for (const row of rows) { const c = eng.crop(row.cropId), hc = eng.harvestFor(row.cropId); if (!c || !hc || hc.micro || !LRFYieldCard.windowOf(eng, c, hc).season) continue;
+        for (const x of row.plantings) { const b = x.r.b; if (!b || eng.isRack(b)) continue; const env = eng.envOf(b), md = E.d2s(E.addDays(x.r.last, -30)).slice(5), ops = A.sellOps(c.id, { until: { [env]: md } });
+          if (!ops || Math.abs(worthOf(A.engineAfter(ops)) - was) < 1) continue;
+          LRFYieldCard.setUntil(c, env, md, () => {}); return [row.cropId, env, md]; } }
+      return false;""")
+    # E2c: the first fall frost moved, under Season…: a frost-tender crop picked past it in open ground is cut
+    follows_change("the first fall frost moved", """const d = A.farmDates(), first = E.s2d(`${d.year}-${d.dates.frostFirst}`), md = E.d2s(E.addDays(first, -21)).slice(5);
+      return A.setFarmDates({ ...d.dates, frostFirst: md }) ? md : false;""")
 
     check("the page raised no error", not errors, errors[:4])
     browser.close()

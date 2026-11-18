@@ -24,11 +24,12 @@ const units = (e, p) => { const q = e.planting(p.id), y = e.yieldOf(q, e.calc(q)
 
 // ── the build itself moves nothing ──
 if (OLD) {
-  const E0 = require(path.join(OLD, 'engine.js')), F0 = require(path.join(OLD, 'forecast.js')), old = E0.create(core, Lib);
-  const off = core.plantings.filter(p => { const a = old.calc(p), b = eng.calc(p); if (!a !== !b) return true; if (!a) return false; const ya = old.yieldOf(p, a), yb = eng.yieldOf(p, b);
-    return +a.first !== +b.first || +a.last !== +b.last || +(a.sow || 0) !== +(b.sow || 0) || +old.occupancyThrough(p, a) !== +eng.occupancyThrough(p, b) || !ya !== !yb || (ya && (!near(ya.units, yb.units) || ya.unit !== yb.unit || ya.price !== yb.price || ya.set !== yb.set)); });
+  // the plantings the frost cuts (E2c) are held at their last day, which the build before knows no other way (tests/frost_held.cjs)
+  const E0 = require(path.join(OLD, 'engine.js')), F0 = require(path.join(OLD, 'forecast.js')), old = E0.create(core, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, core, old), Lib);
+  const off = core.plantings.filter(p => { const q = now.planting(p.id), a = old.calc(p), b = now.calc(q); if (!a !== !b) return true; if (!a) return false; const ya = old.yieldOf(p, a), yb = now.yieldOf(q, b);
+    return +a.first !== +b.first || +a.last !== +b.last || +(a.sow || 0) !== +(b.sow || 0) || +old.occupancyThrough(p, a) !== +now.occupancyThrough(q, b) || !ya !== !yb || (ya && (!near(ya.units, yb.units) || ya.unit !== yb.unit || ya.price !== yb.price || ya.set !== yb.set)); });
   check('with nothing set, every planting has the dates, the ground and the yield it had in 0.22', off.length === 0, off.slice(0, 3).map(p => p.id));
-  const m0 = F0.build(old), m1 = F.build(eng), k0 = new Map(m0.rows.map(r => [r.key, r]));
+  const m0 = F0.build(old), m1 = F.build(now), k0 = new Map(m0.rows.map(r => [r.key, r]));
   const rowsOff = m1.rows.filter(r => { const o = k0.get(r.key); return !o || !near(o.total, r.total) || !near(o.worth, r.worth) || o.unit !== r.unit || Array.from(r.days).some((v, i) => !near(v, o.days[i], 1e-9)); });
   check('with nothing set, the forecast is 0.22’s day for day, crop for crop', m0.rows.length === m1.rows.length && rowsOff.length === 0, rowsOff.slice(0, 3).map(r => r.key));
   check('with nothing kept, what is picked is what there is to sell', m1.keeps === false && m1.rows.every(r => Array.from(r.days).every((v, i) => near(v, r.picked[i], 1e-9)) && near(r.total, r.pickedTotal)));

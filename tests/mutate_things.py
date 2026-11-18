@@ -50,8 +50,8 @@ NODE = [
  ("a thing out of each bed takes the whole bed", EN, "for (const t of beds) parts.push(own(t, t.share / 100));", "for (const t of beds) parts.push(own(t, 1));"),
  ("the crop's own line is left whole beside a thing out of each bed", EN, "const bedLeft = 1 - beds.reduce((n, t) => n + t.share, 0) / 100,", "const bedLeft = 1,"),
  ("a week's picking is counted as a total", EN, "const each = weekly ? t.yield * days / 7 : t.yield,", "const each = t.yield,"),
- ("a thing's own harvest days are passed over", EN, "const days = t.days ? Math.min(t.days, r.harvestDays) : r.harvestDays,", "const days = r.harvestDays,"),
- ("a thing with harvest days of its own is picked to the planting's last day", EN, "last: addDays(r.first, Math.max(0, days - 1)), slice: part };", "last: r.last, slice: part };"),
+ ("a thing's own harvest days are passed over", EN, "days = t.days ? Math.min(t.days, there) : there,", "days = there,"),
+ ("a thing with harvest days of its own is picked to the planting's last day", EN, "last: addDays(r.first, Math.max(0, Math.min(days, r.harvestDays) - 1)), slice: part };", "last: r.last, slice: part };"),
  ("a thing is picked from the day after the planting's first picking", EN, "by: 'thing', keep: y.keep, first: r.first, last:", "by: 'thing', keep: y.keep, first: addDays(r.first, 1), last:"),
  # one harvest, packed two ways
  ("packed from the harvest, the amount is multiplied by what one holds", EN, "(t.way === 'weighs' ? t.weighs : 1 / t.holds)", "(t.way === 'weighs' ? t.weighs : t.holds)"),

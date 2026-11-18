@@ -234,13 +234,14 @@ tryCase('a planting marked failed is left as it is by a variety swap, and a live
 
 // ── 4. with no mark, nothing moved ──
 if (oldDir) {
-  const E0 = require(path.join(oldDir, 'engine.js')), e0 = E0.create(plan, Lib);
+  // the first fall frost's cut (E2c) is held, as in the other build-before comparisons (frost_held.cjs): what is compared is the mark
+  const E0 = require(path.join(oldDir, 'engine.js')), e0 = E0.create(plan, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, plan, e0), Lib);
   let differ = [];
-  for (const p of plan.plantings) {
-    const a = eng.calc(p), b = e0.calc(p);
+  for (const p0 of plan.plantings) {
+    const p = now.planting(p0.id) || p0, a = now.calc(p), b = e0.calc(p0);
     if (!a !== !b) { differ.push(p.id); continue; }
     if (!a) continue;
-    if ([a.sow, a.field, a.first, a.last, a.harvestDays, eng.occupancyThrough(p, a), (eng.yieldOf(p, a) || {}).units].map(D).join() !== [b.sow, b.field, b.first, b.last, b.harvestDays, e0.occupancyThrough(p, b), (e0.yieldOf(p, b) || {}).units].map(D).join()) differ.push(p.id);
+    if ([a.sow, a.field, a.first, a.last, a.harvestDays, now.occupancyThrough(p, a), (now.yieldOf(p, a) || {}).units].map(D).join() !== [b.sow, b.field, b.first, b.last, b.harvestDays, e0.occupancyThrough(p0, b), (e0.yieldOf(p0, b) || {}).units].map(D).join()) differ.push(p.id);
   }
   check('with no planting marked failed, every planting has the dates, the ground and the yield it had in the build before', differ.length === 0, differ.slice(0, 5));
 }

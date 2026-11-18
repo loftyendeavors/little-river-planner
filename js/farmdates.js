@@ -31,7 +31,7 @@
    */
   const FIELDS = [
     { key: 'frostLast', group: 'frost', label: 'Last spring frost', short: 'the last spring frost', fallback: null, does: 'A frost-tender crop is not offered ground open to frost before it. Crates and towers under cover move out on it, unless they have a day of their own.' },
-    { key: 'frostFirst', group: 'frost', label: 'First fall frost', short: 'the first fall frost', fallback: null, does: 'Where the harvest of a frost-tender crop ends in ground open to frost.' },
+    { key: 'frostFirst', group: 'frost', label: 'First fall frost', short: 'the first fall frost', fallback: null, does: 'Where the harvest of a frost-tender crop ends in ground open to frost: what it would pick after it is lost.' },
     { key: 'firstCoolField', group: 'field', label: 'Cool-season crops, from', short: 'the start of cool-season field planting', fallback: '04-15', does: 'The first day the planner offers a cool-season crop a place in the field.' },
     { key: 'firstWarmField', group: 'field', label: 'Warm-season crops, from', short: 'the start of warm-season field planting', fallback: '05-01', does: 'The first day it offers a warm-season crop a place in the field.' },
     { key: 'lastOutdoorField', group: 'field', label: 'Outdoor planting ends', short: 'the end of outdoor planting', fallback: '10-01', does: 'The last day it offers anything a place outdoors.' }

@@ -124,8 +124,10 @@
   function placesOf(eng, c, hc, x) {
     if (hc.micro) return { list: ['tray'], planted: x.n > 0 };
     const planted = eng.ENVS.filter(env => x.places.has(env));
-    if (planted.length) return { list: eng.ENVS.filter(env => x.places.has(env) || hc.cells[env].mine != null), planted: true };
-    return { list: eng.ENVS.filter(env => hc.cells[env].used), planted: false };
+    // a place with a figure or a last picking of his own keeps its column, planted there or not, so what he set can be seen and cleared
+    const his = env => hc.cells[env].mine != null || !!(hc.until || {})[env];
+    if (planted.length) return { list: eng.ENVS.filter(env => x.places.has(env) || his(env)), planted: true };
+    return { list: eng.ENVS.filter(env => hc.cells[env].used || !!(hc.until || {})[env]), planted: false };
   }
 
   // ───────────────────────── the checklist ─────────────────────────
@@ -264,6 +266,51 @@
     const eng = App.state.engine, change = { days: to }, ops = App.sellOps(c.id, change);
     if (!ops) { redraw(); return false; }
     const label = to === 'season' ? `${c.name}: picked to the season’s end` : to == null ? `${c.name}: harvest days as before` : `${c.name}: picked for ${to} days`;
+    if (!await askMoves(eng, c, ops, label, to === 'season' ? 'Pick to the season’s end' : to == null ? 'Go back' : `Pick for ${to} days`)) { redraw(); return false; }
+    const done = await App.setSell(c.id, change, label, { told: true, shown: true });
+    if (!done) redraw();
+    return done;
+  }
+  /**
+   * Set a place's last picking for a crop picked to the season's end: `md` a month and day ('10-31'), or null to go back to the
+   * season's end there. What it moves is shown first, as for the choice above; then it is the list's own step, with one Undo.
+   */
+  async function setUntil(c, env, md, redraw = () => ui.redraw()) {
+    const eng = App.state.engine, year = study(eng).year, change = { until: { [env]: md } }, ops = App.sellOps(c.id, change);
+    if (!ops) { redraw(); return false; }
+    const where = `${c.name}, ${PLACE[env].toLowerCase()}`, label = md ? `${where}: last picking ${UI.day(root.LRFEngine.s2d(`${year}-${md}`))}` : `${where}: picked to the season’s end`;
+    if (!await askMoves(eng, c, ops, label, md ? 'End it then' : 'Go back')) { redraw(); return false; }
+    const done = await App.setSell(c.id, change, label, { told: true, shown: true });
+    if (!done) redraw();
+    return done;
+  }
+  /** Where the season ends in a place with no date of his own, in words: whose day it is. */
+  const ENDS_BY = { frost: 'your first frost', cover: 'the first frost, under cover', close: 'the garden closes', record: 'the crop’s record', year: 'the year’s end' };
+  /**
+   * A place's last picking, for a crop picked to the season's end: a date he can set, the day in force, whose it is, and where the
+   * plantings there end if that is not one day. In open ground a date of his past the first frost is cut short by it, and says so.
+   */
+  function untilCell(eng, c, hc, env, year, at) {
+    // a date of his is read as the engine reads it: Feb 29 is Feb 28 in a common year
+    const se = eng.seasonEndOf(c.id, env, year), mine = hc.until[env] || null, own = mine ? root.LRFEngine.monthDayDate(year, mine) : null, inForce = own || (se && se.date);
+    const where = `${c.name}, ${PLACE[env].toLowerCase()}`, whose = mine ? 'yours' : se ? ENDS_BY[se.by] : '';
+    const input = h('input', { type: 'date', value: inForce ? iso(inForce) : '', min: `${year}-01-01`, max: `${year}-12-31`, 'aria-label': `${where}: last picking`, dataset: { yk: `until|${env}`, hook: 'harvest-until', place: env, mine: mine || '' },
+      title: mine ? `Your last picking ${IN[env]}. Clear it to go back to ${se ? `${ENDS_BY[se.by]}, ${UI.day(se.date)}` : 'the season’s end there'}.` : `The season ends ${IN[env]} on ${inForce ? UI.day(inForce) : 'no day'}: ${whose}. Pick a date to end it on another day. What that moves is shown first.` });
+    input.addEventListener('change', () => {
+      const v = input.value, md = v && root.LRFEngine.validDate(root.LRFEngine.s2d(v)) ? v.slice(5) : null;
+      if ((md || null) === mine || (!mine && md && inForce && iso(inForce).slice(5) === md)) { input.value = inForce ? iso(inForce) : ''; return; }
+      setUntil(c, env, md);
+    });
+    // what ends a date of his sooner: the first frost in open ground, or the day the garden closes, whichever comes first
+    const cut = own && se && se.frost && own > se.frost && !(se.close && se.close < se.frost) ? h('small.yc-total.warn', { dataset: { hook: 'harvest-until-frost' } }, `the first frost, ${UI.day(se.frost)}, cuts it short`) : null;
+    const shut = own && se && se.close && own > se.close && !cut ? h('small.yc-total.warn', { dataset: { hook: 'harvest-until-close' } }, `the garden closes ${UI.day(se.close)}, which ends it sooner`) : null;
+    const apart = at && (+at.lo !== +at.hi || !inForce || +at.hi !== +inForce) ? h('small.yc-total', `plantings end ${between(at.lo, at.hi)}`) : null;
+    // the dates the plantings there come to are carried on the line, as on a crop picked for a number of days (hook harvest-end)
+    const line = at ? { hook: 'harvest-end', place: env, from: iso(at.lo), to: iso(at.hi), n: String(at.n) } : {};
+    return [h('span.yc-line', { dataset: line }, h('span.yc-box.yc-date' + (mine ? '.mine' : ''), input), h('span.yc-unit', { dataset: { hook: 'harvest-until-whose' } }, whose)), cut, shut, apart];
+  }
+  /** Show what a step of the harvest window would move, in a sheet, whenever it moves anything; true when he agrees or nothing moves. */
+  async function askMoves(eng, c, ops, label, confirmLabel) {
     const m = movesOf(eng, c, ops), moved = Math.abs(m.worth[1] - m.worth[0]) >= 0.5;
     if (m.n || moved || m.beds.length || m.things) {
       const worth = moved ? `the season’s worth goes from ${money(m.worth[0])} to ${money(m.worth[1])}` : `the season’s worth stays ${money(m.worth[0])}`;
@@ -274,13 +321,10 @@
         h('p', { dataset: { hook: 'harvest-twice', beds: m.beds.join('|') } }, m.beds.length ? `Ground booked twice then: ${m.beds.join(', ')}. Not refused: ${m.beds.length === 1 ? 'it waits' : 'they wait'} under “To settle”.` : 'No ground ends up booked twice.'),
         m.own ? h('p', { dataset: { hook: 'harvest-own', n: String(m.own) } }, `${plural(m.own, 'planting')} ${m.own === 1 ? 'keeps its' : 'keep their'} own harvest days or last picking, and ${m.own === 1 ? 'does' : 'do'} not move.`) : null,
         m.things ? h('p', m.things.said) : null);
-      const ok = await UI.confirm({ title: `${label}?`, body: `${!m.n ? 'No planting’s last picking moves' : m.n === 1 ? 'One planting’s last picking moves' : `The last picking of ${num(m.n)} plantings moves`}, worked out on your plan as it stands. One undo takes it back.`,
-        confirmLabel: to === 'season' ? 'Pick to the season’s end' : to == null ? 'Go back' : `Pick for ${to} days`, detail });
-      if (!ok) { redraw(); return false; }
+      return UI.confirm({ title: `${label}?`, body: `${!m.n ? 'No planting’s last picking moves' : m.n === 1 ? 'One planting’s last picking moves' : `The last picking of ${num(m.n)} plantings moves`}, worked out on your plan as it stands. One undo takes it back.`,
+        confirmLabel, detail });
     }
-    const done = await App.setSell(c.id, change, label, { told: true, shown: true });
-    if (!done) redraw();
-    return done;
+    return true;
   }
   /**
    * The choice itself, one joined control: "To the season's end" | "For [N] days". `input` is the number box, made by the caller
@@ -426,12 +470,16 @@
         windowChoice(eng, c, hc, daysBox, T.any)))));   // beside the columns of other things sold, the narrow words
     }
 
-    // last picking: what the choice above comes to in each place, as dates: the plantings there that follow the crop's line
+    // last picking: what the choice above comes to in each place, as dates: the plantings there that follow the crop's line.
+    // Picked to the season's end, each place's end is a date he can set (E2c); picked for a set number of days, the number is
+    // said once, above, and this row gives only the dates it comes to.
     const ends = hc.micro ? new Map() : endsOf(eng, c), hw = hc.micro ? null : windowOf(eng, c, hc);
-    body.append(row('last', 'Last picking', null, cols.list.map(env => h('td', { dataset: { place: env } },
+    const dated = env => hw.season && hc.pattern.value !== 'once' && !hc.micro && env !== 'tray';
+    const said = env => ends.has(env) ? h('span.yc-line', { dataset: { hook: 'harvest-end', place: env, from: iso(ends.get(env).lo), to: iso(ends.get(env).hi), n: String(ends.get(env).n) } }, h('b.yc-fixed', between(ends.get(env).lo, ends.get(env).hi))) : null;
+    body.append(row('last', 'Last picking', hw && hw.season && hc.pattern.value !== 'once' ? 'the season’s end there, or a date of your own' : null, cols.list.map(env => h('td', { dataset: { place: env } },
       hc.micro ? why('none: a tray is taken whole') : hc.pattern.value === 'once' ? why('none: cleared in one day')
-        : ends.has(env) ? h('span.yc-line', { dataset: { hook: 'harvest-end', place: env, from: iso(ends.get(env).lo), to: iso(ends.get(env).hi), n: String(ends.get(env).n) } }, h('b.yc-fixed', between(ends.get(env).lo, ends.get(env).hi)))
-          : why(hw.season ? 'when the season ends there' : `${hw.days} days after the first`)))));
+        : dated(env) ? untilCell(eng, c, hc, env, year, ends.get(env))
+          : said(env) || why('counted from the first picking')))));
 
     // ── under the grid: what it comes to, and what it waits on ──
     const comes = [], units = [...x.units.values()].filter(k => k.total > 0);
@@ -615,5 +663,5 @@
     return { mine: made.mine, all: made.all, left };
   }
 
-  root.LRFYieldCard = { render, reset, open, unitChanged, current: () => ui.cur, order: () => ui.order.slice(), state: ui, box, windowOf, windowChoice, setWindow, follows };
+  root.LRFYieldCard = { render, reset, open, unitChanged, current: () => ui.cur, order: () => ui.order.slice(), state: ui, box, windowOf, windowChoice, setWindow, setUntil, follows };
 })(window);
