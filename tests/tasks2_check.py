@@ -298,6 +298,24 @@ def run(pw):
             check("the panel's sowing calendar goes back no further than a year before its planned day", got == cal["want"], {"min": got, "want": cal["want"]})
         else: check("a sowing still to record is there for the calendar's check", False)
 
+    # ── a change made while the take-back's snapshot is being kept is not lost by it ──
+    before = snap(page)
+    race = page.evaluate("""async () => { %s
+      const t = V.tasks().find(t => open(t) && t.due < now && t.items().length); if (!t) return null;
+      const items = t.items(); A.recordWork(items, { date: t.due, follow: true });
+      const going = A.takeBackSeason();                           // its snapshot is awaited; a note on the same planting lands meanwhile
+      A.noteWork(items, 'written while the snapshot was kept');
+      const done = await going, ids = items.map(i => i.id);
+      return { done: !!done, notes: ids.map(id => JSON.stringify((S.engine.planting(id).tasks || {}).note || null)), rec: S.plan.plantings.filter(p => p.done && Object.keys(p.done).length).length };
+    }""" % PRE)
+    check("the plan has a late task, for the check of a change made while the snapshot is kept", race)
+    if race:
+        check("a note written while Take back everything keeps its snapshot is kept, and the recorded work still goes back", race["done"] and race["rec"] == 0 and all("written while the snapshot was kept" in n for n in race["notes"]), race)
+        for _ in range(6):
+            if snap(page)["plan"] == before["plan"]: break
+            js(page, "A.undo(); return null;"); page.wait_for_timeout(250)
+        check("Undo gives back the plan exactly (the race)", snap(page)["plan"] == before["plan"])
+
     # ── two jobs of one planting recorded in one step (Mark all done with its sowing and a later job both late) ──
     before = snap(page)
     pair = js(page, """const d0 = plus(now, -4), d = plus(now, -2), by = new Map();

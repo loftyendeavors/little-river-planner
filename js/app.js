@@ -1206,8 +1206,8 @@
    * Each planting's jobs go back last first, so seed returns to its lots and a planting pushed by late work returns to its
    * day; then what was put off goes back where it was, and skips are cleared. Notes stay.
    */
-  async function takeBackSeason() {
-    if (elsewhere()) return refuse(elsewhere());
+  /** What taking back everything recorded in the season would change, worked out on the plan as it stands now. */
+  function seasonTakeBack() {
     const year = String(planYear()), ctx = { now: new Date().toISOString(), uid, year: planYear(), name: '', today: todayText() }, ops = [], failed = [];
     let inventory = inventoryNow(), touched = false, returned = 0, lost = 0, sowings = 0, jobs = 0, delays = 0, skips = 0;
     for (const p0 of state.plan.plantings) {
@@ -1249,12 +1249,21 @@
       if (p !== p0) ops.push({ before: p0, after: p });
     }
     if (touched) ops.push({ kind: 'inventory', before: state.plan.seedInventory || null, after: inventory });
-    if (!ops.length) { toast(failed.length ? `Nothing was taken back: ${failed[0].label}: ${failed[0].why}` : 'Nothing is recorded in this season.'); return null; }
-    const kept = await snapshot(`Before everything recorded in ${year} was taken back`);
+    return { year, ops, failed, sowings, jobs, delays, skips, returned, lost };
+  }
+  async function takeBackSeason() {
+    if (elsewhere()) return refuse(elsewhere());
+    let plan = state.plan, w = seasonTakeBack();
+    const none = x => { toast(x.failed.length ? `Nothing was taken back: ${x.failed[0].label}: ${x.failed[0].why}` : 'Nothing is recorded in this season.'); return null; };
+    if (!w.ops.length) return none(w);
+    const kept = await snapshot(`Before everything recorded in ${w.year} was taken back`, { plan });
     if (!kept && Snaps && !isSample()) { toast('The snapshot could not be kept, so nothing was taken back.'); return null; }
+    // the plan may have changed while the snapshot was kept (an edit, or changes taken in from another device): what goes back is
+    // worked out again on the plan as it is now, and the change made at once, with nothing awaited between the two
+    if (state.plan !== plan) { if (elsewhere()) return refuse(elsewhere()); plan = state.plan; w = seasonTakeBack(); if (!w.ops.length) return none(w); }
     const was = state.engine;
-    if (!commit(`Everything recorded in ${year} taken back`, ops, { unchecked: true })) return null;
-    return { sowings, jobs, delays, skips, returned: Math.round(returned * 1e6) / 1e6, lost: Math.round(lost * 1e6) / 1e6, failed, overlaps: impact(was, state.engine).overlaps, snapshot: kept ? kept.name : null };
+    if (!commit(`Everything recorded in ${w.year} taken back`, w.ops, { unchecked: true })) return null;
+    return { sowings: w.sowings, jobs: w.jobs, delays: w.delays, skips: w.skips, returned: Math.round(w.returned * 1e6) / 1e6, lost: Math.round(w.lost * 1e6) / 1e6, failed: w.failed, overlaps: impact(was, state.engine).overlaps, snapshot: kept ? kept.name : null };
   }
 
   /**
