@@ -139,11 +139,15 @@ def run_surface(context, floating):
     verify("an ordinary click on a painted planting opens its bed's season", selection() == {"type": "bed", "id": sample["bed"]} and season.is_visible(), selection())
     if not season.is_visible():
         select_bed(sample["bed"])
+    verify("a painted planting opens its own date and variety row", row.get_attribute("aria-expanded") == "true" and loc("bed-planting-date").is_visible() and loc("bed-planting-variety").is_visible())
     verify("the season strip and every planting appear in chronological order", loc("card-year").is_visible() and loc("card-planting").evaluate_all("rows => rows.map(r => r.dataset.planting)") == sample["rows"])
     image = row.locator("img")
     verify("a kept variety photo renders at 40 px in the row", image.count() == 1 and image.get_attribute("src") == sample["photo"] and image.evaluate("el => el.getBoundingClientRect().width") == 40)
-    verify("the picking row is marked in words", row.locator(hook("bed-planting-status") + '[data-state="picking"]').is_visible())
+    picking = row.locator(hook("bed-planting-status") + '[data-state="picking"]')
+    verify("the picking row is marked in words", picking.is_visible() and picking.inner_text() == "Picking")
     page.screenshot(path=str(shots / ("floating-card.png" if floating else "sidebar.png")))
+    if row.get_attribute("aria-expanded") == "true":
+        row.click()
 
     if floating:
         # Frame a bed that can take the planting; put the card over it without editing the layout.
@@ -252,11 +256,36 @@ def run_surface(context, floating):
     full.click()
     page.locator('#inspectorBody button[aria-label="Close"]').click()
     verify("the full inspector's × closes the selection", selection() is None and not season.is_visible())
+    page.evaluate("id => LRFApp.select({type: 'planting', id})", sample["id"])
+    if floating:
+        loc("card-full").click()
+    page.locator('#inspectorBody button[aria-label="Close"]').click()
+    verify("the full inspector's × also closes a planting opened directly", selection() is None and not season.is_visible())
+
+    # Two crops share the same painted bed on this date in the bundled farm.
+    split_bed = "north-field-1"
+    date("2027-04-20")
+    page.evaluate("id => LRFMap.fitSpaces([id], false, .6)", split_bed)
+    first_fill = page.locator('#mapBeds [data-planting="p0001"]').first
+    second_fill = page.locator('#mapBeds [data-planting="p0002"]').first
+    first_fill.click()
+    first_open = page.locator(planting("p0001")).get_attribute("aria-expanded") == "true"
+    second_fill.click()
+    verify("the second painted crop in a split bed replaces the first open row",
+           first_open and selection() == {"type": "bed", "id": split_bed} and
+           page.locator(planting("p0001")).get_attribute("aria-expanded") == "false" and
+           page.locator(planting("p0002")).get_attribute("aria-expanded") == "true" and
+           loc("bed-planting-date").count() == loc("bed-planting-variety").count() == 1 and key() == initial)
 
     select_bed(sample["empty"])
     empty_opening = loc("card-opening").first
     empty_opening.click()
     verify("an empty bed's opening opens the full fit planner", selection()["type"] == "opening" and page.locator("#ahTitle").is_visible())
+    page.evaluate("""() => {
+      const { type, id, bedId } = LRFApp.state.sel;
+      LRFApp.select({ type, id, bedId });
+    }""")
+    verify("an empty bed's opening resolves when reached without the bed-season route", page.locator("#ahTitle").is_visible())
     page.locator("#ahToBed").click()
 
     layout_bed = "north-field-7"
@@ -275,15 +304,44 @@ def run_surface(context, floating):
     verify("shortening a planted bed reports the exact before and after forecast values beside Undo",
            float(length.input_value()) == before - 4 and was != now and shorten.is_visible() and f"goes from ${was:,} to ${now:,}" in shorten.inner_text(), {"before": was, "after": now})
     loc("layout-shorten-undo").click()
-    verify("the layout Undo restores the original length and plan", float(length.input_value()) == before and key() == initial)
+    verify("the layout Undo restores the original length, forecast and plan", float(length.input_value()) == before and worth() == was and key() == initial)
     page.locator("#leDone").click()
     verify("Done returns to the same bed's season", selection() == {"type": "bed", "id": layout_bed} and season.is_visible())
     loc("card-layout").click()
     page.keyboard.press("Escape")
     verify("Escape returns to the same bed's season", selection() == {"type": "bed", "id": layout_bed} and season.is_visible())
     loc("card-layout").click()
+    page.evaluate("id => LRFMap.fitSpaces([id], false, .65)", split_bed)
+    page.locator(f'#mapBeds [data-bed={json.dumps(split_bed)}] .bed-base').click(force=True)
+    other_picked = page.evaluate("LRFMapEdit.picked()") == [split_bed]
+    page.keyboard.press("Escape")
+    verify("Escape clears a different layout pick without closing Edit layout",
+           other_picked and page.evaluate("LRFMapEdit.on() && LRFMapEdit.picked().length === 0"))
+    page.keyboard.press("Escape")
+    verify("Escape after clearing layout picks returns to the original bed", selection() == {"type": "bed", "id": layout_bed} and season.is_visible())
+    loc("card-layout").click()
     page.locator("#leClose").click()
     verify("the layout's × leaves no selection", selection() is None and not season.is_visible())
+
+    date(sample["picking"])
+    select_bed(sample["bed"])
+    failed_date = page.evaluate("""id => {
+      const a = LRFApp, p = a.state.engine.planting(id), r = a.state.engine.calc(p);
+      const failureDate = LRFEngine.d2s(r.first);
+      const change = {workflow: {...p.workflow, outcome: 'failed', failureDate}, done: {...p.done, flip: failureDate}};
+      if (a.updatePlanting(id, change, 'Record a legacy failure and clearance')) {
+        return LRFUI.day(r.first);
+      }
+      return null;
+    }""", sample["id"])
+    failed_marker = row.locator(hook("bed-planting-status") + '[data-state="failed"]')
+    strip_title = season.locator(hook("card-year")).evaluate("el => Array.from(el.querySelectorAll('[title]'), item => item.title)")
+    verify("an older failed planting has a Failed row and is marked on the season strip",
+           failed_date and failed_marker.is_visible() and failed_marker.inner_text() == "Failed" and
+           any(f" · Failed {failed_date}" in title for title in strip_title))
+    if failed_date:
+        undo()
+    verify("Undo restores the crop's picking status and plan", key() == initial and picking.is_visible())
 
     select_bed(sample["bed"])
     second_page = context.new_page()
@@ -296,10 +354,11 @@ def run_surface(context, floating):
 
 def run():
     chrome = os.environ.get("LRF_CHROME", "/usr/bin/google-chrome")
+    width = int(os.environ.get("WIDTH", "1280"))
     with sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=chrome, args=["--no-sandbox"])
         for floating in (False, True):
-            with browser.new_context(viewport={"width": 1280, "height": 900}) as context:
+            with browser.new_context(viewport={"width": width, "height": 900}) as context:
                 run_surface(context, floating)
         browser.close()
 

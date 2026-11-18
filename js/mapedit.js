@@ -596,6 +596,8 @@
   }
 
   // ── keys ──
+  const hasOtherPicks = () => S.picked.some(id => id !== S.returnBed);
+
   function key(e) {
     if (e.code === 'Space') spaceDown = e.type === 'keydown';
     if (e.type !== 'keydown' || !S.on || App.state.view !== 'map' || document.querySelector('dialog[open]')) return;
@@ -606,9 +608,8 @@
       if (S.drag) cancel();
       else if (S.tool || S.draft || S.tape) { if (typing) e.target.blur(); S.tool = null; S.draft = null; S.tape = null; refresh(); }   // a form half filled in is left without doing anything
       else if (typing) e.target.blur();
-      else if (S.returnBed) close(true);
-      else if (S.picked.length) pick([]);
-      else close();
+      else if (hasOtherPicks()) pick([]);
+      else close(!!S.returnBed);
       return;
     }
     if (typing) return;
@@ -789,8 +790,9 @@
     const beds = S.picked.map(bedOf).filter(Boolean), first = beds[0], garden = wholeGarden(), soil = beds.filter(b => kindOf(b) === 'bed'), one = beds.length === 1 ? first : null;
     const gardens = [...new Set(beds.map(b => gardenOf(b).name))], label = Lib.gardenTypeLabels || {};
     const plantings = beds.reduce((n, b) => n + eng().plantingsIn(b.id).length, 0), x = M.shapeOf(first.id);
+    const closeEditor = S.returnBed && !hasOtherPicks();
     panel.append(head(one ? `${gardenOf(one).name || 'Garden'} · ${label[gardenOf(one).type] || ''}` : garden ? `${label[garden.type] || 'Garden'} · ${plural(beds.length, 'space')}` : gardens.length === 1 ? gardens[0] : plural(gardens.length, 'garden'),
-      one ? nameOf(one) : garden ? garden.name : plural(beds.length, 'space'), S.returnBed ? () => close() : () => pick([]), S.returnBed ? 'Close' : 'Let go of what is picked'));
+      one ? nameOf(one) : garden ? garden.name : plural(beds.length, 'space'), closeEditor ? () => close() : () => pick([]), closeEditor ? 'Close' : 'Let go of what is picked'));
     // what it measures, to be read at a glance
     const same = key => soil.length && soil.every(b => +b[key] === +soil[0][key]) ? soil[0][key] : null, w = same('w'), l = same('l');
     if (soil.length) panel.append(h('div.stats.dims', { id: 'leDims' }, stat('Width (ft)', w == null ? 'mixed' : num(w, 2), 'leWidth'), stat('Length (ft)', l == null ? 'mixed' : num(l, 2), 'leLength'),

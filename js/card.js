@@ -225,6 +225,10 @@
   }
 
   // ── a bed's card ──
+  function failureDay(p, r) {
+    return E.s2d(r.failed || (p.workflow?.outcome === 'failed' ? p.workflow.failureDate : ''));
+  }
+
   /** The bed's year: a line for each length of it, plantings as bars, openings dashed, the planning date as an orange mark. */
   function bedYear(bed, all, openings) {
     const e = eng(), year = App.planYear(), a = +new Date(year, 0, 1), z = +new Date(year + 1, 0, 1), w = z - a, cap = e.capOf(bed) || 1;
@@ -236,7 +240,9 @@
       const where = x(from, end);
       if (!where) continue;
       const ys = f ? y(f.a0, f.a1) : r.partial ? y(0, r.len) : y(0, cap);
-      bars.push(h('i.cy-bar', { title: `${App.cropLabel(p)} · ${span(r.field, r.last)}`, style: { ...where, ...ys, '--crop': e.cropColor(r.c) } }));
+      const failedOn = failureDay(p, r), failed = E.validDate(failedOn) && failedOn <= App.state.date;
+      const title = failed ? `${App.cropLabel(p)} · Failed ${day(failedOn)}` : `${App.cropLabel(p)} · ${span(r.field, r.last)}`;
+      bars.push(h('i.cy-bar', { title, style: { ...where, ...ys, '--crop': failed ? 'var(--muted)' : e.cropColor(r.c) } }));
     }
     for (const o of openings) { const where = x(o.from, E.addDays(o.to, 1)); if (where) bars.push(h('i.cy-open', { style: { ...where, ...y(o.a0, o.a1) } })); }
     const date = App.state.date, mark = +date >= a && +date < z ? h('i.cy-now', { style: { left: `${((+date - a) / w * 100).toFixed(2)}%` } }) : null;
@@ -270,12 +276,12 @@
 
   function bedPlantingRow(x, bed, status, date, readOnly, redraw) {
     const { p, r } = x, e = eng(), f = e.footprint(p, r), through = e.occupancyThrough(p, r);
-    const failedOn = E.s2d(r.failed || (p.workflow?.outcome === 'failed' ? p.workflow.failureDate : ''));
+    const failedOn = failureDay(p, r);
     const failed = E.validDate(failedOn) && failedOn <= date;
     const here = status.crops.some(item => item.planting.id === p.id);
     const turnover = status.resting && e.occupancyFrom(p, r) <= date && date <= through && E.validDate(through);
     const state = failed ? 'failed' : here ? (r.first <= date && date <= r.last ? 'picking' : 'growing') : turnover ? 'turnover' : '';
-    const word = { failed: 'Failed', growing: 'In now', picking: 'In now', turnover: turnover ? `Turnover to ${day(E.addDays(through, 1))}` : '' }[state];
+    const word = { failed: 'Failed', growing: 'Growing', picking: 'Picking', turnover: turnover ? `Turnover · free ${day(E.addDays(through, 1))}` : '' }[state];
     const expanded = bedRow?.id === p.id, part = r.partial && f ? ` · ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} ft` : '';
     let press;
     const trigger = h('button.row.card-item.bed-planting-trigger', { type: 'button', 'aria-expanded': String(expanded), dataset: { hook: 'card-planting', planting: p.id },
@@ -356,6 +362,16 @@
     if (!bedRow) return;
     const row = [...document.querySelectorAll('.bed-planting-trigger')].find(el => el.dataset.planting === bedRow.id);
     row?.focus();
+  }
+
+  function openBedFromMap(bedId, plantingId) {
+    bedRow = plantingId ? { bedId, id: plantingId } : null;
+    App.select({ type: 'bed', id: bedId });
+    if (plantingId) {
+      const row = [...document.querySelectorAll('.bed-planting-trigger')].find(el => el.dataset.planting === plantingId);
+      row?.scrollIntoView({ block: 'nearest' });
+    }
+    revealBed(bedId);
   }
 
   function bedCard(bed) {
@@ -649,6 +665,6 @@
     draw();
   }
 
-  root.LRFCard = { init, tick, on: () => on, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, revealBed, keepBedFocus };
+  root.LRFCard = { init, tick, on: () => on, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, openBedFromMap, keepBedFocus };
   init();
 })(window);

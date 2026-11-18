@@ -649,8 +649,7 @@
     // while the series tool is asking for beds, a click on a bed names it
     if (bedId && root.LRFSeries && root.LRFSeries.picking() && root.LRFSeries.toggleBed(bedId)) return;
     if (bedId && root.LRFCard.bedSeasonOn(beds.get(bedId)?.bed)) {
-      App.select({ type: 'bed', id: bedId });
-      root.LRFCard.revealBed(bedId);
+      root.LRFCard.openBedFromMap(bedId, fill?.dataset.planting);
     } else if (fill) App.select({ type: 'planting', id: fill.dataset.planting });
     else if (bedId) App.select({ type: 'bed', id: bedId });
     else if (App.state.sel && App.state.sel.type !== 'series') App.select(null);   // a stray click on the photo does not throw a half-filled series away

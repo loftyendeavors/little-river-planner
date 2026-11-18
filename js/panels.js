@@ -610,7 +610,7 @@
         h('p.eyebrow', c.name), h('h2', c.vname || c.name),
         h('button.link', { type: 'button', dataset: fromBedSeason ? { hook: 'bed-planting-back' } : {},
           onclick: () => fromBedSeason ? root.LRFCard.backToBed(bed.id) : App.select({ type: 'bed', id: bed.id }) }, App.bedLabel(bed)),
-        h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select(fromBedSeason ? null : { type: 'bed', id: bed.id }) }, '×')),
+        h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select(null) }, '×')),
       h('section.insp-section.form',
         field(c.method === 'TP' ? 'Transplant date' : sow && sow.kind === 'field' && sow.done ? 'Planned sowing date' : 'Sowing date', h('input', { type: 'date', id: 'fDate', value: p.date, onchange: e => { const ed = edit.date(e.target.value); if (ed) set(...ed); else render(); } })),
         field('Variety', variety, canMix && !several ? h('button.linkish', { type: 'button', id: 'fSeveral', title: 'Grow several varieties in this bed: each becomes a planting of its own beside this one, and the bed is shared equally', onclick: () => { several = { id: p.id, picked: new Set(), by: 'length' }; render(); } }, 'Several varieties in this bed…') : null),
