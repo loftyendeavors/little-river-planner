@@ -624,7 +624,8 @@
       harvest: [['Marketable yield', 'What is packed and fit to sell, from a plant, a bed-foot or a tray.'], ['Gradually', 'The yield is a week’s picking, every week of the harvest window.'],
         ['Clear', 'The yield is a total, all of it on the day it is ready.'], ['On demand', 'The yield is a total, spread evenly over the harvest window.'], ['Harvest window', 'The days a planting is picked: to the season’s end, or a set number.']]
     };
-    $('asTitle').after(UI.help(() => $('asLead').textContent, () => $('assumeView'), () => WORDS[ui.mode] || []));
+    // the controls it names are the page's own tools; the crop list's rows carry titles too, and are not controls of the page
+    $('asTitle').after(UI.help(() => $('asLead').textContent, () => document.querySelector('#assumeView .as-tools'), () => WORDS[ui.mode] || [], { hook: 'assume-help', label: 'What this page is for' }));
     sheets();
     $('asSearch').addEventListener('input', e => { ui.query = e.target.value; render(); });
     for (const button of document.querySelectorAll('[data-as-scope]')) {

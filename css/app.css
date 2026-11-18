@@ -2369,7 +2369,8 @@ table.as tr.as-thing td { background: var(--surface); }
 .hint.cols dd { margin: 0; }
 .map-tools .help-btn { width: var(--control); height: var(--control); }   /* among the map's tools it is as high as they are */
 .sec-head { display: flex; align-items: center; gap: var(--space-8); }   /* a side panel section's head, with its "?" beside it */
-.bn-edit-head .help-btn { align-self: center; flex: none; }
+.bn-edit-head:has(> .help-btn) { align-items: center; }
+.bn-edit-head .help-btn { flex: none; }
 
 /* A sheet, and its foot: the way back at the left, then Cancel and the one dark button at the right. */
 .dialog { border: 0; border-radius: var(--corner-20); padding: var(--space-24); box-shadow: var(--shadow-float); }
