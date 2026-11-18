@@ -124,8 +124,10 @@
   function placesOf(eng, c, hc, x) {
     if (hc.micro) return { list: ['tray'], planted: x.n > 0 };
     const planted = eng.ENVS.filter(env => x.places.has(env));
-    if (planted.length) return { list: eng.ENVS.filter(env => x.places.has(env) || hc.cells[env].mine != null), planted: true };
-    return { list: eng.ENVS.filter(env => hc.cells[env].used), planted: false };
+    // a place with a figure or a last picking of his own keeps its column, planted there or not, so what he set can be seen and cleared
+    const his = env => hc.cells[env].mine != null || !!(hc.until || {})[env];
+    if (planted.length) return { list: eng.ENVS.filter(env => x.places.has(env) || his(env)), planted: true };
+    return { list: eng.ENVS.filter(env => hc.cells[env].used || !!(hc.until || {})[env]), planted: false };
   }
 
   // ───────────────────────── the checklist ─────────────────────────

@@ -240,6 +240,15 @@ with sync_playwright() as pw:
     bad_crop = js("return sameRows(%s, %s, c => c === %s);" % (json.dumps(ugot["rows"]), json.dumps(uwant["rows"]), json.dumps(fid)))
     bad_rest = js("return sameRows(%s, %s, c => c !== %s);" % (json.dumps(rows0), json.dumps(ugot["rows"]), json.dumps(fid)))
     check("the forecast then is the engine's on that plan, day by day, and every other crop's is as it was; the card shows the date as yours, and the plantings there end on it", bad_crop == [] and bad_rest == [] and ugot["until"][fenv]["value"] == (fd["before"] if fd else None) and ugot["until"][fenv]["whose"] == "yours" and ugot["ends"] == uwant["ends"] and uwant["ends"][fenv]["to"] == (fd["before"] if fd else None), {"crop": bad_crop, "rest": bad_rest[:3] if isinstance(bad_rest, list) else bad_rest, "until": ugot["until"].get(fenv)})
+    # a date kept for a place the crop is not planted in keeps that place's column, so it can be seen and cleared
+    farc = {}
+    far = js("const id = %s, envs = ['field', 'tunnel', 'heated', 'tower'], here = new Set(S.plan.plantings.filter(p => p.cropId === id && placeOf(S.engine, p)).map(p => placeOf(S.engine, p))); return envs.find(e => !here.has(e)) || null;" % json.dumps(fid))
+    if far:
+        js("const p = withUntil(%s, %s, '09-01'); A.revise('A date for a place with no planting', [{ kind: 'assume', before: S.plan.assumptions, after: p.assumptions }]); return 1;" % (json.dumps(fid), json.dumps(far))); wait(900)
+        open_crop(sub["plant"], 200); open_crop(fid, 300)
+        farc = js("return untilCells();")
+    check("a date he kept for a place the crop is not planted in keeps its column on the card, with the date as his", bool(far) and far in farc and farc[far]["mine"] == "09-01" and farc[far]["whose"] == "yours", {"place": far, "cells": farc if far else None})
+    if far: undo_to(1); open_crop(sub["plant"], 200); open_crop(fid, 300)
     # past the frost, in open ground: the frost cuts it short, and the card says so
     uwant2 = js("const id = %s, b = engineOf(withUntil(id, %s, %s)); return { was: worthOf(S.engine), now: worthOf(b), assume: JSON.stringify(b.plan.assumptions || null), ends: ends(b, id) };" % (json.dumps(fid), json.dumps(fenv), json.dumps(fd["past"][5:] if fd else "")))
     js("return pickDate(%s, %s);" % (json.dumps(fenv), json.dumps(fd["past"] if fd else ""))); wait(800)
