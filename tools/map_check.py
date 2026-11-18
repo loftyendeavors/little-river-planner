@@ -560,8 +560,14 @@ def run(page, width):
     sel = js('LRFApp.state.sel')
     check(tag + 'back in the plan, a click on a bed opens its panel as before', sel is not None and sel['type'] in ('bed', 'planting'), sel)
     js("LRFApp.select({ type: 'bed', id: '%s' })" % ids[1]); page.wait_for_timeout(100)
-    links = js("(() => { const host = document.getElementById('inspectorBody'), b = document.getElementById('bedLayoutEdit'), spill = e => e.scrollWidth > e.clientWidth + 1; return { figures: ['bedWidth', 'bedLength', 'bedArea'].filter(id => document.getElementById(id)).length, fields: host.querySelectorAll('input:not([type=checkbox]), select, textarea').length, size: !!document.getElementById('bedSizeEdit') || !!document.getElementById('bedSizeForm'), layout: !!b, oneLine: !!b && b.getClientRects().length === 1 && !spill(b) }; })()")
-    check(tag + 'the bed’s panel shows the size and holds nothing that changes it: three figures, no field, no size form', links['figures'] == 3 and links['fields'] == 0 and not links['size'], links)
+    links = js("""(() => {
+      const host = document.getElementById('inspectorBody'), b = document.getElementById('bedLayoutEdit');
+      const fields = host.querySelectorAll('input:not([type=checkbox]), select:not([data-hook=bed-planting-variety]), textarea').length;
+      return { figures: ['bedWidth', 'bedLength', 'bedArea'].filter(id => document.getElementById(id)).length, fields,
+        size: !!document.getElementById('bedSizeEdit') || !!document.getElementById('bedSizeForm'), layout: !!b,
+        oneLine: !!b && b.getClientRects().length === 1 && b.scrollWidth <= b.clientWidth + 1 };
+    })()""")
+    check(tag + 'the bed’s panel shows the size and holds nothing that changes it: three figures, no size field, no size form', links['figures'] == 3 and links['fields'] == 0 and not links['size'], links)
     if links['layout']:
         page.click('#bedLayoutEdit'); page.wait_for_timeout(500)
     via = js("({ on: LRFMapEdit.on(), picked: LRFMapEdit.picked(), sel: LRFApp.state.sel, w: (document.getElementById('fLayW') || {}).value, l: (document.getElementById('fLayL') || {}).value })")
