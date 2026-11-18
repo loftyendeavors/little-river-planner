@@ -21,15 +21,15 @@
     <button type="button" class="build-chip" id="buildChip" aria-haspopup="dialog" title="The build that is running. Press for what each build changed, with three things to try."></button>
   </div>
   <nav class="views" aria-label="Views">
-    <button type="button" data-view-btn="map" aria-pressed="true" title="The plan on the farm: where each crop goes">Map</button>
-    <button type="button" data-view-btn="timeline" aria-pressed="false" title="The plan through the season: when each crop goes in and comes out">Timeline</button>
-    <button type="button" data-view-btn="harvest" aria-pressed="false" title="What the plan gives, week by week">Harvest</button>
+    <button type="button" data-view-btn="map" data-hook="view-tab" aria-pressed="true" title="The plan on the farm: where each crop goes">Map</button>
+    <button type="button" data-view-btn="timeline" data-hook="view-tab" aria-pressed="false" title="The plan through the season: when each crop goes in and comes out">Timeline</button>
+    <button type="button" data-view-btn="harvest" data-hook="view-tab" aria-pressed="false" title="What the plan gives and earns, week by week, and over the season">Forecast</button>
     <i class="views-sep" aria-hidden="true"></i>
-    <button type="button" data-view-btn="sow" aria-pressed="false" title="The week’s work, nursery and field, ticked as it is done">Tasks</button>
-    <button type="button" data-view-btn="trays" aria-pressed="false" title="Bench room, live trays, supplies and the benches themselves">Nursery</button>
-    <button type="button" data-view-btn="seeds" aria-pressed="false" title="Varieties, seed stock and orders">Seeds</button>
+    <button type="button" data-view-btn="sow" data-hook="view-tab" aria-pressed="false" title="The week’s work, nursery and field, ticked as it is done">Tasks</button>
+    <button type="button" data-view-btn="trays" data-hook="view-tab" aria-pressed="false" title="Bench room, live trays, supplies and the benches themselves">Nursery</button>
+    <button type="button" data-view-btn="seeds" data-hook="view-tab" aria-pressed="false" title="Varieties, seed stock and orders">Seeds</button>
     <i class="views-sep" aria-hidden="true"></i>
-    <button type="button" data-view-btn="assume" aria-pressed="false" title="The figures the plan rests on, crop by crop">Assumptions</button>
+    <button type="button" data-view-btn="assume" data-hook="view-tab" aria-pressed="false" title="The figures the plan rests on, crop by crop">Assumptions</button>
   </nav>
   <div class="top-actions">
     <button type="button" class="wait-badge" id="waitBadge" hidden></button>

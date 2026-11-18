@@ -83,6 +83,7 @@
   /** "?": the round button that opens a hint under it (DESIGN.md, the frame). What a page used to say in a standing paragraph is said
    *  here, with what else the caller hands over (a page's figures in full), and what each of the page's own controls does: the
    *  words a control otherwise shows only to a pointer held over it. `lead` and `more` may be functions, read when it opens;
+   *  `lead` may give an element in place of a sentence, where what it says has parts (the Forecast page's);
    *  `from` is the element whose controls are listed, or a function that gives it. One hint is open at a time.
    *  `opts`: `id` for the button (its card is that id with "Card"), `label` for what it is called, `cols` for a card in two
    *  columns (a name, and what it does), where the rows are the whole of it. A row's second part may hold a button: pressing
@@ -106,7 +107,7 @@
       const said = host ? [...host.querySelectorAll('button[title], select[title], input[title], summary[title], a[title]')].filter(el => el !== btn && el.title && shown(el))
         .map(el => [(el.getAttribute('aria-label') || el.textContent || el.placeholder || '').trim().replace(/\s+/g, ' ').slice(0, 48), el.title]) : [];
       const rows = [...extra, ...said].filter(([name], i, all) => name && all.findIndex(x => x[0] === name) === i).slice(0, 14);
-      box = h('div.hint' + (opts.cols ? '.cols' : ''), { role: 'note', id: opts.id ? opts.id + 'Card' : null }, text ? h('p', text) : null, rows.length ? h('dl', rows.map(([name, what]) => [h('dt', name), h('dd', what)])) : null);
+      box = h('div.hint' + (opts.cols ? '.cols' : ''), { role: 'note', id: opts.id ? opts.id + 'Card' : null }, text ? (text.nodeType ? text : h('p', text)) : null, rows.length ? h('dl', rows.map(([name, what]) => [h('dt', name), h('dd', what)])) : null);
       box.addEventListener('click', e => { if (e.target.closest('button')) close(); });
       document.body.append(box);
       const r = btn.getBoundingClientRect(), w = box.offsetWidth;

@@ -245,18 +245,18 @@ with sync_playwright() as pw:
     # ── the Harvest page, and the list that is sent ──
     page.evaluate("LRFApp.setView('harvest')"); wait(600)
     hv = js("""const m = F.build(eng, { year: A.planYear() }), c = F.build(eng, { year: A.planYear(), use: 'commercial' }), o = F.build(eng, { year: A.planYear(), use: 'personal' });
-      const seg = $('hvUse'), tiles = [...document.querySelectorAll('#hvTiles .tr-stat')].map(x => x.textContent), rows = () => [...document.querySelectorAll('#hvTable tr.hv-row')].length;
+      const seg = $('hvUse'), tiles = ['week', 'season'].map(n => (document.querySelector(`[data-hook=fc-fig][data-fig=${n}]`) || {}).textContent || ''), rows = () => [...document.querySelectorAll('#hvTable tr.hv-row')].length;
       return { seg: seg ? [...seg.querySelectorAll('button')].map(b => [b.dataset.hvUse, b.textContent, b.getAttribute('aria-pressed'), b.getBoundingClientRect().height]) : null, tiles, note: txt('hvOwnNote'), foot: (document.querySelector('#hvTable tfoot .hv-name') || {}).textContent, footWorth: (document.querySelector('#hvTable tfoot .hv-total') || {}).textContent,
         rows: rows(), want: { all: m.rows.filter(r => r.total > 0).length, commercial: c.rows.filter(r => r.total > 0).length, personal: o.rows.filter(r => r.total > 0).length, marked: m.personal, worth: m.rows.reduce((n, r) => n + r.worth, 0) }, side: document.documentElement.scrollWidth > innerWidth + 1 };""")
     check("once something is marked, Harvest offers Everything, Commercial and Personal use, and opens on Everything", hv["seg"] is not None and [s[:3] for s in hv["seg"]] == [["all", "Everything", "true"], ["commercial", "Commercial", "false"], ["personal", "Personal use", "false"]] and all(s[3] < 40 for s in hv["seg"]) and hv["rows"] == hv["want"]["all"] and not hv["side"], hv)
-    check("its headline figures say which plantings they count: personal use included in what is ready, commercial only in the worth", "personal use included" in hv["tiles"][0] and "commercial plantings only" in hv["tiles"][1] and money(hv["want"]["worth"]) in hv["tiles"][1] and hv["footWorth"] == money(hv["want"]["worth"]) and "grown to sell" in hv["foot"], hv["tiles"][:2])
-    check("a note under the table says how many plantings are marked and what that does", f"{hv['want']['marked']} planting" in hv["note"] and "A list to send" in hv["note"], hv["note"])
+    check("its figures say which plantings they count: personal use included in the week's, commercial only in the season's worth", "personal use included" in hv["tiles"][0] and "commercial plantings only" in hv["tiles"][1] and money(hv["want"]["worth"]) in hv["tiles"][1] and hv["footWorth"] == money(hv["want"]["worth"]) and "grown to sell" in hv["foot"], hv["tiles"][:2])
+    check("behind “?”, a note says how many plantings are marked and what that does", f"{hv['want']['marked']} planting" in hv["note"] and "A list to send" in hv["note"], hv["note"])
     shot("harvest-everything")
     click("#hvUse [data-hv-use=commercial]")
-    hc = js("return { rows: document.querySelectorAll('#hvTable tr.hv-row').length, tile: document.querySelector('#hvTiles .tr-stat').textContent, use: LRFHarvestView.use() }")
+    hc = js("return { rows: document.querySelectorAll('#hvTable tr.hv-row').length, tile: (document.querySelector('[data-hook=fc-fig][data-fig=week]') || {}).textContent || '', use: LRFHarvestView.use() }")
     check("Commercial shows only what is grown to sell", hc["rows"] == hv["want"]["commercial"] and "commercial only" in hc["tile"] and hc["use"] == "commercial", hc)
     click("#hvUse [data-hv-use=personal]")
-    hp = js("return { rows: document.querySelectorAll('#hvTable tr.hv-row').length, tiles: [...document.querySelectorAll('#hvTiles .tr-stat')].map(x => x.textContent), foot: (document.querySelector('#hvTable tfoot .hv-total') || {}).textContent }")
+    hp = js("return { rows: document.querySelectorAll('#hvTable tr.hv-row').length, tiles: ['week', 'season'].map(n => (document.querySelector(`[data-hook=fc-fig][data-fig=${n}]`) || {}).textContent || ''), foot: (document.querySelector('#hvTable tfoot .hv-total') || {}).textContent }")
     check("Personal use shows only what is marked, and that it is worth nothing as revenue", hp["rows"] == hv["want"]["personal"] and hp["rows"] >= 1 and "personal use only" in hp["tiles"][0] and "$0" in hp["tiles"][1] and "not counted as revenue" in hp["tiles"][1] and hp["foot"] == "$0", hp)
     shot("harvest-personal")
     click("#hvShareBtn", 500)
@@ -280,7 +280,7 @@ with sync_playwright() as pw:
     end = js("return { key: A.contentKey(), marked: F.build(eng).personal, p: S.plan.plantings.map(p => p.id).join(','), b: S.plan.beds.map(b => b.id).join(','), g: S.plan.gardens.map(g => g.id).join(','), worth: worth() }")
     check("every mark taken back by Undo: nothing is marked, the worth is what it was, and the plan is the one he started from, record for record and in the same order", steps >= 4 and end["key"] == key0 and end["marked"] == 0 and end["p"] == order0["p"] and end["b"] == order0["b"] and end["g"] == order0["g"] and abs(end["worth"] - worth0) < 0.005, {"steps": steps, "key": end["key"] == key0, "marked": end["marked"]})
     page.evaluate("LRFApp.setView('harvest')"); wait(500)
-    plainh = js("return { seg: !!$('hvUse'), note: !!$('hvOwnNote'), tiles: [...document.querySelectorAll('#hvTiles .tr-stat')].map(x => x.textContent).join(' '), foot: (document.querySelector('#hvTable tfoot .hv-name') || {}).textContent }")
+    plainh = js("return { seg: !!$('hvUse'), note: !!$('hvOwnNote'), tiles: [...document.querySelectorAll('[data-hook=fc-fig]')].map(x => x.textContent).join(' '), foot: (document.querySelector('#hvTable tfoot .hv-name') || {}).textContent }")
     check("with nothing marked, Harvest is as it was: no choice of whom it is grown for, no note, and no figure says commercial or personal", not plainh["seg"] and not plainh["note"] and "commercial" not in plainh["tiles"] and "personal" not in plainh["tiles"] and plainh["foot"] == "Worth, at each crop’s own price", plainh)
     page.evaluate("LRFApp.setView('map')"); wait(300)
     check("the page raised no error", not errors, errors[:4])

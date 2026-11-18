@@ -179,7 +179,7 @@
     const close = () => { dialog.close(); dialog.remove(); };
     const go = async () => { const name = input.value.trim(); if (!name || name === t.name) return close(); close(); await App.setThing(c.id, t.id, { name }, `${c.name}: ${t.name} is now called ${name}`); };
     const dialog = h('dialog.dialog', { id: 'thRenameDlg', oncancel: e => { e.preventDefault(); close(); } }, h('h2', `${c.name}: another name for ${t.name}`),
-      h('p', 'Only the name changes: on the card, the list, the Harvest page and the list to send.'), h('label.field', h('span', 'What you sell'), input),
+      h('p', 'Only the name changes: on the card, the list, the Forecast page and the list to send.'), h('label.field', h('span', 'What you sell'), input),
       h('div.dialog-actions', h('button.btn', { type: 'button', onclick: close }, 'Cancel'), h('button.btn.primary', { type: 'button', onclick: go }, 'Rename')));
     input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
     document.body.append(dialog); dialog.showModal(); input.select();

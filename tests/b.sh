@@ -66,6 +66,8 @@ for n in "$@"; do
     harvest-site) python3 -I $T/harvest_choice_check.py $SITE $S/harvest-site $ZIP 2>&1 | tally harvest-choice-built-site ;;
     trycard) python3 -I $T/trycard_check.py $APP $S/trycard 2>&1 | tally try-the-card ;;   # the card, part 1, behind its tick
     trycard-site) python3 -I $T/trycard_check.py $SITE $S/trycard-site $ZIP 2>&1 | tally try-the-card-built-site ;;
+    forecast) python3 -I $T/forecast_check.py $APP $S/forecast 2>&1 | tally forecast-page ;;   # E3: the Forecast page, amounts and dollars, the whole season at one press, the popup, the list to send, the kept forecast
+    forecast-site) python3 -I $T/forecast_check.py $SITE $S/forecast-site $ZIP 2>&1 | tally forecast-page-built-site ;;
     swap) python3 -I $T/swap_check.py $APP $S/swap 2>&1 | tally variety-swap ;;   # the variety swap: one variety put in the place of another, the sowing days kept
     swap-site) python3 -I $T/swap_check.py $SITE $S/swap-site $ZIP 2>&1 | tally variety-swap-built-site ;;
     f053) python3 -I $T/fixes_053_check.py $APP $S/f053 2>&1 | tally fixes-0.53 ;;

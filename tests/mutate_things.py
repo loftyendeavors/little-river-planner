@@ -31,7 +31,7 @@ EN, FC, SU, AP, TH, YC, AS, HV, SR, IO, CSS = "js/engine.js", "js/forecast.js", 
 NODE = [
  # a plan nobody has touched
  ("the forecast of every plan is a hair off", FC, "const rate = y.units / picked.length,", "const rate = y.units * 1.0000001 / picked.length,"),
- ("a planting is counted once for every part it gives", FC, "variety.total += inYear; any = true;", "variety.total += inYear; any = true; counted++;"),
+ ("a planting is counted once for every part it gives", FC, "variety.total += inYear; variety.worth += inYear * y.price; any = true;", "variety.total += inYear; variety.worth += inYear * y.price; any = true; counted++;"),
  # what counts
  ("a thing that still waits on a figure counts all the same", EN, "          if (t.waits.length) continue;\n", ""),
  ("no price is asked of a thing", EN, "          if (t.price == null) t.waits.push('price');\n", ""),
@@ -163,10 +163,10 @@ PAGE = [
  ("“Take away…” empties the thing and leaves it", AP, "const ops = thingStep(cropId, things => { delete things[id]; });", "const ops = thingStep(cropId, things => { things[id] = { id, n: things[id].n, name: things[id].name, from: things[id].from, unit: things[id].unit }; });"),
  # every page
  ("the Harvest page counts each thing as a crop", HV, "chip('all', 'All', F.cropCount(m.rows.filter(r => r.total > 0))),", "chip('all', 'All', m.rows.filter(r => r.total > 0).length),"),
- ("a bouquet is added into “All stems”", HV, "for (const r of part.filter(r => g !== 'flower' || F.inStems(r))) {", "for (const r of part) {"),
+ ("a bouquet is added into “All stems”", HV, "for (const r of part.filter(r => cash$ || g !== 'flower' || F.inStems(r))) {", "for (const r of part) {"),
  ("a thing's row has no mark of its own on the Harvest page", HV, "        if (row.thing) body[body.length - 1].dataset.thing = row.thing;   // another thing the crop sells: a row of its own, in its own unit\n", ""),
  ("the list to send leaves the things out", FC, "    for (const row of model.rows) {\n      if (options.group && row.group !== options.group) continue;", "    for (const row of model.rows) {\n      if (row.thing || (options.group && row.group !== options.group)) continue;"),
- ("the spreadsheet leaves the things out", FC, "    for (const row of model.rows) {\n      if (!(row.total > 0)) continue;", "    for (const row of model.rows) {\n      if (row.thing || !(row.total > 0)) continue;"),
+ ("the spreadsheet leaves the things out", FC, "    for (const row of model.rows) {\n      const n = x => (counted(row.unit)", "    for (const row of model.rows) {\n      if (row.thing) continue;\n      const n = x => (counted(row.unit)"),
  ("the row's button opens the weekly amount on the crop's own line", HV, "onclick: () => App.openAhead({ mode: 'series', by: 'harvest', thing: row.thing, cropId: row.cropId }) }, 'plan…')", "onclick: () => App.openAhead({ mode: 'series', by: 'harvest', thing: '', cropId: row.cropId }) }, 'plan…')"),
  ("the weekly amount offers no choice of thing", SR, "sold.length ? field('Of', h('select', { id: 'srThing',", "false ? field('Of', h('select', { id: 'srThing',"),
  ("the weekly amount is sized by the crop's own line though a thing is chosen", SR, "from: P.hFrom, thing: P.thing });\n", "from: P.hFrom, thing: '' });\n"),

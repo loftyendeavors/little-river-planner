@@ -1153,14 +1153,14 @@ body[data-view="harvest"] .stage { grid-template-rows: minmax(0, 1fr); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --hv-seq: #3987e5; } }
 :root[data-theme="dark"] { --hv-seq: #3987e5; }
 .hv-wrap { max-width: none; padding-inline: 28px; }
-.hv-wrap .as-head, .hv-wrap .tr-stats, .hv-bar, .hv-wrap > .hv-note { max-width: 1240px; margin-inline: auto; }
+.hv-wrap .as-head, .hv-wrap .tr-stats, .hv-wrap .fc-figs, .hv-bar, .hv-wrap > .hv-note { max-width: 1240px; margin-inline: auto; }
 .hv-wrap .tr-stats { margin-top: 20px; }
-.hv-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 20px; margin-bottom: 10px; }
+.hv-bar { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; margin-top: 20px; margin-bottom: 10px; }
 .hv-bar .grow { flex: 1; }
 .hv-bar .seg { flex: none; }
 .hv-bar .seg button { padding-inline: 12px; }
 .hv-bar .sd-filters { margin: 0; }
-.hv-bar input[type="search"] { height: 31px; width: 170px; border: 1px solid var(--line); border-radius: var(--corner-pill); background: var(--raised); padding: 0 12px; font-size: var(--type-13); }
+.hv-bar input[type="search"] { height: 31px; width: 140px; border: 1px solid var(--line); border-radius: var(--corner-pill); background: var(--raised); padding: 0 12px; font-size: var(--type-13); }
 .hv-scroll { overflow: auto; max-height: calc(100vh - 150px); border: 1px solid var(--line); border-radius: var(--corner-12); background: var(--raised); width: fit-content; max-width: 100%; margin-inline: auto; }
 table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
 .hv th, .hv td { height: 30px; padding: 0 6px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
@@ -2400,7 +2400,7 @@ body.phone .top { padding-block: var(--space-4); }   /* the header stays one sho
    (On the Nursery the controls are its four tabs, and they stand over the figures: see below.)
    No eyebrow and no standing paragraph: what a paragraph said is behind "?" (the words stay in the page, unseen, and "?" reads
    them). Nursery, Seeds and Assumptions stand in it; Tasks was built to it. */
-/* only these three pages: the Harvest page shares the head's name and is not in the frame yet (it becomes the Forecast page) */
+/* only these three pages: the Forecast page has no eyebrow and no paragraph of its own to hide (below) */
 .view-assume .as-head .eyebrow, .nu-head .eyebrow, .sd-title .eyebrow, .view-assume .as-head #asLead, #nuLead { display: none; }
 .view-assume .as-head, .nu-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-8) var(--space-12); max-width: none; }
 .view-assume .as-head h2, .nu-head h2 { font-size: var(--type-24); }
@@ -2548,3 +2548,36 @@ body[data-card="on"] .stage { position: relative; }
   .card-cal-day, .card-cal-month .icon-btn { width: var(--control-phone); height: var(--control-phone); }
   .card-cal { width: min(340px, calc(100vw - 16px)); }
 }
+
+/* ───────────────────────────── The Forecast page in the frame (DESIGN.md, rule 1) ─────────────────────────────
+   The title at 24 with "?" beside it; one line of figures, the season's worth leading; the page's controls; the table.
+   What its paragraphs said is kept unseen in the page and shown by "?". */
+.hv-wrap .hv-head { align-items: center; }
+.hv-head-text { display: flex; align-items: center; gap: var(--space-8); }
+.hv-head-text h2 { font-size: var(--type-24); }
+.fc-figs { margin-top: var(--space-16); }
+.fc-fig.lead b { font-size: var(--type-18); }
+.fc-fig.short::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--space-4); border-radius: var(--corner-pill); background: var(--warn); vertical-align: middle; }
+.hint .fc-lead p + p { margin-top: var(--space-8); }
+.hint .fc-lead + dl { margin-top: var(--space-12); padding-top: var(--space-12); border-top: 1px solid var(--line-soft); }
+/* the whole season at one press: every week on the screen, the columns sharing what the crop names and the season leave */
+.hv-scroll.fit { width: auto; }
+table.hv.fit { width: 100%; table-layout: fixed; }
+.hv.fit .hv-name { width: 150px; min-width: 150px; max-width: 150px; }
+.hv.fit .hv-total { left: 150px; width: 120px; min-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.hv-bar .seg button { white-space: nowrap; }
+.hv.fit td.hv-c, .hv.fit tfoot td, .hv.fit thead th { min-width: 0; padding-inline: 1px; font-family: var(--body); font-size: var(--type-11); overflow: hidden; }
+.hv.fit thead th b { overflow: hidden; }
+.hv.fit .hv-name, .hv.fit .hv-total { padding-inline: 6px; }
+.hv.fit tfoot .hv-name, .hv.fit tfoot .hv-total { font-size: var(--type-13); }
+.hv.fit tfoot .hv-name { overflow: hidden; text-overflow: ellipsis; }
+/* a column too narrow for even "1.2k" keeps its shade; the figure is under the pointer and a click away */
+.hv.fit.bare td.hv-c, .hv.fit.bare tfoot td:not(.hv-name):not(.hv-total) { color: transparent; }
+/* a figure's plantings: a row each, its photograph, variety, bed and amount, and how it is picked as tags */
+.dialog ul.hv-from li.row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: var(--space-12); padding: var(--space-8) 0; }
+.dialog ul.hv-from li.row .row-name { display: block; font: 600 var(--type-13) var(--body); color: var(--ink); }
+.dialog ul.hv-from li.row .row-detail { font-size: var(--type-11); }
+.dialog ul.hv-from li.row .row-word { display: grid; justify-items: end; gap: var(--space-4); }
+.dialog ul.hv-from li.row .row-detail, .dialog ul.hv-from li.row .row-detail span { font: 400 var(--type-11) var(--body); color: var(--muted); white-space: normal; }
+.dialog ul.hv-from .fc-tags { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-4); }
+.dialog ul.hv-from .fc-tag { padding: 1px var(--space-4); border: 1px solid var(--line); border-radius: var(--corner-4); font: 600 var(--type-11) var(--body); color: var(--ink-2); white-space: nowrap; }

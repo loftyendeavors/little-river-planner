@@ -1,5 +1,5 @@
 """Preview 0.39 (the clean-up build) in a real browser: no screen names the planner's earlier version; rows of figures leave no
-grey block; the Harvest table opens with a whole column against the crop names; and the smaller things the build put right.
+grey block; the Forecast table opens with a whole column against the crop names; and the smaller things the build put right.
 usage: python3 -I cleanup_check.py <app-dir-or-built-site> <shots-dir> [backup.zip]     env: WIDTH=1480, STOP_AT_FAIL=1
 """
 import functools, http.server, json, os, sys, threading
@@ -102,16 +102,23 @@ with sync_playwright() as pw:
 
     # ── Harvest ──
     js("A.setView('harvest'); return 1;"); wait(1100)
-    hv = js("return { lead: (document.querySelector('.hv-head-text p:not(.eyebrow)') || {}).textContent || '', at: harvest() };") or {}
-    check("Harvest says how a crop is picked in the Assumptions list's own three words", all(w in hv.get("lead", "") for w in ("gradually", "clear", "on demand")) and "a week at a time" not in hv.get("lead", ""), hv.get("lead"))
+    hv = js("return { lead: (document.querySelector('[data-hook=\"fc-lead\"]') || {}).textContent || '', at: harvest() };") or {}
+    check("Forecast says, behind “?”, how a crop is picked in the Assumptions list's own three words", all(w in hv.get("lead", "") for w in ("Gradually:", "Clear:", "On demand:")) and "a week at a time" not in hv.get("lead", ""), hv.get("lead"))
     at = hv.get("at") or {}
-    check("the Harvest table opens scrolled, with this week in view and up to three weeks before it (or, where the whole season fits, not scrolled at all)", at.get("nowSeen") and ((at.get("scroll", 0) > 0 and at.get("before") in (1, 2, 3)) or (at.get("scroll") == 0 and at.get("room", 9) <= 1)), at)
+    check("the Forecast table opens scrolled, with this week in view and up to three weeks before it (or, where the whole season fits, not scrolled at all)", at.get("nowSeen") and ((at.get("scroll", 0) > 0 and at.get("before") in (1, 2, 3)) or (at.get("scroll") == 0 and at.get("room", 9) <= 1)), at)
     check("and with a whole column against the crop names, not part of one", at.get("off") is not None and abs(at["off"]) <= 1, at)
     for grain in ("day", "month", "week"):
         page.click(f"#hvWrap button[data-hv-grain={grain}]"); wait(700)
         g = js("return harvest();") or {}
         check(f"the same by {grain}: a whole column against the crop names" + ("" if grain == "month" else ", today's in view"), g.get("off") is not None and abs(g["off"]) <= 1 and (grain == "month" or g.get("nowSeen")), g)
-    look("Harvest")
+    look("Forecast")
+    # the whole season at one press, in dollars, and its "?": read for words that do not belong like any other screen
+    page.click('[data-hook="fc-season-btn"]'); wait(700); page.click('[data-hook="fc-measure"] [data-measure="dollars"]'); wait(700)
+    fs = js("const sc = $('hvScroll'); return sc ? { side: Math.round(sc.scrollWidth - sc.clientWidth), fit: (document.querySelector('[data-hook=\"fc-table\"]') || { dataset: {} }).dataset.fit } : null;") or {}
+    check("Forecast's whole season, in dollars, fits the window with nothing to scroll sideways", fs.get("fit") == "season" and fs.get("side", 9) <= 0, fs)
+    look("Forecast, the whole season in dollars")
+    page.click('[data-hook="fc-help"]'); wait(300); look("Forecast's “?”"); page.keyboard.press("Escape"); wait(200)
+    page.click('[data-hook="fc-measure"] [data-measure="amounts"]'); wait(300); page.click("#hvWrap button[data-hv-grain=week]"); wait(500)
 
     # ── Tasks ──
     js("A.setView('sow'); return 1;"); wait(1000)

@@ -21,6 +21,11 @@
  *   const model = LRFForecast.build(engine);
  *   LRFForecast.sum(model.rows[0].days, i0, i1)      -> how much of that crop from day i0 to day i1
  *   LRFForecast.periods(model, 'week')               -> the columns of a week-by-week table
+ *   LRFForecast.kept(engine, options)                -> the same as build, worked out once for an engine and its options
+ *   LRFForecast.byMonth(engine, cropId)              -> what a crop is forecast to sell, month by month
+ *
+ * An engine is made afresh for every change to the plan (js/app.js), so a forecast kept for an engine is the forecast of
+ * that plan for as long as the engine is the plan's: a change makes a new engine, and the new engine has nothing kept.
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./engine.js'));
@@ -84,6 +89,15 @@
   /** "Micro · Arugula" is listed under Microgreens as "Arugula". */
   const short = name => String(name || '').replace(/^micro\s*[·-]?\s*/i, '').trim() || String(name || '');
   const amount = (n, unit, group) => { const v = shown(n), w = unitWord(v, unit, group); return `${fmt(v)}${w ? ' ' + w : ''}`; };
+  // Things sold by the piece: a list to send says them in whole numbers. Weighed things keep their decimal below ten.
+  const WEIGHED = ['lb', 'oz', 'kg', 'g', 'bu'];
+  const counted = unit => !WEIGHED.includes(String(unit || 'each'));
+  /** A quantity in the list to send: a thing counted is a whole number, rounded down; one sold singly reads "each". */
+  function sendShown(n, unit) { return counted(unit) ? (n > 0 ? Math.floor(n + 1e-6) : 0) : shown(n); }
+  function sendAmount(n, unit, group) {
+    const v = sendShown(n, unit), w = unitWord(v, unit, group);
+    return `${fmt(v)} ${w || 'each'}`;
+  }
 
   /**
    * The forecast for one season. options: { year, groups: the grower's own sorting of crops, use }.
@@ -128,7 +142,7 @@
         if (!picked.length || !(y.units > 0)) continue;
         const rate = y.units / picked.length, vId = p.varietyId || '', v = eng.variety(p.varietyId);
         let variety = row.varieties.get(vId);
-        if (!variety) { variety = { id: vId, name: v && v.name ? v.name : 'No variety chosen', days: new Float64Array(n), picked: new Float64Array(n), total: 0 }; row.varieties.set(vId, variety); }
+        if (!variety) { variety = { id: vId, name: v && v.name ? v.name : 'No variety chosen', days: new Float64Array(n), picked: new Float64Array(n), value: new Float64Array(n), total: 0, worth: 0 }; row.varieties.set(vId, variety); }
         // what comes out of the ground each day, and what there is to sell: a crop that keeps is drawn down evenly over the weeks it keeps
         const keep = Math.max(1, Math.round((y.keep || 0) * 7)), lo = picked[0], span = picked[picked.length - 1] - lo + keep, out = new Float64Array(span), avail = new Float64Array(span);
         const lots = y.pattern === 'once' ? [[lo, y.units]] : picked.map(i => [i, rate]);
@@ -138,10 +152,10 @@
           const i = lo + k;
           if (i < 0 || i >= n) continue;
           if (out[k]) { row.picked[i] += out[k]; variety.picked[i] += out[k]; cut += out[k]; }
-          if (avail[k]) { row.days[i] += avail[k]; row.value[i] += avail[k] * y.price; variety.days[i] += avail[k]; inYear += avail[k]; }
+          if (avail[k]) { row.days[i] += avail[k]; row.value[i] += avail[k] * y.price; variety.days[i] += avail[k]; variety.value[i] += avail[k] * y.price; inYear += avail[k]; }
         }
         if (!(inYear > 0) && !(cut > 0)) continue;
-        row.total += inYear; row.pickedTotal += cut; row.worth += inYear * y.price; variety.total += inYear; any = true;
+        row.total += inYear; row.pickedTotal += cut; row.worth += inYear * y.price; variety.total += inYear; variety.worth += inYear * y.price; any = true;
         if (keep > 1) row.keeps = Math.max(row.keeps, y.keep);
         row.patterns.add(y.pattern);
         row.plantings.push({ p, r, units: y.units, inYear, rate, lo, avail, out, pattern: y.pattern, keep: y.keep || 0, i0: Math.max(0, lo), i1: Math.min(n - 1, lo + span - 1), p0: Math.max(0, lo), p1: Math.min(n - 1, picked[picked.length - 1]), price: y.price, personal, ...(y.first ? { from, to } : {}) });
@@ -155,6 +169,40 @@
     const list = [...rows.values()].filter(r => r.total > 0 || r.unset).sort((a, b) => order[a.group] - order[b.group] || a.name.localeCompare(b.name));
     for (const row of list) row.varieties = [...row.varieties.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
     return { year, start, days: n, rows: list, unset, counted, use, personal: marked, keeps: list.some(r => r.keeps > 0), date: i => E.addDays(start, i), index: at };
+  }
+
+  // ── the forecast kept for an engine and its options ──
+  const KEPT = new WeakMap();
+  /** The options build reads, said the one way: two calls that would build the same forecast ask for the same kept one. */
+  function keyOf(eng, options = {}) {
+    const plan = eng.plan || {}, year = +options.year || +(plan.settings && plan.settings.year) || new Date().getFullYear();
+    const use = options.use === 'commercial' || options.use === 'personal' ? options.use : 'all';
+    return JSON.stringify([year, use, options.groups || null]);
+  }
+  /**
+   * The forecast of an engine's plan, worked out the first time it is asked for with these options and kept with the engine.
+   * It is build's own result: the same rows, the same figures. Nothing in it is to be changed by the caller.
+   */
+  function kept(eng, options = {}) {
+    let mine = KEPT.get(eng);
+    if (!mine) { mine = new Map(); KEPT.set(eng, mine); }
+    const key = keyOf(eng, options);
+    if (!mine.has(key)) mine.set(key, build(eng, options));
+    return mine.get(key);
+  }
+  /** Is a forecast with these options kept for this engine? (For the checks: a change to the plan leaves nothing kept.) */
+  const isKept = (eng, options = {}) => !!(KEPT.get(eng) && KEPT.get(eng).has(keyOf(eng, options)));
+  /**
+   * What one crop is forecast to sell, month by month, in one call: its plantings grown to sell, as there is to sell each month
+   * (what keeps is counted in the months it is sold). One line a unit or thing the crop is sold as, each with twelve amounts and
+   * twelve dollar figures, January first. options: { year }.
+   */
+  function byMonth(eng, cropId, options = {}) {
+    const m = kept(eng, { year: options.year, use: 'commercial' }), months = [];
+    for (let k = 0; k < 12; k++) months.push([m.index(new Date(m.year, k, 1)), m.index(new Date(m.year, k + 1, 0))]);
+    const rows = m.rows.filter(r => r.cropId === cropId).map(r => ({ key: r.key, name: r.name, unit: r.unit, ...(r.thing ? { thing: r.thing } : {}),
+      sold: months.map(([a, z]) => sum(r.days, a, z)), worth: months.map(([a, z]) => sum(r.value, a, z)) }));
+    return { year: m.year, cropId, months: MONTHS.slice(), rows };
   }
 
   /** How much of one planting falls between two days: of what there is to sell, or (`picked`) of what comes out of the ground. */
@@ -214,7 +262,7 @@
     const heading = c => options.grain === 'month' ? `${MONTHS[c.start.getMonth()]} ${model.year}` : c.i0 === c.i1 ? `${DAYS[c.start.getDay()]} ${md(c.start)}` : `Week of ${md(c.start)} – ${c.start.getMonth() === c.end.getMonth() ? c.end.getDate() : md(c.end)}`;
     lines.push(`${farm} — what is available`);
     for (const c of cols) {
-      const list = available(model, c.i0, c.i1, { group: options.group });
+      const list = available(model, c.i0, c.i1, { group: options.group }).filter(x => sendShown(x.qty, x.row.unit) > 0);
       lines.push('', heading(c));
       if (!list.length) { lines.push('  Nothing forecast.'); continue; }
       for (const [g, , title] of GROUPS) {
@@ -223,23 +271,24 @@
         lines.push(`  ${title}`);
         for (const x of part) {
           const price = options.prices && x.qty > 0 && x.worth > 0 ? ` @ $${(x.worth / x.qty).toFixed(2)}` : '';
-          lines.push(`    ${x.row.name}: ${amount(x.qty, x.row.unit, x.row.group)}${price}`);
-          if (options.varieties && (x.varieties.length > 1 || (x.varieties.length === 1 && x.varieties[0].id))) for (const v of x.varieties) lines.push(`      ${v.name}: ${amount(v.qty, x.row.unit, x.row.group)}`);
+          lines.push(`    ${x.row.name}: ${sendAmount(x.qty, x.row.unit, x.row.group)}${price}`);
+          if (options.varieties && (x.varieties.length > 1 || (x.varieties.length === 1 && x.varieties[0].id))) for (const v of x.varieties) if (sendShown(v.qty, x.row.unit) > 0) lines.push(`      ${v.name}: ${sendAmount(v.qty, x.row.unit, x.row.group)}`);
         }
       }
     }
     lines.push('', 'Forecast from the crop plan. Quantities are estimates and move with the weather.');
     return lines.filter((l, i, all) => !(l === '' && all[i - 1] === '')).join('\n');
   }
-  /** The same table as a spreadsheet file. */
+  /** The same table as a spreadsheet file: things counted in whole numbers rounded down, as in the list; weighed things to two places. */
   function csv(model, cols, options = {}) {
     const cell = v => { let s = String(v == null ? '' : v); if (/^\s*[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
     const head = ['Kind', 'Crop', 'Variety', 'Unit', 'Season total', ...cols.map(c => options.grain === 'month' ? `${MONTHS[c.start.getMonth()]} ${model.year}` : E.d2s(c.start))], out = [head];
-    const title = Object.fromEntries(GROUPS.map(([g, t]) => [g, t])), n = x => Math.round(x * 100) / 100;
+    const title = Object.fromEntries(GROUPS.map(([g, t]) => [g, t])), two = x => Math.round(x * 100) / 100;
     for (const row of model.rows) {
-      if (!(row.total > 0)) continue;
+      const n = x => (counted(row.unit) ? sendShown(x, row.unit) : two(x));
+      if (!(n(row.total) > 0)) continue;   // less than one of a thing counted, in all, is not on the list either
       out.push([title[row.group], row.name, 'All', row.unit, n(row.total), ...cols.map(c => n(sum(row.days, c.i0, c.i1)))]);
-      if (row.varieties.length > 1 || (row.varieties[0] && row.varieties[0].id)) for (const v of row.varieties) out.push([title[row.group], row.name, v.name, row.unit, n(v.total), ...cols.map(c => n(sum(v.days, c.i0, c.i1)))]);
+      if (row.varieties.length > 1 || (row.varieties[0] && row.varieties[0].id)) for (const v of row.varieties) if (n(v.total) > 0) out.push([title[row.group], row.name, v.name, row.unit, n(v.total), ...cols.map(c => n(sum(v.days, c.i0, c.i1)))]);
     }
     return out.map(r => r.map(cell).join(',')).join('\r\n');
   }
@@ -258,5 +307,5 @@
     return out;
   }
 
-  return { GROUPS, MONTHS, useOf, useOfBed, follows, build, sum, share, periods, season, available, glance, text, csv, gaps, groupOf, unitWord, shown, amount, monday, cropCount, inStems };
+  return { GROUPS, MONTHS, useOf, useOfBed, follows, build, kept, isKept, byMonth, sendAmount, sendShown, counted, sum, share, periods, season, available, glance, text, csv, gaps, groupOf, unitWord, shown, amount, monday, cropCount, inStems };
 });
