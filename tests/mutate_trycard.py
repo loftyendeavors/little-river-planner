@@ -53,6 +53,13 @@ PAGE = [
  ("a right-click opens the browser's own menu", CD, "    document.addEventListener('contextmenu', onContext);\n", ""),
  ("“All of this planting…” opens nothing", CD, "onclick: () => openFull() }, 'All of this planting…')", "onclick: () => {} }, 'All of this planting…')"),
  ("the list of what to settle has no side panel to stand in", CD, "    if (!sel) return !settling && !App.state.newer;", "    if (!sel) return true;"),
+ ("Codex on #66: a change made with no card open is said on the next card", CD, "    App.on('plan', () => { note(); draw(); });", "    App.on('plan', draw);"),
+ ("the panel's word on a change it closed on is said on the next card, with its Undo", CD, "    if (last && last.kind === 'saved' && last.at === seen && !justNow && seenKey !== keyOf(App.state.sel)) return false;\n", ""),
+ ("the card writes days to harvest its own way", CD, "onchange: ev => set(Ed.dtm(p, ev.target.value)) }", "onchange: ev => set([{ dtm: +ev.target.value + 1, timingMode: 'manual' }, 'Change days to harvest']) }"),
+ ("the card writes harvest days its own way", CD, "onchange: ev => set(Ed.hw(ev.target.value)) }", "onchange: ev => set([{ hw: +ev.target.value + 1, harvestMode: 'window' }, 'Change harvest days']) }"),
+ ("“Add” on the card adds one fewer", CD, "onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+count.value) || 1))", "onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+count.value - 1) || 1))"),
+ ("“Send to To place” in the menu removes the planting", CD, "        ['wait', 'Send to To place', () => App.sendToWait(p.id)],", "        ['wait', 'Send to To place', () => App.removePlantings([p.id])],"),
+ ("“Remove planting” in the menu does nothing", CD, "        ['remove', 'Remove planting', () => App.removePlantings([p.id]), null, 'bad']]", "        ['remove', 'Remove planting', () => {}, null, 'bad']]"),
  ("To place's line under the switch is the old one", SR, "'Not in a bed yet, so not in the forecast, seed or sowing lists.'", "'Until it is placed it is not in the forecast, and takes no seed.'"),
  ("the line at the library's foot is the old one", PN, "'Drag one onto a bed or a row. It keeps its date.'", "'Click one to see where it is free, or drag it onto a bed. It keeps its date.'"),
 ]

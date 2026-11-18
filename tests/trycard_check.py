@@ -162,19 +162,19 @@ def run(pw):
         page.evaluate("([s, v]) => { const el = document.querySelector(s); if (!el) return; el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); }", [selector, value])
     def quiet():
         page.evaluate("document.getElementById('toast').classList.remove('show')")
-    def through_panel(do):
-        js("LRFCard.turn(false); return null;"); js(f"A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(400)
+    def through_panel(do, read=None, pid=None):
+        js("LRFCard.turn(false); return null;"); js(f"A.select({{ type: 'planting', id: '{pid or PID}' }}); return null;"); wait(400)
         before = js("return all();")
         do(); wait(500)
-        after = js(f"return rec('{PID}');")
+        after = read(before) if read else js(f"return rec('{PID}');")
         js("A.undo(); return null;"); wait(400)
         back = js("return all();") == before
         return after, back, before
-    def through_card(do, undo_link=True):
-        js("LRFCard.turn(true); return null;"); js(f"A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(400)
+    def through_card(do, read=None, undo_link=True, pid=None):
+        js("LRFCard.turn(true); return null;"); js(f"A.select({{ type: 'planting', id: '{pid or PID}' }}); return null;"); wait(400)
         before = js("return all();")
         quiet(); do(); wait(500)
-        after = js(f"return rec('{PID}');")
+        after = read(before) if read else js(f"return rec('{PID}');")
         said = js("const s = hook('card-said'); return { said: drawn(s) ? s.textContent : '', undo: drawn(hook('card-undo')), toast: $('toast').classList.contains('show') };")
         if undo_link and said["undo"]: press(page, "[data-hook='card-undo']", 500)
         else: js("A.undo(); return null;"); wait(400)
@@ -219,6 +219,53 @@ def run(pw):
     b, bback, bsaid, _ = through_card(card_sale)
     check("“Grown for sale” unticked on the card gives the planting what the panel's “Personal use” gives it, and Undo gives the plan back", a == b and '"use":"personal"' in (b or "") and aback and bback, [a, b, aback, bback])
     check("its answer, with what it does to the season's worth, is said on the card with Undo, and not in a toast as well", "season’s worth" in bsaid["said"] and bsaid["undo"] and not bsaid["toast"], bsaid)
+
+    def card_row(name):
+        if not page.locator(f"[data-hook='card-row'][data-row='{name}'].open").count(): press(page, f"[data-hook='card-row'][data-row='{name}'] .card-row-head", 300)
+    days = js(f"const p = eng.planting('{PID}'), r = eng.calc(p); return {{ dtm: String(Math.max(1, (p.dtm > 0 ? +p.dtm : +r.c.dtm) - 5)), hw: String((p.hw > 0 ? +p.hw : r.harvestDays) + 5) }};")
+    a, aback, _ = through_panel(lambda: set_value("#fDtm", days["dtm"]))
+    b, bback, bsaid, _ = through_card(lambda: (card_row("days"), set_value("[data-hook='card-dtm']", days["dtm"])))
+    check("days to harvest typed in the card's row give the planting what the panel's box gives it, and Undo gives the plan back", a == b and f'"dtm":{days["dtm"]}' in (b or "") and aback and bback, [a, b, aback, bback])
+    a, aback, _ = through_panel(lambda: set_value("#fHw", days["hw"]))
+    b, bback, bsaid, _ = through_card(lambda: (card_row("days"), set_value("[data-hook='card-hw']", days["hw"])))
+    check("harvest days typed in the card's row give the planting what the panel's box gives it, and Undo gives the plan back", a == b and f'"hw":{days["hw"]}' in (b or "") and aback and bback, [a, b, aback, bback])
+
+    # more of it, so many days apart: the plantings added, set side by side without their new ids
+    added = lambda before: js("const was = new Set(JSON.parse(arg).map(p => p.id)); return JSON.stringify(S.plan.plantings.filter(p => !was.has(p.id)).map(p => { const q = { ...p }; delete q.id; return q; }).sort((x, y) => (x.date + x.bedId).localeCompare(y.date + y.bedId)));", before)
+    def panel_repeat():
+        set_value("#fRepeatCount", "2"); set_value("#fRepeatEvery", "21"); page.locator("#inspectorBody .repeat .btn").click(); wait(300)
+    def card_repeat():
+        card_row("repeat"); set_value("[data-hook='card-repeat-count']", "2"); set_value("[data-hook='card-repeat-every']", "21"); press(page, "[data-hook='card-repeat-add']", 300)
+    # its subject: a planting of which two more, three weeks apart, find room in its garden (the made-up farm's fields are full)
+    RP = js("""const Rl = LRFRails; for (const p of S.plan.plantings) { const r = eng.calc(p); if (!r || eng.isPool(r.b) || !eng.isSoilBed(r.b)) continue;
+        const beds = [r.b, ...S.plan.beds.filter(b => b.id !== r.b.id && b.gardenId === r.b.gardenId && b.active !== false && eng.spaceKind(b) === eng.spaceKind(r.b))];
+        const ok = k => beds.some(b => Rl.propose(eng, { plantingId: p.id, copy: true }, { bedId: b.id, date: E.addDays(E.s2d(p.date), 21 * k) }, { source: p, noShrink: true }).state === 'ok');
+        if (ok(1) && ok(2)) return p.id; } return null;""")
+    check("the plan has a planting with room for two more three weeks apart, for the check to work on", bool(RP), RP)
+    a, aback, _ = through_panel(panel_repeat, added, RP)
+    b, bback, bsaid, _ = through_card(card_repeat, added, pid=RP)
+    check("“Add” in the card's row Repeat as a series adds the plantings the panel's own adds, and Undo gives the plan back", a == b and a != "[]" and aback and bback, [a, b, aback, bback])
+
+    # the menu's Send to To place and Remove planting, against the panel's buttons
+    whole = lambda before: js("return JSON.stringify([S.plan.plantings, A.waiting()]);")
+    def card_menu(act):
+        press(page, "[data-hook='card-more']", 300); press(page, f"[data-hook='card-menu-item'][data-act='{act}']", 400)
+    a, aback, _ = through_panel(lambda: press(page, "#fToWait", 400), whole)
+    b, bback, bsaid, _ = through_card(lambda: card_menu("wait"), whole)
+    check("“Send to To place” in the card's menu does what the panel's button does, and Undo gives the plan back", a == b and PID in json.dumps(json.loads(a)[1]) and aback and bback, [a[:300] if a else a, b[:300] if b else b, aback, bback])
+    a, aback, _ = through_panel(lambda: press(page, "[data-hook='panel-remove']", 400), whole)
+    b, bback, bsaid, _ = through_card(lambda: card_menu("remove"), whole)
+    check("“Remove planting” in the card's menu does what the panel's button does; the bed's card says it, with an Undo that gives the plan back",
+          a == b and f'"id":"{PID}"' not in a and aback and bback and "Removed" in bsaid["said"] and bsaid["undo"] and not bsaid["toast"], [aback, bback, bsaid])
+
+    # a change made in the side panel is not said on the next card opened
+    js(f"LRFCard.turn(true); A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(300)
+    press(page, "[data-hook='card-full']", 400)
+    set_value("#fDtm", days["dtm"]); wait(300)
+    js(f"A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(400)
+    stale = js("const s = hook('card-said'); return { card: !!card(), said: drawn(s) ? s.textContent : '' };")
+    check("a change made in the side panel (“All of this planting…”) is not said, with its Undo, on the bed's card opened after it", stale["card"] and stale["said"] == "", stale)
+    js("A.undo(); A.select(null); return null;"); wait(300)
 
     # ══ a drop: answered on the card ══
     js("LRFCard.turn(true); A.setView('map'); A.select(null); return null;"); wait(400); quiet()

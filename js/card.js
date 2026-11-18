@@ -24,7 +24,7 @@
   let full = '';           // a bed or a planting opened in full in the side panel ("All of this planting…"), by its key
   let settling = false;    // the list of what to settle was asked for: it stands in the side panel
   let said = null;         // the answer to the last action taken while the card was open: { text, action, key, at }
-  let seen = null, seenKey = '';   // which card was open when the last change was first seen (as the panel's "Saved" line keeps it)
+  let seen = null, seenKey = '', justNow = false;   // which card was open when the last change was first seen (as the panel's "Saved" line keeps it)
   let card = null, menu = null, cal = null, hint = null, hintTimer = 0, hintBar = null;
   const opened = new Set();   // the rows of a planting's card that are open, by name: they stay open as the card is drawn again
 
@@ -32,6 +32,8 @@
   const inView = () => VIEWS.includes(App.state.view);
   const eng = () => App.state.engine;
   const money = n => '$' + Math.round(n).toLocaleString('en-US');
+  /** The days a planting is picked, short: "Jun 1 – 14" within a month. */
+  const picked = r => (r.first.getMonth() === r.last.getMonth() ? `${day(r.first)} – ${r.last.getDate()}` : span(r.first, r.last));
   const plural = (n, w) => `${num(n)} ${w}${n === 1 ? '' : 's'}`;
 
   /** The bed or the planting the card holds, or null when what is picked belongs to the side panel. */
@@ -60,17 +62,30 @@
   // A toast raised while the card is open is said on the card instead, for as long as the panel's "Saved" line would say it.
   function answer(text, action) {
     if (!card || !card.isConnected || !standing() || !App.state.sel) return false;
+    // a word about a change made earlier on another card or in the side panel (its "Saved", said once when it closed) stays a toast
+    const last = App.lastChange();
+    if (last && last.kind === 'saved' && last.at === seen && !justNow && seenKey !== keyOf(App.state.sel)) return false;
     said = { text, action: action || null, key: keyOf(App.state.sel), at: Date.now() };
     draw();   // drawn again whole: after a drop the variety box is ringed when no variety came with it
     return true;
+  }
+  /** The change just made, and which card was open when it was made (none, when it was made in the side panel): it is said on
+   *  that card only, never on the next one opened (Codex on #66). Heard as the plan changes; a change refused, which changes no
+   *  plan, is noted when it is said. */
+  function note() {
+    const last = App.lastChange();
+    if (last && last.at !== seen) {
+      seen = last.at; seenKey = card && card.isConnected && standing() ? keyOf(App.state.sel) : '';
+      justNow = true; Promise.resolve().then(() => { justNow = false; });   // the action's own answer comes in the same task
+    }
   }
   function fillSaid() {
     const el = card && card.querySelector('.card-said');
     if (!el) return;
     clearTimeout(el.lrfTimer);
     clear(el);
+    note();
     const key = keyOf(App.state.sel), last = App.lastChange();
-    if (last && last.at !== seen) { seen = last.at; seenKey = key; }
     const mine = said && said.key === key && Date.now() - said.at < SAID_FOR;
     const change = last && seenKey === key && Date.now() - last.at < SAID_FOR && (!said || last.at > said.at + 50);
     if (mine && !change) {
@@ -112,7 +127,7 @@
     const sow = r.sow && r.sow < r.field ? r.sow : null, a = +(sow || r.field), z = +(free || E.addDays(r.last, 1)), w = Math.max(1, z - a);
     const at = (from, to) => ({ left: `${((+from - a) / w * 100).toFixed(2)}%`, width: `${(Math.max(0, +to - +from) / w * 100).toFixed(2)}%` });
     const pickEnd = E.addDays(r.last, 1);
-    const items = [sow ? ['Sow', day(sow)] : null, [sow ? 'In' : 'Sown', day(r.field)], ['Pick', r.harvestDays ? (r.first.getMonth() === r.last.getMonth() ? `${day(r.first)} – ${r.last.getDate()}` : span(r.first, r.last)) : 'none'], ['Free', free ? day(free) : 'stays']].filter(Boolean);
+    const items = [sow ? ['Sow', day(sow)] : null, [sow ? 'In' : 'Sown', day(r.field)], ['Pick', r.harvestDays ? picked(r) : 'none'], ['Free', free ? day(free) : 'stays']].filter(Boolean);
     return h('div.card-bar', { dataset: { hook: 'card-bar' }, style: { '--crop': color } },
       h('div.card-bar-track',
         sow ? h('i.cb-nursery', { style: at(sow, r.field) }) : null,
@@ -222,7 +237,7 @@
       const f = e.footprint(x.p, x.r), here = inGround(x), part = x.r.partial ? ` · ${f ? `${num(f.a0, 1)}–${num(Math.min(f.a1, x.r.cap), 1)} ft` : `${num(x.r.len, 1)} ${unit}`}` : '';
       return h('button.row.card-item' + (here ? '.now' : ''), { type: 'button', dataset: { hook: 'card-planting', planting: x.p.id }, onclick: () => App.select({ type: 'planting', id: x.p.id }) },
         root.LRFThumbs.el({ varietyId: x.p.varietyId, cropId: x.p.cropId, color: e.cropColor(x.r.c), label: x.r.c.vname || x.r.c.name, size: 40 }),
-        h('span', h('span.row-name', x.r.c.vname ? `${x.r.c.vname} · ${x.r.c.name}` : x.r.c.name), h('span.row-detail', `In ${day(x.r.field)} · pick ${x.r.harvestDays ? span(x.r.first, x.r.last) : 'none'}${part}`)),
+        h('span', h('span.row-name', x.r.c.vname ? `${x.r.c.vname} · ${x.r.c.name}` : x.r.c.name), h('span.row-detail', `${day(x.r.field)} · pick ${x.r.harvestDays ? picked(x.r) : 'none'}${part}`)),
         h('span.row-word', here ? 'In now' : ''));
     };
     const nameOf = q => `${q.r.c.vname ? q.r.c.vname + ' ' : ''}${q.r.c.name.toLowerCase()}`;
@@ -441,12 +456,12 @@
 
   function init() {
     UI.answerHere(answer);
-    App.on('sel', () => { const sel = App.state.sel; if (sel) settling = false; if (keyOf(sel) !== full) full = ''; closePops(); draw(); });
-    App.on('plan', draw);
+    App.on('sel', () => { const sel = App.state.sel; if (sel) settling = false; if (keyOf(sel) !== full) full = ''; if (said && said.key !== keyOf(sel)) said = null; closePops(); draw(); });   // an answer belongs to the card it was said on
+    App.on('plan', () => { note(); draw(); });
     App.on('date', () => { if (card) draw(); });
     App.on('view', () => { closePops(); draw(); });
     App.on('photos', () => { if (card) draw(); });
-    App.on('refused', () => { if (card) fillSaid(); });
+    App.on('refused', () => { note(); if (card) fillSaid(); });
     document.addEventListener('contextmenu', onContext);
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onAway, true);

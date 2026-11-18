@@ -647,7 +647,7 @@
           canSeries(eng, r.c) ? h('button.linkish', { type: 'button', id: 'fSeriesLink', onclick: () => App.openAhead({ mode: 'series', sourceId: p.id }) }, 'Plan a longer series: see it first, name gardens or beds, or leave them to place') : null)),
       h('div.insp-actions',
         h('button.btn', { type: 'button', id: 'fToWait', title: 'Take it out of this bed and keep it, with its date, under To place. What it shared the bed with takes up its ground.', onclick: () => App.sendToWait(p.id) }, 'Send to To place'),
-        h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')));
+        h('button.btn.danger', { type: 'button', dataset: { hook: 'panel-remove' }, onclick: () => App.removePlantings([p.id]) }, 'Remove planting')));
   }
 
   // Removing a focused field can fire its change handler, which asks for another render: finish this one first.
