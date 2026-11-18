@@ -1,0 +1,15 @@
+{
+ "build": "The bed's season chart uses the same three-letter month names as the main Timeline. The labels are shared by the sidebar and floating bed card.",
+ "changes": {
+  "did": "The bed's season chart shows Jan through Dec.",
+  "steps": [
+   "Open a bed on the Map. Check the month names under the season chart."
+  ]
+ },
+ "words": [],
+ "code": ["card.js"],
+ "added": [],
+ "removed": [],
+ "page": [],
+ "screens": []
+}
