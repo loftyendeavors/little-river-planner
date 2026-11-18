@@ -162,6 +162,25 @@ check('the plan has a frost-tender crop picked to the season’s end in open gro
   check('for a hardy crop the field’s season ends with the year, and nothing is cut by the frost', eng.seasonEndOf(hardyCrop.id, 'field', year).by !== 'frost' && eng.seasonEndOf(hardyCrop.id, 'field', year).frost === null);
 }
 
+// a garden's close still ends a date of his set past it: nothing is picked in a closed garden, and the card is told the day
+{
+  const q = all.find(x => x.r.harvestMode === 'season' && !x.r.frostCut && eng.envOf(x.r.b) === 'heated' && !x.p.harvestEnd) || null;
+  check('the plan has a crop picked to the season’s end in a heated house', !!q);
+  if (q) {
+    const gid = (eng.bedOf(q.p.bedId) || {}).gardenId, close = E.addDays(q.r.last, -30), md = iso(close).slice(5), env = 'heated';
+    const shut = { ...core, gardens: core.gardens.map(g => (core.beds || []).some(b => b.gardenId === g.id && eng.envOf(b) === env) || g.id === gid ? { ...g, close: md } : g) };   // every heated house
+    const e1 = E.create({ ...shut, assumptions: { v: 1, crops: {}, varieties: {}, ...list, sell: { ...(list.sell || {}), [q.p.cropId]: { ...((list.sell || {})[q.p.cropId] || {}), until: { [env]: iso(E.addDays(close, 12)).slice(5) } } } } }, Lib);
+    const r1 = e1.calc(e1.planting(q.p.id)), se = e1.seasonEndOf(q.p.cropId, env, year);
+    check('a date of his past the day the garden closes ends on that day, and the card is told it', +r1.last === +close && !!se && +se.close === +close, [iso(r1.last), md, se && se.close && iso(se.close)]);
+  }
+  const covered = (core.gardens || []).find(g => g.frost && !eng.openGround(g)), cropT = eng.crops().find(c => c.frostTender && !c.micro);
+  if (covered && cropT) {
+    const z = E.create({ ...core, gardens: core.gardens.map(g => g.id === covered.id ? { ...g, frostOffset: 0 } : g) }, Lib), env = eng.envOf((core.beds || []).find(b => b.gardenId === covered.id && b.active !== false) || {});
+    const se = env ? z.seasonEndOf(cropT.id, env, year) : null;
+    check('under cover with no days of frost kept off, the frost is still said to come under cover', !se || se.by !== 'frost', se && se.by);
+  }
+}
+
 // ── 7. the forecast kept for an engine follows every one of these ──
 {
   const id = seasonal.p.cropId, env = eng.envOf(seasonal.r.b), base = F.kept(eng, { year });

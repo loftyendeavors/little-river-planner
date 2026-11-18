@@ -33,8 +33,11 @@ NODE = [
  ("a date set for one place is read in every place", EN, "if (!until || !env || !until[env] || ownHarvest(p) || rule.pattern === 'once') return null;   // a crop cleared in one day has no last picking\n      const v = growingVariety(p);\n      return v && v.cropId === p.cropId && ownHarvest(v) ? null : monthDayDate(year, until[env]);",
   "if (!until || !env || ownHarvest(p) || rule.pattern === 'once') return null;\n      const v = growingVariety(p);\n      return v && v.cropId === p.cropId && ownHarvest(v) ? null : monthDayDate(year, Object.values(until)[0]);"),
  ("a date that is no month and day is read", EN, "for (const env of ENVS) if (validMonthDay(x[env])) out[env] = x[env];", "for (const [env, v] of Object.entries(x)) out[env] = v;"),
- ("a tunnel's season end is said to be the frost", EN, "[frost, finite(g.frostOffset) && !openGround(g) ? 'cover' : 'frost']", "[frost, 'frost']"),
- ("under cover a date of his is said to be cut by the frost", EN, "return { date: ends[0][0], by: ends[0][1], frost: frost && openGround(g) ? frost : null };", "return { date: ends[0][0], by: ends[0][1], frost };"),
+ ("a tunnel's season end is said to be the frost", EN, "[frost, openGround(g) ? 'frost' : 'cover']", "[frost, 'frost']"),
+ ("under cover with no days kept off, the frost is said to come in the open", EN, "[frost, openGround(g) ? 'frost' : 'cover']", "[frost, finite(g.frostOffset) && !openGround(g) ? 'cover' : 'frost']"),
+ ("the card is not told the day the garden closes", EN, "frost: frost && openGround(g) ? frost : null, close: win.close || null };", "frost: frost && openGround(g) ? frost : null, close: null };"),
+ ("a date of his runs past the day the garden closes", EN, "      if (win.close) ends.push(win.close);\n      // his own", "      // his own"),
+ ("under cover a date of his is said to be cut by the frost", EN, "return { date: ends[0][0], by: ends[0][1], frost: frost && openGround(g) ? frost : null, close: win.close || null };", "return { date: ends[0][0], by: ends[0][1], frost, close: win.close || null };"),
  ("the line's dates are not given to the card", EN, "until: micro ? {} : { ...(rule.until || {}) },", "until: {},"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE)})); sys.exit(0)

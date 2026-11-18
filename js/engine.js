@@ -580,7 +580,8 @@
     function seasonHarvestEnd(c, b, field, p) {
       const g = gardenOf(b) || {}, year = field.getFullYear(), ends = [new Date(year, 11, 31)], win = gWindow(g, year);
       if (win.close) ends.push(win.close);
-      // his own last picking for the place stands for the season's end there, in place of the frost's and the crop record's
+      // his own last picking for the place stands for the season's end there, in place of the frost's and the crop record's; the
+      // garden's close still bounds it, since nothing is picked in a closed garden (the card says so beside the date)
       const mine = p ? lineEnd(p, b, year) : null;
       if (mine) ends.push(mine);
       else {
@@ -609,7 +610,8 @@
      * Where a crop picked to the season's end stops in a place when its line sets no date there: { date, by, frost }. by: 'frost'
      * (the first fall frost), 'cover' (the frost and the days a covered garden keeps it off), 'close' (the garden closes), 'record'
      * (the crop record's own "picked until") or 'year' (the plan's year ends). frost: in open ground, the day the first fall frost
-     * cuts short a date set past it; null under cover. Read from the place's first space, as timingFor reads days; null with none.
+     * cuts short a date set past it; null under cover. close: the day the garden closes, which ends a date set past it too (nothing
+     * is picked in a closed garden); null when it sets none. Read from the place's first space, as timingFor reads days; null with none.
      */
     function seasonEndOf(cropId, env, year) {
       const c = crop(cropId), here = b => b.active !== false && (gardenOf(b) || {}).active !== false && envOf(b) === env && !isRack(b);
@@ -617,11 +619,11 @@
       if (!c || !bed || !Number.isInteger(year)) return null;
       const g = gardenOf(bed) || {}, win = gWindow(g, year), ends = [[new Date(year, 11, 31), 'year']], frost = c.frostTender && g.frost ? addDays(frostDates(year).first, finite(g.frostOffset)) : null;
       if (win.close) ends.push([win.close, 'close']);
-      if (frost) ends.push([frost, finite(g.frostOffset) && !openGround(g) ? 'cover' : 'frost']);
+      if (frost) ends.push([frost, openGround(g) ? 'frost' : 'cover']);
       const custom = monthDayDate(year, c.harvestUntil);
       if (custom) ends.push([custom, 'record']);
       ends.sort((a, b) => a[0] - b[0]);
-      return { date: ends[0][0], by: ends[0][1], frost: frost && openGround(g) ? frost : null };
+      return { date: ends[0][0], by: ends[0][1], frost: frost && openGround(g) ? frost : null, close: win.close || null };
     }
     /** The day the first fall frost ends a frost-tender crop's harvest in open ground, for a planting set out on `field`; null elsewhere. */
     function frostEnd(c, b, field) {

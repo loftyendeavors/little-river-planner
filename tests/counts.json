@@ -5,9 +5,9 @@
 
   "fetch service": 26,
 
-  "frost, backup": 55,
+  "frost, backup": 58,
 
-  "frost, compact": 55,
+  "frost, compact": 58,
 
   "hooks": 4,
 
@@ -145,7 +145,7 @@
 
   "forecast": 48,
 
-  "harvest": 42,
+  "harvest": 43,
 
   "look": 33,
 
@@ -252,7 +252,7 @@
 
   "forecast-site": 48,
 
-  "harvest-site": 42,
+  "harvest-site": 43,
 
   "join-site": 46,
 
@@ -444,9 +444,9 @@
 
   "forecast-site @3440": 48,
 
-  "harvest-site @1707": 42,
+  "harvest-site @1707": 43,
 
-  "harvest-site @3440": 42
+  "harvest-site @3440": 43
 
  },
  "screens": {

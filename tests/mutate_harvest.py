@@ -32,6 +32,8 @@ YC, AS, AP, CSS = "js/yieldcard.js", "js/assume.js", "js/app.js", "css/app.css"
 PAGE = [
  ("every crop is shown picked for a number of days", YC, "dataset: { hook: 'harvest-choice', on: w.season ? 'season' : 'days' } },", "dataset: { hook: 'harvest-choice', on: 'days' } },"),
  ("a crop with the list's days is shown picked to the season's end where its record says so", YC, "const season = hc.days.mine == null && hc.season, offer", "const season = hc.season, offer"),
+ ("the card never says the garden's close ends a date sooner", YC, "const shut = own && se && se.close && own > se.close && !cut ? h(", "const shut = false ? h("),
+ ("the card says the frost cuts a date short where the garden closes first", YC, "own > se.frost && !(se.close && se.close < se.frost) ? h(", "own > se.frost ? h("),
  ("the number offered is the days a total is spoken of over, not the crop's own days", YC, "offer = Math.max(1, Math.round(+c.hw > 0 ? +c.hw : hc.nominal || 1));", "offer = Math.max(1, Math.round(hc.nominal || 1));"),
  ("the season's end is never pressed", YC, "h('button.yc-hw-end', { type: 'button', 'aria-pressed': String(w.season),", "h('button.yc-hw-end', { type: 'button', 'aria-pressed': 'false',"),
  ("last picking counts the plantings that keep their own days", YC, "      if (p.cropId !== c.id || !follows(eng, p)) continue;\n      const env = envOfP(eng, p), r = env ? eng.calc(p) : null;", "      if (p.cropId !== c.id) continue;\n      const env = envOfP(eng, p), r = env ? eng.calc(p) : null;"),

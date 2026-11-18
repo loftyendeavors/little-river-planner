@@ -298,11 +298,13 @@
       if ((md || null) === mine || (!mine && md && inForce && iso(inForce).slice(5) === md)) { input.value = inForce ? iso(inForce) : ''; return; }
       setUntil(c, env, md);
     });
-    const cut = own && se && se.frost && own > se.frost ? h('small.yc-total.warn', { dataset: { hook: 'harvest-until-frost' } }, `the first frost, ${UI.day(se.frost)}, cuts it short`) : null;
+    // what ends a date of his sooner: the first frost in open ground, or the day the garden closes, whichever comes first
+    const cut = own && se && se.frost && own > se.frost && !(se.close && se.close < se.frost) ? h('small.yc-total.warn', { dataset: { hook: 'harvest-until-frost' } }, `the first frost, ${UI.day(se.frost)}, cuts it short`) : null;
+    const shut = own && se && se.close && own > se.close && !cut ? h('small.yc-total.warn', { dataset: { hook: 'harvest-until-close' } }, `the garden closes ${UI.day(se.close)}, which ends it sooner`) : null;
     const apart = at && (+at.lo !== +at.hi || !inForce || +at.hi !== +inForce) ? h('small.yc-total', `plantings end ${between(at.lo, at.hi)}`) : null;
     // the dates the plantings there come to are carried on the line, as on a crop picked for a number of days (hook harvest-end)
     const line = at ? { hook: 'harvest-end', place: env, from: iso(at.lo), to: iso(at.hi), n: String(at.n) } : {};
-    return [h('span.yc-line', { dataset: line }, h('span.yc-box.yc-date' + (mine ? '.mine' : ''), input), h('span.yc-unit', { dataset: { hook: 'harvest-until-whose' } }, whose)), cut, apart];
+    return [h('span.yc-line', { dataset: line }, h('span.yc-box.yc-date' + (mine ? '.mine' : ''), input), h('span.yc-unit', { dataset: { hook: 'harvest-until-whose' } }, whose)), cut, shut, apart];
   }
   /** Show what a step of the harvest window would move, in a sheet, whenever it moves anything; true when he agrees or nothing moves. */
   async function askMoves(eng, c, ops, label, confirmLabel) {
