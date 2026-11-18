@@ -20,7 +20,7 @@
   function renderLibrary() {
     if (!App.state.ready) return;
     // the third side of the switch: the plantings that wait for a bed, drawn by the series tool that made them
-    if (lib.scope === 'wait' && root.LRFSeries) { root.LRFSeries.fillWaiting(clear($('libList')), lib.query); $('libHint').textContent = 'Click one to see where it is free, or drag it onto a bed. It keeps its date.'; return; }
+    if (lib.scope === 'wait' && root.LRFSeries) { root.LRFSeries.fillWaiting(clear($('libList')), lib.query); $('libHint').textContent = 'Drag one onto a bed or a row. It keeps its date.'; return; }
     const eng = App.state.engine, plan = App.state.plan, host = clear($('libList')), q = lib.query.trim().toLowerCase();
     const used = new Map();
     for (const p of plan.plantings) used.set(p.cropId, (used.get(p.cropId) || 0) + 1);
@@ -535,6 +535,23 @@
       h('small', h('button.linkish', { type: 'button', id: 'fEqual', onclick: () => App.equalShares(p.id) }, 'Make them equal'), ' · on the map, push an end into its neighbour to move the line between them.'));
   }
 
+  // ── what a change to a planting's own boxes writes: one function for each, used by this panel and by the card (card.js) ──
+  // Each gives [the change, its label] for App.updatePlanting, or null where the value cannot be taken (a date that is no date).
+  const edit = {
+    date: value => (E.validDate(E.s2d(value)) ? [{ date: value }, 'Change date'] : null),
+    variety: id => [{ varietyId: id || null, variety: null }, 'Change variety'],
+    /** The share of its bed, from what is typed in the length box: empty or the whole bed's length gives the whole bed back. */
+    length(eng, p, raw) {
+      const r = eng.calc(p), f = eng.footprint(p, r), n = +raw, lengthKey = r.rack ? 'trays' : 'ft';
+      if (!f) return [{ [lengthKey]: n > 0 && n < r.cap ? n : null }, 'Change length'];
+      if (r.layout) return [{ ft: Math.min(n > 0 ? n : r.cap, r.cap - r.layout.startFt) }, 'Change length'];
+      if (!(n > 0) || n >= r.cap) return [{ ft: null, startFt: null }, 'Change length'];
+      return [{ ft: n, startFt: Math.min(f.a0, r.cap - n) > 0 ? Math.min(f.a0, r.cap - n) : null }, 'Change length'];
+    },
+    dtm(p, raw) { const n = Math.round(+raw); return [n > 0 ? { dtm: n, timingMode: 'manual' } : { dtm: null, timingMode: p.timingMode === 'manual' ? null : p.timingMode }, 'Change days to harvest']; },
+    hw: raw => [raw === '' ? { hw: null, harvestMode: null } : { hw: Math.max(0, Math.round(+raw)), harvestMode: 'window' }, 'Change harvest days'],
+  };
+
   function renderPlanting(host, p) {
     const eng = App.state.engine, r = eng.calc(p);
     if (!r) { host.append(h('p.note', 'This planting cannot be calculated. Its saved data is kept.'), h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')); return; }
@@ -544,7 +561,7 @@
     const set = (change, label) => { if (!App.updatePlanting(p.id, change, label)) render(); };
 
     // Variety
-    const varieties = eng.varietiesOf(p.cropId), variety = h('select', { id: 'fVariety', onchange: e => set({ varietyId: e.target.value || null, variety: null }, 'Change variety') }, h('option', { value: '' }, 'No variety chosen'));
+    const varieties = eng.varietiesOf(p.cropId), variety = h('select', { id: 'fVariety', onchange: e => set(...edit.variety(e.target.value)) }, h('option', { value: '' }, 'No variety chosen'));
     if (v && !varieties.includes(v)) variety.append(h('option', { value: v.id, selected: true }, `${v.name} (retired)`));
     for (const x of varieties) variety.append(h('option', { value: x.id, selected: x.id === p.varietyId }, x.name));
     if (several && several.id !== p.id) several = null;
@@ -559,13 +576,7 @@
       space.append(group);
     }
     const lengthKey = r.rack ? 'trays' : 'ft', whole = !(p[lengthKey] > 0) || (!r.layout && r.physicalLength >= r.cap);
-    const setLength = raw => {
-      const n = +raw;
-      if (!f) return set({ [lengthKey]: n > 0 && n < r.cap ? n : null }, 'Change length');
-      if (r.layout) return set({ ft: Math.min(n > 0 ? n : r.cap, r.cap - r.layout.startFt) }, 'Change length');
-      if (!(n > 0) || n >= r.cap) return set({ ft: null, startFt: null }, 'Change length');
-      set({ ft: n, startFt: Math.min(f.a0, r.cap - n) > 0 ? Math.min(f.a0, r.cap - n) : null }, 'Change length');
-    };
+    const setLength = raw => set(...edit.length(eng, p, raw));
     const split = f && f.rows && f.rows.count < f.rows.total, totalRows = f ? (f.rows ? f.rows.total : r.rows) : 0;
     const whereText = !f ? null : r.partial || split ? `Feet ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} of ${num(r.cap, 1)}. Drag its ends on the map to change them.` : 'Whole bed. Shorten it here, or drag its ends on the map, to share the bed.';
     const dtmSource = timing.activeMode === 'catalog' ? `From the supplier's ${timing.printed}-day figure${timing.conversion === 'seed-minus-nursery' ? `, less ${timing.nurseryDays} nursery days` : timing.conversion === 'direct-less' ? `, which is for seed sown in place: ${timing.off} days less as a transplant` : ''}.${timing.basisBy === 'guess' ? ' What those days are counted from is a guess from the wording of the supplier’s page: set it on the Assumptions list.' : ''}`
@@ -592,7 +603,7 @@
         h('button.link', { type: 'button', onclick: () => App.select({ type: 'bed', id: bed.id }) }, App.bedLabel(bed)),
         h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select({ type: 'bed', id: bed.id }) }, '×')),
       h('section.insp-section.form',
-        field(c.method === 'TP' ? 'Transplant date' : sow && sow.kind === 'field' && sow.done ? 'Planned sowing date' : 'Sowing date', h('input', { type: 'date', id: 'fDate', value: p.date, onchange: e => { if (E.validDate(E.s2d(e.target.value))) set({ date: e.target.value }, 'Change date'); else render(); } })),
+        field(c.method === 'TP' ? 'Transplant date' : sow && sow.kind === 'field' && sow.done ? 'Planned sowing date' : 'Sowing date', h('input', { type: 'date', id: 'fDate', value: p.date, onchange: e => { const ed = edit.date(e.target.value); if (ed) set(...ed); else render(); } })),
         field('Variety', variety, canMix && !several ? h('button.linkish', { type: 'button', id: 'fSeveral', title: 'Grow several varieties in this bed: each becomes a planting of its own beside this one, and the bed is shared equally', onclick: () => { several = { id: p.id, picked: new Set(), by: 'length' }; render(); } }, 'Several varieties in this bed…') : null),
         canMix && several ? severalBox(eng, p, r, varieties) : null,
         field('Growing space', space),
@@ -603,9 +614,9 @@
         f && totalRows >= 2 && totalRows <= 12 ? field('Rows', rowPicker(p, f, totalRows, set), split ? `Uses ${f.rows.count} of ${f.rows.total} rows. The others are free for another crop.` : 'Uses every row. Release some to grow another crop alongside.') : null,
         h('div.field-pair',
           field('Days to harvest', h('input', { type: 'number', id: 'fDtm', min: 1, max: 730, value: p.dtm > 0 ? p.dtm : '', placeholder: String(c.dtm),
-            onchange: e => { const n = Math.round(+e.target.value); set(n > 0 ? { dtm: n, timingMode: 'manual' } : { dtm: null, timingMode: p.timingMode === 'manual' ? null : p.timingMode }, 'Change days to harvest'); } })),
+            onchange: e => set(...edit.dtm(p, e.target.value)) })),
           field('Harvest days', h('input', { type: 'number', id: 'fHw', min: 0, max: 400, value: p.hw != null && p.hw !== '' ? p.hw : '', placeholder: r.harvestMode === 'season' ? 'To season end' : String(c.hw),
-            onchange: e => { const raw = e.target.value; set(raw === '' ? { hw: null, harvestMode: null } : { hw: Math.max(0, Math.round(+raw)), harvestMode: 'window' }, 'Change harvest days'); } }))),
+            onchange: e => set(...edit.hw(e.target.value)) }))),
         h('p.help', fromList || dtmSource),
         useField,
         givesField,
@@ -636,7 +647,7 @@
           canSeries(eng, r.c) ? h('button.linkish', { type: 'button', id: 'fSeriesLink', onclick: () => App.openAhead({ mode: 'series', sourceId: p.id }) }, 'Plan a longer series: see it first, name gardens or beds, or leave them to place') : null)),
       h('div.insp-actions',
         h('button.btn', { type: 'button', id: 'fToWait', title: 'Take it out of this bed and keep it, with its date, under To place. What it shared the bed with takes up its ground.', onclick: () => App.sendToWait(p.id) }, 'Send to To place'),
-        h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')));
+        h('button.btn.danger', { type: 'button', dataset: { hook: 'panel-remove' }, onclick: () => App.removePlantings([p.id]) }, 'Remove planting')));
   }
 
   // Removing a focused field can fire its change handler, which asks for another render: finish this one first.
@@ -742,6 +753,7 @@
   function showSettle() {
     if (!['map', 'timeline'].includes(App.state.view)) App.setView('map');
     cleanupOpen = true; holdSettle = true;
+    if (root.LRFCard) root.LRFCard.settle();   // with the card tried, the list stands in the side panel
     if (App.state.sel) App.select(null); else render();
     requestAnimationFrame(() => { const el = $('toSettle'); if (!el) return; el.scrollIntoView({ block: 'start' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); });
   }
@@ -779,5 +791,5 @@
     });
   }
 
-  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, setScope, scope: () => lib.scope, renderLibrary, sowingBox, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle() };
+  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, setScope, scope: () => lib.scope, renderLibrary, sowingBox, edit, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle() };
 })(window);

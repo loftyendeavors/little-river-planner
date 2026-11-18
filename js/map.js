@@ -781,7 +781,8 @@
       ['Trade', 'Drop a planting on a bed that is taken. The two swap when both fit.'],
       ['Share a bed', 'Drop a crop from the library on a bed that is taken, then choose to split the bed or replace what is there. Or use “Several varieties…” in a planting’s panel. Push a planting’s end into its neighbour to move the line between them.'],
       ['Zoom and pan', 'Wheel · drag · Space and drag · click a garden’s name.'],
-      ['Colours', 'Pale: growing · Full: being picked · Hatched: turnover. Click a group in the bar under the map to show only that group.']
+      ['Colours', 'Pale: growing · Full: being picked · Hatched: turnover. Click a group in the bar under the map to show only that group.'],
+      ...(root.LRFCard ? [['Try the card', root.LRFCard.tick()]] : [])
     ], { id: 'mapHelp', label: 'What can be done on the map', cols: true }));
     // A window that changes size (dragged to the other monitor, made full screen) is fitted again, unless the grower has moved the view since.
     new ResizeObserver(() => { if (App.state.ready && App.state.view === 'map' && (!view.fitted || !view.moved)) fit(); if (App.state.ready) fitLegend(); }).observe(svg);

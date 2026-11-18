@@ -75,7 +75,7 @@ FAULTS = [
  (P, 'from an opening the series starts today, not on the opening\'s day', 'js/ahead.js', "varietyId: O.pick.varietyId || undefined, from: t.p.date, gardenId: o.garden.id })", "varietyId: O.pick.varietyId || undefined, gardenId: o.garden.id })"),
  (P, 'Escape does not leave the tool from inside a field', 'js/main.js', "else if (App.state.sel && (!typing || (App.state.sel.type === 'series' && e.target.closest && e.target.closest('#srForm')))) App.select(null); return; }", "else if (App.state.sel && !typing) App.select(null); return; }"),
  (P, 'a ghost bar shows the hand that picks a bar up', 'css/app.css', ".tl-bar.tl-ghost-bar { cursor: default; outline:", ".tl-bar.tl-ghost-bar { outline:"),
- (P, 'undo leaves a placed planting selected after it has gone back to wait', 'js/app.js', "    if (state.sel && state.sel.type === 'planting' && !state.engine.planting(state.sel.id)) select(null);\n    if (state.sel && state.sel.type === 'waiting' && !waitingOne(state.sel.id)) select(null);\n    toast(`Undid:", "    toast(`Undid:"),
+ (P, 'undo leaves a placed planting selected after it has gone back to wait', 'js/app.js', "    if (state.sel && state.sel.type === 'planting' && !state.engine.planting(state.sel.id)) select(null);\n    if (state.sel && state.sel.type === 'waiting' && !waitingOne(state.sel.id)) select(null);\n    const more", "    const more"),
 ]
 if mode == 'list': print(json.dumps({k: len([f for f in FAULTS if f[0] == k]) for k in (N, P)})); sys.exit(0)
 faults = [f for f in FAULTS if f[0] == mode and (not only or any(word in f[1] for word in only))]
