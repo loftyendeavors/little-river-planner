@@ -21,7 +21,7 @@ NODE = [
  ("a crop cleared in one day and ready after the frost is counted whole", EN, "pattern === 'once' && r.frostCut && r.harvestDays > 0 ? r.frostCut.plannedDays", "pattern === 'once' && r.frostCut ? r.frostCut.plannedDays"),
  ("a cut planting does not say so", EN, "      if (r.frostCut && !isCoverCrop(r.c)) {", "      if (false) {"),
  ("a cut planting says the wrong days", EN, "${r.harvestDays} of ${fc.plannedDays} days are picked", "${fc.plannedDays} of ${fc.plannedDays} days are picked"),
- ("the cut is not told to the yield", EN, "frostCut: period.frost && +last === +period.frost.day ? period.frost : null,", "frostCut: null,"),
+ ("the cut is not told to the yield", EN, "...(period.frost && +last === +period.frost.day ? { frostCut: period.frost } : {}),", "...({}),"),
  ("a place's own date is not read", EN, "      if (mine) ends.push(mine);\n      else {", "      if (false) ends.push(mine);\n      else {"),
  ("a place's own date does not stand over the frost under cover", EN, "      if (mine) ends.push(mine);\n      else {\n        if (c.frostTender && g.frost) ends.push(addDays(frostDates(year).first, finite(g.frostOffset)));",
   "      if (mine) ends.push(mine);\n      if (c.frostTender && g.frost) ends.push(addDays(frostDates(year).first, finite(g.frostOffset)));\n      {"),

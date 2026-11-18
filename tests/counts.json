@@ -5,6 +5,10 @@
 
   "fetch service": 26,
 
+  "frost, backup": 47,
+
+  "frost, compact": 47,
+
   "hooks": 4,
 
   "look-a, backup": 15,

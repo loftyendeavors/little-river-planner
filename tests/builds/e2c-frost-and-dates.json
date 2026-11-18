@@ -22,6 +22,9 @@
   "css/app.css"
  ],
  "screens": [
-  "assumptions-yield"
+  "assumptions-yield",
+  "forecast",
+  "map",
+  "timeline"
  ]
 }

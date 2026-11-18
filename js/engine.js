@@ -867,8 +867,9 @@
         planned, field, sow: gh, plannedSow: plannedGh, sowDefault, sowSet: !!sowOwn, start: gh || field, slip: dayDiff(field, planned),
         first, last, modeledLast: period.modeledLast, automaticEnd: period.automaticEnd, harvestMode: period.harvestMode,
         harvestDays, expectedHarvestDays: period.expectedDays, removal: period.removal, actualClear,
-        // the first fall frost ended the harvest (and nothing after it did): { day, planned: the last day it was to be picked, plannedDays }
-        frostCut: period.frost && +last === +period.frost.day ? period.frost : null,
+        // the first fall frost ended the harvest (and nothing after it did): { day, planned: the last day it was to be picked, plannedDays }.
+        // Only a planting the frost cut carries the key, so that every other planting's reckoning reads as it did before the rule.
+        ...(period.frost && +last === +period.frost.day ? { frostCut: period.frost } : {}),
         area: tw || rack || ct ? 0 : (+b.w || 0) * len, days, blackoutDays,
         occupiedDays: actualClear ? Math.max(1, dayDiff(actualClear, field) + 1) : days + turnoverFor(p)
       };
