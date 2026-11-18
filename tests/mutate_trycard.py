@@ -66,7 +66,7 @@ PAGE = [
  ("the card writes harvest days its own way", CD, "onchange: ev => set(Ed.hw(ev.target.value)) }", "onchange: ev => set([{ hw: +ev.target.value + 1, harvestMode: 'window' }, 'Change harvest days']) }"),
  ("“Add” on the card adds one fewer", CD, "onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+count.value) || 1))", "onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+count.value - 1) || 1))"),
  ("“Send to To place” in the menu removes the planting", CD, "        ['wait', 'Send to To place', () => toWait(p)],", "        ['wait', 'Send to To place', () => App.removePlantings([p.id])],"),
- ("Codex on #66: Send to To place from the card is answered in a toast, the card gone", CD, "    if (r) App.select({ type: 'bed', id: r.b.id });\n    App.sendToWait(p.id);", "    App.sendToWait(p.id);"),
+ ("Codex on #66: Send to To place from the card is answered in a toast, the card gone", CD, "    if (r && !e.isPool(r.b) && !root.LRFRails.fixed(e, { p })) App.select({ type: 'bed', id: r.b.id });\n    App.sendToWait(p.id);", "    App.sendToWait(p.id);"),
  ("“Remove planting” in the menu does nothing", CD, "        ['remove', 'Remove planting', () => App.removePlantings([p.id]), null, 'bad']]", "        ['remove', 'Remove planting', () => {}, null, 'bad']]"),
  ("To place's line under the switch is the old one", SR, "'Not in a bed yet, so not in the forecast, seed or sowing lists.'", "'Until it is placed it is not in the forecast, and takes no seed.'"),
  ("the line at the library's foot is the old one", PN, "'Drag one onto a bed or a row. It keeps its date.'", "'Click one to see where it is free, or drag it onto a bed. It keeps its date.'"),
