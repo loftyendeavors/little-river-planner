@@ -32,6 +32,7 @@ YC, AS, AP, CSS = "js/yieldcard.js", "js/assume.js", "js/app.js", "css/app.css"
 PAGE = [
  ("every crop is shown picked for a number of days", YC, "dataset: { hook: 'harvest-choice', on: w.season ? 'season' : 'days' } },", "dataset: { hook: 'harvest-choice', on: 'days' } },"),
  ("a crop with the list's days is shown picked to the season's end where its record says so", YC, "const season = hc.days.mine == null && hc.season, offer", "const season = hc.season, offer"),
+ ("a saved Feb 29 shows blank in a year without it", YC, "own = mine ? root.LRFEngine.monthDayDate(year, mine) : null,", "own = mine ? root.LRFEngine.s2d(`${year}-${mine}`) : null,"),
  ("a place with only a date of his has no column", YC, "const his = env => hc.cells[env].mine != null || !!(hc.until || {})[env];", "const his = env => hc.cells[env].mine != null;"),
  ("the card never says the garden's close ends a date sooner", YC, "const shut = own && se && se.close && own > se.close && !cut ? h(", "const shut = false ? h("),
  ("the card says the frost cuts a date short where the garden closes first", YC, "own > se.frost && !(se.close && se.close < se.frost) ? h(", "own > se.frost ? h("),

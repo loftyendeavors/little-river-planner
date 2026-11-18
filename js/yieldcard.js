@@ -291,7 +291,8 @@
    * plantings there end if that is not one day. In open ground a date of his past the first frost is cut short by it, and says so.
    */
   function untilCell(eng, c, hc, env, year, at) {
-    const se = eng.seasonEndOf(c.id, env, year), mine = hc.until[env] || null, own = mine ? root.LRFEngine.s2d(`${year}-${mine}`) : null, inForce = own || (se && se.date);
+    // a date of his is read as the engine reads it: Feb 29 is Feb 28 in a common year
+    const se = eng.seasonEndOf(c.id, env, year), mine = hc.until[env] || null, own = mine ? root.LRFEngine.monthDayDate(year, mine) : null, inForce = own || (se && se.date);
     const where = `${c.name}, ${PLACE[env].toLowerCase()}`, whose = mine ? 'yours' : se ? ENDS_BY[se.by] : '';
     const input = h('input', { type: 'date', value: inForce ? iso(inForce) : '', min: `${year}-01-01`, max: `${year}-12-31`, 'aria-label': `${where}: last picking`, dataset: { yk: `until|${env}`, hook: 'harvest-until', place: env, mine: mine || '' },
       title: mine ? `Your last picking ${IN[env]}. Clear it to go back to ${se ? `${ENDS_BY[se.by]}, ${UI.day(se.date)}` : 'the season’s end there'}.` : `The season ends ${IN[env]} on ${inForce ? UI.day(inForce) : 'no day'}: ${whose}. Pick a date to end it on another day. What that moves is shown first.` });

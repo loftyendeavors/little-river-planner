@@ -244,10 +244,11 @@ with sync_playwright() as pw:
     farc = {}
     far = js("const id = %s, envs = ['field', 'tunnel', 'heated', 'tower'], here = new Set(S.plan.plantings.filter(p => p.cropId === id && placeOf(S.engine, p)).map(p => placeOf(S.engine, p))); return envs.find(e => !here.has(e)) || null;" % json.dumps(fid))
     if far:
-        js("const p = withUntil(%s, %s, '09-01'); A.revise('A date for a place with no planting', [{ kind: 'assume', before: S.plan.assumptions, after: p.assumptions }]); return 1;" % (json.dumps(fid), json.dumps(far))); wait(900)
+        js("const p = withUntil(%s, %s, '02-29'); A.revise('A date for a place with no planting', [{ kind: 'assume', before: S.plan.assumptions, after: p.assumptions }]); return 1;" % (json.dumps(fid), json.dumps(far))); wait(900)
         open_crop(sub["plant"], 200); open_crop(fid, 300)
         farc = js("return untilCells();")
-    check("a date he kept for a place the crop is not planted in keeps its column on the card, with the date as his", bool(far) and far in farc and farc[far]["mine"] == "09-01" and farc[far]["whose"] == "yours", {"place": far, "cells": farc if far else None})
+    fyear = js("return +S.plan.settings.year;")
+    check("a date he kept for a place the crop is not planted in keeps its column on the card, with the date as his; Feb 29, in a year without it, shows as Feb 28, the day the engine reads", bool(far) and far in farc and farc[far]["mine"] == "02-29" and farc[far]["whose"] == "yours" and farc[far]["value"] == (f"{fyear}-02-29" if fyear % 4 == 0 else f"{fyear}-02-28"), {"place": far, "cells": farc if far else None})
     if far: undo_to(1); open_crop(sub["plant"], 200); open_crop(fid, 300)
     # past the frost, in open ground: the frost cuts it short, and the card says so
     uwant2 = js("const id = %s, b = engineOf(withUntil(id, %s, %s)); return { was: worthOf(S.engine), now: worthOf(b), assume: JSON.stringify(b.plan.assumptions || null), ends: ends(b, id) };" % (json.dumps(fid), json.dumps(fenv), json.dumps(fd["past"][5:] if fd else "")))
