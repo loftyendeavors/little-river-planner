@@ -42,7 +42,7 @@ PAGE = [
  ("a bed's card lists only what is in the ground", CD, "all.map(x => bedPlantingRow(x, bed, status, date, readOnly, redraw))", "all.filter(x => status.crops.includes(x.r)).map(x => bedPlantingRow(x, bed, status, date, readOnly, redraw))"),
  ("the calendar puts the planting a day after the day picked", CD, "const ed = root.LRFPanels.edit.date(value);", "const ed = root.LRFPanels.edit.date(iso(E.addDays(E.s2d(value), 1)));"),
  ("the calendar says nothing before a day is picked", CD, "          onpointerenter: () => tell(value), onfocus: () => tell(value),\n", ""),
- ("the card writes a variety its own way", CD, "onchange: ev => set(Ed.variety(ev.target.value)) }", "onchange: ev => set([{ varietyId: ev.target.value, variety: ev.target.selectedOptions[0].text }, 'Change variety']) }"),
+ ("the card writes a variety its own way", CD, "dataset: { hook: 'card-variety' }, onchange: ev => set(Ed.variety(ev.target.value)) }", "dataset: { hook: 'card-variety' }, onchange: ev => set([{ varietyId: ev.target.value, variety: ev.target.selectedOptions[0].text }, 'Change variety']) }"),
  ("the card writes a share of the bed its own way", CD, "onchange: ev => set(Ed.length(e, p, ev.target.value)) }", "onchange: ev => set([{ ft: +ev.target.value + 1 }, 'Change length']) }"),
  ("Grown for sale on a planting's card sets its bed", CD, "if (!App.setUse('planting', [p.id], ev.target.checked ? 'commercial' : 'personal')) draw();", "if (!App.setUse('bed', [bed.id], ev.target.checked ? 'commercial' : 'personal')) draw();"),
  ("an answer is said in a toast as well as on the card", UI, "    if (answerTo && answerTo(message, action)) return;", "    if (answerTo) answerTo(message, action);"),
