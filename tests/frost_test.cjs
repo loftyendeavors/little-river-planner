@@ -56,9 +56,9 @@ check('the season’s worth falls by what the cut plantings lose, and by nothing
   const fdOf = g => E.addDays(E.s2d(`${year}-${core.settings.frostFirst}`), Number(g.frostOffset) || 0);
   const open = g => !!g && !!g.frost && (g.growingEnvironment && g.growingEnvironment.v === 1 ? g.growingEnvironment.kind === 'outdoor' : g.type === 'field' || g.type === 'towers');
   const expect = x => { const p = x.p, r = x.r, c = eng.crop(p.cropId), g = (core.gardens || []).find(k => k.id === (eng.bedOf(p.bedId) || {}).gardenId);
-    if (!c || !c.frostTender || !open(g) || p.harvestEnd || (p.done && p.done.flip) || (p.workflow && p.workflow.outcome === 'failed') || r.harvestMode !== 'window') return false;
+    if (!c || !c.frostTender || !open(g) || E.validDate(E.s2d(p.harvestEnd)) || (p.done && E.validDate(E.s2d(p.done.flip))) || (p.workflow && p.workflow.outcome === 'failed') || r.harvestMode !== 'window') return false;
     return E.addDays(r.first, r.c.hw - 1) > fdOf(g); };
-  const plain = all.filter(x => !(eng.bedOf(x.p.bedId) || {}).shelter && x.r.harvestMode === 'window');
+  const plain = all.filter(x => !x.p.shelter && !(eng.bedOf(x.p.bedId) || {}).shelter && x.r.harvestMode === 'window');   // shelter is kept on a planting, or on its bed
   const want = plain.filter(expect).map(x => x.p.id).sort(), got = plain.filter(x => x.r.frostCut).map(x => x.p.id).sort();
   check('the plantings cut are those the rule names, read from the plan itself: no more, no fewer', JSON.stringify(want) === JSON.stringify(got) && all.filter(x => x.r.harvestMode === 'season' && x.r.frostCut).length === 0, { want, got });
 }
@@ -83,6 +83,8 @@ const subject = cut.find(x => x.r.harvestDays > 0);
   check('a clear recorded after the frost stands: picked to the day recorded, and nothing cut', !r1.frostCut && iso(r1.last) === late && !e1.warnings(e1.planting(subject.p.id), r1).some(w => /ends its harvest/.test(w.t)), [iso(r1.last), !!r1.frostCut]);
   const e2 = withPlanting(subject.p.id, { workflow: { outcome: 'failed', failureDate: late } }), r2 = e2.calc(e2.planting(subject.p.id));
   check('a failure recorded after the frost stands too: the harvest ends on it, and nothing is cut', !r2.frostCut && iso(r2.last) === late);
+  const e3 = withPlanting(subject.p.id, { workflow: { outcome: 'failed' } }), q3 = e3.planting(subject.p.id), r3 = e3.calc(q3);
+  check('a failure recorded with no day is not cut by the frost as well: one note, the failure', !r3.frostCut && !e3.warnings(q3, r3).some(w => /ends its harvest/.test(w.t)));
 }
 // a crate or tower that stands under shelter until after the frost is under cover when it comes
 {
@@ -128,6 +130,10 @@ check('the plan has a frost-tender crop picked to the season’s end in open gro
   check('every planting of the crop in that place follows it; other crops are as they were', mates.filter(x => eng.envOf(x.r.b) === env && !x.p.harvestEnd).every(x => { const r = e1.calc(e1.planting(x.p.id)); return r.harvestMode !== 'season' || +r.last === Math.min(+before, +x.r.last) || r.last < before; }) && others.every(x => +e1.calc(e1.planting(x.p.id)).last === +x.r.last));
   const e2 = withSell(id, { until: { [env]: iso(past).slice(5) } }), r2 = e2.calc(e2.planting(seasonal.p.id));
   check('a date past the frost, in open ground, is cut short by the frost: picked to the frost, and the yield with it', r2.frostCut && +r2.last === +fd && +r2.frostCut.planned === +past && r2.harvestDays < r2.frostCut.plannedDays);
+  // set later, to some fifteen days before the frost, the planting has fewer days than its season, and the frost cuts it: one note, the frost's
+  const late = E.create({ ...e2.plan, plantings: e2.plan.plantings.map(q => q.id === seasonal.p.id ? { ...q, date: iso(E.addDays(E.s2d(q.date), Math.max(1, r2.harvestDays - 15))) } : q) }, Lib), lq = late.planting(seasonal.p.id), lr = late.calc(lq);
+  const short = lr.frostCut && lr.harvestDays > 0 && lr.harvestDays < (lr.c.yieldDays || lr.c.hw || 1);
+  check('cut short so, a planting with fewer days than its season is told once, by the frost, and not also that its season is short', !!short && !late.warnings(lq, lr).some(w => w.k === 'season') && late.warnings(lq, lr).some(w => /ends its harvest/.test(w.t)), [lr.harvestDays, !!lr.frostCut]);
   check('what it loses is the days after the frost, over the days to his date', near(units(e2, seasonal.p) / units(E.create(Held.held(E, Lib, e2.plan, null), Lib), seasonal.p), r2.harvestDays / r2.frostCut.plannedDays));
   const elsewhere = all.find(x => x.p.cropId === id && eng.envOf(x.r.b) !== env && x.r.harvestMode === 'season');
   check('a place he did not name keeps the season’s end there', !elsewhere || +e1.calc(e1.planting(elsewhere.p.id)).last === +elsewhere.r.last);
@@ -177,7 +183,7 @@ check('the plan has a frost-tender crop picked to the season’s end in open gro
   if (covered && cropT) {
     const z = E.create({ ...core, gardens: core.gardens.map(g => g.id === covered.id ? { ...g, frostOffset: 0 } : g) }, Lib), env = eng.envOf((core.beds || []).find(b => b.gardenId === covered.id && b.active !== false) || {});
     const se = env ? z.seasonEndOf(cropT.id, env, year) : null;
-    check('under cover with no days of frost kept off, the frost is still said to come under cover', !se || se.by !== 'frost', se && se.by);
+    check('under cover with no days of frost kept off, the frost is still said to come under cover', !!se && se.by === 'cover' && se.frost === null, se && se.by);
   }
 }
 

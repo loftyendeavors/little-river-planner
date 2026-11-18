@@ -5,9 +5,9 @@
 
   "fetch service": 26,
 
-  "frost, backup": 58,
+  "frost, backup": 60,
 
-  "frost, compact": 58,
+  "frost, compact": 60,
 
   "hooks": 4,
 
