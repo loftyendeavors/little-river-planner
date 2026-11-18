@@ -33,7 +33,6 @@
   const eng = () => App.state.engine;
   const money = n => '$' + Math.round(n).toLocaleString('en-US');
   const plural = (n, w) => `${num(n)} ${w}${n === 1 ? '' : 's'}`;
-  const hook = name => ({ hook: name });
 
   /** The bed or the planting the card holds, or null when what is picked belongs to the side panel. */
   function held(sel = App.state.sel) {
@@ -62,7 +61,7 @@
   function answer(text, action) {
     if (!card || !card.isConnected || !standing() || !App.state.sel) return false;
     said = { text, action: action || null, key: keyOf(App.state.sel), at: Date.now() };
-    fillSaid();
+    draw();   // drawn again whole: after a drop the variety box is ringed when no variety came with it
     return true;
   }
   function fillSaid() {
@@ -77,10 +76,10 @@
     if (mine && !change) {
       el.dataset.state = 'said';
       const run = said.action;
-      add(el, h('span', said.text), run ? h('button.link', { type: 'button', dataset: hook('card-undo'), onclick: () => { said = null; run.run(); } }, run.label) : null);
+      add(el, h('span', said.text), run ? h('button.link', { type: 'button', dataset: { hook: 'card-undo' }, onclick: () => { said = null; run.run(); } }, run.label) : null);
     } else if (change) {
       el.dataset.state = last.kind;
-      if (last.kind === 'saved') add(el, h('b', 'Saved'), h('span', ` · ${last.label}`), last.canUndo ? h('button.link', { type: 'button', dataset: hook('card-undo'), onclick: () => App.undo() }, 'Undo') : null);
+      if (last.kind === 'saved') add(el, h('b', 'Saved'), h('span', ` · ${last.label}`), last.canUndo ? h('button.link', { type: 'button', dataset: { hook: 'card-undo' }, onclick: () => App.undo() }, 'Undo') : null);
       else add(el, h('b', 'Not changed'), h('span', ` · ${last.text}`));
     } else { el.dataset.state = 'idle'; el.hidden = true; return; }
     el.hidden = false;
@@ -92,11 +91,11 @@
   function head(title, sub, thumb, more) {
     return h('header.card-head',
       thumb,
-      h('div.card-title', h('h2', { dataset: hook('card-title') }, title), sub ? h('p.card-sub', sub) : null),
-      h('button.icon-btn.card-more', { type: 'button', 'aria-label': 'More', 'aria-haspopup': 'menu', title: 'More', dataset: hook('card-more'), onclick: e => openMenu(more(), e.currentTarget) }, '⋯'),
-      h('button.icon-btn.card-x', { type: 'button', 'aria-label': 'Close', dataset: hook('card-close'), onclick: () => App.select(null) }, '×'));
+      h('div.card-title', h('h2', { dataset: { hook: 'card-title' } }, title), sub ? h('p.card-sub', sub) : null),
+      h('button.icon-btn.card-more', { type: 'button', 'aria-label': 'More', 'aria-haspopup': 'menu', title: 'More', dataset: { hook: 'card-more' }, onclick: e => openMenu(more(), e.currentTarget) }, '⋯'),
+      h('button.icon-btn.card-x', { type: 'button', 'aria-label': 'Close', dataset: { hook: 'card-close' }, onclick: () => App.select(null) }, '×'));
   }
-  const bedLink = bed => h('button.link', { type: 'button', dataset: hook('card-bed'), title: 'Back to the bed', onclick: () => App.select({ type: 'bed', id: bed.id }) }, App.bedLabel(bed));
+  const bedLink = bed => h('button.link', { type: 'button', dataset: { hook: 'card-bed' }, title: 'Back to the bed', onclick: () => App.select({ type: 'bed', id: bed.id }) }, App.bedLabel(bed));
   /** A row that opens in place: its name and, closed, its figures; open, what changes them. */
   function fold(name, figures, body) {
     const open = opened.has(name);
@@ -114,7 +113,7 @@
     const at = (from, to) => ({ left: `${((+from - a) / w * 100).toFixed(2)}%`, width: `${(Math.max(0, +to - +from) / w * 100).toFixed(2)}%` });
     const pickEnd = E.addDays(r.last, 1);
     const items = [sow ? ['Sow', day(sow)] : null, [sow ? 'In' : 'Sown', day(r.field)], ['Pick', r.harvestDays ? (r.first.getMonth() === r.last.getMonth() ? `${day(r.first)} – ${r.last.getDate()}` : span(r.first, r.last)) : 'none'], ['Free', free ? day(free) : 'stays']].filter(Boolean);
-    return h('div.card-bar', { dataset: hook('card-bar'), style: { '--crop': color } },
+    return h('div.card-bar', { dataset: { hook: 'card-bar' }, style: { '--crop': color } },
       h('div.card-bar-track',
         sow ? h('i.cb-nursery', { style: at(sow, r.field) }) : null,
         h('i.cb-grow', { style: at(r.field, r.harvestDays ? r.first : pickEnd) }),
@@ -137,13 +136,13 @@
     const e = eng(), c = r.c, bed = r.b, color = e.cropColor(c), v = e.variety(p.varietyId), Ed = root.LRFPanels.edit, use = root.LRFForecast.useOf(e, p);
     const set = ed => { if (!ed || !App.updatePlanting(p.id, ...ed)) draw(); };
     const varieties = e.varietiesOf(p.cropId), justPlanted = said && said.key === keyOf(App.state.sel) && Date.now() - said.at < SAID_FOR && /^Plant /.test((App.lastChange() || {}).label || '');
-    const variety = h('select', { dataset: hook('card-variety'), onchange: ev => set(Ed.variety(ev.target.value)) }, h('option', { value: '' }, 'No variety chosen'));
+    const variety = h('select', { dataset: { hook: 'card-variety' }, onchange: ev => set(Ed.variety(ev.target.value)) }, h('option', { value: '' }, 'No variety chosen'));
     if (v && !varieties.includes(v)) variety.append(h('option', { value: v.id, selected: true }, `${v.name} (retired)`));
     for (const x of varieties) variety.append(h('option', { value: x.id, selected: x.id === p.varietyId }, x.name));
     if (justPlanted && !p.varietyId && varieties.length) variety.classList.add('ask');
     const sowRec = App.sowingOf(p), dateLabel = c.method === 'TP' ? 'Transplant date' : sowRec && sowRec.kind === 'field' && sowRec.done ? 'Planned sowing date' : 'Sowing date';
-    const date = h('button.card-date', { type: 'button', dataset: hook('card-date'), 'aria-haspopup': 'dialog', title: 'Pick a day: the calendar says what it would move first', onclick: ev => openCalendar(p, ev.currentTarget) }, day(E.s2d(p.date)));
-    const sale = h('input', { type: 'checkbox', checked: !use.personal, dataset: hook('card-sale'), onchange: ev => { if (!App.setUse('planting', [p.id], ev.target.checked ? 'commercial' : 'personal')) draw(); } });
+    const date = h('button.card-date', { type: 'button', dataset: { hook: 'card-date' }, 'aria-haspopup': 'dialog', title: 'Pick a day: the calendar says what it would move first', onclick: ev => openCalendar(p, ev.currentTarget) }, day(E.s2d(p.date)));
+    const sale = h('input', { type: 'checkbox', checked: !use.personal, dataset: { hook: 'card-sale' }, onchange: ev => { if (!App.setUse('planting', [p.id], ev.target.checked ? 'commercial' : 'personal')) draw(); } });
     const saleSays = use.by === 'planting' ? 'Set on this planting' : use.by === 'default' ? '' : `As ${use.by === 'bed' ? 'its bed' : `all of ${(e.gardenOf(bed) || {}).name || 'its garden'}`}`;
     const f = e.footprint(p, r), unit = e.capUnit(bed), lengthKey = r.rack ? 'trays' : 'ft', whole = !(p[lengthKey] > 0) || (!r.layout && r.physicalLength >= r.cap);
     const split = f && f.rows && f.rows.count < f.rows.total;
@@ -152,29 +151,29 @@
     const canSeries = !c.micro && !e.isCoverCrop(c) && +c.dtm > 0;
     return [
       head(c.vname || c.name, [c.vname ? `${c.name} · ` : '', bedLink(bed)], root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color, label: c.vname || c.name, size: 40 }), () => plantingMenu(p)),
-      h('p.card-said', { role: 'status', dataset: hook('card-said'), hidden: true }),
+      h('p.card-said', { role: 'status', dataset: { hook: 'card-said' }, hidden: true }),
       lifeBar(p, r),
-      h('p.card-sums', { dataset: hook('card-sums') }, comesTo(p, r)),
+      h('p.card-sums', { dataset: { hook: 'card-sums' } }, comesTo(p, r)),
       h('div.card-boxes', box(dateLabel, date), box('Variety', variety)),
       h('label.card-tick', sale, h('span', 'Grown for sale'), saleSays ? h('small', saleSays) : null),
       r.tw ? null : fold('share', shareFigs, () => [
-        box(r.ct ? 'Containers' : r.rack ? 'Trays' : 'Length (ft)', h('input', { type: 'number', min: 1, max: r.cap, step: r.ct || r.rack ? 1 : 0.5, dataset: hook('card-length'), value: whole ? '' : +(+p[lengthKey]).toFixed(2), placeholder: `Whole · ${num(r.cap, 1)}`, onchange: ev => set(Ed.length(e, p, ev.target.value)) })),
+        box(r.ct ? 'Containers' : r.rack ? 'Trays' : 'Length (ft)', h('input', { type: 'number', min: 1, max: r.cap, step: r.ct || r.rack ? 1 : 0.5, dataset: { hook: 'card-length' }, value: whole ? '' : +(+p[lengthKey]).toFixed(2), placeholder: `Whole · ${num(r.cap, 1)}`, onchange: ev => set(Ed.length(e, p, ev.target.value)) })),
         h('p.card-note', whole ? 'Shorten it to share the bed. Its ends can be dragged on the map.' : `Feet ${num(f ? f.a0 : 0, 1)}–${num(f ? Math.min(f.a1, r.cap) : r.len, 1)}. Empty the box for the whole bed.`)]),
       fold('days', `${p.dtm > 0 ? 'Its own' : 'Your list'}: ${num(c.dtm)} days · pick ${r.harvestMode === 'season' && !(p.hw > 0) ? 'to the season’s end' : plural(r.harvestDays, 'day')}`, () => [
         h('div.card-boxes',
-          box('Days to harvest', h('input', { type: 'number', min: 1, max: 730, dataset: hook('card-dtm'), value: p.dtm > 0 ? p.dtm : '', placeholder: String(c.dtm), onchange: ev => set(Ed.dtm(p, ev.target.value)) })),
-          box('Harvest days', h('input', { type: 'number', min: 0, max: 400, dataset: hook('card-hw'), value: p.hw != null && p.hw !== '' ? p.hw : '', placeholder: r.harvestMode === 'season' ? 'To season end' : String(c.hw), onchange: ev => set(Ed.hw(ev.target.value)) }))),
+          box('Days to harvest', h('input', { type: 'number', min: 1, max: 730, dataset: { hook: 'card-dtm' }, value: p.dtm > 0 ? p.dtm : '', placeholder: String(c.dtm), onchange: ev => set(Ed.dtm(p, ev.target.value)) })),
+          box('Harvest days', h('input', { type: 'number', min: 0, max: 400, dataset: { hook: 'card-hw' }, value: p.hw != null && p.hw !== '' ? p.hw : '', placeholder: r.harvestMode === 'season' ? 'To season end' : String(c.hw), onchange: ev => set(Ed.hw(ev.target.value)) }))),
         h('p.card-note', p.dtm > 0 ? 'Its own days. Empty the box to follow your list.' : 'From your list. A figure here is this planting’s own.')]),
       fold('nursery', nursery, () => [h('p.card-note', r.sowing && r.sowing.batch ? `${r.sowing.batch.tray ? r.sowing.batch.tray.name : 'Pots'}${r.sowing.shared ? ', in one batch with other plantings of this variety' : ''}.` : r.cells ? 'Sown in trays.' : 'Nothing to sow in trays.'),
         h('button.btn.quiet.small', { type: 'button', onclick: () => openFull() }, 'Sowing and its record: All of this planting…')]),
-      fold('repeat', 'More of it, so many days apart', () => {
-        const count = h('input', { type: 'number', min: 1, max: 30, value: 3, 'aria-label': 'How many more', dataset: hook('card-repeat-count') });
-        const every = h('input', { type: 'number', min: 1, max: 120, value: Math.max(7, Math.min(28, c.hw || 14)), 'aria-label': 'Days apart', dataset: hook('card-repeat-every') });
+      fold('repeat', `More, every ${num(Math.max(7, Math.min(28, c.hw || 14)))} days`, () => {
+        const count = h('input', { type: 'number', min: 1, max: 30, value: 3, 'aria-label': 'How many more', dataset: { hook: 'card-repeat-count' } });
+        const every = h('input', { type: 'number', min: 1, max: 120, value: Math.max(7, Math.min(28, c.hw || 14)), 'aria-label': 'Days apart', dataset: { hook: 'card-repeat-every' } });
         return [h('div.card-repeat', count, h('span', 'more, every'), every, h('span', 'days'),
-          h('button.btn.small', { type: 'button', dataset: hook('card-repeat-add'), onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+count.value) || 1)), Math.max(1, Math.round(+every.value) || 14)) }, 'Add')),
+          h('button.btn.small', { type: 'button', dataset: { hook: 'card-repeat-add' }, onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+count.value) || 1)), Math.max(1, Math.round(+every.value) || 14)) }, 'Add')),
           canSeries ? h('button.btn.quiet.small', { type: 'button', onclick: () => App.openAhead({ mode: 'series', sourceId: p.id }) }, 'Plan a longer series…') : null];
       }),
-      h('div.card-foot', h('button.btn.quiet.small', { type: 'button', dataset: hook('card-full'), title: 'Every box of this planting, in the side panel', onclick: () => openFull() }, 'All of this planting…'))];
+      h('div.card-foot', h('button.btn.quiet.small', { type: 'button', dataset: { hook: 'card-full' }, title: 'Every box of this planting, in the side panel', onclick: () => openFull() }, 'All of this planting…'))];
   }
   function plantingMenu(p) {
     const e = eng(), r = e.calc(p), c = r && r.c;
@@ -207,7 +206,7 @@
     }
     for (const o of openings) { const where = x(o.from, E.addDays(o.to, 1)); if (where) bars.push(h('i.cy-open', { style: { ...where, ...(o.whole ? y(0, cap) : y(cap - o.length, cap)) } })); }
     const date = App.state.date, mark = +date >= a && +date < z ? h('i.cy-now', { style: { left: `${((+date - a) / w * 100).toFixed(2)}%` } }) : null;
-    return h('div.card-year', { dataset: hook('card-year') }, h('div.cy-track', bars, mark), h('div.cy-months', ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'].map(m => h('span', m))));
+    return h('div.card-year', { dataset: { hook: 'card-year' } }, h('div.cy-track', bars, mark), h('div.cy-months', ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'].map(m => h('span', m))));
   }
   function bedCard(bed) {
     const e = eng(), date = App.state.date, status = e.bedStatus(bed, date), g = e.gardenOf(bed) || {}, unit = e.capUnit(bed), soil = e.isSoilBed(bed), pool = e.isPool(bed);
@@ -216,9 +215,9 @@
     const size = soil ? `${num(bed.w, 2)} × ${num(bed.l, 2)} ft · ${num(bed.w * bed.l)} sq ft` : `${num(status.cap)} ${unit}`;
     const S = root.LRFSuccession, openings = soil && S && all.length ? S.openings(e, { bedId: bed.id }) : [];
     const editable = root.LRFMapEdit && (soil || !pool), use = root.LRFForecast.useOfBed(e, bed);
-    const sale = h('input', { type: 'checkbox', checked: !use.personal, dataset: hook('card-sale'), onchange: ev => { if (!App.setUse('bed', [bed.id], ev.target.checked ? 'commercial' : 'personal')) draw(); } });
+    const sale = h('input', { type: 'checkbox', checked: !use.personal, dataset: { hook: 'card-sale' }, onchange: ev => { if (!App.setUse('bed', [bed.id], ev.target.checked ? 'commercial' : 'personal')) draw(); } });
     const now = status.crops.length ? `${num(status.used, 1)} of ${num(status.cap, 1)} ${unit} planted on ${day(date)}` : status.resting ? `turning over on ${day(date)}` : `free on ${day(date)}`;
-    const inGround = x => { const from = e.occupancyFrom(x.p, x.r), through = e.occupancyThrough(x.p, x.r); return from <= date && date <= through; };
+    const inGround = x => e.occupancyFrom(x.p, x.r) <= date && date <= x.r.last;   // growing or being picked on the map's date
     const rowOf = x => {
       const f = e.footprint(x.p, x.r), here = inGround(x), part = x.r.partial ? ` · ${f ? `${num(f.a0, 1)}–${num(Math.min(f.a1, x.r.cap), 1)} ft` : `${num(x.r.len, 1)} ${unit}`}` : '';
       return h('button.row.card-item' + (here ? '.now' : ''), { type: 'button', dataset: { hook: 'card-planting', planting: x.p.id }, onclick: () => App.select({ type: 'planting', id: x.p.id }) },
@@ -234,12 +233,12 @@
     };
     return [
       head(`${kind} ${bed.bed}`, `${g.name || 'Garden'} · ${size}`, null, () => bedMenu(bed)),
-      h('p.card-said', { role: 'status', dataset: hook('card-said'), hidden: true }),
+      h('p.card-said', { role: 'status', dataset: { hook: 'card-said' }, hidden: true }),
       editable || !e.isRack(bed) ? h('div.card-acts',
-        editable ? h('button.btn.small', { type: 'button', dataset: hook('card-layout'), onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit layout') : null,
-        e.isRack(bed) ? null : h('button.btn.small', { type: 'button', dataset: hook('card-series'), onclick: () => App.openAhead({ mode: 'series', bedId: bed.id }) }, 'Plan a series here')) : null,
+        editable ? h('button.btn.small', { type: 'button', dataset: { hook: 'card-layout' }, onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit layout') : null,
+        e.isRack(bed) ? null : h('button.btn.small', { type: 'button', dataset: { hook: 'card-series' }, onclick: () => App.openAhead({ mode: 'series', bedId: bed.id }) }, 'Plan a series here')) : null,
       soil ? bedYear(bed, all, openings) : null,
-      h('p.card-sums', { dataset: hook('card-sums') }, `${plural(all.length, 'planting')} this season · ${now}`),
+      h('p.card-sums', { dataset: { hook: 'card-sums' } }, `${plural(all.length, 'planting')} this season · ${now}`),
       editable ? h('label.card-tick', sale, h('span', 'Grown for sale'), use.by === 'garden' ? h('small', `As all of ${g.name || 'its garden'}`) : null) : null,
       all.length ? h('div.card-list', all.map(rowOf)) : h('p.card-note', 'Nothing planned here yet. Drag a crop onto this bed.'),
       openings.length ? h('div.card-list.card-opens', openings.map(openRow)) : null];
@@ -275,15 +274,16 @@
     const what = standingNow ? held() : null;
     if (!what) { if (card) { card.remove(); card = null; } closePops(); return; }
     const stage = document.querySelector('.stage');
-    if (!card) { card = h('aside.card.float.lrf-card', { role: 'dialog', 'aria-label': 'Details', dataset: hook('card') }); stage.append(card); }
-    const keep = card.scrollTop, focus = document.activeElement && card.contains(document.activeElement) ? document.activeElement.dataset.hook : null;
+    if (!card) { card = h('aside.card.float.lrf-card', { role: 'dialog', 'aria-label': 'Details', dataset: { hook: 'card' } }); stage.append(card); }
+    const controls = () => [...card.querySelectorAll('button, input, select')];
+    const keep = card.scrollTop, focus = document.activeElement && card.contains(document.activeElement) ? controls().indexOf(document.activeElement) : -1;
     clear(card);
     card.dataset.kind = what.kind;
     add(card, what.kind === 'planting' ? plantingCard(what.p, what.r) : bedCard(what.bed));
     place();
     card.scrollTop = keep;
     fillSaid();
-    if (focus) { const again = [...card.querySelectorAll('[data-hook]')].find(x => x.dataset.hook === focus); if (again && again.focus) again.focus({ preventScroll: true }); }
+    if (focus >= 0) { const again = controls()[focus]; if (again) again.focus({ preventScroll: true }); }   // the box that was in use keeps the keyboard
   }
 
   // ── the menu: the card's "⋯", and a right-click on a bed or a planting ──
@@ -302,7 +302,7 @@
     const again = menu && anchor && menu.lrfAnchor === anchor;
     closePops();
     if (again) return;
-    menu = h('div.card-menu', { role: 'menu', dataset: hook('card-menu') },
+    menu = h('div.card-menu', { role: 'menu', dataset: { hook: 'card-menu' } },
       h('div.card-menu-head', h('b', spec.title), spec.sub ? h('small', spec.sub) : null),
       spec.items.map(item => item ? h('button.card-menu-item' + (item[4] === 'bad' ? '.bad' : ''), { type: 'button', role: 'menuitem', dataset: { hook: 'card-menu-item', act: item[0] }, onclick: () => { closePops(); item[2](); } },
         h('span', item[1]), item[3] ? h('kbd', item[3]) : null) : h('hr')));
@@ -351,9 +351,9 @@
     if (again) return;
     const r = eng().calc(p), was = E.s2d(p.date);
     let month = new Date(was.getFullYear(), was.getMonth(), 1);
-    cal = h('div.card.float.card-cal', { role: 'dialog', 'aria-label': 'Move it to', dataset: hook('card-cal') });
+    cal = h('div.card.float.card-cal', { role: 'dialog', 'aria-label': 'Move it to', dataset: { hook: 'card-cal' } });
     cal.lrfAnchor = anchor;
-    const says = h('div.card-cal-says', { dataset: hook('card-cal-says') });
+    const says = h('div.card-cal-says', { dataset: { hook: 'card-cal-says' } });
     const tell = value => {
       clear(says);
       if (!value) { add(says, h('span', 'Point at a day to see what it would move.')); return; }
@@ -361,7 +361,8 @@
       if (!m) { add(says, h('span', 'That day cannot be worked out.')); return; }
       const mv = (k, u, v) => h('span', `${k} ${day(u)} → `, h('b', v ? day(v) : 'stays'));
       add(says, h('p', h('b', WD(E.s2d(value))), ` · ${m.by === 0 ? 'the day it is on' : `${plural(Math.abs(m.by), 'day')} ${m.by > 0 ? 'later' : 'earlier'}`}`),
-        h('p', m.a.sow && m.a.sow < m.a.field ? [mv('sow', m.a.sow, m.b.sow), ' · '] : null, mv('first pick', m.a.first, m.b.first)),
+        m.a.sow && m.a.sow < m.a.field ? h('p', mv('sow', m.a.sow, m.b.sow)) : null,
+        h('p', mv('first pick', m.a.first, m.b.first)),
         h('p', mv('ground free', m.freeA, m.freeB)),
         m.clash.length ? h('p.card-cal-warn', `Runs into ${m.clash.length === 1 ? `the ${App.cropLabel(m.clash[0].p)}` : plural(m.clash.length, 'planting')} in this bed`) : null);
     };
@@ -405,7 +406,7 @@
     const e = eng(), p = e.planting(bar.dataset.planting), r = p && e.calc(p);
     if (!r || !bar.isConnected) return;
     const through = e.occupancyThrough(p, r), free = through === Infinity ? null : E.addDays(through, 1), v = e.variety(p.varietyId), sow = r.sow && r.sow < r.field;
-    hint = h('div.card-hint', { role: 'tooltip', dataset: hook('card-hint') },
+    hint = h('div.card-hint', { role: 'tooltip', dataset: { hook: 'card-hint' } },
       h('div.card-hint-head', root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color: e.cropColor(r.c), label: r.c.vname || r.c.name, size: 40 }),
         h('span', h('b', r.c.name), h('small', `${v ? v.name + ' · ' : ''}${App.bedLabel(r.b)}`))),
       h('p', sow ? ['Sow ', h('b', day(r.sow)), ' · '] : null, 'In ', h('b', day(r.field)), r.harvestDays ? [' · Pick ', h('b', day(r.first)), ' to ', h('b', day(r.last))] : null, ' · Free ', h('b', free ? day(free) : 'stays')),
@@ -428,7 +429,7 @@
 
   // ── the tick, under the Map's "?" ──
   function tick() {
-    const box = h('input', { type: 'checkbox', checked: on, dataset: hook('card-try'), onchange: e => turn(e.target.checked) });
+    const box = h('input', { type: 'checkbox', checked: on, dataset: { hook: 'card-try' }, onchange: e => turn(e.target.checked) });
     return h('label.card-try', box, h('span', 'A floating card in place of the side panel, on the Map and the Timeline. Kept in this browser only.'));
   }
   function turn(yes) {

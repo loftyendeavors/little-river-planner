@@ -62,6 +62,8 @@ for n in "$@"; do
     loose-site) python3 -I $T/loose_check.py $SITE $S/loose-site $ZIP 2>&1 | tally loose-ends-built-site ;;
     room) python3 -I $T/room_check.py $APP $S/room 2>&1 | tally room-for-a-crop ;;   # the Timeline and the library: room for a crop, a shut garden's band, To place
     room-site) python3 -I $T/room_check.py $SITE $S/room-site $ZIP 2>&1 | tally room-for-a-crop-built-site ;;
+    trycard) python3 -I $T/trycard_check.py $APP $S/trycard 2>&1 | tally try-the-card ;;   # the card, part 1, behind its tick
+    trycard-site) python3 -I $T/trycard_check.py $SITE $S/trycard-site $ZIP 2>&1 | tally try-the-card-built-site ;;
     f053) python3 -I $T/fixes_053_check.py $APP $S/f053 2>&1 | tally fixes-0.53 ;;
     f053-site) python3 -I $T/fixes_053_check.py $SITE $S/f053-site $ZIP 2>&1 | tally fixes-0.53-built-site ;;
     map) WIDTHS=${WIDTHS:-1280,1480,1707,3440} python3 -I $REPO/tools/map_check.py $APP $S/map 2>&1 | tally map ;;

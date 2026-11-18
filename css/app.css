@@ -2419,7 +2419,7 @@ body[data-card="on"] .stage { position: relative; }
 /* rows that open in place, their figures shown while closed */
 .card-row { border-top: 1px solid var(--line-soft); }
 .card-row-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-8); width: 100%; min-height: var(--control); padding: 0; border: 0; background: none; text-align: left; font-size: var(--type-13); color: var(--ink); }
-.card-row-name { font-weight: 600; }
+.card-row-name { font-weight: 600; white-space: nowrap; }
 .card-row-figs { justify-self: end; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-row-head i { font-style: normal; color: var(--muted); transition: transform var(--speed-press) var(--ease); }
 .card-row.open .card-row-head i { transform: rotate(90deg); }
@@ -2441,7 +2441,7 @@ body[data-card="on"] .stage { position: relative; }
 .card-list { display: grid; margin: 0 calc(-1 * var(--space-16)); }
 .card-item { width: 100%; padding: var(--space-8) var(--space-16); border: 0; border-top: 1px solid var(--line-soft); background: none; text-align: left; color: var(--ink); }
 .card-item:hover, .card-open:hover { background: var(--paper); }
-.card-item .row-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-item .row-name, .card-item .row-detail { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-item.now .row-word { color: var(--flag-deep); }
 .card-open { display: grid; gap: 2px; width: 100%; padding: var(--space-8) var(--space-16); border: 0; border-top: 1px solid var(--line-soft); background: none; text-align: left; font-size: var(--type-13); color: var(--ink); }
 .card-open small { font-size: var(--type-11); color: var(--muted); }
