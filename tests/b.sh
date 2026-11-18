@@ -62,6 +62,8 @@ for n in "$@"; do
     loose-site) python3 -I $T/loose_check.py $SITE $S/loose-site $ZIP 2>&1 | tally loose-ends-built-site ;;
     room) python3 -I $T/room_check.py $APP $S/room 2>&1 | tally room-for-a-crop ;;   # the Timeline and the library: room for a crop, a shut garden's band, To place
     room-site) python3 -I $T/room_check.py $SITE $S/room-site $ZIP 2>&1 | tally room-for-a-crop-built-site ;;
+    harvest) python3 -I $T/harvest_choice_check.py $APP $S/harvest 2>&1 | tally harvest-choice ;;   # the card's harvest choice: to the season's end, or for a set number of days
+    harvest-site) python3 -I $T/harvest_choice_check.py $SITE $S/harvest-site $ZIP 2>&1 | tally harvest-choice-built-site ;;
     trycard) python3 -I $T/trycard_check.py $APP $S/trycard 2>&1 | tally try-the-card ;;   # the card, part 1, behind its tick
     trycard-site) python3 -I $T/trycard_check.py $SITE $S/trycard-site $ZIP 2>&1 | tally try-the-card-built-site ;;
     swap) python3 -I $T/swap_check.py $APP $S/swap 2>&1 | tally variety-swap ;;   # the variety swap: one variety put in the place of another, the sowing days kept

@@ -139,6 +139,8 @@
 
   "f053": 22,
 
+  "harvest": 33,
+
   "look": 33,
 
   "loose": 36,
@@ -241,6 +243,8 @@
  "site2": {
 
   "f053-site": 22,
+
+  "harvest-site": 33,
 
   "join-site": 46,
 
@@ -426,7 +430,11 @@
 
   "cleanup-site @1707": 27,
 
-  "cleanup-site @3440": 27
+  "cleanup-site @3440": 27,
+
+  "harvest-site @1707": 33,
+
+  "harvest-site @3440": 33
 
  },
  "screens": {

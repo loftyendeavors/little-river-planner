@@ -45,6 +45,7 @@ scale
 loose
 f053
 room
+harvest
 trycard
 swap
 merge
@@ -90,6 +91,7 @@ script() {
     loose) SCRIPT=$T/mutate_loose.py; ARGS="$APP $F $T" ;;
     f053) SCRIPT=$T/mutate_f053.py; ARGS="$APP $F $T" ;;
     room) SCRIPT=$T/mutate_room.py; ARGS="$APP $F $T" ;;
+    harvest) SCRIPT=$T/mutate_harvest.py; ARGS="$APP $F $T" ;;
     trycard) SCRIPT=$T/mutate_trycard.py; ARGS="$APP $F $T" ;;
     swap) SCRIPT=$T/mutate_swap.py; ARGS="$APP $F $T $PLAN" ;;
     *) return 1 ;;

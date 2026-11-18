@@ -44,7 +44,7 @@ PAGE = [
  ("an amber box shows a starting value in grey", YC, "placeholder: amber || fallback == null ? '' :", "placeholder: fallback == null ? '' :"),
  ("first picking is the days in the bed and one more, not the DTM", YC, "dataset: { dtm: String(t.value) } }, String(t.value))", "dataset: { dtm: String(t.bed + 1) } }, String(t.bed + 1))"),
  ("the mark “DTM” is left off", YC, "The figure the Days to harvest list holds for this crop in this place.` }, 'DTM')", "The figure the Days to harvest list holds for this crop in this place.` }, '')"),
- ("harvest days to the season's end are shown as a number", YC, "box({ key: 'days', mine: hc.days.mine, fallback: hc.season ? 'season' : hc.days.fallback,", "box({ key: 'days', mine: hc.days.mine, fallback: hc.days.fallback,"),
+ ("a crop picked to the season's end is shown on the days side", YC, "dataset: { hook: 'harvest-choice', on: w.season ? 'season' : 'days' } },", "dataset: { hook: 'harvest-choice', on: 'days' } },"),
  ("what it comes to gives the amount as its worth", YC, "u.total += line.total; u.worth += line.worth;", "u.total += line.total; u.worth += line.total;"),
  ("the card spills off a laptop's screen", CSS, "table.yc-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }", "table.yc-grid { width: 1500px; border-collapse: collapse; table-layout: fixed; }"),
  # what a box writes
@@ -53,7 +53,7 @@ PAGE = [
  ("the card names its step in words of its own", YC, ": `${c.name}: $${fig(k)}${each(unit)}`) }),", ": `${c.name}: priced at $${fig(k)}`) }),"),
  ("8 of every 10 is saved as 8 a plant", YC, "save: v => { const y = v == null ? null : v / k;", "save: v => { const y = v == null ? null : v;"),
  # a week's figure
- ("the label of a weekly box does not say a week", YC, "`Gives, packed, ${per}${weekly ? ' a week' : ''}`;", "`Gives, packed, ${per}`;"),
+ ("the label of a weekly box does not say a week", YC, "`Marketable yield ${PER_SAY[hc.basis]}${weekly ? ' per week' : ''}`;", "`Marketable yield ${PER_SAY[hc.basis]}`;"),
  ("the season's total is the list's round figure, not the engine's for the plantings there", YC, "const list = at && at.per.length ? at.per : [cell.total],", "const list = [cell.total],"),
  # the keyboard
  ("Tab goes to the last empty box, past the next", YC, "to = all.slice(at + 1).find(blank);", "to = all.slice(at + 1).reverse().find(blank);"),
@@ -101,7 +101,7 @@ PAGE = [
  ("the farm's switch is left behind when the list is carried onto a backup", "js/planio.js", "if (prev.settings && prev.settings.houseKeeps === false && !(next.settings && 'houseKeeps' in next.settings)) {", "if (false) {"),
  ("a tick alone is counted as a figure of the list", "js/planio.js", ".filter(line => Object.keys(line || {}).some(k => !MARKS.includes(k))).length + Object.keys(a.sellV || {}).length : 0;", ".length + Object.keys(a.sellV || {}).length : 0;"),
  # figures that cannot be: each is refused by the card alone
- ("more harvest days than a year holds are taken", YC, "whole: true, min: 1, max: 400, wide: true,", "whole: true, min: 1, wide: true,"),
+ ("more harvest days than a year holds are taken", YC, "fallback: hw.offer, whole: true, min: 1, max: 400, label:", "fallback: hw.offer, whole: true, min: 1, label:"),
  ("12 of every 10 is taken", YC, "amber, max: tenths ? 10 : undefined, label:", "amber, max: undefined, label:"),
  # the tick
  ("the tick is for the year before", AP, "markStep(cropId, 'looked', on ? year : null)", "markStep(cropId, 'looked', on ? year - 1 : null)"),

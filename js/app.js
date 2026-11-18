@@ -275,19 +275,20 @@
     return { changed, later, sooner, most, overlaps: [...now].filter(k => !was.has(k)).length, settled: [...was].filter(k => !now.has(k)).length, byCrop: [...byCrop.values()], worth: [worthOf(before), worthOf(after)] };
   }
   const dollars = n => '$' + Math.round(n).toLocaleString('en-US');
+  /** `options.shown`: whoever called has shown what the step does, worth and ground booked twice included, and he agreed. */
   async function assume(label, ops, options = {}) {
     const plan = withOps(state.plan, ops, 'do'), engine = E.create(plan, Lib), hit = impact(state.engine, engine);
-    const moves = hit.changed ? `${hit.changed} planting${hit.changed === 1 ? '' : 's'} ${hit.later && hit.sooner ? 'shift' : hit.later ? 'harvest later' : 'harvest sooner'}, by up to ${Math.abs(hit.most)} day${Math.abs(hit.most) === 1 ? '' : 's'}` : 'No planting’s dates change';
+    const moves = hit.changed && !hit.most ? `${hit.changed} planting${hit.changed === 1 ? ' ends its' : 's end their'} harvest on another day` : hit.changed ? `${hit.changed} planting${hit.changed === 1 ? '' : 's'} ${hit.later && hit.sooner ? 'shift' : hit.later ? 'harvest later' : 'harvest sooner'}, by up to ${Math.abs(hit.most)} day${Math.abs(hit.most) === 1 ? '' : 's'}` : 'No planting’s dates change';
     const line = row => { const c = engine.crop(row.cropId), lo = Math.min(...row.shifts), hi = Math.max(...row.shifts), days = lo === hi ? Math.abs(hi) : `${Math.min(Math.abs(lo), Math.abs(hi))} to ${Math.max(Math.abs(lo), Math.abs(hi))}`; return UI.h('li', UI.h('b', c ? c.name : 'Crop'), ` ${row.n} planting${row.n === 1 ? '' : 's'}, ${lo === 0 && hi === 0 ? 'harvest ends on another day' : `${days} day${hi === 1 || hi === -1 ? '' : 's'} ${lo < 0 && hi > 0 ? 'either way' : hi > 0 ? 'later' : 'sooner'}`}`); };
     const detail = hit.changed ? UI.h('ul.moves', { id: 'assumeMoves' }, hit.byCrop.sort((a, b) => b.n - a.n).map(line)) : null;
     // what the change does to the season's worth, and to ground booked twice, is said with it
-    const worth = Math.abs(hit.worth[1] - hit.worth[0]) >= 0.5 ? `the season’s worth goes from ${dollars(hit.worth[0])} to ${dollars(hit.worth[1])}` : '';
+    const worth = Math.abs(hit.worth[1] - hit.worth[0]) >= 0.5 ? `the season’s worth goes from ${dollars(hit.worth[0])} to ${dollars(hit.worth[1])}` : options.shown ? `the season’s worth stays ${dollars(hit.worth[0])}` : '';
     const settles = hit.settled ? `${hit.settled} double booking${hit.settled === 1 ? ' is' : 's are'} settled` : '';
     const also = [worth, settles].filter(Boolean).join(' · ');
-    if (hit.overlaps) {
+    if (hit.overlaps && !options.shown) {
       const ok = await UI.confirm({ title: label, confirmLabel: 'Apply', body: `${moves}. ${hit.overlaps} pair${hit.overlaps === 1 ? '' : 's'} of plantings would then be booked into the same ground. They are not refused, because the plan was only ever as good as the number. They will wait on the overview under “To settle”.${also ? ' Also: ' + also + '.' : ''}`, detail });
       if (!ok) return false;
-    } else if (options.ask && hit.changed) {
+    } else if (options.ask && hit.changed && !options.shown) {
       // Several lines of the list changed at once: say what moves before it does.
       if (!await UI.confirm({ title: label, confirmLabel: 'Apply', body: `${moves}. No ground ends up booked twice. One undo takes it all back.`, detail })) return false;
     }
@@ -334,8 +335,21 @@
     const ops = sellOps(cropId, change);
     return ops ? thingsFirst(cropId, label, ops, options).then(ok => ok ? assume(label, ops, options) : false) : Promise.resolve(false);
   }
-  /** The step setSell makes, not yet taken: for the call itself, and for whoever has to say first what it would do. */
+  /**
+   * The step setSell makes, not yet taken: for the call itself, and for whoever has to say first what it would do. `days: 'season'`
+   * is the harvest choice's other side (js/yieldcard.js): the crop is picked to the season's end. The list's days are cleared, and
+   * where the crop's own record is picked for a set number of days, that record says "to the season's end" instead (`harvestMode`,
+   * the field the engine already reads), in the same step.
+   */
   function sellOps(cropId, change) {
+    const eng = state.engine, season = change && change.days === 'season';
+    if (season) change = { ...change, days: null };
+    const list = sellList(cropId, change), c = season ? eng.crop(cropId) : null;
+    if (!c || c.harvestMode === 'season') return list;
+    const own = (state.plan.crops || []).find(x => x.id === cropId) || null;
+    return [...(list || []), { kind: 'crop', before: own, after: { ...(own || { id: cropId }), harvestMode: 'season' } }];
+  }
+  function sellList(cropId, change) {
     const eng = state.engine, before = eng.harvestFor(cropId);
     return listStep(next => {
       next.sell = next.sell || {};
@@ -2360,6 +2374,7 @@
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
+    engineAfter: ops => E.create(withOps(state.plan, ops, 'do'), Lib),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (elsewhere()) { refuse(elsewhere()); return null; } if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
     saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, editNursery, setSupply, setLiveSow, traysToMonday: () => applyTrayStart(),
     snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, joined: () => state.joined || null, useMine, doneJoined: () => { state.joined = null; emit('joined'); }, windowState: () => (store ? store.readOnly : ''), useThisWindow, sync: () => sync, syncInfo, linkService: () => (sync && sync.linkService ? sync.linkService() : null), snapshotsKept: () => !!Snaps
