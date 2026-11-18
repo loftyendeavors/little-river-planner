@@ -10,7 +10,7 @@ Follow `tests/README.md` for builds and checks and `DESIGN.md` for screen change
 
 ## GPT Zoom Out
 
-For consequential changes, Codex owns a read-only GPT Zoom Out before the preview or merge decision. The owner can also ask for **“Zoom out”** at any time to review a proposal, a build or a set of changes. Delegate the check to a fresh GPT reviewer where supported. Use the strongest available GPT with high reasoning or higher (currently GPT-6.2 Astra on this Codex workspace). Record the actual model and any verification gaps. Keep this pass distinct from code review and use a test plan or authorized private preview.
+For consequential changes, Codex owns a read-only GPT Zoom Out before the preview or merge decision. The owner can also ask for **“Zoom out”** at any time to review a proposal, a build or a set of changes. Delegate the check to a fresh GPT reviewer where supported. Use the strongest available GPT with high reasoning or higher. Record the actual model and any verification gaps. Keep this pass distinct from code review and use a test plan or authorized private preview.
 
 Compare the current app, the proposal or preview, relevant design decisions, nearby builds and unresolved findings from earlier reviews. Walk through a real grower job end to end on the affected views and devices. Check that the next action is clear under field conditions, terminology and figures agree across views, recorded work stays distinct from plans, and mistakes are visible and reversible. Only check data, sync and devices relevant to the change. Look for duplicate controls, extra steps, missing handoffs and changes that should be sequenced or deferred.
 
