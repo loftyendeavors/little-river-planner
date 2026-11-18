@@ -1,0 +1,18 @@
+{
+ "build": "After S1c, from the second reading of its last commits: of two batches made on two devices for one demand row and week, the one with work recorded stands alone, also when the other was in the plan the join started from; what a browser kept beside its plan is cleared only once the joined plan is saved; checks for a join interrupted after the records beside the plan were written.",
+ "words": [],
+ "code": [
+  "app.js",
+  "merge.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [],
+ "screens": [],
+ "changes": {
+  "did": "A fix to joining two devices' plans: a tray batch one device sowed no longer stands beside the other device's unsown batch for the same week when that second batch was changed before the first was taken in.",
+  "steps": [
+   "Nothing to press. With “Keep both, record by record” on, a week of a demand plan that both devices made, and one sowed, holds that one batch: “See what differed” names the batch that was dropped."
+  ]
+ }
+}

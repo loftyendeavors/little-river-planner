@@ -2099,14 +2099,20 @@
       // The records the planner does not edit travel in the plan's file: where the joined file's differ from the ones kept here, they are kept first.
       // They are written before the plan, and put back as they were if the plan is then not saved or not swapped in: neither
       // a joined plan beside the old records nor the old plan beside the joined records is left behind.
-      let newAttic = false, putBack = async () => true;
+      let newAttic = false, since = null, putBack = async () => true;
       try {
         const had = await loadAttic().catch(() => emptyAttic()), extras = await loadExtras(), text = JSON.stringify(attic);
         newAttic = text !== JSON.stringify({ ...had, varieties: { ...(had.varieties || {}), ...extras.varieties } });   // an attic the join left empty is a change too: kept, or the record the other device took out would come back from here
         if (newAttic && store.backend !== 'memory') {
           const wasAttic = await store.loadBlob('attic'), wasNew = await store.loadBlob('attic-new');   // a read that fails stops the join here, before anything is written: it is never taken for "nothing was kept"
           putBack = async () => { try { if (wasAttic) await store.saveBlob('attic', wasAttic); else await store.clearBlob('attic'); if (wasNew) await store.saveBlob('attic-new', wasNew); else await store.clearBlob('attic-new'); return true; } catch (_) { return false; } };
-          await store.saveBlob('attic', text); await store.clearBlob('attic-new'); core = { ...core, lrfNext: { ...core.lrfNext, attic: 'cloud' } };
+          // What was kept since the plan was loaded ('attic-new') is read over the records above. It is set to what the join decided for the same
+          // varieties, before anything else is written, and is not cleared: whichever of these writes a closed page or a refusing browser leaves
+          // undone, what is read beside the plan is the joined record, never the one from before the join over it; and no clearing is left on its
+          // way to take out a page record kept just after (Codex, twice, on #65).
+          since = { ...extras, varieties: Object.fromEntries(Object.keys(extras.varieties || {}).filter(id => attic.varieties && attic.varieties[id] !== undefined).map(id => [id, attic.varieties[id]])) };
+          if (wasNew) await store.saveBlob('attic-new', JSON.stringify(since));
+          await store.saveBlob('attic', text); core = { ...core, lrfNext: { ...core.lrfNext, attic: 'cloud' } };
         }
       } catch (error) { await putBack(); return { ok: false, stop: true, why: 'The records kept beside the plan could not be saved in this browser, so nothing was taken in.' }; }
       const lost = { ok: false, stop: true, why: 'The records kept beside the plan could not be put back as they were after a joined plan was not saved. Download a backup now, from Backup.' };
@@ -2116,7 +2122,7 @@
       if (state.plan !== plan) { store.save(state.plan); if (!(await putBack())) return lost; continue; }   // changed during the save: what is stored follows the plan open here, and the two are joined again
       if (loaded() || !idle()) { store.save(state.plan); if (!(await putBack())) return lost; return loaded() || { ok: false, later: true, why: '' }; }   // asked once more before the plan is swapped: nothing is open over a record that is about to change
       const twiceBefore = bookedTwice(state.engine);
-      state.plan = core; if (newAttic) { state.attic = attic; state.extras = emptyExtras(); }
+      state.plan = core; if (newAttic) { state.attic = attic; state.extras = since || emptyExtras(); }
       state.redo.length = 0; state.last = null;
       rebuild(); Thumbs.index(state.plan);
       if (state.sel && state.sel.type === 'planting' && !state.engine.planting(state.sel.id)) select(null);

@@ -75,6 +75,20 @@ with sync_playwright() as pw:
         page.add_init_script("(() => { const R = Date, off = new R(2027, 11, 20, 10).getTime() - R.now(); class D extends R { constructor(...a) { if (a.length) super(...a); else super(R.now() + off); } static now() { return R.now() + off; } } window.Date = D; })();")
         # a browser whose storage is full, for as long as the check says so (it holds over a reload): the plan cannot be written, everything else can
         page.add_init_script("(() => { const set = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (sessionStorage.getItem('check-full') && String(k).startsWith('lrf-next:plan')) throw new DOMException('full', 'QuotaExceededError'); return set.call(this, k, v); }; })();")
+        # a join interrupted at a named moment, for as long as the check says so: the plan changed here, or the page made busy, as the records beside the plan
+        # are written ('attic') or just after the joined plan is ('save'); and a browser that cannot read the records beside the plan
+        page.add_init_script("""(() => { const S = sessionStorage, set = Storage.prototype.setItem, put = IDBObjectStore.prototype.put, get = IDBObjectStore.prototype.get;
+          const busy = () => { if (document.body && !document.querySelector('dialog.check-busy')) { const d = document.createElement('dialog'); d.className = 'check-busy bk'; d.setAttribute('open', ''); d.style.display = 'none'; document.body.appendChild(d); } };
+          if (S.getItem('check-busy')) addEventListener('DOMContentLoaded', busy);
+          const at = where => { if (S.getItem('check-at') !== where) return; S.removeItem('check-at'); S.setItem('check-hit', where);
+            const id = S.getItem('check-edit'); S.removeItem('check-edit'); if (id) window.LRFApp.updatePlanting(id, { note: S.getItem('check-edit-note') }, 'A note');
+            S.setItem('check-busy', '1'); busy(); };
+          Storage.prototype.setItem = function (k, v) { const r = set.call(this, k, v); if (this === localStorage && k === 'lrf-next:plan') { order('s'); at('save'); } return r; };
+          IDBObjectStore.prototype.put = function (v, k) { if (this.name === 'blobs' && k === 'attic') at('attic'); return put.apply(this, arguments); };
+          const order = what => S.setItem('check-order', (S.getItem('check-order') || '') + what), del = IDBObjectStore.prototype.delete;
+          IDBObjectStore.prototype.delete = function (k) { if (this.name === 'blobs' && k === 'attic-new') order('c'); return del.apply(this, arguments); };
+          IDBObjectStore.prototype.get = function (k) { if (this.name === 'blobs' && (k === 'attic' || k === 'attic-new') && S.getItem('check-noread')) throw new DOMException('unreadable', 'UnknownError'); return get.apply(this, arguments); };
+        })();""")
         page.errors = []
         page.on('pageerror', lambda e: page.errors.append(str(e)[:300]))
         if sample:
@@ -261,6 +275,58 @@ with sync_playwright() as pw:
         look(B)
         check('once it can be saved the plan is taken in, and the record the other device took out is gone here too', B.evaluate(P, X1)['note'] == 'and without it again' and B.evaluate(BESIDE) is False)
         look(A)
+
+        # ── 5d. a join interrupted after the records beside the plan were written: every way out leaves the plan and those records as they were ──
+        where = 'interrupted'
+        A.evaluate("(async (id) => { LRFApp.state.attic.rest.checkLog = { picked: 4 }; LRFApp.updatePlanting(id, { note: 'beside it once more' }, 'A note'); })(%s)" % json.dumps(X1)); settled(A, 'in-step')
+        look(B)
+        B.evaluate("(() => { sessionStorage.setItem('check-noread', '1'); })()")
+        B.reload(); ready(B); settled(B, 'in-step')
+        A.evaluate("(id) => { delete LRFApp.state.attic.rest.checkLog; LRFApp.updatePlanting(id, { note: 'taken out, and interrupted' }, 'A note'); }", X1); settled(A, 'in-step')
+        B.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'phone, unread' }, 'A note')", X2)
+        B.wait_for_function("(() => { const c = LRFApp.syncInfo(); return !c.busy && (c.status === 'conflict' || c.status === 'error' || (c.status === 'in-step' && LRFApp.contentKey() === JSON.parse(localStorage.getItem('lrf-next:sync') || '{}').key)); })()", timeout=40000)
+        unread = B.evaluate("LRFApp.syncInfo()")
+        check('when the records kept beside the plan cannot be read, nothing is joined: the page asks, and says why', unread['status'] == 'conflict' and 'could not be read' in unread['joinNote'] and B.evaluate(P, X1)['note'] == 'beside it once more' and B.evaluate(P, X2)['note'] == 'phone, unread', [unread['status'], unread['joinNote'], unread['error']])
+        def interrupted(at, edit=None):
+            """The join is made again with one interruption armed; the page is then held busy and opened again: what the browser kept is read afresh."""
+            B.evaluate("([at, id, note]) => { const S = sessionStorage; S.removeItem('check-noread'); S.removeItem('check-hit'); S.removeItem('check-busy'); S.setItem('check-at', at); if (id) { S.setItem('check-edit', id); S.setItem('check-edit-note', note); } }", [at, X2 if edit else None, edit])
+            B.reload(); ready(B)
+            B.wait_for_function("sessionStorage.getItem('check-hit') !== null", timeout=40000)
+            hit = B.evaluate("sessionStorage.getItem('check-hit')")
+            B.wait_for_timeout(2500)   # the plan open here is written back, and the records put back
+            B.reload(); ready(B); B.wait_for_timeout(2500)   # still busy: nothing is joined, and what is seen is what was kept
+            return [hit, B.evaluate(P, X1)['note'], B.evaluate(P, X2)['note'], B.evaluate(BESIDE), B.evaluate("LRFApp.syncInfo().status")]
+        got = interrupted('save')
+        check('the page turned busy just as the joined plan was saved: nothing is taken in, the plan here is the one kept, and the records beside it are as they were', got[:4] == ['save', 'beside it once more', 'phone, unread', True] and got[4] != 'in-step', got)
+        got = interrupted('save', 'phone, during the save')
+        check('the plan changed here as the joined plan was saved: the change is kept, nothing is taken in yet, and the records beside the plan are as they were', got[:4] == ['save', 'beside it once more', 'phone, during the save', True] and got[4] != 'in-step', got)
+        got = interrupted('attic', 'phone, as the records were written')
+        check('the plan changed here as the records beside it were written: the change is kept, and those records are put back as they were', got[:4] == ['attic', 'beside it once more', 'phone, as the records were written', True] and got[4] != 'in-step', got)
+        B.evaluate("(() => { for (const k of ['check-busy', 'check-hit', 'check-at', 'check-edit', 'check-edit-note']) sessionStorage.removeItem(k); })()")
+        B.reload(); ready(B)
+        look(B)
+        check('left alone at last, the two are joined: both changes, and the record the other device took out is gone here too', B.evaluate(P, X1)['note'] == 'taken out, and interrupted' and B.evaluate(P, X2)['note'] == 'phone, as the records were written' and B.evaluate(BESIDE) is False, [B.evaluate(P, X1), B.evaluate(P, X2)])
+        look(A)
+        check('and the other device takes in the change made during the interruptions', A.evaluate(P, X2)['note'] == 'phone, as the records were written' and A.evaluate(P, X1)['note'] == 'taken out, and interrupted')
+
+        # ── 5e. a supplier's page record changed on both devices: the joined record is the one read, and one kept just after stays ──
+        where = 'page record'
+        VID = A.evaluate("LRFApp.state.plan.varieties[0].id")
+        REC = "(id) => LRFApp.varietyRecord(id).then(r => r && r.catalogSourceText)"
+        A.evaluate("(async ([v, id]) => { await LRFApp.keepVarietyRecord(v, { catalogSourceText: 'first' }); LRFApp.updatePlanting(id, { note: 'a page record, first' }, 'A note'); })(%s)" % json.dumps([VID, X1])); settled(A, 'in-step')
+        look(B)
+        first = B.evaluate(REC, VID)
+        A.evaluate("(async ([v, id]) => { await LRFApp.keepVarietyRecord(v, { catalogSourceText: 'the laptop' }); LRFApp.updatePlanting(id, { note: 'a page record, the laptop' }, 'A note'); })(%s)" % json.dumps([VID, X1])); settled(A, 'in-step')
+        B.evaluate("(async ([v, id]) => { await LRFApp.keepVarietyRecord(v, { catalogSourceText: 'the phone' }); LRFApp.updatePlanting(id, { note: 'a page record, the phone' }, 'A note'); })(%s)" % json.dumps([VID, X2]))
+        settled(B, 'in-step')
+        B.reload(); ready(B); settled(B, 'in-step')
+        check('a page record both devices changed is the cloud\'s after the join, and still is when the page is opened again: what it had kept before the join is not read over it', first == 'first' and B.evaluate(P, X1)['note'] == 'a page record, the laptop' and B.evaluate(REC, VID) == 'the laptop', [first, B.evaluate(REC, VID)])
+        B.evaluate("(async ([v, id]) => { await LRFApp.keepVarietyRecord(v, { catalogSourceText: 'the phone, after' }); })(%s)" % json.dumps([VID, X2]))
+        B.reload(); ready(B); settled(B, 'in-step')
+        check('a page record kept here just after the join is still the one read when the page is opened again', B.evaluate(REC, VID) == 'the phone, after', B.evaluate(REC, VID))
+        B.evaluate("(async ([v, id]) => { await LRFApp.keepVarietyRecord(v, { catalogSourceText: 'the laptop' }); })(%s)" % json.dumps([VID, X2]))
+        look(A)
+        check('and the other device reads the same record', A.evaluate(REC, VID) == 'the laptop' and A.evaluate(P, X2)['note'] == 'a page record, the phone', A.evaluate(REC, VID))
 
         # ── 6. turned off: the question it always was ──
         where = 'off'
