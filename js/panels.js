@@ -2,6 +2,8 @@
 (function (root) {
   'use strict';
   const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, SL = root.LRFSeedLib;
+  /** "Grown for", its two words, for the "?" beside it in a planting's panel and in Edit layout: each term in bold, then its meaning. */
+  const USE_WORDS = [['Commercial', 'Counted in revenue and in the list you send.'], ['Personal use', 'Grown and picked like any other planting, but left out of revenue and out of the list you send.']];
   const { h, clear, add, day, span, num, toast } = UI;
   const $ = id => document.getElementById(id);
 
@@ -208,7 +210,7 @@
     const sets = longSets(todo);
     const total = sets.size + todo.groups.length;
     // what To settle is, behind "?" beside its head (DESIGN.md, rule 1)
-    const why = UI.help('Ground booked twice, and plantings longer than their bed. They came with the plan or follow a change to your list. Each has a fix in one click; the map will not add to them.', null, null, { label: 'What To settle is', hook: 'settle-help', card: { hook: 'settle-help-card' } });
+    const why = UI.help(null, null, [['To settle', 'Ground booked twice, and plantings longer than their bed. They came with the plan or follow a change to your list. Each has a fix in one click; the map will not add to them.']], { label: 'What To settle is', hook: 'settle-help', card: { hook: 'settle-help-card' } });
     const section = h('section.insp-section.cleanup', { id: 'toSettle' }, h('div.sec-head', h('h3', `To settle · ${total}`), why));
     const run = (label, ops) => { if (App.commit(label, ops)) UI.toast(label, { label: 'Undo', run: App.undo }); };
     const action = (label, detail, onclick) => h('button.fix-btn', { type: 'button', onclick }, h('b', label), detail ? h('small', detail) : null);
@@ -585,10 +587,13 @@
     // Whom it is grown for: a flag, which follows the bed (and the bed its garden) until it is set here.
     const F = root.LRFForecast, use = F.useOf(eng, p), bedUse = F.useOfBed(eng, bed);
     const useBtn = (value, text) => h('button', { type: 'button', 'aria-pressed': String(use.use === value), dataset: { use: value }, onclick: () => { if (use.use !== value) App.setUse('planting', [p.id], value); } }, text);
+    // What the two words mean is behind "?" beside the label (his choice of Nov 18, 09:20); under the switch stands only what is so of
+    // this planting, and nothing while it follows the default
     const useHelp = use.by === 'planting' ? `Set on this planting. Its bed is ${bedUse.personal ? 'for personal use' : 'commercial'}.`
-      : use.by === 'default' ? 'Personal use is sown, picked and counted like any other planting, and left out of revenue and out of the list you send.'
-        : `Follows ${use.by === 'bed' ? 'its bed' : (eng.gardenOf(bed) || {}).name || 'its garden'}, which is ${use.personal ? 'for personal use: left out of revenue and out of the list you send' : 'commercial'}.`;
-    const useField = h('div.field', { id: 'fUseField' }, h('span', 'Grown for'), h('div.seg', { id: 'fUse', role: 'group', 'aria-label': 'Grown for', dataset: { use: use.use, by: use.by } }, useBtn('commercial', 'Commercial'), useBtn('personal', 'Personal use')), h('small', useHelp));
+      : use.by === 'default' ? null
+        : `Follows ${use.by === 'bed' ? 'its bed' : (eng.gardenOf(bed) || {}).name || 'its garden'}, which is ${use.personal ? 'for personal use' : 'commercial'}.`;
+    const useField = h('div.field', { id: 'fUseField' }, h('div.field-head', h('span', { dataset: { hook: 'use-label' } }, 'Grown for'), UI.help(null, null, USE_WORDS, { label: 'What Grown for means', hook: 'use-help', card: { hook: 'use-help-card' } })),
+      h('div.seg', { id: 'fUse', role: 'group', 'aria-label': 'Grown for', dataset: { use: use.use, by: use.by } }, useBtn('commercial', 'Commercial'), useBtn('personal', 'Personal use')), useHelp ? h('small', { dataset: { hook: 'use-said' } }, useHelp) : null);
     // Which of the crop's things it is grown for: asked only where two things come out of one bed of this crop, and this planting is shared out.
     const shared = eng.thingsOf(p.cropId).filter(t => t.counts && t.from === 'bed'), givesNow = p.gives === 'first' || shared.some(t => t.id === p.gives) ? p.gives : 'both';
     const givesBtn = (value, text) => h('button', { type: 'button', 'aria-pressed': String(givesNow === value), dataset: { gives: value }, onclick: () => { if (givesNow !== value) App.setGives(p.id, value === 'both' ? null : value); } }, text);
@@ -792,5 +797,5 @@
     });
   }
 
-  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, setScope, scope: () => lib.scope, renderLibrary, sowingBox, edit, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle() };
+  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, setScope, scope: () => lib.scope, renderLibrary, sowingBox, edit, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle(), useWords: USE_WORDS };
 })(window);

@@ -461,7 +461,8 @@ button.as-more:hover { background: var(--paper); color: var(--ink); }
 .insp-section h3 { font: 500 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
 .insp-section .stats { border: 1px solid var(--line-soft); border-radius: var(--corner-8); overflow: hidden; }
 .field { display: grid; gap: var(--space-4); min-width: 0; }
-.field > span { font-size: var(--type-13); font-weight: 600; color: var(--ink-2); }
+.field > span, .field-head > span, .field-head > label { font-size: var(--type-13); font-weight: 600; color: var(--ink-2); }
+.field-head { display: flex; align-items: center; gap: var(--space-8); }   /* a field's label with the "?" that says what its words mean */
 .field input, .field select, .repeat input { width: 100%; height: 34px; border: 1px solid var(--line); border-radius: var(--corner-8); background: var(--raised); padding: 0 var(--space-8); min-width: 0; }
 .field small, .help { font-size: var(--type-13); color: var(--muted); }
 .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-8); }

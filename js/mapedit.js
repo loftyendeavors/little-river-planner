@@ -805,9 +805,13 @@
       const pickUse = h('select', { id: 'leUse', dataset: { scope: whole ? 'garden' : 'bed', use: now }, onchange: e => { if (!App.setUse(whole ? 'garden' : 'bed', whole ? [garden.id] : beds.map(b => b.id), e.target.value)) refresh(); } },
         now ? null : h('option', { value: '', selected: true, disabled: true }, 'mixed'),
         h('option', { value: 'commercial', selected: now === 'commercial' }, 'Commercial'), h('option', { value: 'personal', selected: now === 'personal' }, 'Personal use'));
-      form.append(field(whole ? 'Grown for (the whole garden)' : 'Grown for', pickUse,
-        whole ? 'Every bed here follows, unless one says otherwise. Personal use is planted and picked like the rest, and left out of revenue and out of the list you send.'
-          : `${by === 'garden' ? `Follows ${gardenOf(one).name || 'its garden'}. ` : by === 'bed' ? 'Set on this space. ' : ''}Plantings follow their bed unless one says otherwise. Personal use is left out of revenue and out of the list you send.`));
+      // what the two words mean is behind "?" beside the label (his choice of Nov 18, 09:20), as in a planting's panel; under the box,
+      // only what is so of these spaces
+      const words = root.LRFPanels && root.LRFPanels.useWords;
+      form.append(h('div.field', { id: 'leUseField' }, h('div.field-head', h('label', { for: 'leUse', dataset: { hook: 'use-label' } }, whole ? 'Grown for (the whole garden)' : 'Grown for'),
+        words ? UI.help(null, null, words, { label: 'What Grown for means', hook: 'use-help', card: { hook: 'use-help-card' } }) : null), pickUse,
+        h('small', { dataset: { hook: 'use-said' } }, whole ? 'Every bed here follows, unless one says otherwise.'
+          : `${by === 'garden' ? `Follows ${gardenOf(one).name || 'its garden'}. ` : by === 'bed' ? 'Set on this space. ' : ''}Plantings follow their bed unless one says otherwise.`)));
     }
     form.append(h('p.help', { id: 'leFollow' }, plantings ? `${plural(plantings, 'planting')} this season ${plantings === 1 ? 'follows' : 'follow'} ${beds.length === 1 ? 'this space' : 'these spaces'}: moving and turning change nothing in the plan; a new size works rows and plant counts out again.` : 'Nothing is planted here this season.'));
     panel.append(form);
