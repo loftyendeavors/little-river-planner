@@ -262,9 +262,9 @@
     for (const { row, qty, worth, varieties } of available(model, col.i0, col.i1, options)) {
       const amount = sendShown(qty, row.unit);
       if (amount <= 0) continue;
-      const named = options.varieties && (varieties.length > 1 || (varieties.length === 1 && varieties[0].id));
-      const listed = named ? varieties.map(v => ({ ...v, amount: sendShown(v.qty, row.unit) })).filter(v => v.amount > 0) : [];
-      out.push({ row, amount, price: options.prices && worth > 0 ? (worth / qty).toFixed(2) : '', varieties: listed });
+      const breakdown = options.varieties && (varieties.length > 1 || (varieties.length === 1 && varieties[0].id));
+      const listed = breakdown ? varieties.map(v => ({ ...v, amount: sendShown(v.qty, row.unit) })).filter(v => v.amount > 0) : [];
+      out.push({ row, amount, price: options.prices && worth > 0 ? (worth / qty).toFixed(2) : '', breakdown, varieties: listed });
     }
     return out;
   }
@@ -313,8 +313,9 @@
         }
       }
     }
-    const figures = entries => cols.flatMap((_, i) => {
-      const item = entries[i], amount = item ? item.amount : 0;
+    const figures = (entries, crop = []) => cols.flatMap((_, i) => {
+      // Blank means the preview gave only a crop total. Zero means this row had nothing to offer.
+      const item = entries[i], amount = item?.amount ?? (crop[i] && !crop[i].breakdown ? '' : 0);
       return options.prices ? [amount, item?.price || ''] : [amount];
     });
     for (const row of model.rows) {
@@ -323,7 +324,7 @@
       out.push([title[row.group], row.name, 'All', row.unit, ...figures(record.crop)]);
       for (const v of row.varieties) {
         const entries = record.varieties.get(v.id);
-        if (entries) out.push([title[row.group], row.name, v.name, row.unit, ...figures(entries)]);
+        if (entries) out.push([title[row.group], row.name, v.name, row.unit, ...figures(entries, record.crop)]);
       }
     }
     return out.map(r => r.map(cell).join(',')).join('\r\n');

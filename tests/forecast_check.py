@@ -315,11 +315,22 @@ with sync_playwright() as pw:
     check("its spreadsheet contains the reviewed months and quantities, rounded down as in the text, and no extra totals or varieties", cs["same"] and cs["head"] and all(cs["seen"]), cs)
 
     page.select_option("#hvShareKind", "flower")
-    flowers = download_rows()
-    flower_text = js("return $('hvSheet').textContent;")
-    check("the Flowers-only download and preview list just the commercial flowers, with varieties and prices off",
-          len(flowers) > 1 and all(r[0] == "Flowers" and r[2] == "All" and any(f"    {r[1]}: " in line for line in flower_text.splitlines()) for r in flowers[1:])
-          and all("price" not in label and label != "Season total" for label in flowers[0]), [flowers[:3], flower_text[:240]])
+    flowers = js("""const m = HV.model('commercial'), s = F.season(m), cols = F.periods(m, 'month', s.i0, s.i1), [head, ...rows] = arg, expected = [];
+      const periods = $('hvSheet').textContent.split('\\n\\n').slice(1, -1);
+      const lines = cols.map(() => []);
+      for (const row of m.rows.filter(r => r.group === 'flower')) {
+        const amounts = cols.map((c, i) => {
+          const qty = F.sum(row.days, c.i0, c.i1), amount = F.sendShown(qty, row.unit);
+          if (amount > 0) lines[i].push('    ' + row.name + ': ' + F.sendAmount(qty, row.unit, row.group));
+          return String(amount);
+        });
+        if (amounts.some(q => Number(q) > 0)) expected.push(['Flowers', row.name, 'All', row.unit, ...amounts]);
+      }
+      return { seen: expected.length, rows: JSON.stringify(rows) === JSON.stringify(expected),
+        text: JSON.stringify(periods.map(p => p.split('\\n').filter(l => l.startsWith('    ')))) === JSON.stringify(lines),
+        dates: JSON.stringify(head) === JSON.stringify(['Kind', 'Crop', 'Variety', 'Unit', ...cols.map(c => F.MONTHS[c.start.getMonth()] + ' ' + m.year)]) };""", download_rows())
+    check("the Flowers-only download and preview contain the same commercial flower amounts in each reviewed month, with varieties and prices off",
+          flowers["seen"] > 0 and flowers["rows"] and flowers["text"] and flowers["dates"], flowers)
 
     page.check("#hvShareVar"); page.check("#hvSharePrice")
     detailed = js("""const m = HV.model('commercial'), s = F.season(m), cols = F.periods(m, 'month', s.i0, s.i1), [head, ...rows] = arg, text = $('hvSheet').textContent;
@@ -349,6 +360,21 @@ with sync_playwright() as pw:
       return { none: !/Less than one|A little|Later/.test(text), some: text.includes('"Some","All","head","4"') && text.includes('"Most","head","3"'),
         dates: text.includes('"2027-07-19"') && !text.includes('Season total') };""")
     check("a one-week spreadsheet leaves out crops outside that week and crops or varieties rounded down to zero", tiny["none"] and tiny["some"] and tiny["dates"], tiny)
+
+    breakdown = js("""const cols = [0, 7, 14, 21].map(i => ({i0: i, i1: i + 6, start: new Date(2027, 0, 4 + i), end: new Date(2027, 0, 10 + i)}));
+      const days = (a, b, c) => { const d = new Float64Array(365); d[0] = a; d[7] = b; d[14] = c; return d; };
+      const row = { group: 'flower', name: 'Zinnia', unit: 'stem', days: days(20, 40, 10), value: days(0, 0, 0), varieties: [
+        { id: 'queen', name: 'Queen Lime', days: days(12, 0, 10) }, { id: '', name: 'No variety chosen', days: days(8, 40, 0) }
+      ] };
+      const m = {year: 2027, days: 365, rows: [row]}, options = { grain: 'week', group: 'flower', varieties: true };
+      const rows = F.csv(m, cols, options).split('\\r\\n').slice(1);
+      const week = F.text(m, cols, options).split('\\n\\n')[2];
+      return { rows, week, ok: rows.join('\\n') === [
+        '"Flowers","Zinnia","All","stem","20","40","10","0"',
+        '"Flowers","Zinnia","Queen Lime","stem","12","","10","0"',
+        '"Flowers","Zinnia","No variety chosen","stem","8","","0","0"'
+      ].join('\\n') && week.includes('Zinnia: 40 stems') && !week.includes('      ') };""")
+    check("variety cells are blank when the preview shows only the crop total, and zero where there is nothing on that row", breakdown["ok"], breakdown)
     page.keyboard.press("Escape"); wait(300)
     js("const d = document.querySelector('dialog[open]'); if (d) { d.close(); d.remove(); } return 1;")
 

@@ -53,6 +53,7 @@ PAGE = [
  ("the spreadsheet ignores the chosen crop kind", FC, "for (const item of offered(model, c, options)) {", "for (const item of offered(model, c, { ...options, group: '' })) {"),
  ("the spreadsheet keeps a crop rounded down to zero", FC, "if (amount <= 0) continue;", "if (amount < 0) continue;"),
  ("the spreadsheet keeps a variety of noughts", FC, ".filter(v => v.amount > 0) : [];", ".filter(v => v.amount >= 0) : [];"),
+ ("the spreadsheet shows zero where no variety breakdown is offered", FC, "(crop[i] && !crop[i].breakdown ? '' : 0)", "0"),
  ("a dollar figure's popup lists plantings that earn nothing", HV, ".filter(x => x.here > 1e-9 && (!dollars() || x.here * (x.price || 0) > 1e-9))", ".filter(x => x.here > 1e-9)"),
  ("the list to send says nothing for each", FC, "return `${fmt(v)} ${w || 'each'}`;", "return `${fmt(v)}${w ? ' ' + w : ''}`;"),
  ("the kept forecast is worked out afresh at every call", FC, "    if (!mine.has(key)) mine.set(key, build(eng, options));\n    return mine.get(key);", "    mine.set(key, build(eng, options));\n    return build(eng, options);"),
