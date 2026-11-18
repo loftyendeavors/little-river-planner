@@ -2483,3 +2483,10 @@ body[data-card="on"] .stage { position: relative; }
 .card-try { display: flex; align-items: flex-start; gap: var(--space-8); }
 .card-try input { flex: none; margin: 2px 0 0; }
 @media (prefers-reduced-motion: reduce) { .card-row-head i { transition: none; } }
+/* on a phone, whatever is pressed on the card is 44 high */
+@media (max-width: 700px) {
+  .lrf-card .card-head .icon-btn { width: var(--control-phone); height: var(--control-phone); }
+  .card-box select, .card-box input, .card-date, .card-row-head, .card-repeat input, .lrf-card .btn.small, .card-menu-item, .card-cal-day, .card-cal-month .icon-btn { min-height: var(--control-phone); }
+  .card-cal-day, .card-cal-month .icon-btn { width: var(--control-phone); height: var(--control-phone); }
+  .card-cal { width: min(340px, calc(100vw - 16px)); }
+}
