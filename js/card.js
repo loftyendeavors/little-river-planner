@@ -44,6 +44,7 @@
   /** The days a planting is picked, short: "Jun 1 – 14" within a month. */
   const picked = r => (r.first.getMonth() === r.last.getMonth() ? `${day(r.first)} – ${r.last.getDate()}` : span(r.first, r.last));
   const plural = (n, w) => `${num(n)} ${w}${n === 1 ? '' : 's'}`;
+  const nameOf = ({ r }) => `${r.c.vname ? r.c.vname + ' ' : ''}${r.c.name.toLowerCase()}`;
   const bedSeasonOn = bed => bed && eng().isSoilBed(bed) && !NARROW.matches;
 
   /** The bed or the planting the card holds, or null when what is picked belongs to the side panel. */
@@ -296,7 +297,7 @@
 
   function bedOpeningCard(bed, item, date) {
     const { opening: o, fits } = item, F = root.LRFForecast, groups = (App.state.plan.lrfNext || {}).groups;
-    const next = o.after ? `, after the ${o.after.r.c.name.toLowerCase()}` : o.before ? `, before the ${o.before.r.c.name.toLowerCase()}` : '';
+    const next = o.after ? `, after the ${nameOf(o.after)}` : o.before ? `, before the ${nameOf(o.before)}` : '';
     const now = o.from <= date && date <= o.to;
     return h('button.card-open.p-open.bed-opening', { type: 'button', dataset: { hook: 'card-opening', opening: o.id }, title: 'See what fits',
       onclick: () => App.select({ type: 'opening', id: o.id, bedId: bed.id, fromBedSeason: true }) },
@@ -318,7 +319,7 @@
       body.replaceWith(next);
       if (restore) restore(next);
     };
-    const sale = h('input', { type: 'checkbox', checked: !use.personal, disabled: readOnly, dataset: { hook: 'card-sale' },
+    const sale = h('input', { type: 'checkbox', name: 'bed-sale', checked: !use.personal, disabled: readOnly, dataset: { hook: 'card-sale' },
       onchange: ev => { if (!App.setUse('bed', [bed.id], ev.target.checked ? 'commercial' : 'personal')) ev.target.checked = !use.personal; } });
     body = h('div.bed-season', { dataset: { hook: 'bed-season' } },
       h('div.card-acts',
@@ -347,7 +348,7 @@
       };
     }
     const name = active.name;
-    return name === 'bed-date' || name === 'bed-variety' ? next => next.querySelector(`[name="${name}"]`)?.focus({ preventScroll: true }) : null;
+    return ['bed-date', 'bed-variety', 'bed-sale'].includes(name) ? next => next.querySelector(`[name="${name}"]`)?.focus({ preventScroll: true }) : null;
   }
 
   function backToBed(id) {
@@ -379,7 +380,6 @@
         h('span', h('span.row-name', x.r.c.vname ? `${x.r.c.vname} · ${x.r.c.name}` : x.r.c.name), h('span.row-detail', `${day(x.r.field)} · pick ${x.r.harvestDays ? picked(x.r) : 'none'}${part}`)),
         h('span.row-word', here ? 'In now' : ''));
     };
-    const nameOf = q => `${q.r.c.vname ? q.r.c.vname + ' ' : ''}${q.r.c.name.toLowerCase()}`;
     const openRow = o => {
       const n = S.fits(e, o).length, next = o.after ? `, after the ${nameOf(o.after)}` : o.before ? `, before the ${nameOf(o.before)}` : '';
       return h('button.card-open', { type: 'button', dataset: { hook: 'card-opening', opening: o.id }, title: 'See what fits', onclick: () => App.select({ type: 'opening', id: o.id, bedId: bed.id }) },

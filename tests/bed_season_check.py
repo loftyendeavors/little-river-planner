@@ -84,9 +84,10 @@ SUBJECT = """() => {
       revised: E.d2s(E.addDays(E.s2d(p.date), 1)), picking: E.d2s(r.first),
       turnover: {id: turnover.p.id, day: E.d2s(E.addDays(turnover.r.last, 1)), clear: LRFUI.day(E.addDays(e.occupancyThrough(turnover.p, turnover.r), 1))},
       rows: list.map(x => x.p.id), gap: {id: gap.o.id, date: E.d2s(gap.o.from), label: LRFUI.day(gap.o.from), days: gap.o.days,
-        after: gap.o.after.r.c.name.toLowerCase(), fits: gap.fits.slice(0, 3).map(f => f.crop.name),
+        after: [gap.o.after.r.c.vname, gap.o.after.r.c.name.toLowerCase()].filter(Boolean).join(' '), fits: gap.fits.slice(0, 3).map(f => f.crop.name),
         cropIds: gap.fits.slice(0, 3).map(f => f.crop.id), more: gap.fits.length - 3},
-      empty: a.state.plan.beds.find(x => e.isSoilBed(x) && x.active !== false && x.px && x.l >= 12 && !e.plantingsIn(x.id).length)?.id};
+      empty: a.state.plan.beds.find(x => e.isSoilBed(x) && x.active !== false && x.px && !e.plantingsIn(x.id).length &&
+        S.openings(e, {bedId: x.id, empty: true}).length)?.id};
   }
   return null;
 }"""
@@ -240,9 +241,11 @@ def run_surface(context, floating):
     verify("one Undo restores the planting after a date change", key() == initial)
 
     sale = loc("card-sale")
-    sale.uncheck()
+    sale.focus()
+    page.keyboard.press("Space")
     impact = loc("card-said") if floating else page.locator("#toast")
     verify("the sale checkbox reports which plantings and season worth changed", not sale.is_checked() and "left out of revenue" in impact.inner_text() and "worth" in impact.inner_text() and "Undo" in impact.inner_text())
+    verify("the sale checkbox keeps keyboard focus after it changes", sale.evaluate("el => document.activeElement === el"))
     undo()
     verify("one Undo restores the previous sale status", sale.is_checked() and key() == initial)
 
@@ -251,20 +254,33 @@ def run_surface(context, floating):
     verify("the full inspector's × closes the selection", selection() is None and not season.is_visible())
 
     select_bed(sample["empty"])
+    empty_opening = loc("card-opening").first
+    empty_opening.click()
+    verify("an empty bed's opening opens the full fit planner", selection()["type"] == "opening" and page.locator("#ahTitle").is_visible())
+    page.locator("#ahToBed").click()
+
+    layout_bed = "north-field-7"
+    def worth():
+        return page.evaluate("Math.round(LRFForecast.kept(LRFApp.state.engine).rows.reduce((total, r) => total + r.worth, 0))")
+
+    select_bed(layout_bed)
     loc("card-layout").click()
     length = page.locator("#fLayL")
     before = float(length.input_value())
-    length.fill(str(before - 1))
+    was = worth()
+    length.fill(str(before - 4))
     length.press("Tab")
     shorten = loc("layout-shorten-impact")
-    verify("shortening a bed reports the season's worth beside a single Undo", float(length.input_value()) == before - 1 and shorten.is_visible() and "worth" in shorten.inner_text() and "$" in shorten.inner_text())
+    now = worth()
+    verify("shortening a planted bed reports the exact before and after forecast values beside Undo",
+           float(length.input_value()) == before - 4 and was != now and shorten.is_visible() and f"goes from ${was:,} to ${now:,}" in shorten.inner_text(), {"before": was, "after": now})
     loc("layout-shorten-undo").click()
     verify("the layout Undo restores the original length and plan", float(length.input_value()) == before and key() == initial)
     page.locator("#leDone").click()
-    verify("Done returns to the same bed's season", selection() == {"type": "bed", "id": sample["empty"]} and season.is_visible())
+    verify("Done returns to the same bed's season", selection() == {"type": "bed", "id": layout_bed} and season.is_visible())
     loc("card-layout").click()
     page.keyboard.press("Escape")
-    verify("Escape returns to the same bed's season", selection() == {"type": "bed", "id": sample["empty"]} and season.is_visible())
+    verify("Escape returns to the same bed's season", selection() == {"type": "bed", "id": layout_bed} and season.is_visible())
     loc("card-layout").click()
     page.locator("#leClose").click()
     verify("the layout's × leaves no selection", selection() is None and not season.is_visible())
