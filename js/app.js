@@ -1026,15 +1026,18 @@
   function workOps(items, work) {
     const ctx = { now: new Date().toISOString(), uid, year: planYear(), name: '', today: todayText() }, ops = [], done = [], failed = [];
     let inventory = inventoryNow(), touched = false;
+    // two jobs of one planting in one step (Mark all done: its sowing and its hardening off) are worked one after the other on the
+    // planting as the first left it, and give one change, so that neither record is lost
+    const at = new Map();
     for (const item of items || []) {
-      const p = state.engine.planting(item.id);
-      if (!p) continue;
+      const was = at.has(item.id) ? ops[at.get(item.id)].after : state.engine.planting(item.id);
+      if (!was) continue;
       try {
-        const result = work(p, item, inventory, ctx);
-        ops.push({ before: p, after: result.planting });
+        const result = work(was, item, inventory, ctx);
+        if (at.has(item.id)) ops[at.get(item.id)].after = result.planting; else { at.set(item.id, ops.length); ops.push({ before: was, after: result.planting }); }
         if (result.inventory) { inventory = result.inventory; touched = true; }
-        done.push({ id: p.id, ...result });
-      } catch (error) { failed.push({ id: p.id, label: cropLabel(p), why: error.message || 'It could not be recorded.' }); }
+        done.push({ id: was.id, ...result });
+      } catch (error) { failed.push({ id: was.id, label: cropLabel(was), why: error.message || 'It could not be recorded.' }); }
     }
     if (touched) ops.push({ kind: 'inventory', before: state.plan.seedInventory || null, after: inventory });
     return { ops, done, failed };
@@ -1083,7 +1086,7 @@
     // asked for: whose first harvest the record moves (a planting put in its bed early is picked from that day)
     if (options.firsts && ops.length) {
       const after = E.create(withOps(state.plan, ops, 'do'), Lib), firsts = [];
-      for (const r of done) { const a = state.engine.calc(state.engine.planting(r.id)), b = after.calc(after.planting(r.id)); if (a && b && E.validDate(a.first) && E.validDate(b.first) && +a.first !== +b.first) firsts.push({ id: r.id, from: E.d2s(a.first), to: E.d2s(b.first) }); }
+      for (const id of new Set(done.map(r => r.id))) {   // a planting with two of its jobs in the step is one first harvest const a = state.engine.calc(state.engine.planting(id)), b = after.calc(after.planting(id)); if (a && b && E.validDate(a.first) && E.validDate(b.first) && +a.first !== +b.first) firsts.push({ id, from: E.d2s(a.first), to: E.d2s(b.first) }); }
       return { n: done.length, moved, held, overlaps: 0, failed, firsts };
     }
     // the ground is looked at only when something is pushed: a day recorded for planting is a fact, and its overlaps are said when it is recorded
@@ -1131,7 +1134,10 @@
     const r = p && state.engine.calc(p);
     if (!r || p.established === true) return null;
     // to today, or to the last day it held its ground where that came first: a failure after its bed was free frees nothing
-    const recorded = [SL.doneDate(p, 'sow'), SL.doneDate(p, 'field')].filter(Boolean).sort()[0] || null, planned = E.d2s(r.start), lo = recorded && recorded < planned ? recorded : planned;
+    // from the day it was started, and never before the last work recorded on it: a recorded day is a fact, and it failed after it
+    const days = Object.keys(p.done && typeof p.done === 'object' ? p.done : {}).map(k => SL.doneDate(p, k)).filter(Boolean).sort();
+    const recorded = [SL.doneDate(p, 'sow'), SL.doneDate(p, 'field')].filter(Boolean).sort()[0] || null, planned = E.d2s(r.start), first = recorded && recorded < planned ? recorded : planned;
+    const lo = days.length && days[days.length - 1] > first ? days[days.length - 1] : first;
     const held = state.engine.occupancyThrough(p, r), today = todayText(), hi = held !== Infinity && E.d2s(held) < today ? E.d2s(held) : today;
     return lo <= hi ? { lo, hi } : null;
   }
@@ -1142,7 +1148,7 @@
     if (!range) return 'It has not been started yet, so it cannot have failed. Remove it instead, or move it.';
     if (!SL.realDay(date)) return 'Choose a real calendar date.';
     if (date > range.hi) return range.hi < todayText() ? `Its bed was free after ${day(E.s2d(range.hi))}: choose that day or an earlier one.` : 'A failure is marked on the day it happened: today or an earlier day.';
-    if (date < range.lo) return `That is before it was started (${day(E.s2d(range.lo))}).`;
+    if (date < range.lo) return `That is before ${SL.doneDate(p, 'sow') === range.lo || E.d2s(state.engine.calc(p).start) === range.lo ? 'it was started' : 'the last work recorded on it'} (${day(E.s2d(range.lo))}).`;
     return null;
   }
   /**

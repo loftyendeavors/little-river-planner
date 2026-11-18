@@ -81,6 +81,10 @@ PAGE = [
  ("the panel's day for a failure opens on its start", PN, "h('input', { type: 'date', value: range.hi, min: range.lo,", "h('input', { type: 'date', value: range.lo, min: range.lo,"),
  ("a failed planting is not greyed on the Timeline", TL, "(r.failed ? '.tl-failed' : '')", "''"),
  ("Take the mark off is not on the panel", PN, "dataset: { hook: 'panel-failed-back' }, onclick", "hidden: true, dataset: { hook: 'panel-failed-back' }, onclick"),
+ ("two jobs of one planting in one step: the later is worked on the plan as it was, and the first is lost", AP, "      const was = at.has(item.id) ? ops[at.get(item.id)].after : state.engine.planting(item.id);", "      const was = state.engine.planting(item.id);"),
+ ("two jobs of one planting in one step give two changes, and the second undoes the first", AP, "        if (at.has(item.id)) ops[at.get(item.id)].after = result.planting; else { at.set(item.id, ops.length); ops.push({ before: was, after: result.planting }); }", "        at.set(item.id, ops.length); ops.push({ before: was, after: result.planting });"),
+ ("a planting with two of its jobs in one step has its first harvest said twice", AP, "      for (const id of new Set(done.map(r => r.id))) {", "      for (const id of done.map(r => r.id)) {"),
+ ("a failure may be marked before the last work recorded on it", AP, "    const lo = days.length && days[days.length - 1] > first ? days[days.length - 1] : first;", "    const lo = first;"),
  ("the panel's sowing calendar goes back further than a year", PN, "min: E.validDate(s.planned) ? E.d2s(E.addDays(s.planned, 1 - SL.YEAR_DAYS)) : undefined,", "min: undefined,"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)

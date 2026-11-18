@@ -298,6 +298,26 @@ def run(pw):
             check("the panel's sowing calendar goes back no further than a year before its planned day", got == cal["want"], {"min": got, "want": cal["want"]})
         else: check("a sowing still to record is there for the calendar's check", False)
 
+    # ── two jobs of one planting recorded in one step (Mark all done with its sowing and a later job both late) ──
+    before = snap(page)
+    pair = js(page, """const d0 = plus(now, -4), d = plus(now, -2), by = new Map();
+      for (const t of V.tasks().filter(t => open(t) && t.due < d0)) for (const it of t.items()) { const l = by.get(it.id) || []; if (!l.some(i => i.kind === it.kind)) l.push(it); by.set(it.id, l); }
+      const hit = [...by.entries()].find(([id, l]) => l.length >= 2 && l.some(i => i.kind === 'sow'));
+      if (!hit) return null; const [id, l] = hit, items = [{ ...l.find(i => i.kind === 'sow'), date: d0 }, { ...l.find(i => i.kind !== 'sow'), date: d }];
+      const seen = A.previewWork(items, { date: d, follow: true }, { impact: false, firsts: true }), use0 = ((S.engine.planting(id).workflow || {}).seedUse || []).length;
+      const res = A.recordWork(items, { date: d, follow: true }) || {}, p = S.engine.planting(id), use = ((p.workflow || {}).seedUse || []).length;
+      return { id, d, kinds: items.map(i => i.kind), done: Object.keys(p.done && typeof p.done === 'object' ? p.done : {}), sown: !!(SL.sowing(S.engine, p) || {}).done,
+        seed: use > use0 || (res.used || 0) + (res.untracked || 0) > 0, use0, use, used: res.used, untracked: res.untracked, said: seen.firsts.filter(m => m.id === id).length, range: A.failedRange(p),
+        early: !!A.previewFailed(id, plus(d, -1)).why, onDay: A.previewFailed(id, d).why || null };""")
+    check("the plan has a planting whose sowing and a later job are both late, for the check", pair)
+    if pair:
+        check("its sowing and its later job recorded in one step, each on its own day, are both kept on it", all(k in pair["done"] for k in pair["kinds"]) and pair["sown"], pair)
+        check("and the seed the sowing used is counted on it", pair["seed"], pair)
+        check("before it is done, its first harvest is said once among what moves, however many of its jobs are in the step", pair["said"] <= 1, pair)
+        check("it can be marked failed from the last day work was recorded on it, and not before", pair["range"] and pair["range"]["lo"] == pair["d"] and pair["early"] and pair["onDay"] is None, pair)
+        js(page, "A.undo(); return null;"); page.wait_for_timeout(500)
+        check("it is one step: Undo gives back the plan exactly", snap(page)["plan"] == before["plan"])
+
     # ── on a phone ──
     phone = browser.new_context(viewport={"width": 390, "height": 844}); phone.add_init_script(FAKE); pp = phone.new_page()
     pp.on("pageerror", lambda e: errors.append("pageerror: " + str(e)))
