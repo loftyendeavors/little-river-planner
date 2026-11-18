@@ -86,7 +86,7 @@ with sync_playwright() as pw:
           Storage.prototype.setItem = function (k, v) { const r = set.call(this, k, v); if (this === localStorage && k === 'lrf-next:plan') { order('s'); at('save'); } return r; };
           IDBObjectStore.prototype.put = function (v, k) { if (this.name === 'blobs' && k === 'attic') at('attic'); return put.apply(this, arguments); };
           const order = what => S.setItem('check-order', (S.getItem('check-order') || '') + what), del = IDBObjectStore.prototype.delete;
-          IDBObjectStore.prototype.delete = function (k) { if (this.name === 'blobs' && k === 'attic-new') order('c'); return del.apply(this, arguments); };
+          IDBObjectStore.prototype.delete = function (k) { if (this.name === 'blobs' && k === 'attic-new') { order('c'); if (S.getItem('check-nodelete')) throw new DOMException('refused', 'UnknownError'); } return del.apply(this, arguments); };
           IDBObjectStore.prototype.get = function (k) { if (this.name === 'blobs' && (k === 'attic' || k === 'attic-new') && S.getItem('check-noread')) throw new DOMException('unreadable', 'UnknownError'); return get.apply(this, arguments); };
         })();""")
         page.errors = []
@@ -312,6 +312,23 @@ with sync_playwright() as pw:
         check('left alone at last, the two are joined: both changes, and the record the other device took out is gone here too', B.evaluate(P, X1)['note'] == 'taken out, and interrupted' and B.evaluate(P, X2)['note'] == 'phone, as the records were written' and B.evaluate(BESIDE) is False, [B.evaluate(P, X1), B.evaluate(P, X2)])
         look(A)
         check('and the other device takes in the change made during the interruptions', A.evaluate(P, X2)['note'] == 'phone, as the records were written' and A.evaluate(P, X1)['note'] == 'taken out, and interrupted')
+
+        # ── 5e. a supplier's page record changed on both devices, on a browser that then cannot clear what it kept: the joined record is the one read ──
+        where = 'page record'
+        VID = A.evaluate("LRFApp.state.plan.varieties[0].id")
+        REC = "(id) => LRFApp.varietyRecord(id).then(r => r && r.catalogSourceText)"
+        A.evaluate("(async ([v, id]) => { await LRFApp.keepVarietyRecord(v, { catalogSourceText: 'first' }); LRFApp.updatePlanting(id, { note: 'a page record, first' }, 'A note'); })(%s)" % json.dumps([VID, X1])); settled(A, 'in-step')
+        look(B)
+        first = B.evaluate(REC, VID)
+        A.evaluate("(async ([v, id]) => { await LRFApp.keepVarietyRecord(v, { catalogSourceText: 'the laptop' }); LRFApp.updatePlanting(id, { note: 'a page record, the laptop' }, 'A note'); })(%s)" % json.dumps([VID, X1])); settled(A, 'in-step')
+        B.evaluate("(() => { sessionStorage.setItem('check-nodelete', '1'); })()")
+        B.evaluate("(async ([v, id]) => { await LRFApp.keepVarietyRecord(v, { catalogSourceText: 'the phone' }); LRFApp.updatePlanting(id, { note: 'a page record, the phone' }, 'A note'); })(%s)" % json.dumps([VID, X2]))
+        settled(B, 'in-step')
+        B.reload(); ready(B); settled(B, 'in-step')
+        check('a page record both devices changed is the cloud\'s after the join, and still is when the page is opened again on a browser that could not clear what it had kept', first == 'first' and B.evaluate(P, X1)['note'] == 'a page record, the laptop' and B.evaluate(REC, VID) == 'the laptop', [first, B.evaluate(REC, VID)])
+        B.evaluate("(() => { sessionStorage.removeItem('check-nodelete'); })()")
+        look(A)
+        check('and the other device reads the same record', A.evaluate(REC, VID) == 'the laptop' and A.evaluate(P, X2)['note'] == 'a page record, the phone', A.evaluate(REC, VID))
 
         # ── 6. turned off: the question it always was ──
         where = 'off'

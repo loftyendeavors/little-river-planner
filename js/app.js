@@ -2106,7 +2106,11 @@
         if (newAttic && store.backend !== 'memory') {
           const wasAttic = await store.loadBlob('attic'), wasNew = await store.loadBlob('attic-new');   // a read that fails stops the join here, before anything is written: it is never taken for "nothing was kept"
           putBack = async () => { try { if (wasAttic) await store.saveBlob('attic', wasAttic); else await store.clearBlob('attic'); if (wasNew) await store.saveBlob('attic-new', wasNew); else await store.clearBlob('attic-new'); return true; } catch (_) { return false; } };
-          await store.saveBlob('attic', text); core = { ...core, lrfNext: { ...core.lrfNext, attic: 'cloud' } };   // what was kept since ('attic-new') is folded into it, and is cleared only once the plan that says so is saved: a page closed in between still reads the old plan with its old records
+          // What was kept since the plan was loaded ('attic-new') is read over the records above. It is first set to what the join decided for the
+          // same varieties, and cleared only after the joined plan is open: whichever of these writes a closed page or a refusing browser leaves
+          // undone, what is read beside the plan is the joined record, never the one from before the join over it (Codex, on #65).
+          if (wasNew) await store.saveBlob('attic-new', JSON.stringify({ ...extras, varieties: Object.fromEntries(Object.keys(extras.varieties || {}).filter(id => attic.varieties && attic.varieties[id] !== undefined).map(id => [id, attic.varieties[id]])) }));
+          await store.saveBlob('attic', text); core = { ...core, lrfNext: { ...core.lrfNext, attic: 'cloud' } };
         }
       } catch (error) { await putBack(); return { ok: false, stop: true, why: 'The records kept beside the plan could not be saved in this browser, so nothing was taken in.' }; }
       const lost = { ok: false, stop: true, why: 'The records kept beside the plan could not be put back as they were after a joined plan was not saved. Download a backup now, from Backup.' };
