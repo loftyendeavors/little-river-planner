@@ -402,6 +402,13 @@
     'plantings[].done.*': 'text',
     'plantings[].dtm': 'number',
     'plantings[].established': 'bool',
+    // marked failed on its panel (Tasks part 2): the day and when it was marked, written in one act, so taken whole. One a planting,
+    // so a mark made on two devices is one record (the S1c note's rule for records still to come: a fact written once is taken whole).
+    // Recording too: a mark on one device and work recorded after its day on the other are an order the planner refuses, so
+    // joinPlanting keeps the cloud's and drops this device's (reported), as it does two jobs out of order
+    'plantings[].failed': 'object whole recording',
+    'plantings[].failed.at': 'text',
+    'plantings[].failed.on': 'text',
     'plantings[].ft': 'number place',
     'plantings[].gives': 'text',
     'plantings[].growingDefaults': 'object whole',

@@ -1032,15 +1032,18 @@
   function workOps(items, work) {
     const ctx = { now: new Date().toISOString(), uid, year: planYear(), name: '', today: todayText() }, ops = [], done = [], failed = [];
     let inventory = inventoryNow(), touched = false;
+    // two jobs of one planting in one step (Mark all done: its sowing and its hardening off) are worked one after the other on the
+    // planting as the first left it, and give one change, so that neither record is lost
+    const at = new Map();
     for (const item of items || []) {
-      const p = state.engine.planting(item.id);
-      if (!p) continue;
+      const was = at.has(item.id) ? ops[at.get(item.id)].after : state.engine.planting(item.id);
+      if (!was) continue;
       try {
-        const result = work(p, item, inventory, ctx);
-        ops.push({ before: p, after: result.planting });
+        const result = work(was, item, inventory, ctx);
+        if (at.has(item.id)) ops[at.get(item.id)].after = result.planting; else { at.set(item.id, ops.length); ops.push({ before: was, after: result.planting }); }
         if (result.inventory) { inventory = result.inventory; touched = true; }
-        done.push({ id: p.id, ...result });
-      } catch (error) { failed.push({ id: p.id, label: cropLabel(p), why: error.message || 'It could not be recorded.' }); }
+        done.push({ id: was.id, ...result });
+      } catch (error) { failed.push({ id: was.id, label: cropLabel(was), why: error.message || 'It could not be recorded.' }); }
     }
     if (touched) ops.push({ kind: 'inventory', before: state.plan.seedInventory || null, after: inventory });
     return { ops, done, failed };
@@ -1067,7 +1070,8 @@
     const year = +(plan.settings && plan.settings.year) || planYear();
     return snapshot(`Plan of record ${year} (before the first work was recorded)`, { plan, why: 'record:' + year });
   }
-  const jobWork = input => (p, item, inventory, ctx) => Week.record(state.engine, inventory, p, item.kind, { date: input.date, quantity: item.quantity, note: input.note, follow: input.follow }, ctx);
+  // an item may carry a day of its own ("Mark all done", each on the day it was due); otherwise the day given for all of them
+  const jobWork = input => (p, item, inventory, ctx) => Week.record(state.engine, inventory, p, item.kind, { date: item.date || input.date, quantity: item.quantity, note: input.note, follow: input.follow }, ctx);
   const seedJob = item => { const p = state.engine.planting(item.id), s = p && sowingOf(p); return !!s && s.kind === item.kind && (s.unit === 'seeds' || s.unit === 'g'); };
   /** Record jobs on one date, as one undoable step: items [{ id, kind, quantity? }], input { date, follow?, note? }. */
   function recordWork(items, input) {
@@ -1085,6 +1089,13 @@
   function previewWork(items, input, options = {}) {
     const { ops, done, failed } = workOps(items, jobWork(input));
     const moved = done.filter(r => r.moved).map(r => ({ id: r.id, ...r.moved })), held = done.filter(r => r.held).length;
+    // asked for: whose first harvest the record moves (a planting put in its bed early is picked from that day)
+    if (options.firsts && ops.length) {
+      const after = E.create(withOps(state.plan, ops, 'do'), Lib), firsts = [];
+      // a planting with two of its jobs in the step is one first harvest
+      for (const id of new Set(done.map(r => r.id))) { const a = state.engine.calc(state.engine.planting(id)), b = after.calc(after.planting(id)); if (a && b && E.validDate(a.first) && E.validDate(b.first) && +a.first !== +b.first) firsts.push({ id, from: E.d2s(a.first), to: E.d2s(b.first) }); }
+      return { n: done.length, moved, held, overlaps: 0, failed, firsts };
+    }
     // the ground is looked at only when something is pushed: a day recorded for planting is a fact, and its overlaps are said when it is recorded
     if (!ops.length || !moved.length || options.impact === false) return { n: done.length, moved, held, overlaps: 0, failed };
     const engine = E.create(withOps(state.plan, ops, 'do'), Lib), pairs = eng => { const set = new Set(); for (const p of eng.plan.plantings) { const r = eng.calc(p); if (r) for (const o of eng.conflicts(p, r)) if (!o.rest) set.add([p.id, o.p.id].sort().join('|')); } return set; };
@@ -1124,6 +1135,143 @@
     if (!ops.length) return null;
     return commit(note ? 'A note on a task' : 'A task’s note cleared', ops, { unchecked: true }) ? { n: ops.length } : null;
   }
+  // ── a planting that failed: its bed is free from that day, nothing more is picked, and it stays on record (js/engine.js failedOn) ──
+  /** The days a planting can be marked failed on: from the day it was started (its sowing, or its day in the ground) to today. Null when it has not started. */
+  function failedRange(p) {
+    const r = p && state.engine.calc(p);
+    if (!r || p.established === true) return null;
+    // to today, or to the last day it held its ground where that came first: a failure after its bed was free frees nothing
+    // from the day it was started, and never before the last work recorded on it: a recorded day is a fact, and it failed after it
+    const days = Object.keys(p.done && typeof p.done === 'object' ? p.done : {}).map(k => SL.doneDate(p, k)).filter(Boolean).sort();
+    const recorded = [SL.doneDate(p, 'sow'), SL.doneDate(p, 'field')].filter(Boolean).sort()[0] || null, planned = E.d2s(r.start), first = recorded && recorded < planned ? recorded : planned;
+    const lo = days.length && days[days.length - 1] > first ? days[days.length - 1] : first;
+    const held = state.engine.occupancyThrough(p, r), today = todayText(), hi = held !== Infinity && E.d2s(held) < today ? E.d2s(held) : today;
+    return lo <= hi ? { lo, hi } : null;
+  }
+  const failedTo = (p, date) => Week.fail(p, date, new Date().toISOString());
+  /** Why a day cannot be the day a planting failed, in words; null when it can. */
+  function failedRefusal(p, date) {
+    const range = failedRange(p);
+    if (!range) return 'It has not been started yet, so it cannot have failed. Remove it instead, or move it.';
+    if (!SL.realDay(date)) return 'Choose a real calendar date.';
+    if (date > range.hi) return range.hi < todayText() ? `Its bed was free after ${day(E.s2d(range.hi))}: choose that day or an earlier one.` : 'A failure is marked on the day it happened: today or an earlier day.';
+    if (date < range.lo) return `That is before ${SL.doneDate(p, 'sow') === range.lo || E.d2s(state.engine.calc(p).start) === range.lo ? 'it was started' : 'the last work recorded on it'} (${day(E.s2d(range.lo))}).`;
+    return null;
+  }
+  /**
+   * What marking a planting failed on a day would do, with nothing changed: the day its bed is free (and the day it was free
+   * before), what comes off the forecast (its amount and the season's worth), and the tasks that leave the list.
+   */
+  function previewFailed(id, date) {
+    const p = state.engine.planting(id), why = p ? failedRefusal(p, date) : 'That planting is not in the plan.';
+    if (why) return { why };
+    const r = state.engine.calc(p), after = failedTo(p, date), engine = E.create(withOps(state.plan, [{ before: p, after }], 'do'), Lib), q = engine.planting(id), a = engine.calc(q);
+    const was = state.engine.occupancyThrough(p, r), y0 = state.engine.yieldOf(p, r), y1 = engine.yieldOf(q, a), worth = impact(state.engine, engine).worth;
+    return { date, freeFrom: date, wasFree: was === Infinity ? null : E.d2s(E.addDays(was, 1)), unit: y0 ? y0.unit : null, units: y0 && y1 ? Math.max(0, y0.units - y1.units) : 0,
+      worth: Math.max(0, worth[0] - worth[1]), tasks: Week.steps(state.engine, p).filter(st => !st.done && !st.skipped).length, lastPick: a.harvestDays > 0 ? E.d2s(a.last) : null };
+  }
+  /** Mark a planting failed on a day, or with no day take the mark off: one step, with Undo. Taking it off puts it back in its bed, and says what that overlaps. */
+  function markFailed(id, date) {
+    const p = state.engine.planting(id);
+    if (!p) return null;
+    const was = state.engine;
+    if (date == null) {
+      if (!p.failed) return null;
+      const after = Week.fail(p, null);
+      return commit(`${cropLabel(p)}: no longer marked failed`, [{ before: p, after }], { unchecked: true }) ? { overlaps: impact(was, state.engine).overlaps } : null;
+    }
+    const why = failedRefusal(p, date);
+    if (why) { toast(why); return null; }
+    const shown = previewFailed(id, date);
+    return commit(`${cropLabel(p)}: marked failed ${day(E.s2d(date))}`, [{ before: p, after: failedTo(p, date) }], { unchecked: true }) ? shown : null;
+  }
+
+  // ── everything recorded in the season, taken back at once (Tasks, "⋯") ──
+  const UNDO_ORDER = ['move', 'field', 'harden', 'potup', 'sow'];
+  /** A sowing, as the sheet counts it: seed put in a tray or in the ground. Bulbs, canes and plants put in are counted with the other tasks. */
+  const sownJob = (st, sow) => st.kind === 'sow' || (st.seed && !!sow && (sow.unit === 'seeds' || sow.unit === 'g'));
+  /**
+   * What "Take back everything recorded" would take back in the plan's year: the jobs recorded (sowings apart, with the seed
+   * they took), what was put off and what was skipped. Notes are kept, and so is a planting marked failed.
+   */
+  function seasonRecords() {
+    const year = String(planYear()), out = { sowings: 0, jobs: 0, delays: 0, skips: 0, notes: 0, failed: 0, seed: 0, plantings: 0 };
+    for (const p of state.plan.plantings) {
+      if (String(p.date).slice(0, 4) !== year) continue;
+      const steps = Week.steps(state.engine, p), sow = sowingOf(p), t = p.tasks && typeof p.tasks === 'object' ? p.tasks : {};
+      const jobs = steps.filter(st => st.done), delays = Object.keys(t.delay || {}).length, skips = Object.keys(t.skip || {}).length;
+      for (const st of jobs) { if (sownJob(st, sow)) out.sowings++; else out.jobs++; }
+      if (sow && sow.done) out.seed += sow.uses.filter(u => u && u.source === 'sowing' && u.lotId).reduce((n, u) => n + (+u.quantity || 0), 0);
+      out.delays += delays; out.skips += skips; out.notes += Object.keys(t.note || {}).length; if (p.failed) out.failed++;
+      if (jobs.length || delays || skips) out.plantings++;
+    }
+    return out;
+  }
+  /**
+   * Take back everything recorded in the plan's year, as one step with Undo, after a snapshot of the plan as it stands.
+   * Each planting's jobs go back last first, so seed returns to its lots and a planting pushed by late work returns to its
+   * day; then what was put off goes back where it was, and skips are cleared. Notes stay.
+   */
+  /** What taking back everything recorded in the season would change, worked out on the plan as it stands now. */
+  function seasonTakeBack() {
+    const year = String(planYear()), ctx = { now: new Date().toISOString(), uid, year: planYear(), name: '', today: todayText() }, ops = [], failed = [];
+    let inventory = inventoryNow(), touched = false, returned = 0, lost = 0, sowings = 0, jobs = 0, delays = 0, skips = 0;
+    for (const p0 of state.plan.plantings) {
+      if (String(p0.date).slice(0, 4) !== year) continue;
+      // one planting at a time, its seed carried in a copy that is kept only when the whole planting went back. A planting marked
+      // failed lists no work, so its work is undone with the mark set aside, and the mark put back after: failed marks stay
+      let p = p0.failed ? Week.fail(p0, null) : p0, inv = inventory, back = { returned: 0, lost: 0, sowings: 0, jobs: 0, delays: 0, skips: 0, inv: false };
+      try {
+        // Work is undone last first, whatever kind it was: a put-off that still stands where it was put goes back by its days, and
+        // otherwise the latest recorded job is taken back (a planting it pushed returns to its day). Each undo can let an earlier
+        // one stand again, so the two are tried in turn until neither can go further.
+        for (let guard = 0; guard < 40; guard++) {
+          const standing = Object.keys(((p.tasks && typeof p.tasks === 'object' ? p.tasks : {}).delay) || {}).find(kind => { const st = Week.delayOf(p, kind) && Week.step(state.engine, p, kind); return !!(st && st.delayedFrom); });
+          if (standing) {
+            const put = Week.delayOf(p, standing);
+            let moved = null;
+            try { moved = Week.delay(state.engine, p, standing, put.from); } catch (_) { moved = null; }   // one that would leave the year keeps its day
+            p = moved ? moved.planting : Week.withTask(p, 'delay', standing, null);
+            back.delays++;
+            continue;
+          }
+          const kind = UNDO_ORDER.find(k => { const st = Week.step(state.engine, p, k); return !!(st && st.done); });
+          if (!kind) break;
+          const st = Week.step(state.engine, p, kind), sown = sownJob(st, sowingOf(p)), result = Week.takeBack(state.engine, inv, p, kind, ctx);
+          p = result.planting;
+          if (result.inventory) { inv = result.inventory; back.inv = true; }
+          back.returned += +result.returned || 0; back.lost += +result.lost || 0;
+          if (sown) back.sowings++; else back.jobs++;
+        }
+        const t = p.tasks && typeof p.tasks === 'object' ? p.tasks : {};
+        // what is left was put off from a day the planting no longer stands on (moved by hand since): its record goes, its day stays
+        for (const kind of Object.keys(t.delay || {})) { p = Week.withTask(p, 'delay', kind, null); back.delays++; }
+        for (const kind of Object.keys(t.skip || {})) { p = Week.withTask(p, 'skip', kind, null); back.skips++; }
+      } catch (error) { failed.push({ id: p0.id, label: cropLabel(p0), why: error.message || 'It could not be taken back.' }); continue; }
+      if (p0.failed) p = { ...p, failed: p0.failed };
+      if (!(back.sowings + back.jobs + back.delays + back.skips)) p = p0;
+      inventory = inv; if (back.inv) touched = true;
+      returned += back.returned; lost += back.lost; sowings += back.sowings; jobs += back.jobs; delays += back.delays; skips += back.skips;
+      if (p !== p0) ops.push({ before: p0, after: p });
+    }
+    if (touched) ops.push({ kind: 'inventory', before: state.plan.seedInventory || null, after: inventory });
+    return { year, ops, failed, sowings, jobs, delays, skips, returned, lost };
+  }
+  async function takeBackSeason() {
+    if (elsewhere()) return refuse(elsewhere());
+    let plan = state.plan, w = seasonTakeBack();
+    const none = x => { toast(x.failed.length ? `Nothing was taken back: ${x.failed[0].label}: ${x.failed[0].why}` : 'Nothing is recorded in this season.'); return null; };
+    if (!w.ops.length) return none(w);
+    const kept = await snapshot(`Before everything recorded in ${w.year} was taken back`, { plan });
+    if (!kept && Snaps && !isSample()) { toast('The snapshot could not be kept, so nothing was taken back.'); return null; }
+    // the plan may have changed while the snapshot was kept (an edit, or changes taken in from another device): what goes back is
+    // worked out again on the plan as it is now, and the change made at once, with nothing awaited between the two
+    if (state.plan !== plan) { if (elsewhere()) return refuse(elsewhere()); plan = state.plan; w = seasonTakeBack(); if (!w.ops.length) return none(w); }
+    const was = state.engine;
+    if (!commit(`Everything recorded in ${w.year} taken back`, w.ops, { unchecked: true })) return null;
+    return { sowings: w.sowings, jobs: w.jobs, delays: w.delays, skips: w.skips, returned: Math.round(w.returned * 1e6) / 1e6, lost: Math.round(w.lost * 1e6) / 1e6, failed: w.failed, overlaps: impact(was, state.engine).overlaps, snapshot: kept ? kept.name : null };
+  }
+
   /**
    * Set the day sowings are planned for, as one step. Nothing is marked sown and no seed leaves stock: this moves the plan.
    * A transplant keeps the day it goes out and is raised for longer or shorter. A tray batch keeps the day it is due.
@@ -1509,7 +1657,7 @@
     if (!p0 || !bed || !eng.isSoilBed(bed)) return { no: 'Only a bed in the ground can be divided this way.' };
     if (!varietyIds.length) return { no: 'Tick the varieties to add.' };
     // each variety is a copy of the planting: its date and its choices, another variety, no record of work, and ground of its own
-    const drafts = varietyIds.map(varietyId => { const d = { ...p0, id: uid(), varietyId }; for (const key of ['variety', 'done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'tasks', 'sowOn', 'seat', 'ft', 'startFt', 'bedLayout']) delete d[key]; return d; });
+    const drafts = varietyIds.map(varietyId => { const d = { ...p0, id: uid(), varietyId }; for (const key of ['variety', 'done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'tasks', 'failed', 'sowOn', 'seat', 'ft', 'startFt', 'bedLayout']) delete d[key]; return d; });
     const group = Rails.mates(eng, p0), res = Rails.equalize(eng, group.length ? group.map(x => x.p.id) : [p0.id], { extra: drafts, by });
     if (res.no) return { no: res.who ? `${cropLabel(res.who)} cannot give up ground: it ${{ recorded: 'is already recorded as sown or planted', standing: 'stands for years', tray: 'follows weekly demand' }[res.no] || 'is held'}.`
       : res.no === 'rows' ? (by === 'rows' ? 'The rows of this bed do not divide evenly among that many, or the bed is already shared along its length.' : 'This bed is shared by rows: choose By rows.')
@@ -2181,6 +2329,9 @@
       if (x.kind === 'same-box') rows.push({ what, where: path.slice(top === 'plantings' ? 2 : 1).filter(s => !String(s).startsWith('#')).join(' · ') || 'the whole record', theirs: short(x.theirs), mine: short(x.mine), item: usable(x) ? x : null });
       else if (x.kind === 'move-not-applied') rows.push({ what, where: x.what === 'day' ? 'its day' : 'its place', note: x.whose === 'mine' ? 'Work was recorded on it on the other device, so the move made here was not applied.' : 'Work was recorded on it here, so the move made on the other device was not applied.' });
       else if (x.kind === 'recorded-twice') rows.push({ what: plantingName(x.id), where: SL.DONE_WORD[x.job] || x.job, note: `Recorded on both devices${x.theirs ? ` (there on ${x.theirs}${x.mine ? `, here on ${x.mine}` : ''})` : ''}: the other device’s record stands, and seed was drawn once.` });
+      else if (x.kind === 'failed-before-work') rows.push({ what: plantingName(x.id), where: x.whose === 'mine' ? 'marked failed' : SL.DONE_WORD[x.job] || x.job, note: x.whose === 'mine'
+        ? `Marked failed here on ${x.on}, and ${SL.DONE_WORD[x.job] || x.job} on ${x.work} on the other device: the other device’s record stands, so it is not marked failed. Mark it again if it failed after that.`
+        : `Marked failed on the other device on ${x.on}, and ${SL.DONE_WORD[x.job] || x.job} here on ${x.work}: the mark stands, so the work recorded here was not kept.` });
       else if (x.kind === 'kept') rows.push({ what, where: 'kept', note: x.removedBy === 'mine' ? 'Taken out here and changed on the other device: it stays, as changed.' : 'Taken out on the other device and changed here: it stays, as changed.' });
       else if (x.kind === 'seed-short') rows.push({ what: 'seed on hand', where: 'a lot ran short', note: `The two devices together drew ${UI.num(x.short)} more than the lot held. The lot is at zero, and that seed is counted as used without a counted lot.` });
       else if (x.kind === 'placed-and-waiting') rows.push({ what: plantingName(x.id), where: 'placed', note: 'Put on a bed on one device and changed while it waited on the other: it is on its bed.' });
@@ -2379,7 +2530,7 @@
     commit, undo, redo, lastChange, refuse, setUse, setGives, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
-    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
+    revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, failedRange, previewFailed, markFailed, seasonRecords, takeBackSeason, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     engineAfter: ops => E.create(withOps(state.plan, ops, 'do'), Lib),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (elsewhere()) { refuse(elsewhere()); return null; } if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
     saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, editNursery, setSupply, setLiveSow, traysToMonday: () => applyTrayStart(),

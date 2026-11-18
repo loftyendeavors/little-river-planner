@@ -360,7 +360,8 @@
     }
     if (s.sown) return add(box, h('p.sow-done', h('span', 'Later work is already recorded for this planting, so its seed is no longer counted as still to sow.')));
     const lots = SL.lotsToUse(App.inventoryNow(), s.key, s.stockUnit), onHand = lots.reduce((n, l) => n + Number(l.quantity), 0), today = App.today();
-    const date = h('input', { type: 'date', value: today, max: today, 'aria-label': `${act} on`, dataset: { sow: 'date' } });
+    // a day a year or more before the plan's is almost always the wrong year typed: the calendar stops short of it, and the record refuses it
+    const date = h('input', { type: 'date', value: today, max: today, min: E.validDate(s.planned) ? E.d2s(E.addDays(s.planned, 1 - SL.YEAR_DAYS)) : undefined, 'aria-label': `${act} on`, dataset: { sow: 'date' } });
     const used = h('input', { type: 'number', min: 0, step: s.stockUnit === 'g' ? 'any' : 1, value: s.estimate, 'aria-label': `${word} used`, dataset: { sow: 'quantity' }, oninput: () => says() });
     const note = h('p.help', { dataset: { sow: 'note' } });
     function says() {
@@ -400,7 +401,7 @@
         jobOpen = null;
         toast(`${App.cropLabel(p)}: ${w[1].toLowerCase()} ${dayY(E.s2d(input.value))}${done.moved.length ? ` · it goes out ${num(done.moved[0].days)} day${done.moved[0].days === 1 ? '' : 's'} later` : ''}${done.overlaps ? ` · it now overlaps ${done.overlaps === 1 ? 'another planting' : done.overlaps + ' plantings'}: see To settle` : ''}${done.planOfRecord ? ' · the plan as it stood is kept under Snapshots as the plan of record' : ''}`, { label: 'Undo', run: App.undo });
       };
-      const date = open ? h('input', { type: 'date', value: today, max: today, 'aria-label': `${w[1]} on`, dataset: { job: 'date' }, onkeydown: e => { if (e.key === 'Enter') save(e.target); else if (e.key === 'Escape') { e.stopPropagation(); jobOpen = null; render(); } } }) : null;
+      const date = open ? h('input', { type: 'date', value: today, max: today, min: E.d2s(E.addDays(st.planned, 1 - root.LRFSeedLib.YEAR_DAYS)), 'aria-label': `${w[1]} on`, dataset: { job: 'date' }, onkeydown: e => { if (e.key === 'Enter') save(e.target); else if (e.key === 'Escape') { e.stopPropagation(); jobOpen = null; render(); } } }) : null;
       return h('li' + (st.done ? '.done' : st.passed ? '.passed' : ''), { dataset: { job: st.kind, state: st.done ? 'done' : st.passed ? 'passed' : 'open' } },
         h('span', st.done ? w[1] : w[0],
           st.kind === 'sow' && r.sowSet && !st.done ? h('button.link.sow-own', { type: 'button', title: `You set this day. The plan works out ${day(r.sowDefault)}. Click to use the plan’s day.`, onclick: () => App.planSowings([p.id], null) }, 'your day') : null,
@@ -413,6 +414,46 @@
         open ? h('span.job-record', date, h('button.btn.small', { type: 'button', dataset: { job: 'save' }, onclick: () => save(date) }, 'Record'), h('button.icon-btn.job-x', { type: 'button', 'aria-label': 'Leave it', title: 'Leave it', onclick: () => { jobOpen = null; render(); } }, '×'))
           : h('b', day(st.done ? E.s2d(st.done) : st.planned)));
     });
+  }
+
+  // ── a planting that failed: marked here, on the day it happened. Its bed is free from that day, its harvest comes off the forecast, and it stays on record, greyed ──
+  let failOpen = null;   // the planting whose day of failure is being chosen
+  const dollars = n => '$' + Math.round(n).toLocaleString('en-US');
+  /** What marking it failed on a day would do, said before it is done. */
+  function failSays(p, date) {
+    const F = root.LRFForecast, x = App.previewFailed(p.id, date);
+    if (x.why) return x.why;
+    return [`Its bed is free from ${day(E.s2d(x.freeFrom))}${x.wasFree ? ` (it was held to ${day(E.addDays(E.s2d(x.wasFree), -1))})` : ''}`,
+      x.units > 0 ? `${F.amount(x.units, x.unit, 'produce')} comes off the forecast${x.worth >= 0.5 ? `, ${dollars(x.worth)} of the season’s worth` : ''}` : 'nothing comes off the forecast',
+      x.tasks ? `${num(x.tasks)} task${x.tasks === 1 ? '' : 's'} leave${x.tasks === 1 ? 's' : ''} Tasks` : '',
+      'it stays on record, greyed'].filter(Boolean).join(' · ') + '.';
+  }
+  function failSection(p) {
+    if (p.failed && p.failed.on) {
+      return h('section.insp-section.fail', { dataset: { hook: 'panel-failed' } },
+        h('p.fail-said', h('b', `Failed ${UI.dayLong(E.s2d(p.failed.on)).replace(/, \d{4}$/, '')}`), ' · its bed is free from that day, nothing after it is picked, and its work is off Tasks.'),
+        h('button.link', { type: 'button', dataset: { hook: 'panel-failed-back' }, onclick: () => {
+          const done = App.markFailed(p.id, null);
+          if (done) toast(`${App.cropLabel(p)} is no longer marked failed${done.overlaps ? ` · it now overlaps ${done.overlaps === 1 ? 'another planting' : done.overlaps + ' plantings'}: see To settle` : ''}`, { label: 'Undo', run: App.undo });
+        } }, 'Take the mark off'));
+    }
+    const range = App.failedRange(p);
+    if (!range) return null;
+    if (failOpen !== p.id) return h('div.insp-actions.fail-way', h('button.btn', { type: 'button', dataset: { hook: 'panel-fail' }, title: 'It failed: its bed is free from the day you choose, and its harvest comes off the forecast. It stays on record.', onclick: () => { failOpen = p.id; render(); } }, 'Mark as failed…'));
+    const says = h('p.help', { dataset: { hook: 'panel-fail-says' } });
+    const date = h('input', { type: 'date', value: range.hi, min: range.lo, max: range.hi, 'aria-label': 'Failed on', dataset: { hook: 'panel-fail-date' }, oninput: e => { says.textContent = failSays(p, e.target.value); } });
+    says.textContent = failSays(p, range.hi);
+    return h('section.insp-section.fail', { dataset: { hook: 'panel-fail-box' } },
+      h('h3', 'Mark as failed'),
+      h('div.sow-row', h('label', h('span', 'Failed on'), date),
+        h('button.btn', { type: 'button', dataset: { hook: 'panel-fail-save' }, onclick: () => {
+          const done = App.markFailed(p.id, date.value);
+          if (!done) return;
+          failOpen = null;
+          toast(`${App.cropLabel(p)} marked failed ${day(E.s2d(done.date))} · its bed is free from then${done.units > 0 ? ` · ${root.LRFForecast.amount(done.units, done.unit, 'produce')} off the forecast` : ''}`, { label: 'Undo', run: App.undo });
+        } }, 'Mark failed'),
+        h('button.btn.quiet', { type: 'button', onclick: () => { failOpen = null; render(); } }, 'Cancel')),
+      says);
   }
 
   /**
@@ -637,7 +678,8 @@
           h('li', h('span', 'First harvest'), h('b', day(r.first))),
           h('li', h('span', 'Last harvest'), h('b', r.harvestDays ? day(r.last) : 'None before the season ends')),
           h('li', h('span', 'Ground free again'), h('b', through === Infinity ? 'Stays planted' : day(E.addDays(through, 1)))))),
-      sow ? h('section.insp-section', h('h3', sow.kind === 'sow' || sow.unit === 'seeds' ? 'Sowing' : 'Planting'), sowingBox(p)) : null,
+      failSection(p),
+      sow && !(sow.failed && !sow.done) ? h('section.insp-section', h('h3', sow.kind === 'sow' || sow.unit === 'seeds' ? 'Sowing' : 'Planting'), sowingBox(p)) : null,
       h('section.insp-section',
         h('h3', 'Quantities'),
         h('div.stats',

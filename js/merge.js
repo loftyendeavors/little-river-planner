@@ -83,9 +83,9 @@
   /** Taken whole from one side, never half from each. */
   const WHOLE = new Set(['beds[].px', 'beds[].potLayout', 'gardens[].bedOrder', 'gardens[].mapLayout', 'map.imageFile', 'nursery.spaces[].benchLayout',
     'plantings[].bedLayout', 'plantings[].growingDefaults', 'plantings[].liveTray', 'varieties[].supplierPacks', 'varieties[].prices', 'varieties[].webImport',
-    // a thing written in one act, or whose parts are read together: a job put off (from, to), what the planner noted of an edit (set, was),
+    // a thing written in one act, or whose parts are read together: a job put off (from, to), a planting marked failed (on, at), what the planner noted of an edit (set, was),
     // a photo's file and its type, a crop's selling line (its price, yield and weight are by its unit), a demand plan (its editor checks it whole)
-    'plantings[].tasks.delay.*', 'plantings[].towerCycle', 'lrfNext.facts.*.*', 'lrfNext.waiting[].wait', 'varieties[].photo', 'varieties[].environmentDefaults',
+    'plantings[].tasks.delay.*', 'plantings[].failed', 'plantings[].towerCycle', 'lrfNext.facts.*.*', 'lrfNext.waiting[].wait', 'varieties[].photo', 'varieties[].environmentDefaults',
     'assumptions.sell.*', 'assumptions.sellV.*', 'cropUnits.*', 'crops[].liveSow', 'gardens[].growingEnvironment', 'seedInventory.lots[].germination', 'liveTrayPlans[]']);
   /**
    * Who saved a file and with what, and what a device notes for itself about the plan it holds (when it was loaded, from which
@@ -248,6 +248,15 @@
       const alike = sameJob(jm, jt) && same(km, kt);
       side.set(kind, who); jobs.set(kind, { js, jm, jt, alike, mineMoved: !mineSame && !alike, theirsMoved: !theirsSame && !alike });
     }
+    // a failed mark and work recorded after its day, one on each side, are an order the planner refuses too (it takes no work
+    // after a planting failed, nor a failure day before its last work): the cloud's stands and this device's is dropped, reported.
+    // The mark is one fact taken whole (WHOLE); which side's stands is worked out as joinObject would.
+    const fs = s0.failed, fm = m.failed, ft = t.failed, markOn = f => (isObj(f) && typeof f.on === 'string' ? f.on : null);
+    const markWho = same(fm, ft) ? 'both' : same(fs, fm) ? 't' : same(fs, ft) ? 'm' : 't';
+    if (markWho === 't' && markOn(ft)) for (const kind of kinds) {   // the cloud's mark: this device's later work goes
+      const j = jobs.get(kind);
+      if (side.get(kind) === 'm' && j.jm && String(j.jm.date) > markOn(ft)) { said(ctx, { kind: 'failed-before-work', path, id, job: kind, on: markOn(ft), whose: 'theirs', work: String(j.jm.date) }); side.set(kind, 't'); }
+    }
     // two jobs that stand from different sides, in an order the planner refuses on one device: the cloud's stands
     // until nothing moves: a job given back to the cloud's side can then be out of order with another
     for (let moved = true; moved;) { moved = false; for (const [first, second] of ctx.order) {
@@ -258,6 +267,12 @@
       said(ctx, { kind: 'recorded-twice', path, id, job: kind, mine: j.jm ? j.jm.date : null, theirs: j.jt ? j.jt.date : null, against: kind === first ? second : first });
       side.set(kind, 't'); moved = true;
     } }
+    // this device's mark, before work the cloud's record holds: the mark goes, and the cloud's (none, or its own) stands
+    let markGoes = false;
+    if (markWho === 'm' && markOn(fm)) for (const kind of kinds) {
+      const j = jobs.get(kind), job = side.get(kind) === 'm' ? j.jm : j.jt;
+      if (side.get(kind) === 't' && job && String(job.date) > markOn(fm) && !markGoes) { said(ctx, { kind: 'failed-before-work', path, id, job: kind, on: markOn(fm), whose: 'mine', work: String(job.date) }); markGoes = true; }
+    }
     const done = {};
     let mineStands = false, theirsRecorded = false;
     for (const kind of kinds) {
@@ -283,6 +298,7 @@
     const goneUse = bagOf(minus(us.filter(free), um.filter(free)));
     const seedUse = [...ut.filter(u => (free(u) ? !take(goneUse, u) : whose(u) === 't')), ...um.filter(u => whose(u) === 'm'), ...minus(minus(um.filter(free), us.filter(free)), ut.filter(free))];
     const special = { done: Object.keys(done).length ? done : undefined };
+    if (markGoes) special.failed = ft;
     if (isObj(m.workflow) || isObj(t.workflow)) {
       const own = { history: history.length || Array.isArray(flowOf(t).history) ? history : undefined, seedUse: seedUse.length ? seedUse : undefined };
       special.workflow = joinObject(ctx, pat + '.workflow', path.concat('workflow'), flowOf(s0), { history: [], seedUse: [], ...flowOf(m) }, { history: [], seedUse: [], ...flowOf(t) }, own);
@@ -618,7 +634,7 @@
       if (why) return why;
     }
     // 4
-    const twice = new Set(items.filter(x => x.kind === 'recorded-twice').map(x => `${x.id}|${x.job}`));
+    const twice = new Set(items.filter(x => x.kind === 'recorded-twice' || (x.kind === 'failed-before-work' && x.whose === 'theirs')).map(x => `${x.id}|${x.job}`));   // dropped from this device, and said
     const S = new Map(listOf(start, 'plantings').map(p => [p.id, p])), P = new Map(listOf(plan, 'plantings').map(p => [p.id, p]));
     const M = new Map(listOf(mine, 'plantings').map(p => [p.id, p])), T = new Map(listOf(theirs, 'plantings').map(p => [p.id, p]));
     for (const [side, other, name] of [[M, T, 'mine'], [T, M, 'theirs']]) for (const [id, p] of side) {
@@ -682,6 +698,9 @@
    * @returns { ok: true, plan, report } or { ok: false, why, report }. report.items: what could not be kept as each side left it:
    *   { kind: 'same-box', path, mine, theirs }             changed on both sides to different values: the cloud's stands
    *   { kind: 'kept', path, id, removedBy }                taken out on one side, changed on the other: it stays, as changed
+   *   { kind: 'failed-before-work', id, job, on, whose, work }   one device marked the planting failed on `on`, the other recorded
+   *                                                        `job` on the later day `work`: the cloud's stands. `whose`: whose was dropped
+   *                                                        ('mine': this device's mark; 'theirs': this device's work, against the cloud's mark)
    *   { kind: 'recorded-twice', id, job, mine, theirs }    a job recorded on both sides, or (with `against`) two jobs in an order
    *                                                        the planner refuses: the cloud's stands, this device's is dropped
    *   { kind: 'move-not-applied', id, what, whose }        work was recorded on a planting the other side moved: the move is not applied

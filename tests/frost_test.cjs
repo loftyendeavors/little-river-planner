@@ -83,6 +83,8 @@ const subject = cut.find(x => x.r.harvestDays > 0);
   check('a clear recorded after the frost stands: picked to the day recorded, and nothing cut', !r1.frostCut && iso(r1.last) === late && !e1.warnings(e1.planting(subject.p.id), r1).some(w => /ends its harvest/.test(w.t)), [iso(r1.last), !!r1.frostCut]);
   const e2 = withPlanting(subject.p.id, { workflow: { outcome: 'failed', failureDate: late } }), r2 = e2.calc(e2.planting(subject.p.id));
   check('a failure recorded after the frost stands too: the harvest ends on it, and nothing is cut', !r2.frostCut && iso(r2.last) === late);
+  const e4 = withPlanting(subject.p.id, { failed: { on: late } }), q4 = e4.planting(subject.p.id), r4 = e4.calc(q4);
+  check('a planting marked failed after the frost stands as marked: nothing more is picked from that day, and nothing is cut by the frost', !r4.frostCut && iso(r4.last) === iso(E.addDays(E.s2d(late), -1)) && !e4.warnings(q4, r4).some(w => /ends its harvest/.test(w.t)), [iso(r4.last), !!r4.frostCut]);
   const e3 = withPlanting(subject.p.id, { workflow: { outcome: 'failed' } }), q3 = e3.planting(subject.p.id), r3 = e3.calc(q3);
   check('a failure recorded with no day is not cut by the frost as well: one note, the failure', !r3.frostCut && !e3.warnings(q3, r3).some(w => /ends its harvest/.test(w.t)));
 }
