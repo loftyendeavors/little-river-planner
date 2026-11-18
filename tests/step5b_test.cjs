@@ -27,14 +27,15 @@ const STANDS = ['live', 'tray', 'rockwool', 'pot', 'crate'];
 
 // ── 1. the build by itself moves nothing ──
 if (oldDir) {
-  const E0 = require(path.join(oldDir, 'engine.js')), SL0 = require(path.join(oldDir, 'seedlib.js')), eng0 = E0.create(plan, Lib);
+  // the plantings the frost cuts (E2c) are held at their last day, which the build before knows no other way (tests/frost_held.cjs)
+  const E0 = require(path.join(oldDir, 'engine.js')), SL0 = require(path.join(oldDir, 'seedlib.js')), eng0 = E0.create(plan, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, plan, eng0), Lib);
   const differ = [];
   for (const p of P) {
-    const a = eng.calc(p), b = eng0.calc(p);
+    const a = now.calc(now.planting(p.id)), b = eng0.calc(p);
     if (!a !== !b) { differ.push(p.id); continue; }
     if (!a) continue;
     const row = (e, r, D) => [r.sow, r.field, r.first, r.last, e.potUpDate(r), e.hardenStart(r), r.out].map(x => (x ? D.d2s(new Date(x)) : '')).join(',') + '|' + [r.plants, r.seeds, r.seedG, r.cells, r.trays, r.bulbs].join(',');
-    if (row(eng, a, E) !== row(eng0, b, E0)) differ.push(p.id);
+    if (row(now, a, E) !== row(eng0, b, E0)) differ.push(p.id);
   }
   check('every planting has the dates, the seed, the cells and the trays it had in the build before', differ.length === 0, differ.slice(0, 5));
   const off = [];

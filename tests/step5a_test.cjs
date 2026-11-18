@@ -25,14 +25,15 @@ const throws = fn => { try { fn(); return null; } catch (e) { return e.message |
 
 // ── 1. the build by itself moves nothing ──
 if (oldDir) {
-  const E0 = require(path.join(oldDir, 'engine.js')), eng0 = E0.create(plan, Lib);
+  // the plantings the frost cuts (E2c) are held at their last day, which the build before knows no other way (tests/frost_held.cjs)
+  const E0 = require(path.join(oldDir, 'engine.js')), eng0 = E0.create(plan, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, plan, eng0), Lib);
   let differ = [];
   for (const p of P) {
-    const a = eng.calc(p), b = eng0.calc(p);
+    const q = now.planting(p.id), a = now.calc(q), b = eng0.calc(p);
     if (!a !== !b) { differ.push(p.id); continue; }
     if (!a) continue;
-    const row = (e, r, D) => [r.sow, r.plannedSow, r.field, r.planned, r.first, r.last, e.potUpDate(r), e.hardenStart(r), r.out, e.occupancyFrom(p, r), e.occupancyThrough(p, r)].map(x => (x === Infinity ? 'inf' : x ? D.d2s(new Date(x)) : '')).join(',') + '|' + [r.plants, r.seeds, r.cells, r.trays].join(',');
-    if (row(eng, a, E) !== row(eng0, b, E0)) differ.push(p.id);
+    const row = (e, x, r, D) => [r.sow, r.plannedSow, r.field, r.planned, r.first, r.last, e.potUpDate(r), e.hardenStart(r), r.out, e.occupancyFrom(x, r), e.occupancyThrough(x, r)].map(v => (v === Infinity ? 'inf' : v ? D.d2s(new Date(v)) : '')).join(',') + '|' + [r.plants, r.seeds, r.cells, r.trays].join(',');
+    if (row(now, q, a, E) !== row(eng0, p, b, E0)) differ.push(p.id);
   }
   check('with nothing recorded, every planting has the dates, the nursery days and the ground it had in the build before', differ.length === 0, differ.slice(0, 5));
   const none = P.every(p => !p.done || !Object.keys(p.done).length);

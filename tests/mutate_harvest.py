@@ -32,6 +32,10 @@ YC, AS, AP, CSS = "js/yieldcard.js", "js/assume.js", "js/app.js", "css/app.css"
 PAGE = [
  ("every crop is shown picked for a number of days", YC, "dataset: { hook: 'harvest-choice', on: w.season ? 'season' : 'days' } },", "dataset: { hook: 'harvest-choice', on: 'days' } },"),
  ("a crop with the list's days is shown picked to the season's end where its record says so", YC, "const season = hc.days.mine == null && hc.season, offer", "const season = hc.season, offer"),
+ ("a saved Feb 29 shows blank in a year without it", YC, "own = mine ? root.LRFEngine.monthDayDate(year, mine) : null,", "own = mine ? root.LRFEngine.s2d(`${year}-${mine}`) : null,"),
+ ("a place with only a date of his has no column", YC, "const his = env => hc.cells[env].mine != null || !!(hc.until || {})[env];", "const his = env => hc.cells[env].mine != null;"),
+ ("the card never says the garden's close ends a date sooner", YC, "const shut = own && se && se.close && own > se.close && !cut ? h(", "const shut = false ? h("),
+ ("the card says the frost cuts a date short where the garden closes first", YC, "own > se.frost && !(se.close && se.close < se.frost) ? h(", "own > se.frost ? h("),
  ("the number offered is the days a total is spoken of over, not the crop's own days", YC, "offer = Math.max(1, Math.round(+c.hw > 0 ? +c.hw : hc.nominal || 1));", "offer = Math.max(1, Math.round(hc.nominal || 1));"),
  ("the season's end is never pressed", YC, "h('button.yc-hw-end', { type: 'button', 'aria-pressed': String(w.season),", "h('button.yc-hw-end', { type: 'button', 'aria-pressed': 'false',"),
  ("last picking counts the plantings that keep their own days", YC, "      if (p.cropId !== c.id || !follows(eng, p)) continue;\n      const env = envOfP(eng, p), r = env ? eng.calc(p) : null;", "      if (p.cropId !== c.id) continue;\n      const env = envOfP(eng, p), r = env ? eng.calc(p) : null;"),
@@ -39,7 +43,7 @@ PAGE = [
  ("last picking says the earliest date as the latest", YC, "to: iso(ends.get(env).hi), n: String(ends.get(env).n)", "to: iso(ends.get(env).lo), n: String(ends.get(env).n)"),
  ("a variety's own days are not seen", YC, "return !owns(p) && !p.harvestEnd && !(v && v.cropId === p.cropId && owns(v)) && !!b && !eng.isRack(b);", "return !owns(p) && !p.harvestEnd && !!b && !eng.isRack(b);"),
  ("nothing is asked before the change is taken", YC, "    if (m.n || moved || m.beds.length || m.things) {", "    if (false) {"),
- ("Cancel takes the change all the same", YC, "      if (!ok) { redraw(); return false; }\n    }\n    const done = await App.setSell(c.id, change, label, { told: true, shown: true });", "    }\n    const done = await App.setSell(c.id, change, label, { told: true, shown: true });"),
+ ("Cancel takes the change all the same", YC, "if (!await askMoves(eng, c, ops, label, to === 'season' ? 'Pick to the season’s end' : to == null ? 'Go back' : `Pick for ${to} days`)) { redraw(); return false; }", "await askMoves(eng, c, ops, label, to === 'season' ? 'Pick to the season’s end' : to == null ? 'Go back' : `Pick for ${to} days`);"),
  ("the sheet gives the season's worth after as it was before", YC, "const worth = [study(eng).worth, F.build(next).rows.reduce((t, r) => t + r.worth, 0)];", "const worth = [study(eng).worth, study(eng).worth];"),
  ("the sheet names no bed booked twice", YC, "beds = [...new Set([...then].filter(([k]) => !was.has(k))", "beds = [...new Set([...then].filter(([k]) => false)"),
  ("the sheet's dates after are the dates before", YC, "nowFrom: x.now.lo ? iso(x.now.lo) : '', nowTo: x.now.hi ? iso(x.now.hi) : ''", "nowFrom: x.was.lo ? iso(x.was.lo) : '', nowTo: x.was.hi ? iso(x.was.hi) : ''"),
@@ -54,6 +58,17 @@ PAGE = [
  ("a number typed on the list is taken without the sheet", AS, "save: n => YC.setWindow(c, n, schedule) });", "save: n => App.setSell(c.id, { days: n }, n == null ? `${c.name}: harvest days as before` : `${c.name}: picked for ${n} days`) });"),
  ("the yield's row reads as it did", YC, "`Marketable yield ${PER_SAY[hc.basis]}${weekly ? ' per week' : ''}`;", "`Gives, packed, ${PER[hc.basis]}${weekly ? ' a week' : ''}`;"),
  ("the yield's hint does not say packed weight", YC, ": pattern === 'once' ? 'packed weight or count, in all, taken the day it is cleared' : 'packed weight or count, in all, over its harvest days';", ": pattern === 'once' ? 'in all, taken the day it is cleared' : 'in all, over its harvest days';"),
+ # E2c: a last picking for each place, and the harvest days said once
+ ("a place's last picking shows the season's end where he set a date", YC, "const se = eng.seasonEndOf(c.id, env, year), mine = hc.until[env] || null,", "const se = eng.seasonEndOf(c.id, env, year), mine = null,"),
+ ("a place's last picking says it is his whatever it is", YC, "whose = mine ? 'yours' : se ? ENDS_BY[se.by] : '';", "whose = 'yours';"),
+ ("a place's last picking says the frost where the year ends", YC, "  const ENDS_BY = { frost: 'your first frost', cover: 'the first frost, under cover', close: 'the garden closes', record: 'the crop’s record', year: 'the year’s end' };", "  const ENDS_BY = { frost: 'your first frost', cover: 'the first frost, under cover', close: 'the garden closes', record: 'the crop’s record', year: 'your first frost' };"),
+ ("a crop picked to the season's end gives no date to set", YC, "const dated = env => hw.season && hc.pattern.value !== 'once' && !hc.micro && env !== 'tray';", "const dated = env => false;"),
+ ("a date picked for a place is taken without the sheet", YC, "    if (!await askMoves(eng, c, ops, label, md ? 'End it then' : 'Go back')) { redraw(); return false; }\n", ""),
+ ("Cancel on a place's date takes it all the same", YC, "if (!await askMoves(eng, c, ops, label, md ? 'End it then' : 'Go back')) { redraw(); return false; }", "await askMoves(eng, c, ops, label, md ? 'End it then' : 'Go back');"),
+ ("a date picked for one place is written for every place", AP, "for (const [env, md] of Object.entries(change.until)) { if (!eng.ENVS.includes(env)) continue;", "for (const [, md] of Object.entries(change.until)) for (const env of ['field', 'tunnel', 'heated', 'tower']) {"),
+ ("a place's date cleared is kept", AP, "until[env] = md; else delete until[env]; }", "until[env] = md; }"),
+ ("a date past the frost is not said to be cut short", YC, "const cut = own && se && se.frost && own > se.frost && !(se.close && se.close < se.frost) ?", "const cut = false ?"),
+ ("picked for a set number of days, Last picking says the days again", YC, ": said(env) || why('counted from the first picking')))));", ": said(env) || why(`${hw.days} days after the first`)))));"),
  ("the chosen side is not in ink", CSS, ".yc-hw button[aria-pressed=\"true\"], .yc-hw-n.on { background: var(--ink); color: var(--surface); }\n", ""),
 ]
 if mode == "list": print(json.dumps({"page": len(PAGE)})); sys.exit(0)

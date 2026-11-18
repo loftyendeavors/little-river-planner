@@ -42,6 +42,8 @@ node $T/look_a_test.cjs $APP $PLAN | named "look-a, backup"
 node $T/look_a_test.cjs $APP $SHIP | named "look-a, compact"
 node $T/things_test.cjs $APP $PLAN $OLD | named "things, backup"
 node $T/things_test.cjs $APP $SHIP $OLD | named "things, compact"
+node $T/frost_test.cjs $APP $PLAN | named "frost, backup"   # E2c: the first fall frost in open ground, and a last picking for each place
+node $T/frost_test.cjs $APP $SHIP | named "frost, compact"
 node $T/swap_test.cjs $APP $PLAN | named "swap, backup"   # the variety swap: the sowing days kept, the harvest moved by the difference in days
 node $T/swap_test.cjs $APP $SHIP | named "swap, compact"
 node $T/failed_test.cjs $APP $PLAN $OLD | named "failed, backup"   # Tasks part 2: a planting marked failed (its bed free from that day, its harvest off the forecast, taken whole by the merge), and a day a year before its plan refused

@@ -39,7 +39,7 @@ PAGE = [
  ("the checklist is put in order again at every figure typed", YC, "if (!ui.order.length || ui.scope !== scope || ui.year !== year) {", "if (true) {"),
  ("a click on a crop of the checklist does not open it", YC, "onclick: () => open(id, true) },", "onclick: () => {} },"),
  # the card's columns, rows and boxes
- ("a column for every place the farm has, planted or not", YC, "if (planted.length) return { list: eng.ENVS.filter(env => x.places.has(env) || hc.cells[env].mine != null), planted: true };", "if (planted.length) return { list: eng.ENVS.filter(env => hc.cells[env].used), planted: true };"),
+ ("a column for every place the farm has, planted or not", YC, "if (planted.length) return { list: eng.ENVS.filter(env => x.places.has(env) || his(env)), planted: true };", "if (planted.length) return { list: eng.ENVS.filter(env => hc.cells[env].used), planted: true };"),
  ("the price box is never amber", YC, "fallback: hc.price.fallback, amber: w.price, label:", "fallback: hc.price.fallback, amber: false, label:"),
  ("an amber box shows a starting value in grey", YC, "placeholder: amber || fallback == null ? '' :", "placeholder: fallback == null ? '' :"),
  ("first picking is the days in the bed and one more, not the DTM", YC, "dataset: { dtm: String(t.value) } }, String(t.value))", "dataset: { dtm: String(t.bed + 1) } }, String(t.bed + 1))"),

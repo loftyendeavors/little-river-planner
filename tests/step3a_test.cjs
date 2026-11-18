@@ -24,7 +24,9 @@ const days = (e, p) => e.effective(e.planting(p.id)).dtm, timing = (e, p) => e.e
 // ── the build itself moves nothing ──
 if (OLD) {
   const save = global.LRFEngine; delete require.cache[require.resolve(path.join(OLD, 'engine.js'))];
-  const E0 = require(path.join(OLD, 'engine.js')), old = E0.create(core, Lib), off = core.plantings.filter(p => !sameCalc(old.calc(p), eng.calc(p)) || old.effective(p).dtm !== eng.effective(p).dtm);
+  // the plantings the frost cuts (E2c) are held at their last day, which the build before knows no other way (tests/frost_held.cjs)
+  const E0 = require(path.join(OLD, 'engine.js')), old = E0.create(core, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, core, old), Lib);
+  const off = core.plantings.filter(p => { const q = now.planting(p.id); return !sameCalc(old.calc(p), now.calc(q)) || old.effective(p).dtm !== now.effective(q).dtm; });
   check('with nothing set, every planting stands on the days it had in 0.21', off.length === 0, off.slice(0, 3).map(p => p.id));
   global.LRFEngine = save;
 }

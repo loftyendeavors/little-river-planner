@@ -2226,6 +2226,7 @@ table.yc-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .yc-line { display: inline-flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; line-height: 1.3; min-height: 28px; }
 .yc-box input { width: 84px; height: 28px; border: 1px solid var(--line); border-radius: var(--corner-8); background: var(--raised); text-align: right; padding: 0 var(--space-8); font: 600 var(--type-15) var(--mono); color: var(--ink); appearance: textfield; -moz-appearance: textfield; }
 .yc-box.wide input { width: 92px; }
+.yc-box.yc-date input { width: 136px; max-width: 100%; text-align: left; font: 600 var(--type-13) var(--mono); appearance: auto; -moz-appearance: auto; }   /* a place's last picking: a date from the calendar */
 .yc-box input::-webkit-outer-spin-button, .yc-box input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .yc-box input::placeholder { color: var(--muted); font-weight: 400; opacity: 1; }
 .yc-box input:hover { border-color: var(--ink-2); }
