@@ -1,5 +1,5 @@
 {
- "build": "E3, the Forecast page. The Harvest tab is renamed Forecast and the page stands in the frame: the title \"Forecast\" with \"?\" beside it, one line of figures (the season's worth leading, the week in hand, crops ready, trays, stems, the picking season, and plantings with no yield in amber), the page's controls, then the table. The table shows amounts or dollars (\"Amounts | Dollars\"), each week's worth in its foot and the season's beside each crop and in the foot's corner; in dollars every kind has its own total line. \"Whole season\" fits every week of the season to the screen at one press, with no scrolling sideways. The two standing paragraphs are behind \"?\" in the glossary's words (\"days to harvest\" kept). A figure's popup reads \"5.6 lb to sell · 1 planting\", then a row a planting: photograph, variety, bed, amount, and how it is picked as a tag (Gradually, Clear, On demand; \"Own window\" by the card's own rule). The list to send gives things counted in whole numbers and says \"each\". The forecast is kept for an engine and its options (LRFForecast.kept), and a crop's forecast sold amount by month is one call (LRFForecast.byMonth). It stores nothing new and moves no figure.",
+ "build": "E3, the Forecast page. The Harvest tab is renamed Forecast and the page stands in the frame: the title \"Forecast\" with \"?\" beside it, one line of figures (the season's worth leading, the week in hand, crops ready, trays, stems, the picking season, and plantings with no yield in amber), the page's controls, then the table. The table shows amounts or dollars (\"Amounts | Dollars\"), each week's worth in its foot and the season's beside each crop and in the foot's corner; in dollars every kind has its own total line. \"Whole season\" fits every week of the season to the screen at one press, with no scrolling sideways. The two standing paragraphs are behind \"?\" in the glossary's words (\"days to harvest\" kept). A figure's popup reads \"5.6 lb to sell · 1 planting\", then a row a planting: photograph, variety, bed, amount, and how it is picked as a tag (Gradually, Clear, On demand; \"Own window\" by the card's own rule). The list to send gives things counted in whole numbers and says \"each\". The forecast is kept for an engine and its options (LRFForecast.kept), and a crop's forecast sold amount by month is one call (LRFForecast.byMonth). The header's tab reads \"Forecast\" on every screen, so every screen's picture differs by that word. It stores nothing new and moves no figure.",
  "changes": {
   "did": "Harvest is now Forecast: amounts or dollars, each week's worth and the season's, and \"Whole season\" puts every week of the season on the screen at one press. The page's notes are behind \"?\"; a figure's plantings show how each is picked.",
   "steps": [
@@ -24,6 +24,16 @@
   "index.html"
  ],
  "screens": [
-  "forecast"
+  "forecast",
+  "map",
+  "timeline",
+  "tasks",
+  "nursery-bench-room",
+  "nursery-live-trays",
+  "nursery-supplies",
+  "nursery-set-up",
+  "seeds",
+  "assumptions-days",
+  "assumptions-yield"
  ]
 }

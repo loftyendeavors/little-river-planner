@@ -44,8 +44,11 @@
   const qty = n => { const v = F.shown(n); return v ? num(v, v < 10 ? 1 : 0) : ''; };
   /** A week's dollars in a cell: whole dollars, and nothing under one. */
   const cash = n => (n >= 1 ? money(n) : '');
-  /** In the whole season fitted to the screen a column is narrow: a thousand and more is written "1.2k", rounded down; dollars without "$". */
-  const tight = text => { if (!text) return ''; const n = +String(text).replace(/[$,]/g, ''); if (!(n >= 1000)) return String(text).replace('$', ''); return n >= 10000 ? `${Math.floor(n / 1000)}k` : `${Math.floor(n / 100) / 10}k`; };
+  /**
+   * In the whole season fitted to the screen a column is narrow: a thousand and more is written "1.2k", rounded down from the figure
+   * itself (never from the figure already rounded to a dollar); below that the cell's own words, dollars without "$".
+   */
+  const tight = (text, n) => { if (!text) return ''; if (!(n >= 1000)) return String(text).replace('$', ''); return n >= 10000 ? `${Math.floor(n / 1000 + 1e-9)}k` : `${Math.floor(n / 100 + 1e-9) / 10}k`; };
 
   // ── things that leave the page ──
   function download(name, text, type) {
@@ -185,7 +188,7 @@
   }
   function table(m, cols, rows) {
     const i = todayIndex(m), isNow = c => c.i0 <= i && c.i1 >= i, cash$ = dollars();
-    const say = text => (fit ? tight(text) : text);
+    const say = (text, n) => (fit ? tight(text, n) : text);
     const head = h('tr', h('th.hv-name', 'Crop'), h('th.hv-total', 'Season'),
       cols.map(c => h('th' + (isNow(c) ? '.now' : '') + (c.weekend ? '.wkend' : ''), { scope: 'col', title: `Go to ${colTitle(c)}`, onclick: () => App.setDate(c.start), dataset: { col: c.key } }, h('b', c.top || ''), c.label)));
     const body = [];
@@ -196,10 +199,10 @@
         const v = F.sum(series, c.i0, c.i1), text = cash$ ? cash(v) : qty(v), full = cash$ ? money(v) : unit ? F.amount(v, unit.unit, unit.group) : text;
         if (!text) return h('td.hv-c.zero' + (isNow(c) ? '.now' : ''));
         const p = peak > 0 ? Math.round(10 + 52 * Math.min(1, v / peak)) : 10;
-        return h('td.hv-c' + (isNow(c) ? '.now' : ''), { style: { '--p': p + '%' }, title: row ? `${row.name}, ${colTitle(c)}: ${full}` : `${colTitle(c)}: ${full}`, onclick: row ? () => sources(row, c) : null }, say(text));
+        return h('td.hv-c' + (isNow(c) ? '.now' : ''), { style: { '--p': p + '%' }, title: row ? `${row.name}, ${colTitle(c)}: ${full}` : `${colTitle(c)}: ${full}`, onclick: row ? () => sources(row, c) : null }, say(text, cash$ ? v : F.shown(v)));
       }));
     };
-    const plain = (cls, label, total, value) => h('tr' + cls, label, total, cols.map(c => { const v = value(c); return h('td' + (isNow(c) ? '.now' : ''), { title: v ? `${colTitle(c)}: ${v}` : null }, say(v) || ''); }));
+    const plain = (cls, label, total, value) => h('tr' + cls, label, total, cols.map(c => { const n = value(c), v = cash(n); return h('td' + (isNow(c) ? '.now' : ''), { title: v ? `${colTitle(c)}: ${v}` : null }, say(v, n) || ''); }));
     for (const [g, , long] of F.GROUPS) {
       const part = rows.filter(r => r.group === g);
       if (!part.length) continue;
@@ -233,7 +236,7 @@
       }
     }
     // each week's worth, and the season's: in amounts and in dollars alike, the foot is in dollars
-    const foot = plain('', h('td.hv-name', model().personal > 0 ? 'Worth of what is grown to sell' : 'Worth, at each crop’s own price'), h('td.hv-total', { dataset: { hook: 'fc-season-total' } }, money(rows.reduce((n, r) => n + r.worth, 0))), c => cash(rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0)));
+    const foot = plain('', h('td.hv-name', model().personal > 0 ? 'Worth of what is grown to sell' : 'Worth, at each crop’s own price'), h('td.hv-total', { dataset: { hook: 'fc-season-total' } }, money(rows.reduce((n, r) => n + r.worth, 0))), c => rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0));
     foot.dataset.hook = 'fc-week-totals';
     return h('div.hv-scroll' + (fit ? '.fit' : ''), { id: 'hvScroll', dataset: { hook: 'fc-scroll' } }, h('table.hv' + (fit ? '.fit' : ''), { id: 'hvTable', dataset: { hook: 'fc-table', measure, fit: fit ? 'season' : '' } }, h('thead', head), h('tbody', body), h('tfoot', foot)));
   }
@@ -324,5 +327,5 @@
     root.addEventListener('resize', () => { if (!fit || App.state.view !== 'harvest') return; clearTimeout(soon); soon = setTimeout(render, 150); });
   }
   root.LRFHarvestView = { init, render, model, get dirty() { return dirty; }, series: () => series, use: () => (model().personal ? use : 'all'), setUse(value) { if (USES.some(u => u[0] === value)) { use = value; render(); } },
-    measure: () => measure, setMeasure(value) { if (value === 'amounts' || value === 'dollars') { measure = value; render(); } }, fitted: () => fit, setFit(on) { fit = !!on; if (fit) grain = 'week'; render(); } };
+    tight, measure: () => measure, setMeasure(value) { if (value === 'amounts' || value === 'dollars') { measure = value; render(); } }, fitted: () => fit, setFit(on) { fit = !!on; if (fit) grain = 'week'; render(); } };
 })(window);

@@ -162,12 +162,36 @@ with sync_playwright() as pw:
     check(f"“Whole season” shows every week of the season and no other, at {WIDTH} wide", f["pressed"] == "true" and f["fit"] == "season" and len(f["weeks"]) > 10 and f["cols"] == f["weeks"], {"cols": len(f["cols"]), "weeks": len(f["weeks"]), "fit": f["fit"]})
     check(f"and it fits the window at {WIDTH} wide: nothing to scroll sideways, in the table or the page", f["side"] <= 0 and f["page"] <= 0 and f["right"] <= 0, f)
     check("no figure spills out of its cell, and each cell's full figure is the forecast's", f["over"] == 0 and f["titles"] and f["cells"] > 10, f)
+    # what a fitted cell says: "1.2k" rounded down from the figure itself, whatever it rounds to as a whole dollar (Codex on #69)
+    tf = js("""const T = HV.tight, t = table(), m = fresh(HV.use()), at = new Map(F.periods(m, 'week').map(c => [c.key, c])), list = m.rows.filter(r => r.total > 0), bad = [];
+      t.rows.forEach(r => { const row = list.find(x => x.cropId === r.crop && (x.thing || '') === r.thing); t.cols.forEach((k, i) => { const c = at.get(k), v = F.sum(row.value, c.i0, c.i1), want = T(cash(v), v); if (r.cells[i] !== want) bad.push([r.crop, k, r.cells[i], want]); }); });
+      t.cols.forEach((k, i) => { const c = at.get(k), v = list.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0), want = T(cash(v), v); if (t.foot[i] !== want) bad.push(['foot', k, t.foot[i], want]); });
+      return { bad: bad.slice(0, 4), edges: [T(money(1299.6), 1299.6), T(money(9999.7), 9999.7), T(money(10999.5), 10999.5), T(money(1000), 1000), T(money(640.2), 640.2), T(qty(12.5), F.shown(12.5))] };""")
+    check("each fitted dollar figure and week's worth is “1.2k” rounded down from the figure itself, never from the whole dollar it rounds to", tf["bad"] == [] and tf["edges"] == ["1.2k", "9.9k", "10k", "1k", "640", "12"], tf)
+    # and a figure made to stand just under a boundary: a crop's price set so that one week of it is worth $1,299.5 to $1,300
+    u1 = js("return S.undo.length;")
+    bd = js("""const m = fresh(HV.use()), t = table(), at = new Map(F.periods(m, 'week').map(c => [c.key, c]));
+      for (const r of t.rows) { const row = m.rows.find(x => x.cropId === r.crop && (x.thing || '') === r.thing); if (!row || row.thing || !row.plantings.length || row.plantings.some(x => x.personal || x.price !== row.plantings[0].price) || !(row.plantings[0].price > 0)) continue;
+        for (const k of t.cols) { const c = at.get(k), q = F.sum(row.days, c.i0, c.i1); if (q > 3 && q < 40) { const price = Math.ceil(1299.6 / q * 100) / 100; A.setSell(row.cropId, { price }, 'a price for the check'); return { crop: row.cropId, key: k, price }; } } }
+      return null;""")
+    wait(900); settle_dialogs()
+    bv = js("""if (!arg.crop) return null; const m = fresh(HV.use()), row = m.rows.find(x => x.cropId === arg.crop && !x.thing), c = F.periods(m, 'week').find(c => c.key === arg.key), t = table(), i = t.cols.indexOf(arg.key), r = t.rows.find(r => r.crop === arg.crop && !r.thing);
+      return { v: F.sum(row.value, c.i0, c.i1), text: r && i >= 0 ? r.cells[i] : null, fit: t.fit };""", bd or {})
+    check("a week worth just under $1,300 reads “1.2k” in the whole season, not “1.3k”", bd and bv and bv["fit"] == "season" and 1299.5 <= bv["v"] < 1300 and bv["text"] == "1.2k", [bd, bv])
+    if js("return S.undo.length;") > u1: js("A.undo(); return 1;"); wait(800)
     check("its corner is the season's total, the same as the Season figure at the top", f["season"] == f["figure"] and parse(f["season"]) > 0, [f["season"], f["figure"]])
     shot("whole-season")
     click('[data-hook="fc-measure"] [data-measure="amounts"]', 700)
     fa = js("const sc = hook('fc-scroll'), t = table(), w = want(fresh(HV.use()), t.cols, t.rows, false); return { side: Math.round(sc.scrollWidth - sc.clientWidth), titles: t.rows.every((r, i) => w.rows[i] && r.titles.every((x, k) => !x || x.endsWith(': ' + w.rows[i].full[k]))), fit: t.fit };")
     check("in amounts too the whole season fits, and each cell's full figure is the forecast's", fa["fit"] == "season" and fa["side"] <= 0 and fa["titles"], fa)
     shot("whole-season-amounts")
+    # a narrow window: the columns are too narrow for any figure; the season still fits, and no figure spills (the cells keep their shade)
+    page.set_viewport_size({"width": 900, "height": 900}); wait(900)
+    nw = js("""const sc = hook('fc-scroll'), tbl = hook('fc-table'), cells = [...tbl.querySelectorAll('td.hv-c:not(.zero)')];
+      const shown = cells.filter(td => td.scrollWidth > td.clientWidth + 1 && getComputedStyle(td).color !== 'rgba(0, 0, 0, 0)').length;
+      return { side: Math.round(sc.scrollWidth - sc.clientWidth), page: Math.round(document.documentElement.scrollWidth - innerWidth), spilled: shown, titled: cells.every(td => /: \\S/.test(td.title)), n: cells.length, cols: tbl.querySelectorAll('thead th[data-col]').length };""")
+    check("made narrow (900 wide, under the planner's own least width), the whole season still fits its table with nothing to scroll sideways; a figure that cannot fit keeps its shade and gives itself under the pointer", nw["side"] <= 0 and nw["spilled"] == 0 and nw["titled"] and nw["n"] > 50 and nw["cols"] == len(f["weeks"]), nw)
+    page.set_viewport_size({"width": WIDTH, "height": 900}); wait(900)
     click('[data-hv-grain="week"]', 700)
     back = js("const t = table(); return { fit: t.fit, pressed: hook('fc-season-btn').getAttribute('aria-pressed') };")
     check("Weeks takes the page back from the whole season", back["fit"] == "" and back["pressed"] == "false", back)
@@ -201,6 +225,44 @@ with sync_playwright() as pw:
     check("each row's tags say how it is picked, in the list's three words, and “Own window” by the card's own rule", pop and [g["tags"] for g in got] == [w["tags"] for w in pop["want"]] and any(["own", "Own window"] in g["tags"] for g in got) and any(["own", "Own window"] not in g["tags"] for g in got), {"got": [g["tags"] for g in got], "want": [w["tags"] for w in (pop["want"] if pop else [])]})
     shot("popup")
     click('[data-hook="fc-from"] .btn.primary', 300)
+
+    # a second subject made here and taken back: the crop with most plantings in beds, of two varieties at least, is set to be picked
+    # gradually, and one of its varieties is given a harvest window of its own. Its plantings with a figure of their own are counted
+    # on demand all the same, and the variety's are "Own window" by the variety: the tags must say each as the forecast and the card do.
+    u0 = js("return S.undo.length;")
+    made = js("""const eng = S.engine, m = F.build(eng, { year: A.planYear() });
+      const owns = o => !!o && (o.harvestMode === 'season' || o.harvestMode === 'window' || (o.hw != null && o.hw !== '' && Number.isFinite(+o.hw) && +o.hw >= 0));
+      const follows = p => { const v = eng.variety(p.varietyId), b = eng.bedOf(p.bedId); return !owns(p) && !p.harvestEnd && !(v && v.cropId === p.cropId && owns(v)) && !!b && !eng.isRack(b); };
+      const rows = m.rows.filter(r => !r.thing && r.group === 'produce').map(r => ({ r, f: r.plantings.filter(x => follows(x.p) && x.p.varietyId) })).filter(o => new Set(o.f.map(x => x.p.varietyId)).size >= 2).sort((a, b) => b.f.length - a.f.length);
+      if (!rows.length) return null;
+      const row = rows[0].r, counts = {}; for (const x of rows[0].f) counts[x.p.varietyId] = (counts[x.p.varietyId] || 0) + 1;
+      const vid = Object.entries(counts).sort((a, b) => a[1] - b[1])[0][0], v = eng.variety(vid);
+      return { crop: row.cropId, variety: vid, hw: Math.max(7, Math.round(+eng.crop(row.cropId).hw || 30) + 14), v };""")
+    if made:
+        js("A.setSell(arg.crop, { pattern: 'weekly' }, 'picked gradually, for the check'); return 1;", made); wait(900); settle_dialogs()
+        js("A.commit('a variety with a window of its own, for the check', [{ kind: 'variety', before: arg.v, after: { ...arg.v, hw: arg.hw } }]); return 1;", made); wait(900)
+    sub2 = js("""const m = HV.model(), eng = S.engine, t = table(), at = new Map(F.periods(m, 'week').map(c => [c.key, c])), ri = t.rows.findIndex(r => r.crop === arg.crop && !r.thing);
+      if (ri < 0) return null; const row = m.rows.find(x => x.cropId === arg.crop && !x.thing); let best = null;
+      // a planting of the variety that has no window or last day of its own: it is "Own window" by its variety alone
+      const own0 = p => (p.harvestMode === 'season' || p.harvestMode === 'window' || (p.hw != null && p.hw !== '' && Number.isFinite(+p.hw) && +p.hw >= 0)) || !!p.harvestEnd;
+      t.cols.forEach((k, ci) => { const c = at.get(k); if (!c) return; const here = row.plantings.filter(x => F.share(x, c.i0, c.i1) > 1e-9), mine = here.filter(x => x.p.varietyId === arg.variety && !own0(x.p)).length, kinds = new Set(here.map(x => x.pattern)).size; const score = (mine && mine < here.length ? 100 : 0) + (kinds > 1 ? 50 : 0) + here.length; if (here.length && (!best || score > best.score)) best = { ri, ci, score, mine, n: here.length, kinds, weekly: here.filter(x => x.pattern === 'weekly').length }; });
+      return best;""", made or {})
+    vown = js("const v = S.engine.variety(arg.variety); return v ? v.hw : null;", made or {})
+    check("a second subject, made here: a crop picked gradually, a figure of it from plantings of a variety with a window of its own and of another", made and vown == made["hw"] and sub2 and sub2["mine"] >= 1 and sub2["n"] > sub2["mine"] and sub2["weekly"] >= 1, [made and {k: made[k] for k in ("crop", "hw")}, vown, sub2])
+    if sub2:
+        page.locator('[data-hook="fc-table"] tbody tr.hv-row').nth(sub2["ri"]).locator("td.hv-c").nth(sub2["ci"]).click(); wait(600)
+    pop2 = js("""const d = hook('fc-from'); if (!d) return null; const m = HV.model(), eng = S.engine, t = table(), at = new Map(F.periods(m, 'week').map(c => [c.key, c])), c = at.get(t.cols[arg.ci]);
+      const owns = o => !!o && (o.harvestMode === 'season' || o.harvestMode === 'window' || (o.hw != null && o.hw !== '' && Number.isFinite(+o.hw) && +o.hw >= 0));
+      const follows = p => { const v = eng.variety(p.varietyId), b = eng.bedOf(p.bedId); return !owns(p) && !p.harvestEnd && !(v && v.cropId === p.cropId && owns(v)) && !!b && !eng.isRack(b); };
+      const WORD = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' }, row = F.build(eng, { year: A.planYear() }).rows.find(x => x.cropId === t.rows[arg.ri].crop && !x.thing);
+      const wanted = Object.fromEntries(row.plantings.filter(x => F.share(x, c.i0, c.i1) > 1e-9).map(x => [x.p.id, [['pattern', WORD[x.pattern]], ...((() => { const b = eng.bedOf(x.p.bedId); return b && !eng.isRack(b) && !follows(x.p); })() ? [['own', 'Own window']] : []), ...(x.personal ? [['personal', 'Personal use']] : [])]]));
+      const got = Object.fromEntries(hooks('fc-from-row', d).map(li => [li.dataset.planting, hooks('fc-tag', li).map(x => [x.dataset.tag, txt(x)]).filter(x => x[0] !== 'keeps')]));
+      return { same: JSON.stringify(Object.keys(got).sort().map(k => [k, got[k]])) === JSON.stringify(Object.keys(wanted).sort().map(k => [k, wanted[k]])), got, want: wanted, words: [...new Set(Object.values(got).flat().filter(x => x[0] === 'pattern').map(x => x[1]))], own: Object.values(got).filter(x => x.some(y => y[0] === 'own')).length, n: Object.keys(got).length };""", sub2 or {})
+    check("its tags: Gradually where the planting is picked gradually, On demand where its own figure makes it so, “Own window” for the variety's own window, as the forecast and the card have each", pop2 and pop2["same"] and "Gradually" in pop2["words"] and 0 < pop2["own"] < pop2["n"], pop2)
+    click('[data-hook="fc-from"] .btn.primary', 300)
+    for _ in range(4):
+        if js("return S.undo.length;") > u0: js("A.undo(); return 1;"); wait(500)
+    check("and both changes made for it are taken back", js("return S.undo.length;") == u0, u0)
 
     # ══ the list to send: things counted in whole numbers, and "each" ══
     click("#hvShareBtn", 600)
