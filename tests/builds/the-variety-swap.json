@@ -1,0 +1,24 @@
+{
+ "build": "The variety swap (job 12 of the season's twenty). On Seeds, a variety's panel has \"Put another in its place…\" when the variety is in the plan and its crop has another variety. It opens a sheet, 760 wide: the crop's other varieties as rows with their photographs, to pick the one that takes its place; the plantings that use the variety, each with its bed, its sowing day and what its harvest does (\"harvest 7 days later, Jul 2 → Jul 9\"), each with a tick; what the change does (plantings taken, harvests moved, the season's worth before and after, overlaps); the seed of the new variety needed against on hand and on order, and what the old one then needs; and each overlap the moved harvest makes with the next planting in the bed, placed anyway and waiting under To settle. Left out by default, with a line that says so: plantings with work recorded on them (sown, planted out), which cannot be ticked, and plantings with days typed on them, which are unticked and, ticked, take the new variety and keep their days. Nothing is written until the dark button; then one step, one Undo, and the answer stands in the variety's panel where it was asked. Each planting keeps its sowing day: only varietyId changes, and where the new variety's nursery weeks differ the day in the bed moves by the difference so that the sowing day holds. No new field is written into a plan. js/swap.js holds the working out (Node and browser) and the sheet; js/seeds.js the way in and the answer. No date, yield, price, seed count or bench figure changes until the grower confirms a swap.",
+ "changes": {
+  "did": "On Seeds, a sold-out variety can be swapped for another of the same crop in every planting that uses it. Each keeps its sowing day; the sheet says how far each harvest moves, the seed needed and the season’s worth before anything changes.",
+  "steps": [
+   "On Seeds, click a variety that is in your plan, then “Put another in its place…”: a sheet lists the crop’s other varieties with their photographs, and the plantings that use it, already sown ones and ones with days of their own left out with a line that says so.",
+   "Pick a variety with other days to harvest: each ticked planting says “harvest N days later” (or sooner), with the dates, and the line at the foot gives the seed needed against on hand and the season’s worth before and after. Untick one: the figures change, and nothing in the plan has yet.",
+   "Press the dark button: the panel says how many plantings changed and what the season is worth now. Open one of them on the map: its sowing day is the same. Then press Undo beside the answer: every planting is as it was."
+  ]
+ },
+ "words": [],
+ "code": [
+  "seeds.js"
+ ],
+ "added": [
+  "swap.js"
+ ],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html"
+ ],
+ "screens": []
+}

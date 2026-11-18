@@ -46,6 +46,7 @@ loose
 f053
 room
 harvest
+swap
 merge
 join
 shape
@@ -90,6 +91,7 @@ script() {
     f053) SCRIPT=$T/mutate_f053.py; ARGS="$APP $F $T" ;;
     room) SCRIPT=$T/mutate_room.py; ARGS="$APP $F $T" ;;
     harvest) SCRIPT=$T/mutate_harvest.py; ARGS="$APP $F $T" ;;
+    swap) SCRIPT=$T/mutate_swap.py; ARGS="$APP $F $T $PLAN" ;;
     *) return 1 ;;
   esac
 }

@@ -930,7 +930,7 @@
       h('div.sd-stats', n ? h('button.sd-stat.jump', { type: 'button', title: 'Go to its plantings, where a sowing is recorded', onclick: () => { const to = $('sdPlan'); if (to) to.scrollIntoView({ block: 'start' }); } }, h('small', 'Plantings'), h('b', String(n)), h('span', 'sowing ↓')) : stat('Plantings', '—'),
         stat('To sow', r && r.toSow > 0 ? num(r.toSow, r.unit === 'g' ? 1 : 0) : '—', r && r.toSow > 0 ? (r.unit === 'seeds' ? SL.measures(r.toSow, v).weight || 'seeds' : SL.UNIT_WORD[r.unit]) : null),
         stat('On hand', r && r.onHand ? num(r.onHand) : '—', r && r.onOrder ? `${num(r.onOrder)} ordered` : r && r.short > 0 ? `short ${num(r.short)}` : null)),
-      lotsBox('v:' + v.id, r ? r.stockUnit : unitFor(crop), v.name, r && r.odd), sizesBox(v, crop, r), body, status);
+      swapBox(v, crop, n), lotsBox('v:' + v.id, r ? r.stockUnit : unitFor(crop), v.name, r && r.odd), sizesBox(v, crop, r), body, status);
     openVariety(v, null, host);
     const mine = plan.plantings.filter(p => p.varietyId === v.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).sort((a, b) => a.r.field - b.r.field);
     const sownCount = mine.filter(({ p }) => { const s = App.sowingOf(p); return s && s.sown; }).length;
@@ -942,6 +942,18 @@
         s ? h('button.sd-sowbtn' + (s.sown ? '.done' : ''), { type: 'button', 'aria-expanded': String(open), dataset: { sowfor: p.id }, title: s.sown ? 'See what was recorded, or take it back' : 'Record that this was sown: the seed comes off stock', onclick: () => { ui.sowOpen = open ? null : p.id; ui.panelKey = ''; schedule(); } }, s.sown ? '✓ sown' : 'Sown…') : h('span.sd-sowbtn.none', 'in place')),
         open ? root.LRFPanels.sowingBox(p) : null];
     })), mine.length > 40 ? h('p.dlg-hint', `and ${mine.length - 40} more`) : null);
+  }
+
+  /**
+   * Sold out: another variety of the crop put in the place of this one, in every planting that uses it (js/swap.js). The sheet
+   * shows what moves before anything changes; its answer stands here, where it was asked, with its Undo.
+   */
+  function swapBox(v, crop, n) {
+    const W = root.LRFSwap, said = W ? W.answer(v.id) : null, can = !!W && n > 0 && W.choices(App.state.engine, v.id).length > 0;
+    if (!can && !said) return null;
+    return h('div.sd-swap',
+      can ? h('button.btn.small', { type: 'button', dataset: { hook: 'swap-open' }, title: `Sold out? Put another variety of ${cropName(crop)} in the plantings that use ${v.name}. What moves is shown before anything changes.`, onclick: () => W.open(v.id, () => { ui.panelKey = ''; schedule(); }) }, 'Put another in its place…') : null,
+      said ? h('p.sd-swapsay', { role: 'status', dataset: { hook: 'swap-said' } }, h('span', said.text), said.canUndo ? h('button.link', { type: 'button', dataset: { hook: 'swap-undo' }, onclick: () => App.undo() }, 'Undo') : null) : null);
   }
 
   /** The sizes this variety's vendor sells, and which of them covers what is short. */
