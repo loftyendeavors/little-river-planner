@@ -2195,6 +2195,10 @@ table.yc-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .as.ah .yc-hw-n { padding-right: var(--space-4); }
 .as.ah .yc-hw-n button { padding-right: 0; }
 .as.ah .ah-days .yc-hw input { width: 40px; border: 1px solid var(--line); border-radius: var(--corner-4); }
+/* what a change of the window moves, in its sheet */
+.yc-moves { font-size: var(--type-13); color: var(--ink-2); }
+.yc-moves p { margin: var(--space-8) 0 0; }
+.yc-moves .yc-moves-worth { color: var(--ink); font-weight: 600; }
 .yc-total, .yc-note { display: block; font-size: var(--type-11); line-height: 1.3; color: var(--muted); padding: 0 0 2px; }
 .yc-total.yc-turned { color: var(--ink-2); }
 .yc-facts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-8) var(--space-24); border-top: 1px solid var(--line); padding: var(--space-8) 0 2px; }

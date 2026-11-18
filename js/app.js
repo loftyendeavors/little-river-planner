@@ -278,7 +278,7 @@
   /** `options.shown`: whoever called has shown what the step does, worth and ground booked twice included, and he agreed. */
   async function assume(label, ops, options = {}) {
     const plan = withOps(state.plan, ops, 'do'), engine = E.create(plan, Lib), hit = impact(state.engine, engine);
-    const moves = hit.changed ? `${hit.changed} planting${hit.changed === 1 ? '' : 's'} ${hit.later && hit.sooner ? 'shift' : hit.later ? 'harvest later' : 'harvest sooner'}, by up to ${Math.abs(hit.most)} day${Math.abs(hit.most) === 1 ? '' : 's'}` : 'No planting’s dates change';
+    const moves = hit.changed && !hit.most ? `${hit.changed} planting${hit.changed === 1 ? '’s last picking moves' : 's’ last pickings move'}` : hit.changed ? `${hit.changed} planting${hit.changed === 1 ? '' : 's'} ${hit.later && hit.sooner ? 'shift' : hit.later ? 'harvest later' : 'harvest sooner'}, by up to ${Math.abs(hit.most)} day${Math.abs(hit.most) === 1 ? '' : 's'}` : 'No planting’s dates change';
     const line = row => { const c = engine.crop(row.cropId), lo = Math.min(...row.shifts), hi = Math.max(...row.shifts), days = lo === hi ? Math.abs(hi) : `${Math.min(Math.abs(lo), Math.abs(hi))} to ${Math.max(Math.abs(lo), Math.abs(hi))}`; return UI.h('li', UI.h('b', c ? c.name : 'Crop'), ` ${row.n} planting${row.n === 1 ? '' : 's'}, ${lo === 0 && hi === 0 ? 'harvest ends on another day' : `${days} day${hi === 1 || hi === -1 ? '' : 's'} ${lo < 0 && hi > 0 ? 'either way' : hi > 0 ? 'later' : 'sooner'}`}`); };
     const detail = hit.changed ? UI.h('ul.moves', { id: 'assumeMoves' }, hit.byCrop.sort((a, b) => b.n - a.n).map(line)) : null;
     // what the change does to the season's worth, and to ground booked twice, is said with it

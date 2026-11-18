@@ -264,11 +264,11 @@
       const detail = h('div.yc-moves', { dataset: { hook: 'harvest-moves' } },
         m.places.length ? h('ul.moves', m.places.map(x => h('li', { dataset: { hook: 'harvest-move', place: x.env, wasFrom: iso(x.was[0]), wasTo: iso(x.was[1]), nowFrom: iso(x.now[0]), nowTo: iso(x.now[1]), n: String(x.n) } },
           h('b', PLACE[x.env]), ` ${plural(x.n, 'planting')}: last picking ${between(...x.was)} → ${between(...x.now)}`))) : null,
-        h('p', { dataset: { hook: 'harvest-worth', was: String(m.worth[0]), now: String(m.worth[1]) } }, worth.charAt(0).toUpperCase() + worth.slice(1), '.'),
+        h('p.yc-moves-worth', { dataset: { hook: 'harvest-worth', was: String(m.worth[0]), now: String(m.worth[1]) } }, worth.charAt(0).toUpperCase() + worth.slice(1), '.'),
         h('p', { dataset: { hook: 'harvest-twice', beds: m.beds.join('|') } }, m.beds.length ? `Ground booked twice then: ${m.beds.join(', ')}. Not refused: ${m.beds.length === 1 ? 'it waits' : 'they wait'} under “To settle”.` : 'No ground ends up booked twice.'),
         m.own ? h('p', { dataset: { hook: 'harvest-own', n: String(m.own) } }, `${plural(m.own, 'planting')} ${m.own === 1 ? 'keeps its' : 'keep their'} own harvest days or last picking, and ${m.own === 1 ? 'does' : 'do'} not move.`) : null,
         m.things ? h('p', m.things.said) : null);
-      const ok = await UI.confirm({ title: `${label}?`, body: `${!m.n ? 'No planting’s last picking moves' : m.n === 1 ? 'One planting’s last picking moves' : `The last picking of ${num(m.n)} plantings moves`}, and ${worth}. One undo takes it back.`,
+      const ok = await UI.confirm({ title: `${label}?`, body: `${!m.n ? 'No planting’s last picking moves' : m.n === 1 ? 'One planting’s last picking moves' : `The last picking of ${num(m.n)} plantings moves`}, worked out on your plan as it stands. One undo takes it back.`,
         confirmLabel: to === 'season' ? 'Pick to the season’s end' : to == null ? 'Go back' : `Pick for ${to} days`, detail });
       if (!ok) { redraw(); return false; }
     }
