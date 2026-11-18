@@ -85,7 +85,7 @@ PAGE = [
  ('turnover does not say what it settles', 'js/app.js', "const settles = hit.settled ? `", "const settles = false ? `"),
  ('a variety’s price is saved on its crop', 'js/assume.js', "save: n => App.setSellV(v.id, { price: n },", "save: n => App.setSell(c.id, { price: n },"),
  ('the Harvest view never offers “Picked”', 'js/harvestview.js', "m.keeps ? h('div.seg.hv-series'", "false ? h('div.seg.hv-series'"),
- ('“Picked” shows the same figures as “To sell”', 'js/harvestview.js', "const seriesOf = (m, x) => (series === 'picked' && m.keeps ? x.picked : x.days);", "const seriesOf = (m, x) => x.days;"),
+ ('“Picked” shows the same figures as “To sell”', 'js/harvestview.js', "const seriesOf = (m, x) => (dollars() ? x.value : series === 'picked' && m.keeps ? x.picked : x.days);", "const seriesOf = (m, x) => (dollars() ? x.value : x.days);"),
  ('the summary does not count own yields', 'js/assume.js', "fig('own yield', hv.yield,", "fig('own yield', 0,"),
  ('the review window has no yield section', 'js/assume.js', "    section('Yield', 'yield',", "    if (false) section('Yield', 'yield',"),
  ('the review does not say what using the list’s yield does', 'js/assume.js', "if (Math.abs(a - b) > 1e-6) out.push(`yield ${num(a)} → ${num(b)}", "if (false) out.push(`yield ${num(a)} → ${num(b)}"),
