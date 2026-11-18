@@ -226,6 +226,8 @@
     return out;
   }
   const iso = d => root.LRFEngine.d2s(d), between = (lo, hi) => +lo === +hi ? UI.day(lo) : `${UI.day(lo)} to ${UI.day(hi)}`;
+  /** One side of a place's move in the sheet: its dates, and how many of its plantings are not picked at all. */
+  const sideSaid = x => !x.lo ? 'not picked' : `${between(x.lo, x.hi)}${x.none ? ` (${num(x.none)} not picked)` : ''}`;
   /**
    * What a change of the choice would do, worked out on the plan with the step taken and nothing kept: each place's last picking
    * before and after, the plantings that keep their own, the season's worth, and the beds it would book twice that are not now.
@@ -240,10 +242,14 @@
       if (!follows(eng, p)) { own++; continue; }
       if (+a.last === +b.last || (!(a.harvestDays > 0) && !(b.harvestDays > 0))) continue;
       n++;
-      const at = places.get(env) || { n: 0, was: [a.last, a.last], now: [b.last, b.last] };
+      // a side with no harvest day is "not picked", never a date: its last day is only the season's end before it is ripe
+      const at = places.get(env) || { n: 0, was: { lo: null, hi: null, none: 0 }, now: { lo: null, hi: null, none: 0 } };
       at.n++;
-      if (a.last < at.was[0]) at.was[0] = a.last; if (a.last > at.was[1]) at.was[1] = a.last;
-      if (b.last < at.now[0]) at.now[0] = b.last; if (b.last > at.now[1]) at.now[1] = b.last;
+      for (const [side, r] of [[at.was, a], [at.now, b]]) {
+        if (!(r.harvestDays > 0)) { side.none++; continue; }
+        if (!side.lo || r.last < side.lo) side.lo = r.last;
+        if (!side.hi || r.last > side.hi) side.hi = r.last;
+      }
       places.set(env, at);
     }
     const was = pairs(eng), then = pairs(next), beds = [...new Set([...then].filter(([k]) => !was.has(k)).map(([, bedId]) => bedId))].map(id => App.bedLabel(next.bedOf(id), next));
@@ -262,8 +268,8 @@
     if (m.n || moved || m.beds.length || m.things) {
       const worth = moved ? `the season’s worth goes from ${money(m.worth[0])} to ${money(m.worth[1])}` : `the season’s worth stays ${money(m.worth[0])}`;
       const detail = h('div.yc-moves', { dataset: { hook: 'harvest-moves' } },
-        m.places.length ? h('ul.moves', m.places.map(x => h('li', { dataset: { hook: 'harvest-move', place: x.env, wasFrom: iso(x.was[0]), wasTo: iso(x.was[1]), nowFrom: iso(x.now[0]), nowTo: iso(x.now[1]), n: String(x.n) } },
-          h('b', PLACE[x.env]), ` ${plural(x.n, 'planting')}: last picking ${between(...x.was)} → ${between(...x.now)}`))) : null,
+        m.places.length ? h('ul.moves', m.places.map(x => h('li', { dataset: { hook: 'harvest-move', place: x.env, wasFrom: x.was.lo ? iso(x.was.lo) : '', wasTo: x.was.hi ? iso(x.was.hi) : '', wasNone: String(x.was.none), nowFrom: x.now.lo ? iso(x.now.lo) : '', nowTo: x.now.hi ? iso(x.now.hi) : '', nowNone: String(x.now.none), n: String(x.n) } },
+          h('b', PLACE[x.env]), ` ${plural(x.n, 'planting')}: last picking ${sideSaid(x.was)} → ${sideSaid(x.now)}`))) : null,
         h('p.yc-moves-worth', { dataset: { hook: 'harvest-worth', was: String(m.worth[0]), now: String(m.worth[1]) } }, worth.charAt(0).toUpperCase() + worth.slice(1), '.'),
         h('p', { dataset: { hook: 'harvest-twice', beds: m.beds.join('|') } }, m.beds.length ? `Ground booked twice then: ${m.beds.join(', ')}. Not refused: ${m.beds.length === 1 ? 'it waits' : 'they wait'} under “To settle”.` : 'No ground ends up booked twice.'),
         m.own ? h('p', { dataset: { hook: 'harvest-own', n: String(m.own) } }, `${plural(m.own, 'planting')} ${m.own === 1 ? 'keeps its' : 'keep their'} own harvest days or last picking, and ${m.own === 1 ? 'does' : 'do'} not move.`) : null,
