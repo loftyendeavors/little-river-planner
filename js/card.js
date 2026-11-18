@@ -24,7 +24,13 @@
   let full = '';           // a bed or a planting opened in full in the side panel ("All of this planting…"), by its key
   let settling = false;    // the list of what to settle was asked for: it stands in the side panel
   let said = null;         // the answer to the last action taken while the card was open: { text, action, key, at }
-  let seen = null, seenKey = '', justNow = false;   // which card was open when the last change was first seen (as the panel's "Saved" line keeps it)
+  let seen = null, seenKey = '';
+  // Whether what is being done now was done on the card: a press or a change on it (or its menu or calendar), or a drop that has
+  // just picked what it planted. Only the answer to that is said on the card; any other word (a newer version ready, the plan
+  // changed in another window, another device's changes taken in) stays in the toast, where it outlives the card (Codex on #66).
+  let acting = false, actTimer = 0, planTick = false, tickTimer = 0;
+  const mark = () => { acting = true; clearTimeout(actTimer); actTimer = setTimeout(() => { acting = false; }, 0); };
+  const watchActs = el => { el.addEventListener('click', mark, true); el.addEventListener('change', mark, true); el.addEventListener('keydown', mark, true); return el; };   // which card was open when the last change was first seen (as the panel's "Saved" line keeps it)
   let card = null, menu = null, cal = null, hint = null, hintTimer = 0, hintBar = null;
   const opened = new Set();   // the rows of a planting's card that are open, by name: they stay open as the card is drawn again
 
@@ -62,9 +68,8 @@
   // A toast raised while the card is open is said on the card instead, for as long as the panel's "Saved" line would say it.
   function answer(text, action) {
     if (!card || !card.isConnected || !standing() || !App.state.sel) return false;
-    // a word about a change made earlier on another card or in the side panel (its "Saved", said once when it closed) stays a toast
-    const last = App.lastChange();
-    if (last && last.kind === 'saved' && last.at === seen && !justNow && seenKey !== keyOf(App.state.sel)) return false;
+    const last = App.lastChange(), refusedNow = last && last.kind === 'refused' && Date.now() - last.at < 50;   // a change the card asked for, turned down
+    if (!acting && !refusedNow) return false;
     said = { text, action: action || null, key: keyOf(App.state.sel), at: Date.now() };
     draw();   // drawn again whole: after a drop the variety box is ringed when no variety came with it
     return true;
@@ -76,7 +81,6 @@
     const last = App.lastChange();
     if (last && last.at !== seen) {
       seen = last.at; seenKey = card && card.isConnected && standing() ? keyOf(App.state.sel) : '';
-      justNow = true; Promise.resolve().then(() => { justNow = false; });   // the action's own answer comes in the same task
     }
   }
   function fillSaid() {
@@ -297,7 +301,7 @@
     const what = standingNow ? held() : null;
     if (!what) { if (card) { card.remove(); card = null; } closePops(); return; }
     const stage = document.querySelector('.stage');
-    if (!card) { card = h('aside.card.float.lrf-card', { role: 'dialog', 'aria-label': 'Details', dataset: { hook: 'card' } }); stage.append(card); }
+    if (!card) { card = watchActs(h('aside.card.float.lrf-card', { role: 'dialog', 'aria-label': 'Details', dataset: { hook: 'card' } })); stage.append(card); }
     const controls = () => [...card.querySelectorAll('button, input, select')];
     const keep = card.scrollTop, focus = document.activeElement && card.contains(document.activeElement) ? controls().indexOf(document.activeElement) : -1;
     clear(card);
@@ -325,10 +329,10 @@
     const again = menu && anchor && menu.lrfAnchor === anchor;
     closePops();
     if (again) return;
-    menu = h('div.card-menu', { role: 'menu', dataset: { hook: 'card-menu' } },
+    menu = watchActs(h('div.card-menu', { role: 'menu', dataset: { hook: 'card-menu' } },
       h('div.card-menu-head', h('b', spec.title), spec.sub ? h('small', spec.sub) : null),
       spec.items.map(item => item ? h('button.card-menu-item' + (item[4] === 'bad' ? '.bad' : ''), { type: 'button', role: 'menuitem', dataset: { hook: 'card-menu-item', act: item[0] }, onclick: () => { closePops(); item[2](); } },
-        h('span', item[1]), item[3] ? h('kbd', item[3]) : null) : h('hr')));
+        h('span', item[1]), item[3] ? h('kbd', item[3]) : null) : h('hr'))));
     menu.lrfAnchor = anchor || null;
     if (at) popAt(menu, at.x + 4, at.y + 4);
     else { const r = anchor.getBoundingClientRect(); popAt(menu, r.right - 236, r.bottom + 4); }
@@ -362,7 +366,9 @@
   const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const WD = d => `${UI.DAYS[d.getDay()]} ${day(d)}`;
   function moves(p, value) {
-    const e = eng(), a = e.calc(p), q = { ...p, date: value }, b = e.calc(q);
+    const e = eng(), a = e.calc(p), q = { ...p, date: value };
+    if (q.sowOn && !q.liveTray && value !== p.date) delete q.sowOn;   // as App.commit holds it: a sowing day set by hand belongs to the date it was set against (Codex on #66)
+    const b = e.calc(q);
     if (!a || !b) return null;
     const free = (x, r) => { const t = e.occupancyThrough(x, r); return t === Infinity ? null : E.addDays(t, 1); };
     const by = Math.round((E.s2d(value) - E.s2d(p.date)) / 864e5), clash = e.conflicts(q, b).filter(o => !o.rest && o.p && o.p.id !== p.id);
@@ -374,7 +380,7 @@
     if (again) return;
     const r = eng().calc(p), was = E.s2d(p.date);
     let month = new Date(was.getFullYear(), was.getMonth(), 1);
-    cal = h('div.card.float.card-cal', { role: 'dialog', 'aria-label': 'Move it to', dataset: { hook: 'card-cal' } });
+    cal = watchActs(h('div.card.float.card-cal', { role: 'dialog', 'aria-label': 'Move it to', dataset: { hook: 'card-cal' } }));
     cal.lrfAnchor = anchor;
     const says = h('div.card-cal-says', { dataset: { hook: 'card-cal-says' } });
     const tell = value => {
@@ -464,8 +470,10 @@
 
   function init() {
     UI.answerHere(answer);
+    // a drop picks what it planted in the same breath as it plants it: its answer is the card's
+    App.on('sel', () => { if (planTick) mark(); });
     App.on('sel', () => { const sel = App.state.sel; if (sel) settling = false; if (keyOf(sel) !== full) full = ''; if (said && said.key !== keyOf(sel)) said = null; closePops(); draw(); });   // an answer belongs to the card it was said on
-    App.on('plan', () => { note(); draw(); });
+    App.on('plan', () => { planTick = true; clearTimeout(tickTimer); tickTimer = setTimeout(() => { planTick = false; }, 0); note(); draw(); });
     App.on('date', () => { if (card) draw(); });
     App.on('view', () => { closePops(); draw(); });
     App.on('photos', () => { if (card) draw(); });

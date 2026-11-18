@@ -259,6 +259,46 @@ def run(pw):
     check("“Remove planting” in the card's menu does what the panel's button does; the bed's card says it, with an Undo that gives the plan back",
           a == b and f'"id":"{PID}"' not in a and aback and bback and "Removed" in bsaid["said"] and bsaid["undo"] and not bsaid["toast"], [aback, bback, bsaid])
 
+    # a sowing day set by hand: the calendar says what the step will do, which lets that day go and works the sowing out again
+    js(f"LRFCard.turn(true); A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(300)
+    own = js(f"const p = eng.planting('{PID}'), r = eng.calc(p); if (!r.sow || !(r.sow < r.field)) return null; const d = iso(E.addDays(r.sowDefault || r.sow, -3)); A.planSowings(['{PID}'], d); const q = eng.planting('{PID}'); return {{ set: !!S.engine.planting('{PID}').sowOn, sow: LRFUI.day(S.engine.calc(S.engine.planting('{PID}')).sow) }};")
+    check("the planting can carry a sowing day set by hand, for the check to work on", bool(own) and own["set"], own)
+    if own and own["set"]:
+        quiet(); press(page, "[data-hook='card-date']", 300)
+        if not page.locator(f"[data-hook='card-cal-day'][data-day='{target_day}']").count(): press(page, ".card-cal-month .icon-btn >> nth=1", 200)
+        hit = page.locator(f"[data-hook='card-cal-day'][data-day='{target_day}']")
+        says = ""
+        if hit.count(): hit.first.hover(); wait(200); says = js("const s = hook('card-cal-says'); return s ? s.textContent : '';"); hit.first.click(); wait(400)
+        got = js(f"const p = S.engine.planting('{PID}'), r = S.engine.calc(p); return {{ sow: LRFUI.day(r.sow), own: !!p.sowOn, date: p.date }};")
+        check("with a sowing day set by hand, the calendar says the sowing day the move will give (that day goes, as the step lets it go)", got["date"] == target_day and not got["own"] and ("→ " + got["sow"]) in says and "sow " in says, [own, got, says])
+        js("A.undo(); A.undo(); return null;"); wait(300)
+
+    # the bed's card: Grown for sale, against Edit layout's own box for the bed
+    bedrec = lambda before: js(f"return JSON.stringify([S.plan.beds.find(b => b.id === '{BED}'), S.plan.plantings]);")
+    def bed_through(card_on, do):
+        js(f"LRFCard.turn({'true' if card_on else 'false'}); A.setView('map'); A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(400)
+        before = js("return all() + JSON.stringify(S.plan.beds);"); quiet(); do(); wait(500)
+        after = bedrec(None)
+        said = js("const s = hook('card-said'); return { said: drawn(s) ? s.textContent : '', undo: drawn(hook('card-undo')), toast: $('toast').classList.contains('show') };")
+        if card_on and said["undo"]: press(page, "[data-hook='card-undo']", 500)
+        else: js("A.undo(); return null;"); wait(400)
+        return after, js("return all() + JSON.stringify(S.plan.beds);") == before, said
+    def layout_box():
+        js(f"LRFMapEdit.open({{ bedId: '{BED}', field: 'leUse' }}); return null;"); wait(400)
+        if page.locator("#leUse").count(): page.select_option("#leUse", "personal"); wait(300)
+        press(page, "#leDone", 400)
+    a, aback, _ = bed_through(False, layout_box)
+    b, bback, bsaid = bed_through(True, lambda: page.locator("[data-hook='card-sale']").uncheck())
+    check("“Grown for sale” unticked on a bed's card gives the bed what Edit layout's “Grown for” box gives it; said on the card with an Undo that gives the plan back",
+          a == b and '"use":"personal"' in (b or "") and aback and bback and "personal use" in bsaid["said"] and bsaid["undo"] and not bsaid["toast"], [a[:200] if a else a, b[:200] if b else b, aback, bback, bsaid])
+
+    # a word from elsewhere (a newer version ready) stays a toast while a card is open
+    js(f"A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(300); quiet()
+    js("LRFUI.toast('A newer version of the planner is ready.', { label: 'Reload', run: () => {} }); return null;"); wait(200)
+    al = js("const s = hook('card-said'); return { card: !!card(), said: drawn(s) ? s.textContent : '', toast: $('toast').classList.contains('show') ? $('toast').textContent : '' };")
+    check("with a card open, a word that is not the answer to something done on it (a newer version ready) stays in the toast, with its button", al["card"] and "newer version" not in al["said"] and "newer version" in al["toast"] and "Reload" in al["toast"], al)
+    quiet()
+
     # a change made in the side panel is not said on the next card opened
     js(f"LRFCard.turn(true); A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(300)
     press(page, "[data-hook='card-full']", 400)
