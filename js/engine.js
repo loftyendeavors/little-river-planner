@@ -830,7 +830,8 @@
     }
     function occupancyFrom(p, r) {
       if (p.established !== true) return r.field;
-      const models = standMates(p), actual = models.map(q => s2d(doneOf(q, 'field') || (q.established !== true ? fieldDateOf(q) : null))).filter(validDate);
+      // a planting of the stand marked failed does not start it: what is left of the stand holds from its own days
+      const models = standMates(p).filter(q => q === p || !failedOn(q)), actual = models.map(q => s2d(doneOf(q, 'field') || (q.established !== true ? fieldDateOf(q) : null))).filter(validDate);
       if (actual.length) return minDate(actual);
       const dates = models.map(q => s2d(q.date)).filter(validDate), first = dates.length ? minDate(dates) : r.field;
       return new Date(first.getFullYear(), 0, 1);
@@ -1100,7 +1101,7 @@
         if (r.rack && r.c.micro && r.b.liveTrayPool) { const to = addDays(occupancyThrough(p, r), 1); if (to > r.field) items.push({ p, r, kind: 'live', from: r.field, to, n: r.len, eq: r.len }); }
         if (r.sow && r.cells && r.sow < propEnd) items.push({ p, r, kind: 'prop', from: r.sow, to: propEnd });
         if (r.ct && r.b.shelter && r.b.shelter.gardenId === 'nursery' && r.out && r.out > r.field) {
-          const to = r.actualClear && r.actualClear < r.out ? addDays(r.actualClear, 1) : r.out;
+          const lost = failedOn(p), out = lost && lost < r.out ? lost : r.out, to = r.actualClear && r.actualClear < out ? addDays(r.actualClear, 1) : out;   // a crate that failed under shelter leaves the bench that day
           if (to > r.field) items.push({ p, r, kind: 'crate', from: r.field, to, n: r.len, eq: r.len * ctFt2(ctOf(r.b)) / TRAY_FT2, floor: !cratesOnBenches });
         }
       }

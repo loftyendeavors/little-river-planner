@@ -89,6 +89,23 @@ tryCase('a standing crop marked failed is no longer in its bed from that day, an
   const at = d => e.cropsAt(st.bedId, d).some(x => x.planting.id === st.id), before = d => eng.cropsAt(st.bedId, d).some(x => x.planting.id === st.id);
   return [before(E.s2d(day)) && !at(E.s2d(day)) && at(E.addDays(E.s2d(day), -1)) && !at(E.addDays(E.s2d(day), 60)), { day, was: before(E.s2d(day)) }];
 });
+tryCase('a sheltered container marked failed leaves the nursery bench that day (crates counted on benches)', () => {
+  const pl = { ...plan, lrfNext: { ...(plan.lrfNext || {}), crates: 'bench' } }, e0 = E.create(pl, Lib);
+  const c = pl.plantings.find(p => { const r = e0.calc(p); return r && r.ct && r.out && r.out > E.addDays(r.field, 20) && e0.benchItems().some(i => i.kind === 'crate' && i.p.id === p.id); });
+  if (!c) return [false, 'the farm has no sheltered container on the benches'];
+  const r = e0.calc(c), lost = E.addDays(r.field, 5), q = W.fail(c, E.d2s(lost), AT), e1 = E.create(put(pl, q), Lib), day = E.addDays(r.field, 10);
+  const mine = (e, d) => e.benchDay(d).items.filter(i => i.p.id === c.id).length, before = e0.benchDay(day).total, after = e1.benchDay(day).total;
+  return [mine(e0, day) === 1 && mine(e1, day) === 0 && mine(e1, E.addDays(lost, -1)) === 1 && after < before, { before, after }];
+});
+tryCase('a planting of a perennial stand marked failed no longer starts the stand: what is left of it holds from its own year', () => {
+  const st = plan.plantings.find(p => { const r = eng.calc(p); return r && eng.isStandingCrop(p, r) && !p.failed; });
+  if (!st) return [false, 'the farm has no standing crop'];
+  const p1 = { ...st, standId: 'stand-check' }, p2 = { ...st, id: st.id + '-next', standId: 'stand-check', established: true, date: String(+st.date.slice(0, 4) + 1) + st.date.slice(4) };
+  const pl = { ...plan, plantings: [...plan.plantings.map(x => (x.id === st.id ? p1 : x)), p2] }, e0 = E.create(pl, Lib), r1 = e0.calc(p1), on2 = E.d2s(E.addDays(e0.occupancyFrom(p1, r1), 30));
+  const q = W.fail(p1, on2, AT), e1 = E.create(put(pl, q), Lib), later = E.addDays(E.s2d(on2), 20), b = e1.bedOf(st.bedId);
+  const heldBefore = e0.holders(e0.bedOf(st.bedId), later, later, null).some(o => o.p.id === p2.id), heldAfter = e1.holders(b, later, later, null).some(o => o.p.id === p2.id);
+  return [heldBefore && !heldAfter && E.d2s(e1.occupancyFrom(e1.planting(p2.id), e1.calc(e1.planting(p2.id)))) > on2, { heldBefore, heldAfter }];
+});
 tryCase('the mark taken off gives back the planting as it was, byte for byte', () => JSON.stringify(W.fail(W.fail(picking, on, AT), null)) === JSON.stringify(picking));
 tryCase('a day that is not a calendar day is refused', () => { try { W.fail(picking, `${year}-02-30`, AT); return false; } catch (_) { return true; } });
 

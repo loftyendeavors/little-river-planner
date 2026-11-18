@@ -1,10 +1,10 @@
-/* Little River Farm Planner — offline copy of the app. Build 23a7723aece7 (0.65). */
-const CACHE = 'lrf-23a7723aece7';
+/* Little River Farm Planner — offline copy of the app. Build cd9b5ac5ac5f (0.65). */
+const CACHE = 'lrf-cd9b5ac5ac5f';
 const FILES = ["./","js/ahead.js","js/app.js","js/assume.js","js/audit.js","js/backupui.js","js/bench.js","js/built.js","js/card.js","js/changes.js","js/drag.js","js/engine.js","js/farmdates.js","js/folder.js","js/forecast.js","js/guide.js","js/harvestview.js","js/kept.js","js/library.js","js/main.js","js/map.js","js/mapedit.js","js/mapgeo.js","js/merge.js","js/nursery.js","js/panels.js","js/planio.js","js/rails.js","js/reader.js","js/season.js","js/seedlib.js","js/seeds.js","js/series.js","js/snapshots.js","js/sowing.js","js/sowview.js","js/store.js","js/succession.js","js/swap.js","js/sync.js","js/things.js","js/thumbs.js","js/timeline.js","js/trays.js","js/traysview.js","js/ui.js","js/week.js","js/yieldcard.js","js/zip.js","css/app.css","fonts/bricolage-grotesque-latin-standard-normal.woff2","fonts/instrument-sans-latin-standard-normal.woff2","fonts/jetbrains-mono-latin-wght-normal.woff2","css/fonts.css","js/pwa.js","index.html","manifest.webmanifest","icons/icon-192.png","icons/icon-512.png","icons/icon-maskable-512.png"];
 // Each file is asked for under this build's own address (?v=…) and past every cache. The host's network keeps a file for ten minutes
 // after a deploy: asked for by its plain address in that time, a new worker could store the old page beside new scripts and keep that
 // mixture until the next build. It is stored under its plain address, so the page finds it as before.
-const fresh = file => fetch(new Request(file + '?v=23a7723aece7', { cache: 'no-store' })).then(response => { if (!response.ok) throw new Error(file + ': ' + response.status); return response; });
+const fresh = file => fetch(new Request(file + '?v=cd9b5ac5ac5f', { cache: 'no-store' })).then(response => { if (!response.ok) throw new Error(file + ': ' + response.status); return response; });
 self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE).then(cache => Promise.all(FILES.map(file => fresh(file).then(response => cache.put(new Request(file), response))))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('lrf-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', event => {

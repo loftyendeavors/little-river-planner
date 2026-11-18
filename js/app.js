@@ -1205,27 +1205,37 @@
     let inventory = inventoryNow(), touched = false, returned = 0, lost = 0, sowings = 0, jobs = 0, delays = 0, skips = 0;
     for (const p0 of state.plan.plantings) {
       if (String(p0.date).slice(0, 4) !== year) continue;
-      let p = p0;
+      // one planting at a time, its seed carried in a copy that is kept only when the whole planting went back
+      let p = p0, inv = inventory, back = { returned: 0, lost: 0, sowings: 0, jobs: 0, delays: 0, skips: 0, inv: false };
       try {
-        for (const kind of UNDO_ORDER) {
-          const st = Week.step(state.engine, p, kind);
-          if (!st || !st.done) continue;
-          const sown = sownJob(st, sowingOf(p)), result = Week.takeBack(state.engine, inventory, p, kind, ctx);
+        // Work is undone last first, whatever kind it was: a put-off that still stands where it was put goes back by its days, and
+        // otherwise the latest recorded job is taken back (a planting it pushed returns to its day). Each undo can let an earlier
+        // one stand again, so the two are tried in turn until neither can go further.
+        for (let guard = 0; guard < 40; guard++) {
+          const standing = Object.keys(((p.tasks && typeof p.tasks === 'object' ? p.tasks : {}).delay) || {}).find(kind => { const st = Week.delayOf(p, kind) && Week.step(state.engine, p, kind); return !!(st && st.delayedFrom); });
+          if (standing) {
+            const put = Week.delayOf(p, standing);
+            let moved = null;
+            try { moved = Week.delay(state.engine, p, standing, put.from); } catch (_) { moved = null; }   // one that would leave the year keeps its day
+            p = moved ? moved.planting : Week.withTask(p, 'delay', standing, null);
+            back.delays++;
+            continue;
+          }
+          const kind = UNDO_ORDER.find(k => { const st = Week.step(state.engine, p, k); return !!(st && st.done); });
+          if (!kind) break;
+          const st = Week.step(state.engine, p, kind), sown = sownJob(st, sowingOf(p)), result = Week.takeBack(state.engine, inv, p, kind, ctx);
           p = result.planting;
-          if (result.inventory) { inventory = result.inventory; touched = true; }
-          returned += +result.returned || 0; lost += +result.lost || 0;
-          if (sown) sowings++; else jobs++;
+          if (result.inventory) { inv = result.inventory; back.inv = true; }
+          back.returned += +result.returned || 0; back.lost += +result.lost || 0;
+          if (sown) back.sowings++; else back.jobs++;
         }
         const t = p.tasks && typeof p.tasks === 'object' ? p.tasks : {};
-        for (const kind of Object.keys(t.delay || {})) {
-          const put = Week.delayOf(p, kind), st = put ? Week.step(state.engine, p, kind) : null;
-          // a planting put off still stands where it was put: it goes back by as many days. One moved by hand since keeps its day.
-          const back = st && st.delayedFrom && Week.MOVES.includes(kind) ? Week.delay(state.engine, p, kind, put.from) : null;
-          p = back ? back.planting : Week.withTask(p, 'delay', kind, null);
-          delays++;
-        }
-        for (const kind of Object.keys(t.skip || {})) { p = Week.withTask(p, 'skip', kind, null); skips++; }
+        // what is left was put off from a day the planting no longer stands on (moved by hand since): its record goes, its day stays
+        for (const kind of Object.keys(t.delay || {})) { p = Week.withTask(p, 'delay', kind, null); back.delays++; }
+        for (const kind of Object.keys(t.skip || {})) { p = Week.withTask(p, 'skip', kind, null); back.skips++; }
       } catch (error) { failed.push({ id: p0.id, label: cropLabel(p0), why: error.message || 'It could not be taken back.' }); continue; }
+      inventory = inv; if (back.inv) touched = true;
+      returned += back.returned; lost += back.lost; sowings += back.sowings; jobs += back.jobs; delays += back.delays; skips += back.skips;
       if (p !== p0) ops.push({ before: p0, after: p });
     }
     if (touched) ops.push({ kind: 'inventory', before: state.plan.seedInventory || null, after: inventory });
