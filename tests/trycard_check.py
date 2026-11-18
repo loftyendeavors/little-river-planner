@@ -299,6 +299,16 @@ def run(pw):
     check("with a card open, a word that is not the answer to something done on it (a newer version ready) stays in the toast, with its button", al["card"] and "newer version" not in al["said"] and "newer version" in al["toast"] and "Reload" in al["toast"], al)
     quiet()
 
+    # one that cannot be sent to To place keeps its card, which says why
+    FX = js("return (S.plan.plantings.find(p => { const r = eng.calc(p); return r && !eng.isPool(r.b) && LRFRails.fixed(eng, { p }); }) || {}).id || null;")
+    check("the plan has a planting that cannot be sent to To place (recorded, or standing for years), for the check to work on", bool(FX), FX)
+    if FX:
+        js(f"LRFCard.turn(true); A.select({{ type: 'planting', id: '{FX}' }}); return null;"); wait(400); quiet()
+        before = js("return all();")
+        press(page, "[data-hook='card-more']", 300); press(page, "[data-hook='card-menu-item'][data-act='wait']", 400)
+        fx = js(f"const s = hook('card-said'); return {{ same: all() === arg, sel: S.sel && S.sel.type + ':' + S.sel.id, kind: card() && card().dataset.kind, said: drawn(s) ? s.textContent : '', toast: $('toast').classList.contains('show') }};", before)
+        check("“Send to To place” on one that cannot go changes nothing, keeps its card, and says why there", fx["same"] and fx["sel"] == "planting:" + FX and fx["kind"] == "planting" and "stays where it is" in fx["said"] and not fx["toast"], fx)
+
     # a change made in the side panel is not said on the next card opened
     js(f"LRFCard.turn(true); A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(300)
     press(page, "[data-hook='card-full']", 400)
@@ -360,6 +370,18 @@ def run(pw):
     check("To place chosen: the line under the switch reads “Not in a bed yet, so not in the forecast, seed or sowing lists.” and the line at the library's foot “Drag one onto a bed or a row. It keeps its date.”",
           wt["lead"] == "Not in a bed yet, so not in the forecast, seed or sowing lists." and wt["foot"] == "Drag one onto a bed or a row. It keeps its date.", wt)
     js("A.undo(); LRFPanels.setScope('mine'); A.select(null); return null;"); wait(300)
+
+    # ══ on a phone: whatever is pressed on the card, its menu and its calendar is 44 high ══
+    page.set_viewport_size({"width": 390, "height": 844}); wait(400)
+    js(f"if ($('wkFull') && drawn($('wkFull'))) $('wkFull').click(); A.setView('map'); A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(600)
+    hi = lambda sel: js("const el = document.querySelector(arg); return el ? Math.round(el.getBoundingClientRect().height) : 0;", sel)
+    ph = {"x": hi("[data-hook='card-close']"), "date": hi("[data-hook='card-date']"), "variety": hi("[data-hook='card-variety']"), "row": hi("[data-hook='card-row'] .card-row-head")}
+    press(page, "[data-hook='card-more']", 300); ph["menu"] = hi("[data-hook='card-menu-item']"); page.keyboard.press("Escape"); wait(200)
+    press(page, "[data-hook='card-date']", 300); ph["day"] = hi("[data-hook='card-cal-day']"); page.keyboard.press("Escape"); wait(200)
+    ph["inside"] = js("const c = card(); if (!c) return false; const r = c.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth;")
+    check("on a phone (390 wide) the card stands inside the screen, and its ×, date, variety, rows, menu and calendar days are 44 high", ph["inside"] and all(ph[k] >= 44 for k in ["x", "date", "variety", "row", "menu", "day"]), ph)
+    page.set_viewport_size({"width": WIDTH, "height": 960}); wait(400)
+    js("A.setView('map'); return null;"); wait(300)
 
     # ══ unticked: as before ══
     js("A.setView('map'); return null;"); wait(300)

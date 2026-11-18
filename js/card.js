@@ -213,8 +213,9 @@
   /** Send a planting to To place from its card: its bed's card takes its place first, as for a removal, so that what the step did
    *  (and its Undo) is said where it was done (Codex on #66). The step itself is the panel's: App.sendToWait. */
   function toWait(p) {
-    const r = eng().calc(p);
-    if (r) App.select({ type: 'bed', id: r.b.id });
+    const e = eng(), r = e.calc(p);
+    // one that cannot go (recorded, standing for years, following weekly demand) keeps its card, and is told why there (Codex on #66)
+    if (r && !e.isPool(r.b) && !root.LRFRails.fixed(e, { p })) App.select({ type: 'bed', id: r.b.id });
     App.sendToWait(p.id);
   }
 

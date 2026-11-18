@@ -59,6 +59,8 @@ PAGE = [
  ("Codex on #66: Grown for sale on a bed's card sets its garden", CD, "if (!App.setUse('bed', [bed.id], ev.target.checked ? 'commercial' : 'personal')) draw();", "if (!App.setUse('garden', [bed.gardenId], ev.target.checked ? 'commercial' : 'personal')) draw();"),
  ("Codex on #66: Edit layout opened from the card has no side panel", CD, "    if (root.LRFMapEdit && root.LRFMapEdit.on()) return false;", "    void 0;"),
  ("Edit layout closed, the side panel stays", CD, "    new MutationObserver(() => draw()).observe(document.body, { attributes: true, attributeFilter: ['data-layout'] });", "    void MutationObserver;"),
+ ("Codex on #66: one that cannot go to To place loses its card to its bed's", CD, "    if (r && !e.isPool(r.b) && !root.LRFRails.fixed(e, { p })) App.select({ type: 'bed', id: r.b.id });", "    if (r) App.select({ type: 'bed', id: r.b.id });"),
+ ("Codex on #66: on a phone the card's controls are 28 high", CSS, "  .card-box select, .card-box input, .card-date, .card-row-head, .card-repeat input, .lrf-card .btn.small, .card-menu-item, .card-cal-day, .card-cal-month .icon-btn { min-height: var(--control-phone); }", "  .card-repeat input { min-height: var(--control-phone); }"),
  ("a drop is answered in a toast", CD, "    App.on('sel', () => { if (planTick) mark(); });\n", ""),
  ("the card writes days to harvest its own way", CD, "onchange: ev => set(Ed.dtm(p, ev.target.value)) }", "onchange: ev => set([{ dtm: +ev.target.value + 1, timingMode: 'manual' }, 'Change days to harvest']) }"),
  ("the card writes harvest days its own way", CD, "onchange: ev => set(Ed.hw(ev.target.value)) }", "onchange: ev => set([{ hw: +ev.target.value + 1, harvestMode: 'window' }, 'Change harvest days']) }"),
