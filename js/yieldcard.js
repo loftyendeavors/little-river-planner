@@ -284,11 +284,12 @@
   }
   /**
    * The choice itself, one joined control: "To the season's end" | "For [N] days". `input` is the number box, made by the caller
-   * (the card's box, or the list's cell); typing in it is the second side's number. `short`: the list's narrow words.
+   * (the card's box, or the list's cell); typing in it is the second side's number. `short`: the narrow words, for the list and for
+   * a card that has columns for other things sold.
    */
   function windowChoice(eng, c, hc, input, short, redraw) {
     const w = windowOf(eng, c, hc), name = c.name;
-    return h('span.yc-hw', { role: 'group', 'aria-label': `${name}: harvest window`, dataset: { hook: 'harvest-choice', on: w.season ? 'season' : 'days' } },
+    return h('span.yc-hw' + (short ? '.short' : ''), { role: 'group', 'aria-label': `${name}: harvest window`, dataset: { hook: 'harvest-choice', on: w.season ? 'season' : 'days' } },
       h('button.yc-hw-end', { type: 'button', 'aria-pressed': String(w.season), dataset: { hook: 'harvest-season' }, title: w.season ? `Picked until the season ends where it grows. A yield is spoken of over ${hc.nominal} days.` : `Picks ${name} until the season ends where it grows. What that moves is shown first.`,
         onclick: () => { if (!w.season) setWindow(c, 'season', redraw); } }, short ? 'Season' : 'To the season’s end'),
       h('span.yc-hw-n' + (w.season ? '' : '.on'),
@@ -422,12 +423,12 @@
         h('select.yc-sel' + (hc.pattern.mine ? '.mine' : ''), { 'aria-label': `${c.name}: picked`, dataset: { yk: 'pick' }, title: `${PATTERN_TIP[hc.pattern.value]}${hc.pattern.mine ? '' : ' Not set: this is how every crop has been counted so far.'} Changing between Gradually and the other two turns each yield into a week’s figure, or back into a total, over the harvest days.`,
           onchange: e => setPick(c, cols.list, e.target.value) },
           Object.entries(PATTERN).map(([value, text]) => h('option', { value, selected: hc.pattern.value === value }, text)), hc.pattern.mine ? h('option', { value: 'unset' }, 'Back to not set') : null),
-        windowChoice(eng, c, hc, daysBox, false)))));
+        windowChoice(eng, c, hc, daysBox, T.any)))));   // beside the columns of other things sold, the narrow words
     }
 
     // last picking: what the choice above comes to in each place, as dates: the plantings there that follow the crop's line
     const ends = hc.micro ? new Map() : endsOf(eng, c), hw = hc.micro ? null : windowOf(eng, c, hc);
-    body.append(row('last', 'Last picking', hc.micro || hc.pattern.value === 'once' ? null : hw.season ? 'the season’s end where it grows' : `${hw.days} days after the first picking`, cols.list.map(env => h('td', { dataset: { place: env } },
+    body.append(row('last', 'Last picking', null, cols.list.map(env => h('td', { dataset: { place: env } },
       hc.micro ? why('none: a tray is taken whole') : hc.pattern.value === 'once' ? why('none: cleared in one day')
         : ends.has(env) ? h('span.yc-line', { dataset: { hook: 'harvest-end', place: env, from: iso(ends.get(env).lo), to: iso(ends.get(env).hi), n: String(ends.get(env).n) } }, h('b.yc-fixed', between(ends.get(env).lo, ends.get(env).hi)))
           : why(hw.season ? 'when the season ends there' : `${hw.days} days after the first`)))));

@@ -2191,6 +2191,10 @@ table.yc-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .yc-hw-n.on button, .yc-hw-n.on .yc-unit { color: var(--surface); }
 .yc-hw .yc-box input, .as.ah .yc-hw input { width: 60px; height: 22px; font-size: var(--type-13); background: var(--raised); color: var(--ink); }
 .yc-hw-n .yc-unit { margin: 0; }
+.yc-hw.short button { padding: 0 var(--space-8); }
+.yc-hw.short .yc-hw-n button { padding-right: 0; }
+.yc-hw.short .yc-box input { width: 48px; }
+.yc-line:has(> .yc-hw) { row-gap: var(--space-4); }   /* where the choice wraps under its pattern, beside other things' columns */
 .as.ah .yc-hw button { padding: 0 var(--space-8); }
 .as.ah .yc-hw-n { padding-right: var(--space-4); }
 .as.ah .yc-hw-n button { padding-right: 0; }
