@@ -54,7 +54,7 @@ PAGE = [
  ("Upcoming weeks counts done tasks as well", SV, "const cur = T.monday(now), all = tasks().filter(isOpen);", "const cur = T.monday(now), all = tasks();"),
  ("Upcoming weeks starts at this week", SV, "const a = plus(cur, 7 * w), z = plus(a, 6), inWeek", "const a = plus(cur, 7 * (w - 1)), z = plus(a, 6), inWeek"),
  ("a press on a week opens its first day only", SV, "    else if (act === 'upweek') { viewWeek(el.dataset.week);", "    else if (act === 'upweek') { viewDay(el.dataset.week);"),
- ("Trays to fill counts ticked sowings too", SV, "      if (!t.sow || l.kind === 'direct' || !isOpen(t)) continue;", "      if (!t.sow || l.kind === 'direct') continue;"),
+ ("Trays to fill counts trays shared by several sowings once for each", SV, "      if (groups.has(key)) continue;   // trays shared by several sowings are counted once\n", ""),
  ("Trays to fill stands under the lists", SV, "id === 'nursery' ? fillHead(s.open) : null, k ? dayBody", "null, k ? dayBody"),
  ("Mark all done is on a group of two", SV, "  const ALL_FROM = 3;", "  const ALL_FROM = 2;"),
  ("Mark all done on late tasks records today without asking", SV, "    if (list.some(t => t.due < now)) { openPop('all', null, el && el.id, list.map(t => t.key)); return; }", "    if (false) { openPop('all', null, el && el.id, list.map(t => t.key)); return; }"),

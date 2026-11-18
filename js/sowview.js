@@ -377,7 +377,7 @@
     const f = fillFigures(rows);
     if (!f) return null;
     return h('div.tk-fill', { dataset: { hook: 'tasks-trays-to-fill' } },
-      h('div.tk-sec', h('span.tk-sec-name', 'Trays to fill'), h('span.tk-sec-n', [f.trays ? plural(f.trays, 'tray') : '', f.sheets ? plural(f.sheets, 'rockwool sheet') : '', f.mix > 0 ? `${num(f.mix, f.mix < 10 ? 1 : 0)} cu ft mix` : '', plural(f.kinds, 'variety', 'varieties')].filter(Boolean).join(' · '))),
+      h('div.tk-fill-head', h('span.tk-sec-name', 'Trays to fill'), h('span.tk-sec-n', [f.trays ? plural(f.trays, 'tray') : '', f.sheets ? plural(f.sheets, 'rockwool sheet') : '', f.mix > 0 ? `${num(f.mix, f.mix < 10 ? 1 : 0)} cu ft mix` : '', plural(f.kinds, 'variety', 'varieties')].filter(Boolean).join(' · '))),
       h('div.tk-fill-sizes', f.sizes.map(([label, n]) => h('span', h('b', num(n)), ` × ${label}`))));
   }
 

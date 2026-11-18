@@ -171,6 +171,8 @@
 
   "swap": 32,
 
+  "tasks2": 65,
+
   "trycard": 50,
 
   "wide": 28
@@ -272,6 +274,8 @@
 
   "sync-site": 92,
 
+  "tasks2-site": 65,
+
   "tour": 4,
 
   "trycard-site": 50
@@ -336,6 +340,8 @@
   "stepF-site dark": 47,
 
   "swap-site @3440": 32,
+
+  "tasks2-site @3440": 65,
 
   "trycard-site @3440": 50
 

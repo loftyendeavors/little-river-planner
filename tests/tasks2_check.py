@@ -61,7 +61,11 @@ def run(pw):
     nothing = js(page, "return !S.plan.plantings.some(p => p.done && Object.keys(p.done).length) && V.tasks().some(t => open(t) && t.due < now);")
     check("the plan holds nothing recorded, and tasks are late on the pretended day, for the check to work on", nothing)
 
-    # ── Upcoming weeks ──
+    # ── Upcoming weeks ── (a task of next week recorded done first, through the page's own step, so that what is done is seen to be left out)
+    pre_up = snap(page)
+    ticked = js(page, "const cur = LRFTrays.monday(now), t = V.tasks().find(t => open(t) && t.due >= plus(cur, 7) && t.due <= plus(cur, 13)); if (!t) return null; A.recordWork(t.items(), { date: now, follow: true }); return t.half;")
+    page.wait_for_timeout(500)
+    check("a task of next week is recorded done through the page's own step, for the check", ticked)
     up = js(page, """const rows = hooks('tasks-upcoming-week'), cur = LRFTrays.monday(now), all = V.tasks().filter(open);
       return { card: drawn(hook('tasks-upcoming')), below: !!hook('tasks-upcoming') && hook('tasks-upcoming').getBoundingClientRect().top >= $('tkLists').getBoundingClientRect().bottom - 1,
         rows: rows.map((r, i) => { const a = plus(cur, 7 * (i + 1)), z = plus(a, 6), n = h => all.filter(t => t.half === h && t.due >= a && t.due <= z).length;
@@ -75,13 +79,20 @@ def run(pw):
     went = js(page, "return { where: V.where(), want: hooks('tasks-upcoming-week')[1] && hooks('tasks-upcoming-week')[1].dataset.week, pressed: hooks('tasks-upcoming-week')[1] && hooks('tasks-upcoming-week')[1].getAttribute('aria-pressed') };")
     check("a press on a line shows that whole week", went["where"]["day"] is None and went["where"]["week"] == went["want"] and went["pressed"] == "true", went)
     page.screenshot(path=str(shots / "upcoming.png"), full_page=True)
-    js(page, "V.show(now); return null;"); page.wait_for_timeout(500)
+    js(page, "A.undo(); V.show(now); return null;"); page.wait_for_timeout(500)
+    check("Undo of that tick gives back the plan exactly", snap(page)["plan"] == pre_up["plan"])
 
     # ── Trays to fill ──
     fill = js(page, """const el = hook('tasks-trays-to-fill'), t = el ? el.textContent : '', inNursery = !!el && !!el.closest('[data-half="nursery"]');
       const sow = V.tasks().filter(x => open(x) && x.sow && x.id === 'plugs' && x.due <= now && !x.line.group && x.line.batch && x.line.batch.medium !== 'pots' && x.line.trays >= 1);
       const m = t.match(/(\\d+) trays?/); return { drawn: drawn(el), inNursery, first: el && el.closest('.tk-body') && el.closest('.tk-body').firstElementChild === el, trays: m ? +m[1] : null, text: t, tags: el ? el.querySelectorAll('.tk-fill-sizes span').length : 0, one: sow[0] ? { key: sow[0].key, trays: Math.ceil(sow[0].line.trays - 1e-9) } : null };""")
     check("Trays to fill stands at the head of Nursery, with trays, mix and varieties, and a tag for each tray size", fill["drawn"] and fill["inNursery"] and fill["first"] and fill["trays"] and "mix" in fill["text"] and "variet" in fill["text"] and fill["tags"] >= 1, fill)
+    want = js(page, """const seen = new Set(); let n = 0;
+      for (const t of V.tasks()) { if (!open(t) || !t.sow || t.id === 'direct' || t.id === 'rockwool' || t.due > now) continue;
+        if (t.id === 'live') { n += Math.ceil(t.line.trays - 1e-9); continue; }
+        const b = t.line.batch; if (!b || b.medium === 'pots') continue; const g = t.line.group, key = g ? 'g' + g.id : 'b' + t.key; if (seen.has(key)) continue; seen.add(key); n += Math.ceil((g ? g.trays : b.trays) - 1e-9); }
+      return { n, shared: V.tasks().some(t => open(t) && t.sow && t.due <= now && t.line.group && t.line.groupLines.length > 1) };""")
+    check("Trays to fill counts the trays of the open sowings on screen, trays shared by several sowings once", fill["trays"] == want["n"] and want["shared"], {"said": fill["trays"], "want": want})
     check("there is a sowing in plug trays on screen, of its own trays, to tick for the check", fill["one"], fill)
     if fill["one"]:
         before = snap(page)
@@ -161,7 +172,7 @@ def run(pw):
         asked = js(page, "const p = $('tkPop'); return { open: !p.hidden, mode: V.where().pop, text: p.textContent, recorded: S.undo.length };")
         days = js(page, "return E.dayDiff(E.s2d(arg), E.s2d(now));", ahead["farDue"])
         check("a tick a week or more ahead asks first, and says how far ahead it is", asked["open"] and asked["mode"] == "ahead" and ("in %d days" % days) in asked["text"] and asked["recorded"] == before["undo"], asked)
-        press(page, '[data-hook="tasks-ahead-no"]', 400)
+        press(page, '[data-hook="tasks-ahead-no"]', 1300)
         check("Not yet records nothing", snap(page)["plan"] == before["plan"])
         page.locator('#swWrap .tk-row[data-line="%s"] .tk-tick' % ahead["far"].replace('"', '\\"')).first.click(); page.wait_for_timeout(400)
         press(page, '[data-hook="tasks-ahead-yes"]', 1300)
@@ -234,10 +245,10 @@ def run(pw):
         js(page, "A.select({ type: 'planting', id: arg }); return null;", subj["id"]); page.wait_for_timeout(600)
         check("a planting already started has Mark as failed… on its panel", js(page, "return drawn(hook('panel-fail')) && !!hook('panel-fail').closest('#inspectorBody');"))
         press(page, '[data-hook="panel-fail"]', 500)
-        box = js(page, "const d = hook('panel-fail-date'), s = hook('panel-fail-says'); return { date: d ? d.value : null, max: d ? d.max : null, min: d ? d.min : null, says: s ? s.textContent : '', want: A.previewFailed(arg, now) };", subj["id"])
+        box = js(page, "const d = hook('panel-fail-date'), s = hook('panel-fail-says'), want = A.previewFailed(arg, now); return { date: d ? d.value : null, max: d ? d.max : null, min: d ? d.min : null, says: s ? s.textContent : '', want, amount: F.amount(want.units, want.unit, 'produce'), dollars: '$' + Math.round(want.worth).toLocaleString('en-US') };", subj["id"])
         check("it opens on today, and can go no later than today", box["date"] == js(page, "return now;") and box["max"] == box["date"] and box["min"] <= box["date"], box)
         check("before anything is done it says the day its bed is free, what comes off the forecast, and that it stays on record",
-              "free from " in box["says"] and "off the forecast" in box["says"] and "on record" in box["says"] and box["want"]["units"] > 0 and box["want"]["worth"] > 0, box)
+              "free from " in box["says"] and (box["amount"] + " comes off the forecast") in box["says"] and box["dollars"] in box["says"] and "on record" in box["says"] and box["want"]["units"] > 0 and box["want"]["worth"] > 0, box)
         check("nothing has changed yet", snap(page)["plan"] == before["plan"])
         w0 = js(page, "return worth(S.engine);")
         press(page, '[data-hook="panel-fail-save"]', 900)

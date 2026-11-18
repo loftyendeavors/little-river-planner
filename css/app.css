@@ -1127,7 +1127,7 @@ body[data-view="sow"] .view-sow { background: var(--paper); }
 .tk-all { margin-left: auto; border: 0; background: none; padding: 2px 0; font-size: var(--type-13) !important; font-weight: 600 !important; color: var(--muted) !important; cursor: pointer; }
 .tk-all:hover, .tk-all:focus-visible { color: var(--ink) !important; text-decoration: underline; text-underline-offset: 3px; }
 .tk-fill { padding-bottom: var(--space-12); border-bottom: 1px solid var(--tk-hair); }
-.tk-fill .tk-sec { padding-top: var(--space-8); }
+.tk-fill-head { display: flex; align-items: baseline; gap: var(--space-8); padding: var(--space-8) var(--space-16) var(--space-4); }
 .tk-fill-sizes { display: flex; flex-wrap: wrap; gap: var(--space-4); padding: var(--space-4) var(--space-16) 0; }
 .tk-fill-sizes span { padding: 2px var(--space-8); border-radius: var(--corner-8); background: var(--tk-soft); font-size: var(--type-13); line-height: 1.4; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tk-fill-sizes b { font-weight: 700; color: var(--ink); }

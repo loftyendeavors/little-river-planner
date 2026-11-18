@@ -814,7 +814,7 @@
         usedSites: tw ? plants : null, totalSites: tw ? sites(b) : null,
         planned, field, sow: gh, plannedSow: plannedGh, sowDefault, sowSet: !!sowOwn, start: gh || field, slip: dayDiff(field, planned),
         first, last, modeledLast: period.modeledLast, automaticEnd: period.automaticEnd, harvestMode: period.harvestMode,
-        harvestDays, expectedHarvestDays: period.expectedDays, removal: period.removal, actualClear, failed: lost ? d2s(lost) : null,
+        harvestDays, expectedHarvestDays: period.expectedDays, removal: period.removal, actualClear, ...(lost ? { failed: d2s(lost) } : {}),
         area: tw || rack || ct ? 0 : (+b.w || 0) * len, days, blackoutDays,
         occupiedDays: actualClear ? Math.max(1, dayDiff(actualClear, field) + 1) : days + turnoverFor(p)
       };
