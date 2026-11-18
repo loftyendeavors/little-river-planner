@@ -207,15 +207,28 @@ with sync_playwright() as pw:
     js("A.setView('map'); A.select(null); return 1;"); wait(800)
     settle = js("const s = $('toSettle'); return s ? { paras: [...s.children].filter(x => x.tagName === 'P').length } : null;")
     said = card("settle-help") or {}
-    check("To settle's note is behind its “?”: no paragraph stands under its head, and the “?” says what is counted", settle is not None and settle["paras"] == 0 and "booked twice" in said.get("text", ""), {"settle": settle, "said": said.get("text")})
+    check("To settle's note is behind its “?”: no paragraph stands under its head, and the “?” leads with “To settle” in bold, then says what is counted", settle is not None and settle["paras"] == 0 and (said.get("rows") or [""])[0] == "To settle" and "booked twice" in said.get("text", ""), {"settle": settle, "said": said})
     js("const S2 = LRFSuccession, o = S2.openings(eng).find(o => o.whole && S2.fits(eng, o).length > 3); if (o) A.select({ type: 'opening', id: o.id, bedId: o.bed.id }); return !!o;"); wait(900)
     fits = js("const f = $('ahFits'); return f ? [...f.querySelectorAll('p')].map(p => p.textContent).filter(t => t.length >= 140) : null;")
     said = card("fits-help") or {}
-    check("What fits says what makes a crop fit behind its “?”, in the glossary's words, and no paragraph stands under it", fits == [] and "harvest window" in said.get("text", ""), {"standing": fits, "said": said.get("text")})
+    check("What fits says what makes a crop fit behind its “?”, led by its term in bold, in the glossary's words, and no paragraph stands under it", fits == [] and (said.get("rows") or [""])[0] == "What fits" and "harvest window" in said.get("text", ""), {"standing": fits, "said": said})
+    # "Grown for" in a planting's panel: the two words behind "?", each in bold; under the switch nothing, while the planting follows the default
+    js("const F = LRFForecast, p = S.plan.plantings.find(p => { const b = eng.bedOf(p.bedId); return b && !eng.isTower(b) && eng.calc(p) && F.useOf(eng, p).by === 'default'; }); if (p) A.select({ type: 'planting', id: p.id }); return !!p;"); wait(800)
+    grown = js("const f = $('fUseField'); return f ? { said: f.querySelectorAll('[data-hook=use-said]').length, text: f.innerText, label: (f.querySelector('[data-hook=use-label]') || {}).textContent || '' } : null;")
+    said = card("use-help") or {}
+    check("Grown for in a planting's panel: Commercial and Personal use are defined behind its “?”, each term in bold, and nothing stands under the switch while the planting follows the default",
+          grown is not None and grown["label"] == "Grown for" and grown["said"] == 0 and "left out of revenue" not in grown["text"] and said.get("rows") == ["Commercial", "Personal use"] and "left out of revenue" in said.get("text", ""), {"grown": grown, "said": said})
+    bed = js("const p = S.sel && S.sel.type === 'planting' ? eng.planting(S.sel.id) : null; return p ? p.bedId : null;")
+    js("LRFMapEdit.open({ bedId: %s, field: 'leUse' }); return 1;" % json.dumps(bed)); wait(700)
+    lay = js("const f = $('leUseField'); return f ? { text: f.innerText, label: (f.querySelector('[data-hook=use-label]') || {}).textContent || '' } : null;")
+    said = card("use-help") or {}
+    js("LRFMapEdit.close(); A.select(null); return 1;"); wait(500)
+    check("Grown for in Edit layout: the same two terms behind its “?”, and under the box only what is so of the space",
+          lay is not None and lay["label"].startswith("Grown for") and "left out of revenue" not in lay["text"] and said.get("rows") == ["Commercial", "Personal use"], {"layout": lay, "said": said})
     js("A.select(null); A.setView('trays'); LRFTraysView.setTab('setup'); return 1;"); wait(900)
     bench = js("const r = $('bnRules'); return r ? { helps: r.querySelectorAll('[data-hook=bench-help]').length, paras: [...r.querySelectorAll('p')].filter(p => p.textContent.length >= 100).length } : null;")
     said, cool = card("bench-help") or {}, card("bench-help", 1) or {}   # each "?" opened and read: the rules', then growing on without heat's
-    check("the Nursery's hardening-off and growing-on rules say what they do behind two “?”, and no paragraph stands beside their heads", bench == {"helps": 2, "paras": 0} and "harden off" in said.get("text", "") and "unheated benches" in cool.get("text", ""), {"bench": bench, "said": said.get("text"), "cool": cool.get("text")})
+    check("the Nursery's hardening-off and growing-on rules say what they do behind two “?”, each led by its term in bold, and no paragraph stands beside their heads", bench == {"helps": 2, "paras": 0} and (said.get("rows") or [""])[0] == "Hardening off and growing on" and "harden off" in said.get("text", "") and (cool.get("rows") or [""])[0] == "Grown on without heat" and "unheated benches" in cool.get("text", ""), {"bench": bench, "said": said, "cool": cool})
     dtm = {}
     for where, how in [("map", "A.setView('map'); A.select(null);"), ("timeline", "A.setView('timeline');"), ("forecast", "A.setView('harvest');"), ("tasks", "A.setView('sow');"), ("nursery", "A.setView('trays'); LRFTraysView.setTab('room');"),
                        ("seeds", "A.setView('seeds');"), ("days to harvest", "A.setView('assume'); LRFAssume.setMode('days');"), ("yield and price, one crop at a time", "A.setView('assume'); LRFAssume.setMode('harvest'); document.querySelector('[data-ah-way=card]').click();")]:

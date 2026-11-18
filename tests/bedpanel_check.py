@@ -192,12 +192,12 @@ with sync_playwright() as pw:
     # ══ personal use or commercial ══
     worth0 = js("return worth()")
     pick(sub["one"])
-    grown = js("""const seg = $('fUse'); return { there: !!seg, use: seg && seg.dataset.use, by: seg && seg.dataset.by, pressed: seg ? [...seg.querySelectorAll('button')].map(b => [b.dataset.use, b.textContent, b.getAttribute('aria-pressed'), b.getBoundingClientRect().height]) : [], help: (document.querySelector('#fUseField small') || {}).textContent, label: (document.querySelector('#fUseField > span') || {}).textContent, line: txt('fYieldLine') };""")
+    grown = js("""const seg = $('fUse'); return { there: !!seg, use: seg && seg.dataset.use, by: seg && seg.dataset.by, pressed: seg ? [...seg.querySelectorAll('button')].map(b => [b.dataset.use, b.textContent, b.getAttribute('aria-pressed'), b.getBoundingClientRect().height]) : [], help: (document.querySelector('#fUseField [data-hook=use-said]') || {}).textContent, label: (document.querySelector('#fUseField [data-hook=use-label]') || {}).textContent, line: txt('fYieldLine') };""")
     check("a planting's panel has “Grown for”: Commercial or Personal use, in his words, Commercial until he says otherwise", grown["there"] and grown["label"] == "Grown for" and [p[:3] for p in grown["pressed"]] == [["commercial", "Commercial", "true"], ["personal", "Personal use", "false"]] and grown["by"] == "default" and all(p[3] < 40 for p in grown["pressed"]) and "$" in grown["line"], grown)
     dates0 = js(f"const r = eng.calc(eng.planting({json.dumps(sub['one'])})); return [+r.first, +r.last, r.plants, eng.yieldOf(eng.planting({json.dumps(sub['one'])}), r).units].join('/')")
     click("#fUse [data-use=personal]", 450)
     marked = js(f"""const p = eng.planting({json.dumps(sub['one'])}), r = eng.calc(p), seg = $('fUse'); return {{ use: p.use, worth: worth(), dates: [+r.first, +r.last, r.plants, eng.yieldOf(p, r).units].join('/'), toast: txt('toast'), pressed: seg ? seg.querySelector('[aria-pressed=true]').dataset.use : '', by: seg && seg.dataset.by,
-      line: txt('fYieldLine'), help: (document.querySelector('#fUseField small') || {{}}).textContent, undo: S.undo.length, key: A.contentKey(), saved: line('#inspectorBody'), n: F.build(eng).personal }};""")
+      line: txt('fYieldLine'), help: (document.querySelector('#fUseField [data-hook=use-said]') || {{}}).textContent, undo: S.undo.length, key: A.contentKey(), saved: line('#inspectorBody'), n: F.build(eng).personal }};""")
     check("Personal use, pressed: the planting carries the word, in one step, and the plan counts as changed (so it is stored and sent)", marked["use"] == "personal" and marked["undo"] == 1 and marked["key"] != key0 and marked["pressed"] == "personal" and marked["by"] == "planting" and marked["n"] == 1, marked)
     check("the season's worth falls by exactly that planting's dollars", abs((worth0 - marked["worth"]) - sub["oneDollars"]) < 0.005 and sub["oneDollars"] > 0, [worth0, marked["worth"], sub["oneDollars"]])
     money = lambda n: "$" + f"{round(n):,}"
@@ -223,10 +223,10 @@ with sync_playwright() as pw:
     shot("personal-bed-layout")
     page.evaluate("LRFMapEdit.close()"); wait(200)
     pick(sub["two"])
-    follows = js("const seg = $('fUse'); return { pressed: seg && seg.querySelector('[aria-pressed=true]').dataset.use, by: seg && seg.dataset.by, help: (document.querySelector('#fUseField small') || {}).textContent, line: txt('fYieldLine') }")
+    follows = js("const seg = $('fUse'); return { pressed: seg && seg.querySelector('[aria-pressed=true]').dataset.use, by: seg && seg.dataset.by, help: (document.querySelector('#fUseField [data-hook=use-said]') || {}).textContent, line: txt('fYieldLine') }")
     check("a planting in that bed shows Personal use, and says it follows its bed", follows["pressed"] == "personal" and follows["by"] == "bed" and "Follows its bed" in follows["help"] and "$" not in follows["line"], follows)
     click("#fUse [data-use=commercial]", 450)
-    part = js(f"""const p = eng.planting({json.dumps(sub['two'])}), ids = {json.dumps(sub['bedIds'])}.filter(id => id !== p.id); return {{ use: p.use, by: F.useOf(eng, p).by, worth: worth(), want: dollarsOf(ids), help: (document.querySelector('#fUseField small') || {{}}).textContent, line: txt('fYieldLine'), toast: txt('toast') }};""")
+    part = js(f"""const p = eng.planting({json.dumps(sub['two'])}), ids = {json.dumps(sub['bedIds'])}.filter(id => id !== p.id); return {{ use: p.use, by: F.useOf(eng, p).by, worth: worth(), want: dollarsOf(ids), help: (document.querySelector('#fUseField [data-hook=use-said]') || {{}}).textContent, line: txt('fYieldLine'), toast: txt('toast') }};""")
     check("Commercial pressed on it is kept on the planting, since its bed says otherwise: a bed that is part personal", part["use"] == "commercial" and part["by"] == "planting" and abs((worth0 - part["worth"]) - part["want"]) < 0.005 and "Its bed is for personal use" in part["help"] and "$" in part["line"] and "counts as revenue again" in part["toast"], part)
     pick_bed(sub["bedId"])
     check("the bed's panel now says personal use", js("const el = $('bedUse'); return el && el.dataset.use === 'personal' && el.dataset.by === 'bed' && /personal use/.test(el.textContent)"))
