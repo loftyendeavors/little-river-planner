@@ -54,7 +54,10 @@
 
   // ── toast with an optional action (Undo) ──
   let toastTimer = null;
+  // While the card is open (card.js, behind its tick) the answer to an action is said on the card: the one answer (DESIGN.md, rule 3)
+  let answerTo = null;
   function toast(message, action) {
+    if (answerTo && answerTo(message, action)) return;
     const host = document.getElementById('toast');
     clear(host).append(h('span', message));
     if (action) host.append(h('button.toast-action', { type: 'button', onclick: () => { host.classList.remove('show'); action.run(); } }, action.label));
@@ -116,5 +119,5 @@
     return btn;
   }
 
-  root.LRFUI = { h, s, clear, add, day, dayLong, span, num, feet, isoWeek, inkOn, toast, confirm, help, MONTHS, DAYS };
+  root.LRFUI = { h, s, clear, add, day, dayLong, span, num, feet, isoWeek, inkOn, toast, answerHere: fn => { answerTo = fn; }, confirm, help, MONTHS, DAYS };
 })(window);

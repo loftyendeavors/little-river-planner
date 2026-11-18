@@ -1,0 +1,28 @@
+{
+ "build": "Redesign build 5, the card, part 1, behind a tick. Under the Map's \"?\", \"Try the card\" is off and is kept by the browser only (localStorage lrf.tryCard; never in the plan). Off, nothing new is drawn and every screen is the build before's. On, on the Map and the Timeline, the side panel leaves and a bed or a planting picked opens one floating card at the top right of the view (js/card.js): the planting's card (its life as one bar, what it comes to, the date and the variety side by side, Grown for sale as a tick, rows that open in place showing their figures: share of the bed, days and yield, the nursery, repeat), the bed's card (its size, Edit layout and Plan a series here as buttons, the bed's year as one picture, Grown for sale, its plantings with the one in the ground marked, its openings as \"Open N days, after the ...\"), the answer to a drop or a change said on the card with Undo in place of a toast, a menu under \"⋯\" and on a right-click, a calendar that says what a day would move before it is picked, and a hint on a Timeline bar in place of its hover text. Every change the card makes goes through the function the side panel uses for it (LRFPanels.edit, App.setUse, App.addSuccessions, App.sendToWait, App.removePlantings). What the card does not hold (an opening, the series tool, a planting waiting for a bed, To settle, \"All of this planting…\") stands in the side panel as before. With it, at his word of 20:45 on Nov 17: the grey line under the library's switch while To place is chosen reads \"Not in a bed yet, so not in the forecast, seed or sowing lists.\", and the line at the library's foot \"Drag one onto a bed or a row. It keeps its date.\" No date, yield, price, seed count or bench figure changes.",
+ "changes": {
+  "did": "A floating card in place of the side panel, to try: tick “Try the card” under the Map’s “?”. Off, nothing changes. To place’s two lines are shorter.",
+  "steps": [
+   "On the Map press “?” and tick “Try the card”. Click a planted bed: the side panel goes and a card opens at the top right with the bed’s year, its plantings and its openings. Click a planting in it, then the bed’s name under its title to go back; × closes.",
+   "On a planting’s card press its date: point at a day and read what it would move, pick it, and read “Saved” on the card with Undo. Press Undo: the date is back.",
+   "On the Timeline hold the pointer over a bar for its hint, and right-click it for the menu. Untick “Try the card” under the Map’s “?”: the side panel is back as it was."
+  ]
+ },
+ "words": [
+  "series.js"
+ ],
+ "code": [
+  "map.js",
+  "panels.js",
+  "ui.js"
+ ],
+ "added": [
+  "card.js"
+ ],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html"
+ ],
+ "screens": []
+}

@@ -2406,3 +2406,122 @@ body.phone .top { padding-block: var(--space-4); }   /* the header stays one sho
 .nu-stats .tr-stat small { display: none; }
 .nu-stats .tr-stat.over small { display: inline; }
 .nu-week .linkish { margin-top: 0; }
+
+/* ───────────────────────────── The card, part 1 (DESIGN.md, rule 2), behind "Try the card" ─────────────────────────────
+   Only while the tick is on (body[data-card="on"], set by js/card.js): the side panel leaves the Map and the Timeline, and a
+   bed or a planting picked opens one floating card at the top right of the view, under its tools. Off, none of this applies. */
+body[data-card="on"] .inspector { display: none; }
+body[data-card="on"] .work { grid-template-columns: 268px minmax(0, 1fr); }
+@media (max-width: 1080px) { body[data-card="on"] .work { grid-template-columns: 232px minmax(0, 1fr); } }
+@media (max-width: 700px) { body[data-card="on"] .work { grid-template-columns: minmax(0, 1fr); } }
+body[data-card="on"] .stage { position: relative; }
+.lrf-card { position: absolute; right: var(--space-12); z-index: 25; width: min(340px, calc(100% - 24px)); overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-16); display: grid; gap: var(--space-12); font-size: var(--type-13); color: var(--ink-2); }
+.card-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: start; column-gap: var(--space-8); }
+.card-head > .thumb { border-radius: var(--corner-12); }
+.card-title { min-width: 0; }
+.card-title h2 { margin: 0; font: 700 var(--type-18)/1.15 var(--display); font-stretch: 80%; color: var(--ink); overflow-wrap: anywhere; }
+.card-sub { margin: var(--space-4) 0 0; font-size: var(--type-13); color: var(--muted); }
+.card-sub .link { font-size: var(--type-13); }
+.card-head .icon-btn { width: var(--control-in); height: var(--control-in); font-size: var(--type-15); border-color: transparent; background: var(--paper); border-radius: var(--corner-pill); }
+.card-head .icon-btn:hover { border-color: var(--line); }
+.card-said { margin: 0; padding: var(--space-8) var(--space-12); border-radius: var(--corner-12); background: var(--paper); font-size: var(--type-13); color: var(--ink-2); }
+.card-said b { color: var(--ink); }
+.card-said .link { margin-left: var(--space-8); font-weight: 600; }
+.card-said[data-state="refused"] b { color: var(--bad); }
+.card-sums { margin: 0; font-size: var(--type-13); color: var(--ink); font-weight: 600; }
+/* a planting's life as one bar */
+.card-bar { display: grid; gap: var(--space-8); }
+.card-bar-track { position: relative; height: 18px; }
+.card-bar-track i { position: absolute; top: 0; height: 18px; }
+.card-bar-track .cb-nursery { top: 8px; height: 2px; background: color-mix(in srgb, var(--crop) 70%, var(--ink)); }
+.card-bar-track .cb-grow { background: color-mix(in srgb, var(--crop) 40%, var(--raised)); border-radius: var(--corner-4) 0 0 var(--corner-4); }
+.card-bar-track .cb-pick { background: var(--crop); }
+.card-bar-track .cb-turn { background: repeating-linear-gradient(135deg, var(--crop) 0 2px, transparent 2px 6px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--crop) 50%, transparent); border-radius: 0 var(--corner-4) var(--corner-4) 0; }
+.card-bar-days { display: flex; justify-content: space-between; gap: var(--space-8); }
+.card-bar-days span { display: grid; font-size: var(--type-11); color: var(--muted); white-space: nowrap; }
+.card-bar-days b { font: 600 var(--type-11) var(--mono); color: var(--ink); }
+/* the boxes changed most, side by side */
+.card-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-8); }
+.card-box { display: grid; gap: var(--space-4); min-width: 0; }
+.card-box > span { font-size: var(--type-11); color: var(--muted); }
+.card-box select, .card-box input, .card-date { height: var(--control-in); min-width: 0; width: 100%; padding: 0 var(--space-8); border: 1px solid var(--line); border-radius: var(--corner-8); background: var(--raised); font: 600 var(--type-13) var(--body); color: var(--ink); }
+.card-date { text-align: left; }
+.card-box select.ask { border-color: var(--flag); box-shadow: 0 0 0 1px var(--flag); }
+.card-tick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-8); font-size: var(--type-13); font-weight: 600; color: var(--ink); }
+.card-tick input { width: 16px; height: 16px; margin: 0; }
+.card-tick small { flex-basis: 100%; padding-left: var(--space-24); font-weight: 400; font-size: var(--type-11); color: var(--muted); }
+/* rows that open in place, their figures shown while closed */
+.card-row { border-top: 1px solid var(--line-soft); }
+.card-row-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-8); width: 100%; min-height: var(--control); padding: 0; border: 0; background: none; text-align: left; font-size: var(--type-13); color: var(--ink); }
+.card-row-name { font-weight: 600; white-space: nowrap; }
+.card-row-figs { justify-self: end; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-row-head i { font-style: normal; color: var(--muted); transition: transform var(--speed-press) var(--ease); }
+.card-row.open .card-row-head i { transform: rotate(90deg); }
+.card-row-body { display: grid; gap: var(--space-8); padding: 0 0 var(--space-12); }
+.card-note { margin: 0; font-size: var(--type-11); color: var(--muted); }
+.card-repeat { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+.card-repeat input { width: 56px; height: var(--control-in); padding: 0 var(--space-8); border: 1px solid var(--line); border-radius: var(--corner-8); background: var(--raised); }
+.card-foot, .card-acts { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.card-foot { border-top: 1px solid var(--line-soft); padding-top: var(--space-8); }
+/* a bed's year, its plantings and its openings */
+.card-year { display: grid; gap: var(--space-4); }
+.cy-track { position: relative; height: 56px; border-radius: var(--corner-4); background: var(--paper); overflow: hidden; }
+.cy-track i { position: absolute; }
+.cy-bar { background: color-mix(in srgb, var(--crop) 70%, var(--raised)); box-shadow: inset 0 0 0 1px var(--raised); }
+.cy-open { border: 1px dashed var(--muted); box-sizing: border-box; }
+.cy-now { top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--flag); }
+.cy-months { display: flex; justify-content: space-between; font: 500 var(--type-11) var(--mono); color: var(--muted); }
+.cy-months span { flex: 1; text-align: center; }
+.card-list { display: grid; margin: 0 calc(-1 * var(--space-16)); }
+.card-item { width: 100%; padding: var(--space-8) var(--space-16); border: 0; border-top: 1px solid var(--line-soft); background: none; text-align: left; color: var(--ink); }
+.card-item:hover, .card-open:hover { background: var(--paper); }
+.card-item .row-name, .card-item .row-detail { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-item.now .row-word { color: var(--flag-deep); }
+.card-open { display: grid; gap: 2px; width: 100%; padding: var(--space-8) var(--space-16); border: 0; border-top: 1px solid var(--line-soft); background: none; text-align: left; font-size: var(--type-13); color: var(--ink); }
+.card-open small { font-size: var(--type-11); color: var(--muted); }
+/* the menu: the card's "⋯", and a right-click */
+.card-menu { position: fixed; z-index: 70; width: 236px; padding: var(--space-4); border-radius: var(--corner-12); background: var(--raised); box-shadow: var(--shadow-float); display: grid; }
+.card-menu-head { display: grid; padding: var(--space-8) var(--space-8) var(--space-4); }
+.card-menu-head b { font-size: var(--type-13); color: var(--ink); }
+.card-menu-head small { font-size: var(--type-11); color: var(--muted); }
+.card-menu hr { height: 1px; margin: var(--space-4) var(--space-8); border: 0; background: var(--line-soft); }
+.card-menu-item { display: flex; align-items: center; min-height: var(--control-in); padding: 0 var(--space-8); border: 0; border-radius: var(--corner-8); background: none; text-align: left; font-size: var(--type-13); color: var(--ink); }
+.card-menu-item:hover, .card-menu-item:focus-visible { background: var(--paper); outline: none; }
+.card-menu-item.bad { color: var(--bad); }
+.card-menu-item kbd { margin-left: auto; font: var(--type-11) var(--mono); color: var(--muted); }
+/* the calendar: the day it is on ringed, the day pointed at filled, and what that day would move */
+.card-cal { position: fixed; z-index: 70; width: 316px; padding: var(--space-16); display: grid; gap: var(--space-12); font-size: var(--type-13); color: var(--ink-2); }
+.card-cal .card-head { grid-template-columns: minmax(0, 1fr) auto; }
+.card-cal-month { display: flex; align-items: center; gap: var(--space-4); }
+.card-cal-month b { flex: 1; color: var(--ink); }
+.card-cal-month .icon-btn { width: var(--control-in); height: var(--control-in); font-size: var(--type-15); }
+.card-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; justify-items: center; }
+.card-cal-wd { font: 700 var(--type-11) var(--body); color: var(--muted); }
+.card-cal-day { width: var(--control-in); height: var(--control-in); padding: 0; border: 0; border-radius: var(--corner-pill); background: none; font: 600 var(--type-13) var(--body); color: var(--ink); }
+.card-cal-day.cur { box-shadow: inset 0 0 0 1px var(--ink); }
+.card-cal-day:hover, .card-cal-day:focus-visible { background: var(--ink); color: var(--surface); outline: none; }
+.card-cal-says { display: grid; gap: 2px; padding-top: var(--space-8); border-top: 1px solid var(--line-soft); color: var(--muted); }
+.card-cal-says p { margin: 0; }
+.card-cal-says b { color: var(--ink); }
+.card-cal-warn { color: var(--warn); font-weight: 600; }
+/* the hint on a bar: what it is, in place of its hover text */
+.card-hint { position: fixed; z-index: 70; width: 300px; padding: var(--space-12); border-radius: var(--corner-12); background: var(--raised); box-shadow: var(--shadow-float); display: grid; gap: var(--space-8); font-size: var(--type-13); color: var(--muted); pointer-events: none; }
+.card-hint p { margin: 0; }
+.card-hint p b { color: var(--ink); }
+.card-hint-head { display: flex; align-items: center; gap: var(--space-12); }
+.card-hint-head .thumb { border-radius: var(--corner-12); }
+.card-hint-head span { display: grid; }
+.card-hint-head span b { font-size: var(--type-15); color: var(--ink); }
+.card-hint-foot { font: var(--type-11) var(--mono); }
+/* the tick in the Map's "?" */
+.card-try { display: flex; align-items: flex-start; gap: var(--space-8); }
+.card-try input { flex: none; margin: 2px 0 0; }
+@media (prefers-reduced-motion: reduce) { .card-row-head i { transition: none; } }
+/* on a phone, whatever is pressed on the card is 44 high */
+@media (max-width: 700px) {
+  .lrf-card .card-head .icon-btn { width: var(--control-phone); height: var(--control-phone); }
+  .card-box select, .card-box input, .card-date, .card-row-head, .card-repeat input, .lrf-card .btn.small, .card-menu-item, .card-cal-day, .card-cal-month .icon-btn { min-height: var(--control-phone); }
+  .card-cal-day, .card-cal-month .icon-btn { width: var(--control-phone); height: var(--control-phone); }
+  .card-cal { width: min(340px, calc(100vw - 16px)); }
+}
