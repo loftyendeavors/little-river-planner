@@ -41,7 +41,7 @@
   const UNITS = ['each', 'bunch', 'lb', 'pint', 'quart', 'clamshell', 'head', 'stem'];
   const PATTERN = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' };
   const PATTERN_SAY = { weekly: 'picked gradually', once: 'cleared at once', spread: 'picked on demand' };
-  const PATTERN_TIP = { spread: 'The yield is a total, picked evenly over the harvest days: held, and taken as it is wanted.', weekly: 'The yield is what is picked each week. A longer harvest gives more, a shorter one less.', once: 'The yield is a total, and all of it is counted the day the crop is ready.' };
+  const PATTERN_TIP = { spread: 'On demand: the yield is a total, held and spread evenly over the harvest window.', weekly: 'Gradually: the yield is a week’s picking, every week of the harvest window.', once: 'Clear: the yield is a total, all of it counted the day the crop is ready.' };
   const PER = { plant: 'a plant', ft: 'a bed-foot', tray: 'a tray' }, PER_SAY = { plant: 'per plant', ft: 'per bed-foot', tray: 'per tray' };
   const COUNTED = ['each', 'head'];
   const fig = n => root.LRFAssume.fig(n);
@@ -354,7 +354,7 @@
     if (changed && changed.from === unit) ui.units.delete(c.id);
     if (hc.micro) body.append(row('unit', 'Sold by', null, span(why('the tray: a live tray is counted and sold by the tray'))));
     else body.append(row('unit', 'Sold by', null, span(
-      h('select.yc-sel' + (hc.unit.mine ? '.mine' : ''), { 'aria-label': `${c.name}: sold by`, dataset: { yk: 'unit' }, title: `${hc.unit.mine ? `Your choice. The crop’s record says ${hc.unit.fallback}.` : 'From the crop’s record. Choose another to change it.'} One unit for the crop, wherever it grows. With this box in focus a letter picks the unit it begins.`,
+      h('select.yc-sel' + (hc.unit.mine ? '.mine' : ''), { 'aria-label': `${c.name}: sold by`, dataset: { yk: 'unit' }, title: `${hc.unit.mine ? `Your choice; the crop’s record says ${hc.unit.fallback}.` : 'From the crop’s record.'} One unit for the crop, wherever it grows. A typed letter picks a unit.`,
         onchange: e => setUnit(c, e.target.value) },
         [...new Set([...UNITS, hc.unit.fallback, unit].filter(Boolean))].map(v => h('option', { value: v, selected: v === unit }, v)), hc.unit.mine ? h('option', { value: '(default)' }, `Back to ${hc.unit.fallback}`) : null),
       n > 1 ? h('span.yc-unit', 'wherever it grows') : null,
@@ -403,14 +403,14 @@
     // where one unit has to be turned into another, the one figure that does it
     if (T.any) UI.add(body, T.helperRow(row, span));
 
-    // first picking: the crop's DTM for the place, shown and not changed here
+    // first picking: the crop's days to harvest for the place, shown and not changed here
     const timing = hc.micro ? [] : cols.list.map(env => eng.timingFor(c.id, null, env)), after = t => t && t.value != null ? `days after ${t.fixed ? FIXED[t.fixed] : FROM[t.start]}` : '';
     const oneStart = timing.length > 0 && timing.every(t => after(t) && after(t) === after(timing[0]));
-    body.append(row('first', 'First picking', h('span', oneStart ? `${after(timing[0])}: its DTM, changed on ` : 'its DTM, changed on ', h('button.link', { type: 'button', id: 'ycToDays', title: 'DTM: days to maturity. They are set on the other half of this list, for each place.', onclick: () => root.LRFAssume.setMode('days') }, 'Days to harvest')), cols.list.map((env, i) => {
+    body.append(row('first', 'First picking', h('span', oneStart ? `${after(timing[0])}, set under ` : 'Set under ', h('button.link', { type: 'button', id: 'ycToDays', title: 'Days to harvest are set on the other half of this list, for each place.', onclick: () => root.LRFAssume.setMode('days') }, 'Days to harvest')), cols.list.map((env, i) => {
       if (hc.micro) return h('td', { dataset: { place: env } }, why('set on the tray plan, under Nursery'));
       const t = timing[i];
       if (!t || t.value == null) return h('td', { dataset: { place: env } }, why('no days are set for this place'));
-      return h('td', { dataset: { place: env } }, h('span.yc-line', h('b.yc-fixed', { dataset: { dtm: String(t.value) } }, String(t.value)), oneStart ? null : h('span.yc-unit', after(t)), h('span.yc-mark', { title: `DTM: days to maturity, ${after(t)}. The figure the Days to harvest list holds for this crop in this place.` }, 'DTM')));
+      return h('td', { dataset: { place: env } }, h('span.yc-line', h('b.yc-fixed', { dataset: { dtm: String(t.value) } }, String(t.value)), h('span.yc-unit', { title: `Days to harvest, ${after(t).replace(/^days /, '')}: the figure the Days to harvest list holds for this crop in this place.`, dataset: { hook: 'card-first-unit' } }, oneStart ? 'days' : after(t))));
     })));
 
     // how it is picked, and for how long
@@ -420,7 +420,7 @@
         tip: hc.days.mine != null ? `Your number: picked for ${hc.days.mine} days. Clear it to go back to ${hc.season ? 'the end of the season' : hc.days.fallback + ' days'}.` : hw.season ? `Type a number to pick it for that many days instead of to the season’s end. What that moves is shown first.` : `From the crop’s record: picked for ${hc.days.fallback} days.`,
         save: k => setWindow(c, k) });
       body.append(row('pick', 'Picked', null, span(h('span.yc-line',
-        h('select.yc-sel' + (hc.pattern.mine ? '.mine' : ''), { 'aria-label': `${c.name}: picked`, dataset: { yk: 'pick' }, title: `${PATTERN_TIP[hc.pattern.value]}${hc.pattern.mine ? '' : ' Not set: this is how every crop has been counted so far.'} Changing between Gradually and the other two turns each yield into a week’s figure, or back into a total, over the harvest days.`,
+        h('select.yc-sel' + (hc.pattern.mine ? '.mine' : ''), { 'aria-label': `${c.name}: picked`, dataset: { yk: 'pick' }, title: `${PATTERN_TIP[hc.pattern.value]}${hc.pattern.mine ? '' : ' Not set: the default.'}`,
           onchange: e => setPick(c, cols.list, e.target.value) },
           Object.entries(PATTERN).map(([value, text]) => h('option', { value, selected: hc.pattern.value === value }, text)), hc.pattern.mine ? h('option', { value: 'unset' }, 'Back to not set') : null),
         windowChoice(eng, c, hc, daysBox, T.any)))));   // beside the columns of other things sold, the narrow words

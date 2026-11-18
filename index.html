@@ -124,7 +124,7 @@
       <div class="tl-tools">
         <div class="seg tl-filters" id="tlFilters" role="group" aria-label="Which growing spaces to show"></div>
         <button type="button" id="tlOpenToggle" aria-pressed="true" title="Show where whole beds stand open before, after or between crops">Openings</button>
-        <div class="tl-zoom" role="group" aria-label="Timeline zoom" title="Months, Weeks and Days set the scale; − and + step it. Ctrl and the mouse wheel zoom about the pointer. Hold and drag empty chart to move it.">
+        <div class="tl-zoom" role="group" aria-label="Timeline zoom" title="Months, Weeks, Days set the scale; − and + step it. Ctrl and the wheel zoom at the pointer. Drag empty chart to move it.">
           <button type="button" class="tl-step" id="tlZoomOut" aria-label="Zoom out">−</button>
           <button type="button" data-tl-zoom="months" aria-pressed="true" title="The whole year">Months</button>
           <button type="button" data-tl-zoom="weeks" aria-pressed="false">Weeks</button>
@@ -153,7 +153,7 @@
         <header class="as-head">
           <p class="eyebrow">One list the whole plan rests on</p>
           <h2 id="asTitle">Days to first harvest</h2>
-          <p id="asLead">Each row says what its days are counted from, and its numbers count from there. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; a variety with its own figure keeps it, and a planting with no variety uses the crop row.</p>
+          <p id="asLead">Days to harvest for each crop in each place it grows, counted from what its row says. Each number is used as it stands, whatever the month or the house. Grey is the default: type over it to make it yours. A variety with its own figure keeps it; a planting with no variety uses the crop’s row.</p>
           <p class="frame-figs" id="asCount"></p>
         </header>
         <div class="seg as-mode" role="group" aria-label="Which half of the list">
@@ -171,13 +171,13 @@
             <button type="button" data-as-scope="all" aria-pressed="false">All crops <small></small></button>
           </div>
           <input type="search" id="asSearch" placeholder="Search crops and varieties" autocomplete="off">
-          <label class="ah-check as-house" id="ahHouseFarm" title="On: a crop can be marked as partly kept for personal use, and that part is taken off what is sold. Off: everything this farm packs is sold, and the idea is shown on no page. What either does to the season’s worth is shown before it is done." hidden><input type="checkbox" id="ahHouseOn"><span>Part of some crops is for personal use</span></label>
+          <label class="ah-check as-house" id="ahHouseFarm" title="On: part of a crop can be kept for personal use and is not counted as sold. Off: everything packed is sold. Either is shown before it is done." hidden><input type="checkbox" id="ahHouseOn"><span>Part of some crops is for personal use</span></label>
           <p class="as-key"><i class="k-default"></i>unchecked default <i class="k-guide"></i>checked against a guide <i class="k-own"></i>variety’s own <i class="k-mine"></i>yours</p>
         </div>
         <div class="yc" id="ycHost" hidden></div>
         <table class="as ah" id="ahTable" hidden><thead id="ahHead"></thead><tbody id="ahBody"></tbody></table>
         <table class="as" id="asTable">
-          <thead><tr><th>Crop</th><th class="as-th-start" title="Where the numbers in the row count from. Transplanting: the day the crop goes in the bed. Seeding in trays: the day it is sown in the nursery, so the nursery time comes off. Direct seeding: a figure for seed sown in place; as a transplant the crop is in the bed about two weeks less.">Days counted from</th><th>Field</th><th>Unheated tunnel</th><th>Heated greenhouse</th><th>Towers</th><th title="Days in the nursery, plus days in the bed, and what that comes to from seed to first harvest. Worked out for the condition the crop is mostly grown in.">From seed</th><th>Plantings</th></tr></thead>
+          <thead><tr><th>Crop</th><th class="as-th-start" title="What the row’s days count from: transplanting, seeding in trays or direct seeding. “?” says what each means.">Days counted from</th><th>Field</th><th>Unheated tunnel</th><th>Heated greenhouse</th><th>Towers</th><th title="Days in the nursery plus days in the bed: seed to first harvest, where the crop mostly grows.">From seed</th><th>Plantings</th></tr></thead>
           <tbody id="asBody"></tbody>
         </table>
       </div>

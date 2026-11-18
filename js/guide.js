@@ -58,7 +58,7 @@
     [/tomat|pepper|eggplant|^cucumber|vining|cabbage|lettuce|salanova|little gem/i, 'transplant', null, 'Johnny’s counts these from transplanting'],
     [/^kale\b|kohlrabi|summer squash|zucchini/i, 'direct', 14, 'Johnny’s: from direct seeding; subtract about 14 days for a transplant'],
     [/^beets?\b/i, 'direct', 14, 'Johnny’s: from direct seeding; subtract 14 to 21 days for a transplant'],
-    [/onion|shallot|fennel/i, 'direct', 14, 'Johnny’s: from direct seeding. It gives no figure for a transplant; 14 days is its figure for kale and kohlrabi'],
+    [/onion|shallot|fennel/i, 'direct', 14, 'Johnny’s: from direct seeding, with no transplant figure; take off 14 days, as for kale'],
     [/basil|parsley|cilantro|dill|zinnia|cosmos|snapdragon|^stock\b|celosia|sunflower|marigold|strawflower|yarrow|lisianthus|bachelor|black.eyed|rudbeckia|daucus|ammi|statice|scabiosa|aster\b/i, 'seed', null, 'Johnny’s: days for all flowers and herbs are counted from the seeding date']
   ];
   /** The published starting point for a crop, by its name: { from, less, says }, or null. */

@@ -215,11 +215,11 @@
     }
     const pick = h('select.bn-house', { id: 'bnCoolCrop', 'aria-label': 'Crop to grow on without heat', dataset: { f: 'bnCoolCrop' } }, h('option', { value: '' }, 'Choose a crop…'), free.map(([id, name]) => h('option', { value: id }, name)));
     const addCool = () => { if (!pick.value) { pick.focus(); return; } const id = pick.value; change(`${cropName(id)} is grown on without heat, all year until its days are set`, n => N.setCool(n, id, {}), ['cool:' + id, 'from'], said); };
-    const coolBox = h('div.bn-cool', { id: 'bnCool' }, h('div.bn-edit-head', h('h4', 'Grown on without heat'), h('p', 'Between its two days a crop’s plug trays and pots stand on the unheated benches, once they have had their days under heat to come up. Tower seedlings stay under heat.')),
+    const coolBox = h('div.bn-cool', { id: 'bnCool' }, h('div.bn-edit-head', h('h4', 'Grown on without heat'), UI.help('From its first day through its last, a crop’s plug trays and pots stand on the unheated benches once they have had their days under heat to come up. Tower seedlings stay under heat.', null, null, { label: 'What growing on without heat does', hook: 'bench-help' })),
       rules.length ? h('table.as.bn-benches.bn-cool-table', h('thead', h('tr', h('th', 'Crop'), h('th', 'From'), h('th', 'Through'), h('th', { title: 'Days from sowing that the trays stay under heat, to germinate' }, 'Days under heat first'), h('th', ''))), coolBody) : null,
       h('div.bn-edit-foot', pick, h('button.btn', { type: 'button', id: 'bnCoolAdd', onclick: addCool }, '+ Add a crop')));
     return h('div.bn-edit.bn-rules', { id: 'bnRules', role: 'group', 'aria-label': 'Hardening off and growing on' },
-      h('div.bn-edit-head', h('h3', 'Hardening off and growing on'), h('p', 'Neither moves a sowing, planting or harvest day. They say where trays stand, and when the task to harden off falls.')),
+      h('div.bn-edit-head', h('h3', 'Hardening off and growing on'), UI.help('Neither moves a sowing, planting or harvest day. They say where trays stand, and when the task to harden off falls.', null, null, { label: 'What these rules change', hook: 'bench-help' })),
       h('div.bn-edit-foot', option('bnHarden', fig.hardenDays, 'Hardening off', 'days before planting out', 'harden', v => `Hardening off starts ${v} days before planting out`, 0, 21)),
       coolBox);
   }
@@ -229,7 +229,7 @@
     const crates = fig.onBenches
       ? ['Sheltered crates are counted as standing on the benches. ', h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', null, 'Sheltered crates stand on the floor') }, 'They stand on the floor')]
       : fig.floorMost ? [`Up to ${num(fig.floorMost)} are sheltered under heat${fig.floorUntil ? ` until ${day(fig.floorUntil)}` : ''}. They stand on the floor and take no bench room. `, h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', 'bench', 'Count sheltered crates on the benches') }, 'Count them on the benches instead')] : null;
-    const sharing = eng.sowingBatches().length ? [apart ? 'Every variety is counted in trays of its own. ' : `Varieties of one crop sown the same day share trays, each in whole rows. Tower crops sown the same day share rockwool sheets (${SHEET.cells} cells, ${SHEET.rows} rows of ${SHEET.columns}), whatever the crop. `,
+    const sharing = eng.sowingBatches().length ? [apart ? 'Every variety is counted in trays of its own. ' : `Varieties of one crop sown the same day share trays in whole rows; tower crops share rockwool sheets of ${SHEET.cells}, whatever the crop. `,
       h('button.linkish', { type: 'button', onclick: () => App.setOwn('trays', apart ? null : 'variety', apart ? 'Varieties of one crop share trays' : 'Every variety in trays of its own') }, apart ? 'Let varieties of one crop share trays' : 'Count every variety in trays of its own')] : null;
     if (!crates && !sharing) return null;
     return h('div.bn-edit.bn-counting', { id: 'bnCount', role: 'group', 'aria-label': 'How trays and crates are counted' },
