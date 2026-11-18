@@ -39,7 +39,7 @@ PAGE = [
  ("the card is wider than 340", CSS, "width: min(340px, calc(100% - 24px)); overflow-y: auto;", "width: min(360px, calc(100% - 24px)); overflow-y: auto;"),
  ("× does not close the card", CD, "dataset: { hook: 'card-close' }, onclick: () => App.select(null) }, '×'))", "dataset: { hook: 'card-close' }, onclick: () => {} }, '×'))"),
  ("the bed's name does not go back to the bed", CD, "onclick: () => App.select({ type: 'bed', id: bed.id }) }, App.bedLabel(bed));", "onclick: () => {} }, App.bedLabel(bed));"),
- ("a bed's card lists only what is in the ground", CD, "all.length ? h('div.card-list', all.map(rowOf))", "all.length ? h('div.card-list', all.filter(inGround).map(rowOf))"),
+ ("a bed's card lists only what is in the ground", CD, "all.map(x => bedPlantingRow(x, bed, status, date, readOnly, redraw))", "all.filter(x => status.crops.includes(x.r)).map(x => bedPlantingRow(x, bed, status, date, readOnly, redraw))"),
  ("the calendar puts the planting a day after the day picked", CD, "const ed = root.LRFPanels.edit.date(value);", "const ed = root.LRFPanels.edit.date(iso(E.addDays(E.s2d(value), 1)));"),
  ("the calendar says nothing before a day is picked", CD, "          onpointerenter: () => tell(value), onfocus: () => tell(value),\n", ""),
  ("the card writes a variety its own way", CD, "onchange: ev => set(Ed.variety(ev.target.value)) }", "onchange: ev => set([{ varietyId: ev.target.value, variety: ev.target.selectedOptions[0].text }, 'Change variety']) }"),

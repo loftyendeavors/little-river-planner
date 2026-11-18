@@ -1,0 +1,17 @@
+{
+ "build": "L2, the bed across its season. A click on a soil bed on the desktop Map opens the bed in the default sidebar or the optional floating card. Both show its season strip, planting rows with their 40-pixel photographs, dates and status on the planning date, and openings with their first three fits. One row opens for its date and variety, with a link to the whole planting and a way back to the same row. Grown for sale uses the shared definitions and existing impact message and Undo. Edit layout shows the season's worth before and after shortening a bed where the change is allowed. The floating card reveals a bed it covers without changing zoom. No new data is stored.",
+ "changes": {
+  "did": "Click a bed on the Map to see the whole season, with planting photos, quick edits and openings.",
+  "steps": [
+   "Click a planted bed. Open one of its photo rows to change its date or variety, or go to All of this planting. The bed name takes you back to that row.",
+   "Look at an opening for its dates and what fits. Move the planning date into the opening to see it marked.",
+   "Try the floating card under the Map’s ?. The bed shows the same rows, edits and openings there."
+  ]
+ },
+ "words": [],
+ "code": ["ahead.js", "card.js", "map.js", "mapedit.js", "panels.js"],
+ "added": [],
+ "removed": [],
+ "page": ["css/app.css"],
+ "screens": []
+}

@@ -107,11 +107,12 @@ def run(pw):
     check("the card floats at the top right of the map, under its tools, inside the map, 340 wide, on a corner of 20", bool(bed) and bed["inside"] and bed["w"] == min(340, WIDTH) and 8 <= bed["right"] <= 16 and bed["radius"] == "20px", bed)
     page.screenshot(path=str(shots / f"map-bed-{WIDTH}.png"))
 
-    # a planting from the bed's card, the bed's name back, x to close
-    press(page, f"[data-hook='card-planting'][data-planting='{PID}']", 400)
+    # a planting picked directly (for example from a Timeline bar), the bed's name back, x to close.
+    # Bed season rows have their own disclosure and full-record route, covered in bed_season_check.py.
+    js(f"A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(400)
     pl = js(f"""const c = card(), p = S.plan.plantings.find(x => x.id === '{PID}'); if (!c) return null;
       return {{ kind: c.dataset.kind, title: hook('card-title').textContent, bed: hook('card-bed') ? hook('card-bed').textContent : '', date: hook('card-date') ? hook('card-date').textContent : '', want: LRFUI.day(E.s2d(p.date)), variety: hook('card-variety') ? hook('card-variety').value : null, bar: drawn(hook('card-bar')), sums: hook('card-sums') ? hook('card-sums').textContent : '', rows: hooks('card-row').map(x => x.dataset.row), panel: panel() }};""")
-    check("a planting in the bed's card opens the planting's card: its name, the bed's name, its life as a bar, what it comes to, its date and variety, its rows",
+    check("a planting selected directly opens the planting's card: its name, the bed's name, its life as a bar, what it comes to, its date and variety, its rows",
           bool(pl) and pl["kind"] == "planting" and pl["title"] == pick["title"] and pl["bed"] == pick["label"] and pl["date"] == pl["want"] and pl["variety"] and pl["bar"] and len(pl["sums"]) > 4 and pl["rows"] == ["share", "days", "nursery", "repeat"] and not pl["panel"], pl)
     page.screenshot(path=str(shots / f"map-planting-{WIDTH}.png"))
     press(page, "[data-hook='card-bed']", 400)

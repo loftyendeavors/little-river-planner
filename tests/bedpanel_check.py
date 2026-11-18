@@ -209,11 +209,11 @@ with sync_playwright() as pw:
     check("Commercial, pressed again: nothing is kept on the planting (it follows its bed), so the plan is the one he started from", not unmarked["has"] and unmarked["key"] == key0 and abs(unmarked["worth"] - worth0) < 0.005 and "counts as revenue again" in unmarked["toast"], unmarked)
     # the bed
     pick_bed(sub["bedId"])
-    bed_says = js("const el = $('bedUse'); return { there: !!el, use: el && el.dataset.use, by: el && el.dataset.by, text: el && el.textContent, link: !!$('bedUseEdit'), fields: document.querySelectorAll('#inspectorBody input, #inspectorBody select').length }")
-    check("a bed's panel says whom it is grown for, and changes nothing itself: a link leads to the layout", bed_says["there"] and bed_says["use"] == "commercial" and "Grown for" in bed_says["text"] and bed_says["link"] and bed_says["fields"] == 0, bed_says)
-    click("#bedUseEdit", 700)
-    in_layout = js("const el = $('leUse'); return { on: document.body.dataset.layout === 'on', there: !!el, value: el && el.value, scope: el && el.dataset.scope, focus: document.activeElement && document.activeElement.id, key: A.contentKey() }")
-    check("the link opens Edit layout with that bed picked and “Grown for” ready: for the bed, Commercial, nothing changed", in_layout["on"] and in_layout["there"] and in_layout["value"] == "commercial" and in_layout["scope"] == "bed" and in_layout["focus"] == "leUse" and in_layout["key"] == key0, in_layout)
+    bed_says = js("const el = $('bedUse'), sale = document.querySelector('[data-hook=\"card-sale\"]'); return { use: el && el.dataset.use, text: el && el.textContent, checked: sale && sale.checked };")
+    check("a bed's panel shows its use with the “Grown for sale” checkbox", bed_says["use"] == "commercial" and "Grown for sale" in bed_says["text"] and bed_says["checked"], bed_says)
+    click("[data-hook='card-layout']", 700)
+    in_layout = js("const el = $('leUse'); return { on: document.body.dataset.layout === 'on', picked: LRFMapEdit.picked(), value: el && el.value, scope: el && el.dataset.scope, key: A.contentKey() }")
+    check("Edit layout opens with that bed picked, Grown for Commercial and the plan as it was", in_layout["on"] and in_layout["picked"] == [sub["bedId"]] and in_layout["value"] == "commercial" and in_layout["scope"] == "bed" and in_layout["key"] == key0, in_layout)
     if has("#leUse"): page.select_option("#leUse", "personal"); wait(500)
     bed_marked = js(f"""const ids = {json.dumps(sub['bedIds'])}; return {{ bed: eng.bedOf({json.dumps(sub['bedId'])}).use, uses: ids.map(id => F.useOf(eng, eng.planting(id))).map(u => u.use + ':' + u.by), own: ids.filter(id => 'use' in eng.planting(id)).length, elsewhere: S.plan.plantings.filter(p => !ids.includes(p.id) && F.useOf(eng, p).personal).length,
       worth: worth(), want: dollarsOf(ids), toast: txt('toast'), undo: S.undo.length, value: ($('leUse') || {{}}).value, line: line('#layoutPanel') }};""")
@@ -229,7 +229,7 @@ with sync_playwright() as pw:
     part = js(f"""const p = eng.planting({json.dumps(sub['two'])}), ids = {json.dumps(sub['bedIds'])}.filter(id => id !== p.id); return {{ use: p.use, by: F.useOf(eng, p).by, worth: worth(), want: dollarsOf(ids), help: (document.querySelector('#fUseField [data-hook=use-said]') || {{}}).textContent, line: txt('fYieldLine'), toast: txt('toast') }};""")
     check("Commercial pressed on it is kept on the planting, since its bed says otherwise: a bed that is part personal", part["use"] == "commercial" and part["by"] == "planting" and abs((worth0 - part["worth"]) - part["want"]) < 0.005 and "Its bed is for personal use" in part["help"] and "$" in part["line"] and "counts as revenue again" in part["toast"], part)
     pick_bed(sub["bedId"])
-    check("the bed's panel now says personal use", js("const el = $('bedUse'); return el && el.dataset.use === 'personal' && el.dataset.by === 'bed' && /personal use/.test(el.textContent)"))
+    check("the bed's panel shows an unchecked sale box when the bed sets personal use", js("const el = $('bedUse'), sale = document.querySelector('[data-hook=\"card-sale\"]'); return el && el.dataset.use === 'personal' && el.dataset.by === 'bed' && sale && !sale.checked"))
     # the whole garden
     page.evaluate("id => { LRFMapEdit.open({}); LRFMapEdit.pickGarden(id); }", sub["gardenId"]); wait(500)
     whole = js("const el = $('leUse'); return { there: !!el, scope: el && el.dataset.scope, value: el && el.value, label: el && (el.closest('.field').querySelector('[data-hook=use-label]') || {}).textContent }")
@@ -240,7 +240,7 @@ with sync_playwright() as pw:
     check("Personal use chosen there marks the garden: its other beds follow by the garden's word, the planting that said commercial still says so, and nothing outside the garden is touched", garden["garden"] == "personal" and garden["personal"] == len(sub["gardenIds"]) - 1 and garden["kept"] == "commercial" and garden["other"] == "garden" and garden["elsewhere"] == 0 and abs((worth0 - garden["worth"]) - garden["want"]) < 0.005 and "left out of revenue" in garden["toast"], garden)
     page.evaluate("LRFMapEdit.close()"); wait(200)
     pick_bed(sub["otherBed"])
-    check("another bed of that garden says it is for personal use as all of the garden is", js("const el = $('bedUse'); return el && el.dataset.use === 'personal' && el.dataset.by === 'garden' && el.textContent.includes('as all of')"))
+    check("another bed of that garden follows the garden's personal use", js("const el = $('bedUse'); return el && el.dataset.use === 'personal' && el.dataset.by === 'garden' && /as all of/i.test(el.textContent)"))
 
     # ── the Harvest page, and the list that is sent ──
     page.evaluate("LRFApp.setView('harvest')"); wait(600)

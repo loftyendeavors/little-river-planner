@@ -26,7 +26,7 @@
   // on: the mode. picked: ids of the spaces picked, the first being the one the others are lined up to.
   // tool: null | 'block' | 'tape'. drag: the gesture in hand. draft: a garden drawn and not yet made. tape: a measured line.
   // propose: a length offered and not yet set ({ l, why, ids }), when the layout is opened from a fix that wants beds another length
-  const S = { on: false, picked: [], tool: null, drag: null, draft: null, tape: null, nudge: null, propose: null };
+  const S = { on: false, picked: [], tool: null, drag: null, draft: null, tape: null, nudge: null, propose: null, returnBed: null, shortening: null };
   let layer = null, ghosts = null, read = null, pill = null, side = null, panel = null, button = null;
 
   // ── the plan, read as ground ──
@@ -96,6 +96,7 @@
   const spot = (x, y, rot) => ({ x: round2(x), y: round2(y), rot: round2(Geo.turn(rot || 0)) });
   /** Move, turn, size or rename spaces. changes: Map id -> { x?, y?, rot?, and any bed field }. */
   function change(label, changes, more = []) {
+    const beforeEngine = eng();
     const ops = [...more];
     for (const [id, c] of changes) {
       const before = bedOf(id), at = M.shapeOf(id);
@@ -105,7 +106,13 @@
       for (const [key, value] of Object.entries(c)) if (!['x', 'y', 'rot'].includes(key)) { if (value == null) delete after[key]; else after[key] = value; }
       if (JSON.stringify(after) !== JSON.stringify(before)) ops.push({ kind: 'bed', before, after });
     }
-    return ops.length ? App.commit(label, ops) : false;
+    if (!ops.length || !App.commit(label, ops)) return false;
+    if (ops.some(({ kind, before, after }) => kind === 'bed' && before && after && +after.l < +before.l)) {
+      const worth = engine => root.LRFForecast.kept(engine).rows.reduce((sum, row) => sum + row.worth, 0);
+      S.shortening = { step: App.state.undo[App.state.undo.length - 1], before: worth(beforeEngine), after: worth(eng()) };
+      renderPanel();
+    }
+    return true;
   }
   const undoable = message => toast(message, { label: 'Undo', run: App.undo });
   const uniqueGarden = name => { const taken = new Set(plan().gardens.map(g => g.name)); if (!taken.has(name)) return name; for (let n = 2; ; n++) if (!taken.has(`${name} ${n}`)) return `${name} ${n}`; };
@@ -189,9 +196,11 @@
     if (App.state.view !== 'map') App.setView('map');
     if (!S.on) {
       if (App.endMixing) App.endMixing();   // a bed that was being mixed is done with when the layout opens
+      S.on = true;
       App.arm(null); App.select(null);
       if (M.wholeSeason()) M.wholeSeason(false);
-      S.on = true; S.picked = []; S.tool = null; S.draft = null; S.tape = null;
+      S.picked = []; S.tool = null; S.draft = null; S.tape = null;
+      S.returnBed = focus.returnToBed ? focus.bedId : null;
       document.body.dataset.layout = 'on';
       M.lock(true);
       button.setAttribute('aria-pressed', 'true');
@@ -208,14 +217,17 @@
     else refresh();
     if (focus.field) { const el = $(focus.field); if (el) { el.focus(); if (el.select) el.select(); } }
   }
-  function close() {
+  function close(returnToBed = false) {
     if (!S.on) return;
     settleNudge(); dropDrag();
+    const bedId = returnToBed === true && S.returnBed;
     S.on = false; S.picked = []; S.tool = null; S.draft = null; S.tape = null; S.propose = null;
+    S.returnBed = null; S.shortening = null;
     delete document.body.dataset.layout;
     M.lock(false);
     button.setAttribute('aria-pressed', 'false');
     refresh();
+    if (bedId && bedOf(bedId)) App.select({ type: 'bed', id: bedId });
   }
   function setTool(tool) {
     settleNudge();
@@ -594,6 +606,7 @@
       if (S.drag) cancel();
       else if (S.tool || S.draft || S.tape) { if (typing) e.target.blur(); S.tool = null; S.draft = null; S.tape = null; refresh(); }   // a form half filled in is left without doing anything
       else if (typing) e.target.blur();
+      else if (S.returnBed) close(true);
       else if (S.picked.length) pick([]);
       else close();
       return;
@@ -738,7 +751,19 @@
     else if (!S.picked.length) panelFarm();
     else panelPicked();
     const headEl = panel.querySelector('header.insp-head');
-    if (headEl && root.LRFPanels && root.LRFPanels.savedLine) headEl.after(root.LRFPanels.savedLine());
+    if (headEl && root.LRFPanels && root.LRFPanels.savedLine) {
+      const saved = root.LRFPanels.savedLine(), impact = S.shortening;
+      if (impact && impact.step === App.state.undo[App.state.undo.length - 1] && saved.dataset.state === 'saved') {
+        const undo = saved.querySelector('button');
+        if (undo) {
+          const dollars = value => '$' + num(Math.round(value));
+          const from = dollars(impact.before), to = dollars(impact.after);
+          undo.before(h('span', { dataset: { hook: 'layout-shorten-impact' } }, from === to ? ` · The season’s worth stays ${to}` : ` · The season’s worth goes from ${from} to ${to}`));
+          undo.dataset.hook = 'layout-shorten-undo';
+        }
+      }
+      headEl.after(saved);
+    }
     panel.scrollTop = keep;
     const again = focused && $(focused);
     if (again && again !== document.activeElement) again.focus();
@@ -765,7 +790,7 @@
     const gardens = [...new Set(beds.map(b => gardenOf(b).name))], label = Lib.gardenTypeLabels || {};
     const plantings = beds.reduce((n, b) => n + eng().plantingsIn(b.id).length, 0), x = M.shapeOf(first.id);
     panel.append(head(one ? `${gardenOf(one).name || 'Garden'} · ${label[gardenOf(one).type] || ''}` : garden ? `${label[garden.type] || 'Garden'} · ${plural(beds.length, 'space')}` : gardens.length === 1 ? gardens[0] : plural(gardens.length, 'garden'),
-      one ? nameOf(one) : garden ? garden.name : plural(beds.length, 'space'), () => pick([]), 'Let go of what is picked'));
+      one ? nameOf(one) : garden ? garden.name : plural(beds.length, 'space'), S.returnBed ? () => close() : () => pick([]), S.returnBed ? 'Close' : 'Let go of what is picked'));
     // what it measures, to be read at a glance
     const same = key => soil.length && soil.every(b => +b[key] === +soil[0][key]) ? soil[0][key] : null, w = same('w'), l = same('l');
     if (soil.length) panel.append(h('div.stats.dims', { id: 'leDims' }, stat('Width (ft)', w == null ? 'mixed' : num(w, 2), 'leWidth'), stat('Length (ft)', l == null ? 'mixed' : num(l, 2), 'leLength'),
@@ -908,7 +933,7 @@
     pill.hidden = !S.on;
     if (!S.on) return;
     const text = S.tool === 'block' ? (S.draft ? 'Name the new garden on the right, or drag again' : 'Drag a block where the new garden goes') : S.tool === 'tape' ? 'Drag between two points to measure' : S.picked.length ? `${describe(S.picked)} picked` : 'Click a bed, or a garden’s name';
-    clear(pill).append(h('b', 'Editing the layout'), h('span', { id: 'lePillText' }, text), h('button.btn.primary', { type: 'button', id: 'leDone', onclick: close }, 'Done'));
+    clear(pill).append(h('b', 'Editing the layout'), h('span', { id: 'lePillText' }, text), h('button.btn.primary', { type: 'button', id: 'leDone', onclick: () => close(true) }, 'Done'));
   }
   function refresh() {
     document.body.dataset.leTool = S.tool || '';

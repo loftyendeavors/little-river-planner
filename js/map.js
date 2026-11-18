@@ -532,6 +532,21 @@
     view.x = to.x; view.y = to.y; view.z = to.z; view.moved = true;
     applyView();
   }
+
+  /** Leave the zoom alone. Move only far enough to clear an overlapping floating bed card. */
+  function revealBed(id, card) {
+    if (locked || gesture || root.LRFDrag.active()) return;
+    const shape = beds.get(id)?.g.querySelector('.bed-base');
+    if (!shape) return;
+    const a = shape.getBoundingClientRect(), b = $('map').getBoundingClientRect();
+    if (a.right <= card.left || a.left >= card.right || a.bottom <= card.top || a.top >= card.bottom) return;
+    const gap = 12, left = card.left - gap - a.right, down = card.bottom + gap - a.top;
+    const xFits = a.left + left >= b.left + gap, yFits = a.bottom + down <= b.bottom - gap;
+    if (!xFits && !yFits) return;
+    const sideways = xFits && (!yFits || -left <= down);
+    view.moved = true;
+    glide({ x: view.x + (sideways ? left : 0), y: view.y + (sideways ? 0 : down), z: view.z }, 240);
+  }
   function focusBed(bedId) {
     const item = beds.get(bedId), rect = $('map').getBoundingClientRect();
     if (!item || !rect.width) return;
@@ -633,7 +648,10 @@
     if (App.state.armed) { if (bedId) App.place(App.state.armed, bedId, App.state.date, aimAt(bedId, e.clientX, e.clientY)); return; }
     // while the series tool is asking for beds, a click on a bed names it
     if (bedId && root.LRFSeries && root.LRFSeries.picking() && root.LRFSeries.toggleBed(bedId)) return;
-    if (fill) App.select({ type: 'planting', id: fill.dataset.planting });
+    if (bedId && root.LRFCard.bedSeasonOn(beds.get(bedId)?.bed)) {
+      App.select({ type: 'bed', id: bedId });
+      root.LRFCard.revealBed(bedId);
+    } else if (fill) App.select({ type: 'planting', id: fill.dataset.planting });
     else if (bedId) App.select({ type: 'bed', id: bedId });
     else if (App.state.sel && App.state.sel.type !== 'series') App.select(null);   // a stray click on the photo does not throw a half-filled series away
   }
@@ -808,7 +826,7 @@
   const toScreen = (x, y) => [x * view.z + view.x, y * view.z + view.y];
   function lock(on) { locked = !!on; hideTip(); $('map').classList.toggle('locked', locked); }
 
-  root.LRFMap = { init, targetAt, showDrop, fit, fitGarden, wholeSeason: on => { if (on !== undefined) setWholeSeason(on); return wholeSeason; }, seasonOf,
+  root.LRFMap = { init, targetAt, showDrop, fit, fitGarden, revealBed, wholeSeason: on => { if (on !== undefined) setWholeSeason(on); return wholeSeason; }, seasonOf,
     lock, watch: fn => { watchers.push(fn); }, shapeOf, spaces: () => [...beds.keys()], element: id => (beds.get(id) || {}).g || null, toWorld, toScreen, nearest, fitSpaces,
     zoom: () => view.z, feetPerPx: () => feetPerPx, seatsOf: bedId => { const item = beds.get(bedId); return item && item.geo.cells ? seatsOf(item.bed, item.geo.cells.count) : new Map(); },
     cellsOf: bedId => { const item = beds.get(bedId); return item ? item.geo.cells : null; } };
