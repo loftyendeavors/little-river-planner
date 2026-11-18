@@ -6,7 +6,9 @@
  * is named, and the planting is placed anyway (the grower's rule for a change of days).
  *
  * Left out by default, each with a line that says so:
- *   sown        work is recorded on it (sown, planted out, picked …): it is left as it is, and cannot be ticked
+ *   sown        the seed or the plants are in: a sowing, potting up, hardening off, planting out, moving out, a harvest or a
+ *               clearing is recorded on it (SeedLib's own test). It is left as it is, and cannot be ticked. Work that puts in no
+ *               seed (amending the bed, side-dressing, care) does not stop a swap: the record is kept as it is on the planting
  *   own days    days to harvest are typed on the planting: unticked, and ticked it takes the new variety and keeps its days
  *   standing, live tray, failed   left as they are, and cannot be ticked
  *
@@ -43,9 +45,10 @@
     if (s && s.sown) return 'sown';
     return eng.pinned(p) ? 'own-days' : 'swap';
   }
-  /** The first day any work was recorded on a planting, for the line that says it is left as it is. */
+  /** The first day the seed or the plants went in, for the line that says a planting is left as it is (SeedLib's sowing kinds). */
+  const IN_KINDS = ['sow', 'potup', 'harden', 'field', 'move', 'harvest', 'flip'];
   function doneOn(p) {
-    const days = Object.values(p.done || {}).filter(x => typeof x === 'string' && E.validDate(E.s2d(x))).sort();
+    const days = IN_KINDS.map(k => SL.doneDate(p, k)).filter(Boolean).sort();
     return days.length ? days[0] : null;
   }
 

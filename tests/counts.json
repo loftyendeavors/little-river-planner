@@ -55,9 +55,9 @@
 
   "succession": 31,
 
-  "swap, backup": 30,
+  "swap, backup": 32,
 
-  "swap, compact": 30,
+  "swap, compact": 32,
 
   "sync client": 154,
 

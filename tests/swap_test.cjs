@@ -89,9 +89,15 @@ const afterOwn = E.create(apply(core, withOwn.ops), Lib);
 check('a planting with days of its own can be ticked: it takes the new variety and keeps its days and its harvest', !!ownOp && ownOp.after.dtm === ownOp.before.dtm && iso(afterOwn.calc(afterOwn.planting(own.id)).first) === iso(eng.calc(eng.planting(own.id)).first) && withOwn.rows.find(r => r.id === own.id).shift === 0);
 
 // ── already sown ──
-const sownId = moved[moved.length - 1].id, sownPlan = { ...core, plantings: core.plantings.map(p => p.id === sownId ? { ...p, done: { [SL.sowing(eng, p).kind]: E.d2s(sowDay(eng.calc(p))) } } : p) };
+const sownId = moved[moved.length - 1].id, sownPlan = { ...core, plantings: core.plantings.map(p => p.id === sownId ? { ...p, done: { sow: E.d2s(sowDay(eng.calc(p))), field: E.d2s(E.addDays(sowDay(eng.calc(p)), 20)) } } : p) };
 const engSown = E.create(sownPlan, Lib), sv = W.preview(engSown, from.id, to.id, { ticked: view.rows.map(r => r.id) });
 check('a planting with its sowing recorded is left as it is, even when asked for, and is said to be', !sv.ops.some(o => o.before.id === sownId) && sv.rows.find(r => r.id === sownId).state === 'sown' && !sv.rows.find(r => r.id === sownId).ticked && sv.ops.length === view.ticked + view.rows.filter(r => r.state === 'own-days').length - 1);
+
+// work that puts no seed in (the bed amended) does not stop a swap, and the record of it is kept
+const amendId = moved[0].id, amendPlan = { ...core, plantings: core.plantings.map(p => p.id === amendId ? { ...p, done: { amend: E.d2s(E.addDays(sowDay(eng.calc(p)), -3)) } } : p) };
+const av = W.preview(E.create(amendPlan, Lib), from.id, to.id), aop = av.ops.find(o => o.before.id === amendId);
+check('a planting whose bed was amended, with no seed in yet, is still taken, and keeps that record', av.rows.find(r => r.id === amendId).state === 'swap' && !!aop && JSON.stringify(aop.after.done) === JSON.stringify(aop.before.done));
+check('the day a sown planting is said to be sown is the first day recorded, its sowing', sv.rows.find(r => r.id === sownId).done === sownPlan.plantings.find(p => p.id === sownId).done.sow);
 
 // ── nursery weeks that differ: the day in the bed moves so that the sowing day holds ──
 const tp = moved.map(r => eng.planting(r.id)).find(p => eng.calc(p).sow);

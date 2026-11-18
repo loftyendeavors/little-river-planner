@@ -47,6 +47,8 @@ NODE = [
  ("a transplant whose new variety has no nursery weeks is left out", SW, "dayOf(was) === dayOf(now) || p.sowOn || p.liveTray) continue;", "dayOf(was) === dayOf(now) || !r.sow || p.sowOn || p.liveTray) continue;"),
  ("a harvest whose end alone moves is not counted", SW, "return { moves: start.length + endOnly.length,", "return { moves: start.length,"),
  ("a harvest whose end alone moves is not said", SW, "    if (endOnly.length) parts.push(", "    if (false) parts.push("),
+ ("work that puts no seed in stops a swap", SW, "    if (s && s.sown) return 'sown';\n", "    if ((s && s.sown) || Object.keys(p.done || {}).length) return 'sown';\n"),
+ ("a sown planting is said to be sown on the day of other work", SW, "const days = IN_KINDS.map(k => SL.doneDate(p, k)).filter(Boolean).sort();", "const days = ['amend', ...IN_KINDS].map(k => SL.doneDate(p, k)).filter(Boolean).sort().reverse();"),
 ]
 PAGE = [
  ("the way in is not there", SD, "can = !!W && n > 0 && W.choices(App.state.engine, v.id).length > 0;", "can = false;"),
