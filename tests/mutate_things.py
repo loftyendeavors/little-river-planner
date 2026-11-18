@@ -31,7 +31,7 @@ EN, FC, SU, AP, TH, YC, AS, HV, SR, IO, CSS = "js/engine.js", "js/forecast.js", 
 NODE = [
  # a plan nobody has touched
  ("the forecast of every plan is a hair off", FC, "const rate = y.units / picked.length,", "const rate = y.units * 1.0000001 / picked.length,"),
- ("a planting is counted once for every part it gives", FC, "variety.total += inYear; any = true;", "variety.total += inYear; any = true; counted++;"),
+ ("a planting is counted once for every part it gives", FC, "variety.total += inYear; variety.worth += inYear * y.price; any = true;", "variety.total += inYear; variety.worth += inYear * y.price; any = true; counted++;"),
  # what counts
  ("a thing that still waits on a figure counts all the same", EN, "          if (t.waits.length) continue;\n", ""),
  ("no price is asked of a thing", EN, "          if (t.price == null) t.waits.push('price');\n", ""),

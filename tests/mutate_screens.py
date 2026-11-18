@@ -37,7 +37,8 @@ FAULTS = [
 if mode == "list": print(json.dumps({"page": len(FAULTS)})); sys.exit(0)
 
 def run(change, screen, width):
-    """The check on a copy, with one fault in it or none. Returns the names of the lines that failed, or None with why."""
+    """The check on a copy, with one fault in it or none. Returns the names of the lines that failed, or None with why. Where the
+    build itself names the fault's screen, the copy is compared with this build rather than the build before (see below)."""
     site, home = scratch / "screens-site", scratch / "screens-repo"
     for d in (site, home):
         if d.exists(): shutil.rmtree(d)
@@ -46,11 +47,20 @@ def run(change, screen, width):
     was = {f.name for f in (oldroot / "tests" / "builds").glob("*.json")} if (oldroot / "tests" / "builds").is_dir() else set()
     own = [f for f in sorted((tests / "builds").glob("*.json")) if f.name not in was]
     said = json.loads(own[0].read_text(encoding="utf-8")) if own else {}
-    if screen in (said.get("screens") or []): return None, f"the build itself names “{screen}” as changed: this fault needs a screen it does not name"
+    old = oldroot
+    if screen in (said.get("screens") or []):
+        # This build changes that screen itself and names it (a word in the header changes every screen). The fault is then put into
+        # this build compared with this build: the only difference is the fault's, and the build's file names no screen.
+        old = scratch / "screens-before"
+        if old.exists(): shutil.rmtree(old)
+        old.mkdir(parents=True)
+        for name in PAGE: (shutil.copytree if (repo / name).is_dir() else shutil.copy)(repo / name, old / name)
+        if (oldroot / "tests").is_dir(): shutil.copytree(oldroot / "tests", old / "tests")
+        said = {**said, "screens": []}
     if change: change(site, said)
     (home / "tests" / "builds" / (own[0].name if own else "this-build.json")).write_text(json.dumps(said), encoding="utf-8")
     env = {**os.environ, "ONLY": screen, "ONLY_WIDTH": str(width)}
-    try: out = subprocess.run([sys.executable, "-I", str(tests / "screens_check.py"), str(site), str(oldroot), backup, str(scratch / "screens-shots"), str(home)], capture_output=True, text=True, timeout=600, env=env).stdout
+    try: out = subprocess.run([sys.executable, "-I", str(tests / "screens_check.py"), str(site), str(old), backup, str(scratch / "screens-shots"), str(home)], capture_output=True, text=True, timeout=600, env=env).stdout
     except subprocess.TimeoutExpired: return None, "the check did not end in ten minutes"
     try: d = json.loads(out[out.rfind('{"passed"'):])
     except Exception: return None, "the check gave no result: " + out[-200:].replace("\n", " ")

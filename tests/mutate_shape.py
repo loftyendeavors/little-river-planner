@@ -18,7 +18,7 @@ NODE = [
   ('a bed\'s place on the map is no longer taken whole by the merge', 'js/merge.js', "const WHOLE = new Set(['beds[].px', ", "const WHOLE = new Set([", 'whole: what js/merge.js takes whole'),
   ('the merge takes whole a place the shape joins by shape', 'js/merge.js', "const WHOLE = new Set(['beds[].px', ", "const WHOLE = new Set(['plantings[].tasks', 'beds[].px', ", 'whole: what js/merge.js takes whole'),
   ('the merge no longer keeps each side\'s seed lines', 'js/merge.js', "    'plantings[].workflow.seedUse': 'by the sowing each line belongs to'\n", "", 'kept: the lines js/merge.js keeps'),
-  ('the merge takes nothing from the cloud quietly', 'js/merge.js', "const QUIET = new Set(['lrfNextKeep.device', 'lrfNextKeep.v']);", "const QUIET = new Set([]);", 'quiet: what js/merge.js takes'),
+  ("the merge no longer takes the device's own keys from the cloud quietly", 'js/merge.js', "const QUIET = new Set(['lrfNextKeep.device', 'lrfNextKeep.v',\n    'lrfNext.attic',", "const QUIET = new Set([\n    'lrfNext.attic',", 'quiet: what js/merge.js takes'),
   ('the merge takes a new key for a stamp', 'js/merge.js', "const STAMPS = new Set(['updatedAt', 'savedAt']);", "const STAMPS = new Set(['updatedAt', 'savedAt', 'at']);", 'stamp: every place whose key'),
   ('a planting\'s containers are no longer part of its place', 'js/merge.js', "const PLACE = ['bedId', 'ft', 'startFt', 'bedLayout', 'seat']", "const PLACE = ['bedId', 'ft', 'startFt', 'bedLayout']", 'place: where a planting is'),
   ('a sowing day set by hand is no longer part of a planting\'s time', 'js/merge.js', "TIME = ['date', 'sowOn'];", "TIME = ['date'];", 'time: when a planting is'),
