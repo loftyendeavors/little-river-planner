@@ -196,9 +196,11 @@
     if (item.ghost) return barEl({ from: eng.occupancyFrom(p, r), to: through === Infinity ? yearEnd() : through, through, field: r.field, first: r.first, last: r.last, sow: r.sow, lane, color: eng.cropColor(r.c),
       cls: '.tl-ghost-bar', dataset: { ghost: p.id }, tries: namesOf(r.c), pictured: pictureOf(p), alt: r.c.name, title: `Not added yet: ${App.cropLabel(p)} would go in ${day(r.field)} · harvest ${span(r.first, r.last)}` });
     // a tray batch is named by its row and shows its trays; every other bar names its crop, then its variety
-    return barEl({ from: eng.occupancyFrom(p, r), to: through === Infinity ? yearEnd() : through, through, field: r.field, first: r.first, last: r.last, sow: r.sow, lane, color: eng.cropColor(r.c),
-      cls: sel ? '.sel' : '', dataset: { planting: p.id }, kind: tray ? 'tray' : 'bar', fixed: tray ? num(r.len) : null, tries: tray ? null : namesOf(r.c), pictured: tray ? null : pictureOf(p), alt: r.c.name,
-      title: tray ? `${root.LRFTrays.short(r.c.name)} · ${num(r.len)} tray${r.len === 1 ? '' : 's'} · sow ${day(r.field)} · ready ${day(r.first)}` : `${App.cropLabel(p)} · in ${day(r.field)} · harvest ${span(r.first, r.last)}` });
+    // a planting marked failed stays on record, greyed, to the day before it failed (at least its first day, when it failed in the nursery)
+    const from = eng.occupancyFrom(p, r), held = through === Infinity ? yearEnd() : through, failed = r.failed ? `Failed ${day(E.s2d(r.failed))} · ` : '';
+    return barEl({ from, to: held < from ? from : held, through, field: r.field, first: r.first, last: r.last, sow: r.sow, lane, color: eng.cropColor(r.c),
+      cls: (sel ? '.sel' : '') + (r.failed ? '.tl-failed' : ''), dataset: { planting: p.id }, kind: tray ? 'tray' : 'bar', fixed: tray ? num(r.len) : null, tries: tray ? null : namesOf(r.c), pictured: tray ? null : pictureOf(p), alt: r.c.name,
+      title: failed + (tray ? `${root.LRFTrays.short(r.c.name)} · ${num(r.len)} tray${r.len === 1 ? '' : 's'} · sow ${day(r.field)} · ready ${day(r.first)}` : `${App.cropLabel(p)} · in ${day(r.field)} · ${r.failed && !r.harvestDays ? 'no harvest' : 'harvest ' + span(r.first, r.last)}`) });
   }
   /** Several plantings drawn as one bar: the same crop going in on the same day. It is not dragged; a click opens it to its plantings. */
   function summaryBar(g, lane, words) {

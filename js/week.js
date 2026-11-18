@@ -21,6 +21,8 @@
  * up and moving out push nothing, so only the day they are listed on changes. A skipped job is left out of the list
  * and nothing else changes. What was put off, skipped or noted is kept on the planting, under `tasks`.
  *
+ * A planting marked failed has no work left to list: only what was recorded is kept (js/engine.js failedOn).
+ *
  * Sowing itself is recorded by the seed library (LRFSeedLib.recordSowing), which takes the seed off stock; this
  * file calls it and adds the push. The records are the planting's done and workflow.history.
  */
@@ -95,7 +97,8 @@
       st.pushed = st.done ? pushed(p, st.kind) : null;
       st.late = st.done ? dayDiff(s2d(st.done), st.planned) + (st.pushed ? st.pushed.days : 0) : null;
     }
-    return out;
+    // a planting marked failed has no work left: what was recorded stays, and nothing else is listed
+    return engine.failedOn && engine.failedOn(p) ? out.filter(st => st.done) : out;
   }
   const step = (engine, p, kind) => steps(engine, p).find(st => st.kind === kind) || null;
   /** The last record of a job in a planting's history that has not been taken back since. */
@@ -145,6 +148,8 @@
       if (st.done) throw new Error(`This ${SL.DONE_WORD[kind]} is already recorded, on ${st.done}.`);
       if (!SL.realDay(date)) throw new Error('Choose a real calendar date.');
       if (date > ctx.today) throw new Error('Work that has not happened yet cannot be recorded. Choose today or an earlier day.');
+      const far = SL.yearAway(date, st.planned);
+      if (far) throw new Error(far);
       if (p.done != null && !objectOr(p.done, null)) throw new Error('The recorded work of this planting cannot be read. It is kept as it is; nothing was changed.');
       const dates = { ...(p.done || {}), [kind]: date };
       for (const [a, b] of SL.DONE_ORDER) {

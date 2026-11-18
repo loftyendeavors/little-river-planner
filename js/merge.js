@@ -83,9 +83,9 @@
   /** Taken whole from one side, never half from each. */
   const WHOLE = new Set(['beds[].px', 'beds[].potLayout', 'gardens[].bedOrder', 'gardens[].mapLayout', 'map.imageFile', 'nursery.spaces[].benchLayout',
     'plantings[].bedLayout', 'plantings[].growingDefaults', 'plantings[].liveTray', 'varieties[].supplierPacks', 'varieties[].prices', 'varieties[].webImport',
-    // a thing written in one act, or whose parts are read together: a job put off (from, to), what the planner noted of an edit (set, was),
+    // a thing written in one act, or whose parts are read together: a job put off (from, to), a planting marked failed (on, at), what the planner noted of an edit (set, was),
     // a photo's file and its type, a crop's selling line (its price, yield and weight are by its unit), a demand plan (its editor checks it whole)
-    'plantings[].tasks.delay.*', 'plantings[].towerCycle', 'lrfNext.facts.*.*', 'lrfNext.waiting[].wait', 'varieties[].photo', 'varieties[].environmentDefaults',
+    'plantings[].tasks.delay.*', 'plantings[].failed', 'plantings[].towerCycle', 'lrfNext.facts.*.*', 'lrfNext.waiting[].wait', 'varieties[].photo', 'varieties[].environmentDefaults',
     'assumptions.sell.*', 'assumptions.sellV.*', 'cropUnits.*', 'crops[].liveSow', 'gardens[].growingEnvironment', 'seedInventory.lots[].germination', 'liveTrayPlans[]']);
   /**
    * Who saved a file and with what, and what a device notes for itself about the plan it holds (when it was loaded, from which

@@ -197,6 +197,13 @@
   // Cubic feet of mix one of them takes: round figures to start from, each of which he can type over.
   const MIX_EACH = { 'tray-50': 0.2, 'tray-72': 0.15, 'tray-128': 0.11, 'tray-200': 0.1, open: 0.15, 'live-unsaid': 0.15, 'pot-4': 0.015, 'pot-4.5': 0.02 };
   const sig2 = n => { if (!(n > 0)) return null; const p = Math.pow(10, Math.max(0, Math.floor(Math.log10(n)) - 1)); return Math.round(n / p) * p; };
+  /** His own figure of cubic feet of mix one of them takes (`plan.lrfNext.supplies`), or null. One typed in quarts in an earlier build is read as the quarts it was. */
+  function ownMix(own, id) {
+    const cuft = (own && own.cuft) || {}, quarts = (own && own.mix) || {};
+    return cuft[id] != null && Number(cuft[id]) >= 0 ? Number(cuft[id]) : Number(quarts[id]) > 0 ? Math.round(Number(quarts[id]) / DRY_QT_PER_CUFT * 1000) / 1000 : null;
+  }
+  /** Cubic feet of mix one of them takes: his figure, or the round one; null when there is neither. */
+  const mixEach = (own, id) => { const mine = ownMix(own, id); return mine != null ? mine : MIX_EACH[id] != null ? MIX_EACH[id] : null; };
   /** The most of something in use on one day, from spans { from, to (the first day it is free again), n }. */
   function mostAtOnce(spans, count = x => x.n) {
     let most = 0, on = null;
@@ -213,7 +220,7 @@
    * `figures` is the season() of the same engine and year, when the caller already has it.
    */
   function supplies(eng, year, own, figures) {
-    const fig = figures || season(eng, year), have = (own && own.have) || {}, cuft = (own && own.cuft) || {}, quarts = (own && own.mix) || {}, text = String(year);
+    const fig = figures || season(eng, year), have = (own && own.have) || {}, text = String(year);
     const pockets = own && POCKETS.includes(+own.pockets) ? +own.pockets : POCKETS[0];
     const lots = new Map(), pots = new Map(), potLots = new Map(), plug = new Map(), liveCells = new Map(), crates = new Map();
     let liveOpen = 0, liveUnsaid = 0, sheets = 0, woolCells = 0;
@@ -260,7 +267,7 @@
     const rows = [];
     const row = (id, name, need, how, fills, extra = {}) => {
       const h = Number(have[id]) > 0 ? Math.floor(Number(have[id])) : 0, buy = Math.max(0, need - h);
-      const mine = cuft[id] != null && Number(cuft[id]) >= 0 ? Number(cuft[id]) : Number(quarts[id]) > 0 ? Math.round(Number(quarts[id]) / DRY_QT_PER_CUFT * 1000) / 1000 : null;
+      const mine = ownMix(own, id);
       const round = extra.mixDefault != null ? extra.mixDefault : MIX_EACH[id] != null ? MIX_EACH[id] : null, each = fills > 0 ? (mine != null ? mine : round) : null;
       const size = extra.pack || null;
       rows.push({ id, name, need, how: how.filter(Boolean), have: h, buy, pack: size && buy > 0 ? { size, n: Math.ceil(buy / size) } : null, fills, crates: !!extra.crates, pockets: extra.pockets || null,
@@ -320,5 +327,5 @@
     return Object.keys(next).length ? next : null;
   }
 
-  return { KINDS, KIND_IDS, STANDS, kindName, DRY_QT_PER_CUFT, BAG_CUFT, BAG_NAME, CASES, POCKETS, MIX_EACH, blank, addBench, setBench, removeBench, moveBench, addArea, setOptions, setCool, removeCool, sharedNames, roomOf, season, supplies, setSupply };
+  return { KINDS, KIND_IDS, STANDS, kindName, DRY_QT_PER_CUFT, BAG_CUFT, BAG_NAME, CASES, POCKETS, MIX_EACH, mixEach, blank, addBench, setBench, removeBench, moveBench, addArea, setOptions, setCool, removeCool, sharedNames, roomOf, season, supplies, setSupply };
 });

@@ -159,7 +159,7 @@
       const amount = unit === 'g' ? r.seedG : unit === 'seeds' ? r.seeds : (r.bulbs || Math.ceil(r.plants));
       row.total += amount || 0;
       const done = p.done || {}, sown = SOWN_KINDS.some(k => typeof done[k] === 'string' && done[k]);
-      if (sown) continue;
+      if (sown || (engine.failedOn && engine.failedOn(p))) continue;   // a planting marked failed and never sown needs no seed
       row.waiting++; row.toSow += amount || 0; row.trays += r.trays || 0;
       const start = r.sow || r.field;
       if (start && (!row.first || start < row.first)) row.first = start;
@@ -539,6 +539,14 @@
   // (Potting up, hardening off and moving out are recorded since the Week view.)
   const SOWN_KINDS = ['sow', 'potup', 'harden', 'field', 'move', 'harvest', 'flip'];
   const realDay = s => { if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false; const d = new Date(s + 'T12:00:00Z'); return !Number.isNaN(+d) && d.toISOString().slice(0, 10) === s; };
+  const YEAR_DAYS = 365;
+  /** A day recorded a year or more before the day it was planned is almost always the wrong year typed: said, and not recorded. */
+  function yearAway(date, planned) {
+    const d = new Date(date + 'T12:00:00'), when = planned instanceof Date ? planned : null;
+    if (!when || Number.isNaN(+when) || (when - d) / 864e5 < YEAR_DAYS) return '';
+    const pad = n => String(n).padStart(2, '0'), iso = `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}`;
+    return `That is a year or more before it was planned (${iso}). Check the year.`;
+  }
   const doneDate = (p, kind) => { const v = p && p.done && typeof p.done === 'object' ? p.done[kind] : null; return realDay(v) ? v : null; };
   const DONE_ORDER = [['sow', 'potup'], ['sow', 'harden'], ['sow', 'field'], ['potup', 'harden'], ['potup', 'field'], ['harden', 'field'], ['amend', 'field'], ['field', 'move'], ['field', 'sidedress'], ['field', 'harvest'],
     ...['sow', 'potup', 'harden', 'amend', 'field', 'move', 'sidedress', 'harvest', 'care'].map(k => [k, 'flip'])];
@@ -560,7 +568,8 @@
     const amount = (unit === 'g' ? r.seedG : unit === 'seeds' ? r.seeds : (r.bulbs || Math.ceil(r.plants))) || 0;
     const flow = p.workflow && typeof p.workflow === 'object' ? p.workflow : {}, uses = Array.isArray(flow.seedUse) ? flow.seedUse : [];
     const prior = uses.reduce((n, u) => n + (u && u.unit === stock && Number(u.quantity) > 0 ? Number(u.quantity) : 0), 0);
-    return { kind, unit, stockUnit: stock, key: v ? 'v:' + v.id : 'c:' + p.cropId, variety: v, crop: c, amount, prior, estimate: Math.max(0, stock === 'g' ? trim6(amount - prior) : Math.ceil(amount - prior - 1e-9)),
+    const failed = !!(engine.failedOn && engine.failedOn(p));   // marked failed: nothing more is sown for it
+    return { kind, unit, stockUnit: stock, key: v ? 'v:' + v.id : 'c:' + p.cropId, variety: v, crop: c, amount, prior, failed, estimate: failed ? 0 : Math.max(0, stock === 'g' ? trim6(amount - prior) : Math.ceil(amount - prior - 1e-9)),
       planned: kind === 'sow' && !r.rack ? r.plannedSow : r.planned, done: doneDate(p, kind), sown: SOWN_KINDS.some(k => doneDate(p, k)), uses, r };
   }
   /** Lots on hand for a sowing, in the order they are drawn from: oldest packed-for year first, then oldest record. */
@@ -579,6 +588,8 @@
     const date = String((input && input.date) || '');
     if (!realDay(date)) throw new Error('Choose a real calendar date.');
     if (date > ctx.today) throw new Error('Work that has not happened yet cannot be recorded. Choose today or an earlier day.');
+    const far = yearAway(date, s.planned);
+    if (far) throw new Error(far);
     if (p.done != null && (typeof p.done !== 'object' || Array.isArray(p.done))) throw new Error('The recorded work of this planting cannot be read. It is kept as it is; nothing was changed.');
     const done = { ...(p.done || {}), [s.kind]: date };
     for (const [a, b] of DONE_ORDER) {
@@ -643,5 +654,5 @@
   }
 
   return { norm, startOf, BASES, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
-    sizeOf, packs, cover, toCover, money, perGram, orderSheet, orderText, orderCsv, supplierOf, sowing, lotsToUse, recordSowing, takeBackSowing, doneDate, realDay, DONE_ORDER, DONE_WORD, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
+    sizeOf, packs, cover, toCover, money, perGram, orderSheet, orderText, orderCsv, supplierOf, sowing, lotsToUse, recordSowing, takeBackSowing, doneDate, realDay, yearAway, YEAR_DAYS, DONE_ORDER, DONE_WORD, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
 });
