@@ -63,9 +63,9 @@ PAGE = [
  ("a crop picked to the season's end gives no date to set", YC, "const dated = env => hw.season && hc.pattern.value !== 'once' && !hc.micro && env !== 'tray';", "const dated = env => false;"),
  ("a date picked for a place is taken without the sheet", YC, "    if (!await askMoves(eng, c, ops, label, md ? 'End it then' : 'Go back')) { redraw(); return false; }\n", ""),
  ("Cancel on a place's date takes it all the same", YC, "if (!await askMoves(eng, c, ops, label, md ? 'End it then' : 'Go back')) { redraw(); return false; }", "await askMoves(eng, c, ops, label, md ? 'End it then' : 'Go back');"),
- ("a date picked for one place is written for every place", AP, "for (const [env, md] of Object.entries(change.until)) { if (typeof md === 'string' && /^\\d{2}-\\d{2}$/.test(md)) until[env] = md; else delete until[env]; }", "for (const [, md] of Object.entries(change.until)) for (const env of ['field', 'tunnel', 'heated', 'tower']) { if (typeof md === 'string' && /^\\d{2}-\\d{2}$/.test(md)) until[env] = md; else delete until[env]; }"),
+ ("a date picked for one place is written for every place", AP, "for (const [env, md] of Object.entries(change.until)) { if (!eng.ENVS.includes(env)) continue;", "for (const [, md] of Object.entries(change.until)) for (const env of ['field', 'tunnel', 'heated', 'tower']) {"),
  ("a place's date cleared is kept", AP, "until[env] = md; else delete until[env]; }", "until[env] = md; }"),
- ("a date past the frost is not said to be cut short", YC, "const cut = own && se && se.frost && own > se.frost ?", "const cut = false ?"),
+ ("a date past the frost is not said to be cut short", YC, "const cut = own && se && se.frost && own > se.frost && !(se.close && se.close < se.frost) ?", "const cut = false ?"),
  ("picked for a set number of days, Last picking says the days again", YC, ": said(env) || why('counted from the first picking')))));", ": said(env) || why(`${hw.days} days after the first`)))));"),
  ("the chosen side is not in ink", CSS, ".yc-hw button[aria-pressed=\"true\"], .yc-hw-n.on { background: var(--ink); color: var(--surface); }\n", ""),
 ]
