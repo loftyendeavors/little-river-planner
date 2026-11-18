@@ -263,14 +263,18 @@ with sync_playwright() as pw:
     page.click('[data-view-btn="seeds"]'); wait(1500)
     seeds = js("""const v = S.plan.varieties.find(x => x.active !== false && !x.deleted && document.querySelector('#sdBody .sd-var[data-variety="' + x.id + '"]')), rows = [...document.querySelectorAll('#sdBody tr')];
       window.__rows = new Map(rows.map(r => [r.dataset.variety || r.dataset.crop || r.dataset.key, r])); window.__v = v.id; window.__built = LRFSeeds.drawn().builtEver;
-      return { rows: rows.length, id: v.id, name: v.name, imgs: document.querySelectorAll('#sdBody img').length, foot: [...document.querySelectorAll('#sdFoot .sd-foot-list li b')].map(e => e.textContent), para: document.querySelector('#sdFoot').tagName };""")
+      return { rows: rows.length, id: v.id, name: v.name, imgs: document.querySelectorAll('#sdBody img').length, foot: document.querySelector('#sdFoot').textContent, para: document.querySelector('#sdFoot').tagName };""")
+    # how the seed is counted is behind the page's "?" (his notes of Nov 16, section 3): read there by its hook, and closed again
+    page.click('[data-hook="seeds-help"]'); wait(300)
+    seeds["help"] = js("const card = document.querySelector('[data-hook=\"seeds-help-card\"]'); return card ? [...card.querySelectorAll('dt')].map(e => e.textContent) : null;")
+    page.click('[data-hook="seeds-help"]'); wait(200)
     page.evaluate("(async () => { const A = LRFApp, v = A.state.plan.varieties.find(x => x.id === window.__v); await A.revise('renamed for the check', [{ kind: 'variety', before: v, after: { ...v, name: v.name + ' (checked)' } }]); })()"); wait(700)
     re = js("""const rows = [...document.querySelectorAll('#sdBody tr')], old = window.__rows; let same = 0, fresh = 0;
       for (const r of rows) { const k = r.dataset.variety || r.dataset.crop || r.dataset.key; if (old.get(k) === r) same++; else fresh++; }
       return { rows: rows.length, same, fresh, built: LRFSeeds.drawn().builtEver - window.__built, name: document.querySelector('#sdBody .sd-var[data-variety="' + window.__v + '"] .as-vname').textContent, order: rows.map(r => r.dataset.variety || r.dataset.crop || r.dataset.key).join() === [...old.keys()].join() };""")
     check("a change to one variety builds one row again; every other row of the list is the row that was there", re["rows"] == seeds["rows"] and re["fresh"] == 1 and re["same"] == seeds["rows"] - 1 and re["built"] == 1 and re["name"].endswith("(checked)"), re)
     js("A.undo()"); wait(600)
-    check("the foot of the Seeds list is a short list with a name for each line", seeds["para"] == "DIV" and "Seed counts" in seeds["foot"] and "Vendor size" in seeds["foot"], seeds["foot"])
+    check("how the Seeds list counts is behind “?”, a name for each line, and no longer stands at its foot", seeds["para"] == "DIV" and seeds["help"] is not None and all(w in seeds["help"] for w in ("Seed counts", "On hand", "Vendor size")) and "Seed counts" not in seeds["foot"] and "Vendor size" not in seeds["foot"], {"help": seeds["help"], "foot": seeds["foot"][:200]})
     page.fill("#sdSearch", "zzzz-no-such"); wait(500)
     emptied = js("return document.querySelectorAll('#sdBody .sd-var').length")
     page.fill("#sdSearch", ""); wait(500)

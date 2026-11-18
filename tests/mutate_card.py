@@ -43,7 +43,7 @@ PAGE = [
  ("the price box is never amber", YC, "fallback: hc.price.fallback, amber: w.price, label:", "fallback: hc.price.fallback, amber: false, label:"),
  ("an amber box shows a starting value in grey", YC, "placeholder: amber || fallback == null ? '' :", "placeholder: fallback == null ? '' :"),
  ("first picking is the days in the bed and one more, not the DTM", YC, "dataset: { dtm: String(t.value) } }, String(t.value))", "dataset: { dtm: String(t.bed + 1) } }, String(t.bed + 1))"),
- ("the mark “DTM” is left off", YC, "The figure the Days to harvest list holds for this crop in this place.` }, 'DTM')", "The figure the Days to harvest list holds for this crop in this place.` }, '')"),
+ ("first picking is said as DTM again", YC, "dataset: { hook: 'card-first-unit' } }, oneStart ? 'days' : after(t))", "dataset: { hook: 'card-first-unit' } }, oneStart ? 'DTM' : after(t))"),
  ("a crop picked to the season's end is shown on the days side", YC, "dataset: { hook: 'harvest-choice', on: w.season ? 'season' : 'days' } },", "dataset: { hook: 'harvest-choice', on: 'days' } },"),
  ("what it comes to gives the amount as its worth", YC, "u.total += line.total; u.worth += line.worth;", "u.total += line.total; u.worth += line.total;"),
  ("the card spills off a laptop's screen", CSS, "table.yc-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }", "table.yc-grid { width: 1500px; border-collapse: collapse; table-layout: fixed; }"),

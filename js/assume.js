@@ -514,7 +514,7 @@
     clear($('asCount')).append(...(said.length ? said.flatMap((part, i) => [i ? ' · ' : '', h('span', part.length === 2 ? [h('b', part[0]), part[1]] : [part[1], h('b', part[2]), part[3]])]) : ['Nothing set yet: every number is a default']));
   }
   const HEAD = {
-    days: ['Days to first harvest', 'Days to harvest for each crop in each place it grows, counted from what its row says. Each number is used as it stands, whatever the month or the house. Grey is the default: type over it to make it yours. A variety with its own figure keeps it; a planting with no variety uses the crop’s row.'],
+    days: ['Days to first harvest', 'Days to harvest for each crop in each place it grows. Each row says what its days are counted from. Each number is used as it stands, whatever the month or the house. Grey is the default: type over it to make it yours. A variety with its own figure keeps it; a planting with no variety uses the crop’s row.'],
     harvest: ['Yield and price', 'Each crop’s unit, price, harvest pattern and marketable yield (a plant or a bed-foot) in each place it grows. Grey is the default: type over it to make it yours. A planting with its own figure keeps it until “See what differs…” lets it go.'],
     card: ['Yield and price', 'One crop at a time: its unit, price, marketable yield in each place it grows, and harvest pattern. Each box says what it means. “All on one page” shows the same figures as a list.']
   };

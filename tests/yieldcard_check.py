@@ -42,7 +42,7 @@ PRE = ("const A = LRFApp, S = A.state, E = LRFEngine, F = LRFForecast, $ = id =>
        # what the card on show says
        "const card = () => { const c = $('ycCard'); if (!seen(c) || !$('ycGrid')) return c && seen(c) ? { crop: c.dataset.crop, plain: txt('ycPlain') } : null;"
        " const box = el => ({ value: el.value, placeholder: el.placeholder || '', amber: !!el.closest('.yc-box.amber'), mine: !!el.closest('.yc-box.mine, .yc-sel.mine'), tag: el.tagName, label: el.getAttribute('aria-label') || '' });"
-       " const rows = {}; for (const tr of c.querySelectorAll('#ycGrid tbody tr')) { const cells = [...tr.querySelectorAll('td')]; rows[tr.dataset.row] = { label: (tr.querySelector('[data-hook=\"card-row-name\"]') || {}).textContent || '', hint: (tr.querySelector('[data-hook=\"card-row-hint\"]') || {}).textContent || '', cells: cells.map(td => ({ place: td.dataset.place || null, span: td.colSpan, text: td.innerText.replace(/\\s+/g, ' ').trim(), inputs: td.querySelectorAll('input, select').length, na: (td.querySelector('.yc-na') || {}).textContent || '', dtm: (td.querySelector('[data-dtm]') || { dataset: {} }).dataset.dtm || null, mark: (td.querySelector('.yc-mark') || {}).textContent || '', total: td.querySelector('.yc-total') ? { ...td.querySelector('.yc-total').dataset, text: td.querySelector('.yc-total').textContent } : null })) }; }"
+       " const rows = {}; for (const tr of c.querySelectorAll('#ycGrid tbody tr')) { const cells = [...tr.querySelectorAll('td')]; rows[tr.dataset.row] = { label: (tr.querySelector('[data-hook=\"card-row-name\"]') || {}).textContent || '', hint: (tr.querySelector('[data-hook=\"card-row-hint\"]') || {}).textContent || '', cells: cells.map(td => ({ place: td.dataset.place || null, span: td.colSpan, text: td.innerText.replace(/\\s+/g, ' ').trim(), inputs: td.querySelectorAll('input, select').length, na: (td.querySelector('.yc-na') || {}).textContent || '', dtm: (td.querySelector('[data-dtm]') || { dataset: {} }).dataset.dtm || null, mark: (td.querySelector('[data-hook=\"card-first-unit\"]') || {}).textContent || '', total: td.querySelector('.yc-total') ? { ...td.querySelector('.yc-total').dataset, text: td.querySelector('.yc-total').textContent } : null })) }; }"
        " const boxes = {}; for (const el of c.querySelectorAll('[data-yk]')) boxes[el.dataset.yk] = box(el);"
        " const house = $('ycHouse'), next = $('ycNext');"
        " return { crop: c.dataset.crop, name: txt('ycName'), where: txt('ycWhere'), state: txt('ycState'), cols: [...c.querySelectorAll('#ycGrid thead th[data-place]')].map(th => th.dataset.place), heads: [...c.querySelectorAll('#ycGrid thead th[data-place]')].map(th => th.innerText.replace(/\\s+/g, ' ').trim()), order: Object.keys(rows), rows, boxes,"
@@ -234,10 +234,10 @@ with sync_playwright() as pw:
             if cell["inputs"]: out.append("a box")
             if walk[c]["micro"]:
                 if "tray plan" not in cell["na"]: out.append("no reason")
-            elif cell["dtm"] != str(walk[c]["dtm"][cell["place"]]) or cell["mark"] != "DTM" or "days after" not in (cell["text"] + " " + r["hint"]): out.append(f"{cell['place']}: {cell['dtm']} against {walk[c]['dtm'][cell['place']]}")
+            elif cell["dtm"] != str(walk[c]["dtm"][cell["place"]]) or not cell["mark"].startswith("days") or "days after" not in (cell["text"] + " " + r["hint"]) or "DTM" in (cell["text"] + " " + r["hint"]): out.append(f"{cell['place']}: {cell['dtm']} against {walk[c]['dtm'][cell['place']]}, {cell['mark']!r}")
         return out
     bad = {names.get(c): first_ok(c) for c in ids if first_ok(c)}
-    check("first picking is shown, not typed: the crop's DTM for each place, with the mark “DTM”", bad == {}, dict(list(bad.items())[:4]))
+    check("first picking is shown, not typed: the crop's days to harvest for each place, said in days and never as DTM", bad == {}, dict(list(bad.items())[:4]))
     def comes_ok(c):
         got = {x["unit"]: x for x in walk[c]["card"]["comes"]}; f = walk[c]["forecast"]; out = []
         if sorted(got) != sorted(x["unit"] for x in f): out.append("units")
