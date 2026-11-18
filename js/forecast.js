@@ -256,13 +256,26 @@
       trays: by('micro').reduce((n, x) => n + x.qty, 0), stems: by('flower').filter(x => inStems(x.row)).reduce((n, x) => n + x.qty, 0), worth: list.reduce((n, x) => n + x.worth, 0), list };
   }
 
+  /** The entries a grower sees in one period of the list to send, shared by text and spreadsheet. */
+  function offered(model, col, options) {
+    const out = [];
+    for (const { row, qty, worth, varieties } of available(model, col.i0, col.i1, options)) {
+      const amount = sendShown(qty, row.unit);
+      if (amount <= 0) continue;
+      const named = options.varieties && (varieties.length > 1 || (varieties.length === 1 && varieties[0].id));
+      const listed = named ? varieties.map(v => ({ ...v, amount: sendShown(v.qty, row.unit) })).filter(v => v.amount > 0) : [];
+      out.push({ row, amount, price: options.prices && worth > 0 ? (worth / qty).toFixed(2) : '', varieties: listed });
+    }
+    return out;
+  }
+
   /** A plain-text availability list, the kind that is pasted into an email or a text to a chef. */
   function text(model, cols, options = {}) {
     const lines = [], farm = options.farm || 'Farm', DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], md = d => `${MONTHS[d.getMonth()]} ${d.getDate()}`;
     const heading = c => options.grain === 'month' ? `${MONTHS[c.start.getMonth()]} ${model.year}` : c.i0 === c.i1 ? `${DAYS[c.start.getDay()]} ${md(c.start)}` : `Week of ${md(c.start)} – ${c.start.getMonth() === c.end.getMonth() ? c.end.getDate() : md(c.end)}`;
     lines.push(`${farm} — what is available`);
     for (const c of cols) {
-      const list = available(model, c.i0, c.i1, { group: options.group }).filter(x => sendShown(x.qty, x.row.unit) > 0);
+      const list = offered(model, c, options);
       lines.push('', heading(c));
       if (!list.length) { lines.push('  Nothing forecast.'); continue; }
       for (const [g, , title] of GROUPS) {
@@ -270,25 +283,48 @@
         if (!part.length) continue;
         lines.push(`  ${title}`);
         for (const x of part) {
-          const price = options.prices && x.qty > 0 && x.worth > 0 ? ` @ $${(x.worth / x.qty).toFixed(2)}` : '';
-          lines.push(`    ${x.row.name}: ${sendAmount(x.qty, x.row.unit, x.row.group)}${price}`);
-          if (options.varieties && (x.varieties.length > 1 || (x.varieties.length === 1 && x.varieties[0].id))) for (const v of x.varieties) if (sendShown(v.qty, x.row.unit) > 0) lines.push(`      ${v.name}: ${sendAmount(v.qty, x.row.unit, x.row.group)}`);
+          const price = x.price ? ` @ $${x.price}` : '';
+          lines.push(`    ${x.row.name}: ${sendAmount(x.amount, x.row.unit, x.row.group)}${price}`);
+          for (const v of x.varieties) lines.push(`      ${v.name}: ${sendAmount(v.amount, x.row.unit, x.row.group)}`);
         }
       }
     }
     lines.push('', 'Forecast from the crop plan. Quantities are estimates and move with the weather.');
     return lines.filter((l, i, all) => !(l === '' && all[i - 1] === '')).join('\n');
   }
-  /** The same table as a spreadsheet file: things counted in whole numbers rounded down, as in the list; weighed things to two places. */
+  /** The reviewed list as a spreadsheet, with a quantity and optional unit price per selected period. */
   function csv(model, cols, options = {}) {
     const cell = v => { let s = String(v == null ? '' : v); if (/^\s*[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
-    const head = ['Kind', 'Crop', 'Variety', 'Unit', 'Season total', ...cols.map(c => options.grain === 'month' ? `${MONTHS[c.start.getMonth()]} ${model.year}` : E.d2s(c.start))], out = [head];
-    const title = Object.fromEntries(GROUPS.map(([g, t]) => [g, t])), two = x => Math.round(x * 100) / 100;
+    const dates = cols.flatMap(c => {
+      const label = options.grain === 'month' ? `${MONTHS[c.start.getMonth()]} ${model.year}` : E.d2s(c.start);
+      return options.prices ? [label, `${label} unit price (USD)`] : [label];
+    });
+    const out = [['Kind', 'Crop', 'Variety', 'Unit', ...dates]];
+    const title = Object.fromEntries(GROUPS.map(([g, t]) => [g, t])), rows = new Map();
+    for (const [i, c] of cols.entries()) {
+      for (const item of offered(model, c, options)) {
+        const { row, varieties } = item;
+        if (!rows.has(row)) rows.set(row, { crop: [], varieties: new Map() });
+        const record = rows.get(row);
+        record.crop[i] = item;
+        for (const v of varieties) {
+          if (!record.varieties.has(v.id)) record.varieties.set(v.id, []);
+          record.varieties.get(v.id)[i] = v;
+        }
+      }
+    }
+    const figures = entries => cols.flatMap((_, i) => {
+      const item = entries[i], amount = item ? item.amount : 0;
+      return options.prices ? [amount, item?.price || ''] : [amount];
+    });
     for (const row of model.rows) {
-      const n = x => (counted(row.unit) ? sendShown(x, row.unit) : two(x));
-      if (!(n(row.total) > 0)) continue;   // less than one of a thing counted, in all, is not on the list either
-      out.push([title[row.group], row.name, 'All', row.unit, n(row.total), ...cols.map(c => n(sum(row.days, c.i0, c.i1)))]);
-      if (row.varieties.length > 1 || (row.varieties[0] && row.varieties[0].id)) for (const v of row.varieties) if (n(v.total) > 0) out.push([title[row.group], row.name, v.name, row.unit, n(v.total), ...cols.map(c => n(sum(v.days, c.i0, c.i1)))]);
+      const record = rows.get(row);
+      if (!record) continue;
+      out.push([title[row.group], row.name, 'All', row.unit, ...figures(record.crop)]);
+      for (const v of row.varieties) {
+        const entries = record.varieties.get(v.id);
+        if (entries) out.push([title[row.group], row.name, v.name, row.unit, ...figures(entries)]);
+      }
     }
     return out.map(r => r.map(cell).join(',')).join('\r\n');
   }
