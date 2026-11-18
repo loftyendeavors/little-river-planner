@@ -19,6 +19,11 @@
  * goes to the next such box; with none left it is "Looks right. Next: …" and lands in the next crop's first empty box. A
  * letter picks a unit only while "Sold by" itself is in focus: in a number box a letter does nothing.
  *
+ * The harvest window is one joined choice, here and on the list: picked to the season's end, or for a set number of days. It
+ * stores nothing of its own: "for N days" is the list's harvest days (App.setSell, `days`), and "to the season's end" clears them
+ * and, where the crop's own record is picked for a set number of days, sets that record's `harvestMode` in the same step. What a
+ * change moves (each place's last picking, the season's worth, any ground it would book twice) is shown before it is taken.
+ *
  * Two things are said where they happen and kept in sight until the crop is ticked again, for as long as the page is open:
  * that a unit was changed (no figure is turned into another unit, so each is to be read again), and what a yield read
  * before "Picked" turned it into a week's figure or back.
@@ -37,7 +42,7 @@
   const PATTERN = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' };
   const PATTERN_SAY = { weekly: 'picked gradually', once: 'cleared at once', spread: 'picked on demand' };
   const PATTERN_TIP = { spread: 'The yield is a total, picked evenly over the harvest days: held, and taken as it is wanted.', weekly: 'The yield is what is picked each week. A longer harvest gives more, a shorter one less.', once: 'The yield is a total, and all of it is counted the day the crop is ready.' };
-  const PER = { plant: 'a plant', ft: 'a bed-foot', tray: 'a tray' };
+  const PER = { plant: 'a plant', ft: 'a bed-foot', tray: 'a tray' }, PER_SAY = { plant: 'per plant', ft: 'per bed-foot', tray: 'per tray' };
   const COUNTED = ['each', 'head'];
   const fig = n => root.LRFAssume.fig(n);
   const money = n => '$' + Math.round(n).toLocaleString('en-US');
@@ -193,6 +198,99 @@
   /** Words on the card that name something kept on the list: a press opens "All on one page" at this crop's row. */
   const toList = (c, text, varieties) => h('button.link', { type: 'button', dataset: { tolist: c.id }, title: `Opens “All on one page” at ${c.name}’s row.`, onclick: () => root.LRFAssume.setMode('harvest', 'list', c.id, { varieties: !!varieties }) }, text);
 
+  // ───────────────────────── the harvest window: to the season's end, or for a set number of days ─────────────────────────
+  const owns = o => !!o && (o.harvestMode === 'season' || o.harvestMode === 'window' || (o.hw != null && o.hw !== '' && Number.isFinite(+o.hw) && +o.hw >= 0));
+  /** Does a planting take its harvest window from the crop's line? Not when it, or its variety, carries one of its own, or a last day. */
+  function follows(eng, p) {
+    const v = eng.variety(p.varietyId), b = eng.bedOf(p.bedId);
+    return !owns(p) && !p.harvestEnd && !(v && v.cropId === p.cropId && owns(v)) && !!b && !eng.isRack(b);
+  }
+  const envOfP = (eng, p) => { const b = eng.bedOf(p.bedId); return b && !eng.isRack(b) ? eng.envOf(b) : null; };
+  /** Which side of the choice the crop's line is on, and the number of days the other side would take. */
+  function windowOf(eng, c, hc) {
+    const season = hc.days.mine == null && hc.season, offer = Math.max(1, Math.round(+c.hw > 0 ? +c.hw : hc.nominal || 1));
+    return { season, days: season ? null : hc.days.value, offer: season ? offer : hc.days.value };
+  }
+  /** Each place's last picking under the line as it stands: the dates of the plantings there that follow it, earliest and latest. */
+  function endsOf(eng, c) {
+    const out = new Map();
+    for (const p of eng.plan.plantings || []) {
+      if (p.cropId !== c.id || !follows(eng, p)) continue;
+      const env = envOfP(eng, p), r = env ? eng.calc(p) : null;
+      if (!r || !root.LRFEngine.validDate(r.last)) continue;
+      const at = out.get(env) || { lo: r.last, hi: r.last, n: 0 };
+      if (r.last < at.lo) at.lo = r.last;
+      if (r.last > at.hi) at.hi = r.last;
+      at.n++; out.set(env, at);
+    }
+    return out;
+  }
+  const iso = d => root.LRFEngine.d2s(d), between = (lo, hi) => +lo === +hi ? UI.day(lo) : `${UI.day(lo)} to ${UI.day(hi)}`;
+  /**
+   * What a change of the choice would do, worked out on the plan with the step taken and nothing kept: each place's last picking
+   * before and after, the plantings that keep their own, the season's worth, and the beds it would book twice that are not now.
+   */
+  function movesOf(eng, c, ops) {
+    const next = App.engineAfter(ops), places = new Map(), pairs = e => { const set = new Map(); for (const p of e.plan.plantings) { const r = e.calc(p); if (r) for (const o of e.conflicts(p, r)) if (!o.rest) set.set([p.id, o.p.id].sort().join('|'), p.bedId); } return set; };
+    let n = 0, own = 0;
+    for (const p of eng.plan.plantings || []) {
+      if (p.cropId !== c.id) continue;
+      const env = envOfP(eng, p), a = env ? eng.calc(p) : null, q = next.planting(p.id), b = a && q ? next.calc(q) : null;
+      if (!a || !b) continue;
+      if (!follows(eng, p)) { own++; continue; }
+      if (+a.last === +b.last) continue;
+      n++;
+      const at = places.get(env) || { n: 0, was: [a.last, a.last], now: [b.last, b.last] };
+      at.n++;
+      if (a.last < at.was[0]) at.was[0] = a.last; if (a.last > at.was[1]) at.was[1] = a.last;
+      if (b.last < at.now[0]) at.now[0] = b.last; if (b.last > at.now[1]) at.now[1] = b.last;
+      places.set(env, at);
+    }
+    const was = pairs(eng), then = pairs(next), beds = [...new Set([...then].filter(([k]) => !was.has(k)).map(([, bedId]) => bedId))].map(id => App.bedLabel(next.bedOf(id), next));
+    const worth = [study(eng).worth, F.build(next).rows.reduce((t, r) => t + r.worth, 0)];
+    return { n, own, places: eng.ENVS.filter(env => places.has(env)).map(env => ({ env, ...places.get(env) })), worth, beds, things: App.thingsAfter(c.id, ops) };
+  }
+  /**
+   * Set the harvest window: `to` is 'season', a number of days, or null (back to the crop's own record). What it moves is shown
+   * first, in a sheet, whenever it moves anything; then it is the list's own step, with one Undo.
+   */
+  async function setWindow(c, to, redraw = () => ui.redraw()) {
+    const eng = App.state.engine, change = { days: to }, ops = App.sellOps(c.id, change);
+    if (!ops) { redraw(); return false; }
+    const label = to === 'season' ? `${c.name}: picked to the season’s end` : to == null ? `${c.name}: harvest days as before` : `${c.name}: picked for ${to} days`;
+    const m = movesOf(eng, c, ops), moved = Math.abs(m.worth[1] - m.worth[0]) >= 0.5;
+    if (m.n || moved || m.beds.length || m.things) {
+      const worth = moved ? `the season’s worth goes from ${money(m.worth[0])} to ${money(m.worth[1])}` : `the season’s worth stays ${money(m.worth[0])}`;
+      const detail = h('div.yc-moves', { dataset: { hook: 'harvest-moves' } },
+        m.places.length ? h('ul.moves', m.places.map(x => h('li', { dataset: { hook: 'harvest-move', place: x.env, wasFrom: iso(x.was[0]), wasTo: iso(x.was[1]), nowFrom: iso(x.now[0]), nowTo: iso(x.now[1]), n: String(x.n) } },
+          h('b', PLACE[x.env]), ` ${plural(x.n, 'planting')}: last picking ${between(...x.was)} → ${between(...x.now)}`))) : null,
+        h('p', { dataset: { hook: 'harvest-worth', was: String(m.worth[0]), now: String(m.worth[1]) } }, worth.charAt(0).toUpperCase() + worth.slice(1), '.'),
+        h('p', { dataset: { hook: 'harvest-twice', beds: m.beds.join('|') } }, m.beds.length ? `Ground booked twice then: ${m.beds.join(', ')}. Not refused: ${m.beds.length === 1 ? 'it waits' : 'they wait'} under “To settle”.` : 'No ground ends up booked twice.'),
+        m.own ? h('p', { dataset: { hook: 'harvest-own', n: String(m.own) } }, `${plural(m.own, 'planting')} ${m.own === 1 ? 'keeps its' : 'keep their'} own harvest days or last picking, and ${m.own === 1 ? 'does' : 'do'} not move.`) : null,
+        m.things ? h('p', m.things.said) : null);
+      const ok = await UI.confirm({ title: `${label}?`, body: `${!m.n ? 'No planting’s last picking moves' : m.n === 1 ? 'One planting’s last picking moves' : `The last picking of ${num(m.n)} plantings moves`}, and ${worth}. One undo takes it back.`,
+        confirmLabel: to === 'season' ? 'Pick to the season’s end' : to == null ? 'Go back' : `Pick for ${to} days`, detail });
+      if (!ok) { redraw(); return false; }
+    }
+    const done = await App.setSell(c.id, change, label, { told: true, shown: true });
+    if (!done) redraw();
+    return done;
+  }
+  /**
+   * The choice itself, one joined control: "To the season's end" | "For [N] days". `input` is the number box, made by the caller
+   * (the card's box, or the list's cell); typing in it is the second side's number. `short`: the list's narrow words.
+   */
+  function windowChoice(eng, c, hc, input, short, redraw) {
+    const w = windowOf(eng, c, hc), name = c.name;
+    return h('span.yc-hw', { role: 'group', 'aria-label': `${name}: harvest window`, dataset: { hook: 'harvest-choice', on: w.season ? 'season' : 'days' } },
+      h('button.yc-hw-end', { type: 'button', 'aria-pressed': String(w.season), dataset: { hook: 'harvest-season' }, title: w.season ? `Picked until the season ends where it grows. A yield is spoken of over ${hc.nominal} days.` : `Picks ${name} until the season ends where it grows. What that moves is shown first.`,
+        onclick: () => { if (!w.season) setWindow(c, 'season', redraw); } }, short ? 'Season' : 'To the season’s end'),
+      h('span.yc-hw-n' + (w.season ? '' : '.on'),
+        h('button.yc-hw-for', { type: 'button', 'aria-pressed': String(!w.season), dataset: { hook: 'harvest-days' }, title: w.season ? `Picks ${name} for ${w.offer} days, or the number typed beside. What that moves is shown first.` : `Picked for ${w.days} days. Type another number beside to change it.`,
+          onclick: () => { if (!w.season) { input.focus(); return; } const typed = Math.round(+input.value); setWindow(c, typed >= 1 && typed <= 400 ? typed : w.offer, redraw); } }, 'For'),
+        input, h('span.yc-unit', short ? 'd' : 'days')));
+  }
+
   // ───────────────────────── the card ─────────────────────────
   function card(eng, plan, c, q) {
     const s = study(eng), x = s.crops.get(c.id) || NONE, hc = eng.harvestFor(c.id), year = s.year, unit = hc.unit.value, u = unitWord(unit), w = waits(eng, c, hc), cover = eng.isCoverCrop(c);
@@ -234,7 +332,7 @@
 
     // ── the grid ──
     const span = (...kids) => h('td.yc-all', { colSpan: n }, kids);
-    const row = (id, label, hint, cells) => h('tr', { dataset: { row: id } }, h('th', { scope: 'row' }, h('b', label), hint ? h('small', hint) : null), cells, T.cells(id));
+    const row = (id, label, hint, cells) => h('tr', { dataset: { row: id } }, h('th', { scope: 'row' }, h('b', { dataset: { hook: 'card-row-name' } }, label), hint ? h('small', { dataset: { hook: 'card-row-hint' } }, hint) : null), cells, T.cells(id));
     const why = text => h('span.yc-na', text);
     const grid = h('table.yc-grid', { id: 'ycGrid' },
       h('thead', h('tr', h('th'), cols.list.map(env => { const at = x.places.get(env); return h('th', { scope: 'col', dataset: { place: env } }, PLACE[env], h('small', at ? plural(at.n, 'planting') : cols.planted ? 'nothing planted there now' : 'not planted yet')); }), T.heads())));
@@ -264,13 +362,13 @@
     body.append(...T.shareRows(row, span));
 
     // what it gives: a box for each place, in the crop's own way of being picked
-    if (hc.micro) body.append(row('yield', 'Gives, packed', null, span(why('a tray is a tray'))));
+    if (hc.micro) body.append(row('yield', 'Marketable yield', null, span(why('a tray is a tray'))));
     else {
       const pattern = hc.pattern.value, weekly = hc.weekly, was = ui.turned.get(c.id);
       if (was && was.weekly === weekly) ui.turned.delete(c.id);
       const tenths = pattern === 'once' && hc.basis === 'plant' && COUNTED.includes(unit) && cols.list.every(env => hc.cells[env].value == null || hc.cells[env].value <= 1);
-      const label = tenths ? 'Of every 10 planted, fit to sell' : `Gives, packed, ${per}${weekly ? ' a week' : ''}`;
-      const hint = tenths ? 'cut once: the ten that go in, less the ones that do not make it' : weekly ? 'what is picked each week, for as many weeks as it is picked' : pattern === 'once' ? 'in all, taken the day it is cleared' : 'in all, over its harvest days';
+      const label = tenths ? 'Of every 10 planted, fit to sell' : `Marketable yield ${PER_SAY[hc.basis]}${weekly ? ' per week' : ''}`;
+      const hint = tenths ? 'cut once: the ten that go in, less the ones that do not make it' : weekly ? 'packed weight or count, picked each week, for as many weeks as it is picked' : pattern === 'once' ? 'packed weight or count, in all, taken the day it is cleared' : 'packed weight or count, in all, over its harvest days';
       body.append(row('yield', label, hint, cols.list.map(env => {
         const cell = hc.cells[env], at = x.places.get(env), k = tenths ? 10 : 1, where = `${c.name}, ${PLACE[env].toLowerCase()}`, amber = w.places.includes(env);
         const what = `${weekly ? 'picked each week from' : 'in all from'} ${per}`, back = cell.fallback == null ? 'no yield at all' : fig(cell.fallback);
@@ -310,19 +408,23 @@
 
     // how it is picked, and for how long
     if (hc.micro) body.append(row('pick', 'Picked', null, span(why('when due: a live tray is counted whole on the Monday it is due'))));
-    else body.append(row('pick', 'Picked', null, span(
-      h('select.yc-sel' + (hc.pattern.mine ? '.mine' : ''), { 'aria-label': `${c.name}: picked`, dataset: { yk: 'pick' }, title: `${PATTERN_TIP[hc.pattern.value]}${hc.pattern.mine ? '' : ' Not set: this is how every crop has been counted so far.'} Changing between Gradually and the other two turns each yield into a week’s figure, or back into a total, over the harvest days.`,
-        onchange: e => setPick(c, cols.list, e.target.value) },
-        Object.entries(PATTERN).map(([value, text]) => h('option', { value, selected: hc.pattern.value === value }, text)), hc.pattern.mine ? h('option', { value: 'unset' }, 'Back to not set') : null),
-      ' for ',
-      box({ key: 'days', mine: hc.days.mine, fallback: hc.season ? 'season' : hc.days.fallback, whole: true, min: 1, max: 400, wide: true, label: `${c.name}: harvest days`,
-        tip: hc.days.mine != null ? `Your number: picked for ${hc.days.mine} days. Clear it to go back to ${hc.season ? 'the end of the season' : hc.days.fallback + ' days'}.` : hc.season ? `Picked until the season ends where it grows. A yield is spoken of over ${hc.nominal} days. Type a number to pick it for that many days instead.` : `From the crop’s record: picked for ${hc.days.fallback} days.`,
-        save: k => App.setSell(c.id, { days: k }, k == null ? `${c.name}: harvest days as before` : `${c.name}: picked for ${k} days`) }),
-      h('span.yc-unit', 'harvest days'))));
+    else {
+      const hw = windowOf(eng, c, hc), daysBox = box({ key: 'days', mine: hc.days.mine, fallback: hw.offer, whole: true, min: 1, max: 400, label: `${c.name}: harvest days`,
+        tip: hc.days.mine != null ? `Your number: picked for ${hc.days.mine} days. Clear it to go back to ${hc.season ? 'the end of the season' : hc.days.fallback + ' days'}.` : hw.season ? `Type a number to pick it for that many days instead of to the season’s end. What that moves is shown first.` : `From the crop’s record: picked for ${hc.days.fallback} days.`,
+        save: k => setWindow(c, k) });
+      body.append(row('pick', 'Picked', null, span(h('span.yc-line',
+        h('select.yc-sel' + (hc.pattern.mine ? '.mine' : ''), { 'aria-label': `${c.name}: picked`, dataset: { yk: 'pick' }, title: `${PATTERN_TIP[hc.pattern.value]}${hc.pattern.mine ? '' : ' Not set: this is how every crop has been counted so far.'} Changing between Gradually and the other two turns each yield into a week’s figure, or back into a total, over the harvest days.`,
+          onchange: e => setPick(c, cols.list, e.target.value) },
+          Object.entries(PATTERN).map(([value, text]) => h('option', { value, selected: hc.pattern.value === value }, text)), hc.pattern.mine ? h('option', { value: 'unset' }, 'Back to not set') : null),
+        windowChoice(eng, c, hc, daysBox, false)))));
+    }
 
-    // last picking: what the two rows above come to. Not a box of its own yet.
-    body.append(row('last', 'Last picking', null, cols.list.map(env => h('td', { dataset: { place: env } },
-      hc.micro ? why('none: a tray is taken whole') : hc.pattern.value === 'once' ? why('none: cleared in one day') : hc.season && hc.days.mine == null ? why('when the season ends there') : h('span.yc-line', h('b.yc-fixed', String(hc.days.value)), h('span.yc-unit', 'days after the first'))))));
+    // last picking: what the choice above comes to in each place, as dates: the plantings there that follow the crop's line
+    const ends = hc.micro ? new Map() : endsOf(eng, c), hw = hc.micro ? null : windowOf(eng, c, hc);
+    body.append(row('last', 'Last picking', hc.micro || hc.pattern.value === 'once' ? null : hw.season ? 'the season’s end where it grows' : `${hw.days} days after the first picking`, cols.list.map(env => h('td', { dataset: { place: env } },
+      hc.micro ? why('none: a tray is taken whole') : hc.pattern.value === 'once' ? why('none: cleared in one day')
+        : ends.has(env) ? h('span.yc-line', { dataset: { hook: 'harvest-end', place: env, from: iso(ends.get(env).lo), to: iso(ends.get(env).hi), n: String(ends.get(env).n) } }, h('b.yc-fixed', between(ends.get(env).lo, ends.get(env).hi)))
+          : why(hw.season ? 'when the season ends there' : `${hw.days} days after the first`)))));
 
     // ── under the grid: what it comes to, and what it waits on ──
     const comes = [], units = [...x.units.values()].filter(k => k.total > 0);
@@ -506,5 +608,5 @@
     return { mine: made.mine, all: made.all, left };
   }
 
-  root.LRFYieldCard = { render, reset, open, unitChanged, current: () => ui.cur, order: () => ui.order.slice(), state: ui, box };
+  root.LRFYieldCard = { render, reset, open, unitChanged, current: () => ui.cur, order: () => ui.order.slice(), state: ui, box, windowOf, windowChoice, setWindow };
 })(window);

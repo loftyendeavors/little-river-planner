@@ -400,7 +400,7 @@
       th('.ah-unit', 'Sold by', 'The unit the crop is counted and sold in. The yield and the price are in this unit; one unit is never turned into another.'),
       th('.ah-price', 'Price $', 'What one unit sells for. A variety can have its own.'),
       th('.ah-pick', 'Picked', 'How the harvest comes in. Gradually: picked week by week, and the yield is a week’s picking. Clear: the yield is a total, all of it taken the day it is ready. On demand: the yield is a total, held and taken evenly over the harvest days.'),
-      th('.ah-days', 'Days', 'Harvest days: how long the crop is picked, or held to be picked. The ground is held that long.'),
+      th('.ah-days', 'Picked to', 'The harvest window: to the season’s end where it grows, or for a set number of days. The ground is held that long.'),
       App.state.engine.ENVS.map(env => th('.ah-y', SHORT[env], `Yield ${LABEL[env].toLowerCase()}, for a plant or a bed-foot as the row says: a total, or a week’s picking where the crop is picked each week`, 'Yield')),
       th('.ah-comes', 'Comes to', 'The total and the weekly figure side by side, for the condition the crop is mostly grown in. One is yours; the other follows from the harvest days.'),
       h('th.ah-s', { title: 'The part of what is packed that is sold: what is left after the share for personal use', hidden: App.state.plan.settings.houseKeeps === false }, 'Sold %'),
@@ -415,6 +415,15 @@
     const tip = `${LABEL[env]}: ${fig(cell.total)}${u} from ${per} over ${hc.nominal} harvest days, which is ${fig(cell.weekly)} a week. ${hc.house.sold}% of it is counted as sold.`;
     const from = hc.basis === 'ft' ? 'a bed-ft' : per;
     return h('td.as-seed.ah-comes', { title: tip }, h('b', `${fig(cell.total)}${u}`), h('small', hc.weekly ? `${fig(cell.weekly)} × ${weeks} wk · ${from}` : `${fig(cell.weekly)}/wk · ${from}`));
+  }
+  /** The harvest window, as on the card: one joined choice, to the season's end or for a set number of days (js/yieldcard.js). */
+  function harvestCell(eng, c, hc) {
+    const YC = root.LRFYieldCard, { season, offer } = YC.windowOf(eng, c, hc);
+    const td = figCell({ cls: '.ah-days', key: `days|${c.id}`, mine: hc.days.mine, fallback: offer, whole: true, min: 1, max: 400, label: `${c.name}: harvest days`,
+      tip: hc.days.mine != null ? `Your number: picked for ${hc.days.mine} days. Clear it to go back to ${hc.season ? 'the end of the season' : hc.days.fallback + ' days'}.` : season ? 'Type a number to pick it for that many days instead of to the season’s end. What that moves is shown first.' : `From the crop’s record: picked for ${hc.days.fallback} days.`,
+      save: n => YC.setWindow(c, n, schedule) });
+    td.replaceChildren(YC.windowChoice(eng, c, hc, td.firstChild, true, schedule));
+    return td;
   }
   function harvestTable(eng, plan, q, list) {
     const used = new Map(), where = new Map(), whereV = new Map(), ownY = new Map();
@@ -468,9 +477,7 @@
         figCell({ cls: '.ah-price', key: `price|${c.id}`, mine: hc.price.mine, fallback: hc.price.fallback, open: hc.open.price, label: `${c.name}: price`, tip: hc.price.mine != null ? `Your price for one ${unit === 'each' ? 'of them' : unit}. Clear it to go back to ${fig(hc.price.fallback)}.` : `From the crop’s record: $${fig(hc.price.fallback)} for one ${unit === 'each' ? 'of them' : unit}.`,
           save: n => App.setSell(c.id, { price: n }, n == null ? `${c.name}: price back to $${fig(hc.price.fallback)}` : `${c.name}: $${fig(n)}${unit === 'each' ? ' each' : ' a ' + unit}`) }),
         pickCell,
-        hc.micro ? fixed('—', 'A live tray is ready on one day.') : figCell({ cls: '.ah-days', key: `days|${c.id}`, mine: hc.days.mine, fallback: hc.season ? 'season' : hc.days.fallback, whole: true, min: 1, max: 400, label: `${c.name}: harvest days`,
-          tip: hc.days.mine != null ? `Your number: picked for ${hc.days.mine} days. Clear it to go back to ${hc.season ? 'the end of the season' : hc.days.fallback + ' days'}.` : hc.season ? `Picked until the season ends where it grows. A yield is spoken of over ${hc.nominal} days. Type a number to pick it for that many days instead.` : `From the crop’s record: picked for ${hc.days.fallback} days.`,
-          save: n => App.setSell(c.id, { days: n }, n == null ? `${c.name}: harvest days as before` : `${c.name}: picked for ${n} days`) }),
+        hc.micro ? fixed('—', 'A live tray is ready on one day.') : harvestCell(eng, c, hc),
         yields('crops', c.id, hc, c.name, where.get(c.id)),
         comesTo(hc, main, unit),
         !hc.house.farm ? h('td.as-cell.none', { hidden: true }) : hc.micro ? fixed('—') : figCell({ cls: '.ah-s', key: `share|${c.id}`, mine: hc.share.mine, fallback: hc.share.fallback, max: 100, label: `${c.name}: sold percent`, tip: `Of what is packed, the part counted as sold: the rest is for personal use. ${hc.share.mine != null ? 'Yours.' : 'From the crop’s record.'}`, save: n => App.setSell(c.id, { share: n }, n == null ? `${c.name}: sold share back to ${hc.share.fallback}%` : `${c.name}: ${fig(n)}% sold`) }),
