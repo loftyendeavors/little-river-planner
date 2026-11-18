@@ -220,6 +220,8 @@
     // ── recorded work (actual dates) stays separate from planned dates ──
     const doneOf = (p, kind) => { const v = p && p.done && p.done[kind]; return typeof v === 'string' && validDate(s2d(v)) ? v : null; };
     const clearDateOf = p => { const v = doneOf(p, 'flip'); return v ? s2d(v) : null; };
+    // A planting marked failed (its panel's "Mark as failed…"): from that day its bed is free and nothing more is picked. It stays on record.
+    const failedOn = p => { const f = p && p.failed, v = f && typeof f === 'object' && !Array.isArray(f) ? f.on : null; return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && validDate(s2d(v)) ? s2d(v) : null; };
     const sowDateOf = (p, planned) => { const d = doneOf(p, 'sow'); return d ? s2d(d) : (validDate(planned) ? new Date(planned) : null); };
 
     // ── which crop / variety numbers apply to this planting ──
@@ -671,6 +673,8 @@
       for (const p of S.plantings || []) {
         const r = baseOf(p);
         if (!r || r.b.active === false || r.g.active === false) continue;
+        // a planting marked failed before it was sown is sown with nobody: it takes no cells or trays of a lot it would have shared
+        if (failedOn(p) && !['sow', 'field'].some(k => doneOf(p, k))) { plans.set(p, sowSingle(p, r)); continue; }
         const opts = sowOptions(p, r), key = Sow.batchKey(opts, p.id);
         if (!key) continue;
         // sowings planned for different days stay apart even when their recorded dates happen to meet
@@ -801,6 +805,8 @@
       let last = period.last;
       if (validDate(failure) && failure < last) last = failure;
       if (actualClear && actualClear < last) last = actualClear;
+      const lost = failedOn(p);
+      if (lost && addDays(lost, -1) < last) last = addDays(lost, -1);
       const harvestDays = Math.max(0, dayDiff(last, first) + 1), days = Math.max(1, dayDiff(last, field) + 1);
       const blackoutDays = last >= first ? blackoutOverlapDays(c, first, last, { summerOK: c.summerOK }, g) : 0;
       const result = {
@@ -810,7 +816,7 @@
         usedSites: tw ? plants : null, totalSites: tw ? sites(b) : null,
         planned, field, sow: gh, plannedSow: plannedGh, sowDefault, sowSet: !!sowOwn, start: gh || field, slip: dayDiff(field, planned),
         first, last, modeledLast: period.modeledLast, automaticEnd: period.automaticEnd, harvestMode: period.harvestMode,
-        harvestDays, expectedHarvestDays: period.expectedDays, removal: period.removal, actualClear,
+        harvestDays, expectedHarvestDays: period.expectedDays, removal: period.removal, actualClear, ...(lost ? { failed: d2s(lost) } : {}),
         area: tw || rack || ct ? 0 : (+b.w || 0) * len, days, blackoutDays,
         occupiedDays: actualClear ? Math.max(1, dayDiff(actualClear, field) + 1) : days + turnoverFor(p)
       };
@@ -826,13 +832,18 @@
     }
     function occupancyFrom(p, r) {
       if (p.established !== true) return r.field;
-      const models = standMates(p), actual = models.map(q => s2d(doneOf(q, 'field') || (q.established !== true ? fieldDateOf(q) : null))).filter(validDate);
+      // a planting of the stand marked failed does not start it: what is left of the stand holds from its own days
+      const models = standMates(p).filter(q => q === p || !failedOn(q)), actual = models.map(q => s2d(doneOf(q, 'field') || (q.established !== true ? fieldDateOf(q) : null))).filter(validDate);
       if (actual.length) return minDate(actual);
       const dates = models.map(q => s2d(q.date)).filter(validDate), first = dates.length ? minDate(dates) : r.field;
       return new Date(first.getFullYear(), 0, 1);
     }
-    /** Last day the space is held, turnover days included. Infinity = open-ended stand. */
+    /** Last day the space is held, turnover days included. Infinity = open-ended stand. A planting marked failed holds it to the day before. */
     function occupancyThrough(p, r) {
+      const held = heldThrough(p, r), lost = failedOn(p);
+      return lost && addDays(lost, -1) < held ? addDays(lost, -1) : held;
+    }
+    function heldThrough(p, r) {
       if (r.rack && r.c.micro) { const end = addDays(r.first, -1), clear = clearDateOf(p); return clear && clear < end ? clear : end; }
       if (p.workflow && p.workflow.outcome === 'failed') {
         const shared = isStandingCrop(p, r) ? standMates(p).map(clearDateOf).filter(validDate) : [];
@@ -857,7 +868,8 @@
         if (p.established === true && r.planned.getFullYear() > date.getFullYear()) return false;
         const until = (r.rack && r.c.micro) || (p.workflow && p.workflow.outcome === 'failed') ? occupancyThrough(p, r)
           : isStandingCrop(p, r) ? (standEndDate(p) || Infinity) : (clearDateOf(p) || r.last);
-        return date <= until;
+        const lost = failedOn(p);
+        return date <= (lost && addDays(lost, -1) < until ? addDays(lost, -1) : until);
       }).sort((a, b) => b.r.field - a.r.field);
       const seen = new Set();
       return matches.filter(({ p, r }) => {
@@ -946,7 +958,8 @@
       }
       const outdoorField = shelterValid(r.b) && (isTower(r.b) || isCt(r.b)) ? outDate(p, r) || r.field : r.field, lastOutdoor = lastFieldDate(r.c, r.b, outdoorField.getFullYear());
       if (!p.established && lastOutdoor && outdoorField > lastOutdoor) out.push({ k: 'field', t: `Outdoor planting ends ${d2s(lastOutdoor)}; this goes in ${d2s(outdoorField)}.` });
-      if (p.workflow && p.workflow.outcome === 'failed') out.push({ k: 'outcome', t: `Crop failure recorded ${p.workflow.failureDate}.` });
+      if (failedOn(p)) out.push({ k: 'outcome', t: `Marked failed ${p.failed.on}: its bed is free from that day.` });
+      else if (p.workflow && p.workflow.outcome === 'failed') out.push({ k: 'outcome', t: `Crop failure recorded ${p.workflow.failureDate}.` });
       else if (!isCoverCrop(r.c) && r.harvestDays === 0) out.push({ k: 'timing', t: `First harvest (${d2s(r.first)}) falls after the harvest period ends (${d2s(r.last)}).` });
       if (!isCoverCrop(r.c) && r.harvestMode === 'season' && r.harvestDays > 0 && r.harvestDays < positive(r.c.yieldDays, positive(r.c.hw, 1))) {
         out.push({ k: 'season', t: `Only ${r.harvestDays} harvest days remain of a ${r.expectedHarvestDays}-day season; yield is reduced in proportion.` });
@@ -1086,11 +1099,11 @@
       for (const p of S.plantings) {
         const r = calc(p);
         if (!r || r.b.active === false || r.g.active === false) continue;
-        const failure = p.workflow && p.workflow.outcome === 'failed' ? s2d(p.workflow.failureDate) : null, propEnd = validDate(failure) && failure < r.field ? failure : r.field;
+        const failure = failedOn(p) || (p.workflow && p.workflow.outcome === 'failed' ? s2d(p.workflow.failureDate) : null), propEnd = validDate(failure) && failure < r.field ? failure : r.field;
         if (r.rack && r.c.micro && r.b.liveTrayPool) { const to = addDays(occupancyThrough(p, r), 1); if (to > r.field) items.push({ p, r, kind: 'live', from: r.field, to, n: r.len, eq: r.len }); }
         if (r.sow && r.cells && r.sow < propEnd) items.push({ p, r, kind: 'prop', from: r.sow, to: propEnd });
         if (r.ct && r.b.shelter && r.b.shelter.gardenId === 'nursery' && r.out && r.out > r.field) {
-          const to = r.actualClear && r.actualClear < r.out ? addDays(r.actualClear, 1) : r.out;
+          const lost = failedOn(p), out = lost && lost < r.out ? lost : r.out, to = r.actualClear && r.actualClear < out ? addDays(r.actualClear, 1) : out;   // a crate that failed under shelter leaves the bench that day
           if (to > r.field) items.push({ p, r, kind: 'crate', from: r.field, to, n: r.len, eq: r.len * ctFt2(ctOf(r.b)) / TRAY_FT2, floor: !cratesOnBenches });
         }
       }
@@ -1341,7 +1354,7 @@
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, startRule, startFixed, startHint, STARTS, START_LESS, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,
       footprint, overflow, unbounded, holders, conflicts,
-      occupancyFrom, occupancyThrough, turnoverFor, frostDates, firstFieldDate, lastFieldDate, standKey
+      occupancyFrom, occupancyThrough, failedOn, turnoverFor, frostDates, firstFieldDate, lastFieldDate, standKey
     };
   }
 

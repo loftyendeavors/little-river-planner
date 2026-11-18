@@ -39,7 +39,8 @@ with sync_playwright() as pw:
     wait = lambda ms=350: page.wait_for_timeout(ms)
     row = lambda key: page.locator(f'.tk-row[data-line={json.dumps(key)}]')
     toast = lambda: js("return (document.querySelector('.toast') || {}).textContent || ''")
-    def tick(key): row(key).locator(".tk-tick").click(); wait(1400)
+    # a tick a week or more ahead of its day asks first (Tasks part 2): the check answers yes, as the grower would
+    def tick(key): row(key).locator(".tk-tick").click(); page.wait_for_timeout(250); _ah = page.locator('[data-hook="tasks-ahead-yes"]'); _ah.first.click() if _ah.count() and _ah.first.is_visible() else None; wait(1400)
     def unfold():
         for i in range(page.locator('.tk-fold[aria-expanded="false"]').count()): page.locator('.tk-fold[aria-expanded="false"]').first.click(); wait(120)
         wait(400)

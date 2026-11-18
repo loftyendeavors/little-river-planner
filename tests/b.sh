@@ -72,6 +72,8 @@ for n in "$@"; do
     forecast-site) python3 -I $T/forecast_check.py $SITE $S/forecast-site $ZIP 2>&1 | tally forecast-page-built-site ;;
     swap) python3 -I $T/swap_check.py $APP $S/swap 2>&1 | tally variety-swap ;;   # the variety swap: one variety put in the place of another, the sowing days kept
     swap-site) python3 -I $T/swap_check.py $SITE $S/swap-site $ZIP 2>&1 | tally variety-swap-built-site ;;
+    tasks2) python3 -I $T/tasks2_check.py $APP $S/tasks2 2>&1 | tally tasks-part-2 ;;   # Tasks part 2: Upcoming weeks, Trays to fill, Mark all done, the bed flag, a tick ahead asked first, everything recorded taken back, a planting marked failed
+    tasks2-site) python3 -I $T/tasks2_check.py $SITE $S/tasks2-site $ZIP 2>&1 | tally tasks-part-2-built-site ;;
     f053) python3 -I $T/fixes_053_check.py $APP $S/f053 2>&1 | tally fixes-0.53 ;;
     f053-site) python3 -I $T/fixes_053_check.py $SITE $S/f053-site $ZIP 2>&1 | tally fixes-0.53-built-site ;;
     map) WIDTHS=${WIDTHS:-1280,1480,1707,3440} python3 -I $REPO/tools/map_check.py $APP $S/map 2>&1 | tally map ;;

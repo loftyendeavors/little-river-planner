@@ -40,7 +40,7 @@
     if (!r) return 'none';
     if (p.established === true) return 'standing';
     if (p.liveTray) return 'tray';
-    if (p.workflow && p.workflow.outcome === 'failed') return 'failed';
+    if ((eng.failedOn && eng.failedOn(p)) || (p.workflow && p.workflow.outcome === 'failed')) return 'failed';
     const s = SL.sowing(eng, p);
     if (s && s.sown) return 'sown';
     return eng.pinned(p) ? 'own-days' : 'swap';

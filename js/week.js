@@ -15,11 +15,14 @@
  *   Week.takeBack(engine, inventory, p, kind, ctx)        -> the planting with that job cleared (and put back)
  *   Week.delay(engine, p, kind, date)            -> the planting with that job put off to a day, on purpose
  *   Week.skip(p, kind, day | null)               -> the planting with that job skipped, or no longer skipped
+ *   Week.fail(p, day | null, at)                 -> the planting marked failed on a day, or no longer marked
  *
  * A job put off on purpose is a change to the plan, not a record. Sowing, hardening off and planting are tied to the
  * day the planting goes out, so putting one off moves the planting, and every job after it, by as many days. Potting
  * up and moving out push nothing, so only the day they are listed on changes. A skipped job is left out of the list
  * and nothing else changes. What was put off, skipped or noted is kept on the planting, under `tasks`.
+ *
+ * A planting marked failed has no work left to list: only what was recorded is kept (js/engine.js failedOn).
  *
  * Sowing itself is recorded by the seed library (LRFSeedLib.recordSowing), which takes the seed off stock; this
  * file calls it and adds the push. The records are the planting's done and workflow.history.
@@ -95,7 +98,8 @@
       st.pushed = st.done ? pushed(p, st.kind) : null;
       st.late = st.done ? dayDiff(s2d(st.done), st.planned) + (st.pushed ? st.pushed.days : 0) : null;
     }
-    return out;
+    // a planting marked failed has no work left: what was recorded stays, and nothing else is listed
+    return engine.failedOn && engine.failedOn(p) ? out.filter(st => st.done) : out;
   }
   const step = (engine, p, kind) => steps(engine, p).find(st => st.kind === kind) || null;
   /** The last record of a job in a planting's history that has not been taken back since. */
@@ -145,6 +149,8 @@
       if (st.done) throw new Error(`This ${SL.DONE_WORD[kind]} is already recorded, on ${st.done}.`);
       if (!SL.realDay(date)) throw new Error('Choose a real calendar date.');
       if (date > ctx.today) throw new Error('Work that has not happened yet cannot be recorded. Choose today or an earlier day.');
+      const far = SL.yearAway(date, st.planned);
+      if (far) throw new Error(far);
       if (p.done != null && !objectOr(p.done, null)) throw new Error('The recorded work of this planting cannot be read. It is kept as it is; nothing was changed.');
       const dates = { ...(p.done || {}), [kind]: date };
       for (const [a, b] of SL.DONE_ORDER) {
@@ -223,6 +229,16 @@
     return withTask(p, 'skip', kind, day);
   }
 
+  /**
+   * A planting marked failed on a day (`at`: when it was marked), or with no day the mark taken off. The day and the moment are one
+   * record, written in one act (tests/plan_shape.cjs: plantings[].failed, taken whole). What the mark does is the engine's (failedOn).
+   */
+  function fail(p, day, at) {
+    if (day == null) { const out = { ...p }; delete out.failed; return out; }
+    if (!isDay(day)) throw new Error('Choose a real calendar date.');
+    return { ...p, failed: { on: day, at: String(at || '') } };
+  }
+
   // ── the lines of the list ──
   const SECTIONS = [['potup', 'Pot up'], ['harden', 'Harden off'], ['plant', 'Plant out'], ['move', 'Move out']];
   const KIND_OF = { potup: 'potup', harden: 'harden', plant: 'field', move: 'move' };
@@ -278,5 +294,5 @@
     return list;
   }
 
-  return { ORDER, NAME, DID, PUSHES, MOVES, SECTIONS, KIND_OF, monday, steps, step, lastRecord, pushed, pushFor, record, takeBack, delay, skip, skipOf, delayOf, noteOf, withTask, lines };
+  return { ORDER, NAME, DID, PUSHES, MOVES, SECTIONS, KIND_OF, monday, steps, step, lastRecord, pushed, pushFor, record, takeBack, delay, skip, fail, skipOf, delayOf, noteOf, withTask, lines };
 });
