@@ -154,6 +154,36 @@ tryCase('any other job recorded a year or more before its day is refused', () =>
   return [!!why && /year/.test(why), why];
 });
 
+// ── a potting-up planting that failed before it was potted takes no pots ──
+tryCase('a planting to be potted up that fails before its pot-up day takes no pots or potting mix; one that fails after takes them', () => {
+  const N = req('nursery.js');
+  const p = plan.plantings.find(x => { const r = eng.calc(x); if (!r || x.established || x.failed || r.tw || !r.sow || r.c.prop !== 'potup' || String(x.date).slice(0, 4) !== String(year)) return false; const pd = eng.potUpDate(r); return pd && pd > E.addDays(r.sow, 2) && r.field > E.addDays(pd, 2); });
+  if (!p) return [false, 'no planting to be potted up on the plan'];
+  const r = eng.calc(p), pd = eng.potUpDate(r), pots = e => N.supplies(e, year, null).rows.filter(x => /^pot-/.test(x.id)).reduce((n, x) => n + x.need, 0);
+  const at = on => { const e = E.create(put(plan, W.fail(p, E.d2s(on), AT)), Lib); return pots(e); };
+  const p0 = pots(eng), before = at(E.addDays(pd, -1)), after = at(E.addDays(pd, 1));
+  return [before < p0 && after === p0, { p: p.id, pots: p0, failedBefore: before, failedAfter: after }];
+});
+
+tryCase('a crate planting that fails in the nursery before it goes into its crate fills no crate; one that fails in its crate frees it that day', () => {
+  const N = req('nursery.js');
+  const p = plan.plantings.find(x => { const r = eng.calc(x); return r && !x.established && !x.failed && r.ct && r.len > 0 && r.sow && r.field > E.addDays(r.sow, 2) && String(x.date).slice(0, 4) === String(year) && eng.ctOf(r.b) && eng.ctOf(r.b).shape !== 'round' && r.out && r.out > E.addDays(r.field, 4); });
+  if (!p) return [false, 'no crate planting started in the nursery on the plan'];
+  const r = eng.calc(p), id = 'crate-' + (eng.ctOf(r.b).id || 'crate'), filled = e => { const x = N.supplies(e, year, null).rows.find(y => y.id === id); return x ? x.fills : 0; };
+  const at = on => E.create(put(plan, W.fail(p, E.d2s(on), AT)), Lib);
+  const f0 = filled(eng), early = filled(at(E.addDays(r.field, -1))), late = filled(at(E.addDays(r.field, 2)));
+  return [early === f0 - r.len && late === f0, { p: p.id, filled: f0, failedBefore: early, failedIn: late, len: r.len }];
+});
+tryCase('a planting marked failed before it was sown takes no share of the trays it would have shared', () => {
+  const find2 = plan.plantings.find(x => { const r = eng.calc(x), s = r && r.sowing; return s && s.trayGroup && s.trayGroup.parts.length >= 2 && !x.failed && !(x.done && (x.done.sow || x.done.field)) && r.plannedSow; });
+  if (!find2) return [false, 'no shared tray on the plan'];
+  const r = eng.calc(find2), g = r.sowing.trayGroup, mates = plan.plantings.filter(x => { const q = eng.calc(x); return x !== find2 && q && q.sowing && q.sowing.trayGroup && q.sowing.trayGroup.id === g.id; });
+  const e1 = E.create(put(plan, W.fail(find2, E.d2s(r.plannedSow), AT)), Lib), trays = (e, list) => list.reduce((n, x) => { const q = e.calc(e.planting(x.id)); return n + (q && q.sowing ? q.sowing.trays || 0 : 0); }, 0);
+  const named = mates.some(x => { const s = e1.calc(e1.planting(x.id)).sowing; return (s.memberIds || []).includes(find2.id) || (s.trayGroup && s.trayGroup.parts.some(pt => pt.first === find2.id)); });
+  const t0 = trays(eng, mates.concat([find2])), t1 = trays(e1, mates);
+  return [!named && t1 <= t0 && (e1.calc(e1.planting(find2.id)).sowing || {}).trayGroup == null, { p: find2.id, group: g.id, mates: mates.length, trays: [t0, t1], named }];
+});
+
 // ── 4. with no mark, nothing moved ──
 if (oldDir) {
   const E0 = require(path.join(oldDir, 'engine.js')), e0 = E0.create(plan, Lib);

@@ -318,6 +318,40 @@ def run(pw):
         js(page, "A.undo(); return null;"); page.wait_for_timeout(500)
         check("it is one step: Undo gives back the plan exactly", snap(page)["plan"] == before["plan"])
 
+    # ── the flag when another planting goes into the same bed the same day (a twin of one added for the check, then undone) ──
+    before = snap(page)
+    js(page, "A.setView('sow'); return null;"); page.wait_for_timeout(700)
+    twin = js(page, """for (const t of V.tasks()) {
+        if (!open(t) || (t.id !== 'plant' && t.id !== 'direct') || t.due < now || t.line.open.length !== 1) continue;
+        const m = t.line.open[0]; if (S.engine.conflicts(m.p, m.r).length) continue;
+        const copy = { ...JSON.parse(JSON.stringify(m.p)), id: A.uid() }; A.commit('a twin for the check', [{ before: null, after: copy }], { unchecked: true });
+        const q = S.engine.planting(copy.id), r = q && S.engine.calc(q), through = r ? S.engine.occupancyThrough(q, r) : Infinity;
+        if (!r || through === Infinity || +r.field !== +m.r.field) { A.undo(); continue; }
+        return { key: t.key, due: t.due, free: E.d2s(E.addDays(through, 1)) };
+      } return null;""")
+    check("a planting out with nothing else in its bed is there to be given a twin the same day, for the check", twin)
+    if twin:
+        js(page, "V.show(arg); return null;", twin["due"]); page.wait_for_timeout(600)
+        tf = js(page, "const r = [...document.querySelectorAll('#swWrap .tk-row')].find(r => r.dataset.line === arg.key), f = r && r.querySelector('.tk-flag'); return { text: f ? f.textContent : '', day: LRFUI.day(E.s2d(arg.free)) };", twin)
+        check("a bed another planting goes into the same day is flagged not free, with the day it is", tf["text"].startswith("Bed not free until") and tf["day"] in tf["text"], {**twin, **tf})
+        js(page, "A.undo(); V.show(now); return null;"); page.wait_for_timeout(500)
+        check("the twin is gone again: the plan is exactly as it was", snap(page)["plan"] == before["plan"])
+
+    # ── a planting marked failed in a group the Timeline draws as one bar is drawn apart, greyed: in a space of crates and in a bank of towers ──
+    for where, sel in [("a space of crates", ".tl-row.tl-crop .tl-sum"), ("a bank of towers", ".tl-bank .tl-sum")]:
+        before = snap(page)
+        js(page, "A.setView('timeline'); return null;"); page.wait_for_timeout(900)
+        sub = js(page, """const el = [...document.querySelectorAll(arg + ':not(.tl-failed)')].find(el => { const p = S.engine.planting(el.dataset.first); return p && A.failedRange(p); });
+          if (!el) return null; const id = el.dataset.first, key = el.dataset.sum, range = A.failedRange(S.engine.planting(id)); A.markFailed(id, range.hi); return { id, key, on: range.hi };""", sel)
+        check(f"the Timeline has a bar that sums the plantings of {where}, one of them started, for the check", sub)
+        if not sub: continue
+        page.wait_for_timeout(900)
+        drawn_as = js(page, """const own = document.querySelector('.tl-bar[data-planting="' + arg.id + '"]'), sum = [...document.querySelectorAll('.tl-sum')].find(el => el.dataset.first === arg.id), rest = [...document.querySelectorAll('.tl-sum')].find(el => el.dataset.sum === arg.key);
+          const el = own || sum; return { failed: S.engine.planting(arg.id).failed || null, greyed: !!el && el.classList.contains('tl-failed') && /^Failed/.test(el.title), rest: rest ? rest.classList.contains('tl-failed') : null };""", sub)
+        check(f"a failed planting summed with others in {where} on the Timeline is drawn apart, greyed and saying it failed, and the others are not", drawn_as["failed"] and drawn_as["greyed"] and drawn_as["rest"] is not True, {**sub, **drawn_as})
+        js(page, "A.undo(); return null;"); page.wait_for_timeout(500)
+        check(f"Undo gives back the plan exactly ({where})", snap(page)["plan"] == before["plan"])
+
     # ── on a phone ──
     phone = browser.new_context(viewport={"width": 390, "height": 844}); phone.add_init_script(FAKE); pp = phone.new_page()
     pp.on("pageerror", lambda e: errors.append("pageerror: " + str(e)))

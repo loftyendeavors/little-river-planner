@@ -247,7 +247,7 @@
     let until = null, stays = false;
     for (const m of t.line.open) {
       for (const o of eng.conflicts(m.p, m.r)) {
-        if (o.rest || !o.p || !(o.from < m.r.field) || !(o.through >= m.r.field)) continue;
+        if (o.rest || !o.p || !(o.from <= m.r.field) || !(o.through >= m.r.field)) continue;   // one going in the same day holds it too
         if (o.through === Infinity) stays = true; else if (!until || o.through > until) until = o.through;
       }
     }

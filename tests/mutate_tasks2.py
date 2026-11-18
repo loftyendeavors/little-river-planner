@@ -31,6 +31,10 @@ def alone(cmd, timeout, env=None, cwd=None):
     return out, err
 EN, WK, SLB, AP, SV, PN, TL, MG, RL, NS = "js/engine.js", "js/week.js", "js/seedlib.js", "js/app.js", "js/sowview.js", "js/panels.js", "js/timeline.js", "js/merge.js", "js/rails.js", "js/nursery.js"
 NODE = [
+ ("a crate planting failed before its crate still fills one", "js/nursery.js", "      if (lost && lost <= r.field) continue;\n", ""),
+ ("a planting failed before it was sown still shares a tray", EN, "        if (failedOn(p) && !['sow', 'field'].some(k => doneOf(p, k))) { plans.set(p, sowSingle(p, r)); continue; }\n", ""),
+ ("a planting failed before its pot-up day still takes its pots", "js/nursery.js", "(c.prop === 'potup' && !lostFirst)", "c.prop === 'potup'"),
+ ("a planting failed after its pot-up day takes no pots", "js/nursery.js", "!(eng.potUpDate(r) && eng.potUpDate(r) < it.to)", "true"),
  ("a failed planting is picked to its old last day", EN, "      if (lost && addDays(lost, -1) < last) last = addDays(lost, -1);\n", ""),
  ("a failed planting is picked on the day it failed as well", EN, "      if (lost && addDays(lost, -1) < last) last = addDays(lost, -1);", "      if (lost && lost < last) last = lost;"),
  ("a failed planting holds its bed to its old day", EN, "      return lost && addDays(lost, -1) < held ? addDays(lost, -1) : held;", "      return held;"),
@@ -85,6 +89,9 @@ PAGE = [
  ("two jobs of one planting in one step give two changes, and the second undoes the first", AP, "        if (at.has(item.id)) ops[at.get(item.id)].after = result.planting; else { at.set(item.id, ops.length); ops.push({ before: was, after: result.planting }); }", "        at.set(item.id, ops.length); ops.push({ before: was, after: result.planting });"),
  ("a planting with two of its jobs in one step has its first harvest said twice", AP, "      for (const id of new Set(done.map(r => r.id))) {", "      for (const id of done.map(r => r.id)) {"),
  ("a failure may be marked before the last work recorded on it", AP, "    const lo = days.length && days[days.length - 1] > first ? days[days.length - 1] : first;", "    const lo = first;"),
+ ("a failed planting is summed on the Timeline with the others that went in that day", TL, "+ (item.ghost ? '|ghost' : '') + (item.r.failed ? '|failed' : '');", "+ (item.ghost ? '|ghost' : '');"),
+ ("a bar of failed plantings on the Timeline is not greyed", TL, "+ (holdsSel ? '.sel' : '') + (failed ? '.tl-failed' : '')", "+ (holdsSel ? '.sel' : '')"),
+ ("a bed another planting goes into the same day is not flagged", SV, "!(o.from <= m.r.field) || !(o.through >= m.r.field)) continue;", "!(o.from < m.r.field) || !(o.through >= m.r.field)) continue;"),
  ("the panel's sowing calendar goes back further than a year", PN, "min: E.validDate(s.planned) ? E.d2s(E.addDays(s.planned, 1 - SL.YEAR_DAYS)) : undefined,", "min: undefined,"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)

@@ -234,7 +234,9 @@
         continue;
       }
       if (it.kind !== 'prop') continue;
-      const plan = r.sowing, potted = !r.tw && (c.prop === 'pot' || c.prop === 'potup');
+      // a potting-up planting marked failed before its pot-up day was never potted: no pots, no potting mix
+      const plan = r.sowing, lostFirst = c.prop === 'potup' && eng.failedOn && eng.failedOn(it.p) && !(eng.potUpDate(r) && eng.potUpDate(r) < it.to);
+      const potted = !r.tw && (c.prop === 'pot' || (c.prop === 'potup' && !lostFirst));
       if (potted) {
         const size = +c.potSize > 0 ? +c.potSize : 4.5, n = plan && plan.potUpCells != null ? plan.potUpCells : r.cells;
         pots.set(size, (pots.get(size) || 0) + n);
@@ -257,9 +259,12 @@
       const t = eng.ctOf(r.b);
       if (!t || t.shape === 'round') continue;
       const [w, l] = eng.ctDims(t), id = 'crate-' + (t.id || 'crate'), row = crates.get(id) || { id, name: t.name || 'Crate', ft2: w * l, filled: 0, plantings: 0, spans: [] };
+      // a crate planting marked failed before it went into its crate never filled one; one that failed in it leaves it that day
+      const lost = eng.failedOn && eng.failedOn(p);
+      if (lost && lost <= r.field) continue;
       row.filled += r.len; row.plantings += 1;
-      const last = r.out && r.out > r.field ? (r.last && r.last > r.out ? r.last : r.out) : (r.last && r.last > r.field ? r.last : r.field);
-      row.spans.push({ from: r.field, to: plus(last, 1), n: r.len });
+      const last = r.out && r.out > r.field ? (r.last && r.last > r.out ? r.last : r.out) : (r.last && r.last > r.field ? r.last : r.field), to = plus(last, 1);
+      row.spans.push({ from: r.field, to: lost && lost < to ? lost : to, n: r.len });
       crates.set(id, row);
     }
     for (const lot of lots.values()) { const n = whole(lot.n); if (lot.wool) { sheets += n; woolCells = lot.cells; } else trayRow(lot.cells, lot.name).filled += n; }

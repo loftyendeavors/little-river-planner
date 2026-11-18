@@ -85,7 +85,7 @@ PAGE = [
  ("a later week's sheet carries what is late", "js/sowview.js", "now === T.monday(App.today()) && earlier.length + earlierJobs.length ? [h('h2'", "earlier.length + earlierJobs.length ? [h('h2'"),
  ("a phone's opened row offers the map", "js/sowview.js", "isPhone() ? null : h('button.tk-link.map'", "false ? null : h('button.tk-link.map'"),
  ("a late tick is recorded today without asking its day", "js/sowview.js", "    if (t.due < now) { openPop('done', t); return; }\n", ""),
- ("a long run of late tasks is not folded", "js/sowview.js", "if (rows.length <= LATE_FOLD || ui.shown[id + ':late']) return group('Late', 'late', rows, stock, now);", "if (rows.length >= 0) return group('Late', 'late', rows, stock, now);"),
+ ("a long run of late tasks is not folded", "js/sowview.js", "if (rows.length <= LATE_FOLD || ui.shown[id + ':late']) return group('Late', 'late', rows, stock, now, true);", "if (rows.length >= 0) return group('Late', 'late', rows, stock, now, true);"),
  ("the fold of late tasks keeps the oldest, not the latest", "js/sowview.js", "withShares(rows.slice(hidden), stock, now)];", "withShares(rows.slice(0, LATE_SHOWN), stock, now)];"),
  ("the calendar opens over the row it asks about", "js/sowview.js", "    if (row) { if (card.right + 12 + w <= W - 12) left = card.right + 12; else if (card.left - 12 - w >= 12) left = card.left - 12 - w; }\n", ""),
  ("the day a task was due is not marked in the calendar", "js/sowview.js", "due = p.mode === 'done' && !!t && k === t.due, cur", "due = false, cur"),

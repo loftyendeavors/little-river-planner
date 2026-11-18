@@ -673,6 +673,8 @@
       for (const p of S.plantings || []) {
         const r = baseOf(p);
         if (!r || r.b.active === false || r.g.active === false) continue;
+        // a planting marked failed before it was sown is sown with nobody: it takes no cells or trays of a lot it would have shared
+        if (failedOn(p) && !['sow', 'field'].some(k => doneOf(p, k))) { plans.set(p, sowSingle(p, r)); continue; }
         const opts = sowOptions(p, r), key = Sow.batchKey(opts, p.id);
         if (!key) continue;
         // sowings planned for different days stay apart even when their recorded dates happen to meet

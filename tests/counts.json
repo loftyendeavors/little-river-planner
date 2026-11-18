@@ -3,9 +3,9 @@
 
   "assume": 12,
 
-  "failed, backup": 28,
+  "failed, backup": 31,
 
-  "failed, compact": 28,
+  "failed, compact": 31,
 
   "fetch service": 26,
 
@@ -171,7 +171,7 @@
 
   "swap": 32,
 
-  "tasks2": 76,
+  "tasks2": 85,
 
   "trycard": 50,
 
@@ -274,7 +274,7 @@
 
   "sync-site": 92,
 
-  "tasks2-site": 76,
+  "tasks2-site": 85,
 
   "tour": 4,
 
@@ -341,7 +341,7 @@
 
   "swap-site @3440": 32,
 
-  "tasks2-site @3440": 76,
+  "tasks2-site @3440": 85,
 
   "trycard-site @3440": 50
 

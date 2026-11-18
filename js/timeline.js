@@ -207,8 +207,10 @@
     const eng = App.state.engine, items = g.list, first = items[0], min = f => new Date(Math.min(...items.map(f))), max = f => new Date(Math.max(...items.map(f)));
     const endless = items.some(x => x.to === Infinity), through = endless ? Infinity : max(x => x.to), sows = items.filter(x => x.r.sow).map(x => +x.r.sow);
     const holdsSel = App.state.sel && App.state.sel.type === 'planting' && items.some(x => x.p.id === App.state.sel.id), ghost = !!first.ghost;
+    // plantings marked failed are summed apart from the others (their key says so), so a group is failed whole or not at all
+    const failed = !ghost && items.every(x => x.r.failed), said = failed ? `Failed · ${words.title}` : words.title;
     const el = barEl({ from: new Date(g.from), to: endless ? yearEnd() : through, through, field: min(x => +x.r.field), first: min(x => +x.r.first), last: max(x => +x.r.last), sow: sows.length ? new Date(Math.min(...sows)) : null,
-      lane, color: eng.cropColor(first.r.c), cls: ghost ? '.tl-ghost-bar' : '.tl-sum' + (holdsSel ? '.sel' : ''), dataset: ghost ? { ghost: first.p.id } : { sum: g.key, first: first.p.id }, tries: words.tries, pictured: words.pictured, alt: first.r.c.name, title: ghost ? 'Not added yet. ' + words.title.replace(/\. Click to open[^.]*\.$/, '.') : words.title });
+      lane, color: eng.cropColor(first.r.c), cls: ghost ? '.tl-ghost-bar' : '.tl-sum' + (holdsSel ? '.sel' : '') + (failed ? '.tl-failed' : ''), dataset: ghost ? { ghost: first.p.id } : { sum: g.key, first: first.p.id }, tries: words.tries, pictured: words.pictured, alt: first.r.c.name, title: ghost ? 'Not added yet. ' + words.title.replace(/\. Click to open[^.]*\.$/, '.') : said });
     if (el && !ghost) for (const x of items) sums.set(x.p.id, el);
     return el;
   }
@@ -407,7 +409,7 @@
     if (opened) { for (const bed of spaces) bedRow(body, eng, bed, itemsOf(eng, bed), null, h('b', 'Tower ' + bed.bed), `${num(eng.capOf(bed))} ${eng.capUnit(bed)}`); return; }
     const merged = new Map();
     for (const bed of spaces) for (const item of itemsOf(eng, bed)) {
-      const k = [item.p.cropId, item.p.varietyId || '', item.from, item.to, item.ghost ? 'ghost' : ''].join('|');
+      const k = [item.p.cropId, item.p.varietyId || '', item.from, item.to, item.ghost ? 'ghost' : ''].join('|');   // a failed tower ends sooner than the others, so it stands apart by its own days
       if (!merged.has(k)) merged.set(k, { key: key + '|' + k, from: item.from, to: item.to, list: [] });
       merged.get(k).list.push(item);
     }
@@ -432,7 +434,7 @@
       const label = h('button.tl-fold', { type: 'button', 'aria-expanded': String(opened), title: opened ? 'Show each month’s planting as one bar' : 'Show every planting', onclick: flip(prefs.open, key) }, h('span.caret', opened ? '▾' : '▸'), h('b', name));
       if (opened) { bedRow(body, eng, bed, list, null, label, plural(list.length, 'planting'), { cls: '.tl-crop', dataset: { crop: cropId } }); continue; }
       const merged = new Map();
-      for (const item of list) { const k = String(item.from) + (item.ghost ? '|ghost' : ''); if (!merged.has(k)) merged.set(k, { key: key + '|' + k, from: item.from, to: 0, list: [] }); const g = merged.get(k); g.list.push(item); g.to = Math.max(g.to, item.to); }
+      for (const item of list) { const k = String(item.from) + (item.ghost ? '|ghost' : '') + (item.r.failed ? '|failed' : ''); if (!merged.has(k)) merged.set(k, { key: key + '|' + k, from: item.from, to: 0, list: [] }); const g = merged.get(k); g.list.push(item); g.to = Math.max(g.to, item.to); }
       const groups = [...merged.values()], lanes = lanesFor(groups), lane = laneEl(lanes);
       for (const g of groups) {
         const n = g.list.length, holds = g.list.reduce((s, x) => s + (x.r.len || 0), 0), unit = eng.capUnit(bed) === 'containers' ? 'crate' : eng.capUnit(bed), varieties = new Set(g.list.map(x => x.r.c.vname).filter(Boolean));
