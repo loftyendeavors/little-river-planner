@@ -246,7 +246,9 @@
     }
     for (const o of openings) { const where = x(o.from, E.addDays(o.to, 1)); if (where) bars.push(h('i.cy-open', { style: { ...where, ...y(o.a0, o.a1) } })); }
     const date = App.state.date, mark = +date >= a && +date < z ? h('i.cy-now', { style: { left: `${((+date - a) / w * 100).toFixed(2)}%` } }) : null;
-    return h('div.card-year', { dataset: { hook: 'card-year' } }, h('div.cy-track', bars, mark), h('div.cy-months', ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'].map(m => h('span', m))));
+    return h('div.card-year', { dataset: { hook: 'card-year' } },
+      h('div.cy-track', bars, mark),
+      h('div.cy-months', UI.MONTHS.map(month => h('span', month))));
   }
 
   function openingsFor(e, bed) {

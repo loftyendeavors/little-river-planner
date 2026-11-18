@@ -140,7 +140,11 @@ def run_surface(context, floating):
     if not season.is_visible():
         select_bed(sample["bed"])
     verify("a painted planting opens its own date and variety row", row.get_attribute("aria-expanded") == "true" and loc("bed-planting-date").is_visible() and loc("bed-planting-variety").is_visible())
-    verify("the season strip and every planting appear in chronological order", loc("card-year").is_visible() and loc("card-planting").evaluate_all("rows => rows.map(r => r.dataset.planting)") == sample["rows"])
+    year = loc("card-year")
+    months = year.locator("span").all_text_contents()
+    verify("the season strip labels every month clearly and the plantings are in chronological order",
+           year.is_visible() and months == "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
+           and loc("card-planting").evaluate_all("rows => rows.map(r => r.dataset.planting)") == sample["rows"], months)
     image = row.locator("img")
     verify("a kept variety photo renders at 40 px in the row", image.count() == 1 and image.get_attribute("src") == sample["photo"] and image.evaluate("el => el.getBoundingClientRect().width") == 40)
     picking = row.locator(hook("bed-planting-status") + '[data-state="picking"]')
