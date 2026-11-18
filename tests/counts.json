@@ -131,6 +131,8 @@
 
   "ask": 33,
 
+  "bed-season": 79,
+
   "bedpanel": 59,
 
   "card": 110,
@@ -337,6 +339,8 @@
 
  },
  "site6": {
+
+  "bed-season-site": 79,
 
   "bedpanel @1707": 59,
 

@@ -17,6 +17,7 @@
   const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine;
   const { h, clear, add, day, num, span } = UI;
   const KEY = 'lrf.tryCard', SAID_FOR = 8000, VIEWS = ['map', 'timeline'];
+  const NARROW = root.matchMedia('(max-width: 700px)');
   const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   let on = false;
@@ -33,6 +34,8 @@
   const watchActs = el => { el.addEventListener('click', mark, true); el.addEventListener('change', mark, true); el.addEventListener('keydown', mark, true); return el; };   // which card was open when the last change was first seen (as the panel's "Saved" line keeps it)
   let card = null, menu = null, cal = null, hint = null, hintTimer = 0, hintBar = null;
   const opened = new Set();   // the rows of a planting's card that are open, by name: they stay open as the card is drawn again
+  let bedRow = null;
+  let openingSource = null;
 
   const keyOf = sel => (sel ? `${sel.type}:${sel.id}` : '');
   const inView = () => VIEWS.includes(App.state.view);
@@ -41,10 +44,12 @@
   /** The days a planting is picked, short: "Jun 1 – 14" within a month. */
   const picked = r => (r.first.getMonth() === r.last.getMonth() ? `${day(r.first)} – ${r.last.getDate()}` : span(r.first, r.last));
   const plural = (n, w) => `${num(n)} ${w}${n === 1 ? '' : 's'}`;
+  const nameOf = ({ r }) => `${r.c.vname ? r.c.vname + ' ' : ''}${r.c.name.toLowerCase()}`;
+  const bedSeasonOn = bed => bed && eng().isSoilBed(bed) && !NARROW.matches;
 
   /** The bed or the planting the card holds, or null when what is picked belongs to the side panel. */
   function held(sel = App.state.sel) {
-    if (!sel || keyOf(sel) === full) return null;
+    if (!sel || sel.fromBedSeason || keyOf(sel) === full) return null;
     const e = eng();
     if (sel.type === 'bed') { const bed = e.bedOf(sel.id); return bed ? { kind: 'bed', bed } : null; }
     if (sel.type !== 'planting') return null;
@@ -220,6 +225,10 @@
   }
 
   // ── a bed's card ──
+  function failureDay(p, r) {
+    return E.s2d(r.failed || (p.workflow?.outcome === 'failed' ? p.workflow.failureDate : ''));
+  }
+
   /** The bed's year: a line for each length of it, plantings as bars, openings dashed, the planning date as an orange mark. */
   function bedYear(bed, all, openings) {
     const e = eng(), year = App.planYear(), a = +new Date(year, 0, 1), z = +new Date(year + 1, 0, 1), w = z - a, cap = e.capOf(bed) || 1;
@@ -231,17 +240,150 @@
       const where = x(from, end);
       if (!where) continue;
       const ys = f ? y(f.a0, f.a1) : r.partial ? y(0, r.len) : y(0, cap);
-      bars.push(h('i.cy-bar', { title: `${App.cropLabel(p)} · ${span(r.field, r.last)}`, style: { ...where, ...ys, '--crop': e.cropColor(r.c) } }));
+      const failedOn = failureDay(p, r), failed = E.validDate(failedOn) && failedOn <= App.state.date;
+      const title = failed ? `${App.cropLabel(p)} · Failed ${day(failedOn)}` : `${App.cropLabel(p)} · ${span(r.field, r.last)}`;
+      bars.push(h('i.cy-bar', { title, style: { ...where, ...ys, '--crop': failed ? 'var(--muted)' : e.cropColor(r.c) } }));
     }
-    for (const o of openings) { const where = x(o.from, E.addDays(o.to, 1)); if (where) bars.push(h('i.cy-open', { style: { ...where, ...(o.whole ? y(0, cap) : y(cap - o.length, cap)) } })); }
+    for (const o of openings) { const where = x(o.from, E.addDays(o.to, 1)); if (where) bars.push(h('i.cy-open', { style: { ...where, ...y(o.a0, o.a1) } })); }
     const date = App.state.date, mark = +date >= a && +date < z ? h('i.cy-now', { style: { left: `${((+date - a) / w * 100).toFixed(2)}%` } }) : null;
     return h('div.card-year', { dataset: { hook: 'card-year' } }, h('div.cy-track', bars, mark), h('div.cy-months', ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'].map(m => h('span', m))));
   }
+
+  function openingsFor(e, bed) {
+    const S = root.LRFSuccession, A = root.LRFAhead, mine = A.state.O.mine;
+    if (!openingSource || openingSource.engine !== e || openingSource.bed !== bed || openingSource.mine !== mine) {
+      const openings = S.openings(e, { bedId: bed.id, empty: true });
+      openingSource = { engine: e, bed, mine, openings: openings.map(opening => ({ opening, fits: A.fitsIn(e, opening) })) };
+    }
+    return openingSource.openings;
+  }
+
+  function bedPlantingFields(p, r, redraw, readOnly) {
+    const e = eng(), Ed = root.LRFPanels.edit, varieties = e.varietiesOf(p.cropId), v = e.variety(p.varietyId), sow = App.sowingOf(p);
+    const set = ed => { if (!ed || !App.updatePlanting(p.id, ...ed)) redraw(); };
+    const label = r.c.method === 'TP' ? 'Transplant date' : sow && sow.kind === 'field' && sow.done ? 'Planned sowing date' : 'Sowing date';
+    const date = h('button.card-date', { type: 'button', name: 'bed-date', disabled: readOnly, dataset: { hook: 'bed-planting-date' },
+      'aria-label': `${label}, ${day(E.s2d(p.date))}`, 'aria-haspopup': 'dialog', title: 'See what a date moves before choosing it',
+      onclick: ev => openCalendar(p, ev.currentTarget) }, day(E.s2d(p.date)));
+    const variety = h('select', { name: 'bed-variety', disabled: readOnly, dataset: { hook: 'bed-planting-variety' },
+      onchange: ev => set(Ed.variety(ev.target.value)) }, h('option', { value: '' }, 'No variety chosen'));
+    if (v && !varieties.includes(v)) variety.append(h('option', { value: v.id, selected: true }, `${v.name} (retired)`));
+    for (const item of varieties) variety.append(h('option', { value: item.id, selected: item.id === p.varietyId }, item.name));
+    return h('div.bed-planting-fields',
+      h('div.card-boxes', h('label.card-box', h('span', label), date), h('label.card-box', h('span', 'Variety'), variety)),
+      h('button.link', { type: 'button', dataset: { hook: 'bed-planting-full' }, onclick: () => App.select({ type: 'planting', id: p.id, fromBedSeason: true }) }, 'All of this planting'));
+  }
+
+  function bedPlantingRow(x, bed, status, date, readOnly, redraw) {
+    const { p, r } = x, e = eng(), f = e.footprint(p, r), through = e.occupancyThrough(p, r);
+    const failedOn = failureDay(p, r);
+    const failed = E.validDate(failedOn) && failedOn <= date;
+    const here = status.crops.some(item => item.planting.id === p.id);
+    const turnover = status.resting && e.occupancyFrom(p, r) <= date && date <= through && E.validDate(through);
+    const state = failed ? 'failed' : here ? (r.first <= date && date <= r.last ? 'picking' : 'growing') : turnover ? 'turnover' : '';
+    const word = { failed: 'Failed', growing: 'Growing', picking: 'Picking', turnover: turnover ? `Turnover · free ${day(E.addDays(through, 1))}` : '' }[state];
+    const expanded = bedRow?.id === p.id, part = r.partial && f ? ` · ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} ft` : '';
+    let press;
+    const trigger = h('button.row.card-item.bed-planting-trigger', { type: 'button', 'aria-expanded': String(expanded), dataset: { hook: 'card-planting', planting: p.id },
+      onpointerdown: ev => {
+        press = { x: ev.clientX, y: ev.clientY };
+        if (!readOnly && inView()) root.LRFDrag.watch(ev, { payload: { plantingId: p.id }, label: App.cropLabel(p), color: e.cropColor(r.c) });
+      },
+      onclick: ev => {
+        if (ev.detail && press && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) > 5) return;
+        bedRow = expanded ? null : { bedId: bed.id, id: p.id };
+        redraw();
+      } },
+      root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color: e.cropColor(r.c), label: r.c.vname || r.c.name, size: 40 }),
+      h('span.bed-planting-copy', h('span.row-name', r.c.vname ? `${r.c.name} · ${r.c.vname}` : r.c.name), h('span.row-detail', `${day(r.field)} · pick ${r.harvestDays ? picked(r) : 'none'}${part}`)),
+      h('span.bed-planting-tail', word ? h('span.row-word', { dataset: { hook: 'bed-planting-status', state } }, word) : null,
+        h('span.bed-planting-chevron', { 'aria-hidden': 'true' }, '›')));
+    return h('div.bed-planting', { dataset: { state } }, trigger, expanded ? bedPlantingFields(p, r, redraw, readOnly) : null);
+  }
+
+  function bedOpeningCard(bed, item, date) {
+    const { opening: o, fits } = item, F = root.LRFForecast, groups = (App.state.plan.lrfNext || {}).groups;
+    const next = o.after ? `, after the ${nameOf(o.after)}` : o.before ? `, before the ${nameOf(o.before)}` : '';
+    const now = o.from <= date && date <= o.to;
+    return h('button.card-open.p-open.bed-opening', { type: 'button', dataset: { hook: 'card-opening', opening: o.id }, title: 'See what fits',
+      onclick: () => App.select({ type: 'opening', id: o.id, bedId: bed.id, fromBedSeason: true }) },
+      h('b', `Open ${plural(o.days, 'day')}${next}`),
+      h('small', `${span(o.from, o.to)}${o.whole ? '' : ` · ${num(o.length, 1)} ft`}`),
+      now ? h('small.bed-opening-now', { dataset: { hook: 'bed-opening-now' } }, `Open on ${day(date)}`) : null,
+      fits.length ? h('span.bed-opening-fits', fits.slice(0, 3).map(t => h('span', { dataset: { hook: 'bed-opening-fit' } }, t.crop.name,
+        t.units > 0 ? ` · ${F.amount(t.units, t.unit, F.groupOf(t.crop, t.unit, groups))}` : '')),
+      fits.length > 3 ? h('span', `+${num(fits.length - 3)} more`) : null) : null);
+  }
+
+  function bedSeason(bed, all, status) {
+    const e = eng(), date = App.state.date, g = e.gardenOf(bed) || {}, readOnly = !!App.windowState();
+    const use = root.LRFForecast.useOfBed(e, bed), panels = root.LRFPanels, items = openingsFor(e, bed);
+    let body;
+    const redraw = () => {
+      const next = bedSeason(bed, all, status);
+      const restore = keepBedFocus(body);
+      body.replaceWith(next);
+      if (restore) restore(next);
+    };
+    const sale = h('input', { type: 'checkbox', name: 'bed-sale', checked: !use.personal, disabled: readOnly, dataset: { hook: 'card-sale' },
+      onchange: ev => { if (!App.setUse('bed', [bed.id], ev.target.checked ? 'commercial' : 'personal')) ev.target.checked = !use.personal; } });
+    body = h('div.bed-season', { dataset: { hook: 'bed-season' } },
+      h('div.card-acts',
+        readOnly ? null : h('button.btn.small', { type: 'button', id: 'bedLayoutEdit', dataset: { hook: 'card-layout' },
+          onclick: () => root.LRFMapEdit.open({ bedId: bed.id, returnToBed: true }) }, 'Edit layout'),
+        readOnly ? null : h('button.btn.small', { type: 'button', id: 'bedSeries', dataset: { hook: 'card-series' }, onclick: () => App.openAhead({ mode: 'series', bedId: bed.id }) }, 'Plan a series here')),
+      bedYear(bed, all, items.map(item => item.opening)),
+      h('div.bed-season-use', { id: 'bedUse', dataset: { use: use.use, by: use.by } },
+        h('label.card-tick', sale, h('span', 'Grown for sale')),
+        UI.help(null, null, panels.useWords, { label: 'What Grown for means', hook: 'use-help', card: { hook: 'use-help-card' } }),
+        use.by === 'garden' ? h('small', `As all of ${g.name || 'its garden'}`) : null),
+      readOnly ? h('p.card-note', 'Changes are made in the window working on this plan.') : null,
+      all.length ? h('div.bed-plantings', all.map(x => bedPlantingRow(x, bed, status, date, readOnly, redraw))) : h('p.card-note', 'Nothing planted here this season.'),
+      items.length ? h('section.bed-openings', { id: 'bedOpenings' }, h('h3', 'Openings'), items.map(item => bedOpeningCard(bed, item, date))) : null);
+    return body;
+  }
+
+  function keepBedFocus(host) {
+    const active = document.activeElement;
+    if (!host.contains(active) || !active.closest('.bed-season')) return null;
+    if (active.matches('.bed-planting-trigger')) {
+      const id = active.dataset.planting;
+      return next => {
+        const row = [...next.querySelectorAll('.bed-planting-trigger')].find(el => el.dataset.planting === id);
+        row?.focus({ preventScroll: true });
+      };
+    }
+    const name = active.name;
+    return ['bed-date', 'bed-variety', 'bed-sale'].includes(name) ? next => next.querySelector(`[name="${name}"]`)?.focus({ preventScroll: true }) : null;
+  }
+
+  function backToBed(id) {
+    App.select({ type: 'bed', id });
+    if (!bedRow) return;
+    const row = [...document.querySelectorAll('.bed-planting-trigger')].find(el => el.dataset.planting === bedRow.id);
+    row?.focus();
+  }
+
+  function openBedFromMap(bedId, plantingId) {
+    bedRow = plantingId ? { bedId, id: plantingId } : null;
+    App.select({ type: 'bed', id: bedId });
+    if (plantingId) {
+      const row = [...document.querySelectorAll('.bed-planting-trigger')].find(el => el.dataset.planting === plantingId);
+      row?.scrollIntoView({ block: 'nearest' });
+    }
+    revealBed(bedId);
+  }
+
   function bedCard(bed) {
     const e = eng(), date = App.state.date, status = e.bedStatus(bed, date), g = e.gardenOf(bed) || {}, unit = e.capUnit(bed), soil = e.isSoilBed(bed), pool = e.isPool(bed);
     const all = e.plantingsIn(bed.id).map(p => ({ p, r: e.calc(p) })).filter(x => x.r).sort((x, y) => x.r.field - y.r.field);
     const kind = { bed: 'Bed', tower: 'Tower', bench: 'Bench', containers: 'Containers' }[e.spaceKind(bed)] || 'Bed';
     const size = soil ? `${num(bed.w, 2)} × ${num(bed.l, 2)} ft · ${num(bed.w * bed.l)} sq ft` : `${num(status.cap)} ${unit}`;
+    if (bedSeasonOn(bed)) return [
+      head(`${kind} ${bed.bed}`, `${g.name || 'Garden'} · ${size}`, null, () => bedMenu(bed)),
+      h('p.card-said', { role: 'status', dataset: { hook: 'card-said' }, hidden: true }),
+      h('p.card-sums', { dataset: { hook: 'card-sums' } }, `${plural(all.length, 'planting')} this season · ${status.crops.length ? `${num(status.used, 1)} of ${num(status.cap, 1)} ${unit} planted on ${day(date)}` : status.resting ? `turning over on ${day(date)}` : `free on ${day(date)}`}`),
+      bedSeason(bed, all, status)];
     const S = root.LRFSuccession, openings = soil && S && all.length ? S.openings(e, { bedId: bed.id }) : [];
     const editable = root.LRFMapEdit && (soil || !pool), use = root.LRFForecast.useOfBed(e, bed);
     const sale = h('input', { type: 'checkbox', checked: !use.personal, dataset: { hook: 'card-sale' }, onchange: ev => { if (!App.setUse('bed', [bed.id], ev.target.checked ? 'commercial' : 'personal')) draw(); } });
@@ -254,7 +396,6 @@
         h('span', h('span.row-name', x.r.c.vname ? `${x.r.c.vname} · ${x.r.c.name}` : x.r.c.name), h('span.row-detail', `${day(x.r.field)} · pick ${x.r.harvestDays ? picked(x.r) : 'none'}${part}`)),
         h('span.row-word', here ? 'In now' : ''));
     };
-    const nameOf = q => `${q.r.c.vname ? q.r.c.vname + ' ' : ''}${q.r.c.name.toLowerCase()}`;
     const openRow = o => {
       const n = S.fits(e, o).length, next = o.after ? `, after the ${nameOf(o.after)}` : o.before ? `, before the ${nameOf(o.before)}` : '';
       return h('button.card-open', { type: 'button', dataset: { hook: 'card-opening', opening: o.id }, title: 'See what fits', onclick: () => App.select({ type: 'opening', id: o.id, bedId: bed.id }) },
@@ -278,9 +419,9 @@
       title: App.bedLabel(bed), sub: '',
       items: [
         ['open', 'Open', () => App.select({ type: 'bed', id: bed.id })],
-        editable ? ['layout', 'Edit layout…', () => root.LRFMapEdit.open({ bedId: bed.id })] : null,
+        editable ? ['layout', 'Edit layout…', () => root.LRFMapEdit.open({ bedId: bed.id, returnToBed: bedSeasonOn(bed) })] : null,
         e.isRack(bed) ? null : ['series', 'Plan a series here…', () => App.openAhead({ mode: 'series', bedId: bed.id })],
-        ['full', 'All of this bed…', () => { App.select({ type: 'bed', id: bed.id }); openFull(); }]]
+        bedSeasonOn(bed) ? null : ['full', 'All of this bed…', () => { App.select({ type: 'bed', id: bed.id }); openFull(); }]]
     };
   }
 
@@ -306,13 +447,22 @@
     if (!card) { card = watchActs(h('aside.card.float.lrf-card', { role: 'dialog', 'aria-label': 'Details', dataset: { hook: 'card' } })); stage.append(card); }
     const controls = () => [...card.querySelectorAll('button, input, select')];
     const keep = card.scrollTop, focus = document.activeElement && card.contains(document.activeElement) ? controls().indexOf(document.activeElement) : -1;
+    const restore = keepBedFocus(card);
     clear(card);
     card.dataset.kind = what.kind;
     add(card, what.kind === 'planting' ? plantingCard(what.p, what.r) : bedCard(what.bed));
     place();
     card.scrollTop = keep;
     fillSaid();
-    if (focus >= 0) { const again = controls()[focus]; if (again) again.focus({ preventScroll: true }); }   // the box that was in use keeps the keyboard
+    if (restore) restore(card);
+    else if (focus >= 0) { const again = controls()[focus]; if (again) again.focus({ preventScroll: true }); }   // the box that was in use keeps the keyboard
+  }
+  function revealBed(id) {
+    requestAnimationFrame(() => {
+      if (App.state.view === 'map' && App.state.sel?.type === 'bed' && App.state.sel.id === id && card?.dataset.kind === 'bed') {
+        root.LRFMap.revealBed(id, card.getBoundingClientRect());
+      }
+    });
   }
 
   // ── the menu: the card's "⋯", and a right-click on a bed or a planting ──
@@ -322,7 +472,7 @@
     hideHint();
   }
   function popAt(el, x, y) {
-    document.body.append(el);
+    if (!el.isConnected) document.body.append(el);
     const w = el.offsetWidth, hgt = el.offsetHeight;
     el.style.left = Math.round(Math.max(8, Math.min(x, root.innerWidth - w - 8))) + 'px';
     el.style.top = Math.round(Math.max(8, Math.min(y, root.innerHeight - hgt - 8))) + 'px';
@@ -354,7 +504,7 @@
     openMenu(p ? plantingMenu(p) : bedMenu(bed), null, { x: e.clientX, y: e.clientY });
   }
   function onKey(e) {
-    if (e.key === 'Escape' && (menu || cal)) { e.stopPropagation(); closePops(); return; }
+    if (e.key === 'Escape' && (menu || cal)) { e.stopPropagation(); if (cal) dismissCalendar(); else closePops(); return; }
     if (!menu) return;
     const items = [...menu.querySelectorAll('button')], i = items.indexOf(document.activeElement);
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const n = items.length; items[((i < 0 ? (e.key === 'ArrowDown' ? -1 : 0) : i) + (e.key === 'ArrowDown' ? 1 : n - 1)) % n].focus(); }
@@ -373,8 +523,14 @@
     const b = e.calc(q);
     if (!a || !b) return null;
     const free = (x, r) => { const t = e.occupancyThrough(x, r); return t === Infinity ? null : E.addDays(t, 1); };
-    const by = Math.round((E.s2d(value) - E.s2d(p.date)) / 864e5), clash = e.conflicts(q, b).filter(o => !o.rest && o.p && o.p.id !== p.id);
-    return { by, a, b, freeA: free(p, a), freeB: free(q, b), clash };
+    const by = E.dayDiff(E.s2d(value), E.s2d(p.date)), blockers = e.conflicts(q, b);
+    const clash = blockers.filter(o => !o.rest && o.p && o.p.id !== p.id);
+    return { by, a, b, freeA: free(p, a), freeB: free(q, b), clash, rest: blockers.find(o => o.rest) };
+  }
+  function dismissCalendar() {
+    const anchor = cal?.lrfAnchor;
+    closePops();
+    if (anchor?.isConnected) anchor.focus({ preventScroll: true });
   }
   function openCalendar(p, anchor) {
     const again = cal && cal.lrfAnchor === anchor;
@@ -385,6 +541,11 @@
     cal = watchActs(h('div.card.float.card-cal', { role: 'dialog', 'aria-label': 'Move it to', dataset: { hook: 'card-cal' } }));
     cal.lrfAnchor = anchor;
     const says = h('div.card-cal-says', { dataset: { hook: 'card-cal-says' } });
+    const keepInView = () => {
+      if (!cal.isConnected) return;
+      const r = cal.getBoundingClientRect();
+      if (r.bottom > root.innerHeight - 8) popAt(cal, r.left, r.top);
+    };
     const tell = value => {
       clear(says);
       if (!value) { add(says, h('span', 'Point at a day to see what it would move.')); return; }
@@ -395,7 +556,9 @@
         m.a.sow && m.a.sow < m.a.field ? h('p', mv('sow', m.a.sow, m.b.sow)) : null,
         h('p', mv('first pick', m.a.first, m.b.first)),
         h('p', mv('ground free', m.freeA, m.freeB)),
-        m.clash.length ? h('p.card-cal-warn', `Runs into ${m.clash.length === 1 ? `the ${App.cropLabel(m.clash[0].p)}` : plural(m.clash.length, 'planting')} in this bed`) : null);
+        m.clash.length ? h('p.card-cal-warn', `Runs into ${m.clash.length === 1 ? `the ${App.cropLabel(m.clash[0].p)}` : plural(m.clash.length, 'planting')} in this bed`) : null,
+        m.rest ? h('p.card-cal-warn', `The bed is resting until ${day(m.rest.through)}`) : null);
+      keepInView();
     };
     const grid = h('div.card-cal-grid');
     const title = h('b');
@@ -409,13 +572,13 @@
         const d = new Date(month.getFullYear(), month.getMonth(), k), value = iso(d), cur = value === p.date;
         grid.append(h('button.card-cal-day' + (cur ? '.cur' : ''), { type: 'button', dataset: { hook: 'card-cal-day', day: value }, 'aria-label': WD(d), 'aria-current': cur ? 'date' : null,
           onpointerenter: () => tell(value), onfocus: () => tell(value),
-          onclick: () => { closePops(); if (value === p.date) return; const ed = root.LRFPanels.edit.date(value); if (!ed || !App.updatePlanting(p.id, ...ed)) draw(); } }, String(k)));
+          onclick: () => { dismissCalendar(); if (value === p.date) return; const ed = root.LRFPanels.edit.date(value); if (!ed || !App.updatePlanting(p.id, ...ed)) draw(); } }, String(k)));
       }
     }
-    const step = n => { month = new Date(month.getFullYear(), month.getMonth() + n, 1); fill(); };
+    const step = n => { month = new Date(month.getFullYear(), month.getMonth() + n, 1); fill(); tell(null); keepInView(); };
     add(cal,
       h('header.card-head', h('div.card-title', h('h2', 'Move it to'), h('p.card-sub', `${r.c.vname || r.c.name} · ${App.bedLabel(r.b)}`)),
-        h('button.icon-btn.card-x', { type: 'button', 'aria-label': 'Close', onclick: () => closePops() }, '×')),
+        h('button.icon-btn.card-x', { type: 'button', 'aria-label': 'Close', onclick: dismissCalendar }, '×')),
       h('div.card-cal-month', title, h('button.icon-btn', { type: 'button', 'aria-label': 'The month before', onclick: () => step(-1) }, '‹'), h('button.icon-btn', { type: 'button', 'aria-label': 'The month after', onclick: () => step(1) }, '›')),
       grid, says);
     fill(); tell(null);
@@ -468,17 +631,27 @@
     try { if (on) root.localStorage.setItem(KEY, '1'); else root.localStorage.removeItem(KEY); } catch (_) { /* kept for this page only */ }
     full = ''; settling = false;
     draw();
+    root.LRFPanels.redraw();
   }
 
   function init() {
     UI.answerHere(answer);
     // a drop picks what it planted in the same breath as it plants it: its answer is the card's
     App.on('sel', () => { if (planTick) mark(); });
-    App.on('sel', () => { const sel = App.state.sel; if (sel) settling = false; if (keyOf(sel) !== full) full = ''; if (said && said.key !== keyOf(sel)) said = null; closePops(); draw(); });   // an answer belongs to the card it was said on
+    App.on('sel', () => {
+      const sel = App.state.sel;
+      if (sel) settling = false;
+      if (keyOf(sel) !== full) full = '';
+      if (said && said.key !== keyOf(sel)) said = null;
+      if (bedRow && !root.LRFMapEdit.on() && sel?.id !== bedRow.bedId && !sel?.fromBedSeason) bedRow = null;
+      closePops();
+      draw();
+    });   // an answer belongs to the card it was said on
     App.on('plan', () => { planTick = true; clearTimeout(tickTimer); tickTimer = setTimeout(() => { planTick = false; }, 0); note(); draw(); });
     App.on('date', () => { if (card) draw(); });
     App.on('view', () => { closePops(); draw(); });
     App.on('photos', () => { if (card) draw(); });
+    App.on('window', () => { if (card) draw(); });
     App.on('refused', () => { note(); if (card) fillSaid(); });
     document.addEventListener('contextmenu', onContext);
     document.addEventListener('keydown', onKey, true);
@@ -486,11 +659,12 @@
     document.addEventListener('pointerover', onOver);
     document.addEventListener('pointerdown', () => { if (hint || hintBar) hideHint(); });
     document.addEventListener('wheel', () => { if (hint || hintBar) hideHint(); }, { passive: true });
+    NARROW.addEventListener('change', () => { draw(); root.LRFPanels.redraw(); });
     root.addEventListener('resize', () => { if (card) place(); closePops(); });
     new MutationObserver(() => draw()).observe(document.body, { attributes: true, attributeFilter: ['data-layout'] });   // Edit layout opened or closed
     draw();
   }
 
-  root.LRFCard = { init, tick, on: () => on, turn, settle() { settling = true; draw(); }, standing };
+  root.LRFCard = { init, tick, on: () => on, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, openBedFromMap, keepBedFocus };
   init();
 })(window);

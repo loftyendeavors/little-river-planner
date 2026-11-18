@@ -132,7 +132,7 @@
     const fresh = last && Date.now() - last.at < SAID_FOR && lastSel === selKey();
     clearTimeout(el.lrfTimer);
     clear(el);
-    if (!fresh) { el.dataset.state = 'idle'; add(el, 'Changes apply as you make them.'); return el; }
+    if (!fresh) { el.dataset.state = 'idle'; if (!el.classList.contains('bed-season-saved')) add(el, 'Changes apply as you make them.'); return el; }
     el.dataset.state = last.kind;
     el.style.setProperty('--since', `${last.at - Date.now()}ms`);
     if (last.kind === 'saved') add(el, h('b', 'Saved'), h('span', ` · ${last.label} · ${clock(last.at)}`), last.canUndo ? h('button.link', { type: 'button', dataset: { saved: 'undo' }, onclick: () => App.undo() }, 'Undo') : null);
@@ -140,7 +140,7 @@
     el.lrfTimer = setTimeout(() => { if (el.isConnected) fillSaved(el); }, SAID_FOR - (Date.now() - last.at) + 30);
     return el;
   }
-  const savedLine = () => fillSaved(h('p.insp-saved', { role: 'status' }));
+  const savedLine = (quiet = false) => fillSaved(h(quiet ? 'p.insp-saved.bed-season-saved' : 'p.insp-saved', { role: 'status' }));
   // A field is left by clicking somewhere else, and that click can close the panel in the same breath (the map's open ground,
   // another bed). The change was taken and its line was never seen: then, and only then, it is said once in a toast.
   let saidAway = null;
@@ -293,6 +293,7 @@
       h('div.stats.dims', { id: 'bedDims', 'aria-label': 'Size of this space' }, dims),
       h('div.stats', stat(`On ${day(date)}`, status.crops.length ? `${num(status.used, 1)} of ${num(status.cap, 1)} ${unit} planted` : status.resting ? 'Turning over' : 'Free'),
         stat('This season', `${all.length} planting${all.length === 1 ? '' : 's'}`)));
+    if (root.LRFCard.bedSeasonOn(bed)) { host.append(root.LRFCard.renderBedSeason(bed, all, status)); return; }
     if (root.LRFMapEdit && (soil || !eng.isPool(bed))) host.append(h('p.insp-aside', h('button.link', { type: 'button', id: 'bedLayoutEdit',
       title: soil ? 'Sizes are changed in Edit layout: move, turn or resize this bed on the map itself' : 'Move or set out this space on the map itself', onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit the layout…')));
     // whom this ground is grown for is a fact about the farm too: shown here, set in the layout (for a bed, or a whole garden)
@@ -560,6 +561,7 @@
     if (!r) { host.append(h('p.note', 'This planting cannot be calculated. Its saved data is kept.'), h('button.btn.danger', { type: 'button', onclick: () => App.removePlantings([p.id]) }, 'Remove planting')); return; }
     if (eng.isPool(r.b)) { renderTrayBatch(host, p, r); return; }
     const bed = r.b, c = r.c, color = eng.cropColor(c), unit = eng.capUnit(bed), through = eng.occupancyThrough(p, r), f = eng.footprint(p, r);
+    const fromBedSeason = App.state.sel?.fromBedSeason;
     const timing = c.catalogTiming || {}, v = eng.variety(p.varietyId), sow = App.sowingOf(p);
     const set = (change, label) => { if (!App.updatePlanting(p.id, change, label)) render(); };
 
@@ -606,8 +608,9 @@
       h('header.insp-head.planting', { style: { '--crop': color } },
         root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color, label: c.vname || c.name, size: 64, cls: 'head' }),
         h('p.eyebrow', c.name), h('h2', c.vname || c.name),
-        h('button.link', { type: 'button', onclick: () => App.select({ type: 'bed', id: bed.id }) }, App.bedLabel(bed)),
-        h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select({ type: 'bed', id: bed.id }) }, '×')),
+        h('button.link', { type: 'button', dataset: fromBedSeason ? { hook: 'bed-planting-back' } : {},
+          onclick: () => fromBedSeason ? root.LRFCard.backToBed(bed.id) : App.select({ type: 'bed', id: bed.id }) }, App.bedLabel(bed)),
+        h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select(null) }, '×')),
       h('section.insp-section.form',
         field(c.method === 'TP' ? 'Transplant date' : sow && sow.kind === 'field' && sow.done ? 'Planned sowing date' : 'Sowing date', h('input', { type: 'date', id: 'fDate', value: p.date, onchange: e => { const ed = edit.date(e.target.value); if (ed) set(...ed); else render(); } })),
         field('Variety', variety, canMix && !several ? h('button.linkish', { type: 'button', id: 'fSeveral', title: 'Grow several varieties in this bed: each becomes a planting of its own beside this one, and the bed is shared equally', onclick: () => { several = { id: p.id, picked: new Set(), by: 'length' }; render(); } }, 'Several varieties in this bed…') : null),
@@ -668,20 +671,25 @@
     rendering = true;
     try {
       const host = $('inspectorBody'), keep = host.scrollTop, sel = App.state.sel, eng = App.state.engine;
+      const restore = sel?.type === 'bed' ? root.LRFCard.keepBedFocus(host) : null;
       clear(host);
       // an opening that has gone (something was planted in it) gives way to its bed
       const p = sel && sel.type === 'planting' ? eng.planting(sel.id) : null, opening = sel && sel.type === 'opening', bed = sel && sel.type === 'bed' ? eng.bedOf(sel.id) : opening ? eng.bedOf(sel.bedId) : null;
       const Series = root.LRFSeries;
       let overview = false;
       let own = false;   // a planting's or a space's own panel: the ones whose fields change the plan as they are left
-      if (p) { renderPlanting(host, p); own = true; } else if (opening && root.LRFAhead && root.LRFAhead.opening(host, sel, render)) { /* drawn */ } else if (bed) { renderBed(host, bed); own = true; }
+      const season = bed && root.LRFCard.bedSeasonOn(bed);
+      if (p) { renderPlanting(host, p); own = true; } else if (opening && root.LRFAhead && root.LRFAhead.opening(host, sel, render)) { /* drawn */ } else if (bed) {
+        if (!season || !root.LRFCard.standing()) { renderBed(host, bed); own = true; }
+      }
       else if (sel && sel.type === 'series' && Series && Series.panel(host, render)) { /* the series tool */ }
       else if (sel && sel.type === 'waiting' && Series && Series.waitingPanel(host, sel, render)) { /* a planting with no bed yet */ }
       else { renderOverview(host); overview = true; }
       const headEl = own && host.querySelector('header.insp-head');
-      if (headEl) headEl.after(savedLine());
+      if (headEl) headEl.after(savedLine(!!season));
       sayIfGone();
       host.scrollTop = keep;
+      if (restore) restore(host);
       if (!overview) holdSettle = false; else if (holdSettle) settleInView(host);
     } finally {
       rendering = false;
@@ -789,6 +797,7 @@
     App.on('refused', resaid);
     App.on('sel', render);
     App.on('photos', render);
+    App.on('window', () => { if (App.state.sel?.type === 'bed') render(); });
     App.on('view', () => { if (stale) render(); });
     App.on('date', () => {
       const sel = App.state.sel, ground = $('statGround');
@@ -797,5 +806,5 @@
     });
   }
 
-  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, setScope, scope: () => lib.scope, renderLibrary, sowingBox, edit, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle(), useWords: USE_WORDS };
+  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, setScope, scope: () => lib.scope, renderLibrary, sowingBox, edit, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle(), useWords: USE_WORDS, redraw: render };
 })(window);
