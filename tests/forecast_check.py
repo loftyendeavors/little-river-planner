@@ -278,6 +278,20 @@ with sync_playwright() as pw:
     check("the list to send has every crop of every month in its own words, the forecast's amount", ls["want"] > 5 and ls["missing"] == [], ls)
     check("things counted are whole numbers there, and a thing sold singly says “each”", ls["counted"] > 0 and ls["fractions"] == [] and ls["bare"] == [] and ls["each"] > 0 and ls["eachSaid"] >= ls["each"], ls)
     shot("list")
+    # the spreadsheet of the same list: things counted whole, rounded down, in its season and in every month (Codex on #69)
+    csvt = ""
+    try:
+        if has("#hvCsv"):
+            with page.expect_download(timeout=20000) as dl: page.click("#hvCsv")
+            csvt = open(dl.value.path(), encoding="utf-8", newline="").read()
+    except Exception as e: errors.append("spreadsheet: " + str(e)[:160])
+    cs = js("""const m = HV.model('commercial'), s = F.season(m), cols = F.periods(m, 'month', s.i0, s.i1), rows = arg.split('\\r\\n').slice(1).map(l => l.slice(1, -1).split('","'));
+      const bad = [], kinds = { counted: 0, weighed: 0 };
+      for (const row of m.rows.filter(r => r.total > 0)) { const line = rows.find(l => l[1] === row.name && l[2] === 'All' && l[3] === row.unit); if (!line) { bad.push([row.name, 'no line']); continue; }
+        const each = x => F.counted(row.unit) ? Math.floor(x + 1e-6) : Math.round(x * 100) / 100, want = [each(row.total), ...cols.map(c => each(F.sum(row.days, c.i0, c.i1)))], got = line.slice(4).map(Number);
+        kinds[F.counted(row.unit) ? 'counted' : 'weighed']++; if (JSON.stringify(got) !== JSON.stringify(want)) bad.push([row.name, got.slice(0, 4), want.slice(0, 4)]); }
+      return { bad: bad.slice(0, 3), seen: kinds, fractions: rows.filter(l => l.length > 4 && !['lb', 'oz', 'kg', 'g', 'bu'].includes(l[3])).flatMap(l => l.slice(4)).filter(x => /\\./.test(x)).length };""", csvt)
+    check("its spreadsheet gives things counted in whole numbers too, rounded down, and weighed things to two places, each the forecast's", len(csvt) > 200 and cs["bad"] == [] and cs["fractions"] == 0 and cs["seen"]["counted"] > 0 and cs["seen"]["weighed"] > 0, cs)
     page.keyboard.press("Escape"); wait(300)
     js("const d = document.querySelector('dialog[open]'); if (d) { d.close(); d.remove(); } return 1;")
 

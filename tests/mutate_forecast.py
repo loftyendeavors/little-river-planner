@@ -50,6 +50,7 @@ PAGE = [
  ("a variety's own window is not seen in the popup", YC, "return !owns(p) && !p.harvestEnd && !(v && v.cropId === p.cropId && owns(v)) && !!b && !eng.isRack(b);", "return !owns(p) && !!b && !eng.isRack(b);"),
  ("no planting is tagged Own window", HV, "own ? tag('own', 'Own window',", "false ? tag('own', 'Own window',"),
  ("the list to send keeps a fraction of a thing counted", FC, "function sendShown(n, unit) { return counted(unit) ? (n > 0 ? Math.floor(n + 1e-6) : 0) : shown(n); }", "function sendShown(n, unit) { return shown(n); }"),
+ ("the spreadsheet keeps a fraction of a thing counted", FC, "      const n = x => (counted(row.unit) ? sendShown(x, row.unit) : two(x));", "      const n = two;"),
  ("the list to send says nothing for each", FC, "return `${fmt(v)} ${w || 'each'}`;", "return `${fmt(v)}${w ? ' ' + w : ''}`;"),
  ("the kept forecast is worked out afresh at every call", FC, "    if (!mine.has(key)) mine.set(key, build(eng, options));\n    return mine.get(key);", "    mine.set(key, build(eng, options));\n    return build(eng, options);"),
  ("the kept forecast is kept for the first engine and never again", FC, "    let mine = KEPT.get(eng);\n    if (!mine) { mine = new Map(); KEPT.set(eng, mine); }", "    let mine = KEPT.get(KEPT) || KEPT.get(eng);\n    if (!mine) { mine = new Map(); KEPT.set(eng, mine); KEPT.set(KEPT, mine); }"),

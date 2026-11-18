@@ -397,7 +397,7 @@ with sync_playwright() as pw:
         saved = os.path.join(str(shots), "things.csv"); dl.value.save_as(saved); csv = open(saved, encoding="utf-8").read()
     except Exception as e: errors.append("spreadsheet: " + str(e)[:160])
     lines = [[c.strip('"') for c in l.split('","')] for l in csv.splitlines()]
-    check("the spreadsheet has a row for each thing with its unit and a season total that is the forecast's", len(mine) == 3 and all(any(len(l) > 4 and l[1] == r["name"] and l[2] == "All" and l[3] == r["unit"] and abs(float(l[4]) - round(r["total"], 2)) < 0.006 for l in lines) for r in mine), [l[:5] for l in lines if len(l) > 2 and "·" in l[1]][:6])
+    check("the spreadsheet has a row for each thing with its unit and a season total that is the forecast's", len(mine) == 3 and all(any(len(l) > 4 and l[1] == r["name"] and l[2] == "All" and l[3] == r["unit"] and abs(float(l[4]) - (int(r["total"] + 1e-6) if r["unit"] not in ("lb", "oz", "kg", "g", "bu") else round(r["total"], 2))) < 0.006 for l in lines) for r in mine), [l[:5] for l in lines if len(l) > 2 and "·" in l[1]][:6])
     page.keyboard.press("Escape"); wait(300)
 
     # plan to a weekly amount

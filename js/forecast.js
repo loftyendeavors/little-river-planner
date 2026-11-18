@@ -279,13 +279,14 @@
     lines.push('', 'Forecast from the crop plan. Quantities are estimates and move with the weather.');
     return lines.filter((l, i, all) => !(l === '' && all[i - 1] === '')).join('\n');
   }
-  /** The same table as a spreadsheet file. */
+  /** The same table as a spreadsheet file: things counted in whole numbers rounded down, as in the list; weighed things to two places. */
   function csv(model, cols, options = {}) {
     const cell = v => { let s = String(v == null ? '' : v); if (/^\s*[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
     const head = ['Kind', 'Crop', 'Variety', 'Unit', 'Season total', ...cols.map(c => options.grain === 'month' ? `${MONTHS[c.start.getMonth()]} ${model.year}` : E.d2s(c.start))], out = [head];
-    const title = Object.fromEntries(GROUPS.map(([g, t]) => [g, t])), n = x => Math.round(x * 100) / 100;
+    const title = Object.fromEntries(GROUPS.map(([g, t]) => [g, t])), two = x => Math.round(x * 100) / 100;
     for (const row of model.rows) {
       if (!(row.total > 0)) continue;
+      const n = x => (counted(row.unit) ? sendShown(x, row.unit) : two(x));
       out.push([title[row.group], row.name, 'All', row.unit, n(row.total), ...cols.map(c => n(sum(row.days, c.i0, c.i1)))]);
       if (row.varieties.length > 1 || (row.varieties[0] && row.varieties[0].id)) for (const v of row.varieties) out.push([title[row.group], row.name, v.name, row.unit, n(v.total), ...cols.map(c => n(sum(v.days, c.i0, c.i1)))]);
     }
