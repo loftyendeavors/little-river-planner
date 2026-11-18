@@ -232,7 +232,7 @@ with sync_playwright() as pw:
     check("the bed's panel now says personal use", js("const el = $('bedUse'); return el && el.dataset.use === 'personal' && el.dataset.by === 'bed' && /personal use/.test(el.textContent)"))
     # the whole garden
     page.evaluate("id => { LRFMapEdit.open({}); LRFMapEdit.pickGarden(id); }", sub["gardenId"]); wait(500)
-    whole = js("const el = $('leUse'); return { there: !!el, scope: el && el.dataset.scope, value: el && el.value, label: el && el.closest('.field').querySelector('span').textContent }")
+    whole = js("const el = $('leUse'); return { there: !!el, scope: el && el.dataset.scope, value: el && el.value, label: el && (el.closest('.field').querySelector('[data-hook=use-label]') || {}).textContent }")
     check("with a whole garden picked, “Grown for” is the garden's", whole["there"] and whole["scope"] == "garden" and whole["value"] == "commercial" and "whole garden" in whole["label"], whole)
     if has("#leUse"): page.select_option("#leUse", "personal"); wait(500)
     garden = js(f"""const ids = {json.dumps(sub['gardenIds'])}, g = S.plan.gardens.find(g => g.id === {json.dumps(sub['gardenId'])}); return {{ garden: g.use, personal: ids.filter(id => F.useOf(eng, eng.planting(id)).personal).length, kept: F.useOf(eng, eng.planting({json.dumps(sub['two'])})).use, other: F.useOf(eng, eng.planting({json.dumps(sub['otherPlanting'])})).by,
