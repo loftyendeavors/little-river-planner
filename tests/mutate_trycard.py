@@ -57,6 +57,8 @@ PAGE = [
  ("Codex on #66: any word at all is said on the card, and goes with it", CD, "    if (!acting && !refusedNow) return false;\n", ""),
  ("Codex on #66: the calendar says a sowing day set by hand stays", CD, "    if (q.sowOn && !q.liveTray && value !== p.date) delete q.sowOn;", "    void 0;"),
  ("Codex on #66: Grown for sale on a bed's card sets its garden", CD, "if (!App.setUse('bed', [bed.id], ev.target.checked ? 'commercial' : 'personal')) draw();", "if (!App.setUse('garden', [bed.gardenId], ev.target.checked ? 'commercial' : 'personal')) draw();"),
+ ("Codex on #66: Edit layout opened from the card has no side panel", CD, "    if (root.LRFMapEdit && root.LRFMapEdit.on()) return false;", "    void 0;"),
+ ("Edit layout closed, the side panel stays", CD, "    new MutationObserver(() => draw()).observe(document.body, { attributes: true, attributeFilter: ['data-layout'] });", "    void MutationObserver;"),
  ("a drop is answered in a toast", CD, "    App.on('sel', () => { if (planTick) mark(); });\n", ""),
  ("the card writes days to harvest its own way", CD, "onchange: ev => set(Ed.dtm(p, ev.target.value)) }", "onchange: ev => set([{ dtm: +ev.target.value + 1, timingMode: 'manual' }, 'Change days to harvest']) }"),
  ("the card writes harvest days its own way", CD, "onchange: ev => set(Ed.hw(ev.target.value)) }", "onchange: ev => set([{ hw: +ev.target.value + 1, harvestMode: 'window' }, 'Change harvest days']) }"),

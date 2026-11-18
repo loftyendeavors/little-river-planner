@@ -54,6 +54,7 @@
   /** Whether the card stands in place of the side panel now. */
   function standing() {
     if (!on || !App.state.ready || !inView()) return false;
+    if (root.LRFMapEdit && root.LRFMapEdit.on()) return false;   // Edit layout works in the side panel (Codex on #66)
     const sel = App.state.sel;
     if (!sel) return !settling && !App.state.newer;   // with nothing picked there is no panel, unless it has something to say
     return !!held(sel);
@@ -485,6 +486,7 @@
     document.addEventListener('pointerdown', () => { if (hint || hintBar) hideHint(); });
     document.addEventListener('wheel', () => { if (hint || hintBar) hideHint(); }, { passive: true });
     root.addEventListener('resize', () => { if (card) place(); closePops(); });
+    new MutationObserver(() => draw()).observe(document.body, { attributes: true, attributeFilter: ['data-layout'] });   // Edit layout opened or closed
     draw();
   }
 

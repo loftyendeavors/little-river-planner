@@ -330,6 +330,14 @@ def run(pw):
         check("Undo on the card takes the drop back: the plan is as it was, and the card closes", False, drop)
 
     # ══ what the card does not hold stands in the side panel ══
+    js(f"LRFCard.turn(true); A.setView('map'); A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(400)
+    press(page, "[data-hook='card-layout']", 500)
+    lay = js("const lp = document.querySelector('.inspector #leUse'); return { on: document.body.dataset.layout === 'on', card: !!card(), panel: panel(), box: drawn(lp), attr: document.body.dataset.card || null };")
+    check("“Edit layout” on a bed's card opens Edit layout with its boxes in the side panel, and the card gives way", lay["on"] and not lay["card"] and lay["panel"] and lay["box"] and not lay["attr"], lay)
+    press(page, "#leDone", 500)
+    lay2 = js("return { on: document.body.dataset.layout === 'on', panel: panel(), attr: document.body.dataset.card || null };")
+    check("Done in Edit layout closes it, and with nothing picked there is no side panel again", not lay2["on"] and not lay2["panel"] and lay2["attr"] == "on", lay2)
+
     js(f"A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(400)
     press(page, "[data-hook='card-full']", 400)
     fl = js("return { card: !!card(), panel: panel(), date: drawn($('fDate')) };")

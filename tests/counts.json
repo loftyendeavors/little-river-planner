@@ -157,7 +157,7 @@
 
   "stepF": 47,
 
-  "trycard": 45,
+  "trycard": 47,
 
   "wide": 28
 
@@ -254,7 +254,7 @@
 
   "tour": 4,
 
-  "trycard-site": 45
+  "trycard-site": 47
 
  },
  "site3": {
@@ -290,7 +290,7 @@
 
   "stepF-site @1480": 47,
 
-  "trycard-site": 45
+  "trycard-site": 47
 
  },
  "site5": {
@@ -315,7 +315,7 @@
 
   "stepF-site dark": 47,
 
-  "trycard-site @3440": 45
+  "trycard-site @3440": 47
 
  },
  "site6": {
