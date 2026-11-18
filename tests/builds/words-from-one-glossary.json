@@ -32,7 +32,8 @@
  ],
  "screens": [
   "map",
-  "assumptions-days",
+  "timeline",
+  "nursery-set-up",
   "assumptions-yield"
  ]
 }

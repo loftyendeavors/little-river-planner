@@ -184,10 +184,10 @@ with sync_playwright() as pw:
         check("the review window names no “old copy”: a copied figure is a “Copied value”", False, "the review window did not open")
 
     # ── the words, from one glossary (his notes of Nov 16, section 3): the long notes behind "?", the long hovers cut, never DTM ──
-    def card(hook, wait_ms=300):
-        """Opens the first "?" with this hook, reads its card (by the card's own hook), and closes it again by the same button."""
-        got = js("const b = document.querySelector('[data-hook=%s]'); if (!b || !b.offsetWidth) return null; b.scrollIntoView({ block: 'center' }); b.click();"
-                 " const c = document.querySelector('[data-hook=%s-card]'), out = c ? { text: c.innerText, rows: [...c.querySelectorAll('dt')].map(d => d.textContent.trim()) } : { text: '', rows: [] }; b.click(); return out;" % (hook, hook))
+    def card(hook, n=0, wait_ms=300):
+        """Opens the n-th "?" with this hook, reads its card (by the card's own hook), and closes it again by the same button."""
+        got = js("const b = document.querySelectorAll('[data-hook=%s]')[%d]; if (!b || !b.offsetWidth) return null; b.scrollIntoView({ block: 'center' }); b.click();"
+                 " const c = document.querySelector('[data-hook=%s-card]'), out = c ? { text: c.innerText, rows: [...c.querySelectorAll('dt')].map(d => d.textContent.trim()) } : { text: '', rows: [] }; b.click(); return out;" % (hook, n, hook))
         wait(wait_ms); return got
     js("A.setView('assume'); LRFAssume.setMode('days'); return 1;"); wait(800)
     days = card("assume-help") or {}
@@ -214,8 +214,8 @@ with sync_playwright() as pw:
     check("What fits says what makes a crop fit behind its “?”, in the glossary's words, and no paragraph stands under it", fits == [] and "harvest window" in said.get("text", ""), {"standing": fits, "said": said.get("text")})
     js("A.select(null); A.setView('trays'); LRFTraysView.setTab('setup'); return 1;"); wait(900)
     bench = js("const r = $('bnRules'); return r ? { helps: r.querySelectorAll('[data-hook=bench-help]').length, paras: [...r.querySelectorAll('p')].filter(p => p.textContent.length >= 100).length } : null;")
-    said = card("bench-help") or {}
-    check("the Nursery's hardening-off and growing-on rules say what they do behind two “?”, and no paragraph stands beside their heads", bench == {"helps": 2, "paras": 0} and "harden off" in said.get("text", ""), {"bench": bench, "said": said.get("text")})
+    said, cool = card("bench-help") or {}, card("bench-help", 1) or {}   # each "?" opened and read: the rules', then growing on without heat's
+    check("the Nursery's hardening-off and growing-on rules say what they do behind two “?”, and no paragraph stands beside their heads", bench == {"helps": 2, "paras": 0} and "harden off" in said.get("text", "") and "unheated benches" in cool.get("text", ""), {"bench": bench, "said": said.get("text"), "cool": cool.get("text")})
     dtm = {}
     for where, how in [("map", "A.setView('map'); A.select(null);"), ("timeline", "A.setView('timeline');"), ("forecast", "A.setView('harvest');"), ("tasks", "A.setView('sow');"), ("nursery", "A.setView('trays'); LRFTraysView.setTab('room');"),
                        ("seeds", "A.setView('seeds');"), ("days to harvest", "A.setView('assume'); LRFAssume.setMode('days');"), ("yield and price, one crop at a time", "A.setView('assume'); LRFAssume.setMode('harvest'); document.querySelector('[data-ah-way=card]').click();")]:
