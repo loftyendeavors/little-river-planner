@@ -2236,6 +2236,40 @@ table.as tr.as-thing td { background: var(--surface); }
 .sd-house h3 { margin: 0; font: 500 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
 .sd-house .seg { max-width: 340px; }
 
+/* The variety swap (js/swap.js): a sheet 760 wide, opened from a variety on Seeds. A title, one sentence, the variety that takes
+   its place (a row with its photograph), the plantings that would change (a square tick each), what the change does, one foot. */
+.sd-swap { display: grid; gap: var(--space-8); margin-bottom: var(--space-16); }
+.sd-swap .btn { justify-self: start; }
+.sd-swapsay { margin: 0; font-size: var(--type-13); color: var(--ink); }
+.sd-swapsay .link { margin-left: var(--space-8); }
+.dialog.sw { width: min(760px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 40px); }
+.dialog.sw[open] { display: flex; flex-direction: column; }
+.dialog.sw > * { flex: none; }
+.dialog.sw .dlg-lead { font-size: var(--type-13); color: var(--ink-2); margin: var(--space-4) 0 var(--space-12); }
+.sw-from { display: flex; align-items: center; gap: var(--space-12); }
+.sw-from .thumb, .sw-pick .thumb { border-radius: var(--corner-12); }
+.sw-from .row-detail, .sw-pick .row-detail { display: block; font-size: var(--type-13); color: var(--muted); }
+.sw-pick .row-detail, .sw-pick .row-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sw-pick > span { min-width: 0; }
+.sw-from .row-name, .sw-pick .row-name { font-size: var(--type-15); font-weight: 600; }
+.sw-h { margin: var(--space-16) 0 var(--space-8); font: 600 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.sw-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); max-height: 184px; overflow: auto; flex-shrink: 1 !important; min-height: 64px; }
+.sw-pick.row { padding: var(--space-8) var(--space-12); border: 1px solid var(--line-soft); border-radius: var(--corner-12); cursor: pointer; }
+.sw-pick.row:hover { border-color: var(--line); }
+.sw-pick.row:has(input:checked) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.sw-left { margin: 0 0 var(--space-8); font-size: var(--type-13); color: var(--ink-2); }
+.sw-list { display: grid; border-top: 1px solid var(--line-soft); overflow: auto; min-height: 88px; flex-shrink: 1 !important; }
+.sw-row { display: grid; grid-template-columns: 20px minmax(0, 220px) minmax(0, 1fr); column-gap: var(--space-12); align-items: baseline; padding: var(--space-8) var(--space-4); border-bottom: 1px solid var(--line-soft); font-size: var(--type-13); cursor: pointer; }
+.sw-row.off { color: var(--muted); cursor: default; }
+.sw-row small { display: block; font-size: var(--type-11); color: var(--muted); }
+.sw-row.warn .sw-what small { color: var(--warn); }
+.sw-where { font-weight: 600; }
+.sw-sum { margin-top: var(--space-12); display: grid; gap: var(--space-8); }
+.sw-say { margin: 0; font-size: var(--type-13); color: var(--ink); }
+.sw-say.warn, .sw-figs .warn b { color: var(--warn); }
+.sw-figs i { font-style: normal; margin-right: var(--space-4); }
+.sw-overlaps { margin: 0; padding-left: var(--space-16); list-style: disc; font-size: var(--type-13); color: var(--ink-2); display: grid; gap: var(--space-4); }
+
 /* ───────────────────────────── Parts, made once (DESIGN.md) ─────────────────────────────
    One card, one row, two ticks, one switch, three buttons, one filter pill, one menu, one hint and its "?", one sheet and
    its foot. They were first drawn for Tasks. Each is given here once, and the names a page already uses for the same part
