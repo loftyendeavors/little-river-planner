@@ -1086,7 +1086,8 @@
     // asked for: whose first harvest the record moves (a planting put in its bed early is picked from that day)
     if (options.firsts && ops.length) {
       const after = E.create(withOps(state.plan, ops, 'do'), Lib), firsts = [];
-      for (const id of new Set(done.map(r => r.id))) {   // a planting with two of its jobs in the step is one first harvest const a = state.engine.calc(state.engine.planting(id)), b = after.calc(after.planting(id)); if (a && b && E.validDate(a.first) && E.validDate(b.first) && +a.first !== +b.first) firsts.push({ id, from: E.d2s(a.first), to: E.d2s(b.first) }); }
+      // a planting with two of its jobs in the step is one first harvest
+      for (const id of new Set(done.map(r => r.id))) { const a = state.engine.calc(state.engine.planting(id)), b = after.calc(after.planting(id)); if (a && b && E.validDate(a.first) && E.validDate(b.first) && +a.first !== +b.first) firsts.push({ id, from: E.d2s(a.first), to: E.d2s(b.first) }); }
       return { n: done.length, moved, held, overlaps: 0, failed, firsts };
     }
     // the ground is looked at only when something is pushed: a day recorded for planting is a fact, and its overlaps are said when it is recorded
