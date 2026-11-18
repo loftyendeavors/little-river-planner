@@ -51,7 +51,8 @@ with sync_playwright() as pw:
     def unfold():
         for i in range(page.locator('.tk-fold[aria-expanded="false"]').count()): page.locator('.tk-fold[aria-expanded="false"]').first.click(); wait(120)
         wait(400)
-    def tick(key): row(key).locator(".tk-tick").scroll_into_view_if_needed(); row(key).locator(".tk-tick").click(); wait(500)
+    # a tick a week or more ahead of its day asks first (Tasks part 2): the check answers yes, as the grower would
+    def tick(key): row(key).locator(".tk-tick").scroll_into_view_if_needed(); row(key).locator(".tk-tick").click(); page.wait_for_timeout(250); _ah = page.locator('[data-hook="tasks-ahead-yes"]'); _ah.first.click() if _ah.count() and _ah.first.is_visible() else None; wait(500)
     def pick(iso): page.click(f'#tkPop [data-pick="{iso}"]'); wait(1500)
     popup = lambda: js("""const p = $('tkPop'); return p.hidden ? null : { head: p.querySelector('strong').textContent, about: p.querySelector('small').textContent, quick: (p.querySelector('.tk-quick') || {}).textContent || '', hint: $('tkHint').textContent,
       due: [...p.querySelectorAll('.tk-cell.due')].map(c => c.dataset.pick), cur: [...p.querySelectorAll('.tk-cell.cur')].map(c => [c.textContent, c.disabled]), picks: [...p.querySelectorAll('.tk-cell:not([disabled])')].map(c => c.dataset.pick),
@@ -129,7 +130,7 @@ with sync_playwright() as pw:
     js("V.show(A.today())"); wait(400); unfold()
 
     # take back: the day is cleared and the plantings return
-    row(after["key"]).locator(".tk-tick").click(); wait(700)
+    row(after["key"]).locator(".tk-tick").click(); page.wait_for_timeout(250); _ah = page.locator('[data-hook="tasks-ahead-yes"]'); _ah.first.click() if _ah.count() and _ah.first.is_visible() else None; wait(700)
     back = js(f"const ps = {json.dumps(pk['ids'])}.map(id => S.engine.planting(id)); return {{ cleared: ps.every(p => !(p.done && p.done.harden)), dates: ps.map(p => p.date), undo: S.undo.length, toast: (document.querySelector('.toast') || {{}}).textContent || '' }};")
     check("unticking it clears the day and puts the plantings back where they were first planned, in one step", back["cleared"] and back["dates"] == pk["dates"] and back["undo"] == pk["undo"] + 2 and "taken back" in back["toast"] and "first planned" in back["toast"], back)
     page.keyboard.press("Control+z"); wait(500); page.keyboard.press("Control+z"); wait(500)
@@ -278,7 +279,7 @@ with sync_playwright() as pw:
     page.screenshot(path=str(shots / "phone-week.png"))
     pk = js("const l = V.jobs().find(l => l.week === now && l.state === 'open' && l.section === 'harden' && l.date < A.today()); return { key: l.key, ids: l.members.map(m => m.p.id), dates: l.members.map(m => m.p.date), late: E.dayDiff(E.s2d(A.today()), E.s2d(l.date)) };")
     for i in range(page.locator(".tk-list:not(.off) .tk-more").count()): page.locator(".tk-list:not(.off) .tk-more").first.click(); wait(250)
-    r0 = page.locator(f'.tk-row[data-line={json.dumps(pk["key"])}]'); r0.scroll_into_view_if_needed(); r0.locator(".tk-tick").click(); wait(700)
+    r0 = page.locator(f'.tk-row[data-line={json.dumps(pk["key"])}]'); r0.scroll_into_view_if_needed(); r0.locator(".tk-tick").click(); page.wait_for_timeout(250); _ah = page.locator('[data-hook="tasks-ahead-yes"]'); _ah.first.click() if _ah.count() and _ah.first.is_visible() else None; wait(700)
     pb = js("const p = $('tkPop'), r = p.getBoundingClientRect(), k = p.querySelector('.tk-quick button').getBoundingClientRect(), c = p.querySelector('.tk-cell:not([disabled])').getBoundingClientRect(); return { pos: getComputedStyle(p).position, in: r.left >= 0 && r.right <= innerWidth + 1 && Math.abs(r.bottom - innerHeight) <= 1 && r.top >= 0, wide: r.width >= innerWidth - 1, button: k.height, quick: p.querySelector('.tk-quick').textContent, cell: Math.min(c.width, c.height), dim: getComputedStyle($('tkScrim')).backgroundColor };")
     check("a tap on a late task's tick brings the calendar up from the foot of the screen, whole, with Today to hit", pb["pos"] == "fixed" and pb["in"] and pb["wide"] and pb["button"] >= 44 and pb["quick"].startswith("Today") and pb["cell"] >= 40 and pb["dim"] != "rgba(0, 0, 0, 0)", pb)
     page.screenshot(path=str(shots / "phone-ticked.png"))

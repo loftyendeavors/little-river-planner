@@ -263,7 +263,7 @@ with sync_playwright() as pw:
     # recording still works
     rec = js("const l = sowOf().find(x => x.state === 'open' && NS.includes(x.kind) && x.kind !== 'live' && x.date >= A.today()); return l ? { key: l.key, ids: l.members.map(m => m.p.id), todo: V.weekCounts(now) } : null;")
     if rec and has(f'.tk-row[data-line={json.dumps(rec["key"])}] .tk-tick'):
-        page.locator(f'.tk-row[data-line={json.dumps(rec["key"])}] .tk-tick').click(); wait(1500)
+        page.locator(f'.tk-row[data-line={json.dumps(rec["key"])}] .tk-tick').click(); page.wait_for_timeout(250); _ah = page.locator('[data-hook="tasks-ahead-yes"]'); _ah.first.click() if _ah.count() and _ah.first.is_visible() else None; wait(1500)   # a tick a week or more ahead asks first (Tasks part 2)
         said = js("return (document.querySelector('.toast') || {}).textContent || ''")
         done = js(f"const ps = {json.dumps(rec['ids'])}.map(id => eng.planting(id)); return {{ done: ps.every(p => p.done && (p.done.sow || p.done.field)), undo: S.undo.length, todo: V.weekCounts(now), state: (V.tasks().find(t => t.key === {json.dumps(rec['key'])}) || {{}}).state }};")
         js("A.undo()"); wait(600)

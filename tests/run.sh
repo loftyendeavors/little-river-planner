@@ -56,16 +56,17 @@ for part in ${@:-node build app1 app2 app3 app4 new off site1 site2 site3 site4 
       room \
       trycard \
       swap \
+      tasks2 \
       forecast \
       ;;
     app4) sh $T/b.sh mapgeo; WIDTHS=${WIDTHS:-1280,1480,1707,3440} sh $T/b.sh map; sh $T/b.sh map-views; WIDTH=1480 sh $T/b.sh r1; sh $T/b.sh things ;;
     new) sh $T/b.sh sup importer; WIDTH=1480 sh $T/b.sh sup importer; WIDTH=3440 sh $T/b.sh sup importer; sh $T/b.sh sup-site importer-site; WIDTH=1480 sh $T/b.sh sup-site importer-site ;;
     off) sh $T/b.sh offline ahead-off core-off sowing-off trays-off step2a-off f018-off step2b-off map-off ;;
     site1) sh $T/b.sh carry site step3a-site step3b-site wide-site step5a-site ;;
-    site2) sh $T/b.sh step5b-site stepF-site plain-site r1-site sync-site join-site tour loose-site f053-site room-site trycard-site swap-site harvest-site forecast-site ;;
+    site2) sh $T/b.sh step5b-site stepF-site plain-site r1-site sync-site join-site tour loose-site f053-site room-site trycard-site swap-site tasks2-site harvest-site forecast-site ;;
     site3) WIDTHS=${WIDTHS:-1280,1480,1707,3440} sh $T/b.sh map-site; sh $T/b.sh map-views-site; sh $T/b.sh things-site; WIDTH=1480 sh $T/b.sh things-site ;;
     site4) DARK=1 WIDTH=1480 sh $T/b.sh step3a-site step3b-site; WIDTH=1480 sh $T/b.sh step3a-site step3b-site step5a-site step5b-site stepF-site r1-site loose-site room-site; WIDTH=1280 sh $T/b.sh trycard-site ;;
-    site5) DARK=1 sh $T/b.sh step3a-site step3b-site step5a-site step5b-site stepF-site r1-site; WIDTH=3440 sh $T/b.sh stepF-site r1-site loose-site room-site trycard-site swap-site ;;
+    site5) DARK=1 sh $T/b.sh step3a-site step3b-site step5a-site step5b-site stepF-site r1-site; WIDTH=3440 sh $T/b.sh stepF-site r1-site loose-site room-site trycard-site swap-site tasks2-site ;;
     site6) sh $T/b.sh bed-season-site bedpanel-site; WIDTH=1707 sh $T/b.sh bedpanel-site; WIDTH=3440 sh $T/b.sh bedpanel-site; WIDTH=1707 sh $T/b.sh bedpanel; sh $T/b.sh look-site; WIDTH=1707 sh $T/b.sh look-site; WIDTH=3440 sh $T/b.sh look-site ;;
     site7) sh $T/b.sh mixed-site; WIDTH=1707 sh $T/b.sh mixed-site; WIDTH=3440 sh $T/b.sh mixed-site; WIDTH=1707 sh $T/b.sh mixed; WIDTH=3440 sh $T/b.sh mixed; WIDTH=1707 sh $T/b.sh things; WIDTH=3440 sh $T/b.sh things-site ;;
     site8) sh $T/b.sh season-site photo-site; WIDTH=1480 sh $T/b.sh season season-site; WIDTH=1707 sh $T/b.sh season season-site; WIDTH=3440 sh $T/b.sh season season-site; DARK=1 sh $T/b.sh season-site ;;

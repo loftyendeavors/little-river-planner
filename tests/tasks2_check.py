@@ -1,0 +1,394 @@
+"""Tasks, part 2 (js/sowview.js, the planting's panel, js/app.js) in a real browser, on the made-up farm, on a pretended May 5 of
+the plan's year with nothing recorded, so that a long run of tasks is late:
+  Upcoming weeks (a line a week, the counts the page's own tasks give, a press goes to that week); Trays to fill (the trays of the
+  sowings on screen, falling as one is ticked); "Mark all done" (only on a group of three or more; late ones asked one day, or each
+  on its own day, said before it is chosen; one step; Undo gives back the plan exactly); the flag on a planting out whose bed is
+  not free (the day it is free, one line that never wraps, also on a phone); a tick a week or more ahead asks first, one within a
+  week does not; "⋯", "Take back everything recorded…" (a sheet whose counts are what goes back, a snapshot first, notes kept,
+  Undo gives back the plan exactly); "Mark as failed…" on a planting's panel (says before it is done, then its bed is free and its
+  harvest is off the forecast, greyed on the Timeline, the mark taken off again); the panel's sowing calendar stops a year short.
+Every subject is found on the plan the page was given: nothing here names a crop, a variety, a bed or a number of any plan.
+usage: python3 -I tasks2_check.py <app-dir-or-built-site> <shots-dir> [backup.zip]     env: WIDTH=1280, STOP_AT_FAIL=1
+"""
+import functools, http.server, json, os, re, sys, threading
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+target, shots = Path(sys.argv[1]), Path(sys.argv[2]); shots.mkdir(parents=True, exist_ok=True)
+backup = sys.argv[3] if len(sys.argv) > 3 else None
+WIDTH = int(os.environ.get("WIDTH", "1280")); STOP = os.environ.get("STOP_AT_FAIL") == "1"
+class Quiet(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *a): pass
+server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Quiet, directory=str(target)))
+threading.Thread(target=server.serve_forever, daemon=True).start()
+url = f"http://127.0.0.1:{server.server_address[1]}/index.html"
+results, failed, errors = [], [], []
+def check(name, ok, detail=None):
+    results.append({"name": name, "ok": bool(ok), **({"detail": detail} if detail is not None and not ok else {})})
+    if not ok:
+        failed.append(name)
+        if STOP: finish()
+def finish():
+    print(json.dumps({"passed": len(results) - len(failed), "of": len(results), "failed": failed, "details": [r for r in results if not r["ok"]][:12], "errors": errors[:6]}, default=str))
+    sys.stdout.flush(); os._exit(1 if failed else 0)
+# the page's clock: May 5 of the made-up farm's year, with nothing recorded, so that the early season is late
+FAKE = "(() => { const R = Date, off = new R(2027, 4, 5, 10).getTime() - R.now(); class D extends R { constructor(...a) { if (a.length) super(...a); else super(R.now() + off); } static now() { return R.now() + off; } } window.Date = D; })();"
+PRE = ("const A = LRFApp, S = A.state, E = LRFEngine, V = LRFSowView, W = LRFWeek, SL = LRFSeedLib, F = LRFForecast, $ = id => document.getElementById(id);"
+       "const hook = n => document.querySelector('[data-hook=\"' + n + '\"]'), hooks = n => [...document.querySelectorAll('[data-hook=\"' + n + '\"]')];"
+       "const drawn = el => !!el && !el.hidden && el.getClientRects().length > 0 && getComputedStyle(el).display !== 'none';"
+       "const now = A.today(), plus = (iso, n) => E.d2s(E.addDays(E.s2d(iso), n)), open = t => t.state === 'open' || t.state === 'part';"
+       "const worth = e => F.build(e).rows.reduce((n, r) => n + r.worth, 0), row = key => [...document.querySelectorAll('#swWrap .tk-row')].find(r => r.dataset.line === key) || null;"
+       "const figs = ids => Object.fromEntries(ids.map(id => { const e = S.engine, p = e.planting(id), r = p && e.calc(p); return [id, r ? [E.d2s(r.field), E.validDate(r.first) ? E.d2s(r.first) : null] : null]; }));")
+def js(page, body, arg=None):
+    return page.evaluate("(arg) => { %s %s }" % (PRE, body), arg)
+def press(page, selector, ms=350):
+    hit = page.locator(selector)
+    if not hit.count() or not hit.first.is_visible(): return False
+    hit.first.click(timeout=3000); page.wait_for_timeout(ms); return True
+def snap(page): return js(page, "return { plan: JSON.stringify(S.plan), undo: S.undo.length };")
+
+def run(pw):
+    browser = pw.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
+    ctx = browser.new_context(viewport={"width": WIDTH, "height": 1000}); ctx.add_init_script(FAKE); page = ctx.new_page()
+    page.on("console", lambda m: errors.append(m.text) if m.type == "error" and "fonts.g" not in m.text and "ERR_" not in m.text and "Failed to load resource" not in m.text else None)
+    page.on("pageerror", lambda e: errors.append("pageerror: " + str(e)))
+    page.goto(url); page.wait_for_function("window.LRFApp && LRFApp.state.ready", timeout=20000)
+    if backup and page.evaluate("LRFApp.isSample()"):
+        page.set_input_files("#importFile", backup); page.wait_for_timeout(400)
+        if page.locator("dialog[open] .btn.primary").count(): page.locator("dialog[open] .btn.primary").click()
+        page.wait_for_function("LRFApp.state.plan.plantings.length > 600 && !LRFApp.isSample()", timeout=60000); page.wait_for_timeout(1500)
+    js(page, "A.setView('sow'); return null;"); page.wait_for_timeout(900)
+    start = snap(page)
+    nothing = js(page, "return !S.plan.plantings.some(p => p.done && Object.keys(p.done).length) && V.tasks().some(t => open(t) && t.due < now);")
+    check("the plan holds nothing recorded, and tasks are late on the pretended day, for the check to work on", nothing)
+
+    # ── Upcoming weeks ── (a task of next week recorded done first, through the page's own step, so that what is done is seen to be left out)
+    pre_up = snap(page)
+    ticked = js(page, "const cur = LRFTrays.monday(now), t = V.tasks().find(t => open(t) && t.due >= plus(cur, 7) && t.due <= plus(cur, 13)); if (!t) return null; A.recordWork(t.items(), { date: now, follow: true }); return t.half;")
+    page.wait_for_timeout(500)
+    check("a task of next week is recorded done through the page's own step, for the check", ticked)
+    up = js(page, """const rows = hooks('tasks-upcoming-week'), cur = LRFTrays.monday(now), all = V.tasks().filter(open);
+      return { card: drawn(hook('tasks-upcoming')), below: !!hook('tasks-upcoming') && hook('tasks-upcoming').getBoundingClientRect().top >= $('tkLists').getBoundingClientRect().bottom - 1,
+        rows: rows.map((r, i) => { const a = plus(cur, 7 * (i + 1)), z = plus(a, 6), n = h => all.filter(t => t.half === h && t.due >= a && t.due <= z).length;
+          const cells = [...r.querySelectorAll('.tk-up-cell')].map(c => { const m = c.textContent.match(/(\\d+) tasks?/); return m ? +m[1] : 0; });
+          const trays = h => { const seen = new Set(); let k = 0; for (const t of all) { if (t.half !== h || t.due < a || t.due > z || !t.sow || t.id === 'direct' || t.id === 'rockwool') continue;
+            if (t.id === 'live') { k += Math.ceil(t.line.trays - 1e-9); continue; } const b = t.line.batch; if (!b || b.medium === 'pots') continue; const g = t.line.group, key = g ? 'g' + g.id : 'b' + t.key; if (seen.has(key)) continue; seen.add(key); k += Math.ceil((g ? g.trays : b.trays) - 1e-9); } return k; };
+          const saidTrays = [...r.querySelectorAll('.tk-up-cell')].map(c => { const m = c.textContent.match(/(\\d+) trays?/); return m ? +m[1] : 0; });
+          return { week: r.dataset.week, a, said: cells, want: [n('nursery'), n('field')], trays: saidTrays, wantTrays: [trays('nursery'), trays('field')], shared: all.some(t => t.due >= a && t.due <= z && t.sow && t.line.group && t.line.groupLines.length > 1), pics: r.querySelectorAll('.tk-up-thumb').length }; }) };""")
+    check("Upcoming weeks is one card under both lists", up["card"] and up["below"], up)
+    check("it has a line for each of the next four weeks, in order", [r["week"] for r in up["rows"]] == [r["a"] for r in up["rows"]] and len(up["rows"]) == 4, up["rows"])
+    check("each line's tasks for Nursery and for Field are the page's own open tasks of that week", all(r["said"] == r["want"] for r in up["rows"]), up["rows"])
+    check("each line's trays are counted as Trays to fill counts them, trays shared by several sowings once", all(r["trays"] == r["wantTrays"] for r in up["rows"]) and any(r["shared"] for r in up["rows"]), [(r["trays"], r["wantTrays"], r["shared"]) for r in up["rows"]])
+    check("a line shows the photographs of its varieties, four at most a list", any(r["pics"] > 0 for r in up["rows"]) and all(r["pics"] <= 8 for r in up["rows"]), [r["pics"] for r in up["rows"]])
+    page.locator('[data-hook="tasks-upcoming-week"]').nth(1).click(); page.wait_for_timeout(500)
+    went = js(page, "return { where: V.where(), want: hooks('tasks-upcoming-week')[1] && hooks('tasks-upcoming-week')[1].dataset.week, pressed: hooks('tasks-upcoming-week')[1] && hooks('tasks-upcoming-week')[1].getAttribute('aria-pressed') };")
+    check("a press on a line shows that whole week", went["where"]["day"] is None and went["where"]["week"] == went["want"] and went["pressed"] == "true", went)
+    page.screenshot(path=str(shots / "upcoming.png"), full_page=True)
+    js(page, "A.undo(); V.show(now); return null;"); page.wait_for_timeout(500)
+    check("Undo of that tick gives back the plan exactly", snap(page)["plan"] == pre_up["plan"])
+
+    # ── Trays to fill ──
+    fill = js(page, """const el = hook('tasks-trays-to-fill'), t = el ? el.textContent : '', inNursery = !!el && !!el.closest('[data-half="nursery"]');
+      const sow = V.tasks().filter(x => open(x) && x.sow && x.id === 'plugs' && x.due <= now && !x.line.group && x.line.batch && x.line.batch.medium !== 'pots' && x.line.trays >= 1);
+      const m = t.match(/(\\d+) trays?/); return { drawn: drawn(el), inNursery, first: el && el.closest('.tk-body') && el.closest('.tk-body').firstElementChild === el, trays: m ? +m[1] : null, text: t, tags: el ? el.querySelectorAll('.tk-fill-sizes span').length : 0, one: sow[0] ? { key: sow[0].key, trays: Math.ceil(sow[0].line.trays - 1e-9) } : null };""")
+    check("Trays to fill stands at the head of Nursery, with trays, mix and varieties, and a tag for each tray size", fill["drawn"] and fill["inNursery"] and fill["first"] and fill["trays"] and "mix" in fill["text"] and "variet" in fill["text"] and fill["tags"] >= 1, fill)
+    want = js(page, """const seen = new Set(); let n = 0;
+      for (const t of V.tasks()) { if (!open(t) || !t.sow || t.id === 'direct' || t.id === 'rockwool' || t.due > now) continue;
+        if (t.id === 'live') { n += Math.ceil(t.line.trays - 1e-9); continue; }
+        const b = t.line.batch; if (!b || b.medium === 'pots') continue; const g = t.line.group, key = g ? 'g' + g.id : 'b' + t.key; if (seen.has(key)) continue; seen.add(key); n += Math.ceil((g ? g.trays : b.trays) - 1e-9); }
+      return { n, shared: V.tasks().some(t => open(t) && t.sow && t.due <= now && t.line.group && t.line.groupLines.length > 1) };""")
+    check("Trays to fill counts the trays of the open sowings on screen, trays shared by several sowings once", fill["trays"] == want["n"] and want["shared"], {"said": fill["trays"], "want": want})
+    check("there is a sowing in plug trays on screen, of its own trays, to tick for the check", fill["one"], fill)
+    if fill["one"]:
+        before = snap(page)
+        js(page, "const t = V.tasks().find(x => x.key === arg); A.recordWork(t.items(), { date: t.due, follow: true }); return null;", fill["one"]["key"]); page.wait_for_timeout(600)
+        fell = js(page, "const el = hook('tasks-trays-to-fill'), m = el && el.textContent.match(/(\\d+) trays?/); return m ? +m[1] : null;")
+        check("Trays to fill falls by that sowing's trays once it is ticked", fell == fill["trays"] - fill["one"]["trays"], {"was": fill["trays"], "now": fell, "sowing": fill["one"]})
+        js(page, "A.undo(); return null;"); page.wait_for_timeout(500)
+        check("Undo of that tick gives back the plan exactly", snap(page)["plan"] == before["plan"])
+
+    # ── Mark all done ──
+    groups = js(page, """return [...document.querySelectorAll('#swWrap .tk-sec')].map(s => ({ name: (s.querySelector('.tk-sec-name') || {}).textContent, n: +((s.querySelector('.tk-sec-n') || {}).textContent || '0').split(' ')[0].replace(/,/g, ''), all: !!s.querySelector('[data-hook="tasks-mark-all"]'), half: s.closest('[data-half]') && s.closest('[data-half]').dataset.half }));""")
+    check("every Late or Today group of three or more has Mark all done, and none of fewer has it",
+          all(g["all"] == (g["n"] >= 3) for g in groups if g["name"] in ("Late", "Today")) and any(g["all"] for g in groups), groups)
+    late = page.locator('[data-half="field"] .tk-sec.late [data-hook="tasks-mark-all"]')
+    keys = json.loads(late.first.get_attribute("data-keys")) if late.count() else []
+    check("the Field list has a late group with Mark all done, for the check", len(keys) >= 3, groups)
+    if keys:
+        before = snap(page)
+        ids = js(page, "return [...new Set(arg.flatMap(k => V.tasks().find(t => t.key === k).items().map(i => i.id)))];", keys)
+        figs0 = js(page, "return figs(arg);", ids)
+        late.first.click(); page.wait_for_timeout(500)
+        pop = js(page, "const p = $('tkPop'); return { open: !p.hidden, title: (p.querySelector('strong') || {}).textContent, today: !!p.querySelector('.tk-quick button[data-pick=\"' + now + '\"]'), each: drawn(hook('tasks-mark-all-each')), where: V.where().pop };")
+        check("Mark all done on late tasks asks one day for all of them, or each on its own day", pop["open"] and pop["where"] == "all" and pop["today"] and pop["each"] and "were they done" in (pop["title"] or ""), pop)
+        page.hover('[data-hook="tasks-mark-all-each"]'); page.wait_for_timeout(200)
+        hint = js(page, "return $('tkHint').textContent;")
+        check("pointed at, each on its own day says that nothing moves", "nothing moves" in hint, hint)
+        page.hover('#tkPop .tk-quick button[data-pick]'); page.wait_for_timeout(300)
+        hint_today = js(page, "return $('tkHint').textContent;")
+        pre = js(page, "const list = arg.map(k => V.tasks().find(t => t.key === k)); const p = A.previewWork(list.flatMap(t => t.items()), { date: now, follow: true }, { impact: false, firsts: true }); return { moved: p.moved.length, firsts: p.firsts.length };", keys)
+        check("pointed at, today says how many plantings go out later and how many first harvests move, as the plan works it out",
+              ((pre["moved"] == 0 and "go out" not in hint_today) or (str(pre["moved"]) + " planting") in hint_today) and ((pre["firsts"] == 0 and "first harvest" not in hint_today) or (str(pre["firsts"]) + " first harvest") in hint_today) and (pre["moved"] + pre["firsts"] > 0 or "nothing moves" in hint_today), {"hint": hint_today, "said": pre})
+        press(page, '[data-hook="tasks-mark-all-each"]', 800)
+        after = js(page, "return { figs: figs(arg.ids), done: arg.keys.map(k => { const t = V.tasks().find(x => x.key === k); return t ? [t.state, t.on, t.due] : null; }), undo: S.undo.length, toast: $('toast').textContent };", {"ids": ids, "keys": keys})
+        check("each on its own day records every one of them on the day it was due", all(d and d[0] == "done" and d[1] == d[2] for d in after["done"]), after["done"][:4])
+        check("and nothing moves: the day each planting goes out and its first harvest are as they were", after["figs"] == figs0, {"before": list(figs0.items())[:2], "after": list(after["figs"].items())[:2]})
+        check("it is one step, said once with Undo", after["undo"] == before["undo"] + 1 and "recorded each on the day it was due" in after["toast"], after["toast"])
+        js(page, "A.undo(); return null;"); page.wait_for_timeout(600)
+        check("Undo gives back the plan exactly", snap(page)["plan"] == before["plan"])
+        # the same on one day, today: what it moves is what it said
+        late.first.click(); page.wait_for_timeout(400); press(page, '#tkPop .tk-quick button[data-pick]', 900)
+        moved = js(page, "return arg.ids.filter(id => { const a = arg.was[id], e = S.engine, p = e.planting(id), r = p && e.calc(p); return a && r && a[1] !== (E.validDate(r.first) ? E.d2s(r.first) : null); }).length;", {"ids": ids, "was": figs0})
+        check("on one day, today, as many first harvests move as it said", moved == pre["firsts"], {"moved": moved, "said": pre})
+        js(page, "A.undo(); return null;"); page.wait_for_timeout(600)
+        check("and Undo gives that back exactly too", snap(page)["plan"] == before["plan"])
+    today = page.locator('.tk-sec:not(.late) [data-hook="tasks-mark-all"]')
+    if today.count():
+        before = snap(page); tkeys = json.loads(today.first.get_attribute("data-keys"))
+        today.first.click(); page.wait_for_timeout(800)
+        rec = js(page, "return { pop: V.where().pop, done: arg.map(k => { const t = V.tasks().find(x => x.key === k); return t && t.state === 'done' && t.on === now; }) };", tkeys)
+        check("Mark all done on Today records them at once, today, without asking", rec["pop"] is None and all(rec["done"]), rec)
+        js(page, "A.undo(); return null;"); page.wait_for_timeout(500)
+        check("Undo gives back the plan exactly", snap(page)["plan"] == before["plan"])
+    else: check("a Today group of three or more is there for the check", False, groups)
+
+    # ── the flag on a planting out whose bed is not free ──
+    held = js(page, """for (const t of V.tasks()) {
+        if (!open(t) || (t.id !== 'plant' && t.id !== 'direct') || t.due < now) continue;
+        for (const m of t.line.open) { const hit = S.engine.conflicts(m.p, m.r).filter(o => !o.rest && o.p && o.from < m.r.field && o.through >= m.r.field && o.through !== Infinity);
+          if (hit.length) return { key: t.key, due: t.due, free: E.d2s(E.addDays(new Date(Math.max(...hit.map(o => +o.through))), 1)) }; }
+      } return null;""")
+    check("the plan has a planting out or a sowing in the ground whose bed another planting still holds that day, for the check", held)
+    if held:
+        js(page, "V.show(arg); return null;", held["due"]); page.wait_for_timeout(600)
+        fl = js(page, "const r = row(arg.key), f = r && r.querySelector('.tk-flag'), cs = f && getComputedStyle(f); return { text: f ? f.textContent : '', h: f ? f.getBoundingClientRect().height : 0, lh: cs ? parseFloat(cs.lineHeight) || 17 : 0, wrap: cs ? cs.whiteSpace : '', free: arg.free, day: LRFUI.day(E.s2d(arg.free)) };", held)
+        check("its row is flagged with the day its bed is free", fl["text"].startswith("Bed not free until") and fl["day"] in fl["text"], fl)
+        check("the flag is one line that does not wrap", fl["wrap"] == "nowrap" and fl["h"] <= fl["lh"] * 1.5 + 1, fl)
+        page.screenshot(path=str(shots / "flag.png"))
+        js(page, "V.show(now); return null;"); page.wait_for_timeout(400)
+
+    # ── a tick a week or more ahead asks first; within a week it does not ──
+    ahead = js(page, "const far = V.tasks().find(t => open(t) && t.due >= plus(now, 9) && t.due <= plus(now, 40) && t.id !== 'live'), near = V.tasks().find(t => open(t) && t.due > now && t.due <= plus(now, 5) && t.id !== 'live'); return far && near ? { far: far.key, farDue: far.due, farItems: far.items(), near: near.key, nearDue: near.due, nearItems: near.items() } : null;")
+    check("the plan has a task nine days or more ahead and one within the week, for the check", ahead)
+    if ahead:
+        before = snap(page)
+        js(page, "V.show(arg); return null;", ahead["farDue"]); page.wait_for_timeout(500)
+        page.locator('#swWrap .tk-row[data-line="%s"] .tk-tick' % ahead["far"].replace('"', '\\"')).first.click(); page.wait_for_timeout(500)
+        asked = js(page, "const p = $('tkPop'); return { open: !p.hidden, mode: V.where().pop, text: p.textContent, recorded: S.undo.length };")
+        days = js(page, "return E.dayDiff(E.s2d(arg), E.s2d(now));", ahead["farDue"])
+        check("a tick a week or more ahead asks first, and says how far ahead it is", asked["open"] and asked["mode"] == "ahead" and ("in %d days" % days) in asked["text"] and asked["recorded"] == before["undo"], asked)
+        press(page, '[data-hook="tasks-ahead-no"]', 1300)
+        check("Not yet records nothing", snap(page)["plan"] == before["plan"])
+        page.locator('#swWrap .tk-row[data-line="%s"] .tk-tick' % ahead["far"].replace('"', '\\"')).first.click(); page.wait_for_timeout(400)
+        press(page, '[data-hook="tasks-ahead-yes"]', 1300)
+        did = js(page, "return arg.map(i => SL.doneDate(S.engine.planting(i.id), i.kind));", ahead["farItems"])
+        check("Record it today records it as done today", did and all(x == js(page, "return now;") for x in did), did)
+        js(page, "A.undo(); return null;"); page.wait_for_timeout(500)
+        js(page, "V.show(arg); return null;", ahead["nearDue"]); page.wait_for_timeout(500)
+        page.locator('#swWrap .tk-row[data-line="%s"] .tk-tick' % ahead["near"].replace('"', '\\"')).first.click(); page.wait_for_timeout(1300)
+        near = js(page, "return { pop: V.where().pop, done: arg.map(i => SL.doneDate(S.engine.planting(i.id), i.kind)) };", ahead["nearItems"])
+        check("a tick within the week records at once, without asking", near["pop"] is None and all(x == js(page, "return now;") for x in near["done"]), near)
+        js(page, "A.undo(); return null;"); page.wait_for_timeout(500)
+        check("Undo gives back the plan exactly", snap(page)["plan"] == before["plan"])
+        js(page, "V.show(now); return null;"); page.wait_for_timeout(400)
+
+    # ── "⋯": take back everything recorded ──
+    before = snap(page)
+    # seed on hand for the first late sowing in plug trays, put there through the page's own step where the plan has none, so that its return can be seen
+    js(page, """const t = V.tasks().find(t => open(t) && t.due < now && t.sow && t.id === 'plugs'); if (!t || SL.lotsToUse(A.inventoryNow(), t.line.stockKey, t.line.stockUnit).length) return null;
+      A.editStock('Seed counted', (inv, c) => SL.addLot(inv, { key: t.line.stockKey, unit: t.line.stockUnit, quantity: 5000, status: 'usable' }, c)); return null;""")
+    seed0 = js(page, "return JSON.stringify((A.inventoryNow().lots || []).map(l => [l.id, l.quantity]));")
+    made = js(page, """const arg0 = arg; const late = V.tasks().filter(t => open(t) && t.due < now);
+      const inv = A.inventoryNow(), stocked = t => SL.lotsToUse(inv, t.line.stockKey, t.line.stockUnit).length > 0;
+      const sows = late.filter(t => t.sow && t.id === 'plugs' && stocked(t)).slice(0, 2).concat(late.filter(t => t.sow && t.id === 'plugs' && !stocked(t)).slice(0, 1)), jobs = late.filter(t => !t.sow && t.id === 'plant').slice(0, 2), later = V.tasks().filter(t => open(t) && t.due > plus(now, 3) && !t.sow);
+      A.recordWork(sows.flatMap(t => t.items()), { date: now, follow: true }); A.recordWork(jobs.flatMap(t => t.items()), { date: now, follow: true });
+      const put = later.find(t => t.id === 'potup' || t.id === 'move' || t.id === 'harden'), skip = later.find(t => t !== put);
+      if (put) A.delayWork(put.items(), plus(put.due, 2)); if (skip) A.skipWork(skip.items(), now);
+      // a planting pushed by its late sowing, and then put off again by its hardening off: taken back, it must return to its first day, not stop at the push
+      const pushed = sows.flatMap(t => t.items()).map(i => S.engine.planting(i.id)).find(p => W.pushed(p, 'sow') && W.steps(S.engine, p).some(st => st.kind === 'harden' && !st.done));
+      if (pushed) A.delayWork([{ id: pushed.id, kind: 'harden' }], plus(E.d2s(W.step(S.engine, pushed, 'harden').planned), 3));
+      const stacked = pushed ? pushed.id : null;
+      // and another planting, put off and then marked failed: its put-off goes back all the same, and the mark stays
+      const lost = sows.flatMap(t => t.items()).map(i => S.engine.planting(i.id)).find(p => p.id !== stacked && W.steps(S.engine, p).some(st => st.kind === 'harden' && !st.done));
+      let lostDay = null;
+      if (lost) { lostDay = S.engine.planting(lost.id).date; A.delayWork([{ id: lost.id, kind: 'harden' }], plus(E.d2s(W.step(S.engine, lost, 'harden').planned), 4)); A.markFailed(lost.id, now); }
+      const failedOne = lost && S.engine.planting(lost.id).failed ? { id: lost.id, date: JSON.parse(arg0).plantings.find(p => p.id === lost.id).date } : null;
+      const note = V.tasks().find(t => open(t) && t !== put && t !== skip); A.noteWork(note.items(), 'kept note');
+      return { stacked, failedOne, n: A.seasonRecords(), note: note.items().map(i => i.id), seed: JSON.stringify((A.inventoryNow().lots || []).map(l => [l.id, l.quantity])) };""", before["plan"])
+    recorded = snap(page)
+    check("the sowings recorded took seed off its lots, for the check of its return", made["seed"] != seed0)
+    check("sowings, other tasks, a task put off, one skipped and a note are recorded through the page's own steps, for the check", made["n"]["sowings"] >= 1 and made["n"]["jobs"] >= 1 and made["n"]["delays"] >= 1 and made["n"]["skips"] >= 1, made["n"])
+    press(page, '[data-hook="tasks-more"]', 400)
+    menu = js(page, "const b = hook('tasks-takeback'); return { pop: V.where().pop, drawn: drawn(b), off: b ? b.disabled : null };")
+    check("\"⋯\" at the top of Tasks opens a menu with Take back everything recorded…", menu["pop"] == "more" and menu["drawn"] and menu["off"] is False, menu)
+    press(page, '[data-hook="tasks-takeback"]', 500)
+    sheet = js(page, "const d = hook('tasks-takeback-sheet'); return { open: !!d && d.open, text: d ? d.textContent : '', lines: d ? [...d.querySelectorAll('li')].map(li => li.textContent) : [] };")
+    n = made["n"]
+    want = ["%d sowing" % n["sowings"], "%d other task" % n["jobs"], "%d task" % n["delays"], "%d skipped task" % n["skips"]]
+    check("the sheet counts what goes back: sowings, other tasks, what was put off and what was skipped", sheet["open"] and all(any(w in l for l in sheet["lines"]) for w in want), {"want": want, "lines": sheet["lines"]})
+    check("the sheet says notes stay, and that a snapshot is kept first", "note" in " ".join(sheet["lines"]) and "snapshot" in sheet["text"].lower(), sheet["text"][:400])
+    page.screenshot(path=str(shots / "takeback-sheet.png"))
+    page.locator('[data-hook="tasks-takeback-sheet"] .btn:not(.primary)').click(); page.wait_for_timeout(400)
+    check("Cancel takes nothing back", snap(page)["plan"] == recorded["plan"])
+    snaps0 = page.evaluate("async () => (await LRFApp.snapshots()).rows.length")
+    press(page, '[data-hook="tasks-more"]', 400); press(page, '[data-hook="tasks-takeback"]', 500); press(page, '[data-hook="tasks-takeback-yes"]', 1500)
+    back = js(page, """const rec = S.plan.plantings.filter(p => (p.done && Object.keys(p.done).length) || (p.tasks && (p.tasks.delay || p.tasks.skip))).length;
+      return { rec, n: A.seasonRecords(), notes: arg.map(id => S.engine.planting(id).tasks && S.engine.planting(id).tasks.note), seed: JSON.stringify((A.inventoryNow().lots || []).map(l => [l.id, l.quantity])), undo: S.undo.length };""", made["note"])
+    snaps1 = page.evaluate("async () => (await LRFApp.snapshots()).rows.map(s => s.name)")
+    dates = js(page, "const e0 = E.create(JSON.parse(arg), LRFLibrary); return S.plan.plantings.filter(p => { if (p.failed) return false; const q = e0.planting(p.id), a = q && e0.calc(q), b = S.engine.calc(p); return a && b && [a.sow, a.field, a.first, a.last].map(String).join() !== [b.sow, b.field, b.first, b.last].map(String).join(); }).length;", before["plan"])
+    if made["failedOne"]:
+        kept = js(page, "const p = S.engine.planting(arg.id); return { date: p.date, failed: !!p.failed, delay: !!(p.tasks && p.tasks.delay) };", made["failedOne"])
+        check("the planting put off and then marked failed is back on its first day, its put-off gone and its failed mark kept", kept["date"] == made["failedOne"]["date"] and kept["failed"] and not kept["delay"], {"kept": kept, "want": made["failedOne"]["date"]})
+    check("a planting pushed by a late sowing and then put off is among them, for the check of the order things go back in", made["stacked"], made["n"])
+    check("a planting put off and then marked failed is among them", made["failedOne"], made["n"])
+    check("everything recorded is taken back: no work, nothing put off, nothing skipped", back["rec"] == 0 and back["n"]["sowings"] + back["n"]["jobs"] + back["n"]["delays"] + back["n"]["skips"] == 0, back)
+    check("every planting is back on the days it had before anything was recorded, and the seed is back on its lots", dates == 0 and back["seed"] == seed0, {"dates": dates})
+    check("the note is kept", all(x and "kept note" in json.dumps(x) for x in back["notes"]), back["notes"])
+    check("a snapshot of the plan as it stood was kept first", len(snaps1) == snaps0 + 1 and any("taken back" in s for s in snaps1), snaps1[:3])
+    check("it is one step", back["undo"] == recorded["undo"] + 1)
+    js(page, "A.undo(); return null;"); page.wait_for_timeout(700)
+    check("Undo gives back the plan as it was recorded, exactly", snap(page)["plan"] == recorded["plan"])
+    for _ in range(recorded["undo"] - before["undo"]): js(page, "A.undo(); return null;"); page.wait_for_timeout(250)
+    check("and the steps before it undo back to the plan the check began on", snap(page)["plan"] == before["plan"])
+
+    # ── Mark as failed, on a planting's panel ──
+    subj = js(page, """const e = S.engine;
+      const p = S.plan.plantings.find(p => { const r = e.calc(p); return r && !p.established && !r.rack && !r.ct && E.d2s(r.start) < plus(now, -10) && r.harvestDays > 10 && E.d2s(r.first) > now && e.occupancyThrough(p, r) !== Infinity && A.failedRange(p); });
+      const ahead = S.plan.plantings.find(p => { const r = e.calc(p); return r && !p.established && E.d2s(r.start) > now; });
+      return p && ahead ? { id: p.id, ahead: ahead.id, held: E.d2s(e.occupancyThrough(p, e.calc(p))) } : null;""")
+    check("the plan has a planting already started and still to be picked, and one not yet started, for the check", subj)
+    if subj:
+        before = snap(page)
+        js(page, "A.setView('map'); A.select({ type: 'planting', id: arg }); return null;", subj["ahead"]); page.wait_for_timeout(600)
+        check("a planting not started yet has no Mark as failed…", not js(page, "return drawn(hook('panel-fail'));"))
+        done_by = js(page, """const e = S.engine, p = S.plan.plantings.find(p => { const r = e.calc(p); if (!r || p.established) return false; const t = e.occupancyThrough(p, r); return t !== Infinity && E.d2s(t) < now && E.d2s(r.start) < E.d2s(t); });
+          if (!p) return null; const r = e.calc(p), t = E.d2s(e.occupancyThrough(p, r)), range = A.failedRange(p), late = A.previewFailed(p.id, plus(t, 2));
+          return { held: t, hi: range && range.hi, refused: !!late.why };""")
+        check("a planting whose bed was already free can be marked failed only up to its last day there, and a later day is refused", done_by and done_by["hi"] == done_by["held"] and done_by["refused"], done_by)
+        js(page, "A.select({ type: 'planting', id: arg }); return null;", subj["id"]); page.wait_for_timeout(600)
+        check("a planting already started has Mark as failed… on its panel", js(page, "return drawn(hook('panel-fail')) && !!hook('panel-fail').closest('#inspectorBody');"))
+        press(page, '[data-hook="panel-fail"]', 500)
+        box = js(page, "const d = hook('panel-fail-date'), s = hook('panel-fail-says'), want = A.previewFailed(arg, now); return { date: d ? d.value : null, max: d ? d.max : null, min: d ? d.min : null, says: s ? s.textContent : '', want, amount: F.amount(want.units, want.unit, 'produce'), dollars: '$' + Math.round(want.worth).toLocaleString('en-US') };", subj["id"])
+        check("it opens on today, and can go no later than today", box["date"] == js(page, "return now;") and box["max"] == box["date"] and box["min"] <= box["date"], box)
+        check("before anything is done it says the day its bed is free, what comes off the forecast, and that it stays on record",
+              "free from " in box["says"] and (box["amount"] + " comes off the forecast") in box["says"] and box["dollars"] in box["says"] and "on record" in box["says"] and box["want"]["units"] > 0 and box["want"]["worth"] > 0, box)
+        check("nothing has changed yet", snap(page)["plan"] == before["plan"])
+        w0 = js(page, "return worth(S.engine);")
+        press(page, '[data-hook="panel-fail-save"]', 900)
+        did = js(page, "const p = S.engine.planting(arg), r = S.engine.calc(p); return { failed: p.failed, held: E.d2s(S.engine.occupancyThrough(p, r)), harvest: r.harvestDays, worth: worth(S.engine), panel: drawn(hook('panel-failed')), back: drawn(hook('panel-failed-back')), undo: S.undo.length };", subj["id"])
+        today = js(page, "return now;")
+        check("marked failed today: the day is kept on the planting", did["failed"] and did["failed"]["on"] == today, did)
+        check("its bed is free from today", did["held"] == js(page, "return plus(now, -1);"), did)
+        check("its harvest is off the forecast: the season's worth falls by what was said", abs((w0 - did["worth"]) - box["want"]["worth"]) < 0.5 and did["harvest"] == 0, {"was": w0, "now": did["worth"], "said": box["want"]["worth"]})
+        check("its panel says it failed, with Take the mark off, and it is one step", did["panel"] and did["back"] and did["undo"] == before["undo"] + 1, did)
+        js(page, "A.setView('timeline'); return null;"); page.wait_for_timeout(900)
+        grey = js(page, "const b = document.querySelector('.tl-bar[data-planting=\"' + arg + '\"]'); return b ? { cls: b.className, title: b.title } : null;", subj["id"])
+        check("it stays on record, greyed, on the Timeline", grey and "tl-failed" in grey["cls"] and grey["title"].startswith("Failed"), grey)
+        js(page, "A.setView('map'); A.select({ type: 'planting', id: arg }); return null;", subj["id"]); page.wait_for_timeout(500)
+        page.screenshot(path=str(shots / "failed-panel.png"))
+        press(page, '[data-hook="panel-failed-back"]', 700)
+        off = js(page, "const p = S.engine.planting(arg); return { failed: p.failed || null, held: E.d2s(S.engine.occupancyThrough(p, S.engine.calc(p))) };", subj["id"])
+        check("Take the mark off puts it back in its bed for its whole season", off["failed"] is None and off["held"] == subj["held"], off)
+        js(page, "A.undo(); A.undo(); return null;"); page.wait_for_timeout(600)
+        check("Undo of both steps gives back the plan exactly", snap(page)["plan"] == before["plan"])
+        # the sowing calendar on the panel stops a year short of the planned day
+        cal = js(page, "const p = S.plan.plantings.find(p => { const s = SL.sowing(S.engine, p); return s && !s.done && !s.sown && E.validDate(s.planned) && E.d2s(s.planned) <= now; }); if (!p) return null; A.select({ type: 'planting', id: p.id }); const s = SL.sowing(S.engine, p); return { id: p.id, want: plus(E.d2s(s.planned), 1 - SL.YEAR_DAYS) };")
+        page.wait_for_timeout(500)
+        if cal:
+            got = js(page, "const i = document.querySelector('#inspectorBody [data-sow=\"date\"]'); return i ? i.min : null;")
+            check("the panel's sowing calendar goes back no further than a year before its planned day", got == cal["want"], {"min": got, "want": cal["want"]})
+        else: check("a sowing still to record is there for the calendar's check", False)
+
+    # ── a change made while the take-back's snapshot is being kept is not lost by it ──
+    before = snap(page)
+    race = page.evaluate("""async () => { %s
+      const t = V.tasks().find(t => open(t) && t.due < now && t.items().length); if (!t) return null;
+      const items = t.items(); A.recordWork(items, { date: t.due, follow: true });
+      const going = A.takeBackSeason();                           // its snapshot is awaited; a note on the same planting lands meanwhile
+      A.noteWork(items, 'written while the snapshot was kept');
+      const done = await going, ids = items.map(i => i.id);
+      return { done: !!done, notes: ids.map(id => JSON.stringify((S.engine.planting(id).tasks || {}).note || null)), rec: S.plan.plantings.filter(p => p.done && Object.keys(p.done).length).length };
+    }""" % PRE)
+    check("the plan has a late task, for the check of a change made while the snapshot is kept", race)
+    if race:
+        check("a note written while Take back everything keeps its snapshot is kept, and the recorded work still goes back", race["done"] and race["rec"] == 0 and all("written while the snapshot was kept" in n for n in race["notes"]), race)
+        for _ in range(6):
+            if snap(page)["plan"] == before["plan"]: break
+            js(page, "A.undo(); return null;"); page.wait_for_timeout(250)
+        check("Undo gives back the plan exactly (the race)", snap(page)["plan"] == before["plan"])
+
+    # ── two jobs of one planting recorded in one step (Mark all done with its sowing and a later job both late) ──
+    before = snap(page)
+    pair = js(page, """const d0 = plus(now, -4), d = plus(now, -2), by = new Map();
+      for (const t of V.tasks().filter(t => open(t) && t.due < d0)) for (const it of t.items()) { const l = by.get(it.id) || []; if (!l.some(i => i.kind === it.kind)) l.push(it); by.set(it.id, l); }
+      const hit = [...by.entries()].find(([id, l]) => l.length >= 2 && l.some(i => i.kind === 'sow'));
+      if (!hit) return null; const [id, l] = hit, items = [{ ...l.find(i => i.kind === 'sow'), date: d0 }, { ...l.find(i => i.kind !== 'sow'), date: d }];
+      const seen = A.previewWork(items, { date: d, follow: true }, { impact: false, firsts: true }), use0 = ((S.engine.planting(id).workflow || {}).seedUse || []).length;
+      const res = A.recordWork(items, { date: d, follow: true }) || {}, p = S.engine.planting(id), use = ((p.workflow || {}).seedUse || []).length;
+      return { id, d, kinds: items.map(i => i.kind), done: Object.keys(p.done && typeof p.done === 'object' ? p.done : {}), sown: !!(SL.sowing(S.engine, p) || {}).done,
+        seed: use > use0 || (res.used || 0) + (res.untracked || 0) > 0, use0, use, used: res.used, untracked: res.untracked, said: seen.firsts.filter(m => m.id === id).length, range: A.failedRange(p),
+        early: !!A.previewFailed(id, plus(d, -1)).why, onDay: A.previewFailed(id, d).why || null };""")
+    check("the plan has a planting whose sowing and a later job are both late, for the check", pair)
+    if pair:
+        check("its sowing and its later job recorded in one step, each on its own day, are both kept on it", all(k in pair["done"] for k in pair["kinds"]) and pair["sown"], pair)
+        check("and the seed the sowing used is counted on it", pair["seed"], pair)
+        check("before it is done, its first harvest is said once among what moves, however many of its jobs are in the step", pair["said"] <= 1, pair)
+        check("it can be marked failed from the last day work was recorded on it, and not before", pair["range"] and pair["range"]["lo"] == pair["d"] and pair["early"] and pair["onDay"] is None, pair)
+        js(page, "A.undo(); return null;"); page.wait_for_timeout(500)
+        check("it is one step: Undo gives back the plan exactly", snap(page)["plan"] == before["plan"])
+
+    # ── the flag when another planting goes into the same bed the same day (a twin of one added for the check, then undone) ──
+    before = snap(page)
+    js(page, "A.setView('sow'); return null;"); page.wait_for_timeout(700)
+    twin = js(page, """for (const t of V.tasks()) {
+        if (!open(t) || (t.id !== 'plant' && t.id !== 'direct') || t.due < now || t.line.open.length !== 1) continue;
+        const m = t.line.open[0]; if (S.engine.conflicts(m.p, m.r).length) continue;
+        const copy = { ...JSON.parse(JSON.stringify(m.p)), id: A.uid() }; A.commit('a twin for the check', [{ before: null, after: copy }], { unchecked: true });
+        const q = S.engine.planting(copy.id), r = q && S.engine.calc(q), through = r ? S.engine.occupancyThrough(q, r) : Infinity;
+        if (!r || through === Infinity || +r.field !== +m.r.field) { A.undo(); continue; }
+        return { key: t.key, due: t.due, free: E.d2s(E.addDays(through, 1)) };
+      } return null;""")
+    check("a planting out with nothing else in its bed is there to be given a twin the same day, for the check", twin)
+    if twin:
+        js(page, "V.show(arg); return null;", twin["due"]); page.wait_for_timeout(600)
+        tf = js(page, "const r = [...document.querySelectorAll('#swWrap .tk-row')].find(r => r.dataset.line === arg.key), f = r && r.querySelector('.tk-flag'); return { text: f ? f.textContent : '', day: LRFUI.day(E.s2d(arg.free)) };", twin)
+        check("a bed another planting goes into the same day is flagged not free, with the day it is", tf["text"].startswith("Bed not free until") and tf["day"] in tf["text"], {**twin, **tf})
+        js(page, "A.undo(); V.show(now); return null;"); page.wait_for_timeout(500)
+        check("the twin is gone again: the plan is exactly as it was", snap(page)["plan"] == before["plan"])
+
+    # ── a planting marked failed in a group the Timeline draws as one bar is drawn apart, greyed: in a space of crates and in a bank of towers ──
+    for where, sel in [("a space of crates", ".tl-row.tl-crop .tl-sum"), ("a bank of towers", ".tl-bank .tl-sum")]:
+        before = snap(page)
+        js(page, "A.setView('timeline'); return null;"); page.wait_for_timeout(900)
+        sub = js(page, """const el = [...document.querySelectorAll(arg + ':not(.tl-failed)')].find(el => { const p = S.engine.planting(el.dataset.first); return p && A.failedRange(p); });
+          if (!el) return null; const id = el.dataset.first, key = el.dataset.sum, range = A.failedRange(S.engine.planting(id)); A.markFailed(id, range.hi); return { id, key, on: range.hi };""", sel)
+        check(f"the Timeline has a bar that sums the plantings of {where}, one of them started, for the check", sub)
+        if not sub: continue
+        page.wait_for_timeout(900)
+        drawn_as = js(page, """const own = document.querySelector('.tl-bar[data-planting="' + arg.id + '"]'), sum = [...document.querySelectorAll('.tl-sum')].find(el => el.dataset.first === arg.id), rest = [...document.querySelectorAll('.tl-sum')].find(el => el.dataset.sum === arg.key);
+          const el = own || sum; return { failed: S.engine.planting(arg.id).failed || null, greyed: !!el && el.classList.contains('tl-failed') && /^Failed/.test(el.title), rest: rest ? rest.classList.contains('tl-failed') : null };""", sub)
+        check(f"a failed planting summed with others in {where} on the Timeline is drawn apart, greyed and saying it failed, and the others are not", drawn_as["failed"] and drawn_as["greyed"] and drawn_as["rest"] is not True, {**sub, **drawn_as})
+        js(page, "A.undo(); return null;"); page.wait_for_timeout(500)
+        check(f"Undo gives back the plan exactly ({where})", snap(page)["plan"] == before["plan"])
+
+    # ── on a phone ──
+    phone = browser.new_context(viewport={"width": 390, "height": 844}); phone.add_init_script(FAKE); pp = phone.new_page()
+    pp.on("pageerror", lambda e: errors.append("pageerror: " + str(e)))
+    pp.goto(url); pp.wait_for_function("window.LRFApp && LRFApp.state.ready", timeout=20000)
+    if backup and pp.evaluate("LRFApp.isSample()"):
+        pp.set_input_files("#importFile", backup); pp.wait_for_timeout(400)
+        if pp.locator("dialog[open] .btn.primary").count(): pp.locator("dialog[open] .btn.primary").click()
+        pp.wait_for_function("LRFApp.state.plan.plantings.length > 600 && !LRFApp.isSample()", timeout=60000); pp.wait_for_timeout(1500)
+    pp.wait_for_timeout(800)
+    ph = pp.evaluate("""() => { const W = document.documentElement.clientWidth, wide = [...document.querySelectorAll('#swWrap *')].filter(el => el.getClientRects().length && el.getBoundingClientRect().right > W + 1).length;
+      const up = document.querySelector('[data-hook="tasks-upcoming"]'), flags = [...document.querySelectorAll('.tk-flag')].map(f => [f.getBoundingClientRect().height, parseFloat(getComputedStyle(f).lineHeight) || 17]);
+      return { phone: document.body.classList.contains('phone'), wide, up: !!up && up.getClientRects().length > 0, flags, more: !!document.querySelector('[data-hook="tasks-more"]') }; }""")
+    check("on a phone, Tasks has Upcoming weeks and \"⋯\", and nothing runs off the side", ph["phone"] and ph["up"] and ph["more"] and ph["wide"] == 0, ph)
+    check("on a phone, every flag is one line", all(h <= lh * 1.5 + 1 for h, lh in ph["flags"]), ph["flags"])
+    pp.screenshot(path=str(shots / "phone.png"), full_page=True)
+    browser.close()
+
+with sync_playwright() as pw:
+    try: run(pw)
+    except Exception as e: check("the check ran to its end", False, repr(e)[:600])
+check("no error on the page", not [e for e in errors if "pageerror" in e], errors[:4])
+finish()

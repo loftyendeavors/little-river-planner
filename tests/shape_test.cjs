@@ -172,6 +172,14 @@ tryCase('a job put off (one that moves its planting, one that does not), skipped
   const delays = plan.plantings.filter(p => p.tasks && p.tasks.delay).length, a = fitsPlan(plan), b = fitsFile(plan);
   return [delays === 2 && a[0] && b[0], { delays, plan: a[1], file: b[1] }];
 });
+tryCase('a planting marked failed, and another marked and the mark taken off, by the planner\'s own function, leave a plan that fits', () => {
+  const [a0, b0] = FARM.plantings.filter(p => !p.established && eng(FARM).calc(p));
+  if (!a0 || !b0) return [false, 'the farm has no plantings to mark'];
+  let plan = put(FARM, { planting: W.fail(a0, a0.date, ctx.now) });
+  plan = put(plan, { planting: W.fail(W.fail(b0, b0.date, ctx.now), null) });
+  const marked = plan.plantings.filter(p => p.failed).length, a = fitsPlan(plan), b = fitsFile(plan);
+  return [marked === 1 && plan.plantings.find(p => p.id === a0.id).failed.on === a0.date && a[0] && b[0], { marked, plan: a[1], file: b[1] }];
+});
 tryCase('seed lots added, counted, received, moved and deleted by the planner\'s own functions leave a plan that fits', () => {
   let inv = FARM.seedInventory;
   const lots = inv.lots.filter(l => l.deleted !== true), first = lots[0];
