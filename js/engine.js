@@ -593,8 +593,8 @@
     /** The crop line's own last picking for the place a planting is in, as a date of the year; null where none is set, or where
      *  the planting or its variety carries a harvest window of its own (it does not follow the line). */
     function lineEnd(p, b, year) {
-      const until = sellRule(p.cropId).until, env = b && !isRack(b) ? envOf(b) : '';
-      if (!until || !env || !until[env] || ownHarvest(p)) return null;
+      const rule = sellRule(p.cropId), until = rule.until, env = b && !isRack(b) ? envOf(b) : '';
+      if (!until || !env || !until[env] || ownHarvest(p) || rule.pattern === 'once') return null;   // a crop cleared in one day has no last picking
       const v = growingVariety(p);
       return v && v.cropId === p.cropId && ownHarvest(v) ? null : monthDayDate(year, until[env]);
     }
@@ -612,7 +612,7 @@
      * cuts short a date set past it; null under cover. Read from the place's first space, as timingFor reads days; null with none.
      */
     function seasonEndOf(cropId, env, year) {
-      const c = crop(cropId), here = b => b.active !== false && envOf(b) === env && !isRack(b);
+      const c = crop(cropId), here = b => b.active !== false && (gardenOf(b) || {}).active !== false && envOf(b) === env && !isRack(b);
       const bed = (S.beds || []).find(b => here(b) && !isCt(b)) || (S.beds || []).find(here);
       if (!c || !bed || !Number.isInteger(year)) return null;
       const g = gardenOf(bed) || {}, win = gWindow(g, year), ends = [[new Date(year, 11, 31), 'year']], frost = c.frostTender && g.frost ? addDays(frostDates(year).first, finite(g.frostOffset)) : null;
@@ -649,14 +649,14 @@
       if (c.micro && isRack(b)) { const first = addDays(field, c.dtm); return { harvestMode: 'window', first, last: first, modeledLast: first, automaticEnd: first, harvestDays: 1, expectedDays: 1, removal: null }; }
       const mode = harvestModeFor(c, null, p), first = addDays(field, c.dtm);
       const automaticEnd = mode === 'season' ? seasonHarvestEnd(c, b, field, p) : addDays(first, Math.max(0, c.hw - 1));
-      // In open ground the first fall frost ends a frost-tender crop's harvest where its days would run past it, and what is
-      // not picked is lost: the yield follows the days that are left (yieldOf). A last day of the planting's own stands over it.
-      const explicit = s2d(p.harvestEnd), own = validDate(explicit), frost = own ? null : frostEnd(c, b, field), cut = frost && automaticEnd > frost ? frost : null;
-      const modeledLast = own ? explicit : cut || automaticEnd, removal = standEndDate(p);
+      const explicit = s2d(p.harvestEnd), own = validDate(explicit), modeledLast = own ? explicit : automaticEnd, removal = standEndDate(p);
       const last = removal && removal < modeledLast ? removal : modeledLast;
       const expectedDays = Math.max(mode === 'season' ? positive(c.yieldDays, positive(c.hw, 1)) : 0, dayDiff(automaticEnd, first) + 1);
+      // In open ground the first fall frost ends a frost-tender crop's harvest where its days would run past it (calcRaw decides,
+      // knowing what was recorded and where the planting stands). A last day of the planting's own stands over it.
+      const frost = own ? null : frostEnd(c, b, field);
       return { harvestMode: mode, first, last, modeledLast, automaticEnd, harvestDays: Math.max(0, dayDiff(last, first) + 1), expectedDays, removal,
-        frost: cut ? { day: cut, planned: automaticEnd, plannedDays: Math.max(0, dayDiff(automaticEnd, first) + 1) } : null };
+        frost: frost && automaticEnd > frost ? { day: frost, planned: automaticEnd, plannedDays: Math.max(0, dayDiff(automaticEnd, first) + 1) } : null };
     }
 
     // ── mixed beds: one planting per row range / length block ──
@@ -854,7 +854,11 @@
 
       const period = harvestPeriod(c, b, field, p), { first } = period;
       const actualClear = clearDateOf(p), failure = p.workflow && p.workflow.outcome === 'failed' ? s2d(p.workflow.failureDate) : null;
-      let last = period.last;
+      // The frost cuts the harvest short in open ground, and what is not picked is lost (yieldOf follows the days left). Not where
+      // work is recorded (a clear or a failure says what happened), and not for a crate or tower still under shelter on the frost.
+      const recorded = !!actualClear || validDate(failure), shelteredTill = shelterValid(b) && (tw || ct) ? outDate(p, { b, planned, field }) : null;
+      const frostCut = period.frost && !recorded && !(shelteredTill && shelteredTill > period.frost.day) && period.frost.day < period.last ? period.frost : null;
+      let last = frostCut ? frostCut.day : period.last;
       if (validDate(failure) && failure < last) last = failure;
       if (actualClear && actualClear < last) last = actualClear;
       const harvestDays = Math.max(0, dayDiff(last, first) + 1), days = Math.max(1, dayDiff(last, field) + 1);
@@ -869,7 +873,7 @@
         harvestDays, expectedHarvestDays: period.expectedDays, removal: period.removal, actualClear,
         // the first fall frost ended the harvest (and nothing after it did): { day, planned: the last day it was to be picked, plannedDays }.
         // Only a planting the frost cut carries the key, so that every other planting's reckoning reads as it did before the rule.
-        ...(period.frost && +last === +period.frost.day ? { frostCut: period.frost } : {}),
+        ...(frostCut ? { frostCut } : {}),
         area: tw || rack || ct ? 0 : (+b.w || 0) * len, days, blackoutDays,
         occupiedDays: actualClear ? Math.max(1, dayDiff(actualClear, field) + 1) : days + turnoverFor(p)
       };
@@ -1006,7 +1010,7 @@
       const outdoorField = shelterValid(r.b) && (isTower(r.b) || isCt(r.b)) ? outDate(p, r) || r.field : r.field, lastOutdoor = lastFieldDate(r.c, r.b, outdoorField.getFullYear());
       if (!p.established && lastOutdoor && outdoorField > lastOutdoor) out.push({ k: 'field', t: `Outdoor planting ends ${d2s(lastOutdoor)}; this goes in ${d2s(outdoorField)}.` });
       if (p.workflow && p.workflow.outcome === 'failed') out.push({ k: 'outcome', t: `Crop failure recorded ${p.workflow.failureDate}.` });
-      else if (!isCoverCrop(r.c) && r.harvestDays === 0) out.push({ k: 'timing', t: `First harvest (${d2s(r.first)}) falls after the harvest period ends (${d2s(r.last)}).` });
+      else if (!isCoverCrop(r.c) && r.harvestDays === 0 && !r.frostCut) out.push({ k: 'timing', t: `First harvest (${d2s(r.first)}) falls after the harvest period ends (${d2s(r.last)}).` });
       if (!isCoverCrop(r.c) && r.harvestMode === 'season' && r.harvestDays > 0 && r.harvestDays < positive(r.c.yieldDays, positive(r.c.hw, 1))) {
         out.push({ k: 'season', t: `Only ${r.harvestDays} harvest days remain of a ${r.expectedHarvestDays}-day season; yield is reduced in proportion.` });
       }

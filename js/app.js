@@ -363,7 +363,7 @@
       // a last picking for a place: `until` is { place: 'MM-DD' }, or null for a place to go back to the season's end there
       if (change.until && typeof change.until === 'object') {
         const until = { ...(record.until || {}) };
-        for (const [env, md] of Object.entries(change.until)) { if (typeof md === 'string' && /^\d{2}-\d{2}$/.test(md)) until[env] = md; else delete until[env]; }
+        for (const [env, md] of Object.entries(change.until)) { if (!eng.ENVS.includes(env)) continue; if (typeof md === 'string' && /^\d{2}-\d{2}$/.test(md) && E.validDate(E.s2d('2000-' + md))) until[env] = md; else delete until[env]; }
         if (Object.keys(until).length) record.until = until; else delete record.until;
       }
       // A tick says the crop's figures were looked at in the unit it was then sold by. With another unit they are to be looked

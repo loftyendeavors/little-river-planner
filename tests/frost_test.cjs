@@ -42,10 +42,26 @@ const ripeAfter = cut.find(x => x.r.harvestDays === 0);
 check('one first ready after the frost is not picked at all, and is not in the forecast', !!ripeAfter && units(eng, ripeAfter.p) === 0 && !F.build(eng, { year }).rows.some(r => r.plantings.some(q => q.p.id === ripeAfter.p.id)));
 const ground = x => +eng.occupancyThrough(x.p, x.r);
 check('the ground it holds is given back from the frost, with its turnover after it', cut.every(x => { const q = held.planting(x.p.id); return ground(x) === +E.addDays(x.r.last, eng.turnoverFor(x.p)) && ground(x) < +held.occupancyThrough(q, held.calc(q)); }));
+check('one note for one cause: a planting ready after the frost is not told also that its harvest period ended', cut.filter(x => !x.r.harvestDays).every(x => !eng.warnings(x.p, x.r).some(w => w.k === 'timing')));
 check('it says so in its own words, quietly, among its planting notes', cut.every(x => eng.warnings(x.p, x.r).some(w => w.k === 'frost' && w.t.includes(`first frost (${iso(x.r.frostCut.day)})`) && (x.r.harvestDays ? w.t.includes(`${x.r.harvestDays} of ${x.r.frostCut.plannedDays} days`) : /nothing is picked/.test(w.t)))), cut.map(x => eng.warnings(x.p, x.r).map(w => w.t)));
 check('nothing else is cut: every other planting is the plan held, day for day and yield for yield', all.filter(x => !x.r.frostCut).every(x => { const q = held.planting(x.p.id), h = held.calc(q); return +h.first === +x.r.first && +h.last === +x.r.last && near(units(held, x.p), units(eng, x.p)); }));
 const m = F.build(eng, { year }), mh = F.build(held, { year }), lost = cut.reduce((n, x) => n + (units(held, x.p) - units(eng, x.p)) * eng.yieldOf(x.p, x.r).price, 0);
 check('the season’s worth falls by what the cut plantings lose, and by nothing else', near(worth(held) - worth(eng), lost, 1e-6) && lost > 0, [worth(held), worth(eng), lost]);
+
+// what the rule names, read from the plan itself and not from the engine's reckoning of the cut: a frost-tender crop in a garden
+// that is open to frost and is a field (or of the outdoor kind), with no last day of its own and no clear or failure recorded,
+// whose days, picked for a set number of them, would run past the frost. A crate or tower that stands under shelter is left to
+// section 2, and a crop picked to the season's end has its own section (5).
+{
+  const fdOf = g => E.addDays(E.s2d(`${year}-${core.settings.frostFirst}`), Number(g.frostOffset) || 0);
+  const open = g => !!g && !!g.frost && (g.growingEnvironment && g.growingEnvironment.v === 1 ? g.growingEnvironment.kind === 'outdoor' : g.type === 'field' || g.type === 'towers');
+  const expect = x => { const p = x.p, r = x.r, c = eng.crop(p.cropId), g = (core.gardens || []).find(k => k.id === (eng.bedOf(p.bedId) || {}).gardenId);
+    if (!c || !c.frostTender || !open(g) || p.harvestEnd || (p.done && p.done.flip) || (p.workflow && p.workflow.outcome === 'failed') || r.harvestMode !== 'window') return false;
+    return E.addDays(r.first, r.c.hw - 1) > fdOf(g); };
+  const plain = all.filter(x => !(eng.bedOf(x.p.bedId) || {}).shelter && x.r.harvestMode === 'window');
+  const want = plain.filter(expect).map(x => x.p.id).sort(), got = plain.filter(x => x.r.frostCut).map(x => x.p.id).sort();
+  check('the plantings cut are those the rule names, read from the plan itself: no more, no fewer', JSON.stringify(want) === JSON.stringify(got) && all.filter(x => x.r.harvestMode === 'season' && x.r.frostCut).length === 0, { want, got });
+}
 
 // ── 2. what it leaves alone ──
 const under = all.find(x => x.r.c.frostTender && !eng.openGround(x.r.g) && x.r.g.frost && x.r.harvestMode === 'window' && x.r.last > frostIn(eng, x.r));
@@ -59,6 +75,25 @@ const subject = cut.find(x => x.r.harvestDays > 0);
   const day = iso(subject.r.frostCut.planned), e1 = withPlanting(subject.p.id, { harvestEnd: day }), q = e1.planting(subject.p.id), r1 = e1.calc(q);
   check('a last day of the planting’s own past the frost stands: it is picked to it in full', !r1.frostCut && iso(r1.last) === day && near(units(e1, subject.p), units(held, subject.p)));
   check('and is still marked quietly as running past the first frost', e1.warnings(q, r1).some(w => w.k === 'frost' && /runs past the first frost/.test(w.t)));
+}
+
+// work recorded says what happened: a clear or a failure recorded after the frost stands, and nothing is cut
+{
+  const late = iso(E.addDays(subject.r.frostCut.day, 4)), e1 = withPlanting(subject.p.id, { done: { ...(subject.p.done || {}), flip: late } }), r1 = e1.calc(e1.planting(subject.p.id));
+  check('a clear recorded after the frost stands: picked to the day recorded, and nothing cut', !r1.frostCut && iso(r1.last) === late && !e1.warnings(e1.planting(subject.p.id), r1).some(w => /ends its harvest/.test(w.t)), [iso(r1.last), !!r1.frostCut]);
+  const e2 = withPlanting(subject.p.id, { workflow: { outcome: 'failed', failureDate: late } }), r2 = e2.calc(e2.planting(subject.p.id));
+  check('a failure recorded after the frost stands too: the harvest ends on it, and nothing is cut', !r2.frostCut && iso(r2.last) === late);
+}
+// a crate or tower that stands under shelter until after the frost is under cover when it comes
+{
+  const crate = cut.find(x => x.r.harvestDays > 0 && eng.isCt(x.r.b)) || null, shelter = { gardenId: 'nursery' };
+  check('the plan has a crate the frost cuts, to put under shelter', !!crate, cut.map(x => x.p.id));
+  if (crate) {
+    const e1 = withPlanting(crate.p.id, { shelter, out: iso(E.addDays(crate.r.frostCut.day, 10)) }), r1 = e1.calc(e1.planting(crate.p.id));
+    check('under shelter until after the frost, it is under cover when the frost comes: nothing is cut', !r1.frostCut && +r1.last === +crate.r.frostCut.planned, [iso(r1.last), !!r1.frostCut]);
+    const e2 = withPlanting(crate.p.id, { shelter, out: iso(E.addDays(crate.r.field, 1)) }), r2 = e2.calc(e2.planting(crate.p.id));
+    check('moved out before the frost, it is in open ground when it comes, and is cut', !!r2.frostCut && +r2.last === +crate.r.frostCut.day);
+  }
 }
 
 // ── 3. how it is picked ──
@@ -98,6 +133,8 @@ check('the plan has a frost-tender crop picked to the season’s end in open gro
   check('a place he did not name keeps the season’s end there', !elsewhere || +e1.calc(e1.planting(elsewhere.p.id)).last === +elsewhere.r.last);
   const listed = withSell(id, { days: 30, until: { [env]: iso(before).slice(5) } }), r3 = listed.calc(listed.planting(seasonal.p.id));
   check('picked for a set number of days, the crop has no season’s end, and the date is not read', r3.harvestMode === 'window' && +r3.automaticEnd === +E.addDays(r3.first, 29));
+  const cleared = withSell(id, { pattern: 'once', until: { [env]: iso(before).slice(5) } }), r6 = cleared.calc(cleared.planting(seasonal.p.id));
+  check('cleared in one day, the crop has no last picking, and the date is not read', +r6.last === +seasonal.r.last);
   // a planting that carries a harvest window of its own, even to the season's end, does not take the line's date (as it keeps its own days)
   const line = withSell(id, { until: { [env]: iso(before).slice(5) } }).plan.assumptions, ownOf = change => E.create({ ...withPlanting(seasonal.p.id, change).plan, assumptions: line }, Lib);
   const own = ownOf({ hw: 25 }), r4 = own.calc(own.planting(seasonal.p.id)), owns = ownOf({ harvestMode: 'season' }), r5 = owns.calc(owns.planting(seasonal.p.id));
