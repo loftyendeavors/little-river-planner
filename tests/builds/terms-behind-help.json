@@ -1,0 +1,17 @@
+{
+ "build": "Defined terms behind \"?\" (his choice of Nov 18, 09:20, of four drawn ways). \"Grown for\" in a planting's panel and in Edit layout gets a \"?\" beside its label whose card defines Commercial and Personal use, each term in bold over its meaning; the sentence that defined Personal use under the switch is gone, and under the switch stands only what is so of this planting or space (\"Set on this planting\", \"Follows its bed, which is for personal use\"), or nothing while a planting follows the default. The \"?\" cards of 0.63 (To settle, What fits, the Nursery's two set-up rules) now lead with their term in bold, as the Assumptions and Seeds \"?\" rows do. Words and look only: no figure, field or stored value changes.",
+ "changes": {
+  "did": "\"Grown for\" has a \"?\" that defines Commercial and Personal use, each term in bold; the definition no longer stands under the switch. To settle, What fits and the Nursery's rules lead their \"?\" with their term in bold.",
+  "steps": [
+   "Click a planting on the Map: under Grown for there is no paragraph; press the \"?\" beside it and Commercial and Personal use are each defined, the term in bold.",
+   "Open Edit layout on a bed: its Grown for has the same \"?\", and under the box only what that space follows.",
+   "On the Map with something To settle, press its \"?\": the card starts with \"To settle\" in bold, then what it counts."
+  ]
+ },
+ "words": [],
+ "code": ["ahead.js", "bench.js", "mapedit.js", "panels.js"],
+ "added": [],
+ "removed": [],
+ "page": ["css/app.css"],
+ "screens": []
+}

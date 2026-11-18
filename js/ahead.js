@@ -33,7 +33,7 @@
   const labelFor = (o, crop) => `Plant ${lower(crop)} ${o.before ? 'before the ' + lower(o.before.r.c) : o.after ? 'after the ' + lower(o.after.r.c) : 'in open ground'}`;
   const find = (eng, sel) => S.openings(eng, { bedId: sel.bedId }).find(o => o.id === sel.id) || null;
   /** What makes a crop fit, behind "?" beside "What fits" (DESIGN.md, rule 1). */
-  const fitsHelp = () => UI.help('A crop fits when all of it goes in, in season: its growing days, its harvest window and its turnover. A green edge: the plan has little or none of it then. Dashed: it would follow its own family.', null, null, { label: 'What makes a crop fit', hook: 'fits-help', card: { hook: 'fits-help-card' } });
+  const fitsHelp = () => UI.help(null, null, [['What fits', 'A crop that goes in whole, in season: its growing days, its harvest window and its turnover. A green edge: the plan has little or none of it then. Dashed: it would follow its own family.']], { label: 'What makes a crop fit', hook: 'fits-help', card: { hook: 'fits-help-card' } });
   function addFit(o, t, crop) {
     const p = { ...t.p, id: App.uid() };
     if (!App.addPlantings([p], labelFor(o, crop))) return;
