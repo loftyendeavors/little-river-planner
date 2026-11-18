@@ -386,7 +386,7 @@
   const TO_ORDER = ['to sow', 'to direct sow', 'to pot up', 'to harden off', 'to plant out', 'to move out'];
   function upCell(name, list) {
     if (!list.length) return h('span.tk-up-cell.none', h('em', name), h('span.tk-up-fig', 'Nothing planned'));
-    const trays = list.reduce((n, t) => n + (t.sow ? whole(t.line.trays) : 0), 0), by = new Map(), seen = new Set(), pics = [];
+    const trays = list.reduce((n, t) => n + (t.sow && t.id !== 'direct' ? whole(t.line.trays) : 0), 0), by = new Map(), seen = new Set(), pics = [];
     for (const t of list) { by.set(TO[t.id], (by.get(TO[t.id]) || 0) + 1); const k = t.line.variety ? t.line.variety.id : 'c:' + t.line.crop.id; if (!seen.has(k)) { seen.add(k); pics.push(t.line); } }
     return h('span.tk-up-cell', h('em', name),
       h('span.tk-up-fig', h('b', num(list.length)), ` ${list.length === 1 ? 'task' : 'tasks'}${trays ? ` · ${plural(trays, 'tray')}` : ''}`),
@@ -527,8 +527,10 @@
     const p = ui.pop, now = App.today(), t = p.key ? byKey(p.key) : null, head = h('b', k === now ? 'Today' : shortDay(k));
     if (p.mode === 'go') { const n = k < now ? tasks().filter(x => x.on === k).length : tasks().filter(x => isOpen(x) && (k === now ? x.due <= now : x.due === k)).length; return [head, ` · ${k < now ? `${num(n)} done` : `${num(n)} ${k === now ? 'to do' : 'planned'}`}`]; }
     if (p.mode === 'all') {
-      const list = p.keys.map(byKey).filter(Boolean), pre = App.previewWork(list.flatMap(x => x.items()), { date: k, follow: true }, { impact: false }), moved = pre.moved || [];
-      return [head, ` · ${plural(list.length, 'task')} · ${!moved.length ? 'nothing moves' : `${plural(moved.length, 'planting')} ${moved.length === 1 ? 'goes' : 'go'} out up to ${days(Math.max(...moved.map(m => m.days)))} later`}`];
+      // what one day for all of them moves: plantings pushed out later by late sowing or hardening off, and harvests counted from a later day in the ground
+      const list = p.keys.map(byKey).filter(Boolean), pre = App.previewWork(list.flatMap(x => x.items()), { date: k, follow: true }, { impact: false, firsts: true }), moved = pre.moved || [], firsts = pre.firsts || [];
+      const said = [moved.length ? `${plural(moved.length, 'planting')} ${moved.length === 1 ? 'goes' : 'go'} out up to ${days(Math.max(...moved.map(m => m.days)))} later` : '', firsts.length ? `${plural(firsts.length, 'first harvest')} ${firsts.length === 1 ? 'moves' : 'move'}` : ''].filter(Boolean);
+      return [head, ` · ${plural(list.length, 'task')} · ${said.length ? said.join(' · ') : 'nothing moves'}`];
     }
     const off = diff(k, t.due);
     if (p.mode === 'delay') return [head, ` · ${off ? `${days(Math.abs(off))} ${off > 0 ? 'later' : 'sooner'}` : 'where it is now'} · ${t.line.members.some(m => Week.MOVES.includes(t.sow ? m.s.kind : t.line.kind)) ? 'what follows it moves as many days' : 'nothing else moves'}`];

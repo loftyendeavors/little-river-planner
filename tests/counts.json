@@ -3,6 +3,10 @@
 
   "assume": 12,
 
+  "failed, backup": 26,
+
+  "failed, compact": 26,
+
   "fetch service": 26,
 
   "hooks": 4,
@@ -23,7 +27,7 @@
 
   "scale": 8,
 
-  "shape": 28,
+  "shape": 29,
 
   "snapshots kept": 4,
 

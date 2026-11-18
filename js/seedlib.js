@@ -542,8 +542,8 @@
   const YEAR_DAYS = 365;
   /** A day recorded a year or more before the day it was planned is almost always the wrong year typed: said, and not recorded. */
   function yearAway(date, planned) {
-    const d = new Date(date + 'T12:00:00'), when = planned instanceof Date ? planned : null;
-    if (!when || Number.isNaN(+when) || (when - d) / 864e5 < YEAR_DAYS) return '';
+    const [y, m, dd] = date.split('-').map(Number), d = new Date(y, m - 1, dd), when = planned instanceof Date ? planned : null;
+    if (!when || Number.isNaN(+when) || Math.round((new Date(when.getFullYear(), when.getMonth(), when.getDate()) - d) / 864e5) < YEAR_DAYS) return '';
     const pad = n => String(n).padStart(2, '0'), iso = `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}`;
     return `That is a year or more before it was planned (${iso}). Check the year.`;
   }

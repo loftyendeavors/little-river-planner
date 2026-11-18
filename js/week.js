@@ -15,6 +15,7 @@
  *   Week.takeBack(engine, inventory, p, kind, ctx)        -> the planting with that job cleared (and put back)
  *   Week.delay(engine, p, kind, date)            -> the planting with that job put off to a day, on purpose
  *   Week.skip(p, kind, day | null)               -> the planting with that job skipped, or no longer skipped
+ *   Week.fail(p, day | null, at)                 -> the planting marked failed on a day, or no longer marked
  *
  * A job put off on purpose is a change to the plan, not a record. Sowing, hardening off and planting are tied to the
  * day the planting goes out, so putting one off moves the planting, and every job after it, by as many days. Potting
@@ -228,6 +229,16 @@
     return withTask(p, 'skip', kind, day);
   }
 
+  /**
+   * A planting marked failed on a day (`at`: when it was marked), or with no day the mark taken off. The day and the moment are one
+   * record, written in one act (tests/plan_shape.cjs: plantings[].failed, taken whole). What the mark does is the engine's (failedOn).
+   */
+  function fail(p, day, at) {
+    if (day == null) { const out = { ...p }; delete out.failed; return out; }
+    if (!isDay(day)) throw new Error('Choose a real calendar date.');
+    return { ...p, failed: { on: day, at: String(at || '') } };
+  }
+
   // ── the lines of the list ──
   const SECTIONS = [['potup', 'Pot up'], ['harden', 'Harden off'], ['plant', 'Plant out'], ['move', 'Move out']];
   const KIND_OF = { potup: 'potup', harden: 'harden', plant: 'field', move: 'move' };
@@ -283,5 +294,5 @@
     return list;
   }
 
-  return { ORDER, NAME, DID, PUSHES, MOVES, SECTIONS, KIND_OF, monday, steps, step, lastRecord, pushed, pushFor, record, takeBack, delay, skip, skipOf, delayOf, noteOf, withTask, lines };
+  return { ORDER, NAME, DID, PUSHES, MOVES, SECTIONS, KIND_OF, monday, steps, step, lastRecord, pushed, pushFor, record, takeBack, delay, skip, fail, skipOf, delayOf, noteOf, withTask, lines };
 });

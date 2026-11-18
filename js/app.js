@@ -1133,7 +1133,7 @@
     const recorded = [SL.doneDate(p, 'sow'), SL.doneDate(p, 'field')].filter(Boolean).sort()[0] || null, planned = E.d2s(r.start), lo = recorded && recorded < planned ? recorded : planned, hi = todayText();
     return lo <= hi ? { lo, hi } : null;
   }
-  const failedTo = (p, date) => ({ ...p, failed: { on: date, at: new Date().toISOString() } });
+  const failedTo = (p, date) => Week.fail(p, date, new Date().toISOString());
   /** Why a day cannot be the day a planting failed, in words; null when it can. */
   function failedRefusal(p, date) {
     const range = failedRange(p);
@@ -1162,8 +1162,7 @@
     const was = state.engine;
     if (date == null) {
       if (!p.failed) return null;
-      const after = { ...p };
-      delete after.failed;
+      const after = Week.fail(p, null);
       return commit(`${cropLabel(p)}: no longer marked failed`, [{ before: p, after }], { unchecked: true }) ? { overlaps: impact(was, state.engine).overlaps } : null;
     }
     const why = failedRefusal(p, date);
@@ -1174,6 +1173,8 @@
 
   // ── everything recorded in the season, taken back at once (Tasks, "⋯") ──
   const UNDO_ORDER = ['move', 'field', 'harden', 'potup', 'sow'];
+  /** A sowing, as the sheet counts it: seed put in a tray or in the ground. Bulbs, canes and plants put in are counted with the other tasks. */
+  const sownJob = (st, sow) => st.kind === 'sow' || (st.seed && !!sow && (sow.unit === 'seeds' || sow.unit === 'g'));
   /**
    * What "Take back everything recorded" would take back in the plan's year: the jobs recorded (sowings apart, with the seed
    * they took), what was put off and what was skipped. Notes are kept, and so is a planting marked failed.
@@ -1184,7 +1185,7 @@
       if (String(p.date).slice(0, 4) !== year) continue;
       const steps = Week.steps(state.engine, p), sow = sowingOf(p), t = p.tasks && typeof p.tasks === 'object' ? p.tasks : {};
       const jobs = steps.filter(st => st.done), delays = Object.keys(t.delay || {}).length, skips = Object.keys(t.skip || {}).length;
-      for (const st of jobs) { if (st.seed) out.sowings++; else out.jobs++; }
+      for (const st of jobs) { if (sownJob(st, sow)) out.sowings++; else out.jobs++; }
       if (sow && sow.done) out.seed += sow.uses.filter(u => u && u.source === 'sowing' && u.lotId).reduce((n, u) => n + (+u.quantity || 0), 0);
       out.delays += delays; out.skips += skips; out.notes += Object.keys(t.note || {}).length; if (p.failed) out.failed++;
       if (jobs.length || delays || skips) out.plantings++;
@@ -1207,11 +1208,11 @@
         for (const kind of UNDO_ORDER) {
           const st = Week.step(state.engine, p, kind);
           if (!st || !st.done) continue;
-          const result = Week.takeBack(state.engine, inventory, p, kind, ctx);
+          const sown = sownJob(st, sowingOf(p)), result = Week.takeBack(state.engine, inventory, p, kind, ctx);
           p = result.planting;
           if (result.inventory) { inventory = result.inventory; touched = true; }
           returned += +result.returned || 0; lost += +result.lost || 0;
-          if (st.seed) sowings++; else jobs++;
+          if (sown) sowings++; else jobs++;
         }
         const t = p.tasks && typeof p.tasks === 'object' ? p.tasks : {};
         for (const kind of Object.keys(t.delay || {})) {
