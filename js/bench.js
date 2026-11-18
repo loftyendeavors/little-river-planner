@@ -215,11 +215,11 @@
     }
     const pick = h('select.bn-house', { id: 'bnCoolCrop', 'aria-label': 'Crop to grow on without heat', dataset: { f: 'bnCoolCrop' } }, h('option', { value: '' }, 'Choose a crop…'), free.map(([id, name]) => h('option', { value: id }, name)));
     const addCool = () => { if (!pick.value) { pick.focus(); return; } const id = pick.value; change(`${cropName(id)} is grown on without heat, all year until its days are set`, n => N.setCool(n, id, {}), ['cool:' + id, 'from'], said); };
-    const coolBox = h('div.bn-cool', { id: 'bnCool' }, h('div.bn-edit-head', h('h4', 'Grown on without heat'), UI.help('From its first day through its last, a crop’s plug trays and pots stand on the unheated benches once they have had their days under heat to come up. Tower seedlings stay under heat.', null, null, { label: 'What growing on without heat does', hook: 'bench-help', card: { hook: 'bench-help-card' } })),
+    const coolBox = h('div.bn-cool', { id: 'bnCool' }, h('div.bn-edit-head', h('h4', 'Grown on without heat'), UI.help(null, null, [['Grown on without heat', 'From its first day through its last, a crop’s plug trays and pots stand on the unheated benches once they have had their days under heat to come up. Tower seedlings stay under heat.']], { label: 'What growing on without heat does', hook: 'bench-help', card: { hook: 'bench-help-card' } })),
       rules.length ? h('table.as.bn-benches.bn-cool-table', h('thead', h('tr', h('th', 'Crop'), h('th', 'From'), h('th', 'Through'), h('th', { title: 'Days from sowing that the trays stay under heat, to germinate' }, 'Days under heat first'), h('th', ''))), coolBody) : null,
       h('div.bn-edit-foot', pick, h('button.btn', { type: 'button', id: 'bnCoolAdd', onclick: addCool }, '+ Add a crop')));
     return h('div.bn-edit.bn-rules', { id: 'bnRules', role: 'group', 'aria-label': 'Hardening off and growing on' },
-      h('div.bn-edit-head', h('h3', 'Hardening off and growing on'), UI.help('Neither moves a sowing, planting or harvest day. They say where trays stand, and when the task to harden off falls.', null, null, { label: 'What these rules change', hook: 'bench-help', card: { hook: 'bench-help-card' } })),
+      h('div.bn-edit-head', h('h3', 'Hardening off and growing on'), UI.help(null, null, [['Hardening off and growing on', 'Neither moves a sowing, planting or harvest day. They say where trays stand, and when the task to harden off falls.']], { label: 'What these rules change', hook: 'bench-help', card: { hook: 'bench-help-card' } })),
       h('div.bn-edit-foot', option('bnHarden', fig.hardenDays, 'Hardening off', 'days before planting out', 'harden', v => `Hardening off starts ${v} days before planting out`, 0, 21)),
       coolBox);
   }

@@ -139,7 +139,7 @@
 
   "card": 110,
 
-  "cleanup": 34,
+  "cleanup": 36,
 
   "f053": 22,
 
@@ -432,19 +432,19 @@
 
   "card-site @3440": 110,
 
-  "cleanup @1480": 34,
+  "cleanup @1480": 36,
 
-  "cleanup @1707": 34,
+  "cleanup @1707": 36,
 
-  "cleanup @3440": 34,
+  "cleanup @3440": 36,
 
-  "cleanup-site": 34,
+  "cleanup-site": 36,
 
-  "cleanup-site @1480": 34,
+  "cleanup-site @1480": 36,
 
-  "cleanup-site @1707": 34,
+  "cleanup-site @1707": 36,
 
-  "cleanup-site @3440": 34,
+  "cleanup-site @3440": 36,
 
   "forecast-site @1707": 44,
 
