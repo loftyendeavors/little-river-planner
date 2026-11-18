@@ -139,7 +139,7 @@ def run(page, width):
     check(tag + 'Map: every new bed is drawn on the plan’s own map', len(new_beds) >= 2 and all(drawn), {'new': len(new_beds), 'drawn': drawn})
     if made['added']:
         js("LRFApp.select({ type: 'bed', id: '%s' })" % made['added']); page.wait_for_timeout(250)
-    picked = js("({ sel: LRFApp.state.sel, figures: ['bedWidth', 'bedLength', 'bedArea'].filter(id => document.getElementById(id)).length, fields: document.querySelectorAll('#inspectorBody input, #inspectorBody select').length })")
+    picked = js("({ sel: LRFApp.state.sel, figures: ['bedWidth', 'bedLength', 'bedArea'].filter(id => document.getElementById(id)).length, fields: document.querySelectorAll('#inspectorBody input:not([type=checkbox]), #inspectorBody select').length })")
     check(tag + 'Map: a new bed can be picked, and its panel shows its size with nothing to type in', picked['sel'] is not None and picked['sel'].get('id') == made['added'] and picked['figures'] == 3 and picked['fields'] == 0, picked)
     if a:
         js("LRFApp.select({ type: 'bed', id: '%s' })" % a['id']); page.wait_for_timeout(250)

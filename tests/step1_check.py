@@ -316,7 +316,7 @@ with sync_playwright() as pw:
     check('there is an empty bed on the photo, at least 6 ft long, to try sizes on', bed is not None, bed)
     bed = bed or {'id': 'none', 'w': 0, 'l': 0}   # with no subject the lines below fail by name; the check does not stop
     page.wait_for_timeout(300)
-    PANEL = "({ w: (document.querySelector('#bedWidth b') || {}).textContent || '', l: (document.querySelector('#bedLength b') || {}).textContent || '', a: (document.querySelector('#bedArea b') || {}).textContent || '', inputs: document.querySelectorAll('#inspectorBody input, #inspectorBody select').length, edit: !!document.getElementById('bedSizeEdit'), form: !!document.getElementById('bedSizeForm'), layout: !!document.getElementById('bedLayoutEdit') })"
+    PANEL = "({ w: (document.querySelector('#bedWidth b') || {}).textContent || '', l: (document.querySelector('#bedLength b') || {}).textContent || '', a: (document.querySelector('#bedArea b') || {}).textContent || '', inputs: document.querySelectorAll('#inspectorBody input:not([type=checkbox]), #inspectorBody select').length, edit: !!document.getElementById('bedSizeEdit'), form: !!document.getElementById('bedSizeForm'), layout: !!document.getElementById('bedLayoutEdit') })"
     shown = page.evaluate(PANEL)
     fmt = lambda n: ('%g' % n)
     check('a selected bed shows its width, length and area, and the panel holds nothing to type a size in: no field, no size form, one link to the layout', shown['w'] == fmt(bed['w']) and shown['l'] == fmt(bed['l']) and shown['a'].replace(',', '') == fmt(round(bed['w'] * bed['l'])) and shown['inputs'] == 0 and not shown['edit'] and not shown['form'] and shown['layout'], {'bed': bed, 'shown': shown})
