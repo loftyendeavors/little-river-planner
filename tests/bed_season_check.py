@@ -144,6 +144,53 @@ def run_surface(context, floating):
     verify("the picking row is marked in words", row.locator(hook("bed-planting-status") + '[data-state="picking"]').is_visible())
     page.screenshot(path=str(shots / ("floating-card.png" if floating else "sidebar.png")))
 
+    if floating:
+        # Frame a bed that can take the planting; put the card over it without editing the layout.
+        bed = page.evaluate("""id => {
+          const a = LRFApp, e = a.state.engine, p = e.planting(id), date = LRFEngine.s2d(p.date);
+          return e.plan.beds.find(b => b.id !== p.bedId && LRFMap.element(b.id) && e.isSoilBed(b) &&
+            !e.plantingsIn(b.id).length && a.preview({plantingId: id}, {bedId: b.id, date}).state === 'ok')?.id;
+        }""", sample["id"])
+        before = key()
+        if bed:
+            page.evaluate("id => LRFMap.fitSpaces([id], false, .65)", bed)
+            end = page.evaluate("""id => {
+              const r = LRFMap.element(id).querySelector('.bed-base').getBoundingClientRect();
+              return {x: r.left + r.width / 2, y: r.top + r.height / 2};
+            }""", bed)
+            card = loc("card")
+            row.scroll_into_view_if_needed()
+            start = row.bounding_box()
+            card.evaluate("(el, offset) => { el.style.transform = `translate(${offset.x}px,${offset.y}px)`; }",
+                          {"x": end["x"] - start["x"] - 40, "y": end["y"] - start["y"] - start["height"] / 2})
+            covered = page.evaluate("""({id, x, y}) =>
+              document.elementFromPoint(x, y)?.closest('.lrf-card') &&
+              document.elementsFromPoint(x, y).some(el => el.closest('#map [data-bed]')?.dataset.bed === id) &&
+              document.elementFromPoint(x - 12, y)?.closest('.lrf-card') != null""", {"id": bed, **end})
+            page.mouse.move(end["x"] - 12, end["y"])
+            page.mouse.down()
+            page.mouse.move(end["x"], end["y"])
+            page.mouse.up()
+            verify("a drag that ends inside the card cannot drop into the covered map bed", covered and key() == before)
+            if key() != before:
+                page.evaluate("LRFApp.undo()")
+                select_bed(sample["bed"])
+            card.evaluate("el => { el.style.transform = ''; }")
+            row.scroll_into_view_if_needed()
+            start = row.bounding_box()
+            page.mouse.move(start["x"] + 40, start["y"] + start["height"] / 2)
+            page.mouse.down()
+            page.mouse.move(end["x"], end["y"], steps=8)
+            page.mouse.up()
+            verify("a drag out of the card can still move a planting into a visible bed", record(sample["id"])["bedId"] == bed)
+            if key() != before:
+                page.evaluate("LRFApp.undo()")
+            select_bed(sample["bed"])
+            page.evaluate("id => LRFMap.fitSpaces([id], false, .65)", sample["bed"])
+        else:
+            verify("a drag that ends inside the card cannot drop into the covered map bed", False, "no bed takes the planting")
+            verify("a drag out of the card can still move a planting into a visible bed", False, "no bed takes the planting")
+
     date(sample["turnover"]["day"])
     turn = sample["turnover"]
     marker = page.locator(planting(turn["id"])).locator(hook("bed-planting-status") + '[data-state="turnover"]')

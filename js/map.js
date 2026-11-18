@@ -717,7 +717,10 @@
   function targetAt(cx, cy) {
     const rect = $('map').getBoundingClientRect();
     if (cx < rect.left || cx > rect.right || cy < rect.top || cy > rect.bottom) return null;
-    const el = document.elementFromPoint(cx, cy), bedEl = el && el.closest && el.closest('#map [data-bed]');
+    const el = document.elementFromPoint(cx, cy);
+    // A drag can start on a row in the floating card. Ground under the card is not a visible drop target.
+    if (el?.closest('.lrf-card')) return null;
+    const bedEl = el?.closest('#map [data-bed]');
     const bedId = bedEl ? bedEl.dataset.bed : nearest(cx, cy);
     if (!bedId) return null;
     const item = beds.get(bedId);
