@@ -409,7 +409,7 @@
     if (opened) { for (const bed of spaces) bedRow(body, eng, bed, itemsOf(eng, bed), null, h('b', 'Tower ' + bed.bed), `${num(eng.capOf(bed))} ${eng.capUnit(bed)}`); return; }
     const merged = new Map();
     for (const bed of spaces) for (const item of itemsOf(eng, bed)) {
-      const k = [item.p.cropId, item.p.varietyId || '', item.from, item.to, item.ghost ? 'ghost' : ''].join('|');   // a failed tower ends sooner than the others, so it stands apart by its own days
+      const k = [item.p.cropId, item.p.varietyId || '', item.from, item.to, item.ghost ? 'ghost' : '', item.r.failed ? 'failed' : ''].join('|');   // a failed tower is summed apart, even where it ends the day a healthy one does
       if (!merged.has(k)) merged.set(k, { key: key + '|' + k, from: item.from, to: item.to, list: [] });
       merged.get(k).list.push(item);
     }
