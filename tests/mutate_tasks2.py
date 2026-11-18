@@ -31,6 +31,11 @@ def alone(cmd, timeout, env=None, cwd=None):
     return out, err
 EN, WK, SLB, AP, SV, PN, TL, MG, RL, NS = "js/engine.js", "js/week.js", "js/seedlib.js", "js/app.js", "js/sowview.js", "js/panels.js", "js/timeline.js", "js/merge.js", "js/rails.js", "js/nursery.js"
 NODE = [
+ ("a planting marked failed can be swapped to another variety", "js/swap.js", "if ((eng.failedOn && eng.failedOn(p)) || (p.workflow", "if ((false) || (p.workflow"),
+ ("a live-tray batch marked failed is made again with its plan, and loses its mark", "js/trays.js", "|| p.outcome || p.failed", "|| p.outcome"),
+ ("a sowing recorded on the day its planting failed takes no tray", "js/nursery.js", "      if (r && r.sow && r.cells && lost <= r.sow && r.b.active !== false && r.g.active !== false) items.push({ p, r, kind: 'prop', from: r.sow, to: r.sow });\n", ""),
+ ("a pot-up recorded on the day its planting failed takes no pots", "js/nursery.js", " || (it.p.done && it.p.done.potup)));", "));"),
+ ("a crate filled on the day its planting failed is not counted", "js/nursery.js", "      if (lost && lost <= r.field && !(p.done && p.done.field)) continue;", "      if (lost && lost <= r.field) continue;"),
  ("a crate planting failed before its crate still fills one", "js/nursery.js", "      if (lost && lost <= r.field) continue;\n", ""),
  ("a planting failed before it was sown still shares a tray", EN, "        if (failedOn(p) && !['sow', 'field'].some(k => doneOf(p, k))) { plans.set(p, sowSingle(p, r)); continue; }\n", ""),
  ("a planting failed before its pot-up day still takes its pots", "js/nursery.js", "(c.prop === 'potup' && !lostFirst)", "c.prop === 'potup'"),

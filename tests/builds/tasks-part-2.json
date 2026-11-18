@@ -19,7 +19,9 @@
   "seedlib.js",
   "sowview.js",
   "succession.js",
+  "swap.js",
   "timeline.js",
+  "trays.js",
   "week.js"
  ],
  "added": [],

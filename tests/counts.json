@@ -3,9 +3,9 @@
 
   "assume": 12,
 
-  "failed, backup": 31,
+  "failed, backup": 33,
 
-  "failed, compact": 31,
+  "failed, compact": 33,
 
   "fetch service": 26,
 

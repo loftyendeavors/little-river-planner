@@ -184,6 +184,35 @@ tryCase('a planting marked failed before it was sown takes no share of the trays
   return [!named && t1 <= t0 && (e1.calc(e1.planting(find2.id)).sowing || {}).trayGroup == null, { p: find2.id, group: g.id, mates: mates.length, trays: [t0, t1], named }];
 });
 
+tryCase('what a job recorded on the day a planting failed used stays counted: its tray and mix, its pots, its crate', () => {
+  const N = req('nursery.js'), inv = plan.seedInventory || SL.emptyInventory(), out = {};
+  const sum = (e, test) => N.supplies(e, year, null).rows.filter(x => test(x.id)).reduce((n, x) => n + (x.fills || 0), 0);
+  const same = (p, kind, test) => {   // recorded on its own day, then that day marked failed, against recorded alone
+    const st = W.steps(eng, p).find(y => y.kind === kind && !y.done); if (!st) return null;
+    const day = E.d2s(st.planned), done = W.record(eng, inv, p, kind, { date: day, follow: false }, ctx).planting;
+    const a = sum(E.create(put(plan, done), Lib), test), b = sum(E.create(put(plan, W.fail(done, day, AT)), Lib), test);
+    return { p: p.id, day, recorded: a, failedThatDay: b, ok: a > 0 && a === b };
+  };
+  const sown = find((p, r) => r.sow && r.cells && !r.tw && !r.ct && r.c.prop !== 'pot' && r.c.prop !== 'potup' && String(p.date).slice(0, 4) === String(year) && W.steps(eng, p).some(y => y.kind === 'sow'));
+  const potted = find((p, r) => r.c.prop === 'potup' && !r.tw && String(p.date).slice(0, 4) === String(year) && W.steps(eng, p).some(y => y.kind === 'potup'));
+  const crated = find((p, r) => r.ct && r.len > 0 && r.sow && r.field > r.sow && String(p.date).slice(0, 4) === String(year) && eng.ctOf(r.b) && eng.ctOf(r.b).shape !== 'round' && W.steps(eng, p).some(y => y.kind === 'field'));
+  out.tray = sown && same(sown, 'sow', id => /^tray-|^rockwool|^sheet/.test(id));
+  out.pots = potted && same(potted, 'potup', id => /^pot-/.test(id));
+  out.crate = crated && same(crated, 'field', id => /^crate-/.test(id));
+  return [!!(out.tray && out.tray.ok && out.pots && out.pots.ok && out.crate && out.crate.ok), out];
+});
+
+tryCase('a planting marked failed is left as it is by a variety swap, and a live-tray batch marked failed is kept when its plan is made again', () => {
+  global.LRFSeedLib = SL; global.LRFEngine = E;
+  const Sw = req('swap.js'), T = req('trays.js');
+  const p = find((q, r) => q.varietyId && Sw.choices(eng, q.varietyId).length > 0);
+  if (!p) return [false, 'no variety with another to swap to'];
+  const e1 = E.create(put(plan, W.fail(p, E.d2s(eng.calc(p).start || eng.calc(p).field), AT)), Lib), to = Sw.choices(e1, p.varietyId)[0].id;
+  const row = (Sw.preview(e1, p.varietyId, to).rows || []).find(x => x.id === p.id || (x.p && x.p.id === p.id) || x.plantingId === p.id) || null;
+  const bare = { ...p, done: {}, workflow: undefined, failed: { on: `${year}-05-01`, at: AT } };
+  return [!!row && row.state === 'failed' && T.locked(plan, bare, null) === true, { p: p.id, state: row && row.state, locked: T.locked(plan, bare, null) }];
+});
+
 // ── 4. with no mark, nothing moved ──
 if (oldDir) {
   const E0 = require(path.join(oldDir, 'engine.js')), e0 = E0.create(plan, Lib);

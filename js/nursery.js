@@ -225,7 +225,16 @@
     const lots = new Map(), pots = new Map(), potLots = new Map(), plug = new Map(), liveCells = new Map(), crates = new Map();
     let liveOpen = 0, liveUnsaid = 0, sheets = 0, woolCells = 0;
     const trayRow = (cells, name) => { const id = 'tray-' + cells; if (!plug.has(id)) plug.set(id, { id, cells, name: name || `${cells}-cell plug tray`, filled: 0, sold: 0 }); return plug.get(id); };
-    for (const it of eng.benchItems()) {
+    // what a job used stays used: a planting marked failed on the day its sowing was recorded has no bench time left, but its
+    // sowing took its tray and mix, so it is counted with no days on the bench
+    const items = eng.benchItems().slice(), propped = new Set(items.filter(it => it.kind === 'prop').map(it => it.p));
+    for (const p of (eng.plan.plantings || [])) {
+      const lost = eng.failedOn && eng.failedOn(p);
+      if (!lost || propped.has(p) || !(p.done && p.done.sow)) continue;
+      const r = eng.calc(p);
+      if (r && r.sow && r.cells && lost <= r.sow && r.b.active !== false && r.g.active !== false) items.push({ p, r, kind: 'prop', from: r.sow, to: r.sow });
+    }
+    for (const it of items) {
       if (String(it.p.date).slice(0, 4) !== text) continue;
       const r = it.r, c = r.c;
       if (it.kind === 'live') {
@@ -235,7 +244,7 @@
       }
       if (it.kind !== 'prop') continue;
       // a potting-up planting marked failed before its pot-up day was never potted: no pots, no potting mix
-      const plan = r.sowing, lostFirst = c.prop === 'potup' && eng.failedOn && eng.failedOn(it.p) && !(eng.potUpDate(r) && eng.potUpDate(r) < it.to);
+      const plan = r.sowing, lostFirst = c.prop === 'potup' && eng.failedOn && eng.failedOn(it.p) && !(eng.potUpDate(r) && (eng.potUpDate(r) < it.to || (it.p.done && it.p.done.potup)));
       const potted = !r.tw && (c.prop === 'pot' || (c.prop === 'potup' && !lostFirst));
       if (potted) {
         const size = +c.potSize > 0 ? +c.potSize : 4.5, n = plan && plan.potUpCells != null ? plan.potUpCells : r.cells;
@@ -261,7 +270,7 @@
       const [w, l] = eng.ctDims(t), id = 'crate-' + (t.id || 'crate'), row = crates.get(id) || { id, name: t.name || 'Crate', ft2: w * l, filled: 0, plantings: 0, spans: [] };
       // a crate planting marked failed before it went into its crate never filled one; one that failed in it leaves it that day
       const lost = eng.failedOn && eng.failedOn(p);
-      if (lost && lost <= r.field) continue;
+      if (lost && lost <= r.field && !(p.done && p.done.field)) continue;   // one recorded in its crate that day filled it
       row.filled += r.len; row.plantings += 1;
       const last = r.out && r.out > r.field ? (r.last && r.last > r.out ? r.last : r.out) : (r.last && r.last > r.field ? r.last : r.field), to = plus(last, 1);
       row.spans.push({ from: r.field, to: lost && lost < to ? lost : to, n: r.len });
