@@ -200,9 +200,17 @@
         c && !c.micro && !e.isCoverCrop(c) && +c.dtm > 0 ? ['series', 'Repeat as a series…', () => App.openAhead({ mode: 'series', sourceId: p.id })] : null,
         ['full', 'All of this planting…', () => { App.select({ type: 'planting', id: p.id }); openFull(); }],
         null,
-        ['wait', 'Send to To place', () => App.sendToWait(p.id)],
+        ['wait', 'Send to To place', () => toWait(p)],
         ['remove', 'Remove planting', () => App.removePlantings([p.id]), null, 'bad']]
     };
+  }
+
+  /** Send a planting to To place from its card: its bed's card takes its place first, as for a removal, so that what the step did
+   *  (and its Undo) is said where it was done (Codex on #66). The step itself is the panel's: App.sendToWait. */
+  function toWait(p) {
+    const r = eng().calc(p);
+    if (r) App.select({ type: 'bed', id: r.b.id });
+    App.sendToWait(p.id);
   }
 
   // ── a bed's card ──

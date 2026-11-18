@@ -202,7 +202,7 @@ def run(pw):
     def card_variety(): page.select_option("[data-hook='card-variety']", pick["other"])
     a, aback, _ = through_panel(panel_variety)
     b, bback, bsaid, _ = through_card(card_variety)
-    check("a variety chosen on the card gives the planting what the panel's variety box gives it, and Undo gives the plan back", a == b and pick["other"] in (b or "") and aback and bback, [a, b, aback, bback])
+    check("a variety chosen on the card gives the planting what the panel's variety box gives it, said on the card with an Undo that gives the plan back", a == b and pick["other"] in (b or "") and aback and bback and bsaid["undo"] and not bsaid["toast"], [a, b, aback, bback, bsaid])
 
     half = js(f"const p = eng.planting('{PID}'), r = eng.calc(p); let n = Math.round(r.cap * 0.4); if (Math.abs(n - r.physicalLength) < 1) n = Math.round(r.cap * 0.6); return n;")
     def panel_length(): set_value("#fLength", str(half))
@@ -211,7 +211,7 @@ def run(pw):
         set_value("[data-hook='card-length']", str(half))
     a, aback, _ = through_panel(panel_length)
     b, bback, bsaid, _ = through_card(card_length)
-    check("a share of the bed typed in the card's row gives the planting what the panel's length box gives it, and Undo gives the plan back", a == b and a != js(f"return rec('{PID}');") and aback and bback, [a, b, aback, bback])
+    check("a share of the bed typed in the card's row gives the planting what the panel's length box gives it, said on the card with an Undo that gives the plan back", a == b and a != js(f"return rec('{PID}');") and aback and bback and bsaid["undo"] and not bsaid["toast"], [a, b, aback, bback, bsaid])
 
     def panel_sale(): press(page, "#fUse button[data-use='personal']", 300)
     def card_sale(): page.locator("[data-hook='card-sale']").uncheck(); wait(200)
@@ -225,10 +225,10 @@ def run(pw):
     days = js(f"const p = eng.planting('{PID}'), r = eng.calc(p); return {{ dtm: String(Math.max(1, (p.dtm > 0 ? +p.dtm : +r.c.dtm) - 5)), hw: String((p.hw > 0 ? +p.hw : r.harvestDays) + 5) }};")
     a, aback, _ = through_panel(lambda: set_value("#fDtm", days["dtm"]))
     b, bback, bsaid, _ = through_card(lambda: (card_row("days"), set_value("[data-hook='card-dtm']", days["dtm"])))
-    check("days to harvest typed in the card's row give the planting what the panel's box gives it, and Undo gives the plan back", a == b and f'"dtm":{days["dtm"]}' in (b or "") and aback and bback, [a, b, aback, bback])
+    check("days to harvest typed in the card's row give the planting what the panel's box gives it, said on the card with an Undo that gives the plan back", a == b and f'"dtm":{days["dtm"]}' in (b or "") and aback and bback and bsaid["undo"] and not bsaid["toast"], [a, b, aback, bback, bsaid])
     a, aback, _ = through_panel(lambda: set_value("#fHw", days["hw"]))
     b, bback, bsaid, _ = through_card(lambda: (card_row("days"), set_value("[data-hook='card-hw']", days["hw"])))
-    check("harvest days typed in the card's row give the planting what the panel's box gives it, and Undo gives the plan back", a == b and f'"hw":{days["hw"]}' in (b or "") and aback and bback, [a, b, aback, bback])
+    check("harvest days typed in the card's row give the planting what the panel's box gives it, said on the card with an Undo that gives the plan back", a == b and f'"hw":{days["hw"]}' in (b or "") and aback and bback and bsaid["undo"] and not bsaid["toast"], [a, b, aback, bback, bsaid])
 
     # more of it, so many days apart: the plantings added, set side by side without their new ids
     added = lambda before: js("const was = new Set(JSON.parse(arg).map(p => p.id)); return JSON.stringify(S.plan.plantings.filter(p => !was.has(p.id)).map(p => { const q = { ...p }; delete q.id; return q; }).sort((x, y) => (x.date + x.bedId).localeCompare(y.date + y.bedId)));", before)
@@ -244,7 +244,7 @@ def run(pw):
     check("the plan has a planting with room for two more three weeks apart, for the check to work on", bool(RP), RP)
     a, aback, _ = through_panel(panel_repeat, added, RP)
     b, bback, bsaid, _ = through_card(card_repeat, added, pid=RP)
-    check("“Add” in the card's row Repeat as a series adds the plantings the panel's own adds, and Undo gives the plan back", a == b and a != "[]" and aback and bback, [a, b, aback, bback])
+    check("“Add” in the card's row Repeat as a series adds the plantings the panel's own adds, said on the card with an Undo that gives the plan back", a == b and a != "[]" and aback and bback and bsaid["undo"] and not bsaid["toast"], [a, b, aback, bback, bsaid])
 
     # the menu's Send to To place and Remove planting, against the panel's buttons
     whole = lambda before: js("return JSON.stringify([S.plan.plantings, A.waiting()]);")
@@ -252,7 +252,8 @@ def run(pw):
         press(page, "[data-hook='card-more']", 300); press(page, f"[data-hook='card-menu-item'][data-act='{act}']", 400)
     a, aback, _ = through_panel(lambda: press(page, "#fToWait", 400), whole)
     b, bback, bsaid, _ = through_card(lambda: card_menu("wait"), whole)
-    check("“Send to To place” in the card's menu does what the panel's button does, and Undo gives the plan back", a == b and PID in json.dumps(json.loads(a)[1]) and aback and bback, [a[:300] if a else a, b[:300] if b else b, aback, bback])
+    check("“Send to To place” in the card's menu does what the panel's button does; the bed's card says it, with an Undo that gives the plan back",
+          a == b and PID in json.dumps(json.loads(a)[1]) and aback and bback and "To place" in bsaid["said"] and bsaid["undo"] and not bsaid["toast"], [a[:300] if a else a, b[:300] if b else b, aback, bback, bsaid])
     a, aback, _ = through_panel(lambda: press(page, "[data-hook='panel-remove']", 400), whole)
     b, bback, bsaid, _ = through_card(lambda: card_menu("remove"), whole)
     check("“Remove planting” in the card's menu does what the panel's button does; the bed's card says it, with an Undo that gives the plan back",
