@@ -264,6 +264,26 @@ with sync_playwright() as pw:
         if js("return S.undo.length;") > u0: js("A.undo(); return 1;"); wait(500)
     check("and both changes made for it are taken back", js("return S.undo.length;") == u0, u0)
 
+    # a figure in dollars comes only from the plantings that earn it: one of two plantings in a week is marked for personal use, the
+    # page shows Everything in dollars, and that week's popup lists the other alone (Codex on #69)
+    u2 = js("return S.undo.length;")
+    mix = js("""const m = HV.model(), at = F.periods(m, 'week');
+      for (const row of m.rows.filter(r => !r.thing && r.total > 0 && r.worth > 0)) for (const c of at) { const here = row.plantings.filter(x => F.share(x, c.i0, c.i1) > 1e-9 && x.price > 0 && !x.personal); if (here.length >= 2) { A.setUse('planting', [here[0].p.id], 'personal'); return { crop: row.cropId, key: c.key, mine: here[0].p.id }; } }
+      return null;""")
+    wait(900); settle_dialogs()
+    if mix:
+        js("HV.setUse('all'); HV.setMeasure('dollars'); return 1;"); wait(700)
+        ci = js("return table().cols.indexOf(arg.key);", mix); ri = js("return table().rows.findIndex(r => r.crop === arg.crop && !r.thing);", mix)
+        if isinstance(ci, int) and isinstance(ri, int) and ci >= 0 and ri >= 0:
+            page.locator('[data-hook="fc-table"] tbody tr.hv-row').nth(ri).locator("td.hv-c").nth(ci).click(); wait(600)
+    dp = js("""const d = hook('fc-from'); if (!d) return null; const m = fresh('all'), row = m.rows.find(x => x.cropId === arg.crop && !x.thing), c = F.periods(m, 'week').find(c => c.key === arg.key);
+      const earn = row.plantings.filter(x => F.share(x, c.i0, c.i1) * (x.price || 0) > 1e-9), total = earn.reduce((n, x) => n + F.share(x, c.i0, c.i1), 0), worth = earn.reduce((n, x) => n + F.share(x, c.i0, c.i1) * x.price, 0);
+      return { ids: hooks('fc-from-row', d).map(li => li.dataset.planting).sort(), want: earn.map(x => x.p.id).sort(), mine: arg.mine, lead: txt(hook('fc-from-lead', d)), wantLead: `${F.amount(total, row.unit, row.group)} to sell · ${earn.length} planting${earn.length === 1 ? '' : 's'} · ${money(worth)}`, personal: hooks('fc-tag', d).filter(x => x.dataset.tag === 'personal').length };""", mix or {})
+    check("in dollars, a figure's popup lists only the plantings that earn it: one marked for personal use that week is not among them", mix and dp and dp["ids"] == dp["want"] and dp["mine"] not in dp["ids"] and len(dp["ids"]) >= 1 and dp["lead"] == dp["wantLead"] and dp["personal"] == 0, dp)
+    js("const d = document.querySelector('dialog[open]'); if (d) { d.close(); d.remove(); } HV.setMeasure('amounts'); return 1;"); wait(400)
+    for _ in range(3):
+        if js("return S.undo.length;") > u2: js("A.undo(); return 1;"); wait(600)
+
     # ══ the list to send: things counted in whole numbers, and "each" ══
     click("#hvShareBtn", 600)
     if has("#hvShareRange"): page.select_option("#hvShareRange", "months"); wait(400)

@@ -139,7 +139,7 @@
 
   "f053": 22,
 
-  "forecast": 43,
+  "forecast": 44,
 
   "harvest": 33,
 
@@ -246,7 +246,7 @@
 
   "f053-site": 22,
 
-  "forecast-site": 43,
+  "forecast-site": 44,
 
   "harvest-site": 33,
 
@@ -436,9 +436,9 @@
 
   "cleanup-site @3440": 28,
 
-  "forecast-site @1707": 43,
+  "forecast-site @1707": 44,
 
-  "forecast-site @3440": 43,
+  "forecast-site @3440": 44,
 
   "harvest-site @1707": 33,
 

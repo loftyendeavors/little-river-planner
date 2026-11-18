@@ -115,10 +115,13 @@
    * variety, carries a window of its own, or it has a last day of its own; a tower's harvest is its own.
    */
   const followsLine = (eng, p) => (root.LRFYieldCard && root.LRFYieldCard.follows ? root.LRFYieldCard.follows(eng, p) : true);
-  /** Where a figure comes from: the plantings picked in that stretch, one row each, with how each is picked as tags. */
+  /**
+   * Where a figure comes from: the plantings picked in that stretch, one row each, with how each is picked as tags. A figure in
+   * dollars comes only from the plantings that earn it: one for personal use, or with no price, is not among them.
+   */
   function sources(row, col) {
     const eng = App.state.engine, picked = !dollars() && series === 'picked' && shownModel().keeps;
-    const list = row.plantings.map(x => ({ ...x, here: F.share(x, col.i0, col.i1, picked) })).filter(x => x.here > 1e-9).sort((a, b) => b.here - a.here), total = list.reduce((n, x) => n + x.here, 0);
+    const list = row.plantings.map(x => ({ ...x, here: F.share(x, col.i0, col.i1, picked) })).filter(x => x.here > 1e-9 && (!dollars() || x.here * (x.price || 0) > 1e-9)).sort((a, b) => b.here - a.here), total = list.reduce((n, x) => n + x.here, 0);
     const worth = list.reduce((n, x) => n + x.here * (x.price || 0), 0);
     const close = () => { dialog.close(); dialog.remove(); };
     const go = x => { close(); App.setDate(x.r.first > App.state.date ? x.r.first : App.state.date); App.setView('map'); App.select({ type: 'planting', id: x.p.id }); };
