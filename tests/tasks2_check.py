@@ -70,10 +70,14 @@ def run(pw):
       return { card: drawn(hook('tasks-upcoming')), below: !!hook('tasks-upcoming') && hook('tasks-upcoming').getBoundingClientRect().top >= $('tkLists').getBoundingClientRect().bottom - 1,
         rows: rows.map((r, i) => { const a = plus(cur, 7 * (i + 1)), z = plus(a, 6), n = h => all.filter(t => t.half === h && t.due >= a && t.due <= z).length;
           const cells = [...r.querySelectorAll('.tk-up-cell')].map(c => { const m = c.textContent.match(/(\\d+) tasks?/); return m ? +m[1] : 0; });
-          return { week: r.dataset.week, a, said: cells, want: [n('nursery'), n('field')], pics: r.querySelectorAll('.tk-up-thumb').length }; }) };""")
+          const trays = h => { const seen = new Set(); let k = 0; for (const t of all) { if (t.half !== h || t.due < a || t.due > z || !t.sow || t.id === 'direct' || t.id === 'rockwool') continue;
+            if (t.id === 'live') { k += Math.ceil(t.line.trays - 1e-9); continue; } const b = t.line.batch; if (!b || b.medium === 'pots') continue; const g = t.line.group, key = g ? 'g' + g.id : 'b' + t.key; if (seen.has(key)) continue; seen.add(key); k += Math.ceil((g ? g.trays : b.trays) - 1e-9); } return k; };
+          const saidTrays = [...r.querySelectorAll('.tk-up-cell')].map(c => { const m = c.textContent.match(/(\\d+) trays?/); return m ? +m[1] : 0; });
+          return { week: r.dataset.week, a, said: cells, want: [n('nursery'), n('field')], trays: saidTrays, wantTrays: [trays('nursery'), trays('field')], shared: all.some(t => t.due >= a && t.due <= z && t.sow && t.line.group && t.line.groupLines.length > 1), pics: r.querySelectorAll('.tk-up-thumb').length }; }) };""")
     check("Upcoming weeks is one card under both lists", up["card"] and up["below"], up)
     check("it has a line for each of the next four weeks, in order", [r["week"] for r in up["rows"]] == [r["a"] for r in up["rows"]] and len(up["rows"]) == 4, up["rows"])
     check("each line's tasks for Nursery and for Field are the page's own open tasks of that week", all(r["said"] == r["want"] for r in up["rows"]), up["rows"])
+    check("each line's trays are counted as Trays to fill counts them, trays shared by several sowings once", all(r["trays"] == r["wantTrays"] for r in up["rows"]) and any(r["shared"] for r in up["rows"]), [(r["trays"], r["wantTrays"], r["shared"]) for r in up["rows"]])
     check("a line shows the photographs of its varieties, four at most a list", any(r["pics"] > 0 for r in up["rows"]) and all(r["pics"] <= 8 for r in up["rows"]), [r["pics"] for r in up["rows"]])
     page.locator('[data-hook="tasks-upcoming-week"]').nth(1).click(); page.wait_for_timeout(500)
     went = js(page, "return { where: V.where(), want: hooks('tasks-upcoming-week')[1] && hooks('tasks-upcoming-week')[1].dataset.week, pressed: hooks('tasks-upcoming-week')[1] && hooks('tasks-upcoming-week')[1].getAttribute('aria-pressed') };")
@@ -242,6 +246,10 @@ def run(pw):
         before = snap(page)
         js(page, "A.setView('map'); A.select({ type: 'planting', id: arg }); return null;", subj["ahead"]); page.wait_for_timeout(600)
         check("a planting not started yet has no Mark as failed…", not js(page, "return drawn(hook('panel-fail'));"))
+        done_by = js(page, """const e = S.engine, p = S.plan.plantings.find(p => { const r = e.calc(p); if (!r || p.established) return false; const t = e.occupancyThrough(p, r); return t !== Infinity && E.d2s(t) < now && E.d2s(r.start) < E.d2s(t); });
+          if (!p) return null; const r = e.calc(p), t = E.d2s(e.occupancyThrough(p, r)), range = A.failedRange(p), late = A.previewFailed(p.id, plus(t, 2));
+          return { held: t, hi: range && range.hi, refused: !!late.why };""")
+        check("a planting whose bed was already free can be marked failed only up to its last day there, and a later day is refused", done_by and done_by["hi"] == done_by["held"] and done_by["refused"], done_by)
         js(page, "A.select({ type: 'planting', id: arg }); return null;", subj["id"]); page.wait_for_timeout(600)
         check("a planting already started has Mark as failed… on its panel", js(page, "return drawn(hook('panel-fail')) && !!hook('panel-fail').closest('#inspectorBody');"))
         press(page, '[data-hook="panel-fail"]', 500)

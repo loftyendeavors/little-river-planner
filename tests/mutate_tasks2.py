@@ -56,6 +56,8 @@ PAGE = [
  ("a press on a week opens its first day only", SV, "    else if (act === 'upweek') { viewWeek(el.dataset.week);", "    else if (act === 'upweek') { viewDay(el.dataset.week);"),
  ("Trays to fill counts trays shared by several sowings once for each", SV, "      if (groups.has(key)) continue;   // trays shared by several sowings are counted once\n", ""),
  ("Trays to fill stands under the lists", SV, "id === 'nursery' ? fillHead(s.open) : null, k ? dayBody", "null, k ? dayBody"),
+ ("Upcoming weeks rounds every share of shared trays up", SV, "    const fig = fillFigures(list), trays = fig ? fig.trays : 0, by = new Map()", "    const trays = list.reduce((n, t) => n + (t.sow && t.id !== 'direct' ? whole(t.line.trays) : 0), 0), by = new Map()"),
+ ("a failure may be marked after its bed was already free", AP, "hi = held !== Infinity && E.d2s(held) < today ? E.d2s(held) : today;", "hi = today;"),
  ("Mark all done is on a group of two", SV, "  const ALL_FROM = 3;", "  const ALL_FROM = 2;"),
  ("Mark all done on late tasks records today without asking", SV, "    if (list.some(t => t.due < now)) { openPop('all', null, el && el.id, list.map(t => t.key)); return; }", "    if (false) { openPop('all', null, el && el.id, list.map(t => t.key)); return; }"),
  ("each on its own day records them all today", SV, "items = list.flatMap(t => t.items().map(i => (each ? { ...i, date: t.due } : i)));", "items = list.flatMap(t => t.items());"),

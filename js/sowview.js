@@ -386,7 +386,8 @@
   const TO_ORDER = ['to sow', 'to direct sow', 'to pot up', 'to harden off', 'to plant out', 'to move out'];
   function upCell(name, list) {
     if (!list.length) return h('span.tk-up-cell.none', h('em', name), h('span.tk-up-fig', 'Nothing planned'));
-    const trays = list.reduce((n, t) => n + (t.sow && t.id !== 'direct' ? whole(t.line.trays) : 0), 0), by = new Map(), seen = new Set(), pics = [];
+    // trays as Trays to fill counts them: plug and live trays, those shared by several sowings once
+    const fig = fillFigures(list), trays = fig ? fig.trays : 0, by = new Map(), seen = new Set(), pics = [];
     for (const t of list) { by.set(TO[t.id], (by.get(TO[t.id]) || 0) + 1); const k = t.line.variety ? t.line.variety.id : 'c:' + t.line.crop.id; if (!seen.has(k)) { seen.add(k); pics.push(t.line); } }
     return h('span.tk-up-cell', h('em', name),
       h('span.tk-up-fig', h('b', num(list.length)), ` ${list.length === 1 ? 'task' : 'tasks'}${trays ? ` · ${plural(trays, 'tray')}` : ''}`),

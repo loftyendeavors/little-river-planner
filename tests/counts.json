@@ -171,7 +171,7 @@
 
   "swap": 32,
 
-  "tasks2": 65,
+  "tasks2": 67,
 
   "trycard": 50,
 
@@ -274,7 +274,7 @@
 
   "sync-site": 92,
 
-  "tasks2-site": 65,
+  "tasks2-site": 67,
 
   "tour": 4,
 
@@ -341,7 +341,7 @@
 
   "swap-site @3440": 32,
 
-  "tasks2-site @3440": 65,
+  "tasks2-site @3440": 67,
 
   "trycard-site @3440": 50
 

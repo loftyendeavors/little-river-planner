@@ -1130,7 +1130,9 @@
   function failedRange(p) {
     const r = p && state.engine.calc(p);
     if (!r || p.established === true) return null;
-    const recorded = [SL.doneDate(p, 'sow'), SL.doneDate(p, 'field')].filter(Boolean).sort()[0] || null, planned = E.d2s(r.start), lo = recorded && recorded < planned ? recorded : planned, hi = todayText();
+    // to today, or to the last day it held its ground where that came first: a failure after its bed was free frees nothing
+    const recorded = [SL.doneDate(p, 'sow'), SL.doneDate(p, 'field')].filter(Boolean).sort()[0] || null, planned = E.d2s(r.start), lo = recorded && recorded < planned ? recorded : planned;
+    const held = state.engine.occupancyThrough(p, r), today = todayText(), hi = held !== Infinity && E.d2s(held) < today ? E.d2s(held) : today;
     return lo <= hi ? { lo, hi } : null;
   }
   const failedTo = (p, date) => Week.fail(p, date, new Date().toISOString());
@@ -1139,7 +1141,7 @@
     const range = failedRange(p);
     if (!range) return 'It has not been started yet, so it cannot have failed. Remove it instead, or move it.';
     if (!SL.realDay(date)) return 'Choose a real calendar date.';
-    if (date > range.hi) return 'A failure is marked on the day it happened: today or an earlier day.';
+    if (date > range.hi) return range.hi < todayText() ? `Its bed was free after ${day(E.s2d(range.hi))}: choose that day or an earlier one.` : 'A failure is marked on the day it happened: today or an earlier day.';
     if (date < range.lo) return `That is before it was started (${day(E.s2d(range.lo))}).`;
     return null;
   }
