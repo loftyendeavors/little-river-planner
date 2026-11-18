@@ -1205,7 +1205,7 @@
   }
 
   function init() {
-    $('sdTitle').after(UI.help(() => 'Click a variety to see and edit it in the panel at the right. With a row in focus, ↑ and ↓ move between varieties and Enter jumps to its first field. ' + (serviceReady() ? 'Links are read for you: paste a product page’s address.' : 'Links are read through Cloud sync once this device is connected. Where a link cannot be read, the page’s text can be copied in instead.'), () => document.querySelector('.sd-main'), () => notes, { hook: 'seeds-help', label: 'How the Seeds page counts' }));
+    $('sdTitle').after(UI.help(() => 'Click a variety to see and edit it in the panel at the right. With a row in focus, ↑ and ↓ move between varieties and Enter jumps to its first field. ' + (serviceReady() ? 'Links are read for you: paste a product page’s address.' : 'Links are read through Cloud sync once this device is connected. Where a link cannot be read, the page’s text can be copied in instead.'), () => document.querySelector('.sd-main'), () => notes, { hook: 'seeds-help', card: { hook: 'seeds-help-card' }, label: 'How the Seeds page counts' }));
     initQuick();
     for (const b of document.querySelectorAll('[data-sd-tab]')) b.addEventListener('click', () => { ui.tab = b.dataset.sdTab; if (ui.tab === 'crops' && ui.sel && ui.sel.type === 'variety') ui.sel = null; schedule(); });
     $('sdSearch').addEventListener('input', e => { ui.query = e.target.value; schedule(); });

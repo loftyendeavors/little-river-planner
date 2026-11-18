@@ -208,7 +208,7 @@
     const sets = longSets(todo);
     const total = sets.size + todo.groups.length;
     // what To settle is, behind "?" beside its head (DESIGN.md, rule 1)
-    const why = UI.help('Ground booked twice, and plantings longer than their bed. They came with the plan or follow a change to your list. Each has a fix in one click; the map will not add to them.', null, null, { label: 'What To settle is', hook: 'settle-help' });
+    const why = UI.help('Ground booked twice, and plantings longer than their bed. They came with the plan or follow a change to your list. Each has a fix in one click; the map will not add to them.', null, null, { label: 'What To settle is', hook: 'settle-help', card: { hook: 'settle-help-card' } });
     const section = h('section.insp-section.cleanup', { id: 'toSettle' }, h('div.sec-head', h('h3', `To settle · ${total}`), why));
     const run = (label, ops) => { if (App.commit(label, ops)) UI.toast(label, { label: 'Undo', run: App.undo }); };
     const action = (label, detail, onclick) => h('button.fix-btn', { type: 'button', onclick }, h('b', label), detail ? h('small', detail) : null);

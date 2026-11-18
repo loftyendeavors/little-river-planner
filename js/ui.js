@@ -86,8 +86,8 @@
    *  `lead` may give an element in place of a sentence, where what it says has parts (the Forecast page's);
    *  `from` is the element whose controls are listed, or a function that gives it. One hint is open at a time.
    *  `opts`: `id` for the button (its card is that id with "Card"), `label` for what it is called, `cols` for a card in two
-   *  columns (a name, and what it does), where the rows are the whole of it, `hook` for the checks (the button carries it, the
-   *  card it with "-card"). A row's second part may hold a button: pressing one closes the card, since what it opens takes its place. */
+   *  columns (a name, and what it does), where the rows are the whole of it, `hook` for the checks (on the button), `card` the card's own
+   *  (`{ hook: '…' }`). A row's second part may hold a button: pressing one closes the card, since what it opens takes its place. */
   let hintOpen = null;
   function help(lead, from, more, opts = {}) {
     const btn = h('button.help-btn', { type: 'button', id: opts.id || null, 'aria-label': opts.label || 'What this page is for', 'aria-expanded': 'false', dataset: opts.hook ? { hook: opts.hook } : {} }, '?');
@@ -107,7 +107,7 @@
       const said = host ? [...host.querySelectorAll('button[title], select[title], input[title], summary[title], a[title]')].filter(el => el !== btn && el.title && shown(el))
         .map(el => [(el.getAttribute('aria-label') || el.textContent || el.placeholder || '').trim().replace(/\s+/g, ' ').slice(0, 48), el.title]) : [];
       const rows = [...extra, ...said].filter(([name], i, all) => name && all.findIndex(x => x[0] === name) === i).slice(0, 14);
-      box = h('div.hint' + (opts.cols ? '.cols' : ''), { role: 'note', id: opts.id ? opts.id + 'Card' : null, dataset: opts.hook ? { hook: opts.hook + '-card' } : {} }, text ? (text.nodeType ? text : h('p', text)) : null, rows.length ? h('dl', rows.map(([name, what]) => [h('dt', name), h('dd', what)])) : null);
+      box = h('div.hint' + (opts.cols ? '.cols' : ''), { role: 'note', id: opts.id ? opts.id + 'Card' : null, dataset: opts.card || {} }, text ? (text.nodeType ? text : h('p', text)) : null, rows.length ? h('dl', rows.map(([name, what]) => [h('dt', name), h('dd', what)])) : null);
       box.addEventListener('click', e => { if (e.target.closest('button')) close(); });
       document.body.append(box);
       const r = btn.getBoundingClientRect(), w = box.offsetWidth;
