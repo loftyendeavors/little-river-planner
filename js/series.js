@@ -432,7 +432,7 @@
     const eng = App.state.engine, q = String(query || '').trim().toLowerCase(), sel = App.state.sel;
     const list = App.waiting().slice().sort((a, b) => a.date.localeCompare(b.date) || natural((eng.crop(a.cropId) || {}).name, (eng.crop(b.cropId) || {}).name));
     if (!list.length) { add(host, h('p.empty.lib-wait-lead', { dataset: { hook: 'waiting-lead' } }, 'Nothing waits for a bed. A series sends a planting here when no bed is free for it.')); return; }
-    add(host, h('p.lib-wait-lead', { dataset: { hook: 'waiting-lead' } }, 'Until it is placed it is not in the forecast, and takes no seed.'));
+    add(host, h('p.lib-wait-lead', { dataset: { hook: 'waiting-lead' } }, 'Not in a bed yet, so not in the forecast, seed or sowing lists.'));
     let shown = 0;
     for (const w of list) {
       const c = eng.crop(w.cropId) || { name: 'Crop' }, v = eng.variety(w.varietyId), wait = w.wait || {}, name = v && v.name ? `${c.name} · ${v.name}` : c.name;
