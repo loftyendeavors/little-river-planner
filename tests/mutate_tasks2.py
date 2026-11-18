@@ -31,6 +31,9 @@ def alone(cmd, timeout, env=None, cwd=None):
     return out, err
 EN, WK, SLB, AP, SV, PN, TL, MG, RL, NS = "js/engine.js", "js/week.js", "js/seedlib.js", "js/app.js", "js/sowview.js", "js/panels.js", "js/timeline.js", "js/merge.js", "js/rails.js", "js/nursery.js"
 NODE = [
+ ("this device's failed mark is kept over later work recorded on the other", MG, " && !markGoes) { said(ctx, { kind: 'failed-before-work'", " && false) { said(ctx, { kind: 'failed-before-work'"),
+ ("this device's work after the cloud's failed mark is kept", MG, "if (markWho === 't' && markOn(ft)) for (const kind of kinds) {", "if (false) for (const kind of kinds) {"),
+ ("work before the failed day is dropped as if it came after", MG, "if (side.get(kind) === 'm' && j.jm && String(j.jm.date) > markOn(ft))", "if (side.get(kind) === 'm' && j.jm)"),
  ("a planting marked failed can be swapped to another variety", "js/swap.js", "if ((eng.failedOn && eng.failedOn(p)) || (p.workflow", "if ((false) || (p.workflow"),
  ("a live-tray batch marked failed is made again with its plan, and loses its mark", "js/trays.js", "|| p.outcome || p.failed", "|| p.outcome"),
  ("a sowing recorded on the day its planting failed takes no tray", "js/nursery.js", "      if (r && r.sow && r.cells && lost <= r.sow && r.b.active !== false && r.g.active !== false) items.push({ p, r, kind: 'prop', from: r.sow, to: r.sow });\n", ""),

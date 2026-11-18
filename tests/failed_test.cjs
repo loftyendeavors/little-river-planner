@@ -125,6 +125,25 @@ tryCase('a planting marked failed on one device and changed in another box on th
   const a = put(plan, W.fail(picking, on, AT)), b = put(plan, { ...picking, note: 'theirs' }), r = M.merge(plan, a, b), p = r.plan.plantings.find(x => x.id === picking.id);
   return [p.failed && p.failed.on === on && p.note === 'theirs', { failed: p.failed, note: p.note }];
 });
+{
+  // one device marks the transplant failed, the other records work on it: before the mark's day both stand, after it the cloud's
+  const inv = plan.seedInventory || SL.emptyInventory(), sowSt = W.steps(eng, nursery).find(y => y.kind === 'sow'), D = E.addDays(sowSt.planned, 5);
+  const marked = put(plan, W.fail(nursery, E.d2s(D), AT));
+  const worked = day => put(plan, W.record(eng, inv, nursery, 'sow', { date: E.d2s(day), follow: false }, ctx).planting);
+  const of = r => r.plan.plantings.find(x => x.id === nursery.id), said = r => r.report.items.filter(x => x.kind === 'failed-before-work');
+  tryCase('marked failed here, and sown on the other device after that day: the other device\'s sowing stands, the mark goes, and it is reported', () => {
+    const r = M.merge(plan, marked, worked(E.addDays(D, 3))), p = of(r);
+    return [!p.failed && p.done && p.done.sow === E.d2s(E.addDays(D, 3)) && said(r).length === 1 && said(r)[0].whose === 'mine', { failed: p.failed, done: p.done, said: said(r) }];
+  });
+  tryCase('marked failed on the other device, and sown here after that day: the mark stands, the sowing here goes, and it is reported', () => {
+    const r = M.merge(plan, worked(E.addDays(D, 3)), marked), p = of(r);
+    return [p.failed && p.failed.on === E.d2s(D) && !(p.done && p.done.sow) && said(r).length === 1 && said(r)[0].whose === 'theirs', { failed: p.failed, done: p.done, said: said(r) }];
+  });
+  tryCase('marked failed on one device, and sown on the other before that day: both stand, and nothing is reported', () => {
+    const a = M.merge(plan, marked, worked(E.addDays(D, -2))), b = M.merge(plan, worked(E.addDays(D, -2)), marked);
+    return [[a, b].every(r => of(r).failed && of(r).failed.on === E.d2s(D) && of(r).done && of(r).done.sow === E.d2s(E.addDays(D, -2)) && !said(r).length), [a, b].map(r => ({ failed: of(r).failed, done: of(r).done }))];
+  });
+}
 tryCase('the mark taken off on one device, and left on the other: taken off', () => {
   const was = put(plan, W.fail(picking, on, AT)), a = put(was, W.fail(was.plantings.find(x => x.id === picking.id), null)), r = M.merge(was, a, was);
   return [!r.plan.plantings.find(x => x.id === picking.id).failed, r.plan.plantings.find(x => x.id === picking.id).failed];
