@@ -779,7 +779,7 @@
       ['Move', 'Drag a planting to another bed. Its date stays.'],
       ['Copy', 'Hold Alt while dragging.'],
       ['Trade', 'Drop a planting on a bed that is taken. The two swap when both fit.'],
-      ['Share a bed', 'Drop a crop from the library on a bed that is taken, then choose to split the bed or replace what is there. Or use “Several varieties…” in a planting’s panel. Push a planting’s end into its neighbour to move the line between them.'],
+      ['Share a bed', 'Drop a crop from the library on a bed that is taken, then split it or replace what is there. Push a planting’s end into its neighbour to move the line.'],
       ['Zoom and pan', 'Wheel · drag · Space and drag · click a garden’s name.'],
       ['Colours', 'Pale: growing · Full: being picked · Hatched: turnover. Click a group in the bar under the map to show only that group.'],
       ...(root.LRFCard ? [['Try the card', root.LRFCard.tick()]] : [])

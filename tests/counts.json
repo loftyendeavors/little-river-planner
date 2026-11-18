@@ -135,7 +135,7 @@
 
   "card": 110,
 
-  "cleanup": 28,
+  "cleanup": 34,
 
   "f053": 22,
 
@@ -422,19 +422,19 @@
 
   "card-site @3440": 110,
 
-  "cleanup @1480": 28,
+  "cleanup @1480": 34,
 
-  "cleanup @1707": 28,
+  "cleanup @1707": 34,
 
-  "cleanup @3440": 28,
+  "cleanup @3440": 34,
 
-  "cleanup-site": 28,
+  "cleanup-site": 34,
 
-  "cleanup-site @1480": 28,
+  "cleanup-site @1480": 34,
 
-  "cleanup-site @1707": 28,
+  "cleanup-site @1707": 34,
 
-  "cleanup-site @3440": 28,
+  "cleanup-site @3440": 34,
 
   "forecast-site @1707": 44,
 

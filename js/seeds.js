@@ -838,15 +838,17 @@
         : c.how === 'packet' ? `${vendor}’s size list is not on file; this is the packet size its page gives.` : `${vendor}’s size list is not on file; this is the weight of the ${short} short.`;
     return h('td.sd-num.sd-size' + (c.how === 'sizes' ? '' : '.soft'), { title }, c.text);
   }
+  let notes = [];   // how the seed counts are made, for "?": written with the foot, read when "?" opens
   function foot(m) {
     const bare = m.live.filter(v => !v.supplier && !v.url && !v.catalogDtm).length, sown = m.need.rows.reduce((n, r) => n + (r.plantings - r.waiting - r.established), 0);
     const item = (label, ...text) => h('li', h('b', label), h('span', text));
-    add(clear($('sdFoot')), h('ul.sd-foot-list',
-      m.live.length && bare === m.live.length ? item('Figures only', 'These varieties carry planning figures only. Supplier, product code and page come in when you load your backup here.') : null,
-      item('Seed counts', `allow for ${m.need.settings.germ}% germination${m.need.settings.buffer ? ` and ${m.need.settings.buffer}% extra plugs on transplants` : ''}. Transplants are sown in whole rows of their tray; plantings of one variety sown the same day are rounded together, as in Tasks.`),
-      sown ? item('Left out', `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted.`) : null,
-      item('On hand', 'Type what you have; click an order when it arrives. Each variety’s lots and sizes are in its panel.'),
-      item('Vendor size', 'What covers a shortfall at least cost, in the sizes that variety’s vendor sells.')),
+    // how the counts are made is said behind "?" (DESIGN.md, rule 1); the foot keeps what is so of this plan, and the download
+    notes = [['Seed counts', `Allow for ${m.need.settings.germ}% germination${m.need.settings.buffer ? ` and ${m.need.settings.buffer}% extra plugs on transplants` : ''}. Transplants are sown in whole rows of their tray; plantings of one variety sown the same day are rounded together, as in Tasks.`],
+      ['On hand', 'Type what you have; click an order when it arrives. Each variety’s lots and sizes are in its panel.'],
+      ['Vendor size', 'What covers a shortfall at least cost, in the sizes that variety’s vendor sells.']];
+    const so = [m.live.length && bare === m.live.length ? item('Figures only', 'These varieties carry planning figures only. Supplier, product code and page come in when you load your backup here.') : null,
+      sown ? item('Left out', `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted.`) : null].filter(Boolean);
+    add(clear($('sdFoot')), so.length ? h('ul.sd-foot-list', so) : null,
       h('button.link', { type: 'button', onclick: () => download(m) }, 'Download seeds required (.csv)'));
   }
   function gallery(m, list, q) {
@@ -903,7 +905,7 @@
       const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), short = [...m.byV.values()].filter(r => r.short > 0).length, onOrder = m.live.filter(v => passes(m, v, 'ordered')).length;
       add(el, h('header.sd-ph.plain', h('div', h('p.eyebrow', `${App.planYear()} season`), h('h2', 'Seed library'))),
         h('p.frame-figs', { id: 'sdFigs' }, h('span', h('b', num(m.live.length)), ' varieties, ', h('b', num(m.live.filter(v => m.used.has(v.id)).length)), ' planted'), h('span', h('b', num(seeds)), ' seeds to sow'), h('span', h('b', num(short)), ' short of seed'), onOrder ? h('span', h('b', num(onOrder)), ' on order') : null),
-        Object.values(m.stock).some(x => x.onOrder > 0) ? h('p.sd-arrived', h('button.btn.small', { type: 'button', id: 'sdReceiveAll', title: 'When the box comes: every order becomes seed on hand, at the quantity ordered. One Undo puts them back. To count one order, click it in the list.', onclick: receiveAll }, 'All orders arrived…')) : null);
+        Object.values(m.stock).some(x => x.onOrder > 0) ? h('p.sd-arrived', h('button.btn.small', { type: 'button', id: 'sdReceiveAll', title: 'When the box comes: every order becomes seed on hand, as ordered. One Undo puts them back. To count one order, click it.', onclick: receiveAll }, 'All orders arrived…')) : null);
       return;
     }
     if (ui.sel.type === 'unlisted') {
@@ -1059,7 +1061,7 @@
     const el = h('dialog.dialog.bk.wide.order', { id: 'orderDlg', oncancel: e => { e.preventDefault(); close(); } },
       h('button.icon-btn.close', { type: 'button', id: 'odClose', 'aria-label': 'Close', title: 'Close. Nothing is changed.', onclick: () => close() }, '×'),
       h('h2', 'Seed to order'),
-      h('p.dlg-lead', 'What is short today, by supplier, in each supplier’s own sizes at the least cost. Change an amount to buy more or less; mark a supplier’s lines as ordered once the order is placed, and they stop counting as short.'),
+      h('p.dlg-lead', 'What is short today, by supplier, in its own sizes at the least cost. Mark a supplier ordered once the order is placed, and its lines stop counting as short.'),
       host, sum,
       h('div.dialog-actions',
         framed ? null : h('button.btn', { type: 'button', id: 'odCsv', onclick: () => saveText(`seed-order-${App.planYear()}-${E.d2s(new Date())}.csv`, '\ufeff' + SL.orderCsv(build().sheet), 'text/csv') }, 'Download (.csv)'),
@@ -1203,7 +1205,7 @@
   }
 
   function init() {
-    $('sdTitle').after(UI.help(() => 'Click a variety to see and edit it in the panel at the right. With a row in focus, ↑ and ↓ move between varieties and Enter jumps to its first field. ' + (serviceReady() ? 'Links are read for you: paste a product page’s address.' : 'Links are read through Cloud sync once this device is connected. Where a link cannot be read, the page’s text can be copied in instead.'), () => document.querySelector('.sd-main')));
+    $('sdTitle').after(UI.help(() => 'Click a variety to see and edit it in the panel at the right. With a row in focus, ↑ and ↓ move between varieties and Enter jumps to its first field. ' + (serviceReady() ? 'Links are read for you: paste a product page’s address.' : 'Links are read through Cloud sync once this device is connected. Where a link cannot be read, the page’s text can be copied in instead.'), () => document.querySelector('.sd-main'), () => notes, { hook: 'seeds-help', card: { hook: 'seeds-help-card' }, label: 'How the Seeds page counts' }));
     initQuick();
     for (const b of document.querySelectorAll('[data-sd-tab]')) b.addEventListener('click', () => { ui.tab = b.dataset.sdTab; if (ui.tab === 'crops' && ui.sel && ui.sel.type === 'variety') ui.sel = null; schedule(); });
     $('sdSearch').addEventListener('input', e => { ui.query = e.target.value; schedule(); });

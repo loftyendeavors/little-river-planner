@@ -24,7 +24,7 @@
   const IN = { field: 'in the field', tunnel: 'in the unheated tunnel', heated: 'in the heated greenhouse', tower: 'in the towers' };
   const PATTERN = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' };
   const PATTERN_SAY = { weekly: 'picked gradually', once: 'cleared at once', spread: 'picked on demand' };
-  const PATTERN_TIP = { spread: 'Its yield is a total, picked evenly over its harvest days.', weekly: 'Its yield is what is picked each week.', once: 'Its yield is a total, all of it counted the first day it is picked.' };
+  const PATTERN_TIP = { spread: 'On demand: its yield is a total, spread evenly over its harvest window.', weekly: 'Gradually: its yield is a week’s picking.', once: 'Clear: its yield is a total, all of it counted the first day it is picked.' };
   const PER = { plant: 'a plant', ft: 'a bed-foot', tray: 'a tray' };
   const KIND = { place: 'A different thing from one place', bed: 'Two things out of one bed', harvest: 'One harvest, packed two ways' };
   const fig = n => root.LRFAssume.fig(n);
@@ -115,8 +115,8 @@
       }
       if (id === 'first') {
         const timing = t.from === 'place' ? eng.timingFor(c.id, null, t.place) : null;
-        const later = `${t.name} is first picked the day ${c.name} is, at its DTM. A first picking of its own (earlier, as for babies) is not built yet: it will be typed in this cell.`;
-        return td(timing && timing.value != null ? h('span.yc-line', { title: later }, h('b.yc-fixed', { dataset: { dtm: String(timing.value) } }, String(timing.value)), h('span.yc-mark', { title: 'DTM: days to maturity. The figure the Days to harvest list holds for this crop in this place.' }, 'DTM'), h('small.yc-total', { dataset: { later: 'first' } }, 'its own will go here'))
+        const later = `First picked with ${c.name}, on its days to harvest. A first picking of its own, earlier as for babies, will be typed here.`;
+        return td(timing && timing.value != null ? h('span.yc-line', { title: later }, h('b.yc-fixed', { dataset: { dtm: String(timing.value) } }, String(timing.value)), h('span.yc-unit', { dataset: { hook: 'card-first-unit' } }, 'days'), h('small.yc-total', { dataset: { later: 'first' } }, 'its own will go here'))
           : h('span.yc-na', { title: later, dataset: { later: 'first' } }, `with ${c.name}: its own first picking will go here`));
       }
       if (id === 'pick') {
@@ -169,7 +169,7 @@
       const ownUnit = eng.plan.plantings.filter(p => { if (p.cropId !== c.id) return false; const v = eng.variety(p.varietyId); return !!v && v.cropId === c.id && !!eng.sellVRule(v.id).unit; }).length;
       return ownUnit ? `${plural(ownUnit, 'planting')} of a variety sold by a unit of its own ${ownUnit === 1 ? 'is' : 'are'} counted as that variety is sold, whole.` : null;
     };
-    const add = () => can ? h('button.btn.yc-add', { type: 'button', id: 'ycAdd', title: `${c.name} sold in another way as well: by another unit, at another price. It gets a column of its own, and counts for nothing until its boxes are filled.`, onclick: () => ask(ctx, list) }, 'Add something else you sell…') : null;
+    const add = () => can ? h('button.btn.yc-add', { type: 'button', id: 'ycAdd', title: `${c.name} sold another way too, by another unit and price: a column of its own, counted once its boxes are filled.`, onclick: () => ask(ctx, list) }, 'Add something else you sell…') : null;
     return { list, any: list.length > 0, counting, places, heads, cells, shareRows, helperRow, empties, needs, apart, add, row: id => rowsOf.get(id) || null, year };
   }
 

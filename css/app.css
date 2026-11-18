@@ -2178,7 +2178,6 @@ table.yc-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .yc-sel.mine { background: var(--flag-soft); border-color: color-mix(in srgb, var(--flag) 55%, var(--line)); }
 .yc-unit { color: var(--ink-2); font-size: var(--type-13); margin: 0 4px 0 2px; }
 .yc-fixed { font: 600 var(--type-15) var(--mono); }
-.yc-mark { font: 600 var(--type-11) var(--mono); letter-spacing: 0.05em; color: var(--ink-2); border: 1px solid var(--line); border-radius: var(--corner-4); padding: 1px var(--space-4); }
 .yc-na { color: var(--muted); font-size: var(--type-13); }
 /* The harvest window: one joined choice, to the season's end or for a set number of days, on the card and on the list. One
    switch, bordered, the chosen side in ink; the second side holds its number box. */
@@ -2369,6 +2368,9 @@ table.as tr.as-thing td { background: var(--surface); }
 .hint.cols dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-8) var(--space-16); }
 .hint.cols dd { margin: 0; }
 .map-tools .help-btn { width: var(--control); height: var(--control); }   /* among the map's tools it is as high as they are */
+.sec-head { display: flex; align-items: center; gap: var(--space-8); }   /* a side panel section's head, with its "?" beside it */
+.bn-edit-head:has(> .help-btn) { align-items: center; }
+.bn-edit-head .help-btn { flex: none; }
 
 /* A sheet, and its foot: the way back at the left, then Cancel and the one dark button at the right. */
 .dialog { border: 0; border-radius: var(--corner-20); padding: var(--space-24); box-shadow: var(--shadow-float); }

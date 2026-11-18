@@ -1,0 +1,39 @@
+{
+ "build": "The words, from one glossary (his notes of Nov 16, section 3; \"days to harvest\" kept, DTM never used). The standing paragraphs and long hover texts that E3 and the small fixes left are rewritten in the glossary's terms (marketable yield, harvest window, harvest pattern) and put behind \"?\" (DESIGN.md, rule 1). Behind a new \"?\" beside its head: To settle's paragraph in the side panel, What fits' paragraph on an opening, the two paragraphs of the Nursery's hardening-off and growing-on rules. Into the Seeds page's \"?\": the three notes on how seed is counted that stood at the foot of the list (the foot keeps what is so of the plan, and the download). The Assumptions \"?\" gives each half's terms as rows (Transplanting, Seeding in trays, Direct seeding, Seed to harvest; Marketable yield, Gradually, Clear, On demand, Harvest window), and its leads are rewritten; the Yield and price title no longer repeats its lead on hover. The yield card's first picking reads \"N days\" where it read \"N DTM\", and \"set under Days to harvest\" where it read \"its DTM, changed on\". About twenty hovers of 140 characters or more are cut to their point (the Picked and Comes to heads, Days counted from, Seed to harvest, the personal-use switch, the Timeline's zoom and To place, a variety's guessed start, the published-guidance button, Move onto the list, Loose ends, Share the bed between them, Add something else you sell, a crop's unit and harvest pattern, All orders arrived, Plan to a weekly amount); the Map's \"?\" row on sharing a bed and the order sheet's lead are shortened. \"?\" can carry a hook for the checks (LRFUI.help, opts.hook). Words only: no figure, field, stored value or behaviour changes.",
+ "changes": {
+  "did": "Page notes use one glossary: marketable yield, harvest window, harvest pattern, days to harvest (never DTM). The long ones are behind \"?\": To settle, What fits, the Nursery's set-up rules, how Seeds counts. Long hover texts are cut to their point.",
+  "steps": [
+   "On Assumptions, Yield and price, press \"?\" beside the title: the page's line, then Marketable yield, Gradually, Clear, On demand and Harvest window, each in one sentence.",
+   "On the yield card, the First picking row reads a number of days with \"set under Days to harvest\"; the letters DTM appear nowhere.",
+   "On the Map with something To settle, the side panel's \"To settle\" has a \"?\" beside it and no paragraph under it; on Seeds, \"?\" lists Seed counts, On hand and Vendor size."
+  ]
+ },
+ "words": [
+  "guide.js",
+  "harvestview.js",
+  "map.js",
+  "timeline.js"
+ ],
+ "code": [
+  "ahead.js",
+  "assume.js",
+  "bench.js",
+  "panels.js",
+  "seeds.js",
+  "things.js",
+  "ui.js",
+  "yieldcard.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html"
+ ],
+ "screens": [
+  "map",
+  "timeline",
+  "nursery-set-up",
+  "assumptions-yield"
+ ]
+}

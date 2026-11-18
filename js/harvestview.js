@@ -288,7 +288,7 @@
       // the title and "?", and beside them the two things done from the page: plan more of a crop, send what is there
       h('header.as-head.hv-head', h('div.hv-head-text', h('h2', { id: 'hvTitle', dataset: { hook: 'fc-title' } }, 'Forecast'), helpBtn, lead(m, marked)),
         h('div.hv-head-acts',
-          root.LRFSeries ? h('button.btn', { type: 'button', id: 'hvPlanBar', title: 'Say how much of a crop is wanted each week between two days: the planner says how many plantings, when and how large. It opens beside the timeline.', onclick: () => App.openAhead({ mode: 'series', by: 'harvest' }) }, 'Plan to a weekly amount…') : null,
+          root.LRFSeries ? h('button.btn', { type: 'button', id: 'hvPlanBar', title: 'Say how much of a crop is wanted each week: the planner says how many plantings, when and how large. It opens beside the timeline.', onclick: () => App.openAhead({ mode: 'series', by: 'harvest' }) }, 'Plan to a weekly amount…') : null,
           h('button.btn.primary', { type: 'button', id: 'hvShareBtn', onclick: share }, 'A list to send…'))),
       figures(m, noYield),
       h('div.hv-bar',

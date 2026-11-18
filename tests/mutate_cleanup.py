@@ -34,7 +34,7 @@ PAGE = [
   ("a download is “a plan file the v7 planner can restore”", 'index.html', '<small>The plan as one file, to keep somewhere safe or load again</small>', '<small>A plan file the v7 planner can restore</small>', 'Backup menu'),
   ("the label says “Rebuild preview”", 'js/main.js', '`Preview ${(root.LRFBuilt', '`Rebuild preview ${(root.LRFBuilt', 'the build says'),
   ("the label is another build's", 'js/built.js', 'label: "' + LABEL + '",', 'label: "' + OTHER + '",', 'the build says'),   # the label is written in js/built.js (tools/shared.cjs)
-  ("the Assumptions list speaks of the old planner", 'js/assume.js', 'Some plantings still carry figures of their own, so', 'Some plantings still carry figures from the old planner, so', 'names the planner'),
+  ("the Assumptions list speaks of the old planner", 'js/assume.js', 'Some plantings keep figures of their own, so', 'Some plantings keep figures from the old planner, so', 'names the planner'),
   ("a tooltip on the Assumptions list speaks of the old planner", 'js/assume.js', "'Plantings that carry nursery weeks of their own that differ", "'Plantings that carry nursery weeks from the old planner that differ", 'names the planner'),
   ("the review window has an “Old copy”", 'js/assume.js', "copy: 'Copied value' }", "copy: 'Old copy' }", 'old copy'),
   ("the last figure of a row is pushed to the end of its line", 'css/app.css', ".stat { flex: 1 1 92px; min-width: 0; background", ".stats > .stat:last-child { margin-left: auto; flex: 0 0 92px; }\n.stat { flex: 1 1 92px; min-width: 0; background", 'grey block'),
@@ -51,8 +51,17 @@ PAGE = [
   ("the importer's window is “from a supplier page”", 'js/seeds.js', "openDialog('Add a variety from a link',", "openDialog('Add a variety from a supplier page',", 'Add from a link'),
   ("a crop sown in place counts from “sowing”", 'js/assume.js', "sown: ['direct seeding',", "sown: ['sowing',", "own words"),
   # the same sentence stands in index.html too, but the list writes its own over it as it is drawn: a fault there shows nowhere
-  ("the list's first line says “where its days start”", 'js/assume.js', "'Each row says what its days are counted from, and", "'Each row says where its days start, and", 'first line'),
+  ("the list's first line says “where its days start”", 'js/assume.js', "Each row says what its days are counted from. Each number", "Each row says where its days start. Each number", 'first line'),
   ("the order sheet's window names the old planner", 'js/seeds.js', "openDialog('Add a variety from a link',", "openDialog('Add a variety from a link (as the old planner did)',", 'names the planner'),
+  # the words, from one glossary (0.63): each puts back one note or hover it took away, or one term it put in
+  ("To settle's paragraph stands under its head again", 'js/panels.js', "h('div.sec-head', h('h3', `To settle · ${total}`), why));", "h('div.sec-head', h('h3', `To settle · ${total}`), why), h('p.help', 'Ground booked twice, or plantings longer than their bed. They came in with the plan, or follow from a change to the assumptions. Each has a fix in one click; the map will not let you add to them.'));", "To settle's note"),
+  ("the Assumptions “?” gives no terms", 'js/assume.js', "() => WORDS[ui.mode] || []", "() => []", "each half's terms"),
+  ("the Assumptions “?” lists the crop list's rows as controls again", 'js/assume.js', "() => document.querySelector('#assumeView .as-tools'), () => WORDS", "() => $('assumeView'), () => WORDS", "each half's terms"),
+  ("the Picked head's hover is long again", 'js/assume.js', "'The harvest pattern. Gradually: a week’s picking, every week. Clear: all of it the day it is ready. On demand: a total, spread evenly.'", "'How the harvest comes in. Gradually: picked week by week, and the yield is a week’s picking. Clear: the yield is a total, all of it taken the day it is ready. On demand: the yield is a total, held and taken evenly over the harvest days.'", "long hovers"),
+  ("What fits has no “?”", 'js/ahead.js', "fits.length ? fitsHelp() : null)", "null)", "What fits"),
+  ("one of the Nursery's rules loses its “?”", 'js/bench.js', "{ label: 'What these rules change', hook: 'bench-help', card: { hook: 'bench-help-card' } }", "{ label: 'What these rules change' }", "Nursery's hardening-off"),
+  ("growing on without heat's “?” says nothing", 'js/bench.js', "UI.help('From its first day through its last, a crop’s plug trays and pots stand on the unheated benches once they have had their days under heat to come up. Tower seedlings stay under heat.',", "UI.help('',", "Nursery's hardening-off"),
+  ("the yield card's first picking says DTM again", 'js/yieldcard.js', "dataset: { hook: 'card-first-unit' } }, oneStart ? 'days' : after(t))", "dataset: { hook: 'card-first-unit' } }, oneStart ? 'DTM' : after(t))", "letters DTM"),
 ]
 if mode == 'list': print(json.dumps({'page': len(PAGE)})); sys.exit(0)
 def copy():

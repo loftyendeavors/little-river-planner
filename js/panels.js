@@ -207,8 +207,9 @@
     if (!todo.count) return;
     const sets = longSets(todo);
     const total = sets.size + todo.groups.length;
-    const section = h('section.insp-section.cleanup', { id: 'toSettle' }, h('h3', `To settle · ${total}`),
-      h('p.help', 'Ground booked twice, or plantings longer than their bed. They came in with the plan, or follow from a change to the assumptions. Each has a fix in one click; the map will not let you add to them.'));
+    // what To settle is, behind "?" beside its head (DESIGN.md, rule 1)
+    const why = UI.help('Ground booked twice, and plantings longer than their bed. They came with the plan or follow a change to your list. Each has a fix in one click; the map will not add to them.', null, null, { label: 'What To settle is', hook: 'settle-help', card: { hook: 'settle-help-card' } });
+    const section = h('section.insp-section.cleanup', { id: 'toSettle' }, h('div.sec-head', h('h3', `To settle · ${total}`), why));
     const run = (label, ops) => { if (App.commit(label, ops)) UI.toast(label, { label: 'Undo', run: App.undo }); };
     const action = (label, detail, onclick) => h('button.fix-btn', { type: 'button', onclick }, h('b', label), detail ? h('small', detail) : null);
 
@@ -529,7 +530,7 @@
     const twice = eng.conflicts(p, eng.calc(p)).some(o => !o.rest);
     if (twice) return h('div.field', { id: 'fMatesField', dataset: { twice: '1' } }, h('span', `Booked into the same ground in ${App.bedLabel(eng.bedOf(p.bedId))}`),
       h('ul.mix-mates', { id: 'fMates' }, mates.map(x => h('li', { dataset: { mate: x.p.id } }, x.p.id === p.id ? h('b', `${App.cropLabel(x.p)} (this one)`) : h('button.link', { type: 'button', onclick: () => App.select({ type: 'planting', id: x.p.id }) }, App.cropLabel(x.p)), h('span', size(x))))),
-      h('small', 'They are in the ground on the same days. ', h('button.linkish', { type: 'button', id: 'fEqual', title: 'Each takes an equal share of the bed, so the ground is no longer booked twice. Plant counts follow the feet; no date changes. The fixes by date are under To settle.', onclick: () => App.equalShares(p.id) }, 'Share the bed between them'), ', or settle it by date under To settle.'));
+      h('small', 'They are in the ground on the same days. ', h('button.linkish', { type: 'button', id: 'fEqual', title: 'Each takes an equal share of the bed, so it is no longer booked twice. Plant counts follow the feet; no date changes.', onclick: () => App.equalShares(p.id) }, 'Share the bed between them'), ', or settle it by date under To settle.'));
     return h('div.field', { id: 'fMatesField' }, h('span', `Shares ${App.bedLabel(eng.bedOf(p.bedId))} with`),
       h('ul.mix-mates', { id: 'fMates' }, mates.map(x => h('li', { dataset: { mate: x.p.id } }, x.p.id === p.id ? h('b', `${App.cropLabel(x.p)} (this one)`) : h('button.link', { type: 'button', onclick: () => App.select({ type: 'planting', id: x.p.id }) }, App.cropLabel(x.p)), h('span', size(x))))),
       h('small', h('button.linkish', { type: 'button', id: 'fEqual', onclick: () => App.equalShares(p.id) }, 'Make them equal'), ' · on the map, push an end into its neighbour to move the line between them.'));
@@ -745,7 +746,7 @@
     badge.hidden = !n;
     if (!n) { closeLoose(); return; }
     clear(badge); add(badge, 'Loose ends', h('b', num(n)));
-    badge.title = `${num(n)} ${n === 1 ? 'thing needs' : 'things need'} you: ground booked twice, plantings longer than their bed, or seed no row can count. Click for the list, with what can wait under it.`;
+    badge.title = `${num(n)} ${n === 1 ? 'thing needs' : 'things need'} you: ground booked twice, plantings longer than their bed, or seed no row can count. What can wait is under it.`;
     if (looseBox) fillLoose();
   }
   /** Worked out a moment after the plan changes, so a run of changes costs one count and typing is never held up by it. */

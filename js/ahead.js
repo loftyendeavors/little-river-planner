@@ -32,6 +32,8 @@
   const stat = (label, value) => h('div.stat', h('span', label), h('b', value));
   const labelFor = (o, crop) => `Plant ${lower(crop)} ${o.before ? 'before the ' + lower(o.before.r.c) : o.after ? 'after the ' + lower(o.after.r.c) : 'in open ground'}`;
   const find = (eng, sel) => S.openings(eng, { bedId: sel.bedId }).find(o => o.id === sel.id) || null;
+  /** What makes a crop fit, behind "?" beside "What fits" (DESIGN.md, rule 1). */
+  const fitsHelp = () => UI.help('A crop fits when all of it goes in, in season: its growing days, its harvest window and its turnover. A green edge: the plan has little or none of it then. Dashed: it would follow its own family.', null, null, { label: 'What makes a crop fit', hook: 'fits-help', card: { hook: 'fits-help-card' } });
   function addFit(o, t, crop) {
     const p = { ...t.p, id: App.uid() };
     if (!App.addPlantings([p], labelFor(o, crop))) return;
@@ -89,11 +91,11 @@
       h('section.insp-section', h('h3', 'It comes'), around.length
         ? h('ul.ah-around', around.map(([word, x, when]) => h('li', h('span', `${word} ${lower(x.r.c)}${x.r.c.vname ? ' · ' + x.r.c.vname : ''}`), h('b', when(x)))))
         : h('p.note', o.rests ? 'Until the bed rests.' : 'Nothing else is planned here.')),
-      h('section.insp-section', { id: 'ahFits' }, h('h3', fits.length ? `What fits · ${num(fits.length)}` : 'What fits'),
+      h('section.insp-section', { id: 'ahFits' }, h('div.sec-head', h('h3', fits.length ? `What fits · ${num(fits.length)}` : 'What fits'), fits.length ? fitsHelp() : null),
         fits.length ? h('div.ah-fits', chips, fits.length > shown.length ? h('button.ah-more', { type: 'button', id: 'ahMore', onclick: () => { O.all = true; redraw(); } }, `+${num(fits.length - shown.length)} more`) : null)
           : h('p.note', { id: 'ahNone' }, O.mine ? 'Too short for anything on your crop list.' : 'Too short for any crop in the library.'),
         h('label.ah-check', h('input', { type: 'checkbox', id: 'ahMine', checked: !O.mine, onchange: e => { O.mine = !e.target.checked; O.pick = null; redraw(); } }), h('span', 'Offer crops I do not grow yet')),
-        fits.length ? h('p.help', 'A crop fits when all of it goes in: growing, its whole harvest and its own turnover, in season. A green edge: the plan has little or none of it then. Dashed: it would follow its own family.') : null),
+        null),
       O.pick && O.pick.cropId ? review(o, redraw) : null,
       h('p.insp-aside', h('button.link', { type: 'button', id: 'ahToBed', onclick: () => App.select({ type: 'bed', id: o.bed.id }) }, `Everything in ${App.bedLabel(o.bed)}`)));
     return true;

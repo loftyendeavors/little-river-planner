@@ -183,6 +183,48 @@ with sync_playwright() as pw:
         check("the review window is read both ways: by kind of figure, then by crop", False, "the review window did not open: the plan has no planting that differs from the list, so nothing was read")
         check("the review window names no “old copy”: a copied figure is a “Copied value”", False, "the review window did not open")
 
+    # ── the words, from one glossary (his notes of Nov 16, section 3): the long notes behind "?", the long hovers cut, never DTM ──
+    def card(hook, n=0, wait_ms=300):
+        """Opens the n-th "?" with this hook, reads its card (by the card's own hook), and closes it again by the same button."""
+        got = js("const b = document.querySelectorAll('[data-hook=%s]')[%d]; if (!b || !b.offsetWidth) return null; b.scrollIntoView({ block: 'center' }); b.click();"
+                 " const c = document.querySelector('[data-hook=%s-card]'), out = c ? { text: c.innerText, rows: [...c.querySelectorAll('dt')].map(d => d.textContent.trim()) } : { text: '', rows: [] }; b.click(); return out;" % (hook, n, hook))
+        wait(wait_ms); return got
+    js("A.setView('assume'); LRFAssume.setMode('days'); return 1;"); wait(800)
+    days = card("assume-help") or {}
+    js("LRFAssume.setMode('harvest'); const way = document.querySelector('[data-ah-way=card]'); if (way) way.click(); return 1;"); wait(800)   # the card, where the crops are a list of buttons
+    yields = card("assume-help") or {}
+    crops = set(js("return eng.crops().map(c => c.name);") or [])
+    titled = js("return $('asTitle').title;")
+    check("the Assumptions “?” gives each half's terms: what days are counted from, and marketable yield, the harvest patterns and the harvest window; it lists no crop as a control",
+          all(w in (days.get("rows") or []) for w in ("Transplanting", "Seeding in trays", "Direct seeding", "Seed to harvest")) and all(w in (yields.get("rows") or []) for w in ("Marketable yield", "Gradually", "Clear", "On demand", "Harvest window"))
+          and not any(r.startswith(c) for r in (days.get("rows") or []) + (yields.get("rows") or []) for c in crops) and not titled, {"days": days.get("rows"), "yield": yields.get("rows"), "title": titled})
+    # hovers the build cut to their point: the two lists' heads, the personal-use switch, a crop's unit and harvest pattern on the card, Seeds' “All orders arrived”, Loose ends
+    long = js("const t = [...document.querySelectorAll('#asTable thead th[title], #ahHead th[title], [data-yk=pick], [data-yk=unit]')].map(e => e.title).concat([$('ahHouseFarm').title, ($('settleBadge') || {}).title || '']);"
+              " return t.filter(x => x.length >= 140);")
+    js("A.setView('seeds'); return 1;"); wait(800)
+    long = (long or []) + (js("const b = $('sdReceiveAll'); return b && b.title.length >= 140 ? [b.title] : [];") or [])
+    check("the long hovers are cut to their point: none of those the build rewrote is 140 characters or more", long == [], long)
+    js("A.setView('map'); A.select(null); return 1;"); wait(800)
+    settle = js("const s = $('toSettle'); return s ? { paras: [...s.children].filter(x => x.tagName === 'P').length } : null;")
+    said = card("settle-help") or {}
+    check("To settle's note is behind its “?”: no paragraph stands under its head, and the “?” says what is counted", settle is not None and settle["paras"] == 0 and "booked twice" in said.get("text", ""), {"settle": settle, "said": said.get("text")})
+    js("const S2 = LRFSuccession, o = S2.openings(eng).find(o => o.whole && S2.fits(eng, o).length > 3); if (o) A.select({ type: 'opening', id: o.id, bedId: o.bed.id }); return !!o;"); wait(900)
+    fits = js("const f = $('ahFits'); return f ? [...f.querySelectorAll('p')].map(p => p.textContent).filter(t => t.length >= 140) : null;")
+    said = card("fits-help") or {}
+    check("What fits says what makes a crop fit behind its “?”, in the glossary's words, and no paragraph stands under it", fits == [] and "harvest window" in said.get("text", ""), {"standing": fits, "said": said.get("text")})
+    js("A.select(null); A.setView('trays'); LRFTraysView.setTab('setup'); return 1;"); wait(900)
+    bench = js("const r = $('bnRules'); return r ? { helps: r.querySelectorAll('[data-hook=bench-help]').length, paras: [...r.querySelectorAll('p')].filter(p => p.textContent.length >= 100).length } : null;")
+    said, cool = card("bench-help") or {}, card("bench-help", 1) or {}   # each "?" opened and read: the rules', then growing on without heat's
+    check("the Nursery's hardening-off and growing-on rules say what they do behind two “?”, and no paragraph stands beside their heads", bench == {"helps": 2, "paras": 0} and "harden off" in said.get("text", "") and "unheated benches" in cool.get("text", ""), {"bench": bench, "said": said.get("text"), "cool": cool.get("text")})
+    dtm = {}
+    for where, how in [("map", "A.setView('map'); A.select(null);"), ("timeline", "A.setView('timeline');"), ("forecast", "A.setView('harvest');"), ("tasks", "A.setView('sow');"), ("nursery", "A.setView('trays'); LRFTraysView.setTab('room');"),
+                       ("seeds", "A.setView('seeds');"), ("days to harvest", "A.setView('assume'); LRFAssume.setMode('days');"), ("yield and price, one crop at a time", "A.setView('assume'); LRFAssume.setMode('harvest'); document.querySelector('[data-ah-way=card]').click();")]:
+        js(how + " return 1;"); wait(700)
+        got = js("const t = [document.body.innerText, ...[...document.querySelectorAll('[title], [aria-label]')].map(e => (e.getAttribute('title') || '') + ' ' + (e.getAttribute('aria-label') || ''))].join(' '); return t.match(/.{0,30}\\bDTM\\b.{0,30}/g) || [];")
+        if got is None or got: dtm[where] = got
+    check("the letters DTM stand on no screen and in no hover: days to harvest is said in words (8 screens read)", not dtm, dtm)
+    js("A.setView('map'); A.select(null); return 1;"); wait(400)
+
     # ── the Backup windows ──
     js("A.setView('map'); void LRFBackupUI.openSnaps(); return 1;"); wait(700); look("Snapshots"); page.keyboard.press("Escape"); wait(300)
     if js("return !!$('syncBtn') && !$('syncBtn').hidden;"):

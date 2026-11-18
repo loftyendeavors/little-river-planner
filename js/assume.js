@@ -37,7 +37,7 @@
   const UNITS = ['each', 'bunch', 'lb', 'pint', 'quart', 'clamshell', 'head', 'stem'];
   const PATTERN = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' };
   const PATTERN_SAY = { weekly: 'picked gradually', once: 'cleared at once', spread: 'picked on demand' };
-  const PATTERN_TIP = { spread: 'The yield is a total, picked evenly over the harvest days: held, and taken as it is wanted.', weekly: 'The yield is what is picked each week. A longer harvest gives more, a shorter one less.', once: 'The yield is a total, and all of it is counted the day the crop is ready.' };
+  const PATTERN_TIP = { spread: 'On demand: the yield is a total, held and spread evenly over the harvest window.', weekly: 'Gradually: the yield is a week’s picking, every week of the harvest window.', once: 'Clear: the yield is a total, all of it counted the day the crop is ready.' };
   const BASIS = { plant: 'a plant', ft: 'a bed-foot', tray: 'a tray' };
   const soldBy = unit => unit === 'each' ? 'sold each' : `sold by the ${unit}`;
   // which of the two ways the second half was last looked at: a preference kept in this browser, not a figure of the plan
@@ -203,22 +203,22 @@
     const host = $('asAudit');
     if (!host) return;
     const s = App.auditSurvey(), d = s.days, hv = s.harvest, later = hv.yield + hv.window + hv.turnover + hv.copy, open = d.own + d.waiting + s.nursery.differ + later;
-    const fig = (label, n, title) => h('span', { title }, h('i', label), h('b', num(n)));
-    const say = [d.own ? `${num(d.own)} their own days` : '', hv.yield ? `${num(hv.yield)} their own yield` : '', hv.window ? `${num(hv.window)} their own harvest days` : '', s.nursery.differ ? `${num(s.nursery.differ)} their own nursery weeks` : ''].filter(Boolean);
+    const fig = (label, n, title, kind) => h('span', { title, dataset: { hook: 'audit-fig', kind } }, h('i', label), h('b', num(n)));
+    const say = [d.own ? `${num(d.own)} their own days` : '', hv.yield ? `${num(hv.yield)} their own yield` : '', hv.window ? `${num(hv.window)} their own harvest window` : '', s.nursery.differ ? `${num(s.nursery.differ)} their own nursery weeks` : ''].filter(Boolean);
     clear(host).append(
       h('h2.au-head', h('b', 'Plantings that differ from your list')),
-      h('p.au-line.au-lead', { id: 'asDiffLine' }, !open ? 'Every planting follows your list.' : `Some plantings still carry figures of their own, so your list does not decide them: ${say.length ? say.join(', ') : 'copies of crop values'}. Most can go onto the list with nothing changing; the rest would move a date or a yield, and are yours to decide.`),
+      h('p.au-line.au-lead', { id: 'asDiffLine' }, !open ? 'Every planting follows your list.' : `Some plantings keep figures of their own, so your list does not decide them: ${say.length ? say.join(', ') : 'copies of crop values'}. Most can follow it with nothing changing; the rest would move a date or a yield.`),
       h('div.au-acts',
-        open ? h('button.btn.small', { type: 'button', id: 'asTidy', title: 'Moves onto the list every figure that can go there with no date, no yield and no dollar changing. It is worked out and shown first; the plan as it stands is kept as a snapshot, and one undo takes it back.', onclick: () => { closeDiffer(); tidy(); } }, 'Move onto the list what changes nothing…') : null,
+        open ? h('button.btn.small', { type: 'button', id: 'asTidy', title: 'Every figure that can go onto the list with no date, yield or dollar changing. Shown first; a snapshot is kept, and one undo takes it back.', onclick: () => { closeDiffer(); tidy(); } }, 'Move onto the list what changes nothing…') : null,
         h('button.btn.small', { type: 'button', id: 'asReview', disabled: !open, title: open ? 'The plantings that would change if they followed the list, crop by crop, with what would move. Nothing changes until you press Apply.' : 'Nothing to see: every planting follows the list.', onclick: () => { closeDiffer(); openAudit(); } }, 'See what differs…')),
       h('details.au-more', { id: 'asAuditMore' }, h('summary', 'The count, kind by kind'),
-      h('p.au-figs', fig('own days', d.own, 'Plantings that carry their own days to harvest and do not follow this list'), fig('own nursery weeks', s.nursery.differ, 'Plantings that carry nursery weeks of their own that differ from the crop’s now'),
-        fig('own yield', hv.yield, 'Plantings that carry their own yield'), fig('own harvest days', hv.window, 'Plantings that carry their own harvest days'), fig('own turnover', hv.turnover, 'Plantings that carry their own turnover days'),
-        hv.copy ? fig('copied crop values', hv.copy, 'Plantings that carry a copy of crop values, taken when the planting was made, that bear on the harvest: yield, price, marketable share, harvest days, unit') : null,
-        d.waiting ? fig('to place', d.waiting, 'Waiting plantings that carry their own days') : null, fig('tray batches', s.trays, 'Tray batches take their days from the tray plan, which is their own list. They are left alone.'),
-        hv.cycles ? fig('tower cycles', hv.cycles, 'A tower cycle’s single harvest day and no turnover are what make it a cycle. They are left alone.') : null),
+      h('p.au-figs', fig('own days', d.own, 'Plantings that carry their own days to harvest and do not follow this list', 'days'), fig('own nursery weeks', s.nursery.differ, 'Plantings that carry nursery weeks of their own that differ from the crop’s now', 'nursery'),
+        fig('own yield', hv.yield, 'Plantings that carry their own yield', 'yield'), fig('own harvest window', hv.window, 'Plantings that carry their own harvest window', 'window'), fig('own turnover', hv.turnover, 'Plantings that carry their own turnover days', 'turnover'),
+        hv.copy ? fig('copied crop values', hv.copy, 'Plantings holding a copy of crop values made with them: yield, price, marketable share, harvest window, unit', 'copy') : null,
+        d.waiting ? fig('to place', d.waiting, 'Waiting plantings that carry their own days', 'waiting') : null, fig('tray batches', s.trays, 'Tray batches take their days from the tray plan, which is their own list. They are left alone.', 'trays'),
+        hv.cycles ? fig('tower cycles', hv.cycles, 'A tower cycle’s single harvest day and no turnover are what make it a cycle. They are left alone.', 'cycles') : null),
       h('p.au-line', { id: 'asAuditLine' }, !d.own ? 'Every planting follows this list for its days to harvest.' : `${num(d.own)} of ${num(s.plantings - s.trays)} plantings in beds, towers and crates keep their own days. ${d.agree ? `${num(d.agree)} carry the number the list already gives; ` : ''}${num(d.differ)} carry a different one.`),
-      h('p.au-line', { id: 'asHarvestLine' }, !later ? 'Every planting follows this list for its yield, harvest days and turnover.' : `${num(hv.yield)} keep their own yield, ${num(hv.window)} their own harvest days and ${num(hv.turnover)} their own turnover days${hv.copy ? `; ${num(hv.copy)} carry a copy of crop values taken when they were made` : ''}. “See what differs…” shows what letting each go would change, before anything does.`),
+      h('p.au-line', { id: 'asHarvestLine' }, !later ? 'Every planting follows this list for its yield, harvest window and turnover.' : `${num(hv.yield)} keep their own yield, ${num(hv.window)} their own harvest window and ${num(hv.turnover)} their own turnover days${hv.copy ? `; ${num(hv.copy)} carry a copy of crop values taken when they were made` : ''}. “See what differs…” shows what letting each go would change, before anything does.`),
       s.guessed.plantings ? h('p.au-line.au-warn', { id: 'asGuessLine' }, `${plural(s.guessed.plantings, 'planting')} count${s.guessed.plantings === 1 ? 's' : ''} from a start guessed from the wording of a supplier’s page: ${s.guessed.crops.map(id => (App.state.engine.crop(id) || {}).name).filter(Boolean).join(', ')}. Setting “Days counted from” for the crop settles it.`) : null,
       h('p.au-fine', `Spacing set on ${num(s.later.spacing)} stays with the planting: beds differ.${d.recorded + hv.recorded ? ` ${plural(d.recorded + hv.recorded, 'planting')} with recorded work keep${d.recorded + hv.recorded === 1 ? 's' : ''} ${d.recorded + hv.recorded === 1 ? 'its' : 'their'} figures.` : ''}`)));
   }
@@ -399,10 +399,10 @@
     clear($('ahHead')).append(h('tr', h('th', 'Crop'),
       th('.ah-unit', 'Sold by', 'The unit the crop is counted and sold in. The yield and the price are in this unit; one unit is never turned into another.'),
       th('.ah-price', 'Price $', 'What one unit sells for. A variety can have its own.'),
-      th('.ah-pick', 'Picked', 'How the harvest comes in. Gradually: picked week by week, and the yield is a week’s picking. Clear: the yield is a total, all of it taken the day it is ready. On demand: the yield is a total, held and taken evenly over the harvest days.'),
+      th('.ah-pick', 'Picked', 'The harvest pattern. Gradually: a week’s picking, every week. Clear: all of it the day it is ready. On demand: a total, spread evenly.'),
       th('.ah-days', 'Picked to', 'The harvest window: to the season’s end where it grows, or for a set number of days. The ground is held that long.'),
       App.state.engine.ENVS.map(env => th('.ah-y', SHORT[env], `Yield ${LABEL[env].toLowerCase()}, for a plant or a bed-foot as the row says: a total, or a week’s picking where the crop is picked each week`, 'Yield')),
-      th('.ah-comes', 'Comes to', 'The total and the weekly figure side by side, for the condition the crop is mostly grown in. One is yours; the other follows from the harvest days.'),
+      th('.ah-comes', 'Comes to', 'The total and the week’s figure, where the crop mostly grows. One is yours; the other follows from the harvest window.'),
       h('th.ah-s', { title: 'The part of what is packed that is sold: what is left after the share for personal use', hidden: App.state.plan.settings.houseKeeps === false }, 'Sold %'),
       th('.ah-s', 'Keeps wk', 'Weeks the crop keeps after picking. What is picked is then counted as there to sell evenly over those weeks.'),
       th('.ah-s', 'Turnover', 'Days the ground is held after the last harvest, before the next crop can go in')));
@@ -450,7 +450,7 @@
           onchange: async e => { const value = e.target.value, to = value === '(default)' ? hc.unit.fallback : value; root.LRFYieldCard.unitChanged(c.id, unit); if (!await App.setSell(c.id, { unit: value === '(default)' || value === hc.unit.fallback ? null : value }, `${c.name}: ${soldBy(to)}`)) schedule(); } },
           unitOptions(unit, hc.unit.fallback).map(x => h('option', { value: x, selected: x === unit }, x)), hc.unit.mine ? h('option', { value: '(default)' }, `Back to ${hc.unit.fallback}`) : null));
       const pickCell = hc.micro ? h('td.as-start', h('span.as-fixed', { title: 'A live tray is counted whole on the Monday it is due.' }, 'when due'))
-        : h('td.as-start', h('select.as-from.ah-sel' + (hc.pattern.mine ? '.mine' : ''), { 'aria-label': `${c.name}: picked`, dataset: { hk: `pick|${c.id}` }, title: `${PATTERN_TIP[hc.pattern.value]}${hc.pattern.mine ? '' : ' Not set: this is how every crop has been counted so far.'}`,
+        : h('td.as-start', h('select.as-from.ah-sel' + (hc.pattern.mine ? '.mine' : ''), { 'aria-label': `${c.name}: picked`, dataset: { hk: `pick|${c.id}` }, title: `${PATTERN_TIP[hc.pattern.value]}${hc.pattern.mine ? '' : ' Not set: the default.'}`,
           onchange: async e => { const value = e.target.value; if (!await App.setSell(c.id, { pattern: value === 'unset' ? null : value }, `${c.name}: ${value === 'unset' ? 'picked as before' : PATTERN_SAY[value]}`)) schedule(); } },
           Object.entries(PATTERN).map(([value, text]) => h('option', { value, selected: hc.pattern.value === value }, text)), hc.pattern.mine ? h('option', { value: 'unset' }, 'Back to not set') : null));
       const fixed = (text, title) => h('td.as-cell.none', { title }, text);
@@ -514,14 +514,13 @@
     clear($('asCount')).append(...(said.length ? said.flatMap((part, i) => [i ? ' · ' : '', h('span', part.length === 2 ? [h('b', part[0]), part[1]] : [part[1], h('b', part[2]), part[3]])]) : ['Nothing set yet: every number is a default']));
   }
   const HEAD = {
-    days: ['Days to first harvest', 'Each row says what its days are counted from, and its numbers count from there. Every number is used as it stands: nothing is added or taken off for the month or the house. Grey is the default; a variety with its own figure keeps it, and a planting with no variety uses the crop row.'],
-    harvest: ['Yield and price', 'What each crop is sold by and for, how it is picked, and what it yields from a plant or a bed-foot in each growing condition. A yield is a total over the harvest days, or a week’s picking where “Picked” says Gradually. Grey is what the plan uses now; type over it to make it yours. A planting with a figure of its own keeps it until “See what differs…” lets it go.'],
-    card: ['Yield and price', 'One crop at a time: what it is sold by and for, what it gives in each place it is planted, and how it is picked. Each box says what it means. “All on one page” shows the same figures as a list.']
+    days: ['Days to first harvest', 'Days to harvest for each crop in each place it grows. Each row says what its days are counted from. Each number is used as it stands, whatever the month or the house. Grey is the default: type over it to make it yours. A variety with its own figure keeps it; a planting with no variety uses the crop’s row.'],
+    harvest: ['Yield and price', 'Each crop’s unit, price, harvest pattern and marketable yield (a plant or a bed-foot) in each place it grows. Grey is the default: type over it to make it yours. A planting with its own figure keeps it until “See what differs…” lets it go.'],
+    card: ['Yield and price', 'One crop at a time: its unit, price, marketable yield in each place it grows, and harvest pattern. Each box says what it means. “All on one page” shows the same figures as a list.']
   };
   function chrome() {
     const harvest = ui.mode === 'harvest', card = harvest && ui.way === 'card', view = document.getElementById('assumeView');
     $('asTitle').textContent = HEAD[ui.mode][0]; $('asLead').textContent = HEAD[card ? 'card' : ui.mode][1];
-    $('asTitle').title = card ? HEAD.card[1] : '';   // on the card's page the lead gives its room to the card, and is said when the heading is pointed at
     $('asTable').hidden = harvest; $('ahTable').hidden = !harvest || card;
     for (const b of document.querySelectorAll('[data-as-mode]')) b.setAttribute('aria-pressed', String(b.dataset.asMode === ui.mode));
     view.dataset.mode = ui.mode;
@@ -579,7 +578,7 @@
           root.LRFThumbs.el({ cropId: c.id, color: eng.cropColor(c), label: c.name, size: 24, cls: 'key' }),
           // the name is never cut short: where the offer does not fit beside it, the offer goes on a line of its own
           h('span.as-nc', h('b', c.name),
-            hint ? h('button.as-hint', { type: 'button', dataset: { hint: c.id }, title: `${hint.says}. Press to count this crop that way; what moves is shown first.`, onclick: () => App.setStart(c.id, hintChange(eng, c, hint), `${c.name}: days counted from ${hintWord(hint)}`) }, `Johnny’s: ${hintWord(hint)}`) : null))),
+            hint ? h('button.as-hint', { type: 'button', dataset: { hint: c.id }, title: `${hint.says}. Press to use it; what moves is shown first.`, onclick: () => App.setStart(c.id, hintChange(eng, c, hint), `${c.name}: days counted from ${hintWord(hint)}`) }, `Johnny’s: ${hintWord(hint)}`) : null))),
         startCell(eng, c),
         eng.ENVS.map(env => cell('crops', c.id, env, row[env], c.name)),
         seedCell(row[main], main),
@@ -590,8 +589,8 @@
         body.append(h('tr.as-var', { dataset: { variety: v.id } },
           h('td', h('div.as-name', root.LRFThumbs.el({ varietyId: v.id, color: eng.cropColor(c), label: v.name, size: 22 }), h('span.as-nc', h('span.as-vname', v.name),
             v.catalogDtm ? h('small', `prints ${v.catalogDtm} d`) : null,
-            guess ? h('small.as-guess', { title: 'The supplier does not say what these days are counted from. This reading goes by the wording of its page, which can mislead. Set the crop row, or this variety, to settle it.' }, `read as from ${FROM[guess.start]}: a guess`) : null,
-            !guess && v.catalogMaturityBasis === 'seed' && eng.startRule(c.id).from === 'direct' ? h('small.as-guess', { title: 'This variety says its days are counted from seeding in trays, so the whole nursery time comes off. If its supplier meant seed sown in place, as the crop row now says, set it to Direct seeding.' }, 'seeding in trays, not the crop’s direct seeding') : null))),
+            guess ? h('small.as-guess', { title: 'The supplier does not say what these days count from: this reads its page’s wording, a guess. Set the crop’s row or this variety.' }, `read as from ${FROM[guess.start]}: a guess`) : null,
+            !guess && v.catalogMaturityBasis === 'seed' && eng.startRule(c.id).from === 'direct' ? h('small.as-guess', { title: 'Its days count from seeding in trays, so the nursery time comes off. If its supplier meant seed sown in place, set it to Direct seeding.' }, 'seeding in trays, not the crop’s direct seeding') : null))),
           varietyStartCell(eng, c, v),
           eng.ENVS.map(env => cell('varieties', v.id, env, t[env], v.name)),
           (mine => seedCell(t[mine], mine))(mainEnv(whereV.get(v.id), t, main)),
@@ -606,7 +605,7 @@
       all.hidden = !offers.length;
       clear(all);
       if (offers.length) all.append(h('h2', h('b', `${plural(offers.length, 'crop')} of yours ${offers.length === 1 ? 'has' : 'have'} published guidance on where days are counted from that the plan does not use yet`)),
-        h('p', 'Each crop’s row on this list offers its own. “Use them all…” counts every one of them the way Johnny’s says; what moves is shown before anything changes.'),
+        h('p', 'Each crop’s row offers its own. “Use them all…” counts each the way Johnny’s says, and shows what moves first.'),
         h('small', offers.map(o => o.c.name).join(', ')),
         h('div.sheet-foot', h('button.btn', { type: 'button', id: 'asGuideCancel', onclick: closeGuide }, 'Cancel'),
           h('button.btn.primary', { type: 'button', id: 'asHintsAll', title: 'Count each of these crops the way Johnny’s says. What moves is shown before anything changes.', onclick: () => { closeGuide(); App.setStarts(offers.map(o => hintChange(eng, o.c, o.hint)), `${plural(offers.length, 'crop')}: days counted from where Johnny’s says`, { ask: true }); } }, 'Use them all…')));
@@ -618,7 +617,15 @@
   function schedule() { cancelAnimationFrame(ui.frame); ui.frame = requestAnimationFrame(render); }
 
   function init() {
-    $('asTitle').after(UI.help(() => $('asLead').textContent, () => $('assumeView')));
+    // "?" says the page's lead, then the glossary's words for the half on show (his notes of Nov 16, section 3), then the controls
+    const WORDS = {
+      days: [['Transplanting', 'Days count from the day the crop goes in the bed.'], ['Seeding in trays', 'Days count from sowing in the nursery, so the nursery time comes off.'],
+        ['Direct seeding', 'A figure for seed sown in place. As a transplant the crop is in the bed about two weeks less.'], ['Seed to harvest', 'Days in the nursery plus days in the bed, where the crop mostly grows.']],
+      harvest: [['Marketable yield', 'What is packed and fit to sell, from a plant, a bed-foot or a tray.'], ['Gradually', 'The yield is a week’s picking, every week of the harvest window.'],
+        ['Clear', 'The yield is a total, all of it on the day it is ready.'], ['On demand', 'The yield is a total, spread evenly over the harvest window.'], ['Harvest window', 'The days a planting is picked: to the season’s end, or a set number.']]
+    };
+    // the controls it names are the page's own tools; the crop list's rows carry titles too, and are not controls of the page
+    $('asTitle').after(UI.help(() => $('asLead').textContent, () => document.querySelector('#assumeView .as-tools'), () => WORDS[ui.mode] || [], { hook: 'assume-help', card: { hook: 'assume-help-card' }, label: 'What this page is for' }));
     sheets();
     $('asSearch').addEventListener('input', e => { ui.query = e.target.value; render(); });
     for (const button of document.querySelectorAll('[data-as-scope]')) {
