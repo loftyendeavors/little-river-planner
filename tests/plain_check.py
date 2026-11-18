@@ -50,8 +50,8 @@ with sync_playwright() as pw:
     start = js("return { key: A.contentKey(), n: St.plan.plantings.length, undo: St.undo.length, sig: " + SIG + " };")
 
     # ── Tasks: the name, and how far ahead it lists ──
-    nav = js("return [...document.querySelectorAll('nav.views [data-view-btn]')].map(b => b.textContent.trim());")
-    check('the views are Map, Timeline, Harvest, Tasks, Nursery, Seeds, Assumptions (0.31: three groups, Trays is Nursery)', nav == ['Map', 'Timeline', 'Harvest', 'Tasks', 'Nursery', 'Seeds', 'Assumptions'], nav)
+    nav = js("return [...document.querySelectorAll('[data-hook=\"view-tab\"]')].map(b => b.textContent.trim());")
+    check('the views are Map, Timeline, Forecast, Tasks, Nursery, Seeds, Assumptions (0.31: three groups, Trays is Nursery; E3: Harvest is Forecast)', nav == ['Map', 'Timeline', 'Forecast', 'Tasks', 'Nursery', 'Seeds', 'Assumptions'], nav)
     page.click('[data-view-btn="sow"]'); wait(800)
     COUNT = """const week = '2027-05-03', span = (w, n) => { const until = E.d2s(E.addDays(E.s2d(w), 7 * n - 1)); return V.figures().list.filter(l => l.week >= w && l.week <= until && l.state !== 'done').length + V.jobs().filter(l => l.week >= w && l.week <= until && !l.passed && l.state !== 'done').length; };
       const rows = () => document.querySelectorAll('#swWrap .tk-list .tk-row:not(.done)').length;"""

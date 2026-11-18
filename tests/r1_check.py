@@ -60,11 +60,11 @@ with sync_playwright() as pw:
     check("the page believes it is May 5 of the plan's year, with a plan in it and nothing to undo", start["today"].endswith("-05-05") and start["now"].endswith("-05-03") and start["n"] > 300 and start["undo"] == 0, start)
 
     # ── the top bar: seven views in three groups ──
-    bar = js("""const nav = document.querySelector('nav.views'), kids = [...nav.children].map(e => e.matches('[data-view-btn]') ? e.textContent.trim() : e.className === 'views-sep' ? '|' : '?');
-      const top = document.querySelector('header.top'), btns = [...nav.querySelectorAll('button')];
+    bar = js("""const nav = document.querySelector('nav.views'), kids = [...nav.children].map(e => e.matches('[data-hook="view-tab"]') ? e.textContent.trim() : e.className === 'views-sep' ? '|' : '?');
+      const top = document.querySelector('header.top'), btns = [...nav.querySelectorAll('[data-hook="view-tab"]')];
       return { kids, ids: btns.map(b => b.dataset.viewBtn), titles: btns.every(b => (b.title || '').length > 10), clipped: btns.filter(b => b.scrollWidth > b.clientWidth + 1).map(b => b.textContent),
         seps: [...nav.querySelectorAll('.views-sep')].map(e => { const r = e.getBoundingClientRect(); return r.width >= 1 && r.height >= 8; }), side: top.scrollWidth > top.clientWidth + 1 || document.documentElement.scrollWidth > innerWidth + 1, high: top.getBoundingClientRect().height };""")
-    check("the top bar reads Map, Timeline, Harvest | Tasks, Nursery, Seeds | Assumptions: three groups with a rule between them", bar["kids"] == ["Map", "Timeline", "Harvest", "|", "Tasks", "Nursery", "Seeds", "|", "Assumptions"] and all(bar["seps"]) and len(bar["seps"]) == 2, bar)
+    check("the top bar reads Map, Timeline, Forecast | Tasks, Nursery, Seeds | Assumptions: three groups with a rule between them", bar["kids"] == ["Map", "Timeline", "Forecast", "|", "Tasks", "Nursery", "Seeds", "|", "Assumptions"] and all(bar["seps"]) and len(bar["seps"]) == 2, bar)
     check("the views keep their ids (the Nursery is still the view 'trays', Tasks still 'sow'), and each says in a tooltip what it is for", bar["ids"] == ["map", "timeline", "harvest", "sow", "trays", "seeds", "assume"] and bar["titles"], bar)
     wait(400)
     crowd = js("""const w = $('waitBadge'), wasHidden = w.hidden, wasHtml = w.innerHTML, s = $('saveState'), wasText = s.textContent;
@@ -305,7 +305,7 @@ with sync_playwright() as pw:
       return { acts: head ? [...head.children].map(b => [b.id, b.textContent]) : null, oneLine: Math.max(...tops) - Math.min(...tops) <= 14, inBar: !!bar.querySelector('#hvShareBtn, #hvPlanBar'), near: head ? Math.round(head.getBoundingClientRect().right - document.querySelector('.hv-bar').getBoundingClientRect().right) : null,
         clipped: head ? [...head.children].filter(b => b.scrollWidth > b.clientWidth + 1 || b.getBoundingClientRect().right > innerWidth).length : -1, rows: rows.length, want: rows.filter(r => can(r.dataset.crop)).map(r => r.dataset.crop), got: plans.map(p => p.dataset.crop),
         micro: rows.filter(r => { const c = eng.crop(r.dataset.crop); return c && c.micro; }).filter(r => r.querySelector('.hv-plan')).length, hidden: plans.length ? getComputedStyle(plans[0]).opacity : null, side: document.documentElement.scrollWidth > innerWidth + 1 };""")
-    check("at the head of Harvest stand the two things done from it: plan to a weekly amount, and a list to send; the bar under the tiles keeps to one line", hvw["acts"] == [["hvPlanBar", "Plan to a weekly amount…"], ["hvShareBtn", "A list to send…"]] and hvw["oneLine"] and not hvw["inBar"] and hvw["clipped"] == 0 and not hvw["side"], hvw)
+    check("at the head of Forecast stand the two things done from it: plan to a weekly amount, and a list to send; the bar under the figures keeps to one line", hvw["acts"] == [["hvPlanBar", "Plan to a weekly amount…"], ["hvShareBtn", "A list to send…"]] and hvw["oneLine"] and not hvw["inBar"] and hvw["clipped"] == 0 and not hvw["side"], hvw)
     check("every crop that can be planned to an amount has “plan…” on its row, tray crops have none, and it shows only when the row is pointed at", hvw["got"] == hvw["want"] and len(hvw["want"]) > 5 and hvw["micro"] == 0 and hvw["hidden"] == "0", hvw)
     if hvw["want"]:
         cid = hvw["want"][min(3, len(hvw["want"]) - 1)]

@@ -135,9 +135,11 @@
 
   "card": 110,
 
-  "cleanup": 27,
+  "cleanup": 28,
 
   "f053": 22,
+
+  "forecast": 35,
 
   "harvest": 33,
 
@@ -243,6 +245,8 @@
  "site2": {
 
   "f053-site": 22,
+
+  "forecast-site": 35,
 
   "harvest-site": 33,
 
@@ -418,19 +422,23 @@
 
   "card-site @3440": 110,
 
-  "cleanup @1480": 27,
+  "cleanup @1480": 28,
 
-  "cleanup @1707": 27,
+  "cleanup @1707": 28,
 
-  "cleanup @3440": 27,
+  "cleanup @3440": 28,
 
-  "cleanup-site": 27,
+  "cleanup-site": 28,
 
-  "cleanup-site @1480": 27,
+  "cleanup-site @1480": 28,
 
-  "cleanup-site @1707": 27,
+  "cleanup-site @1707": 28,
 
-  "cleanup-site @3440": 27,
+  "cleanup-site @3440": 28,
+
+  "forecast-site @1707": 35,
+
+  "forecast-site @3440": 35,
 
   "harvest-site @1707": 33,
 

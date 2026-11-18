@@ -84,7 +84,7 @@ Tasks was built to it. Nursery, Seeds and Assumptions stand in it: no eyebrow, n
 title at 24 with "?" beside it, and one line of figures. On the Nursery the four tabs stand over the figures, not under them:
 the figures differ from tab to tab, and over the tabs they made the tabs jump. On Seeds the figures are in the side panel
 while nothing is picked, one to a line, because that panel still stands there; they move when the panel becomes the card of
-rule 2. Still to come: Harvest, as the Forecast page.
+rule 2. The Forecast page (once Harvest) stands in it too: its figures lead with the season's worth.
 
 ## Loose ends
 
@@ -106,7 +106,7 @@ Tasks. A new notice is never the way to say that something needs the grower: it 
 ## Leave alone
 
 The Timeline's bars. The drag and the tooltip that names the dates before a drop. The bench chart and the supplies table. The
-seed gallery. The density of the Timeline and of the Harvest table. The three typefaces. The farm photograph in colour. No
+seed gallery. The density of the Timeline and of the Forecast table. The three typefaces. The farm photograph in colour. No
 glass, no blur.
 
 ## How the scale is held
@@ -127,7 +127,7 @@ check on the day it no longer matches anything:
 - **Type sized to the thing it is drawn on**: a label on the map grows with the map; a letter that stands for a photograph
   grows with its tile.
 - **Sizes in points**: the printed sheets. Paper is not a screen.
-- **Space inside the parts listed under "Leave alone"**: the Timeline, the Harvest table, the bench chart and the supplies
+- **Space inside the parts listed under "Leave alone"**: the Timeline, the Forecast table, the bench chart and the supplies
   table, the seed gallery, the printed week. And any padding or gap of 2 px or less (a hair), or over 32 (a placement: a line
   set in under a photograph, a column kept for a label). A placement that follows a padding has to be kept in step by hand.
 - **Four animations that are not an arrival or a press**: a message that waits before it fades, a flash that draws the eye,

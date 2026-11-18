@@ -615,5 +615,5 @@
     return { mine: made.mine, all: made.all, left };
   }
 
-  root.LRFYieldCard = { render, reset, open, unitChanged, current: () => ui.cur, order: () => ui.order.slice(), state: ui, box, windowOf, windowChoice, setWindow };
+  root.LRFYieldCard = { render, reset, open, unitChanged, current: () => ui.cur, order: () => ui.order.slice(), state: ui, box, windowOf, windowChoice, setWindow, follows };
 })(window);

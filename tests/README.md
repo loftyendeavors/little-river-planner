@@ -302,7 +302,7 @@ What has gone wrong before, so that it does not again.
 - **"Is it in view" can pass on the app folder and fail on the built site**: after a backup is loaded, a notice goes away a
   few seconds later and everything under it moves up. Hold what was scrolled into place.
 - **A selector for "the nth tile" is scoped to its view.**
-- **In the Harvest table the first cells of a row lie under the crop names**, which stay put: click a later one.
+- **In the Forecast table the first cells of a row lie under the crop names**, which stay put: click a later one.
 - **A check of clipping looks for spilling too.**
 - **To give the page a pretended today**, add an init script that replaces `Date` with a subclass shifted by a fixed offset
   (`fake()` in `step5a_check.py`).
