@@ -80,6 +80,8 @@
     'assumptions.sell.*.things.*.yield': 'number',
     'assumptions.sell.*.turnover': 'number',
     'assumptions.sell.*.unit': 'text',
+    'assumptions.sell.*.until': 'map',          // a last picking for a place (E2c): taken with the crop's line, whole
+    'assumptions.sell.*.until.*': 'text',
     'assumptions.sellV': 'map',
     'assumptions.sellV.*': 'object whole',
     'assumptions.sellV.*.price': 'number',

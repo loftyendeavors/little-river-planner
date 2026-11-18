@@ -56,6 +56,12 @@ PRE = ("const A = LRFApp, S = A.state, E = LRFEngine, F = LRFForecast, $ = id =>
        " const ink = el => el ? getComputedStyle(el).backgroundColor : '';"
        " return { on: g.dataset.on, season: end ? end.getAttribute('aria-pressed') : null, days: days ? days.getAttribute('aria-pressed') : null, value: box ? box.value : null, placeholder: box ? box.placeholder : null, endInk: ink(end), daysInk: ink(days && days.parentElement), seen: seen(g) }; };"
        "const cardChoice = () => choiceIn($('ycCard'));"
+       # a place's last picking on the card (E2c): the date in its box, his or the season's end there, and whose day the card says it is
+       "const untilCells = () => Object.fromEntries(hooks('harvest-until', $('ycCard')).map(el => { const td = el.closest('td'); return [el.dataset.place, { value: el.value, mine: el.dataset.mine, whose: (hook('harvest-until-whose', td) || {}).textContent || '', frost: !!hook('harvest-until-frost', td) }]; }));"
+       "const BY = { frost: 'your first frost', cover: 'the first frost, under cover', close: 'the garden closes', record: 'the crop’s record', year: 'the year’s end' };"
+       "const untilWant = (e, id, envs) => { const year = +e.plan.settings.year, mine = sellOf(id).until || {}; return Object.fromEntries(envs.map(env => { const se = e.seasonEndOf(id, env, year), own = mine[env] ? `${year}-${mine[env]}` : null; return [env, { value: own || (se ? E.d2s(se.date) : ''), mine: mine[env] || '', whose: own ? 'yours' : se ? BY[se.by] : '', frost: !!(own && se && se.frost && own > E.d2s(se.frost)) }]; })); };"
+       "const withUntil = (id, env, md) => { const p = copy(); p.assumptions = p.assumptions || { v: 1, crops: {}, varieties: {} }; p.assumptions.sell = p.assumptions.sell || {}; const line = { ...(p.assumptions.sell[id] || {}) }, u = { ...(line.until || {}) }; if (md) u[env] = md; else delete u[env]; if (Object.keys(u).length) line.until = u; else delete line.until; if (Object.keys(line).length) p.assumptions.sell[id] = line; else delete p.assumptions.sell[id]; return p; };"
+       "const pickDate = (env, value) => { const el = $('ycCard').querySelector(`[data-hook=\"harvest-until\"][data-place=\"${env}\"]`); if (!el) return false; el.value = value; el.dispatchEvent(new Event('change', { bubbles: true })); return true; };"
        "const cardEnds = () => Object.fromEntries(hooks('harvest-end', $('ycCard')).map(el => [el.dataset.place, { from: el.dataset.from, to: el.dataset.to, n: +el.dataset.n }]));"
        "const sheet = () => { const d = document.querySelector('dialog[open]'), m = d && hook('harvest-moves', d); if (!m) return d ? { other: true, title: (d.querySelector('h2') || {}).textContent } : null; const w = hook('harvest-worth', m), t = hook('harvest-twice', m), o = hook('harvest-own', m);"
        " return { title: (d.querySelector('h2') || {}).textContent || '', text: d.innerText, moves: Object.fromEntries(hooks('harvest-move', m).map(li => [li.dataset.place, { wasFrom: li.dataset.wasFrom, wasTo: li.dataset.wasTo, wasNone: +li.dataset.wasNone, nowFrom: li.dataset.nowFrom, nowTo: li.dataset.nowTo, nowNone: +li.dataset.nowNone, n: +li.dataset.n }])), was: w ? +w.dataset.was : null, now: w ? +w.dataset.now : null, beds: t ? (t.dataset.beds ? t.dataset.beds.split('|').sort() : []) : null, own: o ? +o.dataset.n : 0 }; };")
@@ -130,12 +136,16 @@ with sync_playwright() as pw:
     check("the checklist of Yield and price lists the crops to walk", isinstance(ids, list) and len(ids) > 20, ids)
 
     # ── every card: the choice shows the crop's line truly, and Last picking the engine's dates ──
-    wrong_choice, wrong_ends, walked = [], [], 0
+    wrong_choice, wrong_ends, walked, wrong_until, said_twice = [], [], 0, [], []
     for cid in ids if isinstance(ids, list) else []:
         open_crop(cid, 60)
-        k = js("const id = %s, c = S.engine.crop(id), micro = !!c.micro, ch = cardChoice(), once = S.engine.harvestFor(id).pattern.value === 'once';"
-               "return { id, micro, once, ch, want: micro ? null : { on: seasonOf(id) ? 'season' : 'days', value: listDays(id) == null ? '' : String(listDays(id)), placeholder: String(offerOf(id)) }, ends: cardEnds(), engine: micro || once ? {} : ends(S.engine, id) };" % json.dumps(cid))
+        k = js("const id = %s, c = S.engine.crop(id), micro = !!c.micro, ch = cardChoice(), once = S.engine.harvestFor(id).pattern.value === 'once', envs = [...$('ycCard').querySelectorAll('thead th[data-place]')].map(th => th.dataset.place);"
+               "const lastRow = $('ycCard').querySelector('tr[data-row=last]'), said = lastRow ? lastRow.innerText : '';"
+               "return { id, micro, once, ch, want: micro ? null : { on: seasonOf(id) ? 'season' : 'days', value: listDays(id) == null ? '' : String(listDays(id)), placeholder: String(offerOf(id)) }, ends: cardEnds(), engine: micro || once ? {} : ends(S.engine, id),"
+               " until: untilCells(), untilWant: micro || once || !seasonOf(id) ? {} : untilWant(S.engine, id, envs), twice: !micro && !seasonOf(id) && /\\b\\d+ days after\\b/.test(said) };" % json.dumps(cid))
         walked += 1
+        if k["until"] != k["untilWant"]: wrong_until.append({"crop": cid, "card": k["until"], "plan": k["untilWant"]})
+        if k["twice"]: said_twice.append(cid)
         if k["micro"]:
             if k["ch"]: wrong_choice.append(cid + " (a live tray has a choice)")
             continue
@@ -145,13 +155,16 @@ with sync_playwright() as pw:
         if not k["once"] and k["ends"] != k["engine"]: wrong_ends.append({"crop": cid, "card": k["ends"], "engine": k["engine"]})
     check("on every crop's card the harvest choice shows the side the plan stores: to the season's end where the crop's record says so and the list holds no days, else for its days, the list's number in the box as his and the crop's in grey", walked == len(ids) and not wrong_choice, wrong_choice[:3])
     check("Last picking shows for each place the dates of the plantings there that follow the crop's line, as the engine works them out, and no date where none follows", walked == len(ids) and not wrong_ends and sum(1 for c in ids) > 0, wrong_ends[:3])
+    check("picked to the season's end, Last picking holds a date for each place: his where he set one, else the season's end there as the engine has it, saying whose day it is", walked == len(ids) and not wrong_until, wrong_until[:2])
+    check("picked for a set number of days, the card says the number once, in the Picked row: Last picking gives dates and never the days again", walked == len(ids) and not said_twice, said_twice[:4])
     # ── the yield's row, by its hook ──
     sub = js("""const m = S.engine.crops().filter(c => !c.micro && S.plan.plantings.some(p => p.cropId === c.id)), hc = c => S.engine.harvestFor(c.id), plantings = id => S.plan.plantings.filter(p => p.cropId === id && placeOf(S.engine, p) && S.engine.calc(p));
       const followers = id => plantings(id).filter(p => followsP(S.engine, p)).length, open = c => hc(c).pattern.value !== 'once' && followers(c.id) > 0, rec = id => (S.plan.crops || []).some(x => x.id === id);
       const pick = f => (m.find(f) || {}).id || null;
-      return { season: pick(c => seasonOf(c.id) && open(c)), days: pick(c => !seasonOf(c.id) && listDays(c.id) == null && open(c) && rec(c.id) && !(S.plan.crops.find(x => x.id === c.id).harvestMode)) || pick(c => !seasonOf(c.id) && listDays(c.id) == null && open(c)),
+      const inOpen = id => plantings(id).filter(p => followsP(S.engine, p) && S.engine.openGround(S.engine.gardenOf(S.engine.bedOf(p.bedId))) && S.engine.calc(p).harvestDays > 20).length;
+      return { season: pick(c => seasonOf(c.id) && open(c)), frosty: pick(c => seasonOf(c.id) && open(c) && c.frostTender && inOpen(c.id) > 0 && !(sellOf(c.id).until)), days: pick(c => !seasonOf(c.id) && listDays(c.id) == null && open(c) && rec(c.id) && !(S.plan.crops.find(x => x.id === c.id).harvestMode)) || pick(c => !seasonOf(c.id) && listDays(c.id) == null && open(c)),
         plant: pick(c => hc(c).basis === 'plant' && !hc(c).weekly && hc(c).pattern.value === 'spread'), ft: pick(c => hc(c).basis === 'ft' && !hc(c).weekly), names: Object.fromEntries(m.map(c => [c.id, c.name])) };""")
-    check("the plan has a crop of each kind to change: picked to the season's end, picked for a number of days, counted by the plant and by the bed-foot, each with plantings that follow its line", all(isinstance(sub[k], str) for k in ("season", "days", "plant", "ft")), {k: v for k, v in sub.items() if k != "names"})
+    check("the plan has a crop of each kind to change: picked to the season's end (and one of them frost-tender, in open ground), picked for a number of days, counted by the plant and by the bed-foot, each with plantings that follow its line", all(isinstance(sub[k], str) for k in ("season", "frosty", "days", "plant", "ft")), {k: v for k, v in sub.items() if k != "names"})
     names = sub["names"]
     open_crop(sub["plant"]); lab = js("const tr = $('ycCard').querySelector('tr[data-row=yield]'); return { name: (hook('card-row-name', tr) || {}).textContent, hint: (hook('card-row-hint', tr) || {}).textContent };")
     open_crop(sub["ft"]); lab2 = js("const tr = $('ycCard').querySelector('tr[data-row=yield]'); return { name: (hook('card-row-name', tr) || {}).textContent, hint: (hook('card-row-hint', tr) || {}).textContent };")
@@ -208,6 +221,39 @@ with sync_playwright() as pw:
     undo_to(0); back = js("return { snap: snap(), ch: cardChoice() };")
     check("Undo puts the plan back as it was, and the choice back to the season's end", back["snap"]["key"] == snap0["key"] and back["snap"]["plan"] == snap0["plan"] and back["ch"]["on"] == "season", back["ch"])
     plan_card = got["assume"]
+
+    # ── a last picking for a place (E2c): a date of his own, shown first, one step, Undo; past the frost in open ground, cut short ──
+    fid = sub["frosty"]; open_crop(fid)
+    fenv = js("const id = %s, hits = S.plan.plantings.filter(p => p.cropId === id && followsP(S.engine, p) && S.engine.openGround(S.engine.gardenOf(S.engine.bedOf(p.bedId))) && S.engine.calc(p) && S.engine.calc(p).harvestDays > 20); return hits.length ? placeOf(S.engine, hits[0]) : null;" % json.dumps(fid))
+    fd = js("const env = %s, se = S.engine.seasonEndOf(%s, env, +S.plan.settings.year); return se && se.frost ? { frost: E.d2s(se.frost), before: E.d2s(E.addDays(se.frost, -12)), past: E.d2s(E.addDays(se.frost, 9)) } : null;" % (json.dumps(fenv), json.dumps(fid)))
+    uwant = js("const id = %s, b = engineOf(withUntil(id, %s, %s)); return { moves: moves(S.engine, b, id), was: worthOf(S.engine), now: worthOf(b), beds: twice(S.engine, b), assume: JSON.stringify(b.plan.assumptions || null), rows: rowsOf(b), ends: ends(b, id) };" % (json.dumps(fid), json.dumps(fenv), json.dumps(fd["before"][5:] if fd else "")))
+    rows0 = js("return rowsOf(S.engine);"); assume0 = js("return JSON.stringify(S.plan.assumptions || null);")
+    js("return pickDate(%s, %s);" % (json.dumps(fenv), json.dumps(fd["before"] if fd else ""))); wait(800)
+    ush = js("return sheet();"); asked = js("return snap();")
+    shot("sheet-until")
+    check("a date picked for a place asks first, with each place's last picking before and after and the season's worth as the engine works them out on the plan with that date set, and nothing changes while it asks", bool(fd) and bool(ush) and isinstance(ush.get("moves"), dict) and ush["moves"] == uwant["moves"] and len(uwant["moves"]) > 0 and abs(ush["was"] - uwant["was"]) < 0.005 and abs(ush["now"] - uwant["now"]) < 0.005 and ush["beds"] == uwant["beds"] and asked["undo"] == 0 and asked["key"] == snap0["key"], {"sheet": ush.get("moves") if ush else None, "engine": uwant["moves"]})
+    answer(False)
+    check("Cancel changes nothing, and the box goes back to the day in force", js("return snap();")["key"] == snap0["key"] and js("return untilCells();")[fenv]["value"] == js("return untilWant(S.engine, %s, [%s]);" % (json.dumps(fid), json.dumps(fenv)))[fenv]["value"])
+    js("return pickDate(%s, %s);" % (json.dumps(fenv), json.dumps(fd["before"] if fd else ""))); wait(800); answer(True, 1200)
+    ust = last_step(); ugot = js("return { assume: JSON.stringify(S.plan.assumptions || null), crops: JSON.stringify(S.plan.crops || null), rows: rowsOf(S.engine), until: untilCells(), ends: cardEnds(), toast: ($('toast') || {}).textContent || '' };")
+    check("agreed, it is one step of the list's own: the crop's line holds that month and day for that place, and nothing else in the plan is written", ust["n"] == 1 and ust["kinds"] == ["assume"] and ugot["assume"] == uwant["assume"] and ugot["crops"] == crops0 and f"{names.get(fid)}," in str(ust["label"]) and "last picking" in str(ust["label"]), {"step": ust})
+    bad_crop = js("return sameRows(%s, %s, c => c === %s);" % (json.dumps(ugot["rows"]), json.dumps(uwant["rows"]), json.dumps(fid)))
+    bad_rest = js("return sameRows(%s, %s, c => c !== %s);" % (json.dumps(rows0), json.dumps(ugot["rows"]), json.dumps(fid)))
+    check("the forecast then is the engine's on that plan, day by day, and every other crop's is as it was; the card shows the date as yours, and the plantings there end on it", bad_crop == [] and bad_rest == [] and ugot["until"][fenv]["value"] == (fd["before"] if fd else None) and ugot["until"][fenv]["whose"] == "yours" and ugot["ends"] == uwant["ends"] and uwant["ends"][fenv]["to"] == (fd["before"] if fd else None), {"crop": bad_crop, "rest": bad_rest[:3] if isinstance(bad_rest, list) else bad_rest, "until": ugot["until"].get(fenv)})
+    # past the frost, in open ground: the frost cuts it short, and the card says so
+    uwant2 = js("const id = %s, b = engineOf(withUntil(id, %s, %s)); return { was: worthOf(S.engine), now: worthOf(b), assume: JSON.stringify(b.plan.assumptions || null), ends: ends(b, id) };" % (json.dumps(fid), json.dumps(fenv), json.dumps(fd["past"][5:] if fd else "")))
+    js("return pickDate(%s, %s);" % (json.dumps(fenv), json.dumps(fd["past"] if fd else ""))); wait(800)
+    ush2 = js("return sheet();")
+    if ush2: answer(True, 1200)
+    ugot2 = js("return { assume: JSON.stringify(S.plan.assumptions || null), until: untilCells(), ends: cardEnds(), n: S.undo.length };")
+    check("a date past the first frost, in open ground, is kept as his, and the card says the frost cuts it short: the plantings there still end on the frost", ugot2["n"] == 2 and ugot2["assume"] == uwant2["assume"] and ugot2["until"][fenv]["whose"] == "yours" and ugot2["until"][fenv]["frost"] is True and ugot2["ends"] == uwant2["ends"] and ugot2["ends"][fenv]["to"] == (fd["frost"] if fd else None), {"until": ugot2["until"].get(fenv), "ends": ugot2["ends"].get(fenv)})
+    js("return pickDate(%s, '');" % json.dumps(fenv)); wait(800)
+    if js("return !!sheet();"): answer(True, 1200)
+    cleared = js("return { assume: JSON.stringify(S.plan.assumptions || null), until: untilCells(), n: S.undo.length };")
+    check("the box cleared goes back to the season's end there: a step of its own, and the line as it was before any date", cleared["n"] == 3 and cleared["assume"] == assume0 and cleared["until"][fenv]["whose"] != "yours" and cleared["until"][fenv]["mine"] == "", cleared)
+    undo_to(0)
+    check("Undo takes every one back, to the plan as it was opened", js("return snap();")["key"] == snap0["key"] and js("return snap();")["plan"] == snap0["plan"])
+    open_crop(cid)
 
     # ── a variety with harvest days of its own, as an older plan may carry: its plantings keep them, and are not counted as moving ──
     vv = js("const id = %s, used = S.plan.plantings.filter(p => p.cropId === id && p.varietyId && placeOf(S.engine, p) && S.engine.calc(p) && followsP(S.engine, p)), v = used.length ? S.engine.variety(used[0].varietyId) : null; return v && v.cropId === id ? v.id : null;" % json.dumps(cid))

@@ -31,17 +31,19 @@ const D = (m, d) => new Date(year, m - 1, d);
 
 // ── 1. the build by itself moves nothing ──
 if (oldDir) {
+  // the plantings the frost cuts (E2c) are held at their last day, which the build before knows no other way (tests/frost_held.cjs)
   const E0 = require(path.join(oldDir, 'engine.js')), S0 = require(path.join(oldDir, 'succession.js')), F0 = require(path.join(oldDir, 'forecast.js')), Lib0 = require(path.join(oldDir, 'library.js')), eng0 = E0.create(plan, Lib0);
+  const now = E.create(require('./frost_held.cjs').held(E, Lib, plan, eng0), Lib);
   const differ = [];
   for (const p of plan.plantings) {
-    const a = eng.calc(p), b = eng0.calc(p);
+    const q = now.planting(p.id), a = now.calc(q), b = eng0.calc(p);
     if (!a !== !b) { differ.push(p.id); continue; }
     if (!a) continue;
-    const row = (e, r, DD) => [r.sow, r.field, r.first, r.last].map(x => (x ? DD.d2s(new Date(x)) : '')).join(',') + '|' + [r.plants, r.seeds, r.len, r.trays].join(',') + '|' + JSON.stringify((y => y && [y.units, y.unit, y.price, y.pattern])(e.yieldOf(p, r)));
-    if (row(eng, a, E) !== row(eng0, b, E0)) differ.push(p.id);
+    const row = (e, x, r, DD) => [r.sow, r.field, r.first, r.last].map(v => (v ? DD.d2s(new Date(v)) : '')).join(',') + '|' + [r.plants, r.seeds, r.len, r.trays].join(',') + '|' + JSON.stringify((y => y && [y.units, y.unit, y.price, y.pattern])(e.yieldOf(x, r)));
+    if (row(now, q, a, E) !== row(eng0, p, b, E0)) differ.push(p.id);
   }
   check('every planting has the dates, the seed and the yield it had in the build before', differ.length === 0, differ.slice(0, 5));
-  const m1 = F.build(eng, { year }), m0 = F0.build(eng0, { year });
+  const m1 = F.build(now, { year }), m0 = F0.build(eng0, { year });
   check('the forecast is the build before’s, crop by crop', m1.rows.length === m0.rows.length && m1.rows.every((r, i) => r.key === m0.rows[i].key && near(r.total, m0.rows[i].total, 1e-9) && near(r.worth, m0.rows[i].worth, 1e-9)), [m1.rows.length, m0.rows.length]);
   // a series asked for the old way (so many days apart, whole beds or feet) is what it was
   const shape = r => r.error ? r.error : JSON.stringify([r.waves.map(w => [iso(w.target), w.placed.map(x => [x.bed.id, iso(x.r.field), iso(x.r.first), Math.round(x.r.physicalLength * 100), Math.round(x.units * 1000)]), w.held.map(h => [h.date, h.ft || 0, (h.wait || {}).why || '']), Math.round((w.short || 0) * 100), w.skipped || '']), r.placed, r.short, Math.round(r.units * 1000), r.unit]);
