@@ -285,10 +285,10 @@
     const head = ['Kind', 'Crop', 'Variety', 'Unit', 'Season total', ...cols.map(c => options.grain === 'month' ? `${MONTHS[c.start.getMonth()]} ${model.year}` : E.d2s(c.start))], out = [head];
     const title = Object.fromEntries(GROUPS.map(([g, t]) => [g, t])), two = x => Math.round(x * 100) / 100;
     for (const row of model.rows) {
-      if (!(row.total > 0)) continue;
       const n = x => (counted(row.unit) ? sendShown(x, row.unit) : two(x));
+      if (!(n(row.total) > 0)) continue;   // less than one of a thing counted, in all, is not on the list either
       out.push([title[row.group], row.name, 'All', row.unit, n(row.total), ...cols.map(c => n(sum(row.days, c.i0, c.i1)))]);
-      if (row.varieties.length > 1 || (row.varieties[0] && row.varieties[0].id)) for (const v of row.varieties) out.push([title[row.group], row.name, v.name, row.unit, n(v.total), ...cols.map(c => n(sum(v.days, c.i0, c.i1)))]);
+      if (row.varieties.length > 1 || (row.varieties[0] && row.varieties[0].id)) for (const v of row.varieties) if (n(v.total) > 0) out.push([title[row.group], row.name, v.name, row.unit, n(v.total), ...cols.map(c => n(sum(v.days, c.i0, c.i1)))]);
     }
     return out.map(r => r.map(cell).join(',')).join('\r\n');
   }

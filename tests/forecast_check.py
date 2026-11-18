@@ -291,6 +291,13 @@ with sync_playwright() as pw:
         const each = x => F.counted(row.unit) ? Math.floor(x + 1e-6) : Math.round(x * 100) / 100, want = [each(row.total), ...cols.map(c => each(F.sum(row.days, c.i0, c.i1)))], got = line.slice(4).map(Number);
         kinds[F.counted(row.unit) ? 'counted' : 'weighed']++; if (JSON.stringify(got) !== JSON.stringify(want)) bad.push([row.name, got.slice(0, 4), want.slice(0, 4)]); }
       return { bad: bad.slice(0, 3), seen: kinds, fractions: rows.filter(l => l.length > 4 && !['lb', 'oz', 'kg', 'g', 'bu'].includes(l[3])).flatMap(l => l.slice(4)).filter(x => /\\./.test(x)).length };""", csvt)
+    # a crop and a variety of less than one thing counted in all: no line of noughts, as the list leaves them out (Codex on #69)
+    tiny = js("""const days = new Float64Array(365), more = new Float64Array(365); days[200] = 0.6; more[200] = 3.4; const m = { year: 2027, days: 365, rows: [
+        { group: 'produce', name: 'Less than one', unit: 'head', total: 0.6, days, varieties: [{ id: 'a', name: 'Alone', total: 0.6, days }] },
+        { group: 'produce', name: 'Some', unit: 'head', total: 4, days: (() => { const d = new Float64Array(365); d[200] = 4; return d; })(), varieties: [{ id: 'b', name: 'Most', total: 3.4, days: more }, { id: 'c', name: 'A little', total: 0.6, days }] }] };
+      const cols = [{ i0: 0, i1: 364, start: new Date(2027, 0, 1) }], text = F.csv(m, cols, { grain: 'month' });
+      return { none: !text.includes('Less than one') && !text.includes('A little'), some: text.includes('"Some","All","head","4"') && text.includes('"Most"') };""")
+    check("its spreadsheet leaves out a crop or a variety of less than one thing counted in all, and keeps the rest", tiny["none"] and tiny["some"], tiny)
     check("its spreadsheet gives things counted in whole numbers too, rounded down, and weighed things to two places, each the forecast's", len(csvt) > 200 and cs["bad"] == [] and cs["fractions"] == 0 and cs["seen"]["counted"] > 0 and cs["seen"]["weighed"] > 0, cs)
     page.keyboard.press("Escape"); wait(300)
     js("const d = document.querySelector('dialog[open]'); if (d) { d.close(); d.remove(); } return 1;")
