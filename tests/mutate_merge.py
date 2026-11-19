@@ -116,7 +116,10 @@ NODE = [
   ('a thing taken whole that this device only stamped again is changed there', " if (same(bare(s), bare(m))) return t; }", " }", 'changed and changed back'),
   # the ids a demand plan makes (js/trays.js)
   ('a new batch takes a random id again', "free(batchId(plan.id, b.key), x => taken.has(x))", "uid()", 'two devices that widen one demand plan alike make one record', 'trays.js'),
-  ('a new batch takes its worked id though a plain planting holds it', "free(batchId(plan.id, b.key), x => taken.has(x))", "batchId(plan.id, b.key)", 'taken off its demand plan', 'trays.js'),
+  ('a new batch takes its worked id though another plan\'s batch holds it', "free(batchId(plan.id, b.key), x => taken.has(x))", "batchId(plan.id, b.key)", 'with nothing recorded on it', 'trays.js'),
+  ('a sown batch taken off its plan is left plain, and its week made again beside it', "const plain = original ? null : state.plantings.find(p => p.id === batchId(plan.id, b.key) && !p.liveTray);", "const plain = null;", 'taken off its demand plan', 'trays.js'),
+  ('a sown batch taken off its plan is made again from the demand, not kept as recorded', "if (plain && locked(state, plain, options.records)) {", "if (false) {", 'taken off its demand plan', 'trays.js'),
+  ('a plain planting under the worked id with nothing recorded is left beside the week\'s batch', "      if (plain) original = plain;", "", 'with nothing recorded on it', 'trays.js'),
   ('a batch\'s id holds its demand plan\'s id unescaped', "'tray:' + encodeURIComponent(planId) + ':' + key", "'tray:' + planId + ':' + key", 'no two give one', 'trays.js'),
   ('the heated greenhouse benches take a random id', "free(POOL_ID, id => gardenIds.has(id))", "uid()", 'no heated greenhouse benches', 'trays.js'),
   ('the bed of the benches takes a random id', "free(POOL_BED_ID, id => bedIds.has(id))", "uid()", 'no heated greenhouse benches', 'trays.js'),

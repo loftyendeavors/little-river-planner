@@ -102,8 +102,8 @@
   /**
    * Save a demand plan into a farm plan: the plan record, its crops, and its batches as plantings.
    * A batch that already exists (same crop row, same week) keeps its id and anything else recorded on it. A new one takes the id
-   * worked from its plan and key; where a planting that is not this batch holds that id (a sown batch taken off its demand plan
-   * stays as a plain planting under its id), the first free id after it.
+   * worked from its plan and key. A plain planting that holds that id is this week's batch taken off the plan with its work (see
+   * below): it is the week's batch again. Any other planting that holds it keeps it, and the batch takes the first free id after it.
    * options: uid() for a new demand plan's id, now (ISO time), crop(id) to find a crop the plan does not list itself, records { harvests, fieldRecords },
    * keepRecorded: batches with work recorded are history: left untouched, whatever the demand now says, while the others follow it.
    */
@@ -132,10 +132,17 @@
       r.cropId = c.id; crops.set(r.id, c.id);
     }
     const taken = new Set(state.plantings.map(p => p.id));   // every id a planting holds (keys differ, so no two batches here are given one)
+    let back = 0;
     const records = model.batches.map(b => {
-      const original = old.find(p => p.liveTray && p.liveTray.key === b.key);
+      let original = old.find(p => p.liveTray && p.liveTray.key === b.key);
+      // A sown batch taken off its demand plan stays a plain planting under its id (remove, keepRecorded). Where it meets its plan
+      // again (one device deleted the plan while the other changed it, and the join kept both), its id says which week it is: it is
+      // that week's batch again, as it was recorded, and the week is not made a second time beside it.
+      const plain = original ? null : state.plantings.find(p => p.id === batchId(plan.id, b.key) && !p.liveTray);
+      if (plain && locked(state, plain, options.records)) { back++; return { ...plain, liveTray: { planId: plan.id, key: b.key, ready: b.ready, week: b.week, rowId: b.rowId } }; }
+      if (plain) original = plain;   // nothing recorded on it (not reached by the planner's own steps): made the week's batch again, under its id
       if (original && done.includes(original)) return original;
-      const id = (original && original.id) || free(batchId(plan.id, b.key), x => taken.has(x));
+      const id = (original && original.id) || free(batchId(plan.id, b.key), x => taken.has(x));   // held by a planting of another plan: only by a file edited by hand
       const p = { ...(original || {}), id, bedId: bed.id, cropId: crops.get(b.rowId), date: b.sow, trays: b.trays, dtm: b.days, timingMode: 'manual', price: b.price, yield: 1,
         liveTray: { ...((original && original.liveTray) || {}), planId: plan.id, key: b.key, ready: b.ready, week: b.week, rowId: b.rowId } };
       p.growingDefaults = { v: 1, cropId: p.cropId, crop: { mk: { present: true, value: 1 }, baseUnit: { present: true, value: 'tray' }, yBasis: { present: true, value: 'tray' }, gh: { present: true, value: 0 } } };
@@ -153,7 +160,7 @@
     const have = new Set(state.plantings.map(p => p.id));
     state.plantings.push(...records.filter(p => !have.has(p.id)));
     state.liveTrayPlans = (state.liveTrayPlans || []).filter(p => p.id !== plan.id).concat({ ...prior, ...plan, updatedAt: options.now || new Date().toISOString() });
-    return { plan: state, saved: plan, records, model, kept: done.length };
+    return { plan: state, saved: plan, records, model, kept: done.length + back };
   }
   /**
    * Take a demand plan and its batches out of a farm plan. With keepRecorded, batches with work recorded
