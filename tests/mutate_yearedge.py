@@ -15,7 +15,8 @@ NODE = [
  ("Seeds goes by the planting's own date again", SL, "const season = seasonOf(engine, p, r), dated = yearOfDate(p);", "const season = yearOfDate(p), dated = yearOfDate(p);"),
  ("the season is the year of the planting's date", SL, "return calc.first instanceof Date && !Number.isNaN(+calc.first) ? calc.first.getFullYear() : own;", "return own;"),
  ("earlier work not recorded is still counted to sow", SL, "if (dated !== null && dated < year && start && isoOf(start) < today) {", "if (false) {"),
- ("earlier work not recorded is left out of the plan too", SL, "{ outside.earlier++; row.earlier++; continue; }", "{ outside.earlier++; row.earlier++; row.total -= amount || 0; continue; }"),
+ ("an earlier year two years back is not said", SL, "if (!outside.years.includes(dated)) outside.years.push(dated);", ""),
+ ("earlier work not recorded is left out of the plan too", SL, "{ outside.earlier++; row.earlier++; if (", "{ outside.earlier++; row.earlier++; row.total -= amount || 0; if ("),
  ("work dated in the plan's year is folded as earlier too", SL, "if (dated !== null && dated < year && start && isoOf(start) < today) {", "if (dated !== null && dated <= year && start && isoOf(start) < today) {"),
  ("the seed used is not what counts for a sown planting", SL, "row.total += used != null ? used : amount || 0;", "row.total += amount || 0;"),
  ("a sowing for the next season is counted in this one", SL, "if (season !== year) { if (dated === year", "if (season !== year && dated !== year) { if (dated === year"),
@@ -29,6 +30,7 @@ NODE = [
  ("stock carried in is counted twice", FC, "if (carry[k]) { row.carried[i] += carry[k];", "if (carry[k]) { row.days[i] += carry[k]; row.carried[i] += carry[k];"),
  ("what is to sell after Dec 31 is not said", FC, "if (i >= n) { after += avail[k]; continue; }", "if (i >= n) continue;"),
  ("what is to sell after Dec 31 is counted in the season", FC, "if (i >= n) { after += avail[k]; continue; }", "if (i >= n) { after += avail[k]; inYear += avail[k]; continue; }"),
+ ("the year stock was carried in from is not kept", FC, "if (from !== null && !row.carriedFrom.includes(from)) row.carriedFrom.push(from);", ""),
  ("a figure's carried part is all of it", FC, "part === 'carried' ? (carry ? carry[i - x.lo] : 0)", "part === 'carried' ? series[i - x.lo]"),
 ]
 PAGE = [

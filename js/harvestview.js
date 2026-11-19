@@ -144,7 +144,7 @@
     };
     const lead = `${F.amount(total, row.unit, row.group)} ${picked ? 'picked' : 'to sell'} · ${num(list.length)} planting${list.length === 1 ? '' : 's'}`;
     const dialog = h('dialog.dialog.wide', { id: 'hvFrom', dataset: { hook: 'fc-from' }, oncancel: e => { e.preventDefault(); close(); } },
-      h('h2', `${row.name}${part === 'carried' ? `, carried in from ${App.planYear() - 1}` : ''}, ${colTitle(col)}`), h('p', { dataset: { hook: 'fc-from-lead' } }, lead, !picked && worth >= 1 ? ` · ${money(worth)}` : ''),
+      h('h2', `${row.name}${part === 'carried' ? `, carried in from ${(row.carriedFrom && row.carriedFrom.length ? row.carriedFrom : [App.planYear() - 1]).join(' and ')}` : ''}, ${colTitle(col)}`), h('p', { dataset: { hook: 'fc-from-lead' } }, lead, !picked && worth >= 1 ? ` · ${money(worth)}` : ''),
       h('ul.hv-from', list.map(x => h('li.row', { dataset: { hook: 'fc-from-row', planting: x.p.id, pattern: x.pattern, here: String(x.here) } },
         root.LRFThumbs.el({ varietyId: x.p.varietyId, cropId: x.p.cropId, color: eng.cropColor(x.r.c), label: x.r.c.vname || x.r.c.name, size: 40 }),
         h('span', h('b.row-name', { dataset: { hook: 'fc-from-variety' } }, x.r.c.vname || 'No variety chosen'),
@@ -181,7 +181,7 @@
       ['Flower stems', `${num(F.shown(now.stems))} that week · ${num(F.shown(all.stems))} over the season`],
       ...(best && best.worth > 0 ? [['Fullest week', `${day(best.c.start)}, ${money(best.worth)}`]] : []),
       // the year's two edges (js/forecast.js): a pound is in the one season it is sold in
-      ...(m.carried && m.carried.total > 1e-9 ? [[`Carried in from ${m.year - 1}`, `${money(m.carried.worth)} of ${m.carried.crops.join(', ')}, picked before Jan 1 and still to sell. It is in this season's figures, on a line of its own under its crop`]] : []),
+      ...(m.carried && m.carried.total > 1e-9 ? [[`Carried in from ${(m.carried.years.length ? m.carried.years : [m.year - 1]).join(' and ')}`, `${money(m.carried.worth)} of ${m.carried.crops.join(', ')}, picked before Jan 1 and still to sell. It is in this season's figures, on a line of its own under its crop`]] : []),
       ...(m.after && m.after.total > 1e-9 ? [['After Dec 31', `${money(m.after.worth)} more of ${m.after.crops.join(', ')}, picked or still in store after the year's end. It counts in ${m.year + 1}, not in this season's worth`]] : [])];
     return h('p.frame-figs.fc-figs', { id: 'hvFigs', dataset: { hook: 'fc-figs', use: marked ? m.use : '' } },
       fig('season', 'Season', money(all.worth), worthSays, { cls: 'lead' }),
@@ -240,7 +240,7 @@
         body[body.length - 1].dataset.crop = row.cropId;
         if (row.thing) body[body.length - 1].dataset.thing = row.thing;   // another thing the crop sells: a row of its own, in its own unit
         if (carry) {
-          const from = `Carried in from ${m.year - 1}`;
+          const from = `Carried in from ${(row.carriedFrom.length ? row.carriedFrom : [m.year - 1]).join(' and ')}`;
           body.push(line('.hv-var', h('td.hv-name', { title: `${row.name}: picked before Jan 1 and still to sell` }, from),
             h('td.hv-total', cash$ ? money(row.carriedWorth) : F.amount(row.carriedTotal, row.unit, row.group)), carriedOf(row), row, peak, row, 'carried'));
           Object.assign(body[body.length - 1].dataset, { hook: 'fc-carried', crop: row.cropId });

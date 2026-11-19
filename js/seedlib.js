@@ -173,12 +173,12 @@
    * as still to sow: the planner was not told whether it was sown, and seed is not ordered for a day that has passed
    * (Tasks says the same of its work in one line). `outside` counts what is left out, for the page to say: `later`, plantings
    * dated in the plan's year whose produce is for a later season (they count there), and `seasons`, which; `earlier`, those not
-   * counted to sow.
+   * counted to sow, and `years`, the years they are dated in.
    * A planting recorded as sown counts for the plan the seed recorded as used, where that is recorded in its unit.
    */
   function required(engine, options = {}) {
     const plan = engine.plan, year = +(plan.settings && plan.settings.year), rows = new Map(), today = realDay(options.today) ? options.today : isoOf(new Date());
-    const outside = { year, later: 0, seasons: [], earlier: 0 };
+    const outside = { year, later: 0, seasons: [], earlier: 0, years: [] };
     for (const p of plan.plantings || []) {
       const r = engine.calc(p);
       if (!r || r.b.active === false) continue;
@@ -197,12 +197,12 @@
       row.total += used != null ? used : amount || 0;
       if (sown || (engine.failedOn && engine.failedOn(p))) continue;   // a planting marked failed and never sown needs no seed
       const start = r.sow || r.field;
-      if (dated !== null && dated < year && start && isoOf(start) < today) { outside.earlier++; row.earlier++; continue; }
+      if (dated !== null && dated < year && start && isoOf(start) < today) { outside.earlier++; row.earlier++; if (!outside.years.includes(dated)) outside.years.push(dated); continue; }
       row.waiting++; row.toSow += amount || 0; row.trays += r.trays || 0;
       if (start && (!row.first || start < row.first)) row.first = start;
     }
     const list = [...rows.values()].sort((a, b) => String(a.crop && a.crop.name).localeCompare(String(b.crop && b.crop.name)) || String((a.variety && a.variety.name) || '').localeCompare(String((b.variety && b.variety.name) || '')));
-    outside.seasons.sort((a, b) => a - b);
+    outside.seasons.sort((a, b) => a - b); outside.years.sort((a, b) => a - b);
     return { rows: list, settings: { germ: +(plan.settings && plan.settings.germ) || 85, buffer: +(plan.settings && plan.settings.buffer) || 0 }, outside };
   }
   /**

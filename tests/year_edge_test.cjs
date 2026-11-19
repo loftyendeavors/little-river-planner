@@ -81,7 +81,9 @@ const winter = { id: 'ye-winter', bedId: empties[1].id, cropId: keeper.id, date:
 const jan = { id: 'ye-jan', bedId: covered[0].id, cropId: keeper.id, date: `${Y}-01-05`, ft: 10 };
 // sown in the plan's year with days of its own that bring its first harvest two seasons on
 const far = { id: 'ye-far', bedId: lateBed.id, cropId: late.id, date: `${Y}-06-01`, ft: 10, dtm: 600, timingMode: 'manual' };
-plan.plantings.push(dec, mar, garlic, end, winter, jan, far);
+// sown two years before the plan's year with days of its own that bring its first harvest into the plan's year
+const older = { id: 'ye-older', bedId: empties[1].id, cropId: late.id, date: `${year - 2}-06-01`, ft: 10, dtm: 600, timingMode: 'manual' };
+plan.plantings.push(dec, mar, garlic, end, winter, jan, far, older);
 const eng0 = E.create(base, Lib), eng1 = E.create(plan, Lib), old0 = E0.create(base, Lib), old1 = E0.create(plan, Lib);
 const batch = plan.plantings.find(p => p.liveTray && p.liveTray.ready === ready), spring = plan.plantings.find(p => p.liveTray && p.liveTray.ready === april);
 const rb = eng1.calc(batch), rs = eng1.calc(spring);
@@ -123,7 +125,7 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   check('counted once: the season\'s worth rises by the stock\'s worth, and the weeks and the months add up to it', near(worthOf(m1) - worthOf(mNo), inJan * price) && near(weeks(m1), worthOf(m1)) && near(months(m1), worthOf(m1)), [worthOf(mNo), worthOf(m1), inJan * price, weeks(m1), months(m1)]);
   const row = m1.rows.find(r => r.cropId === keeper.id && !r.thing), bm = F.byMonth(eng1, keeper.id).rows.find(r => r.key === row.key);
   check('the crop\'s row carries it once: its total and worth hold the carried part, and what it sells in January by month is the two together',
-    row && near(row.carriedTotal, inJan) && near(row.carriedWorth, inJan * price) && bm && near(bm.sold[0], monthOf(m1, keeper.id, 0)) && m1.carried.crops.includes(row.name) && near(m1.carried.worth, inJan * price), [row && row.carriedTotal, bm && bm.sold[0], m1.carried]);
+    row && near(row.carriedTotal, inJan) && near(row.carriedWorth, inJan * price) && bm && near(bm.sold[0], monthOf(m1, keeper.id, 0)) && m1.carried.crops.includes(row.name) && near(m1.carried.worth, inJan * price) && JSON.stringify(row.carriedFrom) === JSON.stringify([year - 1]) && JSON.stringify(m1.carried.years) === JSON.stringify([year - 1]), [row && row.carriedTotal, bm && bm.sold[0], m1.carried, row && row.carriedFrom]);
   const x = row.plantings.find(q => q.p.id === dec.id), wk = F.periods(m1, 'week', 0, 6)[0];
   check('a figure\'s plantings split the same way: of one week, what was carried in and the rest come to the whole', x && near(F.share(x, wk.i0, wk.i1, false, 'carried') + F.share(x, wk.i0, wk.i1, false, 'own'), F.share(x, wk.i0, wk.i1, false)) && near(F.share(x, wk.i0, wk.i1, false, 'own'), 0) && F.share(x, wk.i0, wk.i1, true, 'carried') === 0, x ? [F.share(x, wk.i0, wk.i1, false, 'carried'), F.share(x, wk.i0, wk.i1, false)] : null);
   const listed = F.available(m1, wk.i0, wk.i1).filter(a => a.row.cropId === keeper.id && !a.row.thing);
@@ -173,6 +175,8 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   const early = need(SL, eng1, key, `${Y0}-09-01`), past = need(SL, eng1, key, before), o = SL0.required(old1).rows.find(r => r.key === key), out = SL.required(eng1, { today: before }).outside;
   check('Seeds counts it for the plan: still to plant before its day, and not once the day is past with nothing recorded', early.toSow > 0 && near(early.toSow, early.total) && past.toSow === 0 && near(past.total, early.total) && past.plantings === 1 && out.earlier >= 1, [early, past, out]);
   check('the build before had no row for it', !o || o.plantings === 0);
+  const ro = eng1.calc(older);
+  check('one dated two years before, first picked in the plan\'s year, is earlier work too, and said with its own year', SL.seasonOf(eng1, older) === year && iso(ro.first).slice(0, 4) === Y && out.earlier === 2 && JSON.stringify(out.years) === JSON.stringify([year - 2, year - 1]), [iso(ro && ro.first), out]);
   // its planting is on Tasks' other jobs when it is a transplant; here it is sown in place, which is the sowing list's
   check('Tasks\' other jobs list the work of the plan\'s season and of the plan\'s year, and the build before\'s list is all in it', (() => { const a = new Set(W.lines(eng1, plan, year).flatMap(l => l.members.map(m => l.key + '|' + m.p.id))); return W0.lines(old1, plan, year).every(l => l.members.every(m => a.has(l.key + '|' + m.p.id))) && W.lines(eng1, plan, year).some(l => l.members.some(m => m.p.id === mar.id)); })());
 }
@@ -182,7 +186,8 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   const re = eng1.calc(end), key = keyOf(eng1, end);
   check('the case: sown late in the plan\'s year, first picked in the next', re && iso(re.first).slice(0, 4) === String(year + 1), [iso(re && re.first)]);
   const here = SL.required(eng1, { today: before }), there = E.create(withYear(plan, year + 1), Lib), thereBase = E.create(withYear(base, year + 1), Lib);
-  check('it is the next season: Seeds for the plan\'s year leaves it out and says so, and the next year counts it', SL.seasonOf(eng1, end) === year + 1 && !here.rows.some(r => r.key === key && r.plantings > need(SL, eng0, key, before).plantings) && here.outside.later >= 1
+  const noEnd = E.create({ ...plan, plantings: plan.plantings.filter(p => p.id !== end.id) }, Lib);
+  check('it is the next season: Seeds for the plan\'s year leaves it out and says so, and the next year counts it', SL.seasonOf(eng1, end) === year + 1 && need(SL, eng1, key, before).plantings === need(SL, noEnd, key, before).plantings && here.outside.later >= 1
     && need(SL, there, key, before).plantings - need(SL, thereBase, key, before).plantings === 1, [here.outside, need(SL, there, key, before)]);
   check('its work is on Tasks for the plan\'s year, where it is done, and for the next, whose season it is', SL.onTasks(eng1, end, year) && SL.onTasks(eng1, end, year + 1));
   const rf = eng1.calc(far);

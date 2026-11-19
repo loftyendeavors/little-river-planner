@@ -136,7 +136,7 @@
           row = { key, cropId: p.cropId, name: short(crop.name || r.c.name || 'Crop') + (y.thing ? ' · ' + y.name : ''), unit: y.unit, group: groupOf(crop, y.thing ? eng.unitOf(crop) : y.unit, own), color: eng.cropColor(r.c), days: new Float64Array(n), picked: new Float64Array(n), value: new Float64Array(n),
             total: 0, pickedTotal: 0, worth: 0, plantings: [], varieties: new Map(), unset: 0, first: null, last: null, keeps: 0, patterns: new Set(), ...(y.thing ? { thing: y.thing, sold: y.name } : {}),
             // of `days` and `value`: what was picked before Jan 1 and is still to sell (carried in); and what is to sell after Dec 31 (in no figure here)
-            carried: new Float64Array(n), carriedValue: new Float64Array(n), carriedTotal: 0, carriedWorth: 0, after: 0, afterWorth: 0 };
+            carried: new Float64Array(n), carriedValue: new Float64Array(n), carriedTotal: 0, carriedWorth: 0, carriedFrom: [], after: 0, afterWorth: 0 };
           rows.set(key, row);
         }
         // a first thing that is left nothing by the others is not a yield that works out to nothing
@@ -152,7 +152,12 @@
         // `carry` is the part of `avail` picked before the year (a day number below 0): stock carried in, kept apart so it is shown apart
         const keep = keepOf(y), lo = picked[0], span = picked[picked.length - 1] - lo + keep, out = new Float64Array(span), avail = new Float64Array(span), carry = new Float64Array(span);
         const lots = y.pattern === 'once' ? [[lo, y.units]] : picked.map(i => [i, rate]);
-        for (const [i, q] of lots) { out[i - lo] += q; for (let k = 0; k < keep; k++) { avail[i - lo + k] += q / keep; if (i < 0) carry[i - lo + k] += q / keep; } }
+        for (const [i, q] of lots) {
+          out[i - lo] += q;
+          for (let k = 0; k < keep; k++) { avail[i - lo + k] += q / keep; if (i < 0) carry[i - lo + k] += q / keep; }
+          const from = i < 0 && i + keep > 0 ? E.addDays(start, i).getFullYear() : null;   // the year a lot still to sell in this one was picked in
+          if (from !== null && !row.carriedFrom.includes(from)) row.carriedFrom.push(from);
+        }
         let inYear = 0, cut = 0, carried = 0, after = 0;
         for (let k = 0; k < span; k++) {
           const i = lo + k;
@@ -182,7 +187,8 @@
     // the worth, once). After: to sell after Dec 31 from what is picked in the year, picked or still in store: it counts in the next
     // year, where it is carried in, and in no figure of this one. A pound is in the one season it is sold in.
     const edge = (q, w) => { const crops = list.filter(r => r[q] > 1e-9); return { crops: crops.map(r => r.name), total: crops.reduce((t, r) => t + r[q], 0), worth: crops.reduce((t, r) => t + r[w], 0) }; };
-    const carried = edge('carriedTotal', 'carriedWorth'), after = edge('after', 'afterWorth');
+    for (const row of list) row.carriedFrom.sort((a, b) => a - b);
+    const carried = { ...edge('carriedTotal', 'carriedWorth'), years: [...new Set(list.filter(r => r.carriedTotal > 1e-9).flatMap(r => r.carriedFrom))].sort((a, b) => a - b) }, after = edge('after', 'afterWorth');
     return { year, start, days: n, rows: list, unset, counted, use, personal: marked, keeps: list.some(r => r.keeps > 0), carried, after, date: i => E.addDays(start, i), index: at };
   }
 
