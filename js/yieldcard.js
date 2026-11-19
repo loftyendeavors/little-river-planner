@@ -523,7 +523,14 @@
         save: k => App.setSell(c.id, { young: hc.young.map((x, j) => j === i ? k : x.mine) }, k == null ? `${c.name}: a young stand, ${words[i]} back to ${back}` : `${c.name}: a young stand gives ${fig(k)}% ${words[i]}`) }),
         h('span.yc-unit', `% ${words[i]},`)];
     };
-    const said = `${published ? 'Grey: published figures (each box says whose), counted only once a stand’s year is typed. Yours replace them.' : `No published figures for ${c.name}: an empty box gives all of it.`} ${stands.length ? `${typed} of ${plural(stands.length, 'stand')} ${typed === 1 ? 'has its' : 'have their'} year typed.` : ''}`;
+    // a stand picked, in part or whole, before the year it is planted: said with its date (none of it is counted that year)
+    const early = [];
+    for (const p of stands) {
+      const r = eng.calc(p), y = r ? eng.yieldOf(p, r) : null;
+      if (!y || !y.age) continue;
+      for (const x of eng.soldOf(p, r, y) || [y]) if (x.age && x.age.season === 0) { const d = x.first || r.first; early.push(`${x.name || c.name} in ${App.bedLabel(eng.bedOf(p.bedId), eng)} first picked ${UI.day(d)}, ${d.getFullYear()}, before the stand is planted (${x.age.year}): none counted that year.`); }
+    }
+    const said = `${early.join(' ')}${early.length ? ' ' : ''}${published ? 'Grey: published figures (each box says whose), counted only once a stand’s year is typed. Yours replace them.' : `No published figures for ${c.name}: an empty box gives all of it.`} ${stands.length ? `${typed} of ${plural(stands.length, 'stand')} ${typed === 1 ? 'has its' : 'have their'} year typed.` : ''}`;
     return row('young', 'A young stand gives', 'of the yield above, for a stand whose year is typed on its planting; an empty year is a mature stand',
       span(h('span.yc-line', ...cell(0), ...cell(1), h('span.yc-unit', 'all of it from the third')), h('small.yc-total', { dataset: { hook: 'young-said' } }, said.trim())));
   }

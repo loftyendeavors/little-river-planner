@@ -105,7 +105,11 @@ const mine = x => x.parts.find(q => q.thing === T);
   // a planting changed after the days before were typed, so it goes into its bed fewer days before its days to harvest: it starts the
   // day after it goes in, and its notes say how many of the days it gets and why (Codex on #83: the number keeps one meaning, said)
   const late = E.create(plan({ before: N }, { dtm: 4, timingMode: 'manual' }), Lib), xl = partOf(late, P0), ql = mine(xl), nl = late.warnings(late.planting(P0)).filter(w => w.k === 'pick');
-  check('a planting changed afterwards to go into its bed fewer days before: picked from the day after, and its notes say how many of the days and why', !!ql && days(xl.r.first, xl.r.field) === 4 && ql.ahead === 3 && nl.length === 1 && nl[0].t.includes(`3 of the ${N} days`) && nl[0].t.includes('only the day before'), [ql && ql.ahead, nl]);
+  check('a planting changed afterwards to go into its bed fewer days before: picked from the day after it goes in, and its notes say how many of the days asked apply and name the day it goes in', !!ql && days(xl.r.first, xl.r.field) === 4 && ql.ahead === 3 && ql.asked === N && nl.length === 1 && nl[0].t.includes(`3 of the ${N} days early asked`) && nl[0].t.includes(`goes into its bed ${iso(xl.r.field)}`) && +late.pickedFrom(late.planting(P0)) === +ql.first, [ql && ql.ahead, nl]);
+  // none can apply: a planting that goes into its bed the day before its days to harvest. The days asked are kept and said, with the
+  // days named; the planting is first picked with its crop (Codex on #83: the zero case is not silent)
+  const zero = E.create(plan({ before: N }, { dtm: 1, timingMode: 'manual' }), Lib), xz = partOf(zero, P0), qz = mine(xz), nz = zero.warnings(zero.planting(P0)).filter(w => w.k === 'pick');
+  check('none can apply (in its bed one day before its days to harvest): it is first picked with its crop, the days asked are kept on the part, and its notes say none can apply, with the day it goes in and the day it is first picked', !!qz && !qz.ahead && qz.asked === N && +qz.first === +xz.r.first && nz.length === 1 && nz[0].t.includes('none can apply') && nz[0].t.includes(iso(xz.r.field)) && nz[0].t.includes(iso(xz.r.first)) && +zero.pickedFrom(zero.planting(P0)) === +xz.r.first, [qz, nz]);
   const none = E.create(plan({ before: N }, { harvestEnd: iso(E.addDays(e1.calc(beds[0]).first, -1)) }), Lib), xn = partOf(none, P0);
   check('a planting that is not picked at all is not picked early either', xn.r.harvestDays === 0 && !(xn.parts || []).some(q => q.ahead), [xn.r.harvestDays, (xn.parts || []).map(q => q.ahead)]);
   // On demand with no days of its own, its planting's harvest cut short by a last day of its own: the share of its total its days
@@ -131,7 +135,7 @@ check('the plan has a cane stand that follows the list, and one with a yield of 
   check('planted the year it is picked: its first season, nothing of the list’s yield', u(y1) === 0 && y1.standAge(y1.planting(S1.id)).season === 1, u(y1));
   check('planted the year before: its second season, 80% of it', near(u(y2), base * 0.8) && y2.standAge(y2.planting(S1.id)).share === 80, [u(y2), base]);
   check('planted two years before or earlier, or with no year: all of it, as before', near(u(y3), base) && near(u(yr(1990)), base) && e3.standAge(S1) === null, [u(y3), base]);
-  check('a year after the one it is picked in is not read', near(u(yf), base) && yf.standAge(yf.planting(S1.id)) === null);
+  check('picked in a year before the stand is planted: nothing is counted, and its season is said as 0', u(yf) === 0 && yf.standAge(yf.planting(S1.id)).season === 0 && yf.warnings(yf.planting(S1.id)).some(w => w.k === 'stand' && w.t.includes('before the stand is planted')));
   const lost = base * 0.2 * price, w0 = worthOf(F.build(e3, { year })), w2 = worthOf(F.build(y2, { year }));
   check('the season’s worth falls by exactly what the young stand does not give', near(w0 - w2, lost, 1e-9) && lost > 0, [w0, w2, lost]);
   check('no date and no ground of any planting moves', lines(e3).map(l => l.split('|').slice(0, 6).join('|')).join('\n') === lines(y1).map(l => l.split('|').slice(0, 6).join('|')).join('\n'));
@@ -157,6 +161,19 @@ check('the plan has a cane stand that follows the list, and one with a yield of 
     const plain = E.create(pl, Lib), earlyPl = withSell(pl, S1.cropId, { things: { 't-cane': { ...pl.assumptions.sell[S1.cropId].things['t-cane'], before: 90 } } }), xe = E.create(earlyPl, Lib);
     const q0 = plain.planting(S1.id), q1 = xe.planting(S1.id), r1 = xe.calc(q1), part = (xe.soldOf(q1, r1) || []).find(x => x.thing === 't-cane');
     check('a stand planted the year before, its crop ready in the new year, and something it sells picked early in December: that part is its first season (nothing), its crop’s own line its second (80%)', plain.calc(q0).first.getFullYear() === at && xe.standAge(q1).season === 2 && near(xe.yieldOf(q1, r1).units, plain.yieldOf(q0).units) && !!part && part.first.getFullYear() === at - 1 && part.age && part.age.season === 1 && part.units === 0 && xe.standYear(q1, r1) === at - 1, [iso(plain.calc(q0).first), part && iso(part.first), part && part.age, part && part.units]);
+  }
+  // a split cane stand first picked Jan 10, something else it sells 20 days early (Dec 21 the year before): each part takes the share of
+  // the year it is picked in; a part picked before the stand is planted counts nothing and is said; the bed is "picking" only from a day
+  // that counts (the chat that holds the build, on Codex's Zoom Out of #83)
+  {
+    const field = iso(E.addDays(E.s2d(`${at}-01-10`), -(e3.calc(S1).first - e3.calc(S1).field) / 864e5));
+    const split = (y, young) => { let pl = withSell(withPlanting(given, S1.id, { date: field, ...(y ? { plantedIn: y } : {}) }), S1.cropId, { things: { 't-cane': { id: 't-cane', n: 1, name: 'Seconds', from: 'bed', unit: 'lb', price: 2, pattern: 'spread', share: 50, yield: 0.4, before: 20 } } }); if (young) pl = withSell(pl, S1.cropId, { young }); return E.create(pl, Lib); };
+    const at2 = e => { const q = e.planting(S1.id), r = e.calc(q), y = e.yieldOf(q, r), part = (e.soldOf(q, r, y) || []).find(x => x.thing === 't-cane'), own = (e.soldOf(q, r, y) || []).find(x => !x.thing); return { q, r, y, part, own }; };
+    const a = at2(split(at, [10, 80])), b = at2(split(at - 1, [10, 80])), m = at2(split(null));
+    check('the case: first picked Jan 10 of the season, the other thing Dec 21 the year before', iso(a.r.first) === `${at}-01-10` && iso(a.part.first) === `${at - 1}-12-21`, [iso(a.r.first), a.part && iso(a.part.first)]);
+    check('planted that season: its own line is its first season (10%), the part picked in December before it is planted counts nothing and its notes say so with the date', a.own.age.season === 1 && a.own.age.share === 10 && a.part.age.season === 0 && a.part.units === 0 && a.y.age.season === 1 && a.r && a.q && split(at, [10, 80]).warnings(a.q).some(w => w.k === 'stand' && w.t.includes(`${at - 1}-12-21`) && w.t.includes('before the stand is planted')), [a.own.age, a.part.age]);
+    check('planted the year before: the December part is its first season (10%), its own line in January its second (80%)', b.part.age.season === 1 && b.part.age.share === 10 && b.own.age.season === 2 && b.own.age.share === 80 && near(b.part.units, m.part.units * 0.1) && near(b.own.units, m.own.units * 0.8), [b.part.age, b.own.age]);
+    check('the bed is picking from the December part when it counts, and from its own first picking when it does not', +split(at - 1, [10, 80]).pickedFrom(b.q) === +b.part.first && +split(at, [10, 80]).pickedFrom(a.q) === +a.r.first);
   }
   // a perennial crop with no published figures: an empty box is all of it; his figure counts
   const other = given.plantings.find(p => !e3.isPerennial(e3.crop(p.cropId)) && follows(e3, p) && p.cropId !== C), oc = other && other.cropId;

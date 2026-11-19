@@ -78,7 +78,7 @@ with sync_playwright() as pw:
         if go:
             # "Show on the map" goes to the day it is first picked: a thing's own first picking, days before its crop's
             js("A.setDate(new Date(A.planYear(), 0, 2)); const d = hook('fc-from'), li = d && hooks('fc-from-row', d).find(x => x.dataset.planting === arg); const b = li && li.querySelector('button.link'); if (b) b.click(); return 1;", pid); wait(500)
-            return tags, js("return { date: E.d2s(S.date), view: S.view, sel: S.sel && S.sel.id };")
+            return tags, js("const f = document.querySelector(`#mapBeds .bed-fill[data-planting=\"${arg}\"]`); return { date: E.d2s(S.date), view: S.view, sel: S.sel && S.sel.id, picking: !!f && f.classList.contains('pick') };", pid)
         js("const d = document.querySelector('dialog[open]'); if (d) { d.close(); d.remove(); } return 1;"); wait(200)
         return tags
     start = js("return snap();")
@@ -134,19 +134,28 @@ with sync_playwright() as pw:
     js("A.undo(); return 1;"); wait(400)
     # a planting shortened afterwards: the clamp is said, on the card (the bed named, the days that apply) and in its Schedule; Undo puts both back
     sh0 = js("return snap();")
-    js("A.updatePlanting(arg, { dtm: 2, timingMode: 'manual' }, 'days to harvest 2, for the check'); return 1;", P0); wait(500)
-    js("A.setView('assume'); LRFAssume.setMode('harvest', 'card', arg); return 1;", C); wait(500)
-    sh = js("""const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p), x = eng.soldOf(p, r).find(q => q.thing === arg.T), td = document.querySelector(`#ycGrid tr[data-row="first"] td.yc-thing[data-thing="${arg.T}"]`);
-      return { ahead: x.ahead, before: S.plan.assumptions.sell[arg.C].things[arg.T].before, said: td ? txt(hook('thing-first-said', td)) : '', want: `in ${A.bedLabel(eng.bedOf(p.bedId))} there is room for ${x.ahead} day${x.ahead === 1 ? '' : 's'}, so it is picked ${x.ahead} day${x.ahead === 1 ? '' : 's'} early there` };""", {"P0": P0, "T": T, "C": C})
-    js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", P0); wait(500)
-    shs = js("return hooks('early-pick').map(li => `${txt(li.querySelector('span'))} ${txt(li.querySelector('b'))}`);")
-    check("a planting shortened afterwards: the stored days before stay; the card names its bed and the days that apply there, and its Schedule says it is picked as early as there is room", sh["ahead"] == 1 and sh["before"] == N and sh["want"] in sh["said"] and len(shs) == 1 and shs[0].endswith("(1 day early, all the room there is)"), [sh, shs])
+    def clamp_case(dtm):
+        """The planting set afterwards to `dtm` days to harvest: what the card's line and its Schedule say, and what they should."""
+        js("A.updatePlanting(arg.P0, { dtm: arg.d, timingMode: 'manual' }, 'days to harvest, for the check'); return 1;", {"P0": P0, "d": dtm}); wait(500)
+        js("A.setView('assume'); LRFAssume.setMode('harvest', 'card', arg); return 1;", C); wait(500)
+        got = js("""const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p), x = eng.soldOf(p, r).find(q => q.thing === arg.T), td = document.querySelector(`#ycGrid tr[data-row="first"] td.yc-thing[data-thing="${arg.T}"]`), bed = A.bedLabel(eng.bedOf(p.bedId)), a = x.ahead || 0;
+          return { ahead: a, asked: x.asked, before: S.plan.assumptions.sell[arg.C].things[arg.T].before, said: td ? txt(hook('thing-first-said', td)) : '', field: UI.day(r.field),
+            want: a ? `in ${bed} it goes into its bed ${UI.day(r.field)}, so it is picked ${a} day${a === 1 ? '' : 's'} early there, from ${UI.day(x.first)}` : `in ${bed} none can apply: it goes into its bed ${UI.day(r.field)} and is first picked with ${eng.crop(arg.C).name} on ${UI.day(x.first)}`,
+            row: a ? `(${a} of ${x.asked} days early: in its bed ${UI.day(r.field)})` : `(${x.asked} days early asked; none can apply: in its bed ${UI.day(r.field)}, first picked with ${eng.crop(arg.C).name})` };""", {"P0": P0, "T": T, "C": C})
+        js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", P0); wait(500)
+        got["rows"] = js("return hooks('early-pick').map(li => `${txt(li.querySelector('span'))} ${txt(li.querySelector('b'))}`);")
+        return got
+    sh = clamp_case(2)
+    check("a planting shortened afterwards to two days in its bed: the stored days before stay; the card names its bed, the day it goes in and the days that apply, and its Schedule says the same with the date", sh["ahead"] == 1 and sh["before"] == N and sh["want"] in sh["said"] and len(sh["rows"]) == 1 and sh["rows"][0].endswith(sh["row"]) and sh["field"] in sh["rows"][0], sh)
+    js("A.undo(); return 1;"); wait(400)
+    z = clamp_case(1)
+    check("shortened to one day in its bed, none of the days asked can apply: the card and the Schedule still say so, with the day it goes in, and the Schedule keeps its row", z["ahead"] == 0 and z["asked"] == N and z["before"] == N and z["want"] in z["said"] and len(z["rows"]) == 1 and z["rows"][0].endswith(z["row"]) and z["field"] in z["rows"][0], z)
     js("A.undo(); return 1;"); wait(400)
     js("A.setView('assume'); LRFAssume.setMode('harvest', 'card', arg); return 1;", C); wait(500)
     back = js("""const td = document.querySelector(`#ycGrid tr[data-row="first"] td.yc-thing[data-thing="${arg}"]`); return { said: td ? txt(hook('thing-first-said', td)) : '', plan: snap().plan };""", T)
     js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", P0); wait(500)
     shb = js("return hooks('early-pick').map(li => txt(li.querySelector('b')));")
-    check("and Undo puts the planting, the card and the Schedule back", back["plan"] == sh0["plan"] and "there is room" not in back["said"] and len(shb) == 1 and "room" not in shb[0], [back["said"], shb])
+    check("and Undo puts the planting, the card and the Schedule back", back["plan"] == sh0["plan"] and ";" not in back["said"] and len(shb) == 1 and "(" not in shb[0], [back["said"], shb])
     # the planting's panel and its row in the bed's season
     js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", P0); wait(600)
     sched = js("""const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p), part = eng.soldOf(p, r).find(x => x.thing === arg.T), items = [...document.querySelectorAll('#jobList > li')];
@@ -162,7 +171,7 @@ with sync_playwright() as pw:
     tags, went = got_go if isinstance(got_go, tuple) else (got_go, {})
     check("the Forecast's popup, on a week before its days to harvest, lists it with a tag for the days it is picked early", tags is not None and ["early", f"{N} d early"] in tags, tags)
     first_day = js("const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p); return E.d2s(eng.soldOf(p, r).find(x => x.thing === arg.T).first);", {"P0": P0, "T": T})
-    check("“Show on the map” from it goes to the day the thing is first picked, not to its crop's days to harvest", went.get("date") == first_day and went.get("view") == "map" and went.get("sel") == P0, [went, first_day])
+    check("“Show on the map” from it goes to the day the thing is first picked, not to its crop's days to harvest, and the map shows its bed as being picked that day", went.get("date") == first_day and went.get("view") == "map" and went.get("sel") == P0 and went.get("picking") is True, [went, first_day])
     # two early products entered out of date order: the later one first, the earlier one second. A planting grown for both by the
     # crop's shares lists them in date order in its Schedule, before its own days to harvest; "Show on the map" goes to each one's own day
     T2, P1 = "t-earlier-check", sub["p1"]
@@ -239,6 +248,41 @@ with sync_playwright() as pw:
     em = js("return { has: 'plantedIn' in S.engine.planting(arg), undo: S.undo.length, toast: toast() };", st["id"])
     check("emptied there, one step: a mature stand again, and the message says so", em["has"] is False and em["undo"] == s5["undo"] + 1 and "a mature stand" in em["toast"], em)
     shot("bed-season-stand")
+    # a split cane stand first picked Jan 10, something else it sells 20 days early (Dec 21 the year before), shares 10 and 80: each path
+    # (year then days before, days before then year, and the planting's date moved last) ends in the same figures and words; a part
+    # picked before the stand is planted counts nothing and is said with its date on the panel, the Expected line, the Schedule and the card
+    sp0 = js("return snap();"); Y = st["season"]
+    field = js("""const eng = S.engine, p = eng.planting(arg), r = eng.calc(p); return E.d2s(E.addDays(new Date(A.planYear(), 0, 10), -Math.round(E.dayDiff(r.first, r.field))));""", st["id"])
+    js("""const before = S.plan.assumptions || null, after = before ? JSON.parse(JSON.stringify(before)) : { v: 1, crops: {}, varieties: {} };
+      after.sell = after.sell || {}; after.sell[arg] = { ...(after.sell[arg] || {}), young: [10, 80], things: { 't-cane': { id: 't-cane', n: 1, name: 'Seconds', from: 'bed', unit: 'lb', price: 2, pattern: 'spread', share: 50, yield: 0.4 } } };
+      A.commit('a thing out of each bed and his shares, for the check', [{ kind: 'assume', before, after }], { unchecked: true }); return 1;""", st["crop"]); wait(400)
+    base = js("return S.undo.length;")
+    def year_step(y):
+        js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", st["id"]); wait(400)
+        js("return typeIn($('fStand'), %d);" % y); wait(500)
+    def lead_step(): page.evaluate("async (c) => { await LRFApp.setThing(c, 't-cane', { before: 20 }, 'twenty days before, for the check'); }", st["crop"]); wait(400)
+    def date_step(): js("A.updatePlanting(arg.id, { date: arg.d }, 'moved, for the check'); return 1;", {"id": st["id"], "d": field}); wait(400)
+    def read():
+        js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", st["id"]); wait(500)
+        out = js("""const eng = S.engine, p = eng.planting(arg), box = $('fStand');
+          return { plan: JSON.stringify({ plantedIn: p.plantedIn, date: p.date, before: S.plan.assumptions.sell[p.cropId].things['t-cane'].before }), rows: rowsOf(S.engine), said: txt(hook('stand-said')), line: txt($('fYieldLine')), early: hooks('early-pick').map(li => txt(li)), max: box ? +box.max : null, value: box ? +box.value : null };""", st["id"])
+        js("A.setView('assume'); LRFAssume.setMode('harvest', 'card', arg); return 1;", st["crop"]); wait(500)
+        out["card"] = js("return txt(hook('young-said'));")
+        return out
+    def back_to(n):
+        while js("return S.undo.length;") > n: js("A.undo(); return 1;"); wait(200)
+    date_step(); year_step(Y); lead_step(); a = read(); back_to(base)
+    date_step(); lead_step(); year_step(Y); b = read(); back_to(base)
+    year_step(Y); lead_step(); date_step(); c = read()
+    want = f"Seconds first picked Dec 21, {Y - 1}, before the stand is planted ({Y}): none counted that year."
+    check("year then days before, days before then year, and the date moved last: the same figures and the same words", a["plan"] == b["plan"] == c["plan"] and a["rows"] == b["rows"] == c["rows"] and a["said"] == b["said"] == c["said"] and a["line"] == b["line"] == c["line"] and a["card"] == b["card"] == c["card"], [a["said"], b["said"], c["said"]])
+    check("planted that season, the part picked in December before it is planted is said with its date on the panel, the Expected line, the Schedule and the crop's card, and counts nothing", want in a["said"] and "(none: before the stand is planted)" in a["line"] and any(f"Dec 21, {Y - 1}" in x and f"before the stand is planted ({Y})" in x for x in a["early"]) and f"first picked Dec 21, {Y - 1}, before the stand is planted ({Y})" in a["card"], a)
+    check("the year saved stays, and the box's latest year is not below it", a["value"] == Y and a["max"] >= Y, [a["value"], a["max"]])
+    js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", st["id"]); wait(400)
+    js("return typeIn($('fStand'), %d);" % (Y - 1)); wait(500); d = read()
+    check("planted the year before: each part says its own share, the December part its first season (10%), its own line its second (80%)", f"Seconds, first picked Dec 21, {Y - 1}: its first season, 10%." in d["said"] and "(10%, its first season)" in d["line"] and "(80%, its second season)" in d["line"], [d["said"], d["line"]])
+    back_to(base); js("A.undo(); return 1;"); wait(400)
+    check("and Undo takes each step back to the plan before them", js("return snap().plan;") == sp0["plan"])
     while js("return S.undo.length;") > 0: js("A.undo(); return 1;"); wait(150)
     check("every step undone, the plan is the one the page was given", js("return snap().plan;") == start["plan"])
     check("no error on the page", not errors, errors[:4])

@@ -11,7 +11,7 @@ from pathlib import Path
 app, scratch, tests, plan = [Path(x).resolve() for x in sys.argv[1:5]]
 mode = sys.argv[5] if len(sys.argv) > 5 else "node"; words = [w.lower() for w in sys.argv[6:]]
 old = os.environ.get("OLD") or str(Path(os.environ.get("LRF_WORK", "/tmp/lrf-work")) / "old" / "js")
-EN, FC, TH, YC, PN, CD, HV, AP = "js/engine.js", "js/forecast.js", "js/things.js", "js/yieldcard.js", "js/panels.js", "js/card.js", "js/harvestview.js", "js/app.js"
+EN, FC, TH, YC, PN, CD, HV, AP, MP = "js/engine.js", "js/forecast.js", "js/things.js", "js/yieldcard.js", "js/panels.js", "js/card.js", "js/harvestview.js", "js/app.js", "js/map.js"
 NODE = [
  # days before
  ("days before are not read", EN, "before: from !== 'harvest' ? wholeDays(x.before) : null,", "before: null,"),
@@ -26,19 +26,24 @@ NODE = [
  ("the part does not say how many days early", EN, "...(ahead ? { ahead } : {}),", ""),
  ("the forecast picks a thing only on the crop's own days", FC, "if (y.first || eng.pickedOn(r, d)) picked.push(i);", "if (eng.pickedOn(r, d)) picked.push(i);"),
  ("the forecast does not carry the days early", FC, "...(y.ahead ? { ahead: y.ahead } : {}),", ""),
- ("an early picking is not among the planting's notes", EN, "if (!x.ahead) continue;", "continue;"),
- ("a planting in its bed fewer days than the days before says nothing", EN, "short = t && t.before > x.ahead;", "short = false;"),
+ ("an early picking is not among the planting's notes", EN, "if (!x.asked) continue;", "continue;"),
+ ("a planting in its bed fewer days than the days before says nothing", EN, "out.push({ k: 'pick', t: x.ahead === x.asked ?", "out.push({ k: 'pick', t: true ?"),
+ ("none can apply is not said among the notes", EN, ": `${x.name}: ${x.asked} days early asked; none can apply: it goes into its bed ${d2s(r.field)} and is first picked with ${r.c.name} on ${d2s(x.first)}.` });", ": '' });"),
+ ("the notes name no day it goes into its bed", EN, "${x.ahead} of the ${x.asked} days early asked: it goes into its bed ${d2s(r.field)}.`", "${x.ahead} of the ${x.asked} days early asked: it goes into its bed the day before.`"),
+ ("a part does not keep the days asked", EN, "...(t.before && r.harvestDays > 0 ? { asked: t.before } : {}),", ""),
+ ("a stand picked before it is planted is counted as mature", EN, "if (y > at) return { year: y, season: 0, share: 0, at };", "if (y > at) return null;"),
+ ("the bed is picking from a part picked before its stand is planted", EN, "parts.filter(x => !(x.age && x.age.season === 0)).map(", "parts.map("),
  # a young stand
  ("a part picked early is aged to its crop's days to harvest, not to its own first picking", EN, "const age = y.age ? standAge(p, r, start.getFullYear()) : null,", "const age = y.age,"),
  ("a stand's year is not read", EN, "const age = own || liveTray ? null : standAge(p, r),", "const age = null,"),
  ("a planting's own yield is cut by its age", EN, "const age = own || liveTray ? null : standAge(p, r),", "const age = liveTray ? null : standAge(p, r),"),
- ("a crop that is not perennial is cut by a year", EN, "|| y > at || !isPerennial(r.c)) return null;", "|| y > at) return null;"),
- ("a year after the season is read", EN, "|| y > at || !isPerennial(r.c)) return null;", "|| !isPerennial(r.c)) return null;"),
+ ("a crop that is not perennial is cut by a year", EN, "|| at == null || !isPerennial(r.c)) return null;", "|| at == null) return null;"),
+ ("a year after the season is read as a young stand", EN, "if (y > at) return { year: y, season: 0, share: 0, at };", "if (false) return { year: y, season: 0, share: 0, at };"),
  ("a stand is counted from the year after it is planted", EN, "const season = Math.min(3, at - y + 1),", "const season = Math.min(3, at - y),"),
  ("the third year is counted as the second", EN, "const season = Math.min(3, at - y + 1),", "const season = Math.min(2, at - y + 1),"),
  ("his share does not replace the published one", EN, "value: m != null ? m : fallback,", "value: fallback != null ? fallback : m,"),
  ("the published share for the year after is another", EN, "{ name: /raspberr/i, shares: [0, 80],", "{ name: /raspberr/i, shares: [0, 70],"),
- ("a crop with no published figure gives nothing in its first year", EN, "share: cell && cell.value != null ? cell.value : 100 };", "share: cell && cell.value != null ? cell.value : 0 };"),
+ ("a crop with no published figure gives nothing in its first year", EN, "share: cell && cell.value != null ? cell.value : 100, at };", "share: cell && cell.value != null ? cell.value : 0, at };"),
  ("a share out of 0 to 100 is read", EN, "+n >= 0 && +n <= 100 ? +n : null;", "+n >= 0 ? +n : null;"),
  ("the card is not given a perennial crop's shares", EN, "if (!c || !isPerennial(c) || c.micro || isCoverCrop(c)) return null;", "if (!c || c.micro || isCoverCrop(c)) return null;"),
  ("a stand that gives nothing yet is counted as having no yield", FC, "if (y.set && y.age && !(y.age.share > 0)) continue;", ""),
@@ -51,7 +56,7 @@ PAGE = [
  ("too many days before are taken", AP, "if (room != null && want > room) return refuse(", "if (false) return refuse("),
  ("the line under the box does not say what it comes to", TH, "`first picked at ${Math.max(1, days[0] - t.before)} days, ${c.name} at ${days[0]}`", "`first picked with ${c.name}`"),
  ("the Schedule does not say when the thing is first picked", PN, "          earlyPicks(eng, p, r),\n", ""),
- ("the Schedule lists early pickings in the order they were entered", PN, ".filter(x => x.ahead).sort((a, b) => a.first - b.first || b.ahead - a.ahead).map(x =>", ".filter(x => x.ahead).map(x =>"),
+ ("the Schedule lists early pickings in the order they were entered", PN, ".filter(x => x.asked).sort((a, b) => a.first - b.first || (b.ahead || 0) - (a.ahead || 0)).map(x =>", ".filter(x => x.asked).map(x =>"),
  ("the Schedule puts the early picking after the planting's own first harvest", PN, "          earlyPicks(eng, p, r),\n          h('li', { dataset: { hook: 'schedule-first' } }, h('span', eng.soldOf(p, r)?.some(x => x.ahead) ? 'Days to harvest' : 'First harvest'), h('b', day(r.first))),\n", "          h('li', { dataset: { hook: 'schedule-first' } }, h('span', eng.soldOf(p, r)?.some(x => x.ahead) ? 'Days to harvest' : 'First harvest'), h('b', day(r.first))),\n          earlyPicks(eng, p, r),\n"),
  ("the Schedule still calls the crop's days to harvest its first harvest", PN, "x => x.ahead) ? 'Days to harvest' : 'First harvest'", "x => x.ahead) ? 'First harvest' : 'First harvest'"),
  ("“Show on the map” goes to the crop's own first picking", HV, "const first = x.from || x.r.first;", "const first = x.r.first;"),
@@ -66,6 +71,14 @@ PAGE = [
  ("the Expected line does not say a young stand's share", PN, "${how ? ` (${how})` : ''}${standSaid(y.age)}.", "${how ? ` (${how})` : ''}."),
  ("the bed's season has no year box", CD, "h('label.card-box', h('span', 'Variety'), variety), standCardBox(p, r, redraw, readOnly)),", "h('label.card-box', h('span', 'Variety'), variety)),"),
  ("the popup has no tag for a young stand", HV, "x.age ? tag('stand',", "false ? tag('stand',"),
+ ("the map decides picking by the crop's own first picking", MP, "ripe = eng.pickedFrom(r.planting, r) <= date && date <= r.last,", "ripe = r.first <= date && date <= r.last,"),
+ ("the Schedule drops the row where none of the days can apply", PN, "filter(x => x.asked).sort(", "filter(x => x.ahead).sort("),
+ ("the Schedule names no day it goes into its bed", PN, "ahead ? `${ahead} of ${x.asked} days early: in its bed ${dayYear(r.field)}`", "ahead ? `${ahead} of ${x.asked} days early: all the room there is`"),
+ ("the card's line says nothing where none can apply", TH, "      : `in ${bed(p)} none can apply: it goes into its bed ${day(r.field)} and is first picked with ${c.name} on ${day(x.first)}`;", "      : '';"),
+ ("the box's latest year is that of its earliest picking", PN, "max: Math.max(r.first.getFullYear(), Number.isInteger(p.plantedIn) ? p.plantedIn : 0),", "max: eng.standYear(p, r),"),
+ ("a part picked before its stand is planted is not said on the panel", PN, "    return parts.map(x => x.age.season === 0 ?", "    return parts.filter(x => x.age.season !== 0).map(x => x.age.season === 0 ?"),
+ ("the Expected line gives one share for every part", PN, "${x.age && x.age.season < 3 ? (x.age.season === 0 ? ' (none: before the stand is planted)' : ` (${num(x.age.share, 1)}%, its ${ORD[x.age.season]} season)`) : ''}", ""),
+ ("the crop's card does not say a stand picked before it is planted", YC, "if (x.age && x.age.season === 0) { const d = x.first || r.first; early.push(", "if (false) { const d = x.first || r.first; early.push("),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)
 faults = NODE if mode == "node" else PAGE

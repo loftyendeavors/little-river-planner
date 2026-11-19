@@ -283,10 +283,7 @@
     return h('label.card-box', { title: P.standSays(e, p, r) }, h('span', 'Stand planted in'), P.standBox(e, p, r, { name: 'bed-stand', disabled: readOnly, onFail: redraw }));
   }
   /** The first day a row is picked: the earliest first picking of what it is grown for (a thing may start before its crop). */
-  function pickFrom(p, r) {
-    const parts = eng().soldOf(p, r);
-    return parts ? new Date(Math.min(+r.first, ...parts.map(x => +(x.first || r.first)))) : r.first;
-  }
+  const pickFrom = (p, r) => eng().pickedFrom(p, r);
 
   function bedPlantingRow(x, bed, status, date, readOnly, redraw) {
     const { p, r } = x, e = eng(), f = e.footprint(p, r), through = e.occupancyThrough(p, r);

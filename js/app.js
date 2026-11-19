@@ -276,14 +276,14 @@
   function setPlantedIn(id, value) {
     const F = root.LRFForecast, eng = state.engine, before = eng.planting(id), r = before ? eng.calc(before) : null;
     if (!before || !r || !eng.isPerennial(r.c)) return false;
-    const year = value == null || String(value).trim() === '' ? null : Math.round(+value), at = eng.standYear(before, r);
+    const year = value == null || String(value).trim() === '' ? null : Math.round(+value), at = r.first.getFullYear();   // the planting's own first picking: a year saved never falls out of the box
     if (year != null && !(year >= 1900 && year <= at)) return refuse(`A stand picked in ${at} was planted in ${at} or before. Type a year up to ${at}, or empty the box for a mature stand.`);
     if ((Number.isInteger(before.plantedIn) ? before.plantedIn : null) === year) return false;
     const ops = [{ before, after: changed(before, { plantedIn: year }) }], next = E.create(withOps(state.plan, ops, 'do'), Lib);
     const worth = e => F.build(e).rows.reduce((sum, row) => sum + row.worth, 0), was = worth(eng), now = worth(next);
     const q = next.planting(id), age = next.standAge(q), y = next.yieldOf(q);
     const label = `${cropLabel(before)}, ${bedLabel(eng.bedOf(before.bedId))}: ${year == null ? 'year planted emptied' : `planted in ${year}`}`;
-    const said = y && y.own ? 'its own yield stands' : !age || age.season >= 3 ? 'a mature stand' : `its ${age.season === 1 ? 'first' : 'second'} season, ${Math.round(age.share * 10) / 10}% of a mature stand’s yield`;
+    const said = y && y.own ? 'its own yield stands' : !age || age.season >= 3 ? 'a mature stand' : age.season === 0 ? 'picked before it is planted: none counted' : `its ${age.season === 1 ? 'first' : 'second'} season, ${Math.round(age.share * 10) / 10}% of a mature stand’s yield`;
     if (!commit(label, ops, { unchecked: true })) return false;
     toast(`${label} · ${said} · ${worthSaid(was, now)} · no date moves`, { label: 'Undo', run: undo });
     return { was, now };

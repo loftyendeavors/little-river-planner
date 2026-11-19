@@ -116,8 +116,11 @@
       // plantings it comes from that go into their bed fewer days before their days to harvest than this: they start the day after (Codex on #83)
       // named, with the days that apply there: the box's number is kept, so widening the planting brings it back
       const shortOf = t => {
-        const list = (eng.plan.plantings || []).filter(p => p.cropId === c.id).map(p => { const r = eng.calc(p), x = r && (eng.soldOf(p, r) || []).find(q => q.thing === t.id); return x && x.ahead < t.before ? { p, x } : null; }).filter(Boolean);
-        const say = ({ p, x }) => `in ${App.bedLabel(eng.bedOf(p.bedId), eng)} there is room for ${x.ahead} day${x.ahead === 1 ? '' : 's'}, so it is picked ${x.ahead} day${x.ahead === 1 ? '' : 's'} early there`;
+        const list = (eng.plan.plantings || []).filter(p => p.cropId === c.id).map(p => { const r = eng.calc(p), x = r && (eng.soldOf(p, r) || []).find(q => q.thing === t.id); return x && x.asked && (x.ahead || 0) < x.asked ? { p, r, x } : null; }).filter(Boolean);
+        const day = d => root.LRFUI.day(d), bed = p => App.bedLabel(eng.bedOf(p.bedId), eng);
+        // the day it goes into its bed and the day it is first picked, named: a number that does not apply is never left unsaid
+        const say = ({ p, r, x }) => x.ahead ? `in ${bed(p)} it goes into its bed ${day(r.field)}, so it is picked ${x.ahead} day${x.ahead === 1 ? '' : 's'} early there, from ${day(x.first)}`
+          : `in ${bed(p)} none can apply: it goes into its bed ${day(r.field)} and is first picked with ${c.name} on ${day(x.first)}`;
         return list.length ? `; ${list.slice(0, 2).map(say).join('; ')}${list.length > 2 ? `; and ${list.length - 2} more` : ''}` : '';
       };
       if (id === 'first') {

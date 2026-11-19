@@ -298,7 +298,8 @@
       const here = [...status.crops].sort((a, b) => a.field - b.field || String(a.planting.id).localeCompare(String(b.planting.id)));
       let used = 0, picking = false, holdsSel = false;
       for (const r of here) {
-        const color = eng.cropColor(r.c), ripe = r.first <= date && date <= r.last, id = r.planting.id, name = r.c.vname || r.c.name;
+        // picking from its earliest picking that applies: something else it sells may be picked before its days to harvest (E2c part 2)
+        const color = eng.cropColor(r.c), ripe = eng.pickedFrom(r.planting, r) <= date && date <= r.last, id = r.planting.id, name = r.c.vname || r.c.name;
         const fill = ripe ? shade(color, PICK) : color, attrs = { fill, 'data-planting': id, class: `bed-fill ${ripe ? 'pick' : 'grow'}${id === selPlanting ? ' sel' : ''}` };
         picking = picking || ripe; holdsSel = holdsSel || id === selPlanting;
         tally(counts, r.c.id, bed.id);

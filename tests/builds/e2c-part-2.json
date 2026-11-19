@@ -16,6 +16,7 @@
   "engine.js",
   "forecast.js",
   "harvestview.js",
+  "map.js",
   "panels.js",
   "rails.js",
   "succession.js",
