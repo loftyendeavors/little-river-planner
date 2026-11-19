@@ -369,6 +369,18 @@ with sync_playwright() as pw:
         check('the Delete key on a batch that follows a weekly demand plan removes nothing: the batch stays, no step is added, and the page says the demand is changed on Live trays',
               bool(tied) and kept['there'] and kept['steps'] == steps and 'weekly demand' in kept['toast'] and 'Live trays' in kept['toast'], kept)
 
+        # the other device widens further than this one's own widening; this one then takes its own back: the plan stays as the other
+        # left it, and every week it lists keeps its batches
+        if t0:
+            A.evaluate(WIDEN, later); settled(A, 'in-step'); look(B)
+            further = B.evaluate("(d) => LRFTrays.add(d, 7)", later); wk2 = B.evaluate("(d) => LRFTrays.add(LRFTrays.monday(d), 7)", later)
+            B.evaluate(WIDEN, further); settled(B, 'in-step'); look(A)
+            had = A.evaluate(WEEK, wk)
+            A.evaluate("LRFApp.undo()"); A.wait_for_timeout(800)
+            after_undo = {'through': (A.evaluate(DEMAND) or {}).get('through'), 'week': A.evaluate(WEEK, wk), 'week2': len(A.evaluate(WEEK, wk2)), 'toast': toast(A)}
+        check('the other device widened the demand plan a week further; undo of this device\'s own widening leaves the plan as the other device left it, and the week this device added keeps every batch, since the plan still lists it',
+              bool(t0) and len(had) > 1 and after_undo['through'] == further and after_undo['week'] == had and after_undo['week2'] > 0, [had, after_undo] if t0 else None)
+
         # ── 6. turned off: the question it always was ──
         where = 'off'
         B.evaluate("void LRFApp.sync().setJoin(false)"); B.wait_for_timeout(300)

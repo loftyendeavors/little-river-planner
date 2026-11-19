@@ -327,7 +327,7 @@ tryCase('a planting put by hand under a week\'s worked id: the week\'s own batch
   }
   return [!!other && !!field && out.length === 0, out];
 });
-tryCase('a batch marked failed, its plan then deleted and the mark taken off is a plain planting with nothing recorded on it under its worked id: when the other device\'s change brings the plan back and the plan is saved, that planting is the week\'s batch again, under its id, and the week holds it once (the reviewing agent, on #80)', () => {
+tryCase('a batch marked failed, its plan then deleted and the mark taken off is a plain planting with nothing recorded on it under its worked id; the join with the other device\'s changed plan ties it back (settleTrays: its work is the same as the cloud\'s), so the plan\'s next save keeps it as the week\'s batch, and the week holds it once (the reviewing agent, on #80)', () => {
   const X = TWIN, start = X.widen(X.start, device('first', 8)), WK = X.week(start, '2027-05-10')[0].id, plan = start.liveTrayPlans.find(t => t.id === X.id);
   const failed = putPlanting(start, W.fail(planting(start, WK), '2027-04-28', '2027-04-28T10:00:00Z'));
   const removed = TR.remove(failed, X.id, {}, { keepRecorded: true }), off = putPlanting(removed, W.fail(planting(removed, WK), null)), p = planting(off, WK);
@@ -335,7 +335,7 @@ tryCase('a batch marked failed, its plan then deleted and the mark taken off is 
   const laptop = X.apply(start, { ...plan, rows: plan.rows.map(r => ({ ...r, price: 19 })) }, theirs()), r = X.join(start, off, laptop);
   if (!ok(r)) return [false, r.why];
   const s = X.apply(r.plan, { ...r.plan.liveTrayPlans.find(t => t.id === X.id), name: 'renamed' }, device('again', 10)), w = X.week(s, '2027-05-10'), ids = s.plantings.map(x => x.id);
-  return [plainNone && w.length === 1 && w[0].id === WK && same(X.harvest(s), [3, 6]) && ids.length === new Set(ids).size, [plainNone, w.map(x => x.id), X.harvest(s), X.harvest(r.plan)]];
+  return [plainNone && !!(planting(r.plan, WK) || {}).liveTray && w.length === 1 && w[0].id === WK && same(X.harvest(s), [3, 6]) && ids.length === new Set(ids).size, [plainNone, w.map(x => x.id), X.harvest(s), X.harvest(r.plan)]];
 });
 tryCase('a batch tied to a demand plan is not removed by hand: it stays (LRFTrays.removable, under the Delete key and the card\'s Remove), a plain planting is removed; so a sown batch is never made again unsown under its id: the plan renamed on one device, a note on the other, joined either way round, one batch, sown, 60 seeds off a lot of 500 once (the reviewing agent, on #80)', () => {
   const X = TWIN, key = SL.sowing(eng(X.start), X.batches(X.start)[0]).key, stocked = addLot(X.start, key, 500, device('stock', 7)), lotId = stocked.seedInventory.lots[stocked.seedInventory.lots.length - 1].id;

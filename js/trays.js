@@ -146,7 +146,7 @@
       const base = batchId(plan.id, b.key), line = original ? [] : state.plantings.filter(p => !p.liveTray && nth(base, p.id) && p.bedId === bed.id && p.cropId === crops.get(b.rowId)).sort((x, y) => nth(base, x.id) - nth(base, y.id));
       const plain = line.find(p => locked(state, p, options.records)) || line[0];
       if (plain && locked(state, plain, options.records)) { back++; return { ...plain, liveTray: { planId: plan.id, key: b.key, ready: b.ready, week: b.week, rowId: b.rowId } }; }
-      if (plain) original = plain;   // nothing recorded on it (rare: a batch marked failed when its plan was deleted, the mark then taken off): made the week's batch again, under its id
+      if (plain) original = plain;   // nothing recorded on it (only a hand edit leaves one plain beside its plan: a join ties such a batch back first): made the week's batch again, under its id
       if (original && done.includes(original)) return original;
       const id = (original && original.id) || free(base, x => taken.has(x));   // held by anything else: only by a file edited by hand
       const p = { ...(original || {}), id, bedId: bed.id, cropId: crops.get(b.rowId), date: b.sow, trays: b.trays, dtm: b.days, timingMode: 'manual', price: b.price, yield: 1,

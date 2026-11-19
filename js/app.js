@@ -163,24 +163,24 @@
     let kept = 0;
     for (const op of step.ops) {
       const is = now(op);
+      if (!op.kind && op.before == null && is && is.liveTray && step.ops.some(o => o.kind === 'trays')) { made.push([op, is]); continue; }   // a batch of a demand plan the step changed: below
       if (alike(is, left(op))) { ops.push(op); continue; }
       if (op.kind === 'inventory' || (!op.kind && worked(op.before) !== worked(op.after))) return null;
-      if (!op.kind && op.before == null && is && is.liveTray && step.ops.some(o => o.kind === 'trays')) { made.push([op, is]); continue; }   // a batch of a demand plan the step changed: below
       if (is == null || op.before == null || op.after == null) { kept++; continue; }   // made or taken out by the step, and changed or gone since: it stays as it is now
       const place = op.kind === 'own' ? 'lrfNext.' + op.key : whole[op.kind] || listOf(op) + '[]', joined = M.joinOne(place, op.after, op.before, is);
       kept += joined.items.length;
       if (!alike(joined.value, is)) ops.push({ ...op, before: joined.value, after: is });
     }
-    // A weekly batch the step made, and another device changed since with nothing recorded on it, follows its demand plan as the
-    // undo leaves it, as an unsown batch does whenever the demand changes: it goes when that plan no longer lists its week, and stays
-    // when it does. One with work recorded on it stays, as history.
+    // A weekly batch the step made follows its demand plan as the undo leaves it, as an unsown batch does whenever the demand
+    // changes: it goes when that plan no longer lists its week, and stays when it does (another device may have widened the plan
+    // further since). One the other device has changed goes only with nothing recorded on it; one with work recorded stays, as history.
     if (made.length) {
       const Trays = root.LRFTrays, back = ops.find(o => o.kind === 'trays'), plans = back ? back.before || [] : plan.liveTrayPlans || [];
       const listed = p => { const demand = plans.find(t => t.id === p.liveTray.planId); try { return !!demand && Trays.schedule(demand).batches.some(b => b.key === p.liveTray.key); } catch (_) { return false; } };
       // work can also be recorded in the records kept beside the plan (harvests, picks): read where they are loaded; where they are
       // kept and not loaded, nothing is taken out
       const kept0 = state.attic ? state.attic.rest || {} : ((plan.lrfNext || {}).attic || 'none') === 'none' ? {} : null, records = kept0 && { harvests: kept0.harvests, fieldRecords: kept0.fieldRecords };
-      for (const [op, is] of made) if (records && !Trays.locked(plan, is, records) && !listed(is)) ops.push({ ...op, after: is }); else kept++;
+      for (const [op, is] of made) if ((alike(is, left(op)) || (records && !Trays.locked(plan, is, records))) && !listed(is)) ops.push({ ...op, after: is }); else kept++;
     }
     return { ops, kept };
   }
