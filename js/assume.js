@@ -622,7 +622,9 @@
       days: [['Transplanting', 'Days count from the day the crop goes in the bed.'], ['Seeding in trays', 'Days count from sowing in the nursery, so the nursery time comes off.'],
         ['Direct seeding', 'A figure for seed sown in place. As a transplant the crop is in the bed about two weeks less.'], ['Seed to harvest', 'Days in the nursery plus days in the bed, where the crop mostly grows.']],
       harvest: [['Marketable yield', 'What is packed and fit to sell, from a plant, a bed-foot or a tray.'], ['Gradually', 'The yield is a week’s picking, every week of the harvest window.'],
-        ['Clear', 'The yield is a total, all of it on the day it is ready.'], ['On demand', 'The yield is a total, spread evenly over the harvest window.'], ['Harvest window', 'The days a planting is picked: to the season’s end, or a set number.']]
+        ['Clear', 'The yield is a total, all of it on the day it is ready.'], ['On demand', 'The yield is a total, spread evenly over the harvest window.'], ['Harvest window', 'The days a planting is picked: to the season’s end, or a set number.'],
+        ['Days before', 'How many days before the crop’s days to harvest something else it sells is first picked, as baby carrots are before the big ones. Empty: picked with the crop. No date moves.'],
+        ['A young stand', 'A cane stand gives a share of a mature stand’s yield the year it is planted and the year after, all of it from the third. The grey figures are published ones and count only once a stand’s year is typed on its planting; yours replace them. An empty year is a mature stand.']]
     };
     // the controls it names are the page's own tools; the crop list's rows carry titles too, and are not controls of the page
     $('asTitle').after(UI.help(() => $('asLead').textContent, () => document.querySelector('#assumeView .as-tools'), () => WORDS[ui.mode] || [], { hook: 'assume-help', card: { hook: 'assume-help-card' }, label: 'What this page is for' }));

@@ -45,14 +45,14 @@ NODE = [
  ("the crop's own line keeps the plantings a place thing takes", EN, "if (there) return [own(there, 1)];", "if (there) return [{ ...y, thing: null, name: null }, own(there, 1)];"),
  ("what one weighs is left out of the amount", EN, "cut = weekly ? 1 : clamp(days / Math.max(1, nominal), 0, 1), k = t.counted ? t.weighs : 1;", "cut = weekly ? 1 : clamp(days / Math.max(1, nominal), 0, 1), k = 1;"),
  ("a planting with a yield of its own is given in parts too", EN, "if (!y || y.own || (r.rack && !!r.c.micro)) return null;", "if (!y || (r.rack && !!r.c.micro)) return null;"),
- ("the share sold is not taken off a thing", EN, "units: y.count * part * each * k * y.mk * cut, unit: t.unit,", "units: y.count * part * each * k * cut, unit: t.unit,"),
+ ("the share sold is not taken off a thing", EN, "units: y.count * part * each * k * y.mk * cut * young, unit: t.unit,", "units: y.count * part * each * k * cut * young, unit: t.unit,"),
  # two things out of one bed
  ("a thing out of each bed takes the whole bed", EN, "for (const t of beds) parts.push(own(t, t.share / 100));", "for (const t of beds) parts.push(own(t, 1));"),
  ("the crop's own line is left whole beside a thing out of each bed", EN, "const bedLeft = 1 - beds.reduce((n, t) => n + t.share, 0) / 100,", "const bedLeft = 1,"),
  ("a week's picking is counted as a total", EN, "const each = weekly ? t.yield * days / 7 : t.yield,", "const each = t.yield,"),
  ("a thing's own harvest days are passed over", EN, "days = t.days ? Math.min(t.days, there) : there,", "days = there,"),
- ("a thing with harvest days of its own is picked to the planting's last day", EN, "last: addDays(r.first, Math.max(0, Math.min(days, r.harvestDays) - 1)), slice: part };", "last: r.last, slice: part };"),
- ("a thing is picked from the day after the planting's first picking", EN, "by: 'thing', keep: y.keep, first: r.first, last:", "by: 'thing', keep: y.keep, first: addDays(r.first, 1), last:"),
+ ("a thing with harvest days of its own is picked to the planting's last day", EN, "last: addDays(start, Math.max(0, Math.min(days, r.harvestDays + ahead) - 1)), slice: part,", "last: r.last, slice: part,"),
+ ("a thing is picked from the day after the planting's first picking", EN, "by: 'thing', keep: y.keep, first: start, last:", "by: 'thing', keep: y.keep, first: addDays(start, 1), last:"),
  # one harvest, packed two ways
  ("packed from the harvest, the amount is multiplied by what one holds", EN, "(t.way === 'weighs' ? t.weighs : 1 / t.holds)", "(t.way === 'weighs' ? t.weighs : t.holds)"),
  ("the share packed another way is not taken off the crop's own line", EN, "const parts = [{ ...y, units: source * Math.max(0, packLeft),", "const parts = [{ ...y, units: source,"),
@@ -71,8 +71,8 @@ NODE = [
  ("a backup loaded over the plan does not carry the list", IO, "      plan.assumptions = prev.assumptions; const n = figures(prev.assumptions);", "      const n = figures(prev.assumptions);"),
  # found by a reader of the build: each passed the checks as they then stood
  ("a thing's total is not cut where its planting's harvest is cut short", EN, "cut = weekly ? 1 : clamp(days / Math.max(1, nominal), 0, 1), k =", "cut = 1, k ="),
- ("a thing's own harvest days no longer rescale its total", EN, "nominal = t.days || Math.max(1, r.expectedHarvestDays),", "nominal = Math.max(1, r.expectedHarvestDays),"),
- ("a thing does not keep as its crop keeps", EN, "by: 'thing', keep: y.keep, first: r.first", "by: 'thing', keep: 0, first: r.first"),
+ ("a thing's own harvest days no longer rescale its total", EN, "nominal = t.days || Math.max(1, r.expectedHarvestDays + ahead),", "nominal = Math.max(1, r.expectedHarvestDays + ahead),"),
+ ("a thing does not keep as its crop keeps", EN, "by: 'thing', keep: y.keep, first: start", "by: 'thing', keep: 0, first: start"),
  ("a planting of a variety sold by a unit of its own is given in parts", EN, "      if (v && sellVRule(v.id).unit) return null;\n", ""),
  ("a first thing left nothing is told as a yield that works out to nothing", FC, "if ((!y.set || !(y.units > 0)) && !(parts.length > 1 && y.set))", "if ((!y.set || !(y.units > 0)))"),
  # where a thing is listed, and the readings that take a planting whole
@@ -104,7 +104,7 @@ PAGE = [
  ("the helper row is shown for a thing whose yield is in its own unit", TH, "if (t.from !== 'harvest') return t.counted ? { label: `A ${one(t.counted)} weighs, packed`, unit: t.unit, value: t.weighs } : null;", "if (t.from !== 'harvest') return { label: `A ${one(t.counted || t.unit)} weighs, packed`, unit: t.unit, value: t.weighs };"),
  ("the card does not say a thing is not counted", TH, "const needs = () => list.filter(t => !t.counts).map(", "const needs = () => list.filter(t => false).map("),
  ("what is still empty in a thing's column is not named beside the button", YC, "    for (const e of root.LRFThings.of({ eng, c, hc, x: of(eng, c.id), box }).empties()) out.push(e);\n", ""),
- ("the first-picking cell says nothing of a first picking of its own", TH, "`with ${c.name}: its own first picking will go here`", "`with ${c.name}`"),
+ ("the first-picking cell does not say an empty box is picked with the crop", TH, "`empty: first picked with ${c.name}, on its days to harvest`", "``"),
  ("the crop's own share is shown as 100", TH, "const inForce = kind => 100 - counting.filter(t => t.from === kind).reduce((n, t) => n + t.share, 0);", "const inForce = kind => 100;"),
  ("the share once the others count is not said", TH, "Math.abs(now - typed) > 1e-9 ? h('small.yc-total.warn'", "false ? h('small.yc-total.warn'"),
  ("a place a thing takes stays a column of the crop's own", TH, "const places = cols => { const left = cols.list.filter(env => !taken.has(env)); return left.length ? { ...cols, list: left } : cols; };", "const places = cols => cols;"),
@@ -149,7 +149,7 @@ PAGE = [
  ("the checklist does not say a thing is waiting", YC, "const said = w.things ? `${w.price || w.yield ? say + ' · ' : ''}${plural(w.things, 'thing')} waiting` : say;", "const said = say;"),
  ("a thing's empty price is not amber on the list", TH, "cls: '.ah-price' + (t.price == null ? '.amber' : ''),", "cls: '.ah-price',"),
  ("a thing packed from the crop's share is said in the old words", TH, "`packed from ${c.name}’s own share`", "`packed from what ${c.name} is left`"),
- ("a thing cleared in one day does not say which day", TH, "h('span.yc-na', { dataset: { cleared: 'first' } }, `none: cleared in one day, the day ${c.name} is first picked. A day of its own comes with a later build.`)", "why('none: cleared in one day')"),
+ ("a thing cleared in one day does not say which day", TH, "`none: cleared in one day, the day ${c.name} is first picked. Days before, above, give it a day of its own.`", "`none: cleared in one day`"),
  # the planting's panel, and the weekly amount's sentence
  ("the planting's panel gives the crop's unit and price for a planting that feeds a thing", PN, "    if (parts) return h('p.help', { id: 'fYieldLine', dataset: { things: String(parts.length) } },", "    if (false) return h('p.help', { id: 'fYieldLine', dataset: { things: String(parts.length) } },"),
  ("the weekly amount of a packed thing gives the crop's yield in the thing's unit", SR, "h('b', 'Sized at '), `${k ? packed : gives}${", "h('b', 'Sized at '), `${gives}${"),

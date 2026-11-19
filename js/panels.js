@@ -526,7 +526,39 @@
     const how = y.pattern === 'weekly' ? `${num(y.perWeek, 2)}${unit} a week from ${basis}` : y.pattern === 'once' ? 'all at once' : '';
     // a planting that feeds more than one thing its crop sells: each thing in its own unit, at its own price
     if (parts) return h('p.help', { id: 'fYieldLine', dataset: { things: String(parts.length) } }, `Expected: ${parts.map(x => `${x.thing ? x.name + ', ' : parts.length > 1 ? r.c.name + ', ' : ''}${F.amount(x.units, x.unit, 'produce')}${!personal && x.price > 0 ? ` at $${num(x.price, 2)}, ${'$' + Math.round(x.units * x.price).toLocaleString('en-US')}` : ''}`).join('; ')}${personal ? ', for personal use: not counted as revenue' : ''}. ${r.c.name} sells more than one thing: each is worked out from its own column under Assumptions, Yield and price.`);
-    return h('p.help', { id: 'fYieldLine' }, `Expected: ${F.amount(y.units, y.unit, 'produce')}${personal ? ', for personal use: not counted as revenue' : y.price > 0 ? ` at $${num(y.price, 2)}, ${'$' + Math.round(y.units * y.price).toLocaleString('en-US')}` : ''}. From ${whose}${how ? ` (${how})` : ''}.${r.c.harvestBy === 'list' ? ' Harvest days are your list’s.' : ''}`);
+    return h('p.help', { id: 'fYieldLine' }, `Expected: ${F.amount(y.units, y.unit, 'produce')}${personal ? ', for personal use: not counted as revenue' : y.price > 0 ? ` at $${num(y.price, 2)}, ${'$' + Math.round(y.units * y.price).toLocaleString('en-US')}` : ''}. From ${whose}${how ? ` (${how})` : ''}${standSaid(y.age)}.${r.c.harvestBy === 'list' ? ' Harvest days are your list’s.' : ''}`);
+  }
+  /** What a young stand's share does to the Expected line (E2c part 2): nothing for a mature stand or one with no year typed. */
+  const standSaid = age => !age || age.season >= 3 ? '' : `: ${num(age.share, 1)}% of it, in the stand’s ${age.season === 1 ? 'first' : 'second'} season`;
+
+  // ── the year a cane stand was planted (E2c part 2): its own block, in a planting's panel and in the bed's season (card.js) ──
+  // A box only he can fill, for a planting of a perennial crop. Empty is a mature stand, as before. Typed, a young stand gives the
+  // share of a mature stand's yield its crop's card gives for its season; a planting with a yield of its own keeps it as typed.
+  const STAND_WORDS = [['Stand planted in', 'The year this stand went into its bed. A stand gives less while it is young: how much, the year it is planted and the year after, is on its crop’s card under Assumptions, Yield and price. From the third year it gives all of it. Empty: a mature stand, as before.']];
+  /** What is so of this stand, in a line under its box: nothing to hide, and nothing said where there is nothing to say. */
+  function standSays(eng, p, r) {
+    const y = eng.yieldOf(p, r), age = eng.standAge(p, r);
+    if (y && y.own) return 'It carries a yield of its own, which stands: no share is taken from it.';
+    if (!age) return 'Yours to type. Empty: a mature stand.';
+    if (age.season >= 3) return 'A mature stand: all of its yield.';
+    return `Its ${age.season === 1 ? 'first' : 'second'} season: ${num(age.share, 1)}% of a mature stand’s yield.`;
+  }
+  /** The box itself: a year, sent through App.setPlantedIn. `cls` is the caller's own part (the panel's field, the card's box). */
+  function standBox(eng, p, r, { id, name, disabled, onFail } = {}) {
+    const input = h('input', { type: 'number', id: id || null, name: name || null, min: 1900, max: r.first.getFullYear(), step: 1, value: Number.isInteger(p.plantedIn) ? p.plantedIn : '', placeholder: 'year',
+      disabled: !!disabled, dataset: { hook: 'stand-year', planting: p.id }, title: 'The year this stand was planted. Empty: a mature stand.',
+      onchange: e => { if (!App.setPlantedIn(p.id, e.target.value) && onFail) onFail(); } });
+    return input;
+  }
+  function standField(eng, p, r) {
+    if (!eng.isPerennial(r.c) || r.rack) return null;
+    return h('div.field', { id: 'fStandField' }, h('div.field-head', h('label', { for: 'fStand', dataset: { hook: 'stand-label' } }, 'Stand planted in'),
+      UI.help(null, null, STAND_WORDS, { label: 'What Stand planted in means', hook: 'stand-help', card: { hook: 'stand-help-card' } })),
+      standBox(eng, p, r, { id: 'fStand', onFail: () => render() }), h('small', { dataset: { hook: 'stand-said' } }, standSays(eng, p, r)));
+  }
+  /** Lines of the Schedule for what it sells that is first picked before its days to harvest (E2c part 2). */
+  function earlyPicks(eng, p, r) {
+    return (eng.soldOf(p, r) || []).filter(x => x.ahead).map(x => h('li', { dataset: { hook: 'early-pick', thing: x.thing } }, h('span', `${x.name} from`), h('b', day(x.first))));
   }
 
   // ── several varieties in one bed (stage c of the bed panel build) ──
@@ -668,6 +700,7 @@
           field('Harvest days', h('input', { type: 'number', id: 'fHw', min: 0, max: 400, value: p.hw != null && p.hw !== '' ? p.hw : '', placeholder: r.harvestMode === 'season' ? 'To season end' : String(c.hw),
             onchange: e => set(...edit.hw(e.target.value)) }))),
         h('p.help', fromList || dtmSource),
+        standField(eng, p, r),
         useField,
         givesField,
         yieldLine(eng, p, r)),
@@ -676,6 +709,7 @@
         h('ol.schedule', { id: 'jobList' },
           jobItems(p, r, c, sow),
           h('li', h('span', 'First harvest'), h('b', day(r.first))),
+          earlyPicks(eng, p, r),
           h('li', h('span', 'Last harvest'), h('b', r.harvestDays ? day(r.last) : 'None before the season ends')),
           h('li', h('span', 'Ground free again'), h('b', through === Infinity ? 'Stays planted' : day(E.addDays(through, 1)))))),
       failSection(p),
@@ -848,5 +882,5 @@
     });
   }
 
-  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, setScope, scope: () => lib.scope, renderLibrary, sowingBox, edit, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle(), useWords: USE_WORDS, redraw: render };
+  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, setScope, scope: () => lib.scope, renderLibrary, sowingBox, edit, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle(), useWords: USE_WORDS, redraw: render, standBox, standSays, standWords: STAND_WORDS };
 })(window);

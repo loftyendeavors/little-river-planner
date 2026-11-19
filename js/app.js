@@ -267,6 +267,27 @@
     toast(`${label} · ${worthSaid(was, now)} · no date moves`, { label: 'Undo', run: undo });
     return { was, now };
   }
+  // ───────────────────── the year a cane stand was planted (E2c part 2) ─────────────────────
+  /**
+   * The year a stand of a perennial crop was planted (`plantedIn`), or nothing: a mature stand, as before. A young stand gives the
+   * share of a mature stand's yield its crop's line gives for its season (engine.standAge). It moves no date. A year after the
+   * one it is picked in is refused in a sentence. What it does to the season's worth is said with it, and one Undo takes it back.
+   */
+  function setPlantedIn(id, value) {
+    const F = root.LRFForecast, eng = state.engine, before = eng.planting(id), r = before ? eng.calc(before) : null;
+    if (!before || !r || !eng.isPerennial(r.c)) return false;
+    const year = value == null || String(value).trim() === '' ? null : Math.round(+value), at = r.first.getFullYear();
+    if (year != null && !(year >= 1900 && year <= at)) return refuse(`A stand picked in ${at} was planted in ${at} or before. Type a year up to ${at}, or empty the box for a mature stand.`);
+    if ((Number.isInteger(before.plantedIn) ? before.plantedIn : null) === year) return false;
+    const ops = [{ before, after: changed(before, { plantedIn: year }) }], next = E.create(withOps(state.plan, ops, 'do'), Lib);
+    const worth = e => F.build(e).rows.reduce((sum, row) => sum + row.worth, 0), was = worth(eng), now = worth(next);
+    const q = next.planting(id), age = next.standAge(q), y = next.yieldOf(q);
+    const label = `${cropLabel(before)}, ${bedLabel(eng.bedOf(before.bedId))}: ${year == null ? 'year planted emptied' : `planted in ${year}`}`;
+    const said = y && y.own ? 'its own yield stands' : !age || age.season >= 3 ? 'a mature stand' : `its ${age.season === 1 ? 'first' : 'second'} season, ${Math.round(age.share * 10) / 10}% of a mature stand’s yield`;
+    if (!commit(label, ops, { unchecked: true })) return false;
+    toast(`${label} · ${said} · ${worthSaid(was, now)} · no date moves`, { label: 'Undo', run: undo });
+    return { was, now };
+  }
   // ───────────────────────── assumptions ─────────────────────────
   // A change to the list, or to a garden's growing conditions, is a statement about the world, not
   // an edit to the plan. It is never refused. What it does to the plan is shown first when it would
@@ -339,7 +360,7 @@
     return ops ? assume(label, ops) : Promise.resolve(false);
   }
   /**
-   * Change a crop's line: `change` may hold unit, price, pattern, days, keep, share, turnover; a null goes back to the default.
+   * Change a crop's line: `change` may hold unit, price, pattern, days, keep, share, turnover, until and young; a null goes back to the default.
    * Changing between a weekly figure and a total turns the yields already typed for the crop and its varieties into the other,
    * over the crop's harvest days, so the choice of words does not by itself change what is forecast.
    */
@@ -371,6 +392,12 @@
         const v = change[key];
         if (v == null || v === '') delete record[key];
         else record[key] = key === 'unit' || key === 'pattern' ? String(v) : key === 'days' ? Math.max(1, Math.round(+v)) : key === 'turnover' ? Math.max(0, Math.round(+v)) : key === 'share' ? Math.min(100, Math.max(0, +v)) : Math.max(0, +v);
+      }
+      // a young stand's shares (E2c part 2): `young` is [the year it is planted, the year after], each a percent or null (back to
+      // the published figure); two nulls, or a null `young`, clear them
+      if ('young' in change) {
+        const y = [0, 1].map(i => { const n = Array.isArray(change.young) ? change.young[i] : null; return n == null || n === '' || !Number.isFinite(+n) ? null : figure3(Math.min(100, Math.max(0, +n))); });
+        if (y.some(n => n != null)) record.young = y; else delete record.young;
       }
       // a last picking for a place: `until` is { place: 'MM-DD' }, or null for a place to go back to the season's end there
       if (change.until && typeof change.until === 'object') {
@@ -566,7 +593,7 @@
     return id;
   }
   /**
-   * Change one thing a crop sells. `change` may hold name, unit, price, pattern, days, share, yield and helper (the helper row's
+   * Change one thing a crop sells. `change` may hold name, unit, price, pattern, days, before, share, yield and helper (the helper row's
    * figure: what one counted thing weighs, or what one of this holds); a null empties the box. A share is held to what the other
    * things of its kind leave of 100, and harvest days to what its plantings have. A window asks first, with the season's worth
    * before and after, when the thing would start counting, stop counting, or be sold by another unit (which keeps every figure
@@ -588,9 +615,17 @@
       if (!name) return false;
       if (name.toLowerCase() === String(c.name).toLowerCase() || all.some(x => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) return refuse(`${c.name} already sells something called ${name}. Give this one another name.`);
     }
+    if ('before' in change && change.before != null) {
+      // first picked before the crop's days to harvest (E2c part 2): never before a planting it comes from is in its bed, so that
+      // the number means the same in every bed
+      const want = Math.round(+change.before), fed = t.from === 'harvest' ? [] : thingPlantings(eng, cropId, t).filter(r => r.harvestDays > 0), room = fed.length ? Math.min(...fed.map(r => E.dayDiff(r.first, r.field) - 1)) : null;
+      if (t.from === 'harvest') return refuse(`${t.name} is packed from ${c.name}’s harvest, so it is picked when ${c.name} is.`);
+      if (!(want >= 1)) return refuse('Days before are a whole number from 1. Empty the box to pick it with the crop.');
+      if (room != null && want > room) return refuse(`${t.name} cannot be first picked ${want} days before ${c.name}: a planting it comes from goes into its bed only ${room + 1} days before its days to harvest. Type ${Math.max(1, room)} or fewer, or empty the box to pick it with ${c.name}.`);
+    }
     if ('days' in change && change.days != null && t.from !== 'harvest') {
       // a thing is never picked after its planting's last picking: more days than its plantings have would only cut what it counts as
-      const fed = thingPlantings(eng, cropId, t), longest = fed.length ? Math.max(...fed.map(r => r.harvestDays)) : null, want = Math.round(+change.days);
+      const fed = thingPlantings(eng, cropId, t), longest = fed.length ? Math.max(...fed.map(r => r.harvestDays + eng.aheadOf(t, r))) : null, want = Math.round(+change.days);
       if (longest != null && want > longest) return refuse(`${t.name} cannot be picked for ${want} days: the plantings it comes from are picked for ${longest} day${longest === 1 ? '' : 's'} at the most, and a thing is never picked after its planting’s last picking. Type ${longest} or fewer, or empty the box to pick it as long as ${c.name}.`);
     }
     const unitTo = 'unit' in change && change.unit && String(change.unit) !== t.unit ? String(change.unit) : null;
@@ -601,6 +636,7 @@
       if ('share' in change) put('share', change.share == null ? null : Math.min(100, Math.max(0, +change.share)));
       if ('yield' in change) put('yield', change.yield == null || change.yield === '' ? null : figure3(Math.max(0, +change.yield)));
       if ('days' in change) put('days', change.days == null ? null : Math.max(1, Math.round(+change.days)));
+      if ('before' in change && t.from !== 'harvest') put('before', change.before == null ? null : Math.max(1, Math.round(+change.before)));
       if ('helper' in change) {
         const v = change.helper == null || !(+change.helper > 0) ? null : +change.helper;
         if (t.from !== 'harvest') put('weighs', v);
@@ -1672,7 +1708,7 @@
     if (!p0 || !bed || !eng.isSoilBed(bed)) return { no: 'Only a bed in the ground can be divided this way.' };
     if (!varietyIds.length) return { no: 'Tick the varieties to add.' };
     // each variety is a copy of the planting: its date and its choices, another variety, no record of work, and ground of its own
-    const drafts = varietyIds.map(varietyId => { const d = { ...p0, id: uid(), varietyId }; for (const key of ['variety', 'done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'tasks', 'failed', 'sowOn', 'seat', 'ft', 'startFt', 'bedLayout']) delete d[key]; return d; });
+    const drafts = varietyIds.map(varietyId => { const d = { ...p0, id: uid(), varietyId }; for (const key of ['variety', 'done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'plantedIn', 'tasks', 'failed', 'sowOn', 'seat', 'ft', 'startFt', 'bedLayout']) delete d[key]; return d; });
     const group = Rails.mates(eng, p0), res = Rails.equalize(eng, group.length ? group.map(x => x.p.id) : [p0.id], { extra: drafts, by });
     if (res.no) return { no: res.who ? `${cropLabel(res.who)} cannot give up ground: it ${{ recorded: 'is already recorded as sown or planted', standing: 'stands for years', tray: 'follows weekly demand' }[res.no] || 'is held'}.`
       : res.no === 'rows' ? (by === 'rows' ? 'The rows of this bed do not divide evenly among that many, or the bed is already shared along its length.' : 'This bed is shared by rows: choose By rows.')
@@ -2542,7 +2578,7 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, lastChange, refuse, setUse, setGives, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
+    commit, undo, redo, lastChange, refuse, setUse, setGives, setPlantedIn, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, failedRange, previewFailed, markFailed, seasonRecords, takeBackSeason, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),

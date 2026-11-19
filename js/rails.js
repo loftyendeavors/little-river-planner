@@ -65,7 +65,7 @@
       return p;
     }
     const next = { ...source, bedId, date: iso };
-    if (payload.copy) { next.id = newId(); delete next.done; delete next.workflow; delete next.flagReviews; delete next.planningSource; delete next.standId; delete next.tasks; delete next.failed; }
+    if (payload.copy) { next.id = newId(); delete next.done; delete next.workflow; delete next.flagReviews; delete next.planningSource; delete next.plantedIn; delete next.standId; delete next.tasks; delete next.failed; }
     if (bedId !== source.bedId) {
       // Settings that describe the old space do not follow the planting to a different kind of space.
       const target = eng.bedOf(bedId);

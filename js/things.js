@@ -114,10 +114,18 @@
           h('small.yc-total', { dataset: { helper: hp.label } }, hp.label.replace(/^A /, 'a ').replace(/, packed$/, '')));
       }
       if (id === 'first') {
-        const timing = t.from === 'place' ? eng.timingFor(c.id, null, t.place) : null;
-        const later = `First picked with ${c.name}, on its days to harvest. A first picking of its own, earlier as for babies, will be typed here.`;
-        return td(timing && timing.value != null ? h('span.yc-line', { title: later }, h('b.yc-fixed', { dataset: { dtm: String(timing.value) } }, String(timing.value)), h('span.yc-unit', { dataset: { hook: 'card-first-unit' } }, 'days'), h('small.yc-total', { dataset: { later: 'first' } }, 'its own will go here'))
-          : h('span.yc-na', { title: later, dataset: { later: 'first' } }, `with ${c.name}: its own first picking will go here`));
+        if (!own) return td(why(`with ${c.name}: it is packed from ${c.name}’s harvest`));
+        // first picked before the crop's own days to harvest (E2c part 2), as baby carrots are pulled before the big ones are cleared:
+        // his to type. Empty, it is picked with the crop. No date of a planting moves; the line under the box says what it comes to
+        const envs = t.from === 'place' ? [t.place] : [...x.places.keys()].filter(env => eng.ENVS.includes(env));
+        const days = [...new Set(envs.map(env => eng.timingFor(c.id, null, env)).filter(tm => tm && tm.value != null).map(tm => tm.value))];
+        const said = t.before == null ? `empty: first picked with ${c.name}, on its days to harvest`
+          : days.length === 1 ? `first picked at ${Math.max(1, days[0] - t.before)} days, ${c.name} at ${days[0]}` : `first picked ${t.before} days before ${c.name}, wherever it grows`;
+        return td(h('span.yc-line', box({ key: key(t, 'before'), mine: t.before, fallback: null, whole: true, min: 1, label: label(t, `days before ${c.name}’s first picking`),
+          tip: t.before != null ? `Your number: ${t.name} is first picked ${t.before} days before ${c.name}’s days to harvest, and never before a planting is in its bed. No date of a planting moves. Clear it to pick it with ${c.name}.`
+            : `Only you can fill this: how many days before ${c.name}’s days to harvest ${t.name} is first picked, as baby carrots are before the big ones. Empty: picked with ${c.name}.`,
+          save: k => save(t, { before: k }, k == null ? `first picked with ${c.name}` : `first picked ${k} days before ${c.name}`, 'before') }), h('span.yc-unit', 'days before')),
+          h('small.yc-total', { dataset: { hook: 'thing-first-said' } }, said));
       }
       if (id === 'pick') {
         if (!own) return td(why(`as ${c.name} is picked`));
@@ -129,7 +137,7 @@
             tip: t.days != null ? `Your number: ${t.name} is picked for ${t.days} days, and never after ${c.name}’s own last picking. Clear it to pick it as long as ${c.name}.` : `Nothing set: it is picked as long as ${c.name} is. Type a number to pick it for fewer days.`,
             save: k => save(t, { days: k }, k == null ? `picked as long as ${c.name}` : `picked for ${k} days`, 'days') }), h('span.yc-unit', 'days')));
       }
-      if (id === 'last') return td(!own ? why(`as ${c.name}`) : t.pattern === 'once' ? h('span.yc-na', { dataset: { cleared: 'first' } }, `none: cleared in one day, the day ${c.name} is first picked. A day of its own comes with a later build.`) : t.days != null ? h('span.yc-line', h('b.yc-fixed', String(t.days)), h('span.yc-unit', `days after the first, and no later than ${c.name}’s`)) : why(`with ${c.name}’s own last picking`));
+      if (id === 'last') return td(!own ? why(`as ${c.name}`) : t.pattern === 'once' ? h('span.yc-na', { dataset: { cleared: 'first' } }, t.before ? `none: cleared in one day, ${t.before} days before ${c.name} is first picked` : `none: cleared in one day, the day ${c.name} is first picked. Days before, above, give it a day of its own.`) : t.days != null ? h('span.yc-line', h('b.yc-fixed', String(t.days)), h('span.yc-unit', `days after the first, and no later than ${c.name}’s`)) : why(`with ${c.name}’s own last picking`));
       return td();
     });
 

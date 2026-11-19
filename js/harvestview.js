@@ -140,7 +140,10 @@
       const bed = eng.bedOf(x.p.bedId), own = bed && !eng.isRack(bed) && !followsLine(eng, x.p);
       return [tag('pattern', PATTERN[x.pattern] || PATTERN.spread, 'How it is picked: its crop’s line under Assumptions, Yield and price'),
         own ? tag('own', 'Own window', 'This planting, or its variety, has a harvest window or a last day of its own: the crop’s choice of window does not move it') : null,
-        x.keep ? tag('keeps', `Keeps ${num(x.keep, 1)} wk`) : null, x.personal ? tag('personal', 'Personal use') : null];
+        x.keep ? tag('keeps', `Keeps ${num(x.keep, 1)} wk`) : null, x.personal ? tag('personal', 'Personal use') : null,
+        // E2c part 2: picked before its crop's days to harvest, and a young stand's share
+        x.ahead ? tag('early', `${num(x.ahead)} d early`, `First picked ${num(x.ahead)} days before its days to harvest: “Days before” on its crop’s card`) : null,
+        x.age ? tag('stand', `${x.age.season === 1 ? '1st' : '2nd'} season · ${num(x.age.share, 1)}%`, `Planted in ${x.age.year}: a young stand gives this share of a mature stand’s yield, from its crop’s card`) : null];
     };
     const lead = `${F.amount(total, row.unit, row.group)} ${picked ? 'picked' : 'to sell'} · ${num(list.length)} planting${list.length === 1 ? '' : 's'}`;
     const dialog = h('dialog.dialog.wide', { id: 'hvFrom', dataset: { hook: 'fc-from' }, oncancel: e => { e.preventDefault(); close(); } },

@@ -272,8 +272,20 @@
     if (v && !varieties.includes(v)) variety.append(h('option', { value: v.id, selected: true }, `${v.name} (retired)`));
     for (const item of varieties) variety.append(h('option', { value: item.id, selected: item.id === p.varietyId }, item.name));
     return h('div.bed-planting-fields',
-      h('div.card-boxes', h('label.card-box', h('span', label), date), h('label.card-box', h('span', 'Variety'), variety)),
+      h('div.card-boxes', h('label.card-box', h('span', label), date), h('label.card-box', h('span', 'Variety'), variety), standCardBox(p, r, redraw, readOnly)),
       h('button.link', { type: 'button', dataset: { hook: 'bed-planting-full' }, onclick: () => App.select({ type: 'planting', id: p.id, fromBedSeason: true }) }, 'All of this planting'));
+  }
+
+  // ── the year a cane stand was planted (E2c part 2): the panel's own box (LRFPanels.standBox), as a box of the row ──
+  function standCardBox(p, r, redraw, readOnly) {
+    const e = eng(), P = root.LRFPanels;
+    if (!e.isPerennial(r.c) || r.rack) return null;
+    return h('label.card-box', { title: P.standSays(e, p, r) }, h('span', 'Stand planted in'), P.standBox(e, p, r, { name: 'bed-stand', disabled: readOnly, onFail: redraw }));
+  }
+  /** The first day a row is picked: the earliest first picking of what it is grown for (a thing may start before its crop). */
+  function pickFrom(p, r) {
+    const parts = eng().soldOf(p, r);
+    return parts ? new Date(Math.min(+r.first, ...parts.map(x => +(x.first || r.first)))) : r.first;
   }
 
   function bedPlantingRow(x, bed, status, date, readOnly, redraw) {
@@ -282,7 +294,7 @@
     const failed = E.validDate(failedOn) && failedOn <= date;
     const here = status.crops.some(item => item.planting.id === p.id);
     const turnover = status.resting && e.occupancyFrom(p, r) <= date && date <= through && E.validDate(through);
-    const state = failed ? 'failed' : here ? (r.first <= date && date <= r.last ? 'picking' : 'growing') : turnover ? 'turnover' : '';
+    const from = pickFrom(p, r), state = failed ? 'failed' : here ? (from <= date && date <= r.last ? 'picking' : 'growing') : turnover ? 'turnover' : '';
     const word = { failed: 'Failed', growing: 'Growing', picking: 'Picking', turnover: turnover ? `Turnover · free ${day(E.addDays(through, 1))}` : '' }[state];
     const expanded = bedRow?.id === p.id, part = r.partial && f ? ` · ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} ft` : '';
     let press;
@@ -297,7 +309,7 @@
         redraw();
       } },
       root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color: e.cropColor(r.c), label: r.c.vname || r.c.name, size: 40 }),
-      h('span.bed-planting-copy', h('span.row-name', r.c.vname ? `${r.c.name} · ${r.c.vname}` : r.c.name), h('span.row-detail', `${day(r.field)} · pick ${r.harvestDays ? picked(r) : 'none'}${part}`)),
+      h('span.bed-planting-copy', h('span.row-name', r.c.vname ? `${r.c.name} · ${r.c.vname}` : r.c.name), h('span.row-detail', `${day(r.field)} · pick ${r.harvestDays ? picked({ first: from, last: r.last }) : 'none'}${part}`)),
       h('span.bed-planting-tail', word ? h('span.row-word', { dataset: { hook: 'bed-planting-status', state } }, word) : null,
         h('span.bed-planting-chevron', { 'aria-hidden': 'true' }, '›')));
     return h('div.bed-planting', { dataset: { state } }, trigger, expanded ? bedPlantingFields(p, r, redraw, readOnly) : null);
@@ -356,7 +368,7 @@
       };
     }
     const name = active.name;
-    return ['bed-date', 'bed-variety', 'bed-sale'].includes(name) ? next => next.querySelector(`[name="${name}"]`)?.focus({ preventScroll: true }) : null;
+    return ['bed-date', 'bed-variety', 'bed-sale', 'bed-stand'].includes(name) ? next => next.querySelector(`[name="${name}"]`)?.focus({ preventScroll: true }) : null;
   }
 
   function backToBed(id) {

@@ -63,6 +63,7 @@
     'assumptions.sell.*.share': 'number',
     'assumptions.sell.*.things': 'map',
     'assumptions.sell.*.things.*': 'object',
+    'assumptions.sell.*.things.*.before': 'number',      // first picked so many days before the crop's days to harvest (E2c part 2): taken with the crop's line, whole
     'assumptions.sell.*.things.*.counted': 'text',
     'assumptions.sell.*.things.*.days': 'number',
     'assumptions.sell.*.things.*.from': 'text',
@@ -82,6 +83,7 @@
     'assumptions.sell.*.unit': 'text',
     'assumptions.sell.*.until': 'map',          // a last picking for a place (E2c): taken with the crop's line, whole
     'assumptions.sell.*.until.*': 'text',
+    'assumptions.sell.*.young': 'list',          // a young stand's two shares, percent or null (E2c part 2): taken with the crop's line, whole
     'assumptions.sellV': 'map',
     'assumptions.sellV.*': 'object whole',
     'assumptions.sellV.*.price': 'number',
@@ -435,6 +437,7 @@
     'plantings[].note': 'text',
     'plantings[].out': 'text',
     'plantings[].perC': 'number',
+    'plantings[].plantedIn': 'number',              // the year a stand was planted (E2c part 2): one value, by shape, as `gives`
     'plantings[].price': 'number',
     'plantings[].rowSp': 'number',
     'plantings[].rowsPerBed': 'number|text',

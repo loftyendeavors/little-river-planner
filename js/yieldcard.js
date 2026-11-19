@@ -444,6 +444,11 @@
       })));
     }
 
+    // a young stand (E2c part 2): for a perennial crop, the share of a mature stand's yield it gives the year it is planted and the year
+    // after. The grey figures are published ones and count only for a stand whose year is typed on its planting; his replace them;
+    // an empty year is a mature stand, as before
+    if (hc.young) body.append(youngRow(eng, c, hc, row, span));
+
     // where one unit has to be turned into another, the one figure that does it
     if (T.any) UI.add(body, T.helperRow(row, span));
 
@@ -505,6 +510,22 @@
       h('div', { id: 'ycWaits' }, h('h4', 'What it waits on'), need.length ? h('ul', need.map(text => h('li', text))) : h('p', 'Nothing: every figure it needs is set.'),
         hc.micro ? null : h('p.yc-fine', { id: 'ycMore' }, 'How long it keeps, its turnover days and each variety’s own price are on the list: ', toList(c, 'Keeps, Turnover and varieties', true), '.')));
     return finish(house, grid, facts);
+  }
+
+  /** The card's row for a young stand (E2c part 2): two boxes, each his or the published figure in grey, and what they count for. */
+  function youngRow(eng, c, hc, row, span) {
+    const words = ['the year it is planted', 'the year after'], stands = (eng.plan.plantings || []).filter(p => p.cropId === c.id && eng.bedOf(p.bedId));
+    const typed = stands.filter(p => Number.isInteger(p.plantedIn)).length, published = hc.young.some(y => y.fallback != null);
+    const cell = i => {
+      const y = hc.young[i], back = y.fallback == null ? 'all of it' : `${fig(y.fallback)}%`;
+      return [box({ key: `young|${i}`, mine: y.mine, fallback: y.fallback, min: 0, max: 100, label: `${c.name}: a young stand, percent of a mature stand’s yield ${words[i]}`,
+        tip: y.mine != null ? `Your figure: ${fig(y.mine)}% of a mature stand’s yield ${words[i]}. Clear it to go back to ${back}.` : y.fallback != null ? `Published: ${y.source}. Counted only for a stand whose year is typed on its planting. Type your own to replace it.` : `No published figure for ${c.name}: empty, a stand gives all of it. Type your own.`,
+        save: k => App.setSell(c.id, { young: hc.young.map((x, j) => j === i ? k : x.mine) }, k == null ? `${c.name}: a young stand, ${words[i]} back to ${back}` : `${c.name}: a young stand gives ${fig(k)}% ${words[i]}`) }),
+        h('span.yc-unit', `% ${words[i]},`)];
+    };
+    const said = `${published ? 'Grey: published figures (each box says whose), counted only once a stand’s year is typed. Yours replace them.' : `No published figures for ${c.name}: an empty box gives all of it.`} ${stands.length ? `${typed} of ${plural(stands.length, 'stand')} ${typed === 1 ? 'has its' : 'have their'} year typed.` : ''}`;
+    return row('young', 'A young stand gives', 'of the yield above, for a stand whose year is typed on its planting; an empty year is a mature stand',
+      span(h('span.yc-line', ...cell(0), ...cell(1), h('span.yc-unit', 'all of it from the third')), h('small.yc-total', { dataset: { hook: 'young-said' } }, said.trim())));
   }
 
   // ───────────────────────── what a press does ─────────────────────────

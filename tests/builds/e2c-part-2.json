@@ -1,0 +1,29 @@
+{
+ "build": "E2c, part 2. Something else a crop sells (a column of its card under Assumptions, Yield and price) may be first picked so many days before the crop's own days to harvest, as baby carrots are pulled before the big ones are cleared: its picking starts that many days before the planting's first picking, never before the planting is in its bed nor after its last picking, and no date of any planting moves. A cane stand (a perennial crop) may be given the year it was planted, on its planting's panel or its row in the bed's season: a young stand then gives a share of the list's yield, the year it is planted and the year after, from published figures in grey on its crop's card (Johnny's; University of Idaho; NC State), which his own replace; from the third year all of it. An empty year is a mature stand, as before; a planting's own yield stands. The Forecast, the planting's Schedule and notes, and the bed's season say each. Stored only when typed: assumptions.sell.*.things.*.before, assumptions.sell.*.young, plantings[].plantedIn.",
+ "changes": {
+  "did": "Baby carrots and the like can be first picked days before the crop's days to harvest, typed on the crop's card; a cane stand's year planted makes a young stand give less. Empty, nothing changes.",
+  "steps": [
+   "Assumptions, Yield and price, a crop with something else it sells: type days before in its First picking box. The Forecast shows that row earlier; no bed or date moves.",
+   "Open a raspberry or blackberry planting on the Map: type its year planted. The message gives the season's worth before and after; Undo takes it back.",
+   "On that crop's card, A young stand gives shows grey published shares; type your own to replace them."
+  ]
+ },
+ "words": [],
+ "code": [
+  "app.js",
+  "assume.js",
+  "card.js",
+  "engine.js",
+  "forecast.js",
+  "harvestview.js",
+  "panels.js",
+  "rails.js",
+  "succession.js",
+  "things.js",
+  "yieldcard.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [],
+ "screens": []
+}
