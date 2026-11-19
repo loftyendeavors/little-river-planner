@@ -11,7 +11,7 @@
  "page": [],
  "screens": [],
  "changes": {
-  "did": "Live trays on two devices: when the phone and the laptop each add the same week to a weekly demand plan, they now make the same batch, so after they join the week holds its trays once. A batch that follows a demand plan is no longer removed with the Delete key or the card's Remove planting: the page says to change its weeks or trays on Live trays, as the batch's own panel already did.",
+  "did": "Live trays on two devices: both adding the same week to one weekly demand plan now make the same batch, so the joined week holds its trays once. Delete no longer removes a batch that follows a demand plan: change it on Live trays.",
   "steps": [
    "With “Keep both, record by record” on both devices, add the same week to one demand plan on each (Nursery, Live trays, “Last week of”) before they join. After the join, Forecast shows that week's trays once.",
    "Sow that week's batch in Tasks on one device before the join. After it, the batch shows as sown on both devices, and its seed came off the lot once.",
