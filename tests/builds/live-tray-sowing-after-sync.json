@@ -1,0 +1,15 @@
+{
+ "build": "When one device sows a live-tray batch and the other edits weekly demand, the batch keeps the figures it was sown with. If the sowing device also deletes the demand plan and the other device's edited plan survives, the same batch is linked to its original row and week during sync. This applies to both older and newer batch IDs. Seed is drawn once and the next save does not make another batch. A week removed from the surviving plan keeps its sowing as history.",
+ "changes": {
+  "did": "Live-tray sync keeps the trays, dates and variety you actually sowed. If another device's edited demand plan stays, its matching sown batch comes back with it only once.",
+  "steps": [
+   "On a sample plan, sow a live-tray batch on one device and change its weekly demand on the other. After sync, Forecast shows the trays from the sowing and Tasks asks for no second sowing."
+  ]
+ },
+ "words": [],
+ "code": ["app.js", "merge.js"],
+ "added": [],
+ "removed": [],
+ "page": [],
+ "screens": []
+}
