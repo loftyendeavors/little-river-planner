@@ -468,7 +468,7 @@
 
   /** Everything the three views read: each variety with what the plan needs of it and what is on hand. */
   function model() {
-    const eng = App.state.engine, plan = App.state.plan, need = SL.required(eng), stock = App.stockNow();
+    const eng = App.state.engine, plan = App.state.plan, need = SL.required(eng, { today: App.today() }), stock = App.stockNow();
     const live = plan.varieties.filter(v => v.active !== false && !v.deleted), used = new Map(), usedCrop = new Map(), byV = new Map(), byCrop = new Map();
     for (const p of plan.plantings) { usedCrop.set(p.cropId, (usedCrop.get(p.cropId) || 0) + 1); if (p.varietyId) used.set(p.varietyId, (used.get(p.varietyId) || 0) + 1); }
     for (const r of need.rows) {
@@ -840,14 +840,19 @@
   }
   let notes = [];   // how the seed counts are made, for "?": written with the foot, read when "?" opens
   function foot(m) {
-    const bare = m.live.filter(v => !v.supplier && !v.url && !v.catalogDtm).length, sown = m.need.rows.reduce((n, r) => n + (r.plantings - r.waiting - r.established), 0);
+    const bare = m.live.filter(v => !v.supplier && !v.url && !v.catalogDtm).length, sown = m.need.rows.reduce((n, r) => n + (r.plantings - r.waiting - r.established - (r.earlier || 0)), 0);
     const item = (label, ...text) => h('li', h('b', label), h('span', text));
     // how the counts are made is said behind "?" (DESIGN.md, rule 1); the foot keeps what is so of this plan, and the download
     notes = [['Seed counts', `Allow for ${m.need.settings.germ}% germination${m.need.settings.buffer ? ` and ${m.need.settings.buffer}% extra plugs on transplants` : ''}. Transplants are sown in whole rows of their tray; plantings of one variety sown the same day are rounded together, as in Tasks.`],
       ['On hand', 'Type what you have; click an order when it arrives. Each variety’s lots and sizes are in its panel.'],
       ['Vendor size', 'What covers a shortfall at least cost, in the sizes that variety’s vendor sells.']];
+    // the season's edges (js/seedlib.js required): what is dated in this year and counted with the next, and work of the year before
+    // whose day passed with nothing recorded, which is counted for the plan and not as still to sow
+    const out = m.need.outside || { later: 0, earlier: 0 }, year = out.year || App.planYear();
     const so = [m.live.length && bare === m.live.length ? item('Figures only', 'These varieties carry planning figures only. Supplier, product code and page come in when you load your backup here.') : null,
-      sown ? item('Left out', `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted.`) : null].filter(Boolean);
+      sown ? item('Left out', `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted.`) : null,
+      out.later ? h('li', { dataset: { hook: 'seeds-later' } }, h('b', `For ${year + 1}`), h('span', `${out.later} planting${out.later === 1 ? '' : 's'} dated in ${year} ${out.later === 1 ? 'gives its' : 'give their'} first harvest in ${year + 1}. ${out.later === 1 ? 'Its' : 'Their'} seed counts with that season.`)) : null,
+      out.earlier ? h('li', { dataset: { hook: 'seeds-earlier' } }, h('b', 'Earlier'), h('span', `${out.earlier} planting${out.earlier === 1 ? '' : 's'} dated in ${year - 1} ${out.earlier === 1 ? 'was' : 'were'} due before today, with nothing recorded: not counted as still to sow. Record ${out.earlier === 1 ? 'it' : 'them'} on Tasks.`)) : null].filter(Boolean);
     add(clear($('sdFoot')), so.length ? h('ul.sd-foot-list', so) : null,
       h('button.link', { type: 'button', onclick: () => download(m) }, 'Download seeds required (.csv)'));
   }

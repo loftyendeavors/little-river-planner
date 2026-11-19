@@ -6,8 +6,9 @@
 (function (root) {
   'use strict';
   root.LRFBuilt = {
-    label: "0.69",
+    label: "0.70",
     builds: [
+      {"label":"0.70","on":"2026-11-18","did":"Work and seed across the New Year: a December sowing for January's trays is on Tasks in its own week and counted in Seeds, and stock picked in December and still to sell in January shows on the Forecast as carried in.","steps":["On Tasks, go to the week of a December sowing for a January delivery: it is listed, its row saying it is in the year before.","On Seeds, the foot says how many plantings count with next season, or are earlier work with nothing recorded, when there are any.","On the Forecast in January, a crop picked in December that keeps has a line Carried in under it; the season's worth counts it once."]},
       {"label":"0.69","on":"2026-11-18","did":"The availability spreadsheet follows the list you review, including crop kind, dates, varieties and prices.","steps":["In Forecast, open A list to send and choose Flowers only.","Choose a stretch and whether to include varieties or prices.","Download the spreadsheet and compare it with the list."]},
       {"label":"0.68","on":"2026-11-18","did":"In open ground the first fall frost now ends a frost-tender crop's harvest, and what it would pick after it is lost. A crop picked to the season's end takes a last-picking date for each place, on its card.","steps":["Open Assumptions, Yield and price, and a tomato's card: Last picking shows a date in each place, with whose day it is (your first frost, the year's end).","Pick another date in the field: a sheet shows what moves and the season's worth before and after. Press Cancel and nothing changes.","On the Forecast, a frost-tender crop picked for a set number of days in the field stops on your first frost, and its total with it."]},
       {"label":"0.67","on":"2026-11-18","did":"The bed's season chart shows Jan through Dec.","steps":["Open a bed on the Map. Check the month names under the season chart."]},

@@ -142,30 +142,66 @@
    */
   /** A live tray's seed is counted in seeds where the crop is sown in cells, and by weight where it is broadcast in an open tray. */
   const liveUnit = (engine, c) => (engine.liveSow && engine.liveSow(c).how === 'cells' ? 'seeds' : 'g');
-  function required(engine) {
-    const plan = engine.plan, year = String(plan.settings && plan.settings.year), rows = new Map();
+  // ───────────────────────────── the season a planting is for ─────────────────────────────
+  /** The year a planting is dated in (its own date: a transplant's planting out, a sowing in the ground, a tray batch's sowing), or null. */
+  const yearOfDate = p => (p && /^\d{4}-\d{2}-\d{2}$/.test(String(p.date)) ? +String(p.date).slice(0, 4) : null);
+  /**
+   * The season (a year) a planting belongs to: the year of its first harvest, or for a live tray the day it is ready. So a
+   * tray batch sown on Dec 21 for Jan 11, or garlic planted in the fall for next summer, is the season its produce is for, and a
+   * sowing late in the year for a January harvest is the next one. A planting that gives nothing to pick (a cover crop) goes by
+   * its own date. r is engine.calc(p) when the caller has it. Seeds and Tasks both read this one rule.
+   */
+  function seasonOf(engine, p, r) {
+    const calc = r === undefined ? engine.calc(p) : r, own = yearOfDate(p);
+    if (!calc || (engine.isCoverCrop && engine.isCoverCrop(calc.c))) return own;
+    return calc.first instanceof Date && !Number.isNaN(+calc.first) ? calc.first.getFullYear() : own;
+  }
+  /**
+   * Is a planting's work on Tasks for this plan year? The work of the season's own plantings, wherever it falls (a Dec 21 sowing
+   * for Jan 11 trays), and the work of every planting dated in the year, whatever season it is for (it is done this year).
+   */
+  const onTasks = (engine, p, year, r) => yearOfDate(p) === +year || seasonOf(engine, p, r) === +year;
+  /** The seed a sowing recorded as used, in the unit its lots are kept in; null when none is recorded that way. */
+  function seedUsed(p, unit) {
+    const flow = p && p.workflow && typeof p.workflow === 'object' ? p.workflow : {}, uses = Array.isArray(flow.seedUse) ? flow.seedUse.filter(u => u && u.unit === unit && Number(u.quantity) > 0) : [];
+    return uses.length ? trim6(uses.reduce((n, u) => n + Number(u.quantity), 0)) : null;
+  }
+  const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  /**
+   * What the plan's season needs (seasonOf), wherever its work falls. options.today ('YYYY-MM-DD', the real day when left out):
+   * a planting dated before the plan's year whose seed was due before today and is not recorded is counted for the plan but not
+   * as still to sow: the planner was not told whether it was sown, and seed is not ordered for a day that has passed
+   * (Tasks says the same of its work in one line). `outside` counts what is left out, for the page to say: `later`, plantings
+   * dated in the plan's year whose produce is for the next (they count there); `earlier`, those not counted to sow.
+   * A planting recorded as sown counts for the plan the seed recorded as used, where that is recorded in its unit.
+   */
+  function required(engine, options = {}) {
+    const plan = engine.plan, year = +(plan.settings && plan.settings.year), rows = new Map(), today = realDay(options.today) ? options.today : isoOf(new Date());
+    const outside = { year, later: 0, earlier: 0 };
     for (const p of plan.plantings || []) {
-      if (String(p.date).slice(0, 4) !== year) continue;
       const r = engine.calc(p);
       if (!r || r.b.active === false) continue;
+      const season = seasonOf(engine, p, r), dated = yearOfDate(p);
+      if (season !== year) { if (dated === year && season === year + 1) outside.later++; continue; }
       const c = r.c, saved = engine.variety(p.varietyId), v = saved && saved.cropId === p.cropId ? saved : null;
       const material = r.rack ? 'seed' : c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed');
       const unit = r.rack ? liveUnit(engine, c) : material === 'seed' ? 'seeds' : material + 's';
       const key = (v ? 'v:' + v.id : 'c:' + p.cropId) + '|' + unit;
       let row = rows.get(key);
-      if (!row) rows.set(key, row = { key, crop: engine.crop(p.cropId), variety: v, unit, plantings: 0, waiting: 0, total: 0, toSow: 0, trays: 0, first: null, established: 0 });
+      if (!row) rows.set(key, row = { key, crop: engine.crop(p.cropId), variety: v, unit, plantings: 0, waiting: 0, total: 0, toSow: 0, trays: 0, first: null, established: 0, earlier: 0 });
       row.plantings++;
       if (p.established === true) { row.established++; continue; }
       const amount = unit === 'g' ? r.seedG : unit === 'seeds' ? r.seeds : (r.bulbs || Math.ceil(r.plants));
-      row.total += amount || 0;
-      const done = p.done || {}, sown = SOWN_KINDS.some(k => typeof done[k] === 'string' && done[k]);
+      const done = p.done || {}, sown = SOWN_KINDS.some(k => typeof done[k] === 'string' && done[k]), used = sown ? seedUsed(p, stockUnit(unit)) : null;
+      row.total += used != null ? used : amount || 0;
       if (sown || (engine.failedOn && engine.failedOn(p))) continue;   // a planting marked failed and never sown needs no seed
-      row.waiting++; row.toSow += amount || 0; row.trays += r.trays || 0;
       const start = r.sow || r.field;
+      if (dated !== null && dated < year && start && isoOf(start) < today) { outside.earlier++; row.earlier++; continue; }
+      row.waiting++; row.toSow += amount || 0; row.trays += r.trays || 0;
       if (start && (!row.first || start < row.first)) row.first = start;
     }
     const list = [...rows.values()].sort((a, b) => String(a.crop && a.crop.name).localeCompare(String(b.crop && b.crop.name)) || String((a.variety && a.variety.name) || '').localeCompare(String((b.variety && b.variety.name) || '')));
-    return { rows: list, settings: { germ: +(plan.settings && plan.settings.germ) || 85, buffer: +(plan.settings && plan.settings.buffer) || 0 } };
+    return { rows: list, settings: { germ: +(plan.settings && plan.settings.germ) || 85, buffer: +(plan.settings && plan.settings.buffer) || 0 }, outside };
   }
   /**
    * Seed on hand and on order from the plan's lot records. A lot counts when it has a whole,
@@ -653,6 +689,6 @@
     return out;
   }
 
-  return { norm, startOf, BASES, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
+  return { norm, startOf, BASES, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, seasonOf, yearOfDate, onTasks, seedUsed, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
     sizeOf, packs, cover, toCover, money, perGram, orderSheet, orderText, orderCsv, supplierOf, sowing, lotsToUse, recordSowing, takeBackSowing, doneDate, realDay, yearAway, YEAR_DAYS, DONE_ORDER, DONE_WORD, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
 });

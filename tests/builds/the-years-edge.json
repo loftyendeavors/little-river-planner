@@ -1,0 +1,17 @@
+{
+ "build": "The year's edge: work, seed and stock across the New Year. A planting belongs to the season of its first harvest (a live tray: the day it is ready; a planting that gives nothing to pick, its own date), one rule in js/seedlib.js (seasonOf) read by Seeds and Tasks. Seeds counts the plan's season, wherever its work falls: a tray batch sown in December for January, or garlic planted the fall before, is counted; a sowing late in the plan's year for a January harvest counts with the next season, and the foot says how many. Tasks lists the work of the season's plantings and of every planting dated in the plan's year, each on its own day; a task on a day of another year says which, and work for the next season says so. Work of a planting dated before the plan's year that was due before today and is not recorded is not brought onto the lists as late by itself: it is one line, which opens it, and Seeds counts it for the plan and not as still to sow. A planting recorded as sown counts for the plan the seed recorded as used. The Forecast stays a calendar: stock picked before Jan 1 and still to sell in the year is in it, on a line of its own under its crop (carried in), and counted once in every total and the worth; what is to sell after Dec 31 counts in the next year and is said behind the page's \"?\". Nothing is stored.",
+ "changes": {
+  "did": "Work and seed across the New Year: a December sowing for January's trays is on Tasks in its own week and counted in Seeds, and stock picked in December and still to sell in January shows on the Forecast as carried in.",
+  "steps": [
+   "On Tasks, go to the week of a December sowing for a January delivery: it is listed, its row saying it is in the year before.",
+   "On Seeds, the foot says how many plantings count with next season, or are earlier work with nothing recorded, when there are any.",
+   "On the Forecast in January, a crop picked in December that keeps has a line Carried in under it; the season's worth counts it once."
+  ]
+ },
+ "words": [],
+ "code": ["forecast.js", "harvestview.js", "seedlib.js", "seeds.js", "sowview.js", "week.js"],
+ "added": [],
+ "removed": [],
+ "page": [],
+ "screens": []
+}

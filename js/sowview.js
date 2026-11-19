@@ -74,9 +74,9 @@
   function figures() {
     const eng = App.state.engine;
     if (cache.has(eng)) return cache.get(eng);
-    const plan = App.state.plan, year = String(App.planYear()), lines = new Map(), demand = new Map((plan.liveTrayPlans || []).map(p => [p.id, p]));
+    const plan = App.state.plan, year = App.planYear(), lines = new Map(), demand = new Map((plan.liveTrayPlans || []).map(p => [p.id, p]));
     for (const p of plan.plantings || []) {
-      if (String(p.date).slice(0, 4) !== year) continue;
+      if (!SL.onTasks(eng, p, year)) continue;   // the year's own work, and its season's wherever it falls (a Dec 21 sowing for Jan 11 trays)
       const s = SL.sowing(eng, p);
       if (!s || !(s.unit === 'seeds' || s.unit === 'g') || (s.failed && !s.done)) continue;   // a planting marked failed is listed only for what was recorded
       const r = s.r, planned = s.planned;
@@ -199,8 +199,11 @@
   function tasks() {
     const eng = App.state.engine;
     if (taskCache.has(eng)) return taskCache.get(eng);
+    // `before`: every planting it is for is dated before the plan's year (it came onto Tasks for its season, js/seedlib.js onTasks);
+    // `next`: every planting it is for gives its first harvest in a later season, which counts it (its work is still done this year)
+    const year = App.planYear(), before = l => l.members.every(m => SL.yearOfDate(m.p) !== null && SL.yearOfDate(m.p) < year), next = l => l.members.every(m => SL.seasonOf(eng, m.p, m.r) > year);
     const make = (l, id, sow) => ({ key: l.key, line: l, sow, id, half: halfOf(id), state: l.skipped ? 'skipped' : l.state, due: !sow && l.state === 'done' && l.planned ? l.planned : l.date, on: l.skipped || (l.state === 'done' ? l.doneOn : null),
-      title: `${ACT[id]} ${cropWord(l.crop.name)}`, items: () => l.open.map(m => ({ id: m.p.id, kind: sow ? m.s.kind : l.kind })) });
+      title: `${ACT[id]} ${cropWord(l.crop.name)}`, items: () => l.open.map(m => ({ id: m.p.id, kind: sow ? m.s.kind : l.kind })), before: before(l), next: next(l) });
     const out = [...figures().list.map(l => make(l, l.kind, true)), ...jobs().filter(l => !l.passed || l.skipped).map(l => make(l, l.section, false))];
     // by day, then by kind; within a kind the lists' own order stands, which keeps sowings that share trays together
     out.forEach((t, i) => { t.at = i; });
@@ -214,11 +217,20 @@
   const noteOf = t => { const m = membersOf(t).find(x => Week.noteOf(x.p, x.kind)); return m ? Week.noteOf(m.p, m.kind) : ''; };
 
   // ── what a row says ──
+  /**
+   * The year, where it is not the plan's: a task on a day of another year says which ("in 2026, the year before": a Dec 21 sowing for
+   * January's trays), and the work of a planting whose produce is for the next season says that season ("for 2028").
+   */
+  function yearText(t) {
+    const year = App.planYear(), at = +String(isOpen(t) ? t.due : t.on || t.due).slice(0, 4);
+    return at < year ? `in ${at}, the year before` : at > year ? `in ${at}` : t.next ? `for ${year + 1}` : '';
+  }
   /** The line under a task's name: the variety, how much, where; then anything that sets it apart. It wraps, and is never cut. */
   function detail(t) {
     const l = t.line, bits = [];
     if (t.sow) bits.push(l.kind === 'live' ? [l.variety ? l.name : '', l.sub].filter(Boolean).join(', ') : l.variety ? l.name : 'no variety chosen', howText(l), howNote(l), whereText(l));
     else { const how = jobHow(l); bits.push(l.variety ? l.name : 'no variety chosen', how[0], how[1], jobWhere(l)); }
+    bits.push(yearText(t));
     if (l.state === 'part') bits.push(`${num(l.members.length - l.open.length)} of ${num(l.members.length)} recorded`);
     if (isOpen(t) && l.delayedFrom) bits.push(`delayed from ${shortDay(l.delayedFrom)}`);
     else if (isOpen(t) && t.sow && l.set) bits.push('its day set by hand');
@@ -317,9 +329,22 @@
   // ── what is on screen: one day, or a whole week ──
   /** The tasks on screen for one half, or for both: still to do, and done. Today, and this week, also hold whatever is late. */
   function onScreen(half) {
-    const all = tasks().filter(t => !half || t.half === half), now = App.today(), a = ui.week, end = plus(a, 6), cur = T.monday(now);
-    if (ui.day) return { open: all.filter(t => isOpen(t) && (ui.day === now ? t.due <= now : ui.day > now && t.due === ui.day)), done: all.filter(t => t.on === ui.day) };
-    return { open: all.filter(t => isOpen(t) && (a === cur ? t.due <= end : a > cur && t.due >= a && t.due <= end)), done: all.filter(t => t.on && t.on >= a && t.on <= end) };
+    const now = App.today(), every = tasks().filter(t => !half || t.half === half), earlier = every.filter(t => isEarlier(t, now)), all = ui.shown.earlier ? every : every.filter(t => !earlier.includes(t));
+    const a = ui.week, end = plus(a, 6), cur = T.monday(now), shown = ui.day ? ui.day === now : a === cur, hid = shown && !ui.shown.earlier ? earlier : [];
+    if (ui.day) return { open: all.filter(t => isOpen(t) && (ui.day === now ? t.due <= now : ui.day > now && t.due === ui.day)), done: all.filter(t => t.on === ui.day), earlier: hid };
+    return { open: all.filter(t => isOpen(t) && (a === cur ? t.due <= end : a > cur && t.due >= a && t.due <= end)), done: all.filter(t => t.on && t.on >= a && t.on <= end), earlier: hid };
+  }
+  /**
+   * Work of plantings dated before the plan's year that was due before today and is not recorded (garlic planted last fall, a
+   * December tray batch for January): the planner was never told of it, so it is not brought onto the lists as late by itself.
+   * It stands as one quiet line, which opens it (earlierLine). What is dated in the plan's year is listed and late as before.
+   */
+  const isEarlier = (t, now) => isOpen(t) && t.before && t.due < now;
+  function earlierLine(list) {
+    if (!list.length) return null;
+    const years = [...new Set(list.map(t => t.due.slice(0, 4)))].sort().join(' and ');
+    return h('button.tk-more', { type: 'button', dataset: { act: 'earlier', hook: 'tasks-earlier' }, title: 'Work of plantings dated before this plan’s year, not recorded here. Open it to record it, skip it or leave it.' },
+      `${plural(list.length, 'earlier job')} from ${years}, not recorded`);
   }
   const live = () => { const now = App.today(); return ui.day ? ui.day === now : ui.week === T.monday(now); };
   const later = () => { const now = App.today(); return ui.day ? ui.day > now : ui.week > T.monday(now); };
@@ -333,10 +358,10 @@
   const finished = (name, words, id, now) => h('div.tk-finished', h('span', TICK()), h('strong', `${name} is done for ${words}`), nextLine(id, now));
   function dayBody(id, name, stock, now) {
     const k = ui.day, s = onScreen(id);
-    if (k === now) return [s.open.length ? [lateGroup(id, s.open.filter(t => t.due < now), stock, now), group('Today', '', s.open.filter(t => t.due === now), stock, now, true)]
+    if (k === now) return [earlierLine(s.earlier), s.open.length ? [lateGroup(id, s.open.filter(t => t.due < now), stock, now), group('Today', '', s.open.filter(t => t.due === now), stock, now, true)]
       : s.done.length ? finished(name, 'today', id, now) : h('div.tk-empty', h('p', 'Nothing is planned for today.'), nextLine(id, now)), fold(id, s.done, 'Completed today', stock, now)];
     if (k > now) return s.open.length || s.done.length ? [group('', '', s.open, stock, now), fold(id, s.done, 'Already done', stock, now)] : h('div.tk-empty', h('p', 'Nothing is planned.'));
-    const missed = tasks().filter(t => t.half === id && isOpen(t) && t.due === k).length;
+    const missed = tasks().filter(t => t.half === id && isOpen(t) && t.due === k && (ui.shown.earlier || !isEarlier(t, now))).length;
     return [s.done.length ? group('', '', s.done, stock, now) : h('div.tk-empty', h('p', 'Nothing was recorded.')),
       missed ? h('p.tk-missed', `${plural(missed, 'task')} of that day ${missed === 1 ? 'was' : 'were'} not done, and ${missed === 1 ? 'is' : 'are'} on today’s list.`) : null];
   }
@@ -347,7 +372,7 @@
       for (let i = 0; i < 7; i++) { const k = plus(a, i); out.push(group(dayLabel(k, now), '', s.done.filter(t => t.on === k), stock, now)); }
       return out.some(Boolean) ? out : h('div.tk-empty', h('p', 'Nothing was recorded.'));
     }
-    if (a === cur) out.push(lateGroup(id, s.open.filter(t => t.due < now), stock, now), group('Today', '', s.open.filter(t => t.due === now), stock, now, true));
+    if (a === cur) out.push(earlierLine(s.earlier), lateGroup(id, s.open.filter(t => t.due < now), stock, now), group('Today', '', s.open.filter(t => t.due === now), stock, now, true));
     for (let i = 0; i < 7; i++) { const k = plus(a, i); if (k > now) out.push(group(dayLabel(k, now), '', s.open.filter(t => t.due === k), stock, now)); }
     return [out.some(Boolean) ? out : a === cur && s.done.length ? finished(name, 'the week', id, now) : h('div.tk-empty', h('p', 'Nothing is planned.')), a === cur ? fold(id, s.done, 'Completed this week', stock, now) : null];
   }
@@ -641,7 +666,7 @@
     // the week's seven cells: what each day holds. Today also holds whatever is late.
     const openOn = new Map(), doneOn = new Map();
     let late = 0;
-    for (const t of tasks()) { if (isOpen(t)) { if (t.due < now) late++; else openOn.set(t.due, (openOn.get(t.due) || 0) + 1); } else if (t.on) doneOn.set(t.on, (doneOn.get(t.on) || 0) + 1); }
+    for (const t of tasks()) { if (isOpen(t)) { if (t.due < now) { if (ui.shown.earlier || !isEarlier(t, now)) late++; } else openOn.set(t.due, (openOn.get(t.due) || 0) + 1); } else if (t.on) doneOn.set(t.on, (doneOn.get(t.on) || 0) + 1); }
     let dayRing = null, dayShare = 0;
     const cells = [0, 1, 2, 3, 4, 5, 6].map(i => {
       const x = plus(a, i), dn = doneOn.get(x) || 0, open = x < now ? 0 : (openOn.get(x) || 0) + (x === now ? late : 0), lateHere = x === now ? late : 0;
@@ -703,6 +728,7 @@
     else if (act === 'map') { if (t) showOnMap(t.line.members[0]); }
     else if (act === 'fold') { const on = !ui.shown[el.dataset.half]; ui.shown[el.dataset.half] = on; el.setAttribute('aria-expanded', String(on)); el.nextElementSibling.classList.toggle('shut', !on); }
     else if (act === 'late') { ui.shown[el.dataset.half + ':late'] = true; render(); }
+    else if (act === 'earlier') { ui.shown.earlier = true; render(); }
     else if (act === 'go' || act === 'day') viewDay(el.dataset.day);
     else if (act === 'today') viewDay(now);
     else if (act === 'week') viewWeek(plus(ui.week, +el.dataset.by));

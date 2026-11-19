@@ -251,11 +251,10 @@
    * bulbs, canes and bought-in plants. Seed sown straight into the ground is a sowing, and is not listed here.
    */
   function lines(engine, plan, year) {
-    const map = new Map(), yr = String(year);
+    const map = new Map();
     for (const p of plan.plantings || []) {
-      if (String(p.date).slice(0, 4) !== yr) continue;
       const r = engine.calc(p);
-      if (!r || r.rack || r.b.active === false || r.g.active === false) continue;
+      if (!r || r.rack || r.b.active === false || r.g.active === false || !SL.onTasks(engine, p, year, r)) continue;   // the year's own, and its season's (js/seedlib.js)
       const s = SL.sowing(engine, p), vkey = s ? s.key : 'c:' + p.cropId;
       for (const st of steps(engine, p)) {
         if (st.kind === 'sow') continue;
