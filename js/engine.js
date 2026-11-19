@@ -1361,6 +1361,19 @@
       if (!parts) return r ? r.first : null;
       return new Date(Math.min(+r.first, ...parts.filter(x => !(x.age && x.age.season === 0)).map(x => +(x.first || r.first))));
     }
+    /**
+     * Is a planting being picked on a day, for the screens that say "picking" (the map, the bed's season)? Where what it is grown for is
+     * picked on days of its own with a day before or a stand's age in it (E2c part 2), only inside one of those parts' own days that
+     * counts: not across a gap between two, and not a part that gives nothing (picked before its stand is planted, or a share of 0).
+     * Otherwise its harvest period, as before.
+     */
+    function pickingOn(p, r, date) {
+      r = r || calc(p);
+      if (!r) return false;
+      const y = yieldOf(p, r), parts = y ? soldOf(p, r, y) : null, live = x => !(x.age && !(x.age.share > 0));
+      if (!(parts || [y]).some(x => x && (x.asked || x.age))) return pickedOn(r, date);
+      return (parts || [y]).some(x => live(x) && date >= (x.first || r.first) && date <= (x.last || r.last));
+    }
     /** Is this a day the crop is picked? Any day of its harvest period. */
     const pickedOn = (r, date) => date >= r.first && date <= r.last;
     /** The harvest days a total is shared over: those there are, but for a crop cleared in one day before the frost cut its days short. */
@@ -1528,7 +1541,7 @@
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
       heatedTraySpaces, benchRoom, coolRules, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
       yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, thingsOf, soldOf, givenOf, WEIGHED, COUNTED, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
-      aheadOf, standAge, standYear, youngFor, pickedFrom,
+      aheadOf, standAge, standYear, youngFor, pickedFrom, pickingOn,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, startRule, startFixed, startHint, STARTS, START_LESS, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,

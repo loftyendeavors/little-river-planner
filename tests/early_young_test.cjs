@@ -91,6 +91,13 @@ const mine = x => x.parts.find(q => q.thing === T);
   check('in the forecast the thing’s row starts that many days earlier for each of its plantings', moved.length >= 3 && moved.every(({ q, o }) => !!o && q.lo === o.lo - Math.min(N, days(q.r.first, q.r.field) - 1) && q.ahead === Math.min(N, days(q.r.first, q.r.field) - 1)), moved.slice(0, 3).map(({ q, o }) => [q.p.id, o && o.lo, q.lo, q.ahead]));
   check('each picked for as many days as before keeps its amount; one whose own days were cut short by its planting’s last picking gains the days it now has, and no more', moved.every(({ q, o }) => { const t5 = Math.min(5, q.r.harvestDays + q.ahead), t0 = Math.min(5, q.r.harvestDays); return near(q.units, o.units * t5 / t0); }), moved.filter(({ q, o }) => !near(q.units, o.units)).slice(0, 3).map(({ q, o }) => [q.p.id, o.units, q.units, q.r.harvestDays]));
   check('the season’s worth moves by what the thing’s plantings give more, at its price, and by nothing else', near(worthOf(m1) - worthOf(m0), moved.reduce((n, { q, o }) => n + (q.inYear - o.inYear) * q.price, 0), 1e-9) && m1.rows.filter(r => r.thing !== T).every(r => { const o = m0.rows.find(x => x.key === r.key); return !!o && near(o.worth, r.worth, 1e-12); }), [worthOf(m0), worthOf(m1)]);
+  // the screens' "picking": inside the days of what it is grown for, from the day before typed, and not after its own last day
+  const pk = (e, id, d) => e.pickingOn(e.planting(id), null, d);
+  check('a planting grown only for the thing is picking from its own first day to its own last, and not the day after, though its crop’s days run on', pk(typed, P0, qb.first) && pk(typed, P0, qb.last) && !pk(typed, P0, E.addDays(qb.last, 1)) && E.addDays(qb.last, 1) <= b.r.last && !pk(typed, P0, E.addDays(qb.first, -1)), [iso(qb.first), iso(qb.last), iso(b.r.last)]);
+  {
+    const sample = [0, 60, 120, 180, 240, 300].map(k => E.addDays(new Date(year, 0, 1), k)), e0 = E.create(given, Lib);
+    check('with the boxes empty, “picking” is the planting’s own harvest days, as before, for every planting and day', given.plantings.every(p => { const r = e0.calc(p); return !r || sample.every(d => e0.pickingOn(p, r, d) === e0.pickedOn(r, d)); }));
+  }
   const notes = typed.warnings(typed.planting(P0)).filter(w => w.k === 'pick');
   check('the planting’s notes say when it is first picked, and how many days before its days to harvest', notes.length === 1 && notes[0].t.includes(iso(qb.first)) && notes[0].t.includes(`${N} days before`) && notes[0].t.includes(iso(b.r.first)), notes);
   check('and say nothing where no days before are typed', !base.warnings(base.planting(P0)).some(w => w.k === 'pick'));

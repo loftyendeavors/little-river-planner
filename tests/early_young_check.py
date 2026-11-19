@@ -171,6 +171,10 @@ with sync_playwright() as pw:
     tags, went = got_go if isinstance(got_go, tuple) else (got_go, {})
     check("the Forecast's popup, on a week before its days to harvest, lists it with a tag for the days it is picked early", tags is not None and ["early", f"{N} d early"] in tags, tags)
     first_day = js("const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p); return E.d2s(eng.soldOf(p, r).find(x => x.thing === arg.T).first);", {"P0": P0, "T": T})
+    after_last = js("""const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p), x = eng.soldOf(p, r).find(q => q.thing === arg.T), d = E.addDays(x.last, 1); A.setDate(d);
+      return { last: E.d2s(x.last), day: E.d2s(S.date), inBed: r.last >= d };""", {"P0": P0, "T": T}); wait(500)
+    after_last["picking"] = js("const f = document.querySelector(`#mapBeds .bed-fill[data-planting=\"${arg}\"]`); return f ? f.classList.contains('pick') : null;", P0)
+    check("the day after the only thing it is grown for is last picked, the map no longer shows its bed as picking, though the crop's own days run on", after_last["inBed"] is True and after_last["picking"] is False, after_last)
     check("“Show on the map” from it goes to the day the thing is first picked, not to its crop's days to harvest, and the map shows its bed as being picked that day", went.get("date") == first_day and went.get("view") == "map" and went.get("sel") == P0 and went.get("picking") is True, [went, first_day])
     # two early products entered out of date order: the later one first, the earlier one second. A planting grown for both by the
     # crop's shares lists them in date order in its Schedule, before its own days to harvest; "Show on the map" goes to each one's own day

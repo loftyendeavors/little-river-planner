@@ -291,7 +291,7 @@
     const failed = E.validDate(failedOn) && failedOn <= date;
     const here = status.crops.some(item => item.planting.id === p.id);
     const turnover = status.resting && e.occupancyFrom(p, r) <= date && date <= through && E.validDate(through);
-    const from = pickFrom(p, r), state = failed ? 'failed' : here ? (from <= date && date <= r.last ? 'picking' : 'growing') : turnover ? 'turnover' : '';
+    const from = pickFrom(p, r), state = failed ? 'failed' : here ? (e.pickingOn(p, r, date) ? 'picking' : 'growing') : turnover ? 'turnover' : '';
     const word = { failed: 'Failed', growing: 'Growing', picking: 'Picking', turnover: turnover ? `Turnover · free ${day(E.addDays(through, 1))}` : '' }[state];
     const expanded = bedRow?.id === p.id, part = r.partial && f ? ` · ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} ft` : '';
     let press;
