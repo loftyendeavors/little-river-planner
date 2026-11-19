@@ -2687,6 +2687,8 @@ body[data-card="on"] .stage { position: relative; }
   .card-box select, .card-box input, .card-date, .card-row-head, .card-repeat input, .lrf-card .btn.small, .card-menu-item, .card-cal-day, .card-cal-month .icon-btn { min-height: var(--control-phone); }
   .card-cal-day, .card-cal-month .icon-btn { width: var(--control-phone); height: var(--control-phone); }
   .card-cal { width: min(340px, calc(100vw - 16px)); }
+  .lrf-card .card-use .help-btn, .lrf-card .bed-season-use .help-btn { width: var(--control-phone); height: var(--control-phone); }   /* Codex on #85 */
+  .lrf-card .card-foot .link { display: inline-flex; align-items: center; min-height: var(--control-phone); }
 }
 
 /* ───────────────────────────── The Forecast page in the frame (DESIGN.md, rule 1) ─────────────────────────────

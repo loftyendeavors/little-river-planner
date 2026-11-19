@@ -427,8 +427,9 @@ def run(pw):
     ph = {"x": hi("[data-hook='card-close']"), "date": hi("[data-hook='card-date']"), "variety": hi("[data-hook='card-variety']"), "row": hi("[data-hook='card-row'] .card-row-head")}
     press(page, "[data-hook='card-more']", 300); ph["menu"] = hi("[data-hook='card-menu-item']"); page.keyboard.press("Escape"); wait(200)
     press(page, "[data-hook='card-date']", 300); ph["day"] = hi("[data-hook='card-cal-day']"); page.keyboard.press("Escape"); wait(200)
+    ph["help"] = hi("[data-hook='card'] [data-hook='use-help']"); ph["full"] = hi("[data-hook='card-full']")
     ph["inside"] = js("const c = card(); if (!c) return false; const r = c.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth;")
-    check("on a phone (390 wide) the card stands inside the screen, and its ×, date, variety, rows, menu and calendar days are 44 high", ph["inside"] and all(ph[k] >= 44 for k in ["x", "date", "variety", "row", "menu", "day"]), ph)
+    check("on a phone (390 wide) the card stands inside the screen, and its ×, date, variety, rows, menu and calendar days, Grown for sale's \"?\" and Planting details are 44 high", ph["inside"] and all(ph[k] >= 44 for k in ["x", "date", "variety", "row", "menu", "day", "help", "full"]), ph)
     page.set_viewport_size({"width": WIDTH, "height": 960}); wait(400)
     js("A.setView('map'); return null;"); wait(300)
 

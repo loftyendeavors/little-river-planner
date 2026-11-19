@@ -53,6 +53,8 @@ PAGE = [
  ("a right-click opens the browser's own menu", CD, "    document.addEventListener('contextmenu', onContext);\n", ""),
  ("“Planting details” opens nothing", CD, "onclick: () => openFull() }, 'Planting details')", "onclick: () => {} }, 'Planting details')"),
  ("the card floats over the view again: nothing makes room for it", CSS, "  body[data-card=\"on\"] .stage:has(> .lrf-card) { padding-right: calc(384px + 2 * var(--space-12)); }\n", ""),
+ ("Codex on #85: on a phone Grown for sale's \"?\" is 24 high", CSS, "  .lrf-card .card-use .help-btn, .lrf-card .bed-season-use .help-btn { width: var(--control-phone); height: var(--control-phone); }   /* Codex on #85 */\n", ""),
+ ("Codex on #85: on a phone Planting details is a line high", CSS, "  .lrf-card .card-foot .link { display: inline-flex; align-items: center; min-height: var(--control-phone); }\n", ""),
  ("Codex on #85: the docked card keeps the floating shadow", CSS, "  .card.float.lrf-card { box-shadow: var(--shadow-card); }", "  .lrf-card { box-shadow: var(--shadow-card); }"),
  ("Codex on #85: the card docks however narrow the window", CSS, "@media (min-width: 1200px) {\n  body[data-card", "@media (min-width: 701px) {\n  body[data-card"),
  ("the map frames the farm again when the card comes", MP, "      if (root.LRFCard && root.LRFCard.docked()) view.moved = true;\n", ""),
