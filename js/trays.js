@@ -80,6 +80,21 @@
   const POOL_NAME = 'Heated greenhouse benches', POOL_NAME_BEFORE = 'Shared heated space';
   /** That garden's record under its present name, or null when there is nothing to rename. A name the grower gave it himself is left alone. */
   const poolRenamed = g => (g && g.liveTrayPool === true && g.name === POOL_NAME_BEFORE ? { ...g, name: POOL_NAME } : null);
+  /**
+   * Ids worked from what a thing is, for what this script makes that two devices could each make for one real thing: the merge
+   * keeps a record either side added, so one thing made under two random ids is two things (js/merge.js). An id is worked only
+   * when the thing is made; what a plan already holds keeps the id it has.
+   *   a weekly batch                   its demand plan and its key (crop row and Monday). The plan's id is escaped and holds no
+   *                                    colon, so no two of them give one id
+   *   the heated greenhouse benches    one garden and one bed in a plan
+   *   a crop a demand row adds         its name as a row is matched to a crop (norm); none where the name has no letter or digit
+   */
+  const batchId = (planId, key) => 'tray:' + encodeURIComponent(planId) + ':' + key, POOL_ID = 'live-tray-pool', POOL_BED_ID = 'live-tray-pool-bed';
+  const cropIdOf = name => (norm(name) ? 'micro-' + norm(name) : null);
+  /** The worked id, or where something else already holds it the first of id~2, id~3 … that is free: worked from the plan as it stands, so two devices that hold one plan choose alike. */
+  const free = (id, taken) => { let out = id; for (let n = 2; taken(out); n++) out = id + '~' + n; return out; };
+  /** Where an id stands in that line: 1 for the worked id, n for id~n, 0 for any other. */
+  const nth = (base, id) => (id === base ? 1 : typeof id === 'string' && id.startsWith(base + '~') && /^[1-9]\d*$/.test(id.slice(base.length + 1)) ? +id.slice(base.length + 1) : 0);
   /** Has work been recorded on this batch? Such a batch is history and is never regenerated or removed with its plan. */
   function locked(plan, p, records) {
     const harvests = (records && records.harvests) || plan.harvests, picks = ((records && records.fieldRecords) || plan.fieldRecords || {}).picks;
@@ -88,8 +103,11 @@
   }
   /**
    * Save a demand plan into a farm plan: the plan record, its crops, and its batches as plantings.
-   * A batch that already exists (same crop row, same week) keeps its id and anything else recorded on it.
-   * options: uid() for new ids, now (ISO time), crop(id) to find a crop the plan does not list itself, records { harvests, fieldRecords },
+   * A batch that already exists (same crop row, same week) keeps its id and anything else recorded on it. A new one takes the id
+   * worked from its plan and key. A plain planting on the benches, of the row's crop, that holds that id is this week's batch taken off
+   * the plan with its work (see below): it is the week's batch again. Any other planting that holds it keeps it, and the batch takes
+   * the first free id after it.
+   * options: uid() for a new demand plan's id, now (ISO time), crop(id) to find a crop the plan does not list itself, records { harvests, fieldRecords },
    * keepRecorded: batches with work recorded are history: left untouched, whatever the demand now says, while the others follow it.
    */
   function apply(farm, input, options) {
@@ -103,21 +121,35 @@
     plan.id = (prior && prior.id) || uid();
     let garden = state.gardens.find(g => g.liveTrayPool === true), bed = state.beds.find(b => b.liveTrayPool === true);
     if (bed && (!garden || bed.gardenId !== garden.id)) throw Error('Review the heated greenhouse benches record before continuing.');
-    if (!garden) { garden = { id: uid(), name: POOL_NAME, type: 'greenhouse', active: true, frost: false, dtmFactor: 1, curveMode: 'flat', gapMode: 'none', liveTrayPool: true, growingEnvironment: { v: 1, kind: 'heated', minTempF: null } }; state.gardens.push(garden); }
-    if (!bed) { bed = { id: uid(), gardenId: garden.id, bed: 'Live trays · shared benches', type: 'Bench', trays: 0, w: 0, l: 0, orient: '', active: true, px: null, liveTrayPool: true, note: 'Uses existing heated nursery benches; adds no physical capacity.' }; state.beds.push(bed); }
+    const gardenIds = new Set(state.gardens.map(g => g.id)), bedIds = new Set(state.beds.map(b => b.id));
+    if (!garden) { garden = { id: free(POOL_ID, id => gardenIds.has(id)), name: POOL_NAME, type: 'greenhouse', active: true, frost: false, dtmFactor: 1, curveMode: 'flat', gapMode: 'none', liveTrayPool: true, growingEnvironment: { v: 1, kind: 'heated', minTempF: null } }; state.gardens.push(garden); }
+    if (!bed) { bed = { id: free(POOL_BED_ID, id => bedIds.has(id)), gardenId: garden.id, bed: 'Live trays · shared benches', type: 'Bench', trays: 0, w: 0, l: 0, orient: '', active: true, px: null, liveTrayPool: true, note: 'Uses existing heated nursery benches; adds no physical capacity.' }; state.beds.push(bed); }
     if (garden.active === false || bed.active === false) throw Error('The heated greenhouse benches are set inactive. Reactivate them before planning trays.');
-    const crops = new Map();
+    // a crop's id is taken by a crop of the plan's own, or by one the planner ships (a row of the same name finds the one made here before)
+    const crops = new Map(), cropIds = new Set(state.crops.map(c => c.id)), cropTaken = id => cropIds.has(id) || !!(crop && crop(id));
     for (const r of plan.rows) {
       let c = r.cropId && crop ? crop(r.cropId) : null;
       if (!c) c = state.crops.find(c => c.micro && norm(c.name) === norm(r.name));
-      if (!c) { c = { id: uid(), name: 'Micro · ' + r.name, micro: true, family: 'Microgreens', method: 'DS', gh: 0, dtm: r.days, hw: 1, baseUnit: 'tray', yBasis: 'tray', yield: 1, mk: 1, price: r.price, seedG: null, seedLb: null, tower: false, frostTender: false }; state.crops.push(c); }
+      if (!c) { const id = cropIdOf(r.name) ? free(cropIdOf(r.name), cropTaken) : uid(); c = { id, name: 'Micro · ' + r.name, micro: true, family: 'Microgreens', method: 'DS', gh: 0, dtm: r.days, hw: 1, baseUnit: 'tray', yBasis: 'tray', yield: 1, mk: 1, price: r.price, seedG: null, seedLb: null, tower: false, frostTender: false }; state.crops.push(c); }
       if (!c.micro) throw Error(r.name + ' must be a live-tray crop.');
       r.cropId = c.id; crops.set(r.id, c.id);
     }
+    const taken = new Set(state.plantings.map(p => p.id));   // every id a planting holds (keys differ, so no two batches here are given one)
+    let back = 0;
     const records = model.batches.map(b => {
-      const original = old.find(p => p.liveTray && p.liveTray.key === b.key);
+      let original = old.find(p => p.liveTray && p.liveTray.key === b.key);
+      // A sown batch taken off its demand plan stays a plain planting under its id (remove, keepRecorded). Where it meets its plan
+      // again (one device deleted the plan while the other changed it, and the join kept both), its id says which week it is: it is
+      // that week's batch again, as it was recorded, and the week is not made a second time beside it.
+      // (or under one of the free ids after it, where the worked one was held when the batch was made: the one with work recorded first).
+      // It is one only if it is still on the benches and of the row's crop: a planting given such an id by a file edited by hand keeps it.
+      const base = batchId(plan.id, b.key), line = original ? [] : state.plantings.filter(p => !p.liveTray && nth(base, p.id) && p.bedId === bed.id && p.cropId === crops.get(b.rowId)).sort((x, y) => nth(base, x.id) - nth(base, y.id));
+      const plain = line.find(p => locked(state, p, options.records)) || line[0];
+      if (plain && locked(state, plain, options.records)) { back++; return { ...plain, liveTray: { planId: plan.id, key: b.key, ready: b.ready, week: b.week, rowId: b.rowId } }; }
+      if (plain) original = plain;   // nothing recorded on it (only a hand edit leaves one plain beside its plan: a join ties such a batch back first): made the week's batch again, under its id
       if (original && done.includes(original)) return original;
-      const p = { ...(original || {}), id: (original && original.id) || uid(), bedId: bed.id, cropId: crops.get(b.rowId), date: b.sow, trays: b.trays, dtm: b.days, timingMode: 'manual', price: b.price, yield: 1,
+      const id = (original && original.id) || free(base, x => taken.has(x));   // held by anything else: only by a file edited by hand
+      const p = { ...(original || {}), id, bedId: bed.id, cropId: crops.get(b.rowId), date: b.sow, trays: b.trays, dtm: b.days, timingMode: 'manual', price: b.price, yield: 1,
         liveTray: { ...((original && original.liveTray) || {}), planId: plan.id, key: b.key, ready: b.ready, week: b.week, rowId: b.rowId } };
       p.growingDefaults = { v: 1, cropId: p.cropId, crop: { mk: { present: true, value: 1 }, baseUnit: { present: true, value: 'tray' }, yBasis: { present: true, value: 'tray' }, gh: { present: true, value: 0 } } };
       if (plan.customerId) p.customerId = plan.customerId; else delete p.customerId;
@@ -134,7 +166,7 @@
     const have = new Set(state.plantings.map(p => p.id));
     state.plantings.push(...records.filter(p => !have.has(p.id)));
     state.liveTrayPlans = (state.liveTrayPlans || []).filter(p => p.id !== plan.id).concat({ ...prior, ...plan, updatedAt: options.now || new Date().toISOString() });
-    return { plan: state, saved: plan, records, model, kept: done.length };
+    return { plan: state, saved: plan, records, model, kept: done.length + back };
   }
   /**
    * Take a demand plan and its batches out of a farm plan. With keepRecorded, batches with work recorded
@@ -145,6 +177,17 @@
     if (done.size && !options.keepRecorded) throw Error('Recorded work is attached to this plan. Keep its production history intact.');
     const plantings = farm.plantings.filter(p => !(p.liveTray && p.liveTray.planId === id) || done.has(p.id)).map(p => { if (!done.has(p.id)) return p; const { liveTray, ...rest } = p; return rest; });
     return { ...farm, plantings, liveTrayPlans: (farm.liveTrayPlans || []).filter(p => p.id !== id) };
+  }
+  /**
+   * Which of these plantings may be removed by hand: { ids, kept }. A batch tied to a demand plan the farm plan holds follows that
+   * demand, as the batch's own panel says (it offers no removal): its weeks and trays change on Live trays, and its plan's next save
+   * would make the week again, under the same id. A sown one so made again would come back unsown while its seed stays drawn, and
+   * two devices' plans could then not be joined. `kept`: the tied batches, which stay.
+   */
+  function removable(farm, ids) {
+    const plans = new Set((farm.liveTrayPlans || []).map(t => t.id)), byId = new Map((farm.plantings || []).map(p => [p.id, p])), kept = [], free = [];
+    for (const id of ids) { const p = byId.get(id); if (p && p.liveTray && plans.has(p.liveTray.planId)) kept.push(p); else free.push(id); }
+    return { ids: free, kept };
   }
   /** The difference between two farm plans as undoable steps, in the form the app commits. */
   function ops(before, after) {
@@ -194,5 +237,5 @@
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  return { POOL_NAME, POOL_NAME_BEFORE, poolRenamed, draft, validate, schedule, locked, apply, remove, ops, batches, weeks, byCrop, monday, mondayOnOrAfter, add, short, norm, SEASONS };
+  return { POOL_NAME, POOL_NAME_BEFORE, poolRenamed, draft, validate, schedule, locked, apply, remove, removable, ops, batches, weeks, byCrop, monday, mondayOnOrAfter, add, short, norm, SEASONS };
 });

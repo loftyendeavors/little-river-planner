@@ -124,7 +124,7 @@ with sync_playwright() as pw:
         added = A.evaluate("""(async () => { const without = LRFApp.state.plan.varieties.find(v => v.active !== false && !v.deleted && !LRFThumbs.get(v.id)), withOne = LRFApp.state.plan.varieties.find(v => LRFThumbs.get(v.id));
             if (!without || !withOne) return { none: true, without: !!without, withOne: !!withOne };
             const out = await LRFApp.addPhotos([new File([JSON.stringify({ [without.id]: LRFThumbs.get(withOne.id) })], 'one-more.json', { type: 'application/json' })]);
-            LRFApp.removePlantings([LRFApp.state.plan.plantings[LRFApp.state.plan.plantings.length - 1].id]);
+            LRFApp.removePlantings([LRFApp.state.plan.plantings.filter(p => !p.liveTray).pop().id]);
             return { id: without.id, added: out && out.added, thumbs: LRFThumbs.count() }; })()""")
         check('A adds one variety photo and takes one planting out', bool(added) and added.get('added') == 1, added)
         try:

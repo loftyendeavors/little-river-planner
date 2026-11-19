@@ -21,7 +21,7 @@
 
   "map geometry": 81,
 
-  "merge": 116,
+  "merge": 134,
 
   "page reader": 29,
 
@@ -126,7 +126,7 @@
 
   "f018": 30,
 
-  "join": 46,
+  "join": 50,
 
   "maint": 55,
 
@@ -268,7 +268,7 @@
 
   "harvest-site": 44,
 
-  "join-site": 46,
+  "join-site": 50,
 
   "loose-site": 37,
 
