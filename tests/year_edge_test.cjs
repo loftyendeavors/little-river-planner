@@ -31,7 +31,8 @@ const E0 = old('engine.js'), SL0 = old('seedlib.js'), F0 = old('forecast.js'), W
 // show it in the build before then hold that the build before counts as this build does.
 const knew = typeof SL0.seasonOf === 'function';
 const raw = JSON.parse(fs.readFileSync(planFile, 'utf8'));
-const given = raw.format ? IO.unpack(raw) : IO.split(raw).core;
+// the plantings bought in (N2) are left out when the build before sows them: what is compared is the year's edge (tests/bought_held.cjs)
+const given = require('./bought_held.cjs').held(E, Lib, raw.format ? IO.unpack(raw) : IO.split(raw).core, E0.create(raw.format ? IO.unpack(raw) : IO.split(raw).core, Lib));
 const year = +given.settings.year, Y = String(year), Y0 = String(year - 1);
 const copy = x => JSON.parse(JSON.stringify(x)), near = (a, b, e = 1e-6) => Math.abs(a - b) <= e * Math.max(1, Math.abs(a), Math.abs(b));
 const add = (iso, n) => E.d2s(E.addDays(E.s2d(iso), n)), iso = d => (d && E.validDate(d) ? E.d2s(d) : null);
@@ -46,8 +47,8 @@ const eng = E.create(given, Lib);
 const demand = (given.liveTrayPlans || []).find(d => d.rows && d.rows.some(r => r.cropId));
 const microId = demand && demand.rows.find(r => r.cropId).cropId;
 const crops = [...new Set(given.plantings.map(p => p.cropId))].map(id => eng.crop(id)).filter(Boolean);
-const keeper = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'TP' && +c.gh >= 1 && c.material !== 'bulb' && +c.dtm >= 45 && +c.dtm <= 120);
-const late = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'DS' && c.material !== 'bulb' && +c.dtm >= 32 && +c.dtm <= 90 && c.id !== (keeper && keeper.id));
+const keeper = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'TP' && +c.gh >= 1 && c.material !== 'bulb' && c.plantingMaterial !== 'plant' && +c.dtm >= 45 && +c.dtm <= 120);
+const late = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'DS' && c.material !== 'bulb' && c.plantingMaterial !== 'plant' && +c.dtm >= 32 && +c.dtm <= 90 && c.id !== (keeper && keeper.id));
 const fall = Lib.crops.find(c => c.method === 'DS' && !c.frostTender && !c.micro && +c.dtm >= 180 && c.material !== 'bulb' && !eng.isCoverCrop(c));
 const cover = Lib.crops.find(c => eng.isCoverCrop(c) && +c.dtm >= 120);   // a cover crop sown in the fall, whose days run into the next year
 // covered ground (no frost there) with nothing in it before a day, and ground with nothing in it at all

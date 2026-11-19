@@ -317,7 +317,7 @@ put(B.berry[1], md(4, 6), 'raspberry', { inRow: 30, varietyId: byCrop.raspberry[
 put(B.berry[2], md(4, 6), 'blackberry', { growingDefaults: { v: 1, cropId: 'blackberry', crop: { rowsPerBed: { present: false } } }, varietyId: byCrop.blackberry[0].id });
 put(B.berry[3], md(4, 29), 'broccoli', { inRow: 18, rowsPerBed: 2, ...withV('broccoli') });
 then(B.berry[3], md(8, 7), 'kale', { ft: 40, rowsPerBed: '2', inRow: '14', ...withV('kale') });
-put(B.berry[4], md(5, 21), 'pepper', { inRow: 14, growingDefaults: { v: 1, cropId: 'pepper', crop: {} }, ...withV('pepper') });
+put(B.berry[4], md(5, 21), 'pepper', { inRow: 14, growingDefaults: { v: 1, cropId: 'pepper', crop: {} }, startedFrom: 'plant', ...withV('pepper') });   // bought in as plugs, its variety sown for another planting, its lot not on file (bought_test.cjs, bought_check.py)
 chance('flower block');
 // Flower Block: dahlias from tubers, and cut flowers from plugs
 B.flower.forEach((b, i) => {
@@ -343,7 +343,8 @@ put(B.houseA[2], md(4, 3), 'tomato', { inRow: 20, rowsPerBed: 2, rowSp: 18, lrfT
 put(B.houseA[3], md(4, 10), 'tomato_cherry', { inRow: 18, rowsPerBed: 2, ...withV('tomato_cherry') });
 put(B.houseB[0], md(4, 3), 'cucumber', { growingDefaults: { v: 1, cropId: 'cucumber', crop: {} }, yield: 10, ...withV('cucumber') });
 then(B.houseB[0], md(7, 16), 'cucumber', { variety: byCrop.cucumber[1].name, growingDefaults: { v: 1, cropId: 'cucumber', crop: {} }, yield: 10, varietyId: byCrop.cucumber[1].id });
-put(B.houseB[1], md(4, 3), 'pepper', { inRow: 14, growingDefaults: { v: 1, cropId: 'pepper', crop: {} }, yield: 3.5, ...withV('pepper') });
+const plugs = put(B.houseB[1], md(4, 3), 'pepper', { inRow: 14, growingDefaults: { v: 1, cropId: 'pepper', crop: {} }, yield: 3.5, startedFrom: 'plant', ...withV('pepper') });   // the first succession bought in as plugs (N2)
+Object.assign(varieties.find(v => v.id === plugs.varietyId), { buyLot: 50, buyFrom: 'Example Plug Co.' });   // the lot its plugs are sold in, and the grower (bought_test.cjs)
 put(B.houseB[2], md(4, 10), 'basil', withV('basil')); then(B.houseB[2], md(7, 23), 'basil', withV('basil'));
 chance('tunnel');
 // The tunnel: snack cucumbers early and late, two rounds of vining cucumbers, and spinach before basil
