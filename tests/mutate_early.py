@@ -49,6 +49,7 @@ PAGE = [
  ("too many days before are taken", AP, "if (room != null && want > room) return refuse(", "if (false) return refuse("),
  ("the line under the box does not say what it comes to", TH, "`first picked at ${Math.max(1, days[0] - t.before)} days, ${c.name} at ${days[0]}`", "`first picked with ${c.name}`"),
  ("the Schedule does not say when the thing is first picked", PN, "          earlyPicks(eng, p, r),\n", ""),
+ ("the Schedule lists early pickings in the order they were entered", PN, ".filter(x => x.ahead).sort((a, b) => a.first - b.first || b.ahead - a.ahead).map(x =>", ".filter(x => x.ahead).map(x =>"),
  ("the Schedule puts the early picking after the planting's own first harvest", PN, "          earlyPicks(eng, p, r),\n          h('li', { dataset: { hook: 'schedule-first' } }, h('span', eng.soldOf(p, r)?.some(x => x.ahead) ? 'Days to harvest' : 'First harvest'), h('b', day(r.first))),\n", "          h('li', { dataset: { hook: 'schedule-first' } }, h('span', eng.soldOf(p, r)?.some(x => x.ahead) ? 'Days to harvest' : 'First harvest'), h('b', day(r.first))),\n          earlyPicks(eng, p, r),\n"),
  ("the Schedule still calls the crop's days to harvest its first harvest", PN, "x => x.ahead) ? 'Days to harvest' : 'First harvest'", "x => x.ahead) ? 'First harvest' : 'First harvest'"),
  ("“Show on the map” goes to the crop's own first picking", HV, "const first = x.from || x.r.first;", "const first = x.r.first;"),

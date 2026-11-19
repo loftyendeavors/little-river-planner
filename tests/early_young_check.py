@@ -91,7 +91,7 @@ with sync_playwright() as pw:
       const [crop, list] = [...by.entries()].sort((a, b) => b[1].length - a[1].length)[0] || [];
       if (!crop) return null;
       const room = Math.min(...list.map(p => days(eng.calc(p).first, eng.calc(p).field))) - 1;
-      return { crop, name: eng.crop(crop).name, p0: list[0].id, n: list.length, room, N: Math.max(2, Math.min(9, room - 1)), unit: eng.unitOf(eng.crop(crop)) };""")
+      return { crop, name: eng.crop(crop).name, p0: list[0].id, p1: list[1].id, n: list.length, room, N: Math.max(2, Math.min(9, room - 1)), unit: eng.unitOf(eng.crop(crop)) };""")
     check("a subject: a crop of three plantings at least in beds, following its line, picked over days, with room before its first picking", sub and sub["n"] >= 3 and sub["N"] >= 2, sub)
     if not sub: finish()
     T, N, C, P0 = "t-early-check", sub["N"], sub["crop"], sub["p0"]
@@ -140,6 +140,23 @@ with sync_playwright() as pw:
     check("the Forecast's popup, on a week before its days to harvest, lists it with a tag for the days it is picked early", tags is not None and ["early", f"{N} d early"] in tags, tags)
     first_day = js("const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p); return E.d2s(eng.soldOf(p, r).find(x => x.thing === arg.T).first);", {"P0": P0, "T": T})
     check("“Show on the map” from it goes to the day the thing is first picked, not to its crop's days to harvest", went.get("date") == first_day and went.get("view") == "map" and went.get("sel") == P0, [went, first_day])
+    # two early products entered out of date order: the later one first, the earlier one second. A planting grown for both by the
+    # crop's shares lists them in date order in its Schedule, before its own days to harvest; "Show on the map" goes to each one's own day
+    T2, P1 = "t-earlier-check", sub["p1"]
+    js("""const before = S.plan.assumptions, after = JSON.parse(JSON.stringify(before)), things = after.sell[arg.C].things;
+      things[arg.T2] = { ...things[arg.T], id: arg.T2, n: 2, name: 'Earlier ones', share: 20, before: arg.N + 1 };
+      A.commit('a second thing, picked earlier, for the check', [{ kind: 'assume', before, after }], { unchecked: true }); return 1;""", {"C": C, "T": T, "T2": T2, "N": N}); wait(400)
+    js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", P1); wait(600)
+    two = js("""const eng = S.engine, p = eng.planting(arg.P1), r = eng.calc(p), parts = eng.soldOf(p, r), items = [...document.querySelectorAll('#jobList > li')], own = hook('schedule-first');
+      const day = id => E.d2s(parts.find(x => x.thing === id).first), at = li => items.indexOf(li);
+      return { got: hooks('early-pick').map(li => li.dataset.thing), firsts: { [arg.T]: day(arg.T), [arg.T2]: day(arg.T2) }, ownAfter: hooks('early-pick').every(li => at(li) < at(own)) };""", {"P1": P1, "T": T, "T2": T2})
+    check("two early products entered out of date order: the planting grown for both lists them in date order, the earliest first, both before its own days to harvest", two["got"] == [T2, T] and two["firsts"][T2] < two["firsts"][T] and two["ownAfter"] is True, two)
+    went2 = []
+    for thing in (T2, T):
+        g = popup_tags(C, thing, P1, True, go=True)
+        went2.append(g[1].get("date") if isinstance(g, tuple) else None)
+    check("“Show on the map” from each goes to its own first day", went2 == [two["firsts"][T2], two["firsts"][T]], [went2, two["firsts"]])
+    js("A.undo(); return 1;"); wait(300)
     js("A.undo(); return 1;"); wait(500)
     u1 = js("return { snap: snap(), dates: dates(S.engine) };")
     check("Undo takes the days before back: the plan is as it was", u1["snap"]["plan"] == s1["plan"] and u1["dates"] == d1)
