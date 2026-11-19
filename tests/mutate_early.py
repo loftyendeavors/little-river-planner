@@ -32,7 +32,7 @@ NODE = [
  ("the notes name no day it goes into its bed", EN, "${x.ahead} of the ${x.asked} days early asked: it goes into its bed ${d2s(r.field)}.`", "${x.ahead} of the ${x.asked} days early asked: it goes into its bed the day before.`"),
  ("a part does not keep the days asked", EN, "...(t.before && r.harvestDays > 0 ? { asked: t.before } : {}),", ""),
  ("a stand picked before it is planted is counted as mature", EN, "if (y > at) return { year: y, season: 0, share: 0, at };", "if (y > at) return null;"),
- ("the bed is picking from a part picked before its stand is planted", EN, "x && x.units > 0 && !(x.age && !(x.age.share > 0))", "x && x.units > 0"),
+ ("the bed is picking from a part picked before its stand is planted", EN, "x && x.units > 0 && !(x.age && !(x.age.share > 0))", "x && (x.units > 0 || !!x.age)"),
  ("a part that gets nothing opens a picking window", EN, "x && x.units > 0 && !(x.age && !(x.age.share > 0))", "x && !(x.age && !(x.age.share > 0))"),
  ("the picking windows run across a gap between two parts", EN, "if (last && +a <= +addDays(last[1], 1)) {", "if (last) {"),
  # a young stand
