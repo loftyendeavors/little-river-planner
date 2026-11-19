@@ -88,8 +88,11 @@
     const kind = h('select', { id: 'hvShareKind', 'aria-label': 'Which kinds' }, h('option', { value: '' }, 'Everything'), F.GROUPS.map(([g, short]) => h('option', { value: g }, `${short} only`)));
     const varieties = h('input', { type: 'checkbox', id: 'hvShareVar' }), prices = h('input', { type: 'checkbox', id: 'hvSharePrice' });
     const sheet = h('div.hv-sheet', { id: 'hvSheet', tabindex: 0 });
-    const current = () => { const r = ranges.find(x => x[0] === range.value)[2](); return { ...r, text: F.text(m, r.cols, { farm: App.state.plan.settings.farm || 'Farm', grain: r.grain, varieties: varieties.checked, prices: prices.checked, group: kind.value || undefined }) }; };
-    const draw = () => { sheet.textContent = current().text; };
+    const current = () => {
+      const { cols, grain } = ranges.find(x => x[0] === range.value)[2]();
+      return { cols, options: { farm: App.state.plan.settings.farm || 'Farm', grain, varieties: varieties.checked, prices: prices.checked, group: kind.value || undefined } };
+    };
+    const draw = () => { const { cols, options } = current(); sheet.textContent = F.text(m, cols, options); };
     for (const el of [range, kind, varieties, prices]) el.addEventListener('change', draw);
     const close = () => { dialog.close(); dialog.remove(); };
     const dialog = h('dialog.dialog.wide', { id: 'hvShare', oncancel: e => { e.preventDefault(); close(); } },
@@ -99,11 +102,11 @@
       sheet,
       framed ? h('p.dlg-hint', 'Here the list can be copied. Printing it or downloading a spreadsheet needs the planner opened at its own address.') : null,
       h('div.dialog-actions',
-        framed ? null : h('button.btn', { type: 'button', id: 'hvCsv', onclick: () => { const r = current(); download(`${(App.state.plan.settings.farm || 'farm').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-availability-${m.year}.csv`, F.csv(m, r.cols, { grain: r.grain }), 'text/csv'); } }, 'Download spreadsheet'),
-        framed ? null : h('button.btn', { type: 'button', id: 'hvPrint', onclick: () => print(current().text) }, 'Print'),
+        framed ? null : h('button.btn', { type: 'button', id: 'hvCsv', onclick: () => { const { cols, options } = current(); download(`${options.farm.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-availability-${m.year}.csv`, F.csv(m, cols, options), 'text/csv'); } }, 'Download spreadsheet'),
+        framed ? null : h('button.btn', { type: 'button', id: 'hvPrint', onclick: () => print(sheet.textContent) }, 'Print'),
         h('span.grow'),
         h('button.btn', { type: 'button', onclick: close }, 'Close'),
-        h('button.btn.primary', { type: 'button', id: 'hvCopy', onclick: () => copy(current().text, sheet) }, 'Copy')));
+        h('button.btn.primary', { type: 'button', id: 'hvCopy', onclick: () => copy(sheet.textContent, sheet) }, 'Copy')));
     document.body.append(dialog); draw(); dialog.showModal();
   }
   /** A crop the series tool can size to a weekly amount: one with a harvest to space plantings by. Tray crops follow weekly demand instead. */

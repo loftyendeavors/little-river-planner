@@ -393,7 +393,8 @@ with sync_playwright() as pw:
     sheet = js("""const m = LRFHarvestView.model('commercial'), s = F.season(m), cols = F.periods(m, 'month', s.i0, s.i1), text = txt('hvSheet'), lines = text.split('\\n');
       const want = []; let at = -1;
       for (const c of cols) { at = lines.findIndex((l, i) => i > at && l === F.MONTHS[c.start.getMonth()] + ' ' + m.year); for (const row of m.rows) { if (!arg.includes(row.thing)) continue; const q = F.sum(row.days, c.i0, c.i1); if (!(F.shown(q) > 0)) continue; const line = '    ' + row.name + ': ' + F.amount(q, row.unit, row.group), end = lines.findIndex((l, i) => i > at && l === ''); want.push({ line, there: lines.slice(at, end < 0 ? undefined : end).includes(line) }); } }
-      return { want: want.length, missing: want.filter(w => !w.there).slice(0, 4), months: cols.length };""", [b1, p1, k1])
+      const figures = m.rows.filter(r => arg.includes(r.thing)).map(r => [r.name, r.unit, ...cols.map(c => F.sendShown(F.sum(r.days, c.i0, c.i1), r.unit))]);
+      return { want: want.length, missing: want.filter(w => !w.there).slice(0, 4), months: cols.length, figures };""", [b1, p1, k1])
     check("“A list to send…” has a line for each thing in each month it is there, “Crop · Thing: amount”, in the thing's own unit and the forecast's own amount for that month", sheet["want"] >= 3 and sheet["missing"] == [], sheet)
     csv = ""
     try:
@@ -401,7 +402,9 @@ with sync_playwright() as pw:
         saved = os.path.join(str(shots), "things.csv"); dl.value.save_as(saved); csv = open(saved, encoding="utf-8").read()
     except Exception as e: errors.append("spreadsheet: " + str(e)[:160])
     lines = [[c.strip('"') for c in l.split('","')] for l in csv.splitlines()]
-    check("the spreadsheet has a row for each thing with its unit and a season total that is the forecast's", len(mine) == 3 and all(any(len(l) > 4 and l[1] == r["name"] and l[2] == "All" and l[3] == r["unit"] and abs(float(l[4]) - (int(r["total"] + 1e-6) if r["unit"] not in ("lb", "oz", "kg", "g", "bu") else round(r["total"], 2))) < 0.006 for l in lines) for r in mine), [l[:5] for l in lines if len(l) > 2 and "·" in l[1]][:6])
+    want_things = sheet["figures"]
+    got_things = [[l[1], l[3], *map(float, l[4:])] for l in lines[1:] if len(l) > 4 and l[2] == "All" and l[1] in [r[0] for r in want_things]]
+    check("the spreadsheet gives each thing's unit and amounts in the reviewed months", len(want_things) == 3 and got_things == want_things, got_things)
     page.keyboard.press("Escape"); wait(300)
 
     # plan to a weekly amount

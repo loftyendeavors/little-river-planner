@@ -5,7 +5,7 @@ usage: python3 -I ahead_check.py <app-dir-or-offline.html> <shots-dir>
 Serves the app folder (or opens the single offline file), walks them the way a grower would,
 and checks what the page shows against what the engine works out in that same page.
 """
-import http.server, json, os, socketserver, sys, threading, functools, pathlib
+import csv, http.server, json, os, socketserver, sys, threading, functools, pathlib
 from playwright.sync_api import sync_playwright
 
 target, shots = sys.argv[1], sys.argv[2]
@@ -107,8 +107,16 @@ with sync_playwright() as pw:
     check('Copy puts the list on the clipboard', clip.strip() == page.inner_text('#hvSheet').strip() and len(clip) > 200, clip[:120])
     with page.expect_download() as dl:
         page.click('#hvCsv')
-    csv = open(dl.value.path(), encoding='utf-8').read()
-    check('the spreadsheet downloads with a column a week', dl.value.suggested_filename.endswith('.csv') and csv.count('\n') > 30 and csv.startswith('"Kind","Crop","Variety","Unit","Season total"'), dl.value.suggested_filename)
+    with open(dl.value.path(), encoding='utf-8', newline='') as f:
+        rows = list(csv.reader(f))
+    weeks = page.evaluate("""() => {
+        const start = LRFForecast.monday(LRFApp.state.date), E = LRFEngine;
+        return Array.from({ length: 4 }, (_, i) => E.d2s(E.addDays(start, 7 * i)));
+    }""")
+    header = ['Kind', 'Crop', 'Variety', 'Unit'] + [c for week in weeks for c in (week, f'{week} unit price (USD)')]
+    check('the spreadsheet downloads with the four reviewed weeks and their requested price columns',
+          dl.value.suggested_filename.endswith('.csv') and len(rows) > 1 and rows[0] == header and all(len(r) == len(header) for r in rows),
+          rows[:2])
     page.screenshot(path=os.path.join(shots, 'harvest-share.png'))
     page.click('#hvShare .dialog-actions .btn:not(.primary):not(#hvCsv):not(#hvPrint)')
 
