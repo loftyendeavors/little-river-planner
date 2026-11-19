@@ -3,11 +3,17 @@
 
   "assume": 12,
 
+  "bought in kept, backup": 28,
+
+  "bought in kept, compact": 28,
+
   "bought in, backup": 43,
 
   "bought in, compact": 43,
-  "bought in kept, backup": 28,
-  "bought in kept, compact": 28,
+
+  "early and young, backup": 54,
+
+  "early and young, compact": 54,
 
   "failed, backup": 36,
 
@@ -159,6 +165,8 @@
 
   "cleanup": 36,
 
+  "early-young": 49,
+
   "f053": 22,
 
   "forecast": 51,
@@ -271,6 +279,8 @@
  "site2": {
 
   "bought-site": 45,
+
+  "early-young-site": 49,
 
   "f053-site": 22,
 

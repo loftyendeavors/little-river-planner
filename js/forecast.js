@@ -116,12 +116,14 @@
     const keepOf = y => Math.max(1, Math.round((y.keep || 0) * 7));
     for (const p of plan.plantings || []) {
       const r = eng.calc(p);
-      if (!r || r.b.active === false || r.g.active === false || !(r.harvestDays > 0) || at(r.first) >= n) continue;
+      if (!r || r.b.active === false || r.g.active === false || !(r.harvestDays > 0)) continue;
       const y0 = eng.yieldOf(p, r);
       if (!y0) continue;                                            // a cover crop: nothing to pick
       // what it gives of each thing the crop sells: the crop's own line alone, as always, unless another thing counts for it.
       // A thing's row is listed with its crop (a flower's bouquets among the flowers), whatever unit the thing is sold by.
       const parts = (eng.soldOf && eng.soldOf(p, r, y0)) || [y0];
+      // picked only after the year: a thing first picked before its crop's days to harvest (E2c part 2) may still fall in it
+      if (!parts.some(y => at(y.first || r.first) < n)) continue;
       // a planting picked before the year is in it while what it gave is still to sell: stock carried in across Jan 1
       if (!parts.some(y => at(y.last || r.last) + keepOf(y) - 1 >= 0)) continue;
       const personal = useOf(eng, p).personal;
@@ -139,11 +141,13 @@
             carried: new Float64Array(n), carriedValue: new Float64Array(n), carriedTotal: 0, carriedWorth: 0, carriedFrom: [], after: 0, afterWorth: 0 };
           rows.set(key, row);
         }
+        // a young stand that gives nothing yet is not a yield that works out to nothing: it is picked from a later year (E2c part 2)
+        if (y.set && y.age && !(y.age.share > 0)) continue;
         // a first thing that is left nothing by the others is not a yield that works out to nothing
         if ((!y.set || !(y.units > 0)) && !(parts.length > 1 && y.set)) { row.unset++; unset.push({ p, r, why: y.set ? 'its yield works out to nothing' : 'no yield is set for this crop' }); if (!y.set) continue; }
-        // the days it is picked: its harvest period
+        // the days it is picked: its harvest period, or a thing's own days (which may start before the planting's first picking)
         const picked = [];
-        for (let d = new Date(from), i = at(d); d <= to; d = E.addDays(d, 1), i++) if (eng.pickedOn(r, d)) picked.push(i);
+        for (let d = new Date(from), i = at(d); d <= to; d = E.addDays(d, 1), i++) if (y.first || eng.pickedOn(r, d)) picked.push(i);
         if (!picked.length || !(y.units > 0)) continue;
         const rate = y.units / picked.length, vId = p.varietyId || '', v = eng.variety(p.varietyId);
         let variety = row.varieties.get(vId);
@@ -173,7 +177,7 @@
         row.carriedTotal += carried; row.carriedWorth += carried * y.price; variety.carriedTotal += carried; variety.carriedWorth += carried * y.price;
         if (keep > 1) row.keeps = Math.max(row.keeps, y.keep);
         row.patterns.add(y.pattern);
-        row.plantings.push({ p, r, units: y.units, inYear, rate, lo, avail, out, carry, carried, pattern: y.pattern, keep: y.keep || 0, i0: Math.max(0, lo), i1: Math.min(n - 1, lo + span - 1), p0: Math.max(0, lo), p1: Math.min(n - 1, picked[picked.length - 1]), price: y.price, personal, ...(y.first ? { from, to } : {}) });
+        row.plantings.push({ p, r, units: y.units, inYear, rate, lo, avail, out, carry, carried, pattern: y.pattern, keep: y.keep || 0, i0: Math.max(0, lo), i1: Math.min(n - 1, lo + span - 1), p0: Math.max(0, lo), p1: Math.min(n - 1, picked[picked.length - 1]), price: y.price, personal, ...(y.first ? { from, to } : {}), ...(y.ahead ? { ahead: y.ahead } : {}), ...(y.age && y.age.season < 3 ? { age: y.age } : {}) });
         const a = new Date(Math.max(from, start)), z = new Date(Math.min(to, E.addDays(start, n - 1)));
         if (!row.first || a < row.first) row.first = a;
         if (!row.last || z > row.last) row.last = z;

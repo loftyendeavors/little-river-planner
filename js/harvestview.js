@@ -133,14 +133,18 @@
     const list = row.plantings.map(x => ({ ...x, here: F.share(x, col.i0, col.i1, picked, part) })).filter(x => x.here > 1e-9 && (!dollars() || x.here * (x.price || 0) > 1e-9)).sort((a, b) => b.here - a.here), total = list.reduce((n, x) => n + x.here, 0);
     const worth = list.reduce((n, x) => n + x.here * (x.price || 0), 0);
     const close = () => { dialog.close(); dialog.remove(); };
-    const go = x => { close(); App.setDate(x.r.first > App.state.date ? x.r.first : App.state.date); App.setView('map'); App.select({ type: 'planting', id: x.p.id }); };
+    // to the day it is first picked: a thing's own first picking, where it has one (E2c part 2: it may be days before its crop's)
+    const go = x => { const first = x.from || x.r.first; close(); App.setDate(first > App.state.date ? first : App.state.date); App.setView('map'); App.select({ type: 'planting', id: x.p.id }); };
     const when = x => x.pattern === 'once' ? `all of it ${day(x.from || x.r.first)}` : `picked ${UI.span(x.from || x.r.first, x.to || x.r.last)}`;   // a thing picked on days of its own says those
     const tag = (kind, text, title) => h('span.fc-tag', { dataset: { hook: 'fc-tag', tag: kind }, title: title || null }, text);
     const tags = x => {
       const bed = eng.bedOf(x.p.bedId), own = bed && !eng.isRack(bed) && !followsLine(eng, x.p);
       return [tag('pattern', PATTERN[x.pattern] || PATTERN.spread, 'How it is picked: its crop’s line under Assumptions, Yield and price'),
         own ? tag('own', 'Own window', 'This planting, or its variety, has a harvest window or a last day of its own: the crop’s choice of window does not move it') : null,
-        x.keep ? tag('keeps', `Keeps ${num(x.keep, 1)} wk`) : null, x.personal ? tag('personal', 'Personal use') : null];
+        x.keep ? tag('keeps', `Keeps ${num(x.keep, 1)} wk`) : null, x.personal ? tag('personal', 'Personal use') : null,
+        // E2c part 2: picked before its crop's days to harvest, and a young stand's share
+        x.ahead ? tag('early', `${num(x.ahead)} d early`, `First picked ${num(x.ahead)} days before its days to harvest: “Days before” on its crop’s card`) : null,
+        x.age ? tag('stand', `${x.age.season === 1 ? '1st' : '2nd'} season · ${num(x.age.share, 1)}%`, `Planted in ${x.age.year}: a young stand gives this share of a mature stand’s yield, from its crop’s card`) : null];
     };
     const lead = `${F.amount(total, row.unit, row.group)} ${picked ? 'picked' : 'to sell'} · ${num(list.length)} planting${list.length === 1 ? '' : 's'}`;
     const dialog = h('dialog.dialog.wide', { id: 'hvFrom', dataset: { hook: 'fc-from' }, oncancel: e => { e.preventDefault(); close(); } },

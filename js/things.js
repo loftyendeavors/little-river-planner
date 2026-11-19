@@ -113,11 +113,30 @@
           save: k => save(t, { helper: k }, k == null ? `${hp.label.toLowerCase()} emptied` : `${hp.label.toLowerCase()} ${fig(k)} ${hp.unit}`, 'helper') }), h('span.yc-unit', hp.unit)),
           h('small.yc-total', { dataset: { helper: hp.label } }, hp.label.replace(/^A /, 'a ').replace(/, packed$/, '')));
       }
+      // plantings it comes from that go into their bed fewer days before their days to harvest than this: they start the day after (Codex on #83)
+      // named, with the days that apply there: the box's number is kept, so widening the planting brings it back
+      const shortOf = t => {
+        const list = (eng.plan.plantings || []).filter(p => p.cropId === c.id).map(p => { const r = eng.calc(p), x = r && (eng.soldOf(p, r) || []).find(q => q.thing === t.id); return x && x.asked && (x.ahead || 0) < x.asked ? { p, r, x } : null; }).filter(Boolean);
+        const day = d => root.LRFUI.day(d), bed = p => App.bedLabel(eng.bedOf(p.bedId), eng);
+        // the day it goes into its bed and the day it is first picked, named: a number that does not apply is never left unsaid
+        const say = ({ p, r, x }) => x.ahead ? `in ${bed(p)} it goes into its bed ${day(r.field)}, so it is picked ${x.ahead} day${x.ahead === 1 ? '' : 's'} early there, from ${day(x.first)}`
+          : `in ${bed(p)} none can apply: it goes into its bed ${day(r.field)} and is first picked with ${c.name} on ${day(x.first)}`;
+        return list.length ? `; ${list.slice(0, 2).map(say).join('; ')}${list.length > 2 ? `; and ${list.length - 2} more` : ''}` : '';
+      };
       if (id === 'first') {
-        const timing = t.from === 'place' ? eng.timingFor(c.id, null, t.place) : null;
-        const later = `First picked with ${c.name}, on its days to harvest. A first picking of its own, earlier as for babies, will be typed here.`;
-        return td(timing && timing.value != null ? h('span.yc-line', { title: later }, h('b.yc-fixed', { dataset: { dtm: String(timing.value) } }, String(timing.value)), h('span.yc-unit', { dataset: { hook: 'card-first-unit' } }, 'days'), h('small.yc-total', { dataset: { later: 'first' } }, 'its own will go here'))
-          : h('span.yc-na', { title: later, dataset: { later: 'first' } }, `with ${c.name}: its own first picking will go here`));
+        if (!own) return td(why(`with ${c.name}: it is packed from ${c.name}’s harvest`));
+        // first picked before the crop's own days to harvest (E2c part 2), as baby carrots are pulled before the big ones are cleared:
+        // his to type. Empty, it is picked with the crop. No date of a planting moves; the line under the box says what it comes to
+        const envs = t.from === 'place' ? [t.place] : [...x.places.keys()].filter(env => eng.ENVS.includes(env));
+        const days = [...new Set(envs.map(env => eng.timingFor(c.id, null, env)).filter(tm => tm && tm.value != null).map(tm => tm.value))];
+        // empty, it is 0 days before, in grey as what the plan uses now: picked with the crop; typed, the line under it says what it comes to
+        const said = t.before == null ? null
+          : (days.length === 1 ? `first picked at ${Math.max(1, days[0] - t.before)} days, ${c.name} at ${days[0]}` : `first picked ${t.before} days before ${c.name}, wherever it grows`) + shortOf(t);
+        return td(h('span.yc-line', box({ key: key(t, 'before'), mine: t.before, fallback: 0, whole: true, min: 1, label: label(t, `days before ${c.name}’s first picking`),
+          tip: t.before != null ? `Your number: ${t.name} is first picked ${t.before} days before ${c.name}’s days to harvest, and never before a planting is in its bed. No date of a planting moves. Clear it to pick it with ${c.name}.`
+            : `Only you can fill this: how many days before ${c.name}’s days to harvest ${t.name} is first picked, as baby carrots are before the big ones. Empty: picked with ${c.name}.`,
+          save: k => save(t, { before: k }, k == null ? `first picked with ${c.name}` : `first picked ${k} days before ${c.name}`, 'before') }), h('span.yc-unit', 'days before')),
+          said ? h('small.yc-total', { dataset: { hook: 'thing-first-said' } }, said) : null);
       }
       if (id === 'pick') {
         if (!own) return td(why(`as ${c.name} is picked`));
@@ -129,7 +148,7 @@
             tip: t.days != null ? `Your number: ${t.name} is picked for ${t.days} days, and never after ${c.name}’s own last picking. Clear it to pick it as long as ${c.name}.` : `Nothing set: it is picked as long as ${c.name} is. Type a number to pick it for fewer days.`,
             save: k => save(t, { days: k }, k == null ? `picked as long as ${c.name}` : `picked for ${k} days`, 'days') }), h('span.yc-unit', 'days')));
       }
-      if (id === 'last') return td(!own ? why(`as ${c.name}`) : t.pattern === 'once' ? h('span.yc-na', { dataset: { cleared: 'first' } }, `none: cleared in one day, the day ${c.name} is first picked. A day of its own comes with a later build.`) : t.days != null ? h('span.yc-line', h('b.yc-fixed', String(t.days)), h('span.yc-unit', `days after the first, and no later than ${c.name}’s`)) : why(`with ${c.name}’s own last picking`));
+      if (id === 'last') return td(!own ? why(`as ${c.name}`) : t.pattern === 'once' ? h('span.yc-na', { dataset: { cleared: 'first' } }, t.before ? `none: cleared in one day, ${t.before} days before ${c.name} is first picked` : `none: cleared in one day, the day ${c.name} is first picked. Days before, above, give it a day of its own.`) : t.days != null ? h('span.yc-line', h('b.yc-fixed', String(t.days)), h('span.yc-unit', `days after the first, and no later than ${c.name}’s`)) : why(`with ${c.name}’s own last picking`));
       return td();
     });
 
