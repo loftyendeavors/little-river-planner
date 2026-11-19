@@ -1,5 +1,6 @@
 # Every check, on every push, on a made-up farm (tests/farm). The parts run side by side; "All checks" is the one result to
-# require before a merge. It also prints what every check ran, as tests/counts.json would hold it, and keeps it as "counts".
+# require before a merge (a run started by dispatch says it as a commit status too: the job "counted", at the foot). It also
+# prints what every check ran, as tests/counts.json would hold it, and keeps it as "counts".
 # How to run the same thing on your own computer: tests/README.md.
 name: Checks
 on:
@@ -116,3 +117,28 @@ jobs:
           path: counts.json
           if-no-files-found: ignore
           retention-days: 7
+  # A run started with workflow_dispatch (by "Take main in", whose push starts no workflow, or by hand from the Actions page) is
+  # not counted by the protection of main, though "All checks" passes on the very commit: GitHub weighs the checks of a workflow's
+  # jobs for a pull request only when the run was started by a push, a pull request or a few other events, never by
+  # workflow_dispatch (GitHub's documentation, "Troubleshooting required status checks", "Checks from some workflow jobs are not
+  # evaluated"). So such a run also says "All checks" on the commit it checked as a commit status, which the protection does
+  # count, with the outcome of the job "All checks". A run started by a push says nothing more: its own "All checks" is counted.
+  # This job runs nothing of any branch (no checkout, no action): it reads one outcome and writes one status. A run cancelled
+  # says nothing, and leaves the commit as an earlier run left it. tests/take_main_job_test.cjs holds it to this.
+  counted:
+    name: All checks, as a status
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+    needs: all
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - name: Say "All checks" on the commit checked, as a commit status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOME: ${{ needs.all.result }}
+        run: |
+          if [ "$OUTCOME" = success ]; then state=success; said="Every part and lint passed"; else state=failure; said="A part or lint did not pass ($OUTCOME)"; fi
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state="$state" -f context="All checks" \
+            -f description="$said, in a run started by hand or by Take main in" -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
