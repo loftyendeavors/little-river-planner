@@ -180,6 +180,18 @@ check('the plan has a cane stand that follows the list, and one with a yield of 
     const q0 = plain.planting(S1.id), q1 = xe.planting(S1.id), r1 = xe.calc(q1), part = (xe.soldOf(q1, r1) || []).find(x => x.thing === 't-cane');
     check('a stand planted the year before, its crop ready in the new year, and something it sells picked early in December: that part is its first season (nothing), its crop’s own line its second (80%)', plain.calc(q0).first.getFullYear() === at && xe.standAge(q1).season === 2 && near(xe.yieldOf(q1, r1).units, plain.yieldOf(q0).units) && !!part && part.first.getFullYear() === at - 1 && part.age && part.age.season === 1 && part.units === 0 && xe.standYear(q1, r1) === at - 1, [iso(plain.calc(q0).first), part && iso(part.first), part && part.age, part && part.units]);
   }
+  // the stand's earliest picking (standYear) reads what it is grown for as soldOf does (#84): a planting grown for a thing since taken
+  // away gives the bed's things by shares, so one of them picked early in December is its earliest; where its bed's place has a thing
+  // of its own, that thing alone, so a bed thing picked early is not
+  {
+    const cane = { id: 't-cane', n: 1, name: 'Seconds', from: 'bed', unit: 'lb', price: 2, pattern: 'spread', share: 50, yield: 0.4, before: 90 };
+    const pl = withPlanting(given, S1.id, { date: `${at - 1}-11-01`, plantedIn: at - 1, gives: 't-gone' });
+    const xe = E.create(withSell(pl, S1.cropId, { things: { 't-cane': cane } }), Lib), q = xe.planting(S1.id), r = xe.calc(q);
+    const earliest = e => { const p = e.planting(S1.id), rr = e.calc(p), parts = e.soldOf(p, rr) || []; return Math.min(rr.first.getFullYear(), ...parts.map(x => (x.first || rr.first).getFullYear())); };
+    check('a stand grown for a thing since taken away, another picked early in December: its earliest year is that of soldOf’s earliest picking, the year before', q.gives === 't-gone' && xe.grownFor(q) === null && r.first.getFullYear() === at && earliest(xe) === at - 1 && xe.standYear(q, r) === earliest(xe), [xe.grownFor(q), iso(r.first), earliest(xe), xe.standYear(q, r)]);
+    const env = xe.envOf(r.b), xp = E.create(withSell(pl, S1.cropId, { things: { 't-cane': cane, 't-here': { id: 't-here', n: 2, name: 'Here ones', from: 'place', place: env, unit: 'lb', price: 2, pattern: 'spread', yield: 0.4 } } }), Lib), qp = xp.planting(S1.id), rp = xp.calc(qp);
+    check('where its bed’s place has a thing of its own, the bed thing picked early is not its earliest: the year of its own first picking, as soldOf gives it', !!env && (xp.soldOf(qp, rp) || []).length === 1 && earliest(xp) === at && xp.standYear(qp, rp) === earliest(xp), [env, (xp.soldOf(qp, rp) || []).map(x => x.thing), earliest(xp), xp.standYear(qp, rp)]);
+  }
   // a split cane stand first picked Jan 10, something else it sells 20 days early (Dec 21 the year before): each part takes the share of
   // the year it is picked in; a part picked before the stand is planted counts nothing and is said; the bed is "picking" only from a day
   // that counts (the chat that holds the build, on Codex's Zoom Out of #83)
