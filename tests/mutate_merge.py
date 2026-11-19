@@ -116,9 +116,10 @@ NODE = [
   ('a thing taken whole that this device only stamped again is changed there', " if (same(bare(s), bare(m))) return t; }", " }", 'changed and changed back'),
   # the ids a demand plan makes (js/trays.js)
   ('a new batch takes a random id again', "free(base, x => taken.has(x))", "uid()", 'two devices that widen one demand plan alike make one record', 'trays.js'),
-  ('a new batch takes its worked id though another plan\'s batch holds it', "free(base, x => taken.has(x))", "base", 'with nothing recorded on it', 'trays.js'),
+  ('a new batch takes its worked id though another plan\'s batch holds it', "free(base, x => taken.has(x))", "base", 'any other planting under it keeps it', 'trays.js'),
   ('a sown batch taken off its plan is left plain, and its week made again beside it', "const plain = line.find(p => locked(state, p, options.records)) || line[0];", "const plain = null;", 'taken off its demand plan', 'trays.js'),
-  ('a sown batch under a free id after the worked one is not found again', "state.plantings.filter(p => !p.liveTray && nth(base, p.id))", "state.plantings.filter(p => !p.liveTray && p.id === base)", 'found again the same way', 'trays.js'),
+  ('a sown batch under a free id after the worked one is not found again', "state.plantings.filter(p => !p.liveTray && nth(base, p.id) &&", "state.plantings.filter(p => !p.liveTray && p.id === base &&", 'found again the same way', 'trays.js'),
+  ('a plain planting under the worked id is taken as the week\'s batch whatever it is', " && p.bedId === bed.id && p.cropId === crops.get(b.rowId))", ")", 'any other planting under it keeps it', 'trays.js'),
   ('of plain plantings under those ids the first is taken, recorded or not', "line.find(p => locked(state, p, options.records)) || line[0]", "line[0]", 'found again the same way', 'trays.js'),
   ('a sown batch taken off its plan is made again from the demand, not kept as recorded', "if (plain && locked(state, plain, options.records)) {", "if (false) {", 'taken off its demand plan', 'trays.js'),
   ('a plain planting under the worked id with nothing recorded is left beside the week\'s batch', "      if (plain) original = plain;", "", 'with nothing recorded on it', 'trays.js'),
