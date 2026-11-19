@@ -34,7 +34,7 @@
  *               group is one value (merge.js TOGETHER)
  *   place       where a planting is: one value with the others (merge.js PLACE)
  *   time        when a planting is: one value (merge.js TIME)
- *   recording   a job recorded on a planting is one unit with its history and the seed it drew (merge.js joinPlanting)
+ *   recording   a job is joined with its history and seed. A recorded live-tray sowing also keeps the batch's demand fields.
  *   rule        joined by a rule of its own in merge.js (merge.js RULES)
  * A place with no rule is joined by shape: an object key by key, records by id, anything else as one value.
  *
@@ -397,12 +397,12 @@
     'plantings[].bedLayout.rowStart': 'number',
     'plantings[].bedLayout.startFt': 'number',
     'plantings[].bedLayout.v': 'number',
-    'plantings[].cropId': 'text',
-    'plantings[].customerId': 'text',
+    'plantings[].cropId': 'text recording',
+    'plantings[].customerId': 'text recording',
     'plantings[].date': 'text time',
     'plantings[].done': 'map recording',
     'plantings[].done.*': 'text',
-    'plantings[].dtm': 'number',
+    'plantings[].dtm': 'number recording',
     'plantings[].established': 'bool',
     // marked failed on its panel (Tasks part 2): the day and when it was marked, written in one act, so taken whole. One a planting,
     // so a mark made on two devices is one record (the S1c note's rule for records still to come: a fact written once is taken whole).
@@ -413,7 +413,7 @@
     'plantings[].failed.on': 'text',
     'plantings[].ft': 'number place',
     'plantings[].gives': 'text',
-    'plantings[].growingDefaults': 'object whole',
+    'plantings[].growingDefaults': 'object whole recording',
     'plantings[].growingDefaults.crop': 'map',
     'plantings[].growingDefaults.crop.*': 'object',
     'plantings[].growingDefaults.crop.*.present': 'bool',
@@ -425,7 +425,7 @@
     'plantings[].hw': 'number',
     'plantings[].id': 'text',
     'plantings[].inRow': 'number|text',
-    'plantings[].liveTray': 'object whole',
+    'plantings[].liveTray': 'object whole recording',
     'plantings[].liveTray.key': 'text',
     'plantings[].liveTray.planId': 'text',
     'plantings[].liveTray.ready': 'text',
@@ -438,7 +438,7 @@
     'plantings[].out': 'text',
     'plantings[].perC': 'number',
     'plantings[].plantedIn': 'number',              // the year a stand was planted (E2c part 2): one value, by shape, as `gives`
-    'plantings[].price': 'number',
+    'plantings[].price': 'number recording',
     'plantings[].rowSp': 'number',
     'plantings[].rowsPerBed': 'number|text',
     'plantings[].seat': 'number place',
@@ -456,16 +456,16 @@
     'plantings[].tasks.note.*': 'text',
     'plantings[].tasks.skip': 'map',
     'plantings[].tasks.skip.*': 'text',
-    'plantings[].timingMode': 'text',
+    'plantings[].timingMode': 'text recording',
     'plantings[].towerCycle': 'object whole',
     'plantings[].towerCycle.days': 'number',
     'plantings[].towerCycle.replantSameDay': 'bool',
     'plantings[].towerCycle.v': 'number',
-    'plantings[].trays': 'number',
+    'plantings[].trays': 'number recording',
     'plantings[].turnover': 'number',
     'plantings[].use': 'text',
     'plantings[].variety': 'text',
-    'plantings[].varietyId': 'text',
+    'plantings[].varietyId': 'text recording',
     'plantings[].workflow': 'object recording',
     'plantings[].workflow.history': 'lines kept',
     'plantings[].workflow.history[]': 'object',
@@ -493,8 +493,8 @@
     'plantings[].workflow.seedUse[].source': 'text',
     'plantings[].workflow.seedUse[].unit': 'text',
     'plantings[].workflow.seedUse[].untracked': 'bool',
-    'plantings[].yield': 'number together',
-    'plantings[].yieldBasis': 'text together',
+    'plantings[].yield': 'number together recording',
+    'plantings[].yieldBasis': 'text together recording',
 
     'salesMix': 'map',
     'salesMix.*': 'any',

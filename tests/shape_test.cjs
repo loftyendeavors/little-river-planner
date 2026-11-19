@@ -51,7 +51,7 @@ function words(init) {
 }
 const MERGE = parse('merge.js'), APPJS = parse('app.js');
 const merged = {};
-for (const name of ['WHOLE', 'QUIET', 'STAMPS', 'NO_IDS', 'PLACE', 'TIME', 'RULES']) merged[name] = words(declared(MERGE, name));
+for (const name of ['WHOLE', 'QUIET', 'STAMPS', 'NO_IDS', 'PLACE', 'TIME', 'TRAY_DEMAND', 'RULES']) merged[name] = words(declared(MERGE, name));
 // the keys of a record that are joined as one value: { 'place': [['a', 'b']] } read as the places place.a and place.b
 merged.TOGETHER = (init => (init && init.type === 'ObjectExpression' ? init.properties.flatMap(p => (p.value.type === 'ArrayExpression' ? p.value.elements.flatMap(g => (words(g) || [null]).map(k => (k == null ? null : (p.key.type === 'Literal' ? p.key.value : p.key.name) + '.' + k))) : [null])) : null))(declared(MERGE, 'TOGETHER'));
 // the parts of a planting joinPlanting joins as a recording: the keys of its object `special`, and any key set on it afterwards
@@ -100,7 +100,8 @@ both('stamp: every place whose key is one of js/merge.js STAMPS is marked stamp,
 both('place: where a planting is (js/merge.js PLACE) is what the shape marks place on a planting', marked('place'), (merged.PLACE || []).map(k => 'plantings[].' + k));
 both('time: when a planting is (js/merge.js TIME) is what the shape marks time on a planting', marked('time'), (merged.TIME || []).map(k => 'plantings[].' + k));
 both('rule: what js/merge.js joins by a rule of its own (RULES) is what the shape marks rule', marked('rule'), merged.RULES || []);
-both('recording: what joinPlanting joins as a recording is what the shape marks recording on a planting', marked('recording'), (special || []).map(k => 'plantings[].' + k));
+both('recording: what joinPlanting joins as a recording is what the shape marks recording on a planting', marked('recording'),
+  [...(special || []), ...(merged.TRAY_DEMAND || [])].map(k => 'plantings[].' + k));
 tryCase('every place a merge rule names is written in the shape: none names a place the plan cannot hold', () => {
   const named = [...(merged.WHOLE || []), ...(merged.NO_IDS || []), ...(merged.QUIET || []), ...(merged.TOGETHER || []), ...(merged.RULES || []), ...(merged.PLACE || []).map(k => 'plantings[].' + k), ...(merged.TIME || []).map(k => 'plantings[].' + k)];
   const missing = named.filter(p => !SH.entry(p));

@@ -2375,10 +2375,13 @@
     for (const x of items) {
       const path = Array.isArray(x.path) ? x.path : [], top = path[0] === 'lrfNextKeep' ? 'own.' + path[2] : path[0], id = String(path[1] || '').startsWith('#') ? path[1].slice(1) : x.id;
       const what = top === 'plantings' ? plantingName(id) : WORDS[top] || 'the plan';
-      const key = JSON.stringify([x.kind, path]);
+      const key = JSON.stringify([x.kind, path, x.what]);
       if (keep.has(key)) continue; keep.add(key);
       if (x.kind === 'same-box') rows.push({ what, where: path.slice(top === 'plantings' ? 2 : 1).filter(s => !String(s).startsWith('#')).join(' · ') || 'the whole record', theirs: short(x.theirs), mine: short(x.mine), item: usable(x) ? x : null });
-      else if (x.kind === 'move-not-applied') rows.push({ what, where: x.what === 'day' ? 'its day' : 'its place', note: x.whose === 'mine' ? 'Work was recorded on it on the other device, so the move made here was not applied.' : 'Work was recorded on it here, so the move made on the other device was not applied.' });
+      else if (x.kind === 'move-not-applied') {
+        if (x.what === 'tray-demand') rows.push({ what, where: 'its tray demand', note: x.whose === 'mine' ? 'This batch was sown on the other device, so the demand changes made here were not applied to it.' : 'This batch was sown here, so the demand changes made on the other device were not applied to it.' });
+        else rows.push({ what, where: x.what === 'day' ? 'its day' : 'its place', note: x.whose === 'mine' ? 'Work was recorded on it on the other device, so the move made here was not applied.' : 'Work was recorded on it here, so the move made on the other device was not applied.' });
+      }
       else if (x.kind === 'recorded-twice') rows.push({ what: plantingName(x.id), where: SL.DONE_WORD[x.job] || x.job, note: `Recorded on both devices${x.theirs ? ` (there on ${x.theirs}${x.mine ? `, here on ${x.mine}` : ''})` : ''}: the other device’s record stands, and seed was drawn once.` });
       else if (x.kind === 'failed-before-work') rows.push({ what: plantingName(x.id), where: x.whose === 'mine' ? 'marked failed' : SL.DONE_WORD[x.job] || x.job, note: x.whose === 'mine'
         ? `Marked failed here on ${x.on}, and ${SL.DONE_WORD[x.job] || x.job} on ${x.work} on the other device: the other device’s record stands, so it is not marked failed. Mark it again if it failed after that.`
