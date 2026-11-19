@@ -52,6 +52,7 @@ trycard
 swap
 tasks2
 yearedge
+bought
 early
 merge
 join
@@ -103,6 +104,7 @@ script() {
     swap) SCRIPT=$T/mutate_swap.py; ARGS="$APP $F $T $PLAN" ;;
     tasks2) SCRIPT=$T/mutate_tasks2.py; ARGS="$APP $F $T $PLAN" ;;
     yearedge) SCRIPT=$T/mutate_yearedge.py; ARGS="$APP $F $T $PLAN" ;;
+    bought) SCRIPT=$T/mutate_bought.py; ARGS="$APP $F $T $PLAN" ;;
     early) SCRIPT=$T/mutate_early.py; ARGS="$APP $F $T $PLAN" ;;
     *) return 1 ;;
   esac

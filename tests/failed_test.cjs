@@ -235,9 +235,10 @@ tryCase('a planting marked failed is left as it is by a variety swap, and a live
 // ── 4. with no mark, nothing moved ──
 if (oldDir) {
   // the first fall frost's cut (E2c) is held, as in the other build-before comparisons (frost_held.cjs): what is compared is the mark
-  const E0 = require(path.join(oldDir, 'engine.js')), e0 = E0.create(plan, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, plan, e0), Lib);
+  // and the plantings bought in (N2) are left out on both sides: the build before sows them (tests/bought_held.cjs)
+  const E0 = require(path.join(oldDir, 'engine.js')), base = require('./bought_held.cjs').held(E, Lib, plan, E0.create(plan, Lib)), e0 = E0.create(base, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, base, e0), Lib);
   let differ = [];
-  for (const p0 of plan.plantings) {
+  for (const p0 of base.plantings) {
     const p = now.planting(p0.id) || p0, a = now.calc(p), b = e0.calc(p0);
     if (!a !== !b) { differ.push(p.id); continue; }
     if (!a) continue;

@@ -32,10 +32,12 @@ const D = (m, d) => new Date(year, m - 1, d);
 // ── 1. the build by itself moves nothing ──
 if (oldDir) {
   // the plantings the frost cuts (E2c) are held at their last day, which the build before knows no other way (tests/frost_held.cjs)
-  const E0 = require(path.join(oldDir, 'engine.js')), S0 = require(path.join(oldDir, 'succession.js')), F0 = require(path.join(oldDir, 'forecast.js')), Lib0 = require(path.join(oldDir, 'library.js')), eng0 = E0.create(plan, Lib0);
-  const now = E.create(require('./frost_held.cjs').held(E, Lib, plan, eng0), Lib);
+  const E0 = require(path.join(oldDir, 'engine.js')), S0 = require(path.join(oldDir, 'succession.js')), F0 = require(path.join(oldDir, 'forecast.js')), Lib0 = require(path.join(oldDir, 'library.js'));
+  // and the plantings bought in (N2) are left out on both sides: the build before sows them (tests/bought_held.cjs)
+  const base = require('./bought_held.cjs').held(E, Lib, plan, E0.create(plan, Lib0)), eng0 = E0.create(base, Lib0);
+  const now = E.create(require('./frost_held.cjs').held(E, Lib, base, eng0), Lib);
   const differ = [];
-  for (const p of plan.plantings) {
+  for (const p of base.plantings) {
     const q = now.planting(p.id), a = now.calc(q), b = eng0.calc(p);
     if (!a !== !b) { differ.push(p.id); continue; }
     if (!a) continue;

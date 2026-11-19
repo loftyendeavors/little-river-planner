@@ -26,9 +26,10 @@ const throws = fn => { try { fn(); return null; } catch (e) { return e.message |
 // ── 1. the build by itself moves nothing ──
 if (oldDir) {
   // the plantings the frost cuts (E2c) are held at their last day, which the build before knows no other way (tests/frost_held.cjs)
-  const E0 = require(path.join(oldDir, 'engine.js')), eng0 = E0.create(plan, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, plan, eng0), Lib);
+  // and the plantings bought in (N2) are left out on both sides: the build before sows them (tests/bought_held.cjs)
+  const E0 = require(path.join(oldDir, 'engine.js')), base = require('./bought_held.cjs').held(E, Lib, plan, E0.create(plan, Lib)), eng0 = E0.create(base, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, base, eng0), Lib);
   let differ = [];
-  for (const p of P) {
+  for (const p of base.plantings) {
     const q = now.planting(p.id), a = now.calc(q), b = eng0.calc(p);
     if (!a !== !b) { differ.push(p.id); continue; }
     if (!a) continue;

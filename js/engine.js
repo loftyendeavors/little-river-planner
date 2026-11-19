@@ -727,7 +727,7 @@
     }
     // Tower seedlings are sown in the grower's rockwool sheets (98 cubes, 14 rows of 7).
     const sheet = Sow && Sow.ROCKWOOL_SHEET;
-    const sowOptions = (p, r) => ({ id: p.id, plants: r.plants, crop: r.c, planting: p, settings, nursery: S.nursery, tower: r.tw, rack: r.rack, sheet: r.tw ? sheet : null,
+    const sowOptions = (p, r) => ({ id: p.id, plants: r.plants, crop: r.c, planting: p, settings, nursery: S.nursery, tower: r.tw, rack: r.rack, sheet: r.tw ? sheet : null, boughtIn: r.boughtIn === true,
       sowDate: dayText(r.sow), plannedSowDate: dayText(r.plannedSow), fieldDate: dayText(r.field), potUpDate: dayText(potUpDate(r)), hardenDate: dayText(hardenStart(r)) });
     function sowSingle(p, r) {
       const plan = Sow.sowingPlan(sowOptions(p, r));
@@ -832,6 +832,45 @@
       if (how === 'cells') { const cells = Math.round(positive(x && x.cells, 0)), perCell = positive(x && x.perCell, 0), set = cells > 0 && perCell > 0; return { how: 'cells', cells, perCell, set, seeds: set ? cells * perCell : 0, said: !!x }; }
       return { how: 'open', grams, set: grams > 0, said: !!x };
     }
+    /**
+     * What a planting is started from (N2): 'plant' when it is bought in as plants or plugs, otherwise its crop's "Planted from"
+     * ('seed', 'bulb', 'clove', 'piece'). A planting of a crop raised from seed or bought in as plants may say which for itself
+     * (plantings[].startedFrom), as the first planting of a season is bought in as plugs and the later ones sown. Its crop is read
+     * as the planting holds it (growingCrop), so a planting made while its crop was set to bought-in plants keeps that. A live
+     * tray is always sown. `c` is the crop as the planting reads it, when the caller has it.
+     */
+    const SOURCES = ['seed', 'plant'];
+    function startedFrom(p, c) {
+      const held = c || (p ? growingCrop(p) : null);
+      if (!held || held.micro) return 'seed';
+      const said = held.plantingMaterial || (held.material === 'bulb' ? 'bulb' : 'seed');
+      if (!SOURCES.includes(said)) return said;
+      // nursery work recorded on it (a sowing, a potting up, a hardening off) says it was raised here, whatever else says otherwise:
+      // a sowing ticked on Tasks before a crop was bought in, or joined from another device, stays on record and can be taken back
+      if (['sow', 'potup', 'harden'].some(k => doneOf(p, k))) return 'seed';
+      return SOURCES.includes(p.startedFrom) ? p.startedFrom : said;
+    }
+    /**
+     * Is a planting bought in, so that it has no sowing, trays, mix or bench room (N2)? Where it is started from plants
+     * (startedFrom), and either the grower said so (the planting's own Seed | Bought in, or a crop he set to bought-in plants where
+     * the library sows it, or a crop of his own), or it has no nursery work to lose: no weeks in the nursery and no sowing day set
+     * by hand. A crop that is bought in only by the library's word (raspberry, blackberry), with nursery weeks given to it or a
+     * sowing day set, is raised as it was before N2, its sowing, trays and bench room kept; Seeds still counts it in plants.
+     * A crop record or a planting's record of its crop that repeats the library's word is not his choice: editing its timing writes one.
+     */
+    const libraryMaterial = new Map((lib.crops || []).map(c => [c.id, c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed')]));
+    function nurseryTimed(p, c, b) {
+      if (typeof p.sowOn === 'string' && validDate(s2d(p.sowOn))) return true;
+      if (!b || isRack(b) || (c.material === 'bulb' && !isTower(b))) return false;
+      return isTower(b) ? c.ghDays > 0 : c.method === 'TP' && c.gh > 0;
+    }
+    function boughtInOf(p, given) {
+      const b = p ? plantingBed(p) : null, c = given || (p ? effective(p) : null);
+      if (!b || !c || isRack(b) || p.established === true || startedFrom(p, c) !== 'plant') return false;
+      if (p.startedFrom === 'plant') return true;
+      const said = c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed'), library = libraryMaterial.get(p.cropId);
+      return library !== said || !nurseryTimed(p, c, b);
+    }
     function calcRaw(p) {
       const b = plantingBed(p), c = effective(p);
       if (!b || !c || !p.date || !validDate(s2d(p.date))) return null;
@@ -862,6 +901,11 @@
         else seeds = fixedCount ? Math.ceil(plants / germ) : c.seedsFt ? Math.ceil(rows * physicalLength * c.seedsFt) : Math.ceil(plants / germ);
       }
       if (c.material === 'bulb' && !tw && !rack) { bulbs = Math.ceil(plants); seeds = 0; seedG = 0; cells = 0; trays = 0; gh = null; }
+      // Bought in as plants or plugs: nothing is sown, so no sowing day, cells, trays, seed or mix, and no room on a bench. What is
+      // bought is the plants the bed takes and the spare the plan's own plugs get, so a bought tray and a sown one give as many.
+      const boughtIn = boughtInOf(p, c);
+      const buy = boughtIn ? Math.ceil(plants * buffer - 1e-9) : 0;
+      if (boughtIn) { seeds = 0; seedG = 0; cells = 0; trays = 0; gh = null; }
       if (p.established === true) { seeds = 0; seedG = 0; cells = 0; trays = 0; bulbs = 0; gh = null; }
       // The day a transplant is sown can be set by hand. It holds while it falls before the day the planting goes out.
       const sowDefault = gh, sowOwn = gh && typeof p.sowOn === 'string' && validDate(s2d(p.sowOn)) && s2d(p.sowOn) < planned ? s2d(p.sowOn) : null;
@@ -892,6 +936,8 @@
         // the first fall frost ended the harvest (and nothing after it did): { day, planned: the last day it was to be picked, plannedDays }.
         // Only a planting the frost cut carries the key, so that every other planting's reckoning reads as it did before the rule.
         ...(frostCut ? { frostCut } : {}),
+        // bought in as plants or plugs (startedFrom): how many to buy, the spare in it. Only such a planting carries the keys.
+        ...(boughtIn ? { boughtIn: true, buy } : {}),
         area: tw || rack || ct ? 0 : (+b.w || 0) * len, days, blackoutDays,
         occupiedDays: actualClear ? Math.max(1, dayDiff(actualClear, field) + 1) : days + turnoverFor(p)
       };
@@ -1541,7 +1587,7 @@
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, startRule, startFixed, startHint, STARTS, START_LESS, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,
       footprint, overflow, unbounded, holders, conflicts,
-      occupancyFrom, occupancyThrough, failedOn, turnoverFor, frostDates, firstFieldDate, lastFieldDate, standKey, seasonEndOf, openGround
+      occupancyFrom, occupancyThrough, failedOn, startedFrom, boughtInOf, turnoverFor, frostDates, firstFieldDate, lastFieldDate, standKey, seasonEndOf, openGround
     };
   }
 

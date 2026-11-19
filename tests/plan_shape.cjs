@@ -446,6 +446,7 @@
     'plantings[].shelter.gardenId': 'text',
     'plantings[].sowOn': 'text time',
     'plantings[].startFt': 'number place',
+    'plantings[].startedFrom': 'text',   // N2: 'seed' or 'plant' (bought in) for this planting, over its crop's Planted from; a fact of its own, by shape
     'plantings[].tasks': 'object',
     'plantings[].tasks.delay': 'map',
     'plantings[].tasks.delay.*': 'object whole',
@@ -625,6 +626,8 @@
     'varieties[]._catalogTextBasis': 'text',
     'varieties[]._pageTextBasis': 'text',
     'varieties[].active': 'bool',
+    'varieties[].buyFrom': 'text',   // N2: who its plants or bulbs are bought from, when not its seed supplier
+    'varieties[].buyLot': 'number',   // N2: the lot its plants or bulbs are sold in (a tray of 72, bulbs by the 25); each a fact of its own
     'varieties[].catalogDtm': 'null|number',
     'varieties[].catalogDtmMax': 'null|number',
     'varieties[].catalogDtmText': 'text',

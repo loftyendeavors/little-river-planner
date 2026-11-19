@@ -28,9 +28,10 @@ const STANDS = ['live', 'tray', 'rockwool', 'pot', 'crate'];
 // ── 1. the build by itself moves nothing ──
 if (oldDir) {
   // the plantings the frost cuts (E2c) are held at their last day, which the build before knows no other way (tests/frost_held.cjs)
-  const E0 = require(path.join(oldDir, 'engine.js')), SL0 = require(path.join(oldDir, 'seedlib.js')), eng0 = E0.create(plan, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, plan, eng0), Lib);
+  // and the plantings bought in (N2) are left out on both sides: the build before sows them (tests/bought_held.cjs)
+  const E0 = require(path.join(oldDir, 'engine.js')), SL0 = require(path.join(oldDir, 'seedlib.js')), base = require('./bought_held.cjs').held(E, Lib, plan, E0.create(plan, Lib)), eng0 = E0.create(base, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, base, eng0), Lib);
   const differ = [];
-  for (const p of P) {
+  for (const p of base.plantings) {
     const a = now.calc(now.planting(p.id)), b = eng0.calc(p);
     if (!a !== !b) { differ.push(p.id); continue; }
     if (!a) continue;
@@ -39,12 +40,12 @@ if (oldDir) {
   }
   check('every planting has the dates, the seed, the cells and the trays it had in the build before', differ.length === 0, differ.slice(0, 5));
   const off = [];
-  for (const d of days()) { const a = eng.benchDay(d), b = eng0.benchDay(d); if (!['total', 'cap', 'over', 'floorCrates', ...STANDS].every(k => near(a[k], b[k], 1e-9))) off.push(iso(d)); }
-  check('the benches hold what they held, and carry what they carried, on every day of the year', off.length === 0 && eng.heatedTraySpaces() === eng0.heatedTraySpaces(), off.slice(0, 5));
+  for (const d of days()) { const a = now.benchDay(d), b = eng0.benchDay(d); if (!['total', 'cap', 'over', 'floorCrates', ...STANDS].every(k => near(a[k], b[k], 1e-9))) off.push(iso(d)); }
+  check('the benches hold what they held, and carry what they carried, on every day of the year', off.length === 0 && now.heatedTraySpaces() === eng0.heatedTraySpaces(), off.slice(0, 5));
   const rows = (lib, e) => lib.required(e).rows.filter(r => r.total > 0 || r.toSow > 0).map(r => [r.key, r.unit, r.total, r.toSow, r.trays].join('|')).join('\n');
-  check('seeds required are the same, row for row and unit for unit, wherever anything is counted', rows(SL, eng) === rows(SL0, eng0));
+  check('seeds required are the same, row for row and unit for unit, wherever anything is counted', rows(SL, now) === rows(SL0, eng0));
   const tr = e => { const out = []; for (const d of days()) { const u = e.traysOn(d); out.push([u.carriers, u.live, ...u.plug.map(t => t.id + ':' + t.n)].join(',')); } return out.join('\n'); };
-  check('the trays in use on every day are the same', tr(eng) === tr(eng0));
+  check('the trays in use on every day are the same', tr(now) === tr(eng0));
 }
 
 // ── 2. the room on each kind of bench ──
