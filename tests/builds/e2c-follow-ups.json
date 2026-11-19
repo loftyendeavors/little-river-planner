@@ -1,0 +1,19 @@
+{
+ "build": "E2c follow-ups (#84). What a planting is grown for (`gives`) is read in one place (engine grownFor), as soldOf always read it: a word that names a thing since taken away, or not counted yet, is nothing said, and the planting gives every thing of its bed by the crop's shares. The days-before guard on a crop's card and a stand's earliest picking (standYear) now read it so: a planting grown for a removed thing that goes into its bed too few days before its days to harvest refuses the days before and is named, instead of the days being taken and cut later; and standYear, like soldOf, takes the thing of its bed's place alone where one counts. The bed card's life bar draws growing and picking from the same picking windows as its Pick label, a gap between two windows drawn as growing. With no days before and no year planted, every planting draws and counts exactly as before. Nothing stored changes.",
+ "changes": {
+  "did": "A baby-carrot planting whose \"for\" names something since removed now bounds the days before on the crop's card, and the bed card's bar shows picking on the days the Pick label gives.",
+  "steps": [
+   "Map, a bed with a planting whose crop has something picked days early: on its card, the bar's picking colour starts on the early day the Pick label gives, and a gap between two pickings is drawn as growing.",
+   "Assumptions, Yield and price: type more days before than such a planting has in its bed. The message names that planting and its bed; nothing changes."
+  ]
+ },
+ "words": [],
+ "code": [
+  "app.js",
+  "card.js",
+  "engine.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": []
+}
