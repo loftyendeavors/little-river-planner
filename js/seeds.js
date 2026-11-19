@@ -848,10 +848,10 @@
       ['Vendor size', 'What covers a shortfall at least cost, in the sizes that variety’s vendor sells.']];
     // the season's edges (js/seedlib.js required): what is dated in this year and counted with the next, and work of the year before
     // whose day passed with nothing recorded, which is counted for the plan and not as still to sow
-    const out = m.need.outside || { later: 0, earlier: 0 }, year = out.year || App.planYear();
+    const out = m.need.outside || { later: 0, earlier: 0 }, year = out.year || App.planYear(), later = out.seasons && out.seasons.length ? out.seasons : [year + 1];
     const so = [m.live.length && bare === m.live.length ? item('Figures only', 'These varieties carry planning figures only. Supplier, product code and page come in when you load your backup here.') : null,
       sown ? item('Left out', `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted.`) : null,
-      out.later ? h('li', { dataset: { hook: 'seeds-later' } }, h('b', `For ${year + 1}`), h('span', `${out.later} planting${out.later === 1 ? '' : 's'} dated in ${year} ${out.later === 1 ? 'gives its' : 'give their'} first harvest in ${year + 1}. ${out.later === 1 ? 'Its' : 'Their'} seed counts with that season.`)) : null,
+      out.later ? h('li', { dataset: { hook: 'seeds-later' } }, h('b', `For ${later.join(' and ')}`), h('span', `${out.later} planting${out.later === 1 ? '' : 's'} dated in ${year} ${out.later === 1 ? 'gives its' : 'give their'} first harvest in ${later.join(' or ')}. ${out.later === 1 ? 'Its' : 'Their'} seed counts with ${later.length === 1 ? 'that season' : 'those seasons'}.`)) : null,
       out.earlier ? h('li', { dataset: { hook: 'seeds-earlier' } }, h('b', 'Earlier'), h('span', `${out.earlier} planting${out.earlier === 1 ? '' : 's'} dated in ${year - 1} ${out.earlier === 1 ? 'was' : 'were'} due before today, with nothing recorded: not counted as still to sow. Record ${out.earlier === 1 ? 'it' : 'them'} on Tasks.`)) : null].filter(Boolean);
     add(clear($('sdFoot')), so.length ? h('ul.sd-foot-list', so) : null,
       h('button.link', { type: 'button', onclick: () => download(m) }, 'Download seeds required (.csv)'));

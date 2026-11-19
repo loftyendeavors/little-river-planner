@@ -79,7 +79,9 @@ const end = { id: 'ye-end', bedId: lateBed.id, cropId: late.id, date: `${Y}-12-1
 const winter = { id: 'ye-winter', bedId: empties[1].id, cropId: keeper.id, date: at(`${Y}-02-01`, keeper), ft: 10 };
 // planted out in the plan's first days, sown in the nursery in the year before: listed and counted by 0.69 already
 const jan = { id: 'ye-jan', bedId: covered[0].id, cropId: keeper.id, date: `${Y}-01-05`, ft: 10 };
-plan.plantings.push(dec, mar, garlic, end, winter, jan);
+// sown in the plan's year with days of its own that bring its first harvest two seasons on
+const far = { id: 'ye-far', bedId: lateBed.id, cropId: late.id, date: `${Y}-06-01`, ft: 10, dtm: 600, timingMode: 'manual' };
+plan.plantings.push(dec, mar, garlic, end, winter, jan, far);
 const eng0 = E.create(base, Lib), eng1 = E.create(plan, Lib), old0 = E0.create(base, Lib), old1 = E0.create(plan, Lib);
 const batch = plan.plantings.find(p => p.liveTray && p.liveTray.ready === ready), spring = plan.plantings.find(p => p.liveTray && p.liveTray.ready === april);
 const rb = eng1.calc(batch), rs = eng1.calc(spring);
@@ -183,6 +185,8 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   check('it is the next season: Seeds for the plan\'s year leaves it out and says so, and the next year counts it', SL.seasonOf(eng1, end) === year + 1 && !here.rows.some(r => r.key === key && r.plantings > need(SL, eng0, key, before).plantings) && here.outside.later >= 1
     && need(SL, there, key, before).plantings - need(SL, thereBase, key, before).plantings === 1, [here.outside, need(SL, there, key, before)]);
   check('its work is on Tasks for the plan\'s year, where it is done, and for the next, whose season it is', SL.onTasks(eng1, end, year) && SL.onTasks(eng1, end, year + 1));
+  const rf = eng1.calc(far);
+  check('one first picked two seasons on is left out too, and said with its own season', SL.seasonOf(eng1, far) === year + 2 && iso(rf.first).slice(0, 4) === String(year + 2) && here.outside.later === 2 && JSON.stringify(here.outside.seasons) === JSON.stringify([year + 1, year + 2]) && SL.onTasks(eng1, far, year), [iso(rf && rf.first), here.outside]);
   const m1 = F.build(eng1);
   check('the forecast has nothing of it in the plan\'s year, and the next year\'s has its harvest', !m1.rows.some(r => r.plantings.some(x => x.p.id === end.id)) && F.build(there).rows.some(r => r.plantings.some(x => x.p.id === end.id)));
 }

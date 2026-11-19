@@ -172,17 +172,18 @@
    * a planting dated before the plan's year whose seed was due before today and is not recorded is counted for the plan but not
    * as still to sow: the planner was not told whether it was sown, and seed is not ordered for a day that has passed
    * (Tasks says the same of its work in one line). `outside` counts what is left out, for the page to say: `later`, plantings
-   * dated in the plan's year whose produce is for the next (they count there); `earlier`, those not counted to sow.
+   * dated in the plan's year whose produce is for a later season (they count there), and `seasons`, which; `earlier`, those not
+   * counted to sow.
    * A planting recorded as sown counts for the plan the seed recorded as used, where that is recorded in its unit.
    */
   function required(engine, options = {}) {
     const plan = engine.plan, year = +(plan.settings && plan.settings.year), rows = new Map(), today = realDay(options.today) ? options.today : isoOf(new Date());
-    const outside = { year, later: 0, earlier: 0 };
+    const outside = { year, later: 0, seasons: [], earlier: 0 };
     for (const p of plan.plantings || []) {
       const r = engine.calc(p);
       if (!r || r.b.active === false) continue;
       const season = seasonOf(engine, p, r), dated = yearOfDate(p);
-      if (season !== year) { if (dated === year && season === year + 1) outside.later++; continue; }
+      if (season !== year) { if (dated === year && season > year) { outside.later++; if (!outside.seasons.includes(season)) outside.seasons.push(season); } continue; }
       const c = r.c, saved = engine.variety(p.varietyId), v = saved && saved.cropId === p.cropId ? saved : null;
       const material = r.rack ? 'seed' : c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed');
       const unit = r.rack ? liveUnit(engine, c) : material === 'seed' ? 'seeds' : material + 's';
@@ -201,6 +202,7 @@
       if (start && (!row.first || start < row.first)) row.first = start;
     }
     const list = [...rows.values()].sort((a, b) => String(a.crop && a.crop.name).localeCompare(String(b.crop && b.crop.name)) || String((a.variety && a.variety.name) || '').localeCompare(String((b.variety && b.variety.name) || '')));
+    outside.seasons.sort((a, b) => a - b);
     return { rows: list, settings: { germ: +(plan.settings && plan.settings.germ) || 85, buffer: +(plan.settings && plan.settings.buffer) || 0 }, outside };
   }
   /**

@@ -122,7 +122,7 @@ def run(pw):
       return { later: shown(sl) ? sl.textContent : null, earlier: shown(se) ? se.textContent : null, diff: toSow(S.engine, arg.key) - toSow(without, arg.key), amount: arg.amount,
         out: SL.required(S.engine, { today: A.today() }).outside };""", case)
     check("Seeds counts the batch's seed to sow once, for the plan's year", s["amount"] > 0 and abs(s["diff"] - s["amount"]) < 1e-6, s)
-    check("Seeds' foot says one planting counts with the next season, and one planting of the year before is earlier work not recorded", s["later"] and f"give" in s["later"] and str(YEAR + 1) in s["later"] and s["earlier"] and str(YEAR - 1) in s["earlier"] and s["out"]["later"] == 1 and s["out"]["earlier"] == 1, s)
+    check("Seeds' foot says one planting counts with the next season, and one planting of the year before is earlier work not recorded", s["later"] and s["later"].startswith(f"For {YEAR + 1}1 planting dated in {YEAR} gives its first harvest in {YEAR + 1}") and s["earlier"] and str(YEAR - 1) in s["earlier"] and s["out"]["later"] == 1 and s["out"]["earlier"] == 1, s)
 
     # Forecast, January: the stock carried in, apart, counted once
     page.evaluate("LRFApp.setView('harvest')"); page.wait_for_timeout(400)
