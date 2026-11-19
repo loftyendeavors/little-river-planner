@@ -681,12 +681,13 @@
     document.addEventListener('pointerdown', () => { if (hint || hintBar) hideHint(); });
     document.addEventListener('wheel', () => { if (hint || hintBar) hideHint(); }, { passive: true });
     NARROW.addEventListener('change', () => { draw(); root.LRFPanels.redraw(); });
-    DOCKED.addEventListener('change', () => draw());   // docked or floating: placed again, and the view makes room or takes it back
+    // docked or floating: placed again, and the view makes room or takes it back; docked, a bed it would hide is moved clear (Codex on #85)
+    DOCKED.addEventListener('change', () => { draw(); if (DOCKED.matches && App.state.sel && App.state.sel.type === 'bed') revealBed(App.state.sel.id); });
     root.addEventListener('resize', () => { if (card) place(); closePops(); });
     new MutationObserver(() => draw()).observe(document.body, { attributes: true, attributeFilter: ['data-layout'] });   // Edit layout opened or closed
     draw();
   }
 
-  root.LRFCard = { init, tick, on: () => on, shown: () => !!card && DOCKED.matches, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, openBedFromMap, keepBedFocus };
+  root.LRFCard = { init, tick, on: () => on, docked: () => !!card && DOCKED.matches, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, openBedFromMap, keepBedFocus };
   init();
 })(window);

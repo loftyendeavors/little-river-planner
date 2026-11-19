@@ -534,14 +534,16 @@
     applyView();
   }
 
-  /** Leave the zoom alone. Move only far enough to clear an overlapping floating bed card. */
+  /** Leave the zoom alone. Move only far enough to clear the bed card: a floating card over the map, or, docked beside it,
+   *  everything past the map's right edge, where the card stands (Codex on #85). */
   function revealBed(id, card) {
     if (locked || gesture || root.LRFDrag.active()) return;
     const shape = beds.get(id)?.g.querySelector('.bed-base');
     if (!shape) return;
     const a = shape.getBoundingClientRect(), b = $('map').getBoundingClientRect();
-    if (a.right <= card.left || a.left >= card.right || a.bottom <= card.top || a.top >= card.bottom) return;
-    const gap = 12, left = card.left - gap - a.right, down = card.bottom + gap - a.top;
+    const cover = card.left >= b.right - 1 ? { left: b.right, right: Infinity, top: -Infinity, bottom: Infinity } : card;
+    if (a.right <= cover.left || a.left >= cover.right || a.bottom <= cover.top || a.top >= cover.bottom) return;
+    const gap = 12, left = cover.left - gap - a.right, down = cover.bottom + gap - a.top;
     const xFits = a.left + left >= b.left + gap, yFits = a.bottom + down <= b.bottom - gap;
     if (!xFits && !yFits) return;
     const sideways = xFits && (!yFits || -left <= down);
@@ -806,13 +808,13 @@
       ...(root.LRFCard ? [['Try the card', root.LRFCard.tick()]] : [])
     ], { id: 'mapHelp', label: 'What can be done on the map', cols: true }));
     // A window that changes size (dragged to the other monitor, made full screen) is fitted again, unless the grower has moved the view since.
-    // The docked card takes its room from the map's right side: when it comes or goes the map keeps its zoom and where it is,
-    // and the card moves a bed it would cover (revealBed). Any other change of size frames the farm again, as before.
-    let cardShown = null;
+    // Untouched by hand, the map frames the farm again when its size changes. A docked card is work in hand: from its coming the
+    // map holds its zoom and place as after a move by hand, through what follows in the page's own layout (the key wrapping on
+    // the narrower map, Codex on #85) and through the card's going; the card moves a bed it would cover (revealBed). Fit farm
+    // frames it again.
     new ResizeObserver(() => {
-      const shown = !!(root.LRFCard && root.LRFCard.shown()), byCard = cardShown !== null && shown !== cardShown;
-      cardShown = shown;
-      if (App.state.ready && App.state.view === 'map' && !byCard && (!view.fitted || !view.moved)) fit();
+      if (root.LRFCard && root.LRFCard.docked()) view.moved = true;
+      if (App.state.ready && App.state.view === 'map' && (!view.fitted || !view.moved)) fit();
       if (App.state.ready) fitLegend();
     }).observe(svg);
     $('legendMore').addEventListener('click', () => { legendOpen = !legendOpen; fitLegend(); });

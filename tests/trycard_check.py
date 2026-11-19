@@ -109,7 +109,11 @@ def run(pw):
           bool(bed) and bed["kind"] == "bed" and bed["title"].endswith(" " + pick["bedName"]) and bed["rows"] == pick["n"] and bed["opens"] == pick["open"] and bed["year"] and bed["layout"] and bed["sale"] == bed["saleWant"] and not bed["panel"] and bed["sel"] == BED, [bed, pick])
     check("the card is docked at the top right, never taller than the view, 384 wide, on a corner of 20, and the map, its tools and its key make room for it: nothing of them under it",
           bool(bed) and bed["w"] == min(384, WIDTH) and bed["radius"] == "20px" and 8 <= bed["right"] <= 16 and 8 <= bed["top"] <= 16 and bed["bottom"] >= 8 and bed["clear"] >= 0 and bed["toolsClear"] >= 0 and (bed["keyClear"] is None or bed["keyClear"] >= 0), bed)
-    check("the card coming leaves the map's zoom as it was, and the bed clicked still in view", bool(bed) and abs(bed["zoom"] - zoom0) < 1e-9 and bed["bedSeen"], [bed, zoom0])
+    # what follows from the card in the page's own layout (on GitHub at 1280 the key wrapped on the narrower map) moves nothing either
+    js("$('mapBar').style.paddingBottom = '40px'; return null;"); wait(400)
+    zoom2 = js("const z = LRFMap.zoom(); $('mapBar').style.paddingBottom = ''; return z;"); wait(300)
+    check("the card coming leaves the map's zoom as it was, and the bed clicked still in view; the map's height changing beside it (the key wrapping) leaves it too",
+          bool(bed) and abs(bed["zoom"] - zoom0) < 1e-9 and bed["bedSeen"] and zoom2 is not None and abs(zoom2 - zoom0) < 1e-9, [bed, zoom0, zoom2])
     shade = js("const c = card(), t = document.createElement('div'); t.style.boxShadow = 'var(--shadow-card)'; document.body.append(t); const want = getComputedStyle(t).boxShadow; t.remove(); return { got: c ? getComputedStyle(c).boxShadow : null, want };")
     check("the docked card rests beside the view with a card's soft shadow, not a floating one's (Codex on #85)", shade["got"] == shade["want"], shade)
     # below 1200 wide the view would be left too narrow beside it: the card floats under the map's tools, and the map keeps its width
@@ -117,6 +121,20 @@ def run(pw):
     narrow = js("""const c = card(), s = document.querySelector('.stage'), v = $('mapView').getBoundingClientRect(), t = document.querySelector('.map-tools').getBoundingClientRect(), r = c ? c.getBoundingClientRect() : null;
       return { card: !!c, pad: getComputedStyle(s).paddingRight, over: r ? r.left < v.right && r.right <= v.right + 1 : null, under: r ? r.top >= t.bottom : null, mapW: Math.round(v.width) };""")
     check("below 1200 wide the card floats under the map's tools over the map, and the map keeps the stage's width (Codex on #85)", narrow["card"] and narrow["pad"] == "0px" and narrow["over"] and narrow["under"] and narrow["mapW"] > 700, narrow)
+    # the bed dragged to the map's right edge while the card floats; then the window widened past 1200: docked, the card hides it not
+    grab = js(f"""const v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed="{BED}"]').getBoundingClientRect(), c = card() ? card().getBoundingClientRect() : null;
+      let p = null; for (let y = v.bottom - 140; y > v.top + 80 && !p; y -= 23) for (let x = v.left + 30; x < v.left + v.width / 2 && !p; x += 23) {{ const e = document.elementFromPoint(x, y);
+        if (e && e.closest('#map') && !e.closest('#mapBeds > g') && !(c && x >= c.left && x <= c.right && y >= c.top && y <= c.bottom)) p = {{ x, y }}; }}
+      return p && {{ x: Math.round(p.x), y: Math.round(p.y), dx: Math.round(v.right - 8 - b.right) }};""")
+    if grab:
+        page.mouse.move(grab["x"], grab["y"]); page.mouse.down(); page.mouse.move(grab["x"] + grab["dx"], grab["y"], steps=14); page.mouse.up(); wait(400)
+    edge = js(f"const v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed=\"{BED}\"]').getBoundingClientRect(); return {{ gap: Math.round(v.right - b.right), sel: S.sel && S.sel.id }};")
+    # widened to 1280 whatever the check's width: docked there, the map is narrower than it was at 1100, so the bed is at stake
+    page.set_viewport_size({"width": 1280, "height": 960}); wait(900)
+    redock = js(f"""const c = card(), v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed="{BED}"]').getBoundingClientRect(), r = c ? c.getBoundingClientRect() : null;
+      return {{ card: !!c, sel: S.sel && S.sel.id, seen: b.left >= v.left - 1 && b.right <= v.right + 1, clear: r ? Math.round(r.left - v.right) : null }};""")
+    check("a bed at the map's right edge while the card floats is moved clear when the window widens and the card docks (Codex on #85)",
+          bool(grab) and 0 <= edge["gap"] <= 40 and edge["sel"] == BED and redock["card"] and redock["sel"] == BED and redock["seen"] and redock["clear"] is not None and redock["clear"] >= 0, [grab, edge, redock])
     page.set_viewport_size({"width": WIDTH, "height": 960}); wait(500)
     page.screenshot(path=str(shots / f"map-bed-{WIDTH}.png"))
 
