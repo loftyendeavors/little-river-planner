@@ -202,7 +202,8 @@
     // `before`: every planting it is for is dated before the plan's year (it came onto Tasks for its season, js/seedlib.js onTasks);
     // `next`: every planting it is for gives its first harvest in a later season, which counts it (its work is still done this year)
     const year = App.planYear(), before = l => l.members.every(m => SL.yearOfDate(m.p) !== null && SL.yearOfDate(m.p) < year);
-    const next = l => { const seasons = l.members.map(m => SL.seasonOf(eng, m.p, m.r)); return seasons.every(x => x > year) ? Math.min(...seasons) : null; };   // the season it is for, when every planting is a later one
+    // the later seasons it is for, every one of them, and whether some of its plantings are this season's (a batch of one variety)
+    const next = l => { const seasons = l.members.map(m => SL.seasonOf(eng, m.p, m.r)), later = [...new Set(seasons.filter(x => x > year))].sort((a, b) => a - b); return later.length ? { later, part: seasons.some(x => !(x > year)) } : null; };
     const make = (l, id, sow) => ({ key: l.key, line: l, sow, id, half: halfOf(id), state: l.skipped ? 'skipped' : l.state, due: !sow && l.state === 'done' && l.planned ? l.planned : l.date, on: l.skipped || (l.state === 'done' ? l.doneOn : null),
       title: `${ACT[id]} ${cropWord(l.crop.name)}`, items: () => l.open.map(m => ({ id: m.p.id, kind: sow ? m.s.kind : l.kind })), before: before(l), next: next(l) });
     const out = [...figures().list.map(l => make(l, l.kind, true)), ...jobs().filter(l => !l.passed || l.skipped).map(l => make(l, l.section, false))];
@@ -225,7 +226,7 @@
    */
   function yearText(t) {
     const year = App.planYear(), at = +String(isOpen(t) ? t.due : t.on || t.due).slice(0, 4);
-    return at === year - 1 ? `in ${at}, the year before` : at !== year ? `in ${at}` : t.next ? `for ${t.next}` : '';
+    return at === year - 1 ? `in ${at}, the year before` : at !== year ? `in ${at}` : t.next ? `${t.next.part ? 'partly ' : ''}for ${t.next.later.join(' and ')}` : '';
   }
   /** The line under a task's name: the variety, how much, where; then anything that sets it apart. It wraps, and is never cut. */
   function detail(t) {

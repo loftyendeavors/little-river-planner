@@ -36,7 +36,8 @@ NODE = [
  ("a figure's carried part is all of it", FC, "part === 'carried' ? (carry ? carry[i - x.lo] : 0)", "part === 'carried' ? series[i - x.lo]"),
 ]
 PAGE = [
- ("a task for a later season does not say so", SV, "t.next ? `for ${t.next}` : ''", "''"),
+ ("a task partly for a later season says it is all for it", SV, "`${t.next.part ? 'partly ' : ''}for", "`${''}for"),
+ ("a task for a later season does not say so", SV, "t.next ? `${t.next.part ? 'partly ' : ''}for ${t.next.later.join(' and ')}` : ''", "''"),
  ("a task in the year before does not say so", SV, "return at === year - 1 ? `in ${at}, the year before`", "return at === year - 1 ? ''"),
  ("earlier work comes onto the list as late", SV, "const isEarlier = (t, now) => isOpen(t) && t.before && t.due < now;", "const isEarlier = (t, now) => false;"),
  ("the earlier line does not open", SV, "    else if (act === 'earlier') { ui.shown.earlier = true; render(); }\n", ""),

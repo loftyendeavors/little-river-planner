@@ -64,7 +64,10 @@ SETUP = """
   const kept = await A.setSell(keeper.id, { keep: 3, pattern: 'once', days: 1 }, 'Kept three weeks');
   const c = S.engine.crop(keeper.id), dec = { id: A.uid(), bedId: covered[0].id, cropId: keeper.id, date: E.d2s(E.addDays(E.s2d((Y - 1) + '-12-21'), -c.dtm)), ft: 10 };
   const garlic = { id: A.uid(), bedId: empty.id, cropId: fall.id, date: (Y - 1) + '-10-15', ft: 20 }, end = { id: A.uid(), bedId: lateBed.id, cropId: late.id, date: Y + '-12-10', ft: 10 };
-  const added = A.addPlantings([dec, garlic, end], 'The year edge cases');
+  // sown the same day in the same garden, with days of its own that bring it in this season: one task with the late sowing
+  const twinBed = S.plan.beds.find(b => b.gardenId === lateBed.gardenId && b !== lateBed && soil(b)), twin = twinBed ? { id: A.uid(), bedId: twinBed.id, cropId: late.id, date: end.date, ft: 10, dtm: 14, timingMode: 'manual' } : null;
+  if (!twin) return null;
+  const added = A.addPlantings([dec, garlic, end, twin], 'The year edge cases');
   const batch = S.plan.plantings.find(p => p.liveTray && p.liveTray.ready === ready);
   return { saved: !!saved, kept, added, batch: batch && batch.id, batchDate: batch && batch.date, key: batch && (SL.sowing(S.engine, batch).key + '|' + SL.sowing(S.engine, batch).unit), amount: batch && SL.sowing(S.engine, batch).amount,
     dec: dec.id, garlic: garlic.id, end: end.id, keeper: keeper.id, ready };
@@ -113,6 +116,7 @@ def run(pw):
     js(page, "A.setDate(E.s2d(S.engine.planting(arg).date)); V.open(); return true;", case["end"]); page.wait_for_timeout(600)
     e = js(page, "const t = V.tasks().find(x => x.line.members.some(m => m.p.id === arg)), r = t && row(t.key); return { row: r ? r.textContent : null, due: t ? t.due : null };", case["end"])
     check("Tasks: a sowing late in the plan's year for the next season is listed on its day, its row saying the season it is for", e["row"] and f"for {YEAR + 1}" in e["row"], e)
+    check("Tasks: sown in one task with a planting of this season, its row says it is partly for the next", e["row"] and f"partly for {YEAR + 1}" in e["row"], e)
 
     # Seeds: the batch counted to sow once; the foot says what is left out, and why
     page.evaluate("LRFApp.setView('seeds')"); page.wait_for_timeout(800)
