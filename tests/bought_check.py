@@ -177,6 +177,29 @@ def run(pw):
     check("the order's arrival makes the plants on hand", e["onOrder"] == 0 and e["onHand"] == d["onOrder"], e)
     js(page, "A.undo(); A.undo(); return null;"); page.wait_for_timeout(800)
     check("two Undos take the arrival and the order back", js(page, "return A.contentKey();") == start["key"])
+    # ── a crop bought in by the library's word alone, given weeks in the nursery (Codex on #81): sown as before N2, and its switch at
+    # Seed, as Tasks and the benches have it; Bought in on it is the planting's own word, and Undo gives the plan back ──
+    js(page, """const lib = id => (LRFLibrary.crops || []).find(c => c.id === id);
+      const p = S.plan.plantings.find(p => p.varietyId && !p.startedFrom && !p.done && !p.established && lib(p.cropId) && lib(p.cropId).plantingMaterial === 'plant' && lib(p.cropId).method === 'TP'
+        && eng.calc(p) && eng.calc(p).boughtIn && !eng.calc(p).tw && !eng.calc(p).ct && !eng.calc(p).rack);
+      if (!p) { window.__berry = null; return null; }
+      const crop = (p.growingDefaults && p.growingDefaults.crop) || {};
+      window.__berry = { id: p.id, v: p.varietyId };
+      A.revise('Weeks in the nursery', [{ before: p, after: { ...p, growingDefaults: { v: 1, cropId: p.cropId, crop: { ...crop, gh: { present: true, value: 4 } } } } }]); return null;""")
+    page.wait_for_timeout(900)
+    berry = js(page, "return window.__berry;")
+    check("the plan has a planting of a library crop bought in as plants, with a variety, for the check to work on", berry, berry)
+    if berry:
+        js(page, "LRFSeeds.select({ type: 'variety', id: arg.v }); return null;", berry); page.wait_for_timeout(900)
+        k = js(page, """const p = S.engine.planting(arg.id), r = S.engine.calc(p), s = sw(arg.id);
+          const pressed = s ? [...s.querySelectorAll('button')].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.textContent) : [];
+          return { bought: !!r.boughtIn, sow: iso(r.plannedSow), trays: r.trays, steps: LRFWeek.steps(S.engine, p).map(st => st.kind).filter(x => ['sow', 'harden'].includes(x)).join(','), bench: S.engine.benchItems().some(it => it.p.id === arg.id && it.kind === 'prop'), from: s ? s.dataset.from : '', pressed, undo: S.undo.length };""", berry)
+        check("given weeks in the nursery, a library crop bought in as plants is sown as before N2: its sowing and hardening off in its weeks, its tray on a bench, and its switch at Seed", not k["bought"] and k["sow"] and k["trays"] > 0 and k["steps"] == "sow,harden" and k["bench"] and k["from"] == "seed" and k["pressed"] == ["Seed"] and k["undo"] == start["undo"] + 1, k)
+        js(page, "const s = sw(arg.id); const b = s && [...s.querySelectorAll('button')].find(x => x.dataset.to === 'plant'); if (b) b.click(); return null;", berry); page.wait_for_timeout(900)
+        m = js(page, "const p = S.engine.planting(arg.id), r = S.engine.calc(p); return { from: p.startedFrom || '', bought: !!r.boughtIn, steps: LRFWeek.steps(S.engine, p).some(st => ['sow', 'potup', 'harden'].includes(st.kind)), bench: S.engine.benchItems().some(it => it.p.id === arg.id && it.kind === 'prop'), undo: S.undo.length };", berry)
+        check("Bought in on it writes the planting's own word: bought in, no nursery work in its weeks and no bench room, in one step", m["from"] == "plant" and m["bought"] and not m["steps"] and not m["bench"] and m["undo"] == start["undo"] + 2, m)
+        js(page, "A.undo(); A.undo(); return null;"); page.wait_for_timeout(800)
+        check("two Undos give the plan back exactly", js(page, "return JSON.stringify(S.plan);") == start["plan"])
     check("no error on the page", not errors, errors[:3])
     finish()
 

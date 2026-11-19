@@ -52,6 +52,8 @@ node $T/year_edge_test.cjs $APP $PLAN $OLD | named "year edge, backup"   # the y
 node $T/year_edge_test.cjs $APP $SHIP $OLD | named "year edge, compact"
 node $T/bought_test.cjs $APP $PLAN | named "bought in, backup"   # N2: a planting bought in as plants or plugs (no sowing, tray or mix, its plants and spare to buy, rounded to its lot on the order sheet), a variety counted both ways, two devices
 node $T/bought_test.cjs $APP $SHIP | named "bought in, compact"
+node $T/bought_kept.cjs $APP $PLAN $OLD | named "bought in kept, backup"   # N2: a crop bought in only by the library's word, with nursery weeks or a sowing day set, sown as the build before sowed it; each case read again as a backup and as the compact plan
+node $T/bought_kept.cjs $APP $SHIP $OLD | named "bought in kept, compact"
 node $T/rails_test.cjs $APP $PLAN | named "rails"
 node $T/assume_test.cjs $APP $PLAN | named "assume"
 node $T/merge_test.cjs $APP $PLAN $FARM/inventory.json | named "merge"   # two copies of one plan joined, record by record: the rules, the five tests, 500 pairs of runs of edits

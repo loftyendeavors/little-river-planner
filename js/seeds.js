@@ -992,15 +992,15 @@
   /** The planting's own switch: Seed | Bought in. Its harvest does not move; what it needs, and where its work falls, do. */
   function fromSwitch(p, r, v, s) {
     if (!canChoose(p, r)) return h('span');
-    const eng = App.state.engine, now = eng.startedFrom(p), fixed = !!(s && s.sown);
+    const eng = App.state.engine, from = q => (App.state.engine.boughtInOf(q) ? 'plant' : 'seed'), now = from(p), fixed = !!(s && s.sown);
     const set = async to => {
       // the planting and the engine as they stand now, not as the panel was drawn
       const eng = App.state.engine, cur = eng.planting(p.id) || p, s = App.sowingOf(cur);
-      if (to === eng.startedFrom(cur)) return;
+      if (to === from(cur)) return;
       if (s && s.sown) { toast('Work is already recorded for this planting. Take it back on Tasks first.'); return; }
       // the crop's own word (as the planting holds its crop) needs nothing written; anything else is the planting's
       const plain = { ...cur }; delete plain.startedFrom;
-      const after = eng.startedFrom(plain) === to ? plain : { ...plain, startedFrom: to };
+      const after = from(plain) === to ? plain : { ...plain, startedFrom: to };
       const need = eng.calc(cur), what = to === 'plant' ? `bought in, ${num(Math.ceil(need.plants * (1 + (+App.state.plan.settings.buffer || 0) / 100) - 1e-9))} plants to buy${need.sow ? `, no sowing on ${day(need.sow)}` : ''}` : 'sown from seed';
       if (await App.revise(`${v.name}, ${day(r.field)}: ${what}`, [{ before: cur, after }])) { ui.panelKey = ''; schedule(); }
     };
@@ -1013,7 +1013,7 @@
    */
   function buyBox(v, crop, r) {
     const eng = App.state.engine, plan = App.state.plan, said = crop ? crop.plantingMaterial || (crop.material === 'bulb' ? 'bulb' : 'seed') : 'seed';
-    const bought = plan.plantings.some(p => p.varietyId === v.id && eng.startedFrom(p) === 'plant');
+    const bought = plan.plantings.some(p => p.varietyId === v.id && eng.boughtInOf(p));
     if (!bought && said === 'seed' && !v.buyLot && !v.buyFrom) return null;
     const unit = said === 'bulb' ? 'bulbs' : said === 'clove' ? 'cloves' : said === 'piece' ? 'seed pieces' : 'plants';
     // read the variety as it stands when the box is changed, not as the panel was drawn: a second box changed before the panel is

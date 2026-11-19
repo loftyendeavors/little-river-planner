@@ -73,6 +73,37 @@ tryCase('its sowing is gone from the forecast of nothing: the season\'s worth is
   return [Math.abs(a - b) < 1e-6, [a, b]];
 });
 
+// ── 1b. bought in by the library's word alone, with nursery work to lose: sown as before (tests/bought_kept.cjs holds it to the build before) ──
+{
+  const libC = id => (Lib.crops || []).find(c => c.id === id);
+  const berry = plan.plantings.find(p => !p.startedFrom && !p.sowOn && live(p) && libC(p.cropId) && said(libC(p.cropId)) === 'plant' && libC(p.cropId).method === 'TP' && !(libC(p.cropId).gh > 0) && !eng.calc(p).tw && !eng.calc(p).ct);
+  check('the plan has a planting of a library crop bought in as plants, with no weeks in the nursery', !!berry, null);
+  if (berry) {
+    const yr = d => `${year}-${d}`, noRec = pl => ({ ...pl, crops: (pl.crops || []).filter(c => c.id !== berry.cropId) });
+    const crop0 = berry.growingDefaults && berry.growingDefaults.crop ? berry.growingDefaults.crop : {};
+    const snap = { ...berry, date: yr('04-26'), growingDefaults: { v: 1, cropId: berry.cropId, crop: { ...crop0, gh: { present: true, value: 4 } } } };
+    const rec = (() => { const q = { ...berry, date: yr('04-26') }; delete q.growingDefaults; return q; })();
+    for (const [what, pl, q] of [
+      ['its own record of its crop gives it weeks in the nursery', noRec(put(plan, snap)), snap],
+      ['a crop record in the plan gives it weeks in the nursery and repeats the library’s word', { ...put(plan, rec), crops: [...(plan.crops || []).filter(c => c.id !== berry.cropId), { id: berry.cropId, gh: 4, plantingMaterial: 'plant' }] }, rec],
+      ['a sowing day is set on it by hand, with weeks in the nursery', noRec(put(plan, { ...snap, sowOn: yr('03-25') })), { ...snap, sowOn: yr('03-25') }]]) {
+      tryCase(`a library crop bought in as plants, ${what}: sown, its trays and bench room kept, Seeds counting its plants without the spare`, () => {
+        const e = E.create(pl, Lib), p = e.planting(q.id), r = e.calc(p), s = SL.sowing(e, p);
+        const hand = !q.sowOn || (r.sowSet && E.d2s(r.plannedSow) === q.sowOn);
+        return [!r.boughtIn && !e.boughtInOf(p) && !!r.plannedSow && r.trays > 0 && r.cells > 0 && hand && prop(e, p) && W.steps(e, p).some(st => st.kind === 'sow') && e.startedFrom(p) === 'plant' && !!s && s.unit === 'plants' && s.amount === Math.ceil(r.plants), { sow: D(r.plannedSow), set: r.sowSet, trays: r.trays, bought: r.boughtIn, s: s && [s.unit, s.amount, r.plants] }];
+      });
+    }
+    tryCase('a library crop bought in as plants, with a sowing day set by hand but no weeks in the nursery: counted on Seeds as before, with no spare', () => {
+      const q = { ...berry, sowOn: yr('03-25') }, e = E.create(put(plan, q), Lib), p = e.planting(q.id), r = e.calc(p), s = SL.sowing(e, p);
+      return [!r.boughtIn && !r.plannedSow && !!s && s.unit === 'plants' && s.amount === Math.ceil(r.plants), { bought: r.boughtIn, s: s && [s.unit, s.amount] }];
+    });
+    tryCase('the same planting with weeks in the nursery, said bought in on itself: bought in', () => {
+      const q = { ...snap, startedFrom: 'plant' }, e = E.create(noRec(put(plan, q)), Lib), p = e.planting(q.id), r = e.calc(p);
+      return [r.boughtIn === true && !r.plannedSow && r.trays === 0 && !prop(e, p), { sow: D(r.plannedSow), trays: r.trays }];
+    });
+  }
+}
+
 // ── 2. what says it ──
 tryCase('a planting\'s own word stands over its crop\'s: a planting of a crop bought in as plants that says seed is sown', () => {
   const q = { ...byCrop, startedFrom: 'seed' }, e = E.create(put(plan, q), Lib), r = e.calc(q), s = SL.sowing(e, q);
