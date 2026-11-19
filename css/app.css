@@ -2507,8 +2507,9 @@ body.phone .top { padding-block: var(--space-4); }   /* the header stays one sho
 
 /* ───────────────────────────── The card, part 1 (DESIGN.md, rule 2), behind "Try the card" ─────────────────────────────
    Only while the tick is on (body[data-card="on"], set by js/card.js): the side panel leaves the Map and the Timeline, and a
-   bed or a planting picked opens one card. On a computer it is docked at the right, the same on Map and Timeline, as tall as
-   what it holds and never taller than the view, and the view makes room for it; on a phone it floats under the view's tools.
+   bed or a planting picked opens one card. On a screen 1200 wide or more it is docked at the right, the same on Map and
+   Timeline, as tall as what it holds and never taller than the view, and the view makes room for it; narrower, it floats
+   under the view's tools.
    Off, none of this applies. */
 body[data-card="on"] .inspector { display: none; }
 body[data-card="on"] .work { grid-template-columns: 268px minmax(0, 1fr); }
@@ -2517,10 +2518,12 @@ body[data-card="on"] .work { grid-template-columns: 268px minmax(0, 1fr); }
 body[data-card="on"] .stage { position: relative; }
 .lrf-card { position: absolute; right: var(--space-12); z-index: 25; width: min(384px, calc(100% - 24px)); overflow-y: auto; overscroll-behavior: contain;
   padding: var(--space-16); display: grid; align-content: start; gap: var(--space-12); font-size: var(--type-13); color: var(--ink-2); }
-/* docked: the view's tools, key, header and date bar end at the card's left edge; its head and foot stay while the middle scrolls */
-@media (min-width: 701px) {
+/* docked from 1200 wide (below it the view would be left too narrow: the card floats as on a phone): the view's tools, key,
+   header and date bar end at the card's left edge; its head and foot stay while the middle scrolls */
+@media (min-width: 1200px) {
   body[data-card="on"] .stage:has(> .lrf-card) { padding-right: calc(384px + 2 * var(--space-12)); }
-  .lrf-card { top: var(--space-12); max-height: calc(100% - 2 * var(--space-12)); padding-top: 0; padding-bottom: 0; box-shadow: var(--shadow-card); animation: card-in var(--speed-move) var(--ease); }
+  .lrf-card { top: var(--space-12); max-height: calc(100% - 2 * var(--space-12)); padding-top: 0; padding-bottom: 0; animation: card-in var(--speed-move) var(--ease); }
+  .card.float.lrf-card { box-shadow: var(--shadow-card); }   /* resting beside the view, not floating over it */
   .lrf-card > .card-head { position: sticky; top: 0; z-index: 3; margin: 0 calc(-1 * var(--space-16)); padding: var(--space-16) var(--space-16) var(--space-8); background: var(--raised); box-shadow: 0 1px 0 var(--line-soft); }
   .lrf-card > :last-child:not(.card-foot):not(.bed-season) { margin-bottom: var(--space-12); }
   .lrf-card .card-foot { position: sticky; bottom: 0; z-index: 3; margin: 0 calc(-1 * var(--space-16)); padding: var(--space-12) var(--space-16); background: var(--raised); border-top: 0; box-shadow: 0 -1px 0 var(--line-soft); }

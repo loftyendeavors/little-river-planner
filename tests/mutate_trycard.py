@@ -53,6 +53,8 @@ PAGE = [
  ("a right-click opens the browser's own menu", CD, "    document.addEventListener('contextmenu', onContext);\n", ""),
  ("“Planting details” opens nothing", CD, "onclick: () => openFull() }, 'Planting details')", "onclick: () => {} }, 'Planting details')"),
  ("the card floats over the view again: nothing makes room for it", CSS, "  body[data-card=\"on\"] .stage:has(> .lrf-card) { padding-right: calc(384px + 2 * var(--space-12)); }\n", ""),
+ ("Codex on #85: the docked card keeps the floating shadow", CSS, "  .card.float.lrf-card { box-shadow: var(--shadow-card); }", "  .lrf-card { box-shadow: var(--shadow-card); }"),
+ ("Codex on #85: the card docks however narrow the window", CSS, "@media (min-width: 1200px) {\n  body[data-card", "@media (min-width: 701px) {\n  body[data-card"),
  ("the map frames the farm again when the card comes", MP, "&& !byCard && (!view.fitted || !view.moved)) fit();", "&& (!view.fitted || !view.moved)) fit();"),
  ("the list of what to settle has no side panel to stand in", CD, "    if (!sel) return !settling && !App.state.newer;", "    if (!sel) return true;"),
  ("Codex on #66: a change made with no card open is said on the next card", CD, "tickTimer = setTimeout(() => { planTick = false; }, 0); note(); draw(); });", "tickTimer = setTimeout(() => { planTick = false; }, 0); draw(); });"),

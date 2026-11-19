@@ -110,6 +110,14 @@ def run(pw):
     check("the card is docked at the top right, never taller than the view, 384 wide, on a corner of 20, and the map, its tools and its key make room for it: nothing of them under it",
           bool(bed) and bed["w"] == min(384, WIDTH) and bed["radius"] == "20px" and 8 <= bed["right"] <= 16 and 8 <= bed["top"] <= 16 and bed["bottom"] >= 8 and bed["clear"] >= 0 and bed["toolsClear"] >= 0 and (bed["keyClear"] is None or bed["keyClear"] >= 0), bed)
     check("the card coming leaves the map's zoom as it was, and the bed clicked still in view", bool(bed) and abs(bed["zoom"] - zoom0) < 1e-9 and bed["bedSeen"], [bed, zoom0])
+    shade = js("const c = card(), t = document.createElement('div'); t.style.boxShadow = 'var(--shadow-card)'; document.body.append(t); const want = getComputedStyle(t).boxShadow; t.remove(); return { got: c ? getComputedStyle(c).boxShadow : null, want };")
+    check("the docked card rests beside the view with a card's soft shadow, not a floating one's (Codex on #85)", shade["got"] == shade["want"], shade)
+    # below 1200 wide the view would be left too narrow beside it: the card floats under the map's tools, and the map keeps its width
+    page.set_viewport_size({"width": 1100, "height": 960}); wait(500)
+    narrow = js("""const c = card(), s = document.querySelector('.stage'), v = $('mapView').getBoundingClientRect(), t = document.querySelector('.map-tools').getBoundingClientRect(), r = c ? c.getBoundingClientRect() : null;
+      return { card: !!c, pad: getComputedStyle(s).paddingRight, over: r ? r.left < v.right && r.right <= v.right + 1 : null, under: r ? r.top >= t.bottom : null, mapW: Math.round(v.width) };""")
+    check("below 1200 wide the card floats under the map's tools over the map, and the map keeps the stage's width (Codex on #85)", narrow["card"] and narrow["pad"] == "0px" and narrow["over"] and narrow["under"] and narrow["mapW"] > 700, narrow)
+    page.set_viewport_size({"width": WIDTH, "height": 960}); wait(500)
     page.screenshot(path=str(shots / f"map-bed-{WIDTH}.png"))
 
     # a planting picked directly (for example from a Timeline bar), the bed's name back, x to close.

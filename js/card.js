@@ -18,6 +18,7 @@
   const { h, clear, add, day, num, span } = UI;
   const KEY = 'lrf.tryCard', SAID_FOR = 8000, VIEWS = ['map', 'timeline'];
   const NARROW = root.matchMedia('(max-width: 700px)');
+  const DOCKED = root.matchMedia('(min-width: 1200px)');   // the style sheet's docked card (css/app.css, "The card, part 1")
   const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   let on = false;
@@ -453,7 +454,7 @@
     const stage = card.parentElement, view = document.getElementById(App.state.view === 'map' ? 'mapView' : 'timelineView');
     const tools = view && view.querySelector(App.state.view === 'map' ? '.map-tools' : '.tl-tools');
     if (!stage || !view) return;
-    if (!NARROW.matches) { card.style.top = ''; card.style.maxHeight = ''; return; }   // docked beside the view: the style sheet places it
+    if (DOCKED.matches) { card.style.top = ''; card.style.maxHeight = ''; return; }   // docked beside the view: the style sheet places it
     const s = stage.getBoundingClientRect(), v = view.getBoundingClientRect(), t = tools ? tools.getBoundingClientRect() : v;
     const top = Math.round(Math.max(v.top, t.bottom) - s.top + 8);
     card.style.top = top + 'px';
@@ -680,11 +681,12 @@
     document.addEventListener('pointerdown', () => { if (hint || hintBar) hideHint(); });
     document.addEventListener('wheel', () => { if (hint || hintBar) hideHint(); }, { passive: true });
     NARROW.addEventListener('change', () => { draw(); root.LRFPanels.redraw(); });
+    DOCKED.addEventListener('change', () => draw());   // docked or floating: placed again, and the view makes room or takes it back
     root.addEventListener('resize', () => { if (card) place(); closePops(); });
     new MutationObserver(() => draw()).observe(document.body, { attributes: true, attributeFilter: ['data-layout'] });   // Edit layout opened or closed
     draw();
   }
 
-  root.LRFCard = { init, tick, on: () => on, shown: () => !!card, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, openBedFromMap, keepBedFocus };
+  root.LRFCard = { init, tick, on: () => on, shown: () => !!card && DOCKED.matches, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, openBedFromMap, keepBedFocus };
   init();
 })(window);
