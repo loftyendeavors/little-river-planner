@@ -1087,7 +1087,9 @@
     for (const r of m.need.rows) {
       if (!(r.toSow > 0)) continue;
       const v = r.variety, ms = r.unit === 'seeds' ? SL.measures(r.toSow, v) : { weight: '', packets: '' }, c = r.cover;
-      lines.push([cropName(r.crop), v ? v.name : '', v ? (r.unit === 'seeds' || r.unit === 'g' ? v.supplier || v.source || '' : SL.boughtFrom(r)) : '', v ? v.sku || '' : '', Math.round(r.toSow * 10) / 10, r.unit, r.onHand, r.onOrder, r.short, ms.weight, c ? c.text : '', c && c.cost != null ? c.cost.toFixed(2) : '', r.first ? E.d2s(r.first) : '', r.waiting, r.plantings]);
+      // a plants line names whom it is bought from, and a product code only where that is the variety's own supplier (as the order sheet)
+      const seed = r.unit === 'seeds' || r.unit === 'g', from = v ? (seed ? v.supplier || v.source || '' : SL.boughtFrom(r)) : '', house = seed || (!!v && from === SL.supplierOf(v));
+      lines.push([cropName(r.crop), v ? v.name : '', from, v && house ? v.sku || '' : '', Math.round(r.toSow * 10) / 10, r.unit, r.onHand, r.onOrder, r.short, ms.weight, c ? c.text : '', c && c.cost != null ? c.cost.toFixed(2) : '', r.first ? E.d2s(r.first) : '', r.waiting, r.plantings]);
     }
     const blob = new Blob(['﻿' + lines.map(l => l.map(cell).join(',')).join('\r\n')], { type: 'text/csv' }), filename = `seeds-required-${App.planYear()}-${E.d2s(new Date())}.csv`;
     const fallback = () => { const url = URL.createObjectURL(blob), a = h('a', { href: url, download: filename }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); };
