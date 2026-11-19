@@ -125,11 +125,11 @@
     }
     return minimum;
   }
-  /** What to sow for a number of plants. Null when the planting is not raised in plugs: direct sown, live trays, bulbs, standing crops. */
+  /** What to sow for a number of plants. Null when the planting is not raised in plugs: direct sown, live trays, bulbs, standing crops, bought in. */
   function sowingPlan(options = {}) {
     const crop = options.crop || {}, planting = options.planting || {}, settings = options.settings || {}, nursery = options.nursery || {};
     const tower = options.tower === true;
-    if (options.rack === true || planting.established === true || crop.micro || (crop.material === 'bulb' && !tower) || (crop.method !== 'TP' && !tower)) return null;
+    if (options.rack === true || options.boughtIn === true || planting.established === true || crop.micro || (crop.material === 'bulb' && !tower) || (crop.method !== 'TP' && !tower)) return null;
     const plants = nonnegative(options.plants);
     if (plants == null) return { error: 'Planting quantity must be a finite, nonnegative number.', warnings: [] };
     const resolved = resolve({ crop, planting, nursery, tower, sheet: options.sheet }), tray = resolved.tray, warnings = resolved.warnings.slice();

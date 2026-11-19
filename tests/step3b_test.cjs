@@ -25,8 +25,9 @@ const units = (e, p) => { const q = e.planting(p.id), y = e.yieldOf(q, e.calc(q)
 // ── the build itself moves nothing ──
 if (OLD) {
   // the plantings the frost cuts (E2c) are held at their last day, which the build before knows no other way (tests/frost_held.cjs)
-  const E0 = require(path.join(OLD, 'engine.js')), F0 = require(path.join(OLD, 'forecast.js')), old = E0.create(core, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, core, old), Lib);
-  const off = core.plantings.filter(p => { const q = now.planting(p.id), a = old.calc(p), b = now.calc(q); if (!a !== !b) return true; if (!a) return false; const ya = old.yieldOf(p, a), yb = now.yieldOf(q, b);
+  // and the plantings bought in (N2) are left out on both sides: the build before sows them (tests/bought_held.cjs)
+  const E0 = require(path.join(OLD, 'engine.js')), F0 = require(path.join(OLD, 'forecast.js')), base = require('./bought_held.cjs').held(E, Lib, core, E0.create(core, Lib)), old = E0.create(base, Lib), now = E.create(require('./frost_held.cjs').held(E, Lib, base, old), Lib);
+  const off = base.plantings.filter(p => { const q = now.planting(p.id), a = old.calc(p), b = now.calc(q); if (!a !== !b) return true; if (!a) return false; const ya = old.yieldOf(p, a), yb = now.yieldOf(q, b);
     return +a.first !== +b.first || +a.last !== +b.last || +(a.sow || 0) !== +(b.sow || 0) || +old.occupancyThrough(p, a) !== +now.occupancyThrough(q, b) || !ya !== !yb || (ya && (!near(ya.units, yb.units) || ya.unit !== yb.unit || ya.price !== yb.price || ya.set !== yb.set)); });
   check('with nothing set, every planting has the dates, the ground and the yield it had in 0.22', off.length === 0, off.slice(0, 3).map(p => p.id));
   const m0 = F0.build(old), m1 = F.build(now), k0 = new Map(m0.rows.map(r => [r.key, r]));
@@ -296,7 +297,7 @@ const after = A.apply(core, step.ops), e2 = E.create(after, Lib);
   const coverFor = (amount, unit, v) => SL.toCover(amount, unit, v), sheet = SL.orderSheet(need.rows, coverFor), short = need.rows.filter(r => r.short > 0);
   FIG.order = { lines: sheet.lines, suppliers: sheet.groups.length, cost: Math.round(sheet.cost), unpriced: sheet.unpriced, loose: sheet.loose.length };
   check('every variety that is short is on the sheet once, and nothing that is not', sheet.lines === short.filter(r => r.variety).length && sheet.loose.length === short.filter(r => !r.variety).length && new Set(sheet.groups.flatMap(g => g.lines.map(l => l.key))).size === sheet.lines);
-  check('a supplier is one group however its name is written', new Set(sheet.groups.map(g => g.key)).size === sheet.groups.length && sheet.groups.every(g => g.lines.every(l => (SL.supplierOf(l.variety) ? SL.supplierKey(SL.supplierOf(l.variety)) : '') === g.key)));
+  check('a supplier is one group however its name is written', new Set(sheet.groups.map(g => g.key)).size === sheet.groups.length && sheet.groups.every(g => g.lines.every(l => { const name = SL.boughtFrom ? SL.boughtFrom(l.row) : SL.supplierOf(l.variety); return (name ? SL.supplierKey(name) : '') === g.key; })));
   check('each line is what covers its shortfall in that supplier’s sizes', sheet.groups.every(g => g.lines.every(l => l.amount === l.short && (!l.sized || (l.buy >= l.amount && l.text)))));
   check('a supplier’s cost is the sum of its priced lines, and the total the sum of those', sheet.groups.every(g => near(g.cost, g.lines.reduce((n, l) => n + (l.cost || 0), 0)) && g.unpriced === g.lines.filter(l => l.cost == null).length) && near(sheet.cost, sheet.groups.reduce((n, g) => n + g.cost, 0)));
   const first = sheet.groups.flatMap(g => g.lines).find(l => l.sized && l.cost != null);

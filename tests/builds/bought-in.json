@@ -1,0 +1,25 @@
+{
+ "build": "N2, bought-in plants. A planting is started from seed or bought in as plants or plugs: by its crop's Planted from, unless the planting says otherwise (plantings[].startedFrom), as the first planting of a season is bought in as plugs and the later ones sown; a planting made while its crop was set to bought-in plants keeps that through its own record of the crop. Bought in, it has no sowing day, cells, trays, seed or potting mix, and takes no room on a bench: it goes on Tasks as Plant out, and Seeds counts the plants its bed takes and the plan's spare on plugs, so a bought tray and a sown one give as many. Its harvest does not move. A variety may say who its plants or bulbs are bought from (buyFrom) and the lot they are sold in (buyLot): the shortfall is then rounded up to whole lots, and the order sheet lists it under that grower, beside seed; plugs of a crop otherwise sown are not listed under its seed house. A variety bought in for one planting and sown for another has a second line on Seeds. Marked as ordered and order arrived, as seed is.",
+ "changes": {
+  "did": "Bought-in plants: each planting can be sown or bought in, a bought-in one has no sowing, tray, mix or bench room, and Seeds counts its plants with spare, rounded up to the lot its grower sells.",
+  "steps": [
+   "On Seeds, open a variety bought in as plugs for one planting: under In the plan its row reads Bought in, and Tasks has no sowing for it, only Plant out.",
+   "In that variety's panel, under Bought in, type the grower and the lot (72, say): its row's Vendor size reads so many × 72 plants.",
+   "Open the order sheet: the plants are listed under that grower, beside seed; Mark as ordered, then the order's arrival, as for seed."
+  ]
+ },
+ "words": [],
+ "code": [
+  "engine.js",
+  "planio.js",
+  "seedlib.js",
+  "seeds.js",
+  "sowing.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "css/app.css"
+ ],
+ "screens": ["tasks", "nursery-bench-room", "nursery-supplies", "nursery-set-up", "seeds"]
+}

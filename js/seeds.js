@@ -476,7 +476,13 @@
       const s = stock[r.stockKey + '|' + r.stockUnit] || { onHand: 0, onOrder: 0 };
       r.onHand = s.onHand; r.onOrder = s.onOrder; r.short = Math.max(0, r.unit === 'g' ? Math.round((r.toSow - s.onHand - s.onOrder) * 10) / 10 : Math.ceil(r.toSow - s.onHand - s.onOrder));
       r.cover = r.variety && r.short > 0 ? App.coverFor(r.short, r.unit, r.variety) : null;   // what covers the shortfall, in the vendor's own sizes
-      if (r.variety) { if (!byV.has(r.variety.id) || r.unit === 'seeds') byV.set(r.variety.id, r); }
+      if (r.variety) {
+        // a variety counted two ways (sown for one planting, bought in as plants for another) keeps its seed row first, the other under it
+        const was = byV.get(r.variety.id);
+        if (!was) byV.set(r.variety.id, r);
+        else if (r.unit === 'seeds' && was.unit !== 'seeds') { r.alt = [...(was.alt || []), was]; delete was.alt; byV.set(r.variety.id, r); }
+        else (was.alt || (was.alt = [])).push(r);
+      }
       else if (r.crop) { if (!byCrop.has(r.crop.id)) byCrop.set(r.crop.id, []); byCrop.get(r.crop.id).push(r); }
     }
     // a variety that is not in this season's plan can still have seed on the shelf
@@ -486,7 +492,7 @@
       byV.set(v.id, { key: 'v:' + v.id + '|' + unit, stockKey: 'v:' + v.id, stockUnit: unit, variety: v, crop, unit, plantings: 0, waiting: 0, toSow: 0, total: 0, first: null, onHand: s.onHand, onOrder: s.onOrder, short: 0 });
     }
     // stock the list cannot count: a lot for a removed variety, or in a unit this variety's row does not use
-    const units = new Map([...byV.values()].map(r => [r.stockKey, r.stockUnit])), needed = new Set(need.rows.map(r => r.stockKey + '|' + r.stockUnit));
+    const units = new Map([...byV.values()].map(r => [r.stockKey, [r.stockUnit, ...(r.alt || []).map(a => a.stockUnit)]])), needed = new Set(need.rows.map(r => r.stockKey + '|' + r.stockUnit));
     const unlisted = SL.unlisted(App.inventoryNow(), plan, units).filter(u => u.why !== 'unit' || !needed.has(u.lot.key + '|' + u.lot.unit));
     for (const u of unlisted) if (u.why === 'unit') { const r = byV.get(u.variety.id); (r.odd || (r.odd = [])).push(u); }
     return { eng, plan, live, need, stock, used, usedCrop, byV, byCrop, unlisted, hasStock: Object.keys(stock).length > 0 };
@@ -598,7 +604,8 @@
     box.append(h('button.link', { type: 'button', id: 'sdAddLot', onclick: () => { App.editStock(`${name}: add a lot`, (lib, ctx) => SL.addLot(lib, { key, unit, quantity: 0, status: 'usable' }, ctx), name); } }, lots.length ? '+ Add another lot' : '+ Add a lot'));
     return box;
   }
-  const passes = (m, v, id) => { const r = m.byV.get(v.id); return id === 'all' || (id === 'planted' && m.used.has(v.id)) || (id === 'tosow' && !!r && r.toSow > 0) || (id === 'short' && !!r && r.short > 0) || (id === 'ordered' && !!r && r.onOrder > 0) || (id === 'open' && noStart(v)); };
+  const rowsOf = r => (r ? [r, ...(r.alt || [])] : []);
+  const passes = (m, v, id) => { const rs = rowsOf(m.byV.get(v.id)); return id === 'all' || (id === 'planted' && m.used.has(v.id)) || (id === 'tosow' && rs.some(r => r.toSow > 0)) || (id === 'short' && rs.some(r => r.short > 0)) || (id === 'ordered' && rs.some(r => r.onOrder > 0)) || (id === 'open' && noStart(v)); };
   function groupsOf(m, list) {
     const by = new Map();
     for (const v of list) { if (!by.has(v.cropId)) by.set(v.cropId, []); by.get(v.cropId).push(v); }
@@ -731,7 +738,7 @@
     while (at) { const next = at.nextSibling; at.remove(); at = next; }
   }
   const lotsSig = r => SL.lotsFor(App.inventoryNow(), r.stockKey).map(l => [l.id, l.quantity, l.unit, l.life, l.usable === true]);
-  const needSig = r => !r ? 0 : [r.key, r.unit, r.stockUnit, r.toSow, r.onHand, r.onOrder, r.short, r.first ? +r.first : 0, r.waiting, r.plantings, r.cover ? [r.cover.how, r.cover.text, r.cover.cost, r.cover.total] : 0, r.odd ? r.odd.map(u => [u.lot.id, u.lot.quantity, u.lot.unit, u.unit]) : 0, lotsSig(r)];
+  const needSig = r => !r ? 0 : [r.key, r.unit, r.stockUnit, r.toSow, r.onHand, r.onOrder, r.short, r.first ? +r.first : 0, r.waiting, r.plantings, r.cover ? [r.cover.how, r.cover.text, r.cover.cost, r.cover.total] : 0, r.odd ? r.odd.map(u => [u.lot.id, u.lot.quantity, u.lot.unit, u.unit]) : 0, lotsSig(r), r.alt ? r.alt.map(needSig) : 0];
   const thumbSig = id => { const uri = T.get(id); return uri ? uri.length + uri.slice(-12) : T.remoteOf(id); };
   function listTable(m, list, q) {
     const { eng } = m, grouped = ui.sort === 'crop', plan = listCols(), ids = plan.cols.map(c => c[0]);
@@ -779,11 +786,24 @@
         uses: () => h('td.sd-num', m.used.get(v.id) || '')
       };
       const tr = h('tr.sd-var' + (flat ? '' : '.in-group') + (lotRow.varietyId === v.id ? '.adding' : ''), { tabIndex: 0, 'aria-label': `${v.name}, ${cropName(crop)}`, dataset: { variety: v.id }, onclick: e => { if (!e.target.closest('a, select, input, button')) select({ type: 'variety', id: v.id }); }, onkeydown: rowKey }, ids.map(id => cell[id]()));
-      if (lotRow.varietyId !== v.id) return [tr];
+      const alts = (r && r.alt ? r.alt : []).map(a => altRow(v, a, flat, ids));
+      if (lotRow.varietyId !== v.id) return [tr, ...alts];
       // the same line is put back under the row on a redraw, so what is typed in it, and where the cursor is, are kept
       const line = lotRow.node && lotRow.node.dataset.lotFor === v.id ? lotRow.node : (lotRow.node = lotLine(v, cols, flat));
       line.firstChild.colSpan = cols; line.classList.toggle('in-group', !flat);
-      return [tr, line];
+      return [tr, line, ...alts];
+    };
+    /** A variety's second line: what its plantings bought in as plants need, beside the seed its other plantings need. */
+    const altRow = (v, a, flat, ids) => {
+      const from = SL.boughtFrom(a), word = a.unit === 'plants' ? 'Bought in as plants' : `Counted in ${SL.UNIT_WORD[a.unit] || a.unit}`;
+      const cell = {
+        name: () => h('td', h('div.sd-cell.sd-altname', h('span.sd-name', h('small', word)))),
+        sup: () => h('td.sd-sup', from), days: () => h('td'), from: () => h('td'),
+        tosow: () => h('td.sd-num', a.toSow > 0 ? amount(a) : ''), hand: () => stockCell(a, `${v.name}, ${a.unit}`),
+        short: () => h('td.sd-num', a.short > 0 ? num(a.short) : ''), size: () => sizeCell(a, v),
+        first: () => h('td.sd-num', a.first ? day(a.first) : ''), uses: () => h('td.sd-num', a.waiting === a.plantings ? a.plantings : `${a.waiting} of ${a.plantings}`)
+      };
+      return h('tr.sd-var.sd-alt' + (flat ? '' : '.in-group'), { dataset: { altFor: v.id, unit: a.unit, hook: 'seeds-alt-row' }, onclick: e => { if (!e.target.closest('a, select, input, button')) select({ type: 'variety', id: v.id }); } }, ids.map(id => cell[id]()));
     };
     let shown = 0;
     if (!grouped) {
@@ -830,8 +850,9 @@
   }
   /** What covers a row's shortfall, in the sizes its vendor sells. Nothing when nothing is short. */
   function sizeCell(r, v) {
-    const c = r && r.cover;
-    if (!c) return h('td.sd-num.sd-size');
+    const c = r && r.cover, counted = r && r.unit !== 'seeds' && r.unit !== 'g';
+    if (!c) return counted && r.short > 0 ? h('td.sd-num.sd-size.soft', { title: `The lot ${v.name} is sold in is not on file. Type it under Bought in, in its panel, and the shortfall is rounded up to whole lots.` }, 'lot not on file') : h('td.sd-num.sd-size');
+    if (c.how === 'lots') return h('td.sd-num.sd-size', { title: `Covers the ${num(r.short)} ${r.unit} short: ${num(c.total)} in lots of ${num(c.lot)}, as ${v.name} is sold.` }, c.text);
     const vendor = supplierShort(v) || 'the vendor', short = `${num(r.short, r.unit === 'g' ? 1 : 0)} ${r.unit === 'g' ? 'g' : r.unit}`;
     const title = c.how === 'sizes' ? `Covers the ${short} short: ${num(c.total, r.unit === 'g' ? 1 : 0)} ${r.unit === 'g' ? 'g' : 'seeds'}${c.cost != null ? ` for ${SL.money(c.cost)}` : ''}, the least cost among the sizes ${vendor} lists.`
       : c.how === 'unsized' ? `${vendor} sells a packet for ${SL.money(c.packet.price)} but its page gives no seed count. Type it under “Seeds per packet” in the panel.`
@@ -907,9 +928,9 @@
     if (!ui.sel) {
       // with nothing picked the panel holds the page's one line of figures, and one action for the day the box comes. What stood
       // here as notices is in Loose ends in the header; seed on order is a filter of the list (DESIGN.md, rules 1 and 4)
-      const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), short = [...m.byV.values()].filter(r => r.short > 0).length, onOrder = m.live.filter(v => passes(m, v, 'ordered')).length;
+      const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), plants = rows.reduce((n, r) => n + (r.unit === 'plants' ? r.toSow : 0), 0), short = [...m.byV.values()].filter(r => r.short > 0).length, onOrder = m.live.filter(v => passes(m, v, 'ordered')).length;
       add(el, h('header.sd-ph.plain', h('div', h('p.eyebrow', `${App.planYear()} season`), h('h2', 'Seed library'))),
-        h('p.frame-figs', { id: 'sdFigs' }, h('span', h('b', num(m.live.length)), ' varieties, ', h('b', num(m.live.filter(v => m.used.has(v.id)).length)), ' planted'), h('span', h('b', num(seeds)), ' seeds to sow'), h('span', h('b', num(short)), ' short of seed'), onOrder ? h('span', h('b', num(onOrder)), ' on order') : null),
+        h('p.frame-figs', { id: 'sdFigs' }, h('span', h('b', num(m.live.length)), ' varieties, ', h('b', num(m.live.filter(v => m.used.has(v.id)).length)), ' planted'), h('span', h('b', num(seeds)), ' seeds to sow'), plants ? h('span', { dataset: { hook: 'seeds-plants-figure' } }, h('b', num(plants)), ' plants to buy') : null, h('span', h('b', num(short)), ' short of seed'), onOrder ? h('span', h('b', num(onOrder)), ' on order') : null),
         Object.values(m.stock).some(x => x.onOrder > 0) ? h('p.sd-arrived', h('button.btn.small', { type: 'button', id: 'sdReceiveAll', title: 'When the box comes: every order becomes seed on hand, as ordered. One Undo puts them back. To count one order, click it.', onclick: receiveAll }, 'All orders arrived…')) : null);
       return;
     }
@@ -935,20 +956,80 @@
           h('button.link', { type: 'button', onclick: () => pick.click() }, T.get(v.id) ? 'Change photo' : 'Add a photo'), pick),
         shut),
       h('div.sd-stats', n ? h('button.sd-stat.jump', { type: 'button', title: 'Go to its plantings, where a sowing is recorded', onclick: () => { const to = $('sdPlan'); if (to) to.scrollIntoView({ block: 'start' }); } }, h('small', 'Plantings'), h('b', String(n)), h('span', 'sowing ↓')) : stat('Plantings', '—'),
-        stat('To sow', r && r.toSow > 0 ? num(r.toSow, r.unit === 'g' ? 1 : 0) : '—', r && r.toSow > 0 ? (r.unit === 'seeds' ? SL.measures(r.toSow, v).weight || 'seeds' : SL.UNIT_WORD[r.unit]) : null),
+        stat(r && r.unit !== 'seeds' && r.unit !== 'g' ? 'To buy' : 'To sow', r && r.toSow > 0 ? num(r.toSow, r.unit === 'g' ? 1 : 0) : '—', [r && r.toSow > 0 ? (r.unit === 'seeds' ? SL.measures(r.toSow, v).weight || 'seeds' : SL.UNIT_WORD[r.unit]) : null,
+          ...(r && r.alt ? r.alt.filter(a => a.toSow > 0).map(a => `${num(a.toSow)} ${SL.UNIT_WORD[a.unit] || a.unit} to buy`) : [])].filter(Boolean).join(' · ') || null),
         stat('On hand', r && r.onHand ? num(r.onHand) : '—', r && r.onOrder ? `${num(r.onOrder)} ordered` : r && r.short > 0 ? `short ${num(r.short)}` : null)),
-      swapBox(v, crop, n), lotsBox('v:' + v.id, r ? r.stockUnit : unitFor(crop), v.name, r && r.odd), sizesBox(v, crop, r), body, status);
+      swapBox(v, crop, n), lotsBox('v:' + v.id, r ? r.stockUnit : unitFor(crop), v.name, r && r.odd), buyBox(v, crop, r), sizesBox(v, crop, r), body, status);
     openVariety(v, null, host);
     const mine = plan.plantings.filter(p => p.varietyId === v.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r).sort((a, b) => a.r.field - b.r.field);
     const sownCount = mine.filter(({ p }) => { const s = App.sowingOf(p); return s && s.sown; }).length;
-    if (mine.length) add(el, h('h3.sd-h', { id: 'sdPlan' }, `In the plan · ${mine.length}${sownCount ? ` · ${sownCount} sown` : ''}`), h('div.sd-pls', mine.slice(0, 40).map(({ p, r: c }) => {
+    const choosing = mine.some(({ p, r: c }) => canChoose(p, c));
+    if (mine.length) add(el, h('h3.sd-h.sd-planhead', { id: 'sdPlan' }, h('span', `In the plan · ${mine.length}${sownCount ? ` · ${sownCount} sown` : ''}`), choosing ? fromHelp() : null), h('div.sd-pls', mine.slice(0, 40).map(({ p, r: c }) => {
       const s = App.sowingOf(p), open = ui.sowOpen === p.id;
-      return [h('div.sd-plrow',
+      return [h('div.sd-plrow' + (choosing ? '.from' : ''),
         h('button.sd-pl', { type: 'button', title: 'Show on the map', onclick: () => { App.setView('map'); App.setDate(c.field); App.select({ type: 'planting', id: p.id }); } },
           h('b', day(c.field)), h('span', { title: App.bedLabel(c.b) }, h('em', `${{ bed: 'Bed', tower: 'Tower', bench: 'Bench' }[eng.spaceKind(c.b)] || ''} ${c.b.bed}`.trim()), ` ${(eng.gardenOf(c.b) || {}).name || ''}`), h('small', `harvest ${day(c.first)}${eng.pinned(p) ? ' · own days' : ''}`)),
-        s ? h('button.sd-sowbtn' + (s.sown ? '.done' : ''), { type: 'button', 'aria-expanded': String(open), dataset: { sowfor: p.id }, title: s.sown ? 'See what was recorded, or take it back' : 'Record that this was sown: the seed comes off stock', onclick: () => { ui.sowOpen = open ? null : p.id; ui.panelKey = ''; schedule(); } }, s.sown ? '✓ sown' : 'Sown…') : h('span.sd-sowbtn.none', 'in place')),
+        choosing ? fromSwitch(p, c, v, s) : null,
+        s ? h('button.sd-sowbtn' + (s.sown ? '.done' : ''), { type: 'button', 'aria-expanded': String(open), dataset: { sowfor: p.id }, title: s.sown ? 'See what was recorded, or take it back' : s.kind === 'sow' ? 'Record that this was sown: the seed comes off stock' : 'Record that this was planted: the plants come off stock', onclick: () => { ui.sowOpen = open ? null : p.id; ui.panelKey = ''; schedule(); } }, s.sown ? (s.kind === 'sow' ? '✓ sown' : '✓ planted') : s.kind === 'sow' ? 'Sown…' : 'Planted…') : h('span.sd-sowbtn.none', 'in place')),
         open ? root.LRFPanels.sowingBox(p) : null];
     })), mine.length > 40 ? h('p.dlg-hint', `and ${mine.length - 40} more`) : null);
+  }
+
+  // ── bought in: a planting's own source, and the lot and grower a variety is bought from (N2) ──
+  /** Can this planting be said to be sown or bought in? A crop raised from seed or bought in as plants, not a live tray or a standing crop. */
+  function canChoose(p, r) {
+    const crop = r && r.c;
+    if (!crop || r.rack || crop.micro || p.established === true) return false;
+    const said = crop.plantingMaterial || (crop.material === 'bulb' ? 'bulb' : 'seed');
+    return said === 'seed' || said === 'plant';
+  }
+  const FROM_WORDS = [['Seed', 'Sown on the farm: a sowing day, trays, mix and room on a bench, and seed counted with germination.'],
+    ['Bought in', 'Plugs, plants or bare-root bought from a grower: no sowing, tray, mix or bench room. It goes on Tasks as Plant out, and Seeds counts its plants with the plan’s spare, rounded up to the lot it is sold in.']];
+  const fromHelp = () => UI.help(null, null, FROM_WORDS, { label: 'What Seed and Bought in mean', hook: 'from-help', card: { hook: 'from-help-card' } });
+  /** The planting's own switch: Seed | Bought in. Its harvest does not move; what it needs, and where its work falls, do. */
+  function fromSwitch(p, r, v, s) {
+    if (!canChoose(p, r)) return h('span');
+    const eng = App.state.engine, now = eng.startedFrom(p), fixed = !!(s && s.sown);
+    const set = async to => {
+      if (to === now) return;
+      if (fixed) { toast('Work is already recorded for this planting. Take it back on Tasks first.'); return; }
+      // the crop's own word (as the planting holds its crop) needs nothing written; anything else is the planting's
+      const plain = { ...p }; delete plain.startedFrom;
+      const after = eng.startedFrom(plain) === to ? plain : { ...plain, startedFrom: to };
+      const need = eng.calc(p), what = to === 'plant' ? `bought in, ${num(Math.ceil(need.plants * (1 + (+App.state.plan.settings.buffer || 0) / 100) - 1e-9))} plants to buy${need.sow ? `, no sowing on ${day(need.sow)}` : ''}` : 'sown from seed';
+      if (await App.revise(`${v.name}, ${day(r.field)}: ${what}`, [{ before: p, after }])) { ui.panelKey = ''; schedule(); }
+    };
+    return h('div.seg.sd-from', { role: 'group', 'aria-label': `${v.name}, ${day(r.field)}: started from`, dataset: { from: now, hook: 'planting-from' } },
+      [['seed', 'Seed'], ['plant', 'Bought in']].map(([id, label]) => h('button', { type: 'button', 'aria-pressed': String(now === id), disabled: fixed && now !== id, dataset: { to: id }, title: fixed ? 'Work is recorded for this planting' : id === 'plant' ? 'Bought in as plugs or plants: no sowing, tray or mix' : 'Sown on the farm', onclick: () => set(id) }, label)));
+  }
+  /**
+   * Who a variety's plants are bought from, and the lot they are sold in. Shown where any of its plantings is bought in, or its
+   * crop is planted from plants or bulbs. Each box is set at once, apart from Save below, with Undo.
+   */
+  function buyBox(v, crop, r) {
+    const eng = App.state.engine, plan = App.state.plan, said = crop ? crop.plantingMaterial || (crop.material === 'bulb' ? 'bulb' : 'seed') : 'seed';
+    const bought = plan.plantings.some(p => p.varietyId === v.id && eng.startedFrom(p) === 'plant');
+    if (!bought && said === 'seed' && !v.buyLot && !v.buyFrom) return null;
+    const unit = said === 'bulb' ? 'bulbs' : said === 'clove' ? 'cloves' : said === 'piece' ? 'seed pieces' : 'plants';
+    const put = async (key, raw, label) => {
+      const after = { ...v };
+      if (raw === '' || raw == null) delete after[key]; else after[key] = raw;
+      if (JSON.stringify(after) === JSON.stringify(v)) return;
+      if (!(await App.revise(label, [{ kind: 'variety', before: v, after }]))) { ui.panelKey = ''; schedule(); }
+    };
+    const lot = h('input', { type: 'number', min: 1, step: 1, value: v.buyLot || '', placeholder: '—', 'aria-label': `${v.name}: sold in lots of`, dataset: { hook: 'buy-lot' }, onkeydown: e => { if (e.key === 'Enter') e.target.blur(); },
+      onchange: e => {
+        const t = e.target.value.trim(), n = Number(t);
+        if (t !== '' && !(Number.isSafeInteger(n) && n > 0)) { toast('Sold in lots of: a whole number of ' + unit + ', 1 or more.'); e.target.value = v.buyLot || ''; return; }
+        put('buyLot', t === '' ? '' : n, t === '' ? `${v.name}: lot cleared` : `${v.name}: sold in lots of ${n}`);
+      } });
+    const from = h('input', { type: 'text', maxLength: 120, value: v.buyFrom || '', placeholder: said === 'seed' ? 'The grower' : supplierShort(v) || 'The grower', 'aria-label': `${v.name}: bought from`, dataset: { hook: 'buy-from' }, onkeydown: e => { if (e.key === 'Enter') e.target.blur(); },
+      onchange: e => { const t = e.target.value.trim(); put('buyFrom', t, t ? `${v.name}: bought from ${t}` : `${v.name}: grower cleared`); } });
+    const rows = r ? [r, ...(r.alt || [])].filter(x => x.unit !== 'seeds' && x.unit !== 'g') : [], need = rows[0];
+    const line = need && need.toSow > 0 ? `${num(need.toSow)} ${SL.UNIT_WORD[need.unit] || need.unit} to buy${need.cover ? `, ${need.cover.text}` : ''}.` : '';
+    return h('section.sd-buy', { id: 'sdBuy', dataset: { hook: 'buy-box' } }, h('h3.sd-h', 'Bought in'),
+      h('div.sd-grid', h('label.fld', h('span', 'Bought from'), from), h('label.fld', h('span', `Sold in lots of (${unit})`), lot)),
+      line ? h('p.dlg-hint', line) : null);
   }
 
   /**

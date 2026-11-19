@@ -142,6 +142,17 @@
    */
   /** A live tray's seed is counted in seeds where the crop is sown in cells, and by weight where it is broadcast in an open tray. */
   const liveUnit = (engine, c) => (engine.liveSow && engine.liveSow(c).how === 'cells' ? 'seeds' : 'g');
+  /**
+   * What a planting is started from, as its row counts it: seed, bought-in plants, bulbs, cloves or seed pieces. The engine's own
+   * rule (engine.startedFrom: the planting's own word over its crop's), and the crop's alone for an engine of a build before it.
+   */
+  function materialOf(engine, p, r) {
+    if (r.rack) return 'seed';
+    if (engine.startedFrom) return engine.startedFrom(p, r.c);
+    return r.c.plantingMaterial || (r.c.material === 'bulb' ? 'bulb' : 'seed');
+  }
+  /** What one planting needs in its row's unit: seed by weight or by count, plants bought in with their spare, or bulbs. */
+  const needOf = (r, unit) => (unit === 'g' ? r.seedG : unit === 'seeds' ? r.seeds : unit === 'plants' && r.boughtIn ? r.buy : (r.bulbs || Math.ceil(r.plants)));
   // ───────────────────────────── the season a planting is for ─────────────────────────────
   /** The year a planting is dated in (its own date: a transplant's planting out, a sowing in the ground, a tray batch's sowing), or null. */
   const yearOfDate = p => (p && /^\d{4}-\d{2}-\d{2}$/.test(String(p.date)) ? +String(p.date).slice(0, 4) : null);
@@ -209,14 +220,14 @@
       if (season !== year && dated !== year) continue;
       if (dated === year && season > year) { outside.later++; if (!outside.seasons.includes(season)) outside.seasons.push(season); }
       const c = r.c, saved = engine.variety(p.varietyId), v = saved && saved.cropId === p.cropId ? saved : null;
-      const material = r.rack ? 'seed' : c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed');
+      const material = materialOf(engine, p, r);
       const unit = r.rack ? liveUnit(engine, c) : material === 'seed' ? 'seeds' : material + 's';
       const key = (v ? 'v:' + v.id : 'c:' + p.cropId) + '|' + unit;
       let row = rows.get(key);
       if (!row) rows.set(key, row = { key, crop: engine.crop(p.cropId), variety: v, unit, plantings: 0, waiting: 0, total: 0, planned: 0, toSow: 0, trays: 0, first: null, established: 0, earlier: 0 });
       row.plantings++;
       if (p.established === true) { row.established++; continue; }
-      const amount = unit === 'g' ? r.seedG : unit === 'seeds' ? r.seeds : (r.bulbs || Math.ceil(r.plants));
+      const amount = needOf(r, unit);
       const done = p.done || {}, sown = SOWN_KINDS.some(k => typeof done[k] === 'string' && done[k]), used = sown ? seedUsed(p, stockUnit(unit)) : null;
       row.total += used != null ? used : amount || 0; row.planned += amount || 0;
       if (sown || (engine.failedOn && engine.failedOn(p))) continue;   // a planting marked failed and never sown needs no seed
@@ -348,8 +359,9 @@
       if (!lot || typeof lot !== 'object' || lot.deleted === true || !/^v:/.test(String(lot.key || '')) || !STOCK_UNITS.includes(lot.unit)) continue;
       const life = lifeOf(lot);
       if ((life !== 'ordered' && !(life === 'usable' && lot.usable === true)) || !(Number(lot.quantity) > 0)) continue;
-      const v = byId.get(lot.key.slice(2)), unit = units.get(lot.key);
-      if (isLive(v)) { if (unit && unit !== lot.unit) out.push({ lot, life, why: 'unit', variety: v, unit }); continue; }
+      // a variety may be counted in more than one unit (seed for one planting, plants bought in for another): units holds a list then
+      const v = byId.get(lot.key.slice(2)), said = units.get(lot.key), list = Array.isArray(said) ? said : said ? [said] : [], unit = list[0];
+      if (isLive(v)) { if (unit && !list.includes(lot.unit)) out.push({ lot, life, why: 'unit', variety: v, unit }); continue; }
       const same = v ? all.filter(x => isLive(x) && varietyKey(x.name) === varietyKey(v.name)) : [];
       out.push({ lot, life, why: 'removed', variety: v || null, twin: same.find(x => x.cropId === v.cropId) || (same.length === 1 ? same[0] : null) });
     }
@@ -530,6 +542,8 @@
    */
   function toCover(amount, unit, v, given) {
     if (!v || !(amount > 0)) return null;
+    // plants and bulbs are bought by the supplier's lot (a tray of plugs, bulbs by the 25), said on the variety (buyLot)
+    if (unit !== 'seeds' && unit !== 'g') return lotsOf(amount, unit, v);
     const sizes = packs(v, given), best = unit === 'seeds' || unit === 'g' ? cover(amount, sizes.list, unit) : null;
     const packet = sizes.unsized.slice().sort((a, b) => a.price - b.price)[0];
     if (unit === 'seeds' && packet && (!best || best.cost == null || packet.price < best.cost)) return { how: 'unsized', sizes, items: [], total: null, cost: null, packet, text: 'packet, count not given' };
@@ -540,11 +554,34 @@
     return weight ? { how: 'weight', sizes, items: [], total: amount, cost: null, text: weight } : null;
   }
 
+  /**
+   * Bought in by the lot: so many lots of the variety's buyLot that cover an amount. { how: 'lots', items, total, cost, lot, text }
+   * such as "2 × 50 plants", or null when no lot is on file.
+   */
+  function lotsOf(amount, unit, v) {
+    const lot = Number(v && v.buyLot);
+    if (!(Number.isSafeInteger(lot) && lot > 0) || !(amount > 0)) return null;
+    const n = Math.ceil(amount / lot - 1e-9);
+    return { how: 'lots', items: [], total: n * lot, cost: null, lot, text: `${grouped(n)} × ${grouped(lot)} ${UNIT_WORD[unit] || unit}` };
+  }
+
   // ───────────────────────────── the order sheet ─────────────────────────────
   // Seed is ordered from October on and then through the season, so the sheet is not a yearly document: it is what is short
   // on the day it is opened, by supplier, in that supplier's own sizes. A line can be bought in another amount than its
   // shortfall, and a variety that is not short can be added (a top-up after a sowing that failed).
   const supplierOf = v => String((v && (v.supplier || v.catalogSupplier || (v.source === 'Farm entry' ? '' : v.source))) || '').trim();
+  /**
+   * Who a row is bought from. Seed, from the variety's supplier. Plants or bulbs, from whom the variety says they are bought
+   * (buyFrom); failing that, from its supplier when the crop itself is planted from plants or bulbs, and from no one named when
+   * plugs of a crop otherwise sown are bought in: a seed house is not where plugs come from.
+   */
+  function boughtFrom(r) {
+    const v = r.variety, own = String((v && v.buyFrom) || '').trim();
+    if (r.unit === 'seeds' || r.unit === 'g') return supplierOf(v);
+    if (own) return own;
+    const c = r.crop, crop = c ? c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed') : 'seed';
+    return crop === 'seed' ? '' : supplierOf(v);
+  }
   /**
    * rows: the rows of required(), each with `short` worked out (what is still to sow, less seed on hand and on order).
    * coverFor(amount, unit, variety) names the sizes that cover an amount (toCover). amounts: { [row.key]: amount to buy instead }.
@@ -557,8 +594,8 @@
       const asked = amounts[r.key], set = asked != null && asked !== '' && Number.isFinite(+asked) && +asked >= 0, amount = set ? +asked : r.short;
       if (!(amount > 0)) continue;
       if (!r.variety) { loose.push({ key: r.key, row: r, crop: r.crop, unit: r.unit, amount }); continue; }
-      const v = r.variety, name = supplierOf(v), key = name ? supplierKey(name) || norm(name) : '';
-      const cover = r.unit === 'seeds' || r.unit === 'g' ? coverFor(amount, r.unit, v) : null, sized = !!cover && cover.how === 'sizes';
+      const v = r.variety, name = boughtFrom(r), key = name ? supplierKey(name) || norm(name) : '';
+      const cover = coverFor(amount, r.unit, v), sized = !!cover && (cover.how === 'sizes' || cover.how === 'lots');
       const line = { key: r.key, row: r, variety: v, crop: r.crop, sku: v.sku || '', unit: r.unit, amount, short: r.short || 0, set: set && +asked !== r.short, cover,
         buy: sized && cover.total != null ? cover.total : amount, text: cover ? cover.text : '', sized, cost: cover && cover.cost != null ? cover.cost : null };
       let g = groups.get(key);
@@ -624,10 +661,10 @@
     const r = engine.calc(p);
     if (!r || p.established === true) return null;
     const c = r.c, saved = engine.variety(p.varietyId), v = saved && saved.cropId === p.cropId ? saved : null;
-    const material = r.rack ? 'seed' : c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed');
+    const material = materialOf(engine, p, r);
     const unit = r.rack ? liveUnit(engine, c) : material === 'seed' ? 'seeds' : material + 's', stock = stockUnit(unit);
     const kind = material === 'seed' && (r.rack || r.plannedSow) ? 'sow' : 'field';
-    const amount = (unit === 'g' ? r.seedG : unit === 'seeds' ? r.seeds : (r.bulbs || Math.ceil(r.plants))) || 0;
+    const amount = needOf(r, unit) || 0;
     const flow = p.workflow && typeof p.workflow === 'object' ? p.workflow : {}, uses = Array.isArray(flow.seedUse) ? flow.seedUse : [];
     const prior = uses.reduce((n, u) => n + (u && u.unit === stock && Number(u.quantity) > 0 ? Number(u.quantity) : 0), 0);
     const failed = !!(engine.failedOn && engine.failedOn(p));   // marked failed: nothing more is sown for it
@@ -716,5 +753,5 @@
   }
 
   return { norm, startOf, BASES, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, seasonOf, yearOfDate, onTasks, staysIn, seedUsed, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
-    sizeOf, packs, cover, toCover, money, perGram, orderSheet, orderText, orderCsv, supplierOf, sowing, lotsToUse, recordSowing, takeBackSowing, doneDate, realDay, yearAway, YEAR_DAYS, DONE_ORDER, DONE_WORD, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
+    sizeOf, packs, cover, toCover, money, perGram, orderSheet, orderText, orderCsv, supplierOf, boughtFrom, lotsOf, materialOf, sowing, lotsToUse, recordSowing, takeBackSowing, doneDate, realDay, yearAway, YEAR_DAYS, DONE_ORDER, DONE_WORD, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
 });

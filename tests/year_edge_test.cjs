@@ -28,7 +28,11 @@ const req = f => require(path.resolve(app, 'js', f)), old = f => require(path.re
 const Lib = req('library.js'), E = req('engine.js'), IO = req('planio.js'), SL = req('seedlib.js'), F = req('forecast.js'), T = req('trays.js'), W = req('week.js'), N = req('nursery.js');
 const E0 = old('engine.js'), SL0 = old('seedlib.js'), F0 = old('forecast.js'), W0 = old('week.js'), N0 = old('nursery.js');
 const raw = JSON.parse(fs.readFileSync(planFile, 'utf8'));
-const given = raw.format ? IO.unpack(raw) : IO.split(raw).core;
+// the plantings bought in (N2) are left out when the build before sows them: what is compared is the year's edge (tests/bought_held.cjs)
+const given = require('./bought_held.cjs').held(E, Lib, raw.format ? IO.unpack(raw) : IO.split(raw).core, E0.create(raw.format ? IO.unpack(raw) : IO.split(raw).core, Lib));
+// The build before may know the year's edge itself (every build after it does): then the checks that say what the build before did
+// without it hold the two builds to one another instead (tests/README.md, "What a build changed")
+const knows0 = typeof SL0.seasonOf === 'function';
 const year = +given.settings.year, Y = String(year), Y0 = String(year - 1);
 const copy = x => JSON.parse(JSON.stringify(x)), near = (a, b, e = 1e-6) => Math.abs(a - b) <= e * Math.max(1, Math.abs(a), Math.abs(b));
 const add = (iso, n) => E.d2s(E.addDays(E.s2d(iso), n)), iso = d => (d && E.validDate(d) ? E.d2s(d) : null);
@@ -43,8 +47,8 @@ const eng = E.create(given, Lib);
 const demand = (given.liveTrayPlans || []).find(d => d.rows && d.rows.some(r => r.cropId));
 const microId = demand && demand.rows.find(r => r.cropId).cropId;
 const crops = [...new Set(given.plantings.map(p => p.cropId))].map(id => eng.crop(id)).filter(Boolean);
-const keeper = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'TP' && +c.gh >= 1 && c.material !== 'bulb' && +c.dtm >= 45 && +c.dtm <= 120);
-const late = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'DS' && c.material !== 'bulb' && +c.dtm >= 32 && +c.dtm <= 90 && c.id !== (keeper && keeper.id));
+const keeper = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'TP' && +c.gh >= 1 && c.material !== 'bulb' && c.plantingMaterial !== 'plant' && +c.dtm >= 45 && +c.dtm <= 120);
+const late = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'DS' && c.material !== 'bulb' && c.plantingMaterial !== 'plant' && +c.dtm >= 32 && +c.dtm <= 90 && c.id !== (keeper && keeper.id));
 const fall = Lib.crops.find(c => c.method === 'DS' && !c.frostTender && !c.micro && +c.dtm >= 180 && c.material !== 'bulb' && !eng.isCoverCrop(c));
 const cover = Lib.crops.find(c => eng.isCoverCrop(c) && +c.dtm >= 120);   // a cover crop sown in the fall, whose days run into the next year
 // covered ground (no frost there) with nothing in it before a day, and ground with nothing in it at all
@@ -101,7 +105,8 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   const a = need(SL, eng0, key, before), b = need(SL, eng1, key, before), o = need(SL0, old1, key, before), oa = need(SL0, old0, key, before);
   const springAmount = SL.sowing(eng1, spring).amount;
   check('Seeds counts its seed for the plan, once: still to sow before its day, with the April batch beside it', s && s.amount > 0 && near(b.toSow - a.toSow, s.amount + springAmount) && b.waiting - a.waiting === 2, [a, b, s && s.amount, springAmount]);
-  check('the build before left it out of Seeds: it counted the April batch only', near(o.toSow - oa.toSow, springAmount), [oa, o]);
+  if (knows0) check('the build before counted it too, with the April batch, as this build does', near(o.toSow - oa.toSow, b.toSow - a.toSow), [oa, o, a, b]);
+  else check('the build before left it out of Seeds: it counted the April batch only', near(o.toSow - oa.toSow, springAmount), [oa, o]);
   const back = need(SL, E.create(withYear(plan, year - 1), Lib), key, before), backBase = need(SL, E.create(withYear(base, year - 1), Lib), key, before);
   // a plan holds one season: the year before's plan is this plan with its year set back, where the batch is dated. It counts it there
   // too, as 0.69 did: nothing counted by date is taken away. Once one plan holds two seasons (HP8), one of the two must count it
@@ -129,7 +134,8 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   const keepDays = 21, inJan = yd.units * (keepDays - 11) / keepDays;         // to sell Dec 21 to Jan 10: ten of its 21 days are in January
   check('January\'s forecast has the stock carried in, on its own: picked before Jan 1 and still to sell', near(monthOf(m1, keeper.id, 0, 'carried'), inJan, 1e-9) && near(monthOf(m1, keeper.id, 0) - monthOf(m0, keeper.id, 0), inJan, 1e-9), [monthOf(m1, keeper.id, 0, 'carried'), inJan]);
   check('January\'s own harvest of the crop is what it was without the stock', near(monthOf(m1, keeper.id, 0, 'own'), monthOf(m0, keeper.id, 0), 1e-9), [monthOf(m1, keeper.id, 0, 'own'), monthOf(m0, keeper.id, 0)]);
-  check('the build before left it out of January', near(monthOf(o1, keeper.id, 0), monthOf(m0, keeper.id, 0), 1e-9), [monthOf(o1, keeper.id, 0), monthOf(m0, keeper.id, 0)]);
+  if (knows0) check('the build before had it in January too, as this build does', near(monthOf(o1, keeper.id, 0), monthOf(m1, keeper.id, 0), 1e-9), [monthOf(o1, keeper.id, 0), monthOf(m1, keeper.id, 0)]);
+  else check('the build before left it out of January', near(monthOf(o1, keeper.id, 0), monthOf(m0, keeper.id, 0), 1e-9), [monthOf(o1, keeper.id, 0), monthOf(m0, keeper.id, 0)]);
   const weeks = m => F.periods(m, 'week').reduce((t, c) => t + m.rows.reduce((u, r) => u + F.sum(r.value, c.i0, c.i1), 0), 0), months = m => F.periods(m, 'month').reduce((t, c) => t + m.rows.reduce((u, r) => u + F.sum(r.value, c.i0, c.i1), 0), 0);
   const mNo = F.build(E.create({ ...plan, plantings: plan.plantings.filter(p => p.id !== dec.id) }, Lib));
   check('counted once: the season\'s worth rises by the stock\'s worth, and the weeks and the months add up to it', near(worthOf(m1) - worthOf(mNo), inJan * price) && near(weeks(m1), worthOf(m1)) && near(months(m1), worthOf(m1)), [worthOf(mNo), worthOf(m1), inJan * price, weeks(m1), months(m1)]);
@@ -151,7 +157,7 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   const key = keyOf(eng1, spring), s = SL.sowing(eng1, spring);
   const n0 = need(SL, eng0, key, before), n1 = need(SL, eng1, key, before), o0 = need(SL0, old0, key, before), o1 = need(SL0, old1, key, before);
   // the build before counts the April batch; the December one it does not (case 1), so its difference is the April batch alone
-  check('inside the year: a batch sown in March for April is counted once in Seeds, on this build and on the build before', near(o1.toSow - o0.toSow, s.amount) && near(n1.toSow - n0.toSow - SL.sowing(eng1, batch).amount, s.amount), [n0, n1, o0, o1]);
+  check('inside the year: a batch sown in March for April is counted once in Seeds, on this build and on the build before', near(o1.toSow - o0.toSow, knows0 ? n1.toSow - n0.toSow : s.amount) && near(n1.toSow - n0.toSow - SL.sowing(eng1, batch).amount, s.amount), [n0, n1, o0, o1]);
   const noMar = { ...plan, plantings: plan.plantings.filter(p => p.id !== mar.id) };
   const rm = eng1.calc(mar), ym = eng1.yieldOf(mar, rm), m0 = F.build(E.create(noMar, Lib)), m1 = F.build(eng1), om0 = F0.build(E0.create(noMar, Lib)), om1 = F0.build(old1);
   const marApr = (m, z) => monthOf(m, keeper.id, 2) + monthOf(m, keeper.id, 3) - (monthOf(z, keeper.id, 2) + monthOf(z, keeper.id, 3));
@@ -177,7 +183,7 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   const rw = eng1.calc(winter), mine = l => l.members.some(m => m.p.id === winter.id);
   check('the case: sown and planted out in the year before, first picked in the plan\'s year', winter.date.slice(0, 4) === Y0 && iso(rw.first).slice(0, 4) === Y && iso(rw.plannedSow || rw.field).slice(0, 4) === Y0, [winter.date, iso(rw.first)]);
   const now = W.lines(eng1, plan, year).filter(mine), before0 = W0.lines(old1, plan, year).filter(mine);
-  check('Tasks\' other jobs list its planting out, on its own day in the year before; the build before did not', now.some(l => l.section === 'plant' && l.date === winter.date) && before0.length === 0, [now.map(l => l.section + ' ' + l.date), before0.length]);
+  check(knows0 ? 'Tasks\' other jobs list its planting out, on its own day in the year before, as the build before did' : 'Tasks\' other jobs list its planting out, on its own day in the year before; the build before did not', now.some(l => l.section === 'plant' && l.date === winter.date) && (knows0 ? before0.some(l => l.section === 'plant' && l.date === winter.date) : before0.length === 0), [now.map(l => l.section + ' ' + l.date), before0.length]);
   const m1 = F.build(eng1), x = m1.rows.flatMap(r => r.plantings).find(q => q.p.id === winter.id), at0 = x ? x.lo : 0;
   check('all of its stock is sold in the plan\'s year: nothing of it is carried in, and every week of it is its own',
     x && x.carried === 0 && near(F.share(x, at0, at0 + 6, false, 'own'), F.share(x, at0, at0 + 6, false)) && F.share(x, at0, at0 + 6, false, 'carried') === 0 && F.share(x, at0, at0 + 6, false) > 0, x ? [x.carried, F.share(x, at0, at0 + 6, false, 'carried')] : null);
@@ -190,7 +196,7 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   check('it is the plan\'s season, and on Tasks for it', SL.seasonOf(eng1, garlic) === year && SL.onTasks(eng1, garlic, year));
   const early = need(SL, eng1, key, `${Y0}-09-01`), past = need(SL, eng1, key, before), o = SL0.required(old1).rows.find(r => r.key === key), out = SL.required(eng1, { today: before }).outside;
   check('Seeds counts it for the plan: still to plant before its day, and not once the day is past with nothing recorded', early.toSow > 0 && near(early.toSow, early.total) && past.toSow === 0 && near(past.total, early.total) && past.plantings === 1 && out.earlier >= 1, [early, past, out]);
-  check('the build before had no row for it', !o || o.plantings === 0);
+  check(knows0 ? 'the build before had its row too' : 'the build before had no row for it', knows0 ? !!o && o.plantings === past.plantings : !o || o.plantings === 0);
   const ro = eng1.calc(older);
   check('one dated two years before, first picked in the plan\'s year, is earlier work too, and said with its own year', SL.seasonOf(eng1, older) === year && iso(ro.first).slice(0, 4) === Y && out.earlier === 2 && JSON.stringify(out.years) === JSON.stringify([year - 2, year - 1]), [iso(ro && ro.first), out]);
   // its planting is on Tasks' other jobs when it is a transplant; here it is sown in place, which is the sowing list's
@@ -220,10 +226,10 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
     rc && iso(rc.first).slice(0, 4) === Y && SL.seasonOf(eng1, rye) === year - 1 && need(SL, eng1, key, before).plantings === need(SL, noRye, key, before).plantings && !SL.onTasks(eng1, rye, year), [iso(rc && rc.first), SL.seasonOf(eng1, rye)]);
   const noBatch = { ...plan, plantings: plan.plantings.filter(p => p.id !== batch.id) };
   const sup = (n, e) => n.supplies(e, year, null).liveOpen, up = sup(N, eng1) - sup(N, E.create(noBatch, Lib)), up0 = sup(N0, old1) - sup(N0, E0.create(noBatch, Lib));
-  check('the Nursery\'s supplies count the December batch\'s trays for the plan it is for; the build before did not', up === batch.trays && up0 === 0, [up, up0, batch.trays]);
+  check(knows0 ? 'the Nursery\'s supplies count the December batch\'s trays for the plan it is for, as the build before did' : 'the Nursery\'s supplies count the December batch\'s trays for the plan it is for; the build before did not', up === batch.trays && up0 === (knows0 ? batch.trays : 0), [up, up0, batch.trays]);
   const later = add(batch.date, 13), moved = W.delay(eng1, batch, 'sow', later);
   let refused0 = ''; try { W0.delay(old1, batch, 'sow', later); } catch (e) { refused0 = e.message; }
-  check('a December tray sowing can be put off into the January of the season it is for; the build before refused it', moved && moved.planting.date === later && later.slice(0, 4) === Y && /out of/.test(refused0), [moved && moved.planting.date, refused0]);
+  check(knows0 ? 'a December tray sowing can be put off into the January of the season it is for, as the build before allowed' : 'a December tray sowing can be put off into the January of the season it is for; the build before refused it', moved && moved.planting.date === later && later.slice(0, 4) === Y && (knows0 ? !refused0 : /out of/.test(refused0)), [moved && moved.planting.date, refused0]);
   let gone = ''; try { W.delay(eng1, batch, 'sow', `${Y}-12-30`); } catch (e) { gone = e.message; }
   check('put off so far into the plan\'s year that it would be ready in the next, it is refused: it stays the season it is for', new RegExp(`out of ${Y0}`).test(gone), gone);
   let out = ''; try { W.delay(eng1, end, 'field', `${year + 1}-01-03`); } catch (e) { out = e.message; }

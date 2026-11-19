@@ -71,7 +71,9 @@
     'summerOK', 'harvestMode', 'timingMode', 'timingEnvironmentReviewed', 'environmentDefaults', 'towerUsedSites', 'towerSitePreferenceEnabled',
     'catalogSourceChoice', 'catalogDtm', 'catalogDtmMax', 'catalogMaturityBasis',
     // shown in the seed library and used for seeds required
-    'source', 'supplier', 'sku', 'url', 'catalogDtmText', 'catalogHarvestStage', 'seedsPerPacket', 'seedsPerOz', 'seedsPerG', 'seedsPerLb'];
+    'source', 'supplier', 'sku', 'url', 'catalogDtmText', 'catalogHarvestStage', 'seedsPerPacket', 'seedsPerOz', 'seedsPerG', 'seedsPerLb',
+    // who its plants or bulbs are bought from, and the lot they are sold in: the order sheet rounds to it (N2)
+    'buyFrom', 'buyLot'];
   const PLANTING_DROPPED_FIELDS = ['planningSource', 'flagReviews'];
   const isDeterminate = notes => /\bdeterminate\b/i.test(String(notes || '')) && !/\bindeterminate\b/i.test(String(notes || ''));
   /** Group records that differ only in a few fields: one shared template, one short row each. */

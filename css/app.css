@@ -723,6 +723,17 @@ table.sd td { overflow: hidden; text-overflow: ellipsis; }
 .sd-pl { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: var(--space-8); align-items: baseline; text-align: left; border: 1px solid var(--line-soft); background: var(--surface); border-radius: var(--corner-8); padding: var(--space-4) var(--space-8); font-size: var(--type-13); }
 .sd-pl:hover { border-color: var(--ink-2); }
 .sd-plrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-4); align-items: stretch; }
+/* N2: a planting's own source beside its row (Seed | Bought in), and the line of a variety counted two ways */
+.sd-plrow.from > .sd-pl { grid-row: 1; grid-column: 1; }
+.sd-plrow.from > .sd-sowbtn { grid-row: 1; grid-column: 2; }
+.sd-plrow.from .sd-from { grid-row: 2; grid-column: 1 / -1; justify-self: start; margin-bottom: 4px; }
+.sd-from { height: var(--control-in); }
+.sd-from button { padding: 0 var(--space-8); font-size: var(--type-11); white-space: nowrap; }
+.sd-from button:disabled { opacity: 0.5; }
+.sd-planhead { display: flex; align-items: center; gap: var(--space-8); }
+.sd-buy .sd-grid { margin-top: 4px; }
+tr.sd-alt td { border-top: 0; padding-top: 0; }
+.sd-altname { padding-left: 42px; }
 .sd-sowbtn { border: 1px solid var(--line-soft); background: var(--surface); border-radius: var(--corner-8); padding: 0 var(--space-8); font: 500 var(--type-13) var(--body); color: var(--ink-2); white-space: nowrap; }
 button.sd-sowbtn:hover { border-color: var(--ink-2); color: var(--ink); }
 .sd-sowbtn.done { color: var(--good, #2f7d4f); border-color: transparent; background: transparent; font-weight: 600; }

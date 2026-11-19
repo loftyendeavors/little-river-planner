@@ -50,6 +50,8 @@ node $T/failed_test.cjs $APP $PLAN $OLD | named "failed, backup"   # Tasks part 
 node $T/failed_test.cjs $APP $SHIP $OLD | named "failed, compact"
 node $T/year_edge_test.cjs $APP $PLAN $OLD | named "year edge, backup"   # the year's edge: a December sowing for January's trays counted once in Seeds and on Tasks, stock carried in across Jan 1, the plan's own end; nothing else moves
 node $T/year_edge_test.cjs $APP $SHIP $OLD | named "year edge, compact"
+node $T/bought_test.cjs $APP $PLAN | named "bought in, backup"   # N2: a planting bought in as plants or plugs (no sowing, tray or mix, its plants and spare to buy, rounded to its lot on the order sheet), a variety counted both ways, two devices
+node $T/bought_test.cjs $APP $SHIP | named "bought in, compact"
 node $T/rails_test.cjs $APP $PLAN | named "rails"
 node $T/assume_test.cjs $APP $PLAN | named "assume"
 node $T/merge_test.cjs $APP $PLAN $FARM/inventory.json | named "merge"   # two copies of one plan joined, record by record: the rules, the five tests, 500 pairs of runs of edits
