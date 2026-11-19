@@ -31,7 +31,7 @@ Everything here runs on a made-up farm. No grower's plan is needed to check a bu
 | `*_check.py` | Checks of the page in a real browser |
 | `mutate*.py` | The faults themselves |
 | `shared_test.cjs` | The files the merge writes (`tools/shared.cjs`) and the taking of main into a branch (`tools/take_main.cjs`), on a copy of the repository with a main of its own ("Two builds side by side") |
-| `take_main_job_test.cjs` | The job that takes main in, read as text: no code of a branch runs where a key can write |
+| `take_main_job_test.cjs` | The job that takes main in, and the checks it starts, read as text: no code of a branch runs where a key can write, and a run of the checks started by dispatch says **All checks** as a status the merge counts ("On GitHub") |
 | `join_check.py`, `snaps_test.cjs`, `mutate_join.py` | Two devices that both changed the plan, joined record by record, in two real browsers against the sync service's own code (the switch, taking in, undo after it, "Use mine"); which snapshots stay; and their faults. The join rules themselves are `merge_test.cjs`, and the order of taking in is in `tools/sync_client_test.mjs` |
 | `hooks_test.cjs` | Every hook a check reads is written by the planner, and nothing styles one ("Hooks") |
 | `plan_shape.cjs`, `shape_test.cjs`, `shape_check.py` | The plan's shape written down, and the two checks that hold the farm, the planner and the merge to it ("The plan's shape") |
@@ -82,7 +82,17 @@ python3 -I tests/verdict.py /tmp/part.log app1    # exit 0: every line passed, a
 `.github/workflows/checks.yml` runs every part on every push, side by side: about eight minutes. Beside the parts it runs
 **lint**, which reads the scripts without running them (a name used and never made, a key written twice, a branch that
 cannot be reached): its rules, and how to run it by hand, are in `tools/eslint.config.mjs`. The result named
-**All checks** is the one a merge waits for, and it waits for the parts and for lint. The pictures a failed part took are kept with the run for a week. Two things are
+**All checks** is the one a merge waits for, and it waits for the parts and for lint.
+
+A run started with workflow_dispatch (by the job that takes main in, below, or by hand from the Actions page) is not
+counted by the protection of `main`, though **All checks** passes on the very commit: GitHub weighs the checks of a workflow's
+jobs for a pull request only from a run started by a push, a pull request or a few other events, never by workflow_dispatch
+(GitHub's documentation, "Troubleshooting required status checks", "Checks from some workflow jobs are not evaluated"). A merge
+then answered `Required status check "All checks" is expected`. So such a run also says **All checks** on the commit it
+checked as a commit status, with the outcome of **All checks**, and that is counted. A job of its own does it
+(`counted` in `checks.yml`): it may write statuses and nothing else, checks nothing out and runs nothing of the branch. A run
+started by a push says nothing more. A dispatched run that fails says so on its commit, and a later run on the same commit
+that passes says so again; a run that is cancelled says nothing. `take_main_job_test.cjs` holds this. The pictures a failed part took are kept with the run for a week. Two things are
 kept with every run: **counts**, the file `tests/counts.json` as that run would have it, and **screens**, the pictures of
 every main screen that looks different from the build before (before, now, and the two side by side). The driver of the
 browser and the drawing library are installed at versions said outright in the workflow; the browser is the runner's own.
@@ -181,6 +191,9 @@ those, then `node tools/shared.cjs . <fonts> origin/main`, `git add -A` and comm
 
 **On GitHub it happens by itself.** When main moves, `.github/workflows/take-main.yml` takes it into every open pull request
 from this repository that it can take in without a hand, pushes, starts the checks for the branch and says so on the pull request.
+Its push starts no workflow by itself, so it starts the checks with workflow_dispatch, and their run says **All checks** as a
+status the merge counts ("On GitHub"): no empty commit is needed to merge after it. A taking in that brings a change to a
+workflow file cannot be pushed with its key; it says so on the pull request, and the branch takes main in by hand.
 Where the code conflicts it pushes nothing and names the files there. The merge runs a branch's own helpers, so it runs with no key,
 one job a pull request on a machine of its own; the job that pushes runs nothing of any branch, and pushes only onto the commit the branch was read at
 (`take_main_job_test.cjs` holds this). So a chat that is still building may find its branch
