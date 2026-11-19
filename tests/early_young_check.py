@@ -209,10 +209,10 @@ with sync_playwright() as pw:
     js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", st["id"]); wait(600)
     f0 = js("const box = $('fStand'); return box ? { value: box.value, said: txt(hook('stand-said')), label: txt(hook('stand-label')), help: !!hook('stand-help') } : null;")
     check("the stand's panel has “Stand planted in”, empty, said to be his to type, with its “?”", f0 and f0["value"] == "" and f0["label"] == "Stand planted in" and f0["said"].startswith("Yours to type") and f0["help"], f0)
-    page.locator('[data-hook="stand-help"]').click(); wait(300)
+    (page.locator('[data-hook="stand-help"]').first.click() if page.locator('[data-hook="stand-help"]').count() else None); wait(300)
     hc = js("const c = hook('stand-help-card'); return c ? { term: txt(c.querySelector('dt')), text: txt(c) } : null;")
     check("its “?” gives the term in bold, then what it means: a young stand gives less, how much is on its crop's card, empty is a mature stand", hc and hc["term"] == "Stand planted in" and "Assumptions, Yield and price" in hc["text"] and "mature stand" in hc["text"], hc)
-    page.locator('[data-hook="stand-help"]').click(); wait(200)
+    (page.locator('[data-hook="stand-help"]').first.click() if page.locator('[data-hook="stand-help"]').count() else None); wait(200)
     s4 = js("return snap();"); d4 = js("return dates(S.engine);"); prev = st["season"] - 1
     js("return typeIn($('fStand'), %d);" % prev); wait(700)
     sp = js("""const eng = S.engine, p = eng.planting(arg.id), want = copy(); want.plantings = want.plantings.map(q => q.id === arg.id ? q : q); const was = engineOf(JSON.parse(arg.plan));
