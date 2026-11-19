@@ -1,5 +1,6 @@
-"""Deliberate faults in the joining of two copies of a plan (js/merge.js): each takes one rule or one guard out of a copy of the
-code, and a named line of tests/merge_test.cjs must then fail where it passed before.
+"""Deliberate faults in the joining of two copies of a plan (js/merge.js), and in the ids a live-tray demand plan gives what it
+makes (js/trays.js, named as the fault's fifth part): each takes one rule or one guard out of a copy of the code, and a named line
+of tests/merge_test.cjs must then fail where it passed before.
 
 usage: python3 -I mutate_merge.py <app-dir> <scratch-dir> <tests-dir> <plan.json> <inventory.json> [node | list] [words...]     env FROM=, TO= to run a part
 
@@ -106,10 +107,29 @@ NODE = [
   ('two batches of one demand row and week both stand', "    if (!gone.size) return plan;\n    ctx.report.items = ctx.report.items.filter(x => !(x.kind === 'kept' && Array.isArray(x.path) && x.path[0] === 'plantings' && gone.has(x.id)));\n    return { ...plan, plantings: plan.plantings.filter(p => !gone.has(p.id)) };", "    return plan;", 'one demand row and one week is one batch'),
   ('of two batches of one row and week the cloud\'s stays, sown or not', "      const stay = worked.length ? worked : old.length ? old : [twins.find(p => T.has(p.id)) || twins[0]];", "      const stay = old.length ? old : [twins.find(p => T.has(p.id)) || twins[0]];", 'one demand row and one week is one batch'),
   ('a batch the start held stays beside the sown one', "      const stay = worked.length ? worked : old.length ? old : [twins.find(p => T.has(p.id)) || twins[0]];", "      const stay = worked.length ? [...new Set([...worked, ...old])] : old.length ? old : [twins.find(p => T.has(p.id)) || twins[0]];", 'the laptop changed its own unsown batch'),
-  ('twins are left as joined', "settleTwins(ctx, start, mine, theirs, settleTrays(ctx, start, mine, theirs, plan))", "settleTrays(ctx, start, mine, theirs, plan)", 'where the sowing draws seed'),
+  ('twins are left as joined', "settleTwins(ctx, start, mine, theirs, settleTrays(ctx, start, mine, theirs, plan))", "settleTrays(ctx, start, mine, theirs, plan)", 'when one device runs an older page'),
   ('of two batches of one row and week, each sown, one is dropped', "conflict: worked.length > 1 });", "conflict: false }); if (worked.length > 1) { gone.add(worked[0].id); }", 'both devices sowed their own batch'),
   ('two batches of one row and week: nothing is said', "      said(ctx, { kind: 'tray-batch-twice',", "      void ({ kind: 'tray-batch-twice',", 'one demand row and one week is one batch'),
-  ('a demand plan stamped at two moments is reported as changed on both devices', "if (same(bare(m), bare(t))) return stamp(m) > stamp(t) ? m : t; }", "}", 'stamped at its own moment'),
+  ('a demand plan stamped at two moments is reported as changed on both devices', "      if (same(bare(m), bare(t))) return stamp(m) > stamp(t) ? m : t;\n", "", 'stamped at its own moment'),
+  ('a thing taken whole that a side only stamped again is changed there', "      if (isObj(s)) { if (same(bare(s), bare(t))) return m; if (same(bare(s), bare(m))) return t; }\n", "", 'changed and changed back'),
+  ('a thing taken whole that the cloud only stamped again is changed there', "if (same(bare(s), bare(t))) return m; ", "", 'undo after a join'),
+  ('a thing taken whole that this device only stamped again is changed there', " if (same(bare(s), bare(m))) return t; }", " }", 'changed and changed back'),
+  # the ids a demand plan makes (js/trays.js)
+  ('a new batch takes a random id again', "free(base, x => taken.has(x))", "uid()", 'two devices that widen one demand plan alike make one record', 'trays.js'),
+  ('a new batch takes its worked id though another plan\'s batch holds it', "free(base, x => taken.has(x))", "base", 'any other planting under it keeps it', 'trays.js'),
+  ('a sown batch taken off its plan is left plain, and its week made again beside it', "const plain = line.find(p => locked(state, p, options.records)) || line[0];", "const plain = null;", 'taken off its demand plan', 'trays.js'),
+  ('a sown batch under a free id after the worked one is not found again', "state.plantings.filter(p => !p.liveTray && nth(base, p.id) &&", "state.plantings.filter(p => !p.liveTray && p.id === base &&", 'found again the same way', 'trays.js'),
+  ('a plain planting under the worked id is taken as the week\'s batch whatever it is', " && p.bedId === bed.id && p.cropId === crops.get(b.rowId))", ")", 'any other planting under it keeps it', 'trays.js'),
+  ('of plain plantings under those ids the first is taken, recorded or not', "line.find(p => locked(state, p, options.records)) || line[0]", "line[0]", 'found again the same way', 'trays.js'),
+  ('a sown batch taken off its plan is made again from the demand, not kept as recorded', "if (plain && locked(state, plain, options.records)) {", "if (false) {", 'taken off its demand plan', 'trays.js'),
+  ('a plain planting under the worked id with nothing recorded is left beside the week\'s batch', "      if (plain) original = plain;", "", 'the week\'s own batch, made plain', 'trays.js'),
+  ('a batch tied to a demand plan is removed by hand', "if (p && p.liveTray && plans.has(p.liveTray.planId)) kept.push(p); else free.push(id);", "free.push(id);", 'is not removed by hand', 'trays.js'),
+  ('a batch\'s id holds its demand plan\'s id unescaped', "'tray:' + encodeURIComponent(planId) + ':' + key", "'tray:' + planId + ':' + key", 'no two give one', 'trays.js'),
+  ('the heated greenhouse benches take a random id', "free(POOL_ID, id => gardenIds.has(id))", "uid()", 'no heated greenhouse benches', 'trays.js'),
+  ('the bed of the benches takes a random id', "free(POOL_BED_ID, id => bedIds.has(id))", "uid()", 'no heated greenhouse benches', 'trays.js'),
+  ('a crop a demand row adds takes a random id', "const id = cropIdOf(r.name) ? free(cropIdOf(r.name), cropTaken) : uid();", "const id = uid();", 'is one crop', 'trays.js'),
+  ('a crop a demand row adds takes its worked id though another crop holds it', "free(cropIdOf(r.name), cropTaken)", "cropIdOf(r.name)", 'under the next free id', 'trays.js'),
+  ('a batch already in the plan takes the worked id', "const id = (original && original.id) || free(", "const id = free(", 'keeps every batch it had under its id', 'trays.js'),
   ('a joined plan that is the cloud\'s is not known as the cloud\'s', "    const alike = same(bare(r.plan), bare(theirs));", "    const alike = false;", 'three plans as files hold them'),
   ('who saved a file makes a joined plan differ from the cloud\'s', "    if (isObj(plan.lrfNextKeep)) out.lrfNextKeep = { keep: plan.lrfNextKeep.keep };\n", "", 'three plans as files hold them'),
 ]
@@ -139,8 +159,8 @@ if faults:
     else:
         already = set(names)
         if names: print('with no fault in it the check already fails, so these lines catch nothing: ' + '; '.join(names)[:700], flush=True)
-for n, (what, now, fault, line) in enumerate(faults):
-    work = copy(); path = os.path.join(work, 'js', 'merge.js'); src = open(path, encoding='utf-8').read()
+for n, (what, now, fault, line, *where) in enumerate(faults):
+    work = copy(); path = os.path.join(work, 'js', where[0] if where else 'merge.js'); src = open(path, encoding='utf-8').read()
     if src.count(now) != 1:
         broken.append(what); print('BROKEN %d: %s -> the text to change is there %d times' % (n, what, src.count(now)), flush=True); continue
     open(path, 'w', encoding='utf-8').write(src.replace(now, fault))

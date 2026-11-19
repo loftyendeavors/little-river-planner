@@ -16,7 +16,8 @@
  * and these are not left to shape:
  *   a thing taken whole     a bed's place on the map, a planting's layout in its bed and the like (WHOLE): never half from
  *                           each side.
- *   a stamp                 "last changed at": the later one, and nothing is said.
+ *   a stamp                 "last changed at": the later one, and nothing is said. A thing taken whole that one side holds as the
+ *                           start held it, but for its stamp, that side did not change.
  *   a planting's place      which bed, how long, where in it; and its day with a sowing day set by hand. Each is one value.
  *   a recording             a job ticked as done on a planting is one unit: its day, its lines of history, the seed it drew.
  *                           Recorded on one side: it stands whole, and the planting's place and day are that side's (a move
@@ -162,7 +163,13 @@
       if (recordLists(s, m, t) && Array.isArray(m) && Array.isArray(t)) return joinRecords(ctx, pat, path, s || [], m, t);
     }
     // a thing taken whole that the two sides changed to the same thing, each stamping it at its own moment: the later, and nothing is said
-    if (isObj(m) && isObj(t)) { const bare = o => { const out = { ...o }; for (const k of STAMPS) delete out[k]; return out; }, stamp = o => { for (const k of STAMPS) if (typeof o[k] === 'string') return o[k]; return ''; }; if (same(bare(m), bare(t))) return stamp(m) > stamp(t) ? m : t; }
+    if (isObj(m) && isObj(t)) {
+      const bare = o => { const out = { ...o }; for (const k of STAMPS) delete out[k]; return out; }, stamp = o => { for (const k of STAMPS) if (typeof o[k] === 'string') return o[k]; return ''; };
+      if (same(bare(m), bare(t))) return stamp(m) > stamp(t) ? m : t;
+      // and one that a side holds as the start held it, but for its stamp, that side did not change: the other side's. (Undo meets
+      // this: another device made the very change the step made, at its own moment, so the record now is the step's but for the stamp.)
+      if (isObj(s)) { if (same(bare(s), bare(t))) return m; if (same(bare(s), bare(m))) return t; }
+    }
     said(ctx, { kind: 'same-box', path, mine: m, theirs: t });
     return t;
   }
@@ -544,9 +551,10 @@
   }
 
   /**
-   * One row of a demand plan and one delivery week is one batch. Two devices that each widen a demand plan the same way each make
-   * a planting for the new week, under an id of its own: joined record by record both would stand, and that week would hold
-   * twice the trays wanted. Of such twins, not all of them the start's, one stays: the one with work recorded on it (and no other,
+   * One row of a demand plan and one delivery week is one batch. A batch is now made under an id worked from its plan and week
+   * (js/trays.js), so two devices that each widen a demand plan the same way make one record, joined as any planting. Batches
+   * made before that, or by an older page on one of the devices, have ids of their own: joined record by record both would
+   * stand, and that week would hold twice the trays wanted. Of such twins, not all of them the start's, one stays: the one with work recorded on it (and no other,
    * not even one the start held and this device has changed since: its change is in the report's `dropped`); where none has,
    * the one the start held, or else the cloud's. Where work is recorded on more than one, each of those stays, with its
    * history and the seed it drew, and the report says so (`conflict`): which is the true record is for the grower to say.
