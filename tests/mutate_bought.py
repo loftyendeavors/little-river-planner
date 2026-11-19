@@ -50,6 +50,8 @@ PAGE = [
  ("the lot typed is not kept", SD, "put('buyLot', t === '' ? '' : n,", "put('buyLot', '',"),
  ("a variety counted two ways shows one line", SD, "const alts = (r && r.alt ? r.alt : []).map(a => altRow(v, a, flat, ids));", "const alts = [];"),
  ("no lot on file is not said", SD, "'lot not on file') : h('td.sd-num.sd-size');", "'') : h('td.sd-num.sd-size');"),
+ ("the plants to buy count what is on order too", SD, "plants = m.need.rows.reduce((n, r) => n + (r.unit === 'plants' ? r.short || 0 : 0), 0)", "plants = m.need.rows.reduce((n, r) => n + (r.unit === 'plants' ? r.toSow : 0), 0)"),
+ ("a new lot of a variety bought in goes by its old seed stock", SD, "on the shelf\n  const stockUnitOf = v => { const own = unitOfVariety(v), stock = App.stockNow(); return own === 'plants' ? own : SL", "on the shelf\n  const stockUnitOf = v => { const own = unitOfVariety(v), stock = App.stockNow(); return false ? own : SL"),
  ("the plants to buy are not among the page's figures", SD, "plants ? h('span', { dataset: { hook: 'seeds-plants-figure' } }", "false ? h('span', { dataset: { hook: 'seeds-plants-figure' } }"),
  ("a planting bought in is recorded as sown", SD, "s.kind === 'sow' ? 'Sown…' : 'Planted…'", "'Sown…'"),
 ]

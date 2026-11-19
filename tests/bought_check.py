@@ -33,7 +33,7 @@ PRE = ("const A = LRFApp, S = A.state, E = LRFEngine, SL = LRFSeedLib, UI = LRFU
        "const hook = n => document.querySelector('[data-hook=\"' + n + '\"]'), hooks = n => [...document.querySelectorAll('[data-hook=\"' + n + '\"]')];"
        "const drawn = el => !!el && !el.hidden && el.getClientRects().length > 0 && getComputedStyle(el).display !== 'none';"
        "const iso = d => E.validDate(d) ? E.d2s(d) : null;"
-       "const sw = id => { const b = document.querySelector('[data-sowfor=\"' + id + '\"]'); const row = b && b.closest('.sd-plrow'); return row ? row.querySelector('[data-hook=\"planting-from\"]') : null; };"
+       "const sw = id => hooks('planting-from').find(el => el.dataset.planting === id) || null;"
        "const sowsIt = id => V.figures().list.some(l => l.members.some(m => m.p.id === id));"
        "const plantsIt = id => V.jobs().some(l => l.section === 'plant' && l.members.some(m => m.p.id === id));")
 def js(page, body, arg=None):
@@ -128,7 +128,15 @@ def run(pw):
     check("on the list, a variety bought in for one planting and sown for another has a second line, in plants", lines["row"] and lines["alt"] == 1 and lines["unit"] == "plants" and lines["plants"] and str(lines["plants"]) in lines["text"].replace(",", ""), lines)
     check("with no lot on file, that line says so", "lot not on file" in lines["text"], lines["text"])
     check("the variety bought in with a lot on file reads its plants in whole lots", re.search(r"\d+ × %d plants" % pick["lot"], lines["plugs"]) is not None, lines["plugs"])
-    check("the page's figures say the plants to buy", re.search(r"[\d,]+ plants to buy", lines["fig"]) is not None, lines["fig"])
+    want = js(page, "const stock = A.stockNow(); return SL.required(eng, { today: A.today() }).rows.filter(r => r.unit === 'plants').reduce((n, r) => { const s = stock[(r.variety ? 'v:' + r.variety.id : 'c:' + r.crop.id) + '|plants'] || { onHand: 0, onOrder: 0 }; return n + Math.max(0, Math.ceil(r.toSow - s.onHand - s.onOrder)); }, 0);")
+    check("the page's figures say the plants still to buy: what plants on hand and on order do not cover", re.search(r"([\d,]+) plants to buy", lines["fig"]) is not None and int(re.search(r"([\d,]+) plants to buy", lines["fig"]).group(1).replace(",", "")) == want, [lines["fig"], want])
+    # a new lot of a variety all of whose plantings are bought in is in plants, even with seed of it on the shelf from before
+    js(page, "A.editStock('Seed from before', (lib, ctx) => SL.addLot(lib, { key: 'v:' + arg.v, unit: 'seeds', quantity: 10, status: 'usable' }, ctx)); return null;", pick); page.wait_for_timeout(700)
+    js(page, "const b = document.querySelector('tr.sd-var[data-variety=\"' + arg.v + '\"] .sd-addlot'); if (b) b.click(); return null;", pick); page.wait_for_timeout(600)
+    unit = js(page, "const a = $('lrAmount'); return a ? a.placeholder : '';")
+    check("a new lot of a variety bought in for all its plantings is counted in plants", unit == "Plants", unit)
+    js(page, "const x = $('lrClose'); if (x) x.click(); A.undo(); return null;"); page.wait_for_timeout(600)
+    check("Undo takes the seed from before back", js(page, "return A.contentKey();") == start["key"])
 
     # ── a lot typed: at once, with Undo ──
     js(page, "LRFSeeds.select({ type: 'variety', id: arg.tv }); return null;", pick); page.wait_for_timeout(900)

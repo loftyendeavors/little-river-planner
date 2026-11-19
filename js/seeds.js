@@ -671,7 +671,8 @@
   // The line at the top of the view is for a packet named by typing. From a variety's own row, "+ lot" opens this one
   // under that row, so the eye does not leave it; × or Escape closes it and nothing is added.
   const lotRow = { varietyId: '', vendor: '', year: String(new Date().getFullYear()), amount: '', status: 'usable', focus: '', node: null };
-  const stockUnitOf = v => { const stock = App.stockNow(); return SL.STOCK_UNITS.find(u => stock['v:' + v.id + '|' + u]) || unitOfVariety(v); };
+  // a variety all of whose plantings are bought in takes its lots in plants, whatever stock from before is on the shelf
+  const stockUnitOf = v => { const own = unitOfVariety(v), stock = App.stockNow(); return own === 'plants' ? own : SL.STOCK_UNITS.find(u => stock['v:' + v.id + '|' + u]) || own; };
   function knownVendors() {
     const seen = new Map(), live = App.state.plan.varieties.filter(v => v.active !== false && !v.deleted);
     for (const s of [...live.map(v => v.supplier || (v.source === 'Farm entry' ? '' : v.source) || ''), ...((App.inventoryNow().lots || []).map(l => (l && l.supplier) || ''))]) { const key = SL.supplierKey(s); if (key && !/\.[a-z]{2,}$/i.test(s.trim()) && !seen.has(key)) seen.set(key, s.trim()); }
@@ -930,7 +931,7 @@
     if (!ui.sel) {
       // with nothing picked the panel holds the page's one line of figures, and one action for the day the box comes. What stood
       // here as notices is in Loose ends in the header; seed on order is a filter of the list (DESIGN.md, rules 1 and 4)
-      const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), plants = rows.reduce((n, r) => n + (r.unit === 'plants' ? r.toSow : 0), 0), short = [...m.byV.values()].filter(r => rowsOf(r).some(x => (x.unit === 'seeds' || x.unit === 'g') && x.short > 0)).length, onOrder = m.live.filter(v => passes(m, v, 'ordered')).length;
+      const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), plants = m.need.rows.reduce((n, r) => n + (r.unit === 'plants' ? r.short || 0 : 0), 0), short = [...m.byV.values()].filter(r => rowsOf(r).some(x => (x.unit === 'seeds' || x.unit === 'g') && x.short > 0)).length, onOrder = m.live.filter(v => passes(m, v, 'ordered')).length;
       add(el, h('header.sd-ph.plain', h('div', h('p.eyebrow', `${App.planYear()} season`), h('h2', 'Seed library'))),
         h('p.frame-figs', { id: 'sdFigs' }, h('span', h('b', num(m.live.length)), ' varieties, ', h('b', num(m.live.filter(v => m.used.has(v.id)).length)), ' planted'), h('span', h('b', num(seeds)), ' seeds to sow'), plants ? h('span', { dataset: { hook: 'seeds-plants-figure' } }, h('b', num(plants)), ' plants to buy') : null, h('span', h('b', num(short)), ' short of seed'), onOrder ? h('span', h('b', num(onOrder)), ' on order') : null),
         Object.values(m.stock).some(x => x.onOrder > 0) ? h('p.sd-arrived', h('button.btn.small', { type: 'button', id: 'sdReceiveAll', title: 'When the box comes: every order becomes seed on hand, as ordered. One Undo puts them back. To count one order, click it.', onclick: receiveAll }, 'All orders arrived…')) : null);
@@ -1003,7 +1004,7 @@
       const need = eng.calc(cur), what = to === 'plant' ? `bought in, ${num(Math.ceil(need.plants * (1 + (+App.state.plan.settings.buffer || 0) / 100) - 1e-9))} plants to buy${need.sow ? `, no sowing on ${day(need.sow)}` : ''}` : 'sown from seed';
       if (await App.revise(`${v.name}, ${day(r.field)}: ${what}`, [{ before: cur, after }])) { ui.panelKey = ''; schedule(); }
     };
-    return h('div.seg.sd-from', { role: 'group', 'aria-label': `${v.name}, ${day(r.field)}: started from`, dataset: { from: now, hook: 'planting-from' } },
+    return h('div.seg.sd-from', { role: 'group', 'aria-label': `${v.name}, ${day(r.field)}: started from`, dataset: { from: now, planting: p.id, hook: 'planting-from' } },
       [['seed', 'Seed'], ['plant', 'Bought in']].map(([id, label]) => h('button', { type: 'button', 'aria-pressed': String(now === id), disabled: fixed && now !== id, dataset: { to: id }, title: fixed ? 'Work is recorded for this planting' : id === 'plant' ? 'Bought in as plugs or plants: no sowing, tray or mix' : 'Sown on the farm', onclick: () => set(id) }, label)));
   }
   /**
@@ -1086,7 +1087,7 @@
     for (const r of m.need.rows) {
       if (!(r.toSow > 0)) continue;
       const v = r.variety, ms = r.unit === 'seeds' ? SL.measures(r.toSow, v) : { weight: '', packets: '' }, c = r.cover;
-      lines.push([cropName(r.crop), v ? v.name : '', v ? v.supplier || v.source || '' : '', v ? v.sku || '' : '', Math.round(r.toSow * 10) / 10, r.unit, r.onHand, r.onOrder, r.short, ms.weight, c ? c.text : '', c && c.cost != null ? c.cost.toFixed(2) : '', r.first ? E.d2s(r.first) : '', r.waiting, r.plantings]);
+      lines.push([cropName(r.crop), v ? v.name : '', v ? (r.unit === 'seeds' || r.unit === 'g' ? v.supplier || v.source || '' : SL.boughtFrom(r)) : '', v ? v.sku || '' : '', Math.round(r.toSow * 10) / 10, r.unit, r.onHand, r.onOrder, r.short, ms.weight, c ? c.text : '', c && c.cost != null ? c.cost.toFixed(2) : '', r.first ? E.d2s(r.first) : '', r.waiting, r.plantings]);
     }
     const blob = new Blob(['﻿' + lines.map(l => l.map(cell).join(',')).join('\r\n')], { type: 'text/csv' }), filename = `seeds-required-${App.planYear()}-${E.d2s(new Date())}.csv`;
     const fallback = () => { const url = URL.createObjectURL(blob), a = h('a', { href: url, download: filename }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); };
@@ -1204,7 +1205,7 @@
     add(host, form, say);
 
     const picked = () => (quick.varietyId ? eng().variety(quick.varietyId) : null);
-    const stockUnitOf = v => { const stock = App.stockNow(); return SL.STOCK_UNITS.find(u => stock['v:' + v.id + '|' + u]) || unitOfVariety(v); };
+    const stockUnitOf = v => { const own = unitOfVariety(v), stock = App.stockNow(); return own === 'plants' ? own : SL.STOCK_UNITS.find(u => stock['v:' + v.id + '|' + u]) || own; };
     const typedMatch = () => { const key = SL.norm(name.value); return key ? live().filter(v => SL.norm(v.name) === key) : []; };
     function unit() { const v = picked(); return v ? stockUnitOf(v) : unitFor(cropPick.value ? eng().crop(cropPick.value) : null); }
     function sync() {
