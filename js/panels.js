@@ -525,8 +525,62 @@
     const whose = y.own ? `its own yield, ${num(y.per, 2)}${unit} from ${basis}: “See what differs…” on the Assumptions list lets it follow the list` : y.by === 'default' ? (y.set ? 'the crop’s own yield, not yet set on the Assumptions list' : 'no yield is set for this crop') : `your list’s yield for ${y.by === 'variety' ? 'the variety' : 'the crop'}`;
     const how = y.pattern === 'weekly' ? `${num(y.perWeek, 2)}${unit} a week from ${basis}` : y.pattern === 'once' ? 'all at once' : '';
     // a planting that feeds more than one thing its crop sells: each thing in its own unit, at its own price
-    if (parts) return h('p.help', { id: 'fYieldLine', dataset: { things: String(parts.length) } }, `Expected: ${parts.map(x => `${x.thing ? x.name + ', ' : parts.length > 1 ? r.c.name + ', ' : ''}${F.amount(x.units, x.unit, 'produce')}${!personal && x.price > 0 ? ` at $${num(x.price, 2)}, ${'$' + Math.round(x.units * x.price).toLocaleString('en-US')}` : ''}`).join('; ')}${personal ? ', for personal use: not counted as revenue' : ''}. ${r.c.name} sells more than one thing: each is worked out from its own column under Assumptions, Yield and price.`);
-    return h('p.help', { id: 'fYieldLine' }, `Expected: ${F.amount(y.units, y.unit, 'produce')}${personal ? ', for personal use: not counted as revenue' : y.price > 0 ? ` at $${num(y.price, 2)}, ${'$' + Math.round(y.units * y.price).toLocaleString('en-US')}` : ''}. From ${whose}${how ? ` (${how})` : ''}.${r.c.harvestBy === 'list' ? ' Harvest days are your list’s.' : ''}`);
+    if (parts) return h('p.help', { id: 'fYieldLine', dataset: { things: String(parts.length) } }, `Expected: ${parts.map(x => `${x.thing ? x.name + ', ' : parts.length > 1 ? r.c.name + ', ' : ''}${F.amount(x.units, x.unit, 'produce')}${x.age && x.age.season < 3 ? (x.age.season === 0 ? ' (none: before the stand is planted)' : ` (${num(x.age.share, 1)}%, its ${ORD[x.age.season]} season)`) : ''}${!personal && x.price > 0 ? ` at $${num(x.price, 2)}, ${'$' + Math.round(x.units * x.price).toLocaleString('en-US')}` : ''}`).join('; ')}${personal ? ', for personal use: not counted as revenue' : ''}. ${r.c.name} sells more than one thing: each is worked out from its own column under Assumptions, Yield and price.`);
+    return h('p.help', { id: 'fYieldLine' }, `Expected: ${F.amount(y.units, y.unit, 'produce')}${personal ? ', for personal use: not counted as revenue' : y.price > 0 ? ` at $${num(y.price, 2)}, ${'$' + Math.round(y.units * y.price).toLocaleString('en-US')}` : ''}. From ${whose}${how ? ` (${how})` : ''}${standSaid(y.age)}.${r.c.harvestBy === 'list' ? ' Harvest days are your list’s.' : ''}`);
+  }
+  /** What a young stand's share does to the Expected line (E2c part 2): nothing for a mature stand or one with no year typed. */
+  const standSaid = age => !age || age.season >= 3 ? '' : age.season === 0 ? ': none of it, before the stand is planted' : `: ${num(age.share, 1)}% of it, in the stand’s ${age.season === 1 ? 'first' : 'second'} season`;
+
+  // ── the year a cane stand was planted (E2c part 2): its own block, in a planting's panel and in the bed's season (card.js) ──
+  // A box only he can fill, for a planting of a perennial crop. Empty is a mature stand, as before. Typed, a young stand gives the
+  // share of a mature stand's yield its crop's card gives for its season; a planting with a yield of its own keeps it as typed.
+  const STAND_WORDS = [['Stand planted in', 'The year this stand went into its bed. A stand gives less while it is young: how much, the year it is planted and the year after, is on its crop’s card under Assumptions, Yield and price. From the third year it gives all of it. Empty: a mature stand, as before.']];
+  /** What is so of this stand, in a line under its box: nothing to hide, and nothing said where there is nothing to say. */
+  function standSays(eng, p, r) {
+    const y = eng.yieldOf(p, r), age = eng.standAge(p, r);
+    if (y && y.own) return 'It carries a yield of its own, which stands: no share is taken from it.';
+    if (!age) return 'Yours to type. Empty: a mature stand.';
+    // each part that is picked in another year than the crop's own line says its own season and share; one picked before the stand
+    // is planted says so with its date (the chat that holds the build, on Codex's Zoom Out of #83): the figures and the words agree
+    const own = age.season === 0 ? `First picked ${dayYear(r.first)}, before the stand is planted (${age.year}): none counted that year.`
+      : age.season >= 3 ? 'A mature stand: all of its yield.' : `Its ${ORD[age.season]} season: ${num(age.share, 1)}% of a mature stand’s yield.`;
+    return [own, ...partsSaid(eng, p, r)].join(' ');
+  }
+  const ORD = ['', 'first', 'second', 'third'];
+  /** A day with its year where the year is not the plan's. */
+  const dayYear = d => d.getFullYear() === App.planYear() ? day(d) : `${day(d)}, ${d.getFullYear()}`;
+  /** What else a stand's crop sells that is picked in another year than its own line, and so takes another share: each said. */
+  function partsSaid(eng, p, r) {
+    const y = eng.yieldOf(p, r), parts = (eng.soldOf(p, r, y) || []).filter(x => x.thing && x.age && y && y.age && x.age.season !== y.age.season);
+    return parts.map(x => x.age.season === 0 ? `${x.name} first picked ${dayYear(x.first)}, before the stand is planted (${x.age.year}): none counted that year.`
+      : `${x.name}, first picked ${dayYear(x.first)}: its ${ORD[Math.min(3, x.age.season)]} season, ${x.age.season >= 3 ? 'all of it' : `${num(x.age.share, 1)}%`}.`);
+  }
+  /** The box itself: a year, sent through App.setPlantedIn. `cls` is the caller's own part (the panel's field, the card's box). */
+  function standBox(eng, p, r, { id, name, disabled, onFail } = {}) {
+    const input = h('input', { type: 'number', id: id || null, name: name || null, min: 1900, max: Math.max(r.first.getFullYear(), Number.isInteger(p.plantedIn) ? p.plantedIn : 0), step: 1, value: Number.isInteger(p.plantedIn) ? p.plantedIn : '', placeholder: 'year',
+      disabled: !!disabled, dataset: { hook: 'stand-year', planting: p.id }, title: 'The year this stand was planted. Empty: a mature stand.',
+      onchange: e => { if (!App.setPlantedIn(p.id, e.target.value) && onFail) onFail(); } });
+    return input;
+  }
+  function standField(eng, p, r) {
+    if (!eng.isPerennial(r.c) || r.rack) return null;
+    return h('div.field', { id: 'fStandField' }, h('div.field-head', h('label', { for: 'fStand', dataset: { hook: 'stand-label' } }, 'Stand planted in'),
+      UI.help(null, null, STAND_WORDS, { label: 'What Stand planted in means', hook: 'stand-help', card: { hook: 'stand-help-card' } })),
+      standBox(eng, p, r, { id: 'fStand', onFail: () => render() }), h('small', { dataset: { hook: 'stand-said' } }, standSays(eng, p, r)));
+  }
+  /** Lines of the Schedule for what it sells that is first picked before its days to harvest (E2c part 2): before the planting's own
+   *  first harvest, which then reads "Days to harvest", so that the Schedule stays in order and names each day for what it is. */
+  function earlyPicks(eng, p, r) {
+    // in date order, the earliest first; on one day, the one picked more days early first
+    // kept whenever days before are asked, even where none can apply, so that the number is never silently lost (Codex on #83)
+    return (eng.soldOf(p, r) || []).filter(x => x.asked).sort((a, b) => a.first - b.first || (b.ahead || 0) - (a.ahead || 0)).map(x => h('li', { dataset: { hook: 'early-pick', thing: x.thing } }, h('span', `${x.name} from`), h('b', `${dayYear(x.first)}${early(eng, p, r, x)}`)));
+  }
+  /** Where a planting goes into its bed fewer days before its days to harvest than the card's days before: said, not hidden. */
+  function early(eng, p, r, x) {
+    const ahead = x.ahead || 0, said = [];
+    if (ahead < x.asked) said.push(ahead ? `${ahead} of ${x.asked} days early: in its bed ${dayYear(r.field)}` : `${x.asked} days early asked; none can apply: in its bed ${dayYear(r.field)}, first picked with ${r.c.name}`);
+    if (x.age && x.age.season === 0) said.push(`before the stand is planted (${x.age.year}): none counted that year`);
+    return said.length ? ` (${said.join('; ')})` : '';
   }
 
   // ── several varieties in one bed (stage c of the bed panel build) ──
@@ -668,6 +722,7 @@
           field('Harvest days', h('input', { type: 'number', id: 'fHw', min: 0, max: 400, value: p.hw != null && p.hw !== '' ? p.hw : '', placeholder: r.harvestMode === 'season' ? 'To season end' : String(c.hw),
             onchange: e => set(...edit.hw(e.target.value)) }))),
         h('p.help', fromList || dtmSource),
+        standField(eng, p, r),
         useField,
         givesField,
         yieldLine(eng, p, r)),
@@ -675,7 +730,8 @@
         h('h3', 'Schedule'),
         h('ol.schedule', { id: 'jobList' },
           jobItems(p, r, c, sow),
-          h('li', h('span', 'First harvest'), h('b', day(r.first))),
+          earlyPicks(eng, p, r),
+          h('li', { dataset: { hook: 'schedule-first' } }, h('span', eng.soldOf(p, r)?.some(x => x.ahead) ? 'Days to harvest' : 'First harvest'), h('b', day(r.first))),
           h('li', h('span', 'Last harvest'), h('b', r.harvestDays ? day(r.last) : 'None before the season ends')),
           h('li', h('span', 'Ground free again'), h('b', through === Infinity ? 'Stays planted' : day(E.addDays(through, 1)))))),
       failSection(p),
@@ -848,5 +904,5 @@
     });
   }
 
-  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, setScope, scope: () => lib.scope, renderLibrary, sowingBox, edit, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle(), useWords: USE_WORDS, redraw: render };
+  root.LRFPanels = { init() { initLibrary(); initInspector(); }, isMine, setScope, scope: () => lib.scope, renderLibrary, sowingBox, edit, settleCount, showSettle, savedLine, looseEnds, needsYou, drawLoose: () => laterSettle(), useWords: USE_WORDS, redraw: render, standBox, standSays, standWords: STAND_WORDS };
 })(window);

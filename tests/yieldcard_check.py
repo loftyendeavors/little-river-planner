@@ -191,7 +191,7 @@ with sync_playwright() as pw:
     for cid in ids:
         open_crop(cid, 60)
         walk[cid] = js("""const id = %s, c = S.engine.crop(id), hc = S.engine.harvestFor(id), k = card(), at = placesOf(id);
-          return { card: k, places: at.length ? at : hc.micro ? ['tray'] : S.engine.ENVS.filter(e => hc.cells[e].used), planted: at.length > 0, micro: hc.micro, basis: hc.basis, pattern: hc.pattern.value, season: hc.season, unit: hc.unit.value, waits: waits(c), share: hc.share.value, days: hc.days.value,
+          return { card: k, places: at.length ? at : hc.micro ? ['tray'] : S.engine.ENVS.filter(e => hc.cells[e].used), planted: at.length > 0, stand: S.engine.isPerennial(c) && !hc.micro && !S.engine.isCoverCrop(c), micro: hc.micro, basis: hc.basis, pattern: hc.pattern.value, season: hc.season, unit: hc.unit.value, waits: waits(c), share: hc.share.value, days: hc.days.value,
             dtm: Object.fromEntries(S.engine.ENVS.map(e => [e, (S.engine.timingFor(id, null, e) || {}).value])), forecast: forecast(id), cells: Object.fromEntries(S.engine.ENVS.map(e => [e, hc.cells[e]])), cur: (side().items.find(i => i.cur) || {}).id };""" % json.dumps(cid))
     w_ok = [cid for cid in ids if walk[cid]["card"]["crop"] == cid and walk[cid]["cur"] == cid]
     check("a click on any crop of the checklist opens that crop's card", len(w_ok) == len(ids), [names.get(c) for c in ids if c not in w_ok][:5])
@@ -199,8 +199,8 @@ with sync_playwright() as pw:
     check("a column for each growing place the crop is planted in, and for no other", bad == [] and sum(1 for c in ids if walk[c]["planted"]) > 20, bad[:6])
     idle = [c for c in ids if not walk[c]["planted"]]
     check("a crop that is not planted this season says so, and has a column for each place the farm has, so that it can still be set", all("Not planted" in walk[c]["card"]["where"] and all("not planted yet" in h.lower() for h in walk[c]["card"]["heads"]) and len(walk[c]["card"]["cols"]) >= 1 for c in idle), [names.get(c) for c in idle][:4])
-    bad = [names.get(c) for c in ids if walk[c]["card"]["order"] != ["unit", "price", "yield", "first", "pick", "last"]]
-    check("a row for each figure, in one order on every card: sold by, price, what it gives, first picking, picked, last picking", bad == [], bad[:6])
+    bad = [names.get(c) for c in ids if walk[c]["card"]["order"] != ["unit", "price", "yield"] + (["young"] if walk[c]["stand"] else []) + ["first", "pick", "last"]]
+    check("a row for each figure, in one order on every card: sold by, price, what it gives, for a perennial crop what a young stand gives, first picking, picked, last picking", bad == [] and any(walk[c]["stand"] for c in ids), bad[:6])
     def same_as_list(c):
         k = walk[c]["card"]["boxes"]; out = []
         for yk, hk in [("price", f"price|{c}"), ("unit", f"unit|{c}"), ("pick", f"pick|{c}"), ("days", f"days|{c}")] + [(f"y|{e}", f"y|crops|{c}|{e}") for e in walk[c]["places"] if e != "tray"]:

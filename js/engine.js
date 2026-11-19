@@ -453,7 +453,10 @@
     //   looked    the year its figures were last looked at and said to be right
     // Nothing set means the crop's own figures. The two marks are words about the line: no figure is worked out from them.
     //   things    more than one thing sold from the crop: { thingId: { id, n, name, from, place, unit, price, pattern, days, share, yield,
-    //             counted, weighs, holds, of } }. The line itself is the first thing; these are the others (thingsOf, below).
+    //             counted, weighs, holds, of, before } }. The line itself is the first thing; these are the others (thingsOf, below).
+    //   young     a cane stand (a perennial crop) by its age: [the percent of a mature stand's yield it gives the year it is planted,
+    //             the percent the year after]; from the third year it gives all of it. Each is his; an empty one is the published
+    //             figure where there is one (YOUNG, below), else all of it. Read only for a stand whose year he typed (standAge).
     // settings.houseKeeps === false is the farm's own switch: nothing is kept for personal use, and all that is packed counts as sold.
     const PATTERNS = ['spread', 'weekly', 'once'];
     const amount0 = x => x != null && x !== '' && Number.isFinite(+x) && +x >= 0 ? +x : null;
@@ -461,7 +464,13 @@
     function sellRule(cropId) {
       const x = (S.assumptions && S.assumptions.sell && S.assumptions.sell[cropId]) || {}, share = amount0(x.share), turn = amount0(x.turnover);
       return { unit: word(x.unit), price: amount0(x.price), pattern: PATTERNS.includes(x.pattern) ? x.pattern : null, days: wholeDays(x.days), keep: amount0(x.keep),
-        share: share != null && share <= 100 ? share : null, turnover: turn == null ? null : Math.round(turn), house: x.house === true ? true : null, looked: Number.isInteger(x.looked) ? x.looked : null, until: untilOf(x.until) };
+        share: share != null && share <= 100 ? share : null, turnover: turn == null ? null : Math.round(turn), house: x.house === true ? true : null, looked: Number.isInteger(x.looked) ? x.looked : null, until: untilOf(x.until), young: youngOf(x.young) };
+    }
+    /** A line's shares for a young stand: [the year it is planted, the year after], each a percent 0 to 100 or null; null for none. */
+    function youngOf(x) {
+      if (!Array.isArray(x)) return null;
+      const out = [0, 1].map(i => { const n = x[i]; return n != null && n !== '' && Number.isFinite(+n) && +n >= 0 && +n <= 100 ? +n : null; });
+      return out.some(n => n != null) ? out : null;
     }
     /** A line's last pickings by place: { field: '10-31', … } with only the places that hold a month and day; null for none. */
     function untilOf(x) {
@@ -1037,6 +1046,19 @@
           : once ? `Cleared before the first frost (${d2s(fc.day)}), which ends its harvest days.`
             : `The first frost (${d2s(fc.day)}) ends its harvest: ${r.harvestDays} of ${fc.plannedDays} days are picked, and the yield follows.` });
       }
+      // E2c part 2: something it sells first picked before its days to harvest, and a young stand's share, said quietly
+      if (!isCoverCrop(r.c)) {
+        const y = yieldOf(p, r), parts = y ? soldOf(p, r, y) : null;
+        for (const x of parts || []) {
+          if (x.thing && x.age && x.age.season === 0 && +x.first !== +r.first) out.push({ k: 'stand', t: `${x.name} first picked ${d2s(x.first)}, before the stand is planted (${x.age.year}): none counted that year.` });
+          if (!x.asked) continue;
+          // what was asked and what applies, with the day it goes into its bed named: never a number that is not so (Codex on #83)
+          out.push({ k: 'pick', t: x.ahead === x.asked ? `${x.name} first picked ${d2s(x.first)}, ${x.ahead} day${x.ahead === 1 ? '' : 's'} before its days to harvest (${d2s(r.first)}).`
+            : x.ahead ? `${x.name} first picked ${d2s(x.first)}, ${x.ahead} of the ${x.asked} days early asked: it goes into its bed ${d2s(r.field)}.`
+              : `${x.name}: ${x.asked} days early asked; none can apply: it goes into its bed ${d2s(r.field)} and is first picked with ${r.c.name} on ${d2s(x.first)}.` });
+        }        if (y && y.age && y.age.season === 0) out.push({ k: 'stand', t: `First picked ${d2s(r.first)}, before the stand is planted (${y.age.year}): none counted that year.` });
+        else if (y && y.age && y.age.season < 3) out.push({ k: 'stand', t: y.age.share > 0 ? `Planted in ${y.age.year}, its ${y.age.season === 1 ? 'first' : 'second'} season: ${Math.round(y.age.share * 10) / 10}% of a mature stand’s yield.` : `Planted in ${y.age.year}, its ${y.age.season === 1 ? 'first' : 'second'} season: nothing is picked.` });
+      }
       if (r.c.frostTender && g.frost) {
         const exposed = od && od > r.field ? od : r.field;
         if (exposed <= r.last) {
@@ -1267,9 +1289,86 @@
       const set = liveTray || (c.yield != null && c.yield !== '' && Number.isFinite(+c.yield)) || own || mine != null;
       const figure = liveTray ? 1 : nonNegative(own ? p.yield : mine != null ? mine : c.yield);
       const perWeek = weekly ? (mine != null ? mine : figure * 7 / nominal) : null, each = weekly ? perWeek * r.harvestDays / 7 : figure;
-      return { basis, count, per: each, mk, part: weekly ? 1 : part, units: count * each * mk * (weekly ? 1 : part), unit: unitOf(c, v), set, own, price: priceOf(p, c, v),
+      // a young stand gives its share of the list's yield; a yield of the planting's own is his for that planting, and stands
+      const age = own || liveTray ? null : standAge(p, r), young = age ? age.share / 100 : 1;
+      return { basis, count, per: each, mk, part: weekly ? 1 : part, units: count * each * mk * (weekly ? 1 : part) * young, ...(age ? { age } : {}), unit: unitOf(c, v), set, own, price: priceOf(p, c, v),
         pattern: own && pattern === 'weekly' ? 'spread' : pattern, perWeek, nominal, by: own ? 'own' : fromV != null ? 'variety' : fromC != null ? 'crop' : 'default', keep: liveTray ? 0 : rule.keep || 0 };
     }
+    /**
+     * The days a thing is first picked before a planting's own first picking: its `before`, but never so many that it would be
+     * picked before the planting is in its bed (it is first picked the day after at the earliest), and none for a planting that
+     * is not picked at all. 0 where it has none.
+     */
+    const aheadOf = (t, r) => t && t.before && r && r.harvestDays > 0 ? Math.max(0, Math.min(t.before, dayDiff(r.first, r.field) - 1)) : 0;
+    // ── a cane stand by its age (E2c part 2) ──
+    // A stand gives less while it is young. Published figures for the share of a mature stand's yield it gives the year it is planted
+    // and the year after, for the crops whose name says what they are (as isPerennial reads it). They count only for a stand whose
+    // year he typed on its planting (`plantedIn`), and his own figures on the crop's card (`assumptions.sell[crop].young`) replace
+    // them. An empty year is a mature stand, as before. From the third year a stand gives all of it.
+    //   raspberry   0, 80   Johnny's Selected Seeds, raspberry growing instructions (8859): summer-bearing canes are not picked
+    //                       the year they are planted. University of Idaho, Raspberries: 1991 production costs in Northern Idaho
+    //                       (Levi et al., 1992), for a commercial planting: 5,200 lb an acre the second year against 6,500 in full
+    //                       production. Fall-bearing raspberries crop the first fall (Johnny's): there the grower types his own.
+    //   blackberry  0, 80   NC State, Safley, Boldea and Fernandez (2006), costs of producing blackberries in the southeastern US,
+    //                       for a commercial planting: 0 lb an acre the year planted, 10,000 the second, 12,500 from the third.
+    const YOUNG = [
+      { name: /raspberr/i, shares: [0, 80], said: ['Johnny’s Selected Seeds (Maine), its raspberry growing instructions: summer-bearing canes are not picked the year they are planted. Fall-bearing ones crop the first fall: type your own',
+        'University of Idaho, a commercial planting in Northern Idaho (1992 costs): 5,200 lb an acre the second year, against 6,500 in full production'] },
+      { name: /blackberr/i, shares: [0, 80], said: ['NC State, commercial plantings in the southeastern US (2006 costs): no picking the year they are planted',
+        'NC State, the same budget: 10,000 lb an acre the second year, against 12,500 from the third'] }];
+    /** A perennial crop's shares for a young stand: two cells, each { mine, fallback, value }; null for a crop that is not perennial. */
+    function youngFor(cropId) {
+      const c = crop(cropId);
+      if (!c || !isPerennial(c) || c.micro || isCoverCrop(c)) return null;
+      const seed = YOUNG.find(x => x.name.test(c.name || '')), mine = sellRule(cropId).young;
+      return [0, 1].map(i => { const m = mine ? mine[i] : null, fallback = seed ? seed.shares[i] : null; return { mine: m, fallback, value: m != null ? m : fallback, source: seed ? seed.said[i] : null }; });
+    }
+    /**
+     * How old a stand is: { year, season, share } for a planting of a perennial crop whose year he typed, where `season` is 1 in the
+     * year it was planted, 2 the year after, 3 from then on, counted to the year it is picked in, and `share` the percent of a mature
+     * stand's yield it gives then: 0 in a year before it is planted (season 0). null where no year is typed (a mature stand, as before).
+     * `year`: the year to count to, where not the year of the planting's first picking (something else it sells, picked earlier).
+     */
+    function standAge(p, r, year) {
+      r = r || calc(p);
+      const y = p && p.plantedIn, at = year != null ? year : r && r.first instanceof Date ? r.first.getFullYear() : null;
+      if (!r || !Number.isInteger(y) || y < 1900 || at == null || !isPerennial(r.c)) return null;
+      // picked in a year before the stand is planted (its date moved, or something it sells picked early across the New Year): nothing
+      // is counted from it that year, and its season is 0, so that the screens say so
+      if (y > at) return { year: y, season: 0, share: 0, at };
+      const season = Math.min(3, at - y + 1), cell = season < 3 ? (youngFor(p.cropId) || [])[season - 1] : null;
+      return { year: y, season, share: cell && cell.value != null ? cell.value : 100, at };
+    }
+    /**
+     * The earliest year a stand is picked in: that of its first picking, or of something else its crop sells picked before it. The
+     * latest year planted the stand's box takes (a year after its earliest picking is no year for it).
+     */
+    function standYear(p, r) {
+      r = r || calc(p);
+      if (!r || !(r.first instanceof Date)) return null;
+      const env = envOf(r.b), early = thingsOf(p.cropId).filter(t => t.counts && (t.from === 'place' ? t.place === env : t.from === 'bed' && p.gives !== 'first' && (!p.gives || p.gives === t.id)));
+      const ahead = early.reduce((n, t) => Math.max(n, aheadOf(t, r)), 0);
+      return (ahead ? addDays(r.first, -ahead) : r.first).getFullYear();
+    }
+    /**
+     * The days a planting is picked, for the screens that say "picking" (the map, the bed's season): a list of windows [from, to], in
+     * order, joined where they touch. Where what it is grown for has a day before or a stand's age in it (E2c part 2), the own days of
+     * each sold part that gets something (not one picked before its stand is planted, nor one with a share or an amount of 0); a gap
+     * between two parts stays a gap. Otherwise its harvest period, as before. Empty where it is not picked.
+     */
+    function pickWindows(p, r) {
+      r = r || calc(p);
+      if (!r || !(r.harvestDays > 0)) return [];
+      const y = yieldOf(p, r), parts = y ? soldOf(p, r, y) || [y] : null;
+      if (!parts || !parts.some(x => x && (x.asked || x.age))) return [[r.first, r.last]];
+      const list = parts.filter(x => x && x.units > 0 && !(x.age && !(x.age.share > 0))).map(x => [x.first || r.first, x.last || r.last]).sort((a, b) => a[0] - b[0]), out = [];
+      for (const [a, b] of list) { const last = out[out.length - 1]; if (last && +a <= +addDays(last[1], 1)) { if (b > last[1]) last[1] = b; } else out.push([a, b]); }
+      return out;
+    }
+    /** The first day a planting is picked, for those screens: its first window's. */
+    const pickedFrom = (p, r) => { const w = pickWindows(p, r); return w.length ? w[0][0] : (r || calc(p) || {}).first || null; };
+    /** Is a planting being picked on a day, for those screens: inside one of its windows. */
+    const pickingOn = (p, r, date) => pickWindows(p, r).some(([a, b]) => date >= a && date <= b);
     /** Is this a day the crop is picked? Any day of its harvest period. */
     const pickedOn = (r, date) => date >= r.first && date <= r.last;
     /** The harvest days a total is shared over: those there are, but for a crop cleared in one day before the frost cut its days short. */
@@ -1286,6 +1385,10 @@
     // it is sold by weight and its yield is typed in something counted (`counted`), `weighs` turns the one into the other.
     // Nothing else turns a unit into another. A thing counts for nothing until every figure it needs is there: until then the
     // crop is worked out exactly as if the thing had never been added.
+    // A `place` or `bed` thing may be first picked `before` days ahead of the crop's own days to harvest (E2c part 2: baby carrots,
+    // pulled before the big ones are cleared). Its picking then starts that many days before the planting's first picking, and its
+    // own days count from there; it is never picked before the planting is in its bed, nor after the planting's last picking. No
+    // date of the planting moves: its bed, its first and last picking and its turnover stay as they are. Empty: picked with the crop.
     const THING_KINDS = ['place', 'bed', 'harvest'], WEIGHED = ['lb', 'oz', 'kg', 'g'], COUNTED = ['each', 'head'];
     const thingCache = new Map();
     /**
@@ -1303,7 +1406,7 @@
           const unit = word(x.unit) || own, share = amount0(x.share), from = x.from, counted = from !== 'harvest' && WEIGHED.includes(unit) && COUNTED.includes(x.counted) ? x.counted : null;
           const t = { id, n: Number.isFinite(+x.n) ? +x.n : 0, name: word(x.name) || 'Something else', from, place: from === 'place' && ENVS.includes(x.place) ? x.place : null, unit, price: amount0(x.price),
             pattern: PATTERNS.includes(x.pattern) ? x.pattern : 'spread', patternMine: PATTERNS.includes(x.pattern) ? x.pattern : null, days: wholeDays(x.days), share: share == null || share > 100 ? null : share,
-            yield: amount0(x.yield), counted, weighs: positive0(x.weighs), holds: positive0(x.holds), of: word(x.of), source: own, waits: [], counts: false, why: null };
+            yield: amount0(x.yield), counted, weighs: positive0(x.weighs), holds: positive0(x.holds), of: word(x.of), source: own, before: from !== 'harvest' ? wholeDays(x.before) : null, waits: [], counts: false, why: null };
           t.way = from !== 'harvest' ? 'yield' : WEIGHED.includes(unit) && !WEIGHED.includes(own) ? 'weighs' : 'holds';
           if (t.price == null) t.waits.push('price');
           if (from !== 'place' && t.share == null) t.waits.push('share');
@@ -1342,12 +1445,16 @@
       const saved = variety(p.varietyId), v = saved && saved.cropId === p.cropId ? saved : null;
       if (v && sellVRule(v.id).unit) return null;
       const env = envOf(r.b), list = all.filter(t => t.counts);
-      // a thing with a yield of its own, from `part` of what the planting is counted by
+      // a thing with a yield of its own, from `part` of what the planting is counted by; `ahead`: the days it is first picked before
+      // the planting's first picking (aheadOf), counted in its days; a young stand gives its share of it too
       const own = (t, part) => {
-        const there = pickedDays(r, t.pattern), days = t.days ? Math.min(t.days, there) : there, nominal = t.days || Math.max(1, r.expectedHarvestDays), weekly = t.pattern === 'weekly';
+        const ahead = aheadOf(t, r), start = ahead ? addDays(r.first, -ahead) : r.first;
+        // a young stand gives its share of it by the year this part is first picked in (Codex on #83: a December picking is that year's)
+        const age = y.age ? standAge(p, r, start.getFullYear()) : null, young = age ? age.share / 100 : 1;
+        const there = pickedDays(r, t.pattern) + ahead, days = t.days ? Math.min(t.days, there) : there, nominal = t.days || Math.max(1, r.expectedHarvestDays + ahead), weekly = t.pattern === 'weekly';
         const each = weekly ? t.yield * days / 7 : t.yield, cut = weekly ? 1 : clamp(days / Math.max(1, nominal), 0, 1), k = t.counted ? t.weighs : 1;
-        return { thing: t.id, name: t.name, from: t.from, basis: y.basis, count: y.count * part, per: each * k, mk: y.mk, part: cut, units: y.count * part * each * k * y.mk * cut, unit: t.unit, set: true, own: false,
-          price: t.price, pattern: t.pattern, perWeek: weekly ? t.yield * k : null, nominal, by: 'thing', keep: y.keep, first: r.first, last: addDays(r.first, Math.max(0, Math.min(days, r.harvestDays) - 1)), slice: part };
+        return { thing: t.id, name: t.name, from: t.from, basis: y.basis, count: y.count * part, per: each * k, mk: y.mk, part: cut, units: y.count * part * each * k * y.mk * cut * young, unit: t.unit, set: true, own: false,
+          price: t.price, pattern: t.pattern, perWeek: weekly ? t.yield * k : null, nominal, by: 'thing', keep: y.keep, first: start, last: addDays(start, Math.max(0, Math.min(days, r.harvestDays + ahead) - 1)), slice: part, ...(ahead ? { ahead } : {}), ...(t.before && r.harvestDays > 0 ? { asked: t.before } : {}), ...(age ? { age } : {}) };
       };
       const there = list.find(t => t.from === 'place' && t.place === env);
       if (there) return [own(there, 1)];
@@ -1409,6 +1516,8 @@
         share: pick(micro ? null : rule.share, micro ? 100 : Math.round(clamp(finite(c.mk, 0.9), 0, 1) * 100)), keep: pick(micro ? null : rule.keep, 0), turnover: pick(micro ? null : rule.turnover, micro ? 0 : turnoverDays()),
         // the last picking set for each place, as a month and day (the line's `until`); a place not named keeps the season's end there
         until: micro ? {} : { ...(rule.until || {}) },
+        // a perennial crop's shares for a young stand (E2c part 2): null for any other crop
+        young: youngFor(cropId),
         // figures nobody has looked at: the new-crop starting values, or nothing at all
         open: { yield: !micro && (total0 == null || (total0 === 1 && unit0 === 'each')), price: !(price0 > 0) } };
     }
@@ -1427,6 +1536,7 @@
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
       heatedTraySpaces, benchRoom, coolRules, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
       yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, thingsOf, soldOf, givenOf, WEIGHED, COUNTED, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
+      aheadOf, standAge, standYear, youngFor, pickedFrom, pickingOn, pickWindows,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, startRule, startFixed, startHint, STARTS, START_LESS, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,

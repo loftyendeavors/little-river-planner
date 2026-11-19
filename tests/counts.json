@@ -3,6 +3,10 @@
 
   "assume": 12,
 
+  "early and young, backup": 54,
+
+  "early and young, compact": 54,
+
   "failed, backup": 36,
 
   "failed, compact": 36,
@@ -151,6 +155,8 @@
 
   "cleanup": 36,
 
+  "early-young": 49,
+
   "f053": 22,
 
   "forecast": 51,
@@ -261,6 +267,8 @@
 
  },
  "site2": {
+
+  "early-young-site": 49,
 
   "f053-site": 22,
 

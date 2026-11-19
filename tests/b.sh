@@ -72,6 +72,8 @@ for n in "$@"; do
     forecast-site) python3 -I $T/forecast_check.py $SITE $S/forecast-site $ZIP 2>&1 | tally forecast-page-built-site ;;
     year-edge) python3 -I $T/year_edge_check.py $APP $S/year-edge 2>&1 | tally year-edge ;;   # the year's edge: a December sowing for January's trays on Tasks and in Seeds, earlier work in one line, stock carried in on the Forecast
     year-edge-site) python3 -I $T/year_edge_check.py $SITE $S/year-edge-site $ZIP 2>&1 | tally year-edge-built-site ;;
+    early-young) python3 -I $T/early_young_check.py $APP $S/early-young 2>&1 | tally early-and-young ;;   # E2c part 2: days before on a crop's card, a stand's year planted, the Forecast's tags
+    early-young-site) python3 -I $T/early_young_check.py $SITE $S/early-young-site $ZIP 2>&1 | tally early-and-young-built-site ;;
     swap) python3 -I $T/swap_check.py $APP $S/swap 2>&1 | tally variety-swap ;;   # the variety swap: one variety put in the place of another, the sowing days kept
     swap-site) python3 -I $T/swap_check.py $SITE $S/swap-site $ZIP 2>&1 | tally variety-swap-built-site ;;
     tasks2) python3 -I $T/tasks2_check.py $APP $S/tasks2 2>&1 | tally tasks-part-2 ;;   # Tasks part 2: Upcoming weeks, Trays to fill, Mark all done, the bed flag, a tick ahead asked first, everything recorded taken back, a planting marked failed
