@@ -806,7 +806,15 @@
       ...(root.LRFCard ? [['Try the card', root.LRFCard.tick()]] : [])
     ], { id: 'mapHelp', label: 'What can be done on the map', cols: true }));
     // A window that changes size (dragged to the other monitor, made full screen) is fitted again, unless the grower has moved the view since.
-    new ResizeObserver(() => { if (App.state.ready && App.state.view === 'map' && (!view.fitted || !view.moved)) fit(); if (App.state.ready) fitLegend(); }).observe(svg);
+    // The docked card takes its room from the map's right side: when it comes or goes the map keeps its zoom and where it is,
+    // and the card moves a bed it would cover (revealBed). Any other change of size frames the farm again, as before.
+    let cardShown = null;
+    new ResizeObserver(() => {
+      const shown = !!(root.LRFCard && root.LRFCard.shown()), byCard = cardShown !== null && shown !== cardShown;
+      cardShown = shown;
+      if (App.state.ready && App.state.view === 'map' && !byCard && (!view.fitted || !view.moved)) fit();
+      if (App.state.ready) fitLegend();
+    }).observe(svg);
     $('legendMore').addEventListener('click', () => { legendOpen = !legendOpen; fitLegend(); });
     App.on('plan', () => { $('mapSample').hidden = !App.isSample(); });
     App.on('plan', build);

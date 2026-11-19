@@ -97,14 +97,19 @@ def run(pw):
 
     # ══ the Map: a bed's card ══
     js(f"A.setView('map'); A.select(null); return null;"); wait(500)
+    zoom0 = js("return LRFMap.zoom();")
     box = js(f"const el = document.querySelector('#map [data-bed=\"{BED}\"]'); if (!el) return null; const r = el.getBoundingClientRect(); return {{ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }};")
     if box: page.mouse.click(box["x"], box["y"]); wait(500)
     bed = js(f"""const c = card(); if (!c) return null; const r = c.getBoundingClientRect(), v = $('mapView').getBoundingClientRect(), t = document.querySelector('.map-tools').getBoundingClientRect(), use = LRFForecast.useOfBed(eng, eng.bedOf('{BED}'));
       return {{ kind: c.dataset.kind, title: hook('card-title').textContent, rows: hooks('card-planting').length, opens: hooks('card-opening').length, year: drawn(hook('card-year')), layout: drawn(hook('card-layout')), sale: hook('card-sale') ? hook('card-sale').checked : null, saleWant: !use.personal,
-        panel: panel(), sel: S.sel && S.sel.id, w: Math.round(r.width), inside: r.left >= v.left && r.right <= v.right + 1 && r.top >= t.bottom && r.bottom <= v.bottom + 1, right: Math.round(v.right - r.right), radius: getComputedStyle(c).borderTopLeftRadius }};""")
+        panel: panel(), sel: S.sel && S.sel.id, w: Math.round(r.width), radius: getComputedStyle(c).borderTopLeftRadius, zoom: LRFMap.zoom(),
+        ...(() => {{ const s = document.querySelector('.stage').getBoundingClientRect(), k = $('mapBar'), kr = k ? k.getBoundingClientRect() : null, b = document.querySelector('#map [data-bed="{BED}"]').getBoundingClientRect();
+          return {{ top: Math.round(r.top - s.top), bottom: Math.round(s.bottom - r.bottom), right: Math.round(s.right - r.right), clear: Math.round(r.left - v.right), toolsClear: Math.round(r.left - t.right), keyClear: kr ? Math.round(r.left - kr.right) : null, bedSeen: b.left >= v.left && b.right <= v.right }}; }})() }};""")
     check("a click on a bed on the map opens its card in place of the side panel: the bed's name, Edit layout as a button, the bed's year, its plantings and its openings, Grown for sale as a tick",
           bool(bed) and bed["kind"] == "bed" and bed["title"].endswith(" " + pick["bedName"]) and bed["rows"] == pick["n"] and bed["opens"] == pick["open"] and bed["year"] and bed["layout"] and bed["sale"] == bed["saleWant"] and not bed["panel"] and bed["sel"] == BED, [bed, pick])
-    check("the card floats at the top right of the map, under its tools, inside the map, 340 wide, on a corner of 20", bool(bed) and bed["inside"] and bed["w"] == min(340, WIDTH) and 8 <= bed["right"] <= 16 and bed["radius"] == "20px", bed)
+    check("the card is docked at the top right, never taller than the view, 384 wide, on a corner of 20, and the map, its tools and its key make room for it: nothing of them under it",
+          bool(bed) and bed["w"] == min(384, WIDTH) and bed["radius"] == "20px" and 8 <= bed["right"] <= 16 and 8 <= bed["top"] <= 16 and bed["bottom"] >= 8 and bed["clear"] >= 0 and bed["toolsClear"] >= 0 and (bed["keyClear"] is None or bed["keyClear"] >= 0), bed)
+    check("the card coming leaves the map's zoom as it was, and the bed clicked still in view", bool(bed) and abs(bed["zoom"] - zoom0) < 1e-9 and bed["bedSeen"], [bed, zoom0])
     page.screenshot(path=str(shots / f"map-bed-{WIDTH}.png"))
 
     # a planting picked directly (for example from a Timeline bar), the bed's name back, x to close.
@@ -130,8 +135,9 @@ def run(pw):
     check("the Timeline has a bar clear of where the card stands, for the check to click", bool(tb), tb)
     if tb:
         page.mouse.click(tb["x"], tb["y"]); wait(500)
-        t1 = js("const c = card(); return { kind: c && c.dataset.kind, sel: S.sel && S.sel.id, panel: panel(), top: c ? Math.round(c.getBoundingClientRect().top - document.querySelector('.tl-tools').getBoundingClientRect().bottom) : null };")
-        check("on the Timeline a click on a bar opens the planting's card under the Timeline's tools, in place of the side panel", t1["kind"] == "planting" and t1["sel"] == tb["id"] and not t1["panel"] and t1["top"] is not None and 4 <= t1["top"] <= 12, t1)
+        t1 = js("const c = card(), s = document.querySelector('.stage').getBoundingClientRect(), r = c ? c.getBoundingClientRect() : null, v = $('timelineView').getBoundingClientRect(), m = document.querySelector('.tl-months'); return { kind: c && c.dataset.kind, sel: S.sel && S.sel.id, panel: panel(), top: r ? Math.round(r.top - s.top) : null, clear: r ? Math.round(r.left - v.right) : null, monthsClear: r && m ? Math.round(r.left - m.getBoundingClientRect().right) : null };")
+        check("on the Timeline a click on a bar opens the planting's card in place of the side panel, docked where it stands on the Map, and the Timeline and its months make room for it",
+              t1["kind"] == "planting" and t1["sel"] == tb["id"] and not t1["panel"] and t1["top"] is not None and 8 <= t1["top"] <= 16 and t1["clear"] is not None and t1["clear"] >= 0 and (t1["monthsClear"] is None or t1["monthsClear"] >= 0), t1)
         page.screenshot(path=str(shots / f"timeline-planting-{WIDTH}.png"))
         press(page, "[data-hook='card-bed']", 400)
         t2 = js("return { kind: card() && card().dataset.kind, sel: S.sel && S.sel.type + ':' + S.sel.id };")
@@ -147,7 +153,7 @@ def run(pw):
         # the right-click menu
         page.mouse.click(tb["x"], tb["y"], button="right"); wait(400)
         mn = js("const m = hook('card-menu'); return { menu: drawn(m), acts: hooks('card-menu-item').map(x => x.dataset.act), sel: S.sel && S.sel.id, card: card() && card().dataset.kind };")
-        check("a right-click on a bar opens the card's menu where the pointer is: Open, Change the date…, All of this planting…, Send to To place, Remove planting; the planting is picked",
+        check("a right-click on a bar opens the card's menu where the pointer is: Open, Change the date…, Planting details…, Send to To place, Remove planting; the planting is picked",
               mn["menu"] and all(a in mn["acts"] for a in ["open", "date", "full", "wait", "remove"]) and mn["sel"] == tb["id"] and mn["card"] == "planting", mn)
         page.screenshot(path=str(shots / f"timeline-menu-{WIDTH}.png"))
         press(page, "[data-hook='card-menu-item'][data-act='date']", 400)
@@ -316,7 +322,7 @@ def run(pw):
     set_value("#fDtm", days["dtm"]); wait(300)
     js(f"A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(400)
     stale = js("const s = hook('card-said'); return { card: !!card(), said: drawn(s) ? s.textContent : '' };")
-    check("a change made in the side panel (“All of this planting…”) is not said, with its Undo, on the bed's card opened after it", stale["card"] and stale["said"] == "", stale)
+    check("a change made in the side panel (“Planting details”) is not said, with its Undo, on the bed's card opened after it", stale["card"] and stale["said"] == "", stale)
     js("A.undo(); A.select(null); return null;"); wait(300)
 
     # ══ a drop: answered on the card ══
@@ -352,7 +358,7 @@ def run(pw):
     js(f"A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(400)
     press(page, "[data-hook='card-full']", 400)
     fl = js("return { card: !!card(), panel: panel(), date: drawn($('fDate')) };")
-    check("“All of this planting…” opens it whole in the side panel, in place of the card", not fl["card"] and fl["panel"] and fl["date"], fl)
+    check("“Planting details” opens it whole in the side panel, in place of the card", not fl["card"] and fl["panel"] and fl["date"], fl)
     js(f"A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(400)
     press(page, "[data-hook='card-opening']", 400)
     op = js("return { card: !!card(), panel: panel(), sel: S.sel && S.sel.type };")
