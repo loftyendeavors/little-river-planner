@@ -1,0 +1,20 @@
+{
+ "build": "Tray batches two devices cannot make twice: a new weekly batch takes an id worked from its demand plan and its week, so two devices that widen one demand plan alike make one record and the join holds one batch; the heated greenhouse benches and a crop a demand row adds are made under worked ids too. Batches already in a plan keep their ids. A thing taken whole that one side only stamped again counts as unchanged there, so undo after such a join takes the week back with its batch.",
+ "words": [],
+ "code": [
+  "merge.js",
+  "trays.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [],
+ "screens": [],
+ "changes": {
+  "did": "Live trays on two devices: when the phone and the laptop each add the same week to a weekly demand plan, they now make the same batch, so after they join the week holds its trays once.",
+  "steps": [
+   "With “Keep both, record by record” on both devices, add the same week to one demand plan on each (Nursery, Live trays, “Last week of”) before they join. After the join, Forecast shows that week's trays once.",
+   "Sow that week's batch in Tasks on one device before the join. After it, the batch shows as sown on both devices, and its seed came off the lot once.",
+   "Press Undo for that week on the device that added it. The week and its unsown batch go there, and the other device takes that in; a batch already sown stays as recorded."
+  ]
+ }
+}

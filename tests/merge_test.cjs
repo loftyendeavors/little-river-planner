@@ -179,50 +179,59 @@ tryCase('keys read together are one value on a planting that waits to be placed 
   return [ok(r) && a.yield === 10 && a.yieldBasis === 'container' && b.yield === 10 && b.yieldBasis === 'container' && items(r, 'same-box').length === 2, [a, b, r.report]];
 });
 // One demand row and one delivery week is one batch (found by Codex on #64): made with the planner's own functions, the demand
-// plan by Trays.apply as the Trays page does, the sowing by the week's record as Tasks does.
+// plan by Trays.apply as the Trays page does, the sowing by the week's record as Tasks does. A new batch is made under an id worked
+// from its demand plan and its week (js/trays.js), so two devices that widen one demand plan alike make one record for the week. A
+// page from before that made the same record under an id of its own (`older`): the merge settles such twins (settleTwins).
 const TWIN = (() => {
   const row = { id: 'row-twin', name: 'Twin Shoots', days: 14, price: 18, spring: 3, summer: 3, fall: 3 };
   const demand = through => ({ v: 1, year: 2027, name: 'Twin demand', customerId: '', from: '2027-05-03', through, summer: '2027-07-01', fall: '2027-09-16', rows: [row] });
   const apply = (farm, input, dev) => TR.apply(farm, input, { uid: dev.uid, now: dev.now(), crop: id => eng(farm).crop(id), keepRecorded: true }).plan;
   const start = apply(FARM, demand('2027-05-03'), device('first', 8)), id = start.liveTrayPlans.find(t => t.name === 'Twin demand').id;
-  const widen = (farm, dev) => apply(farm, { ...farm.liveTrayPlans.find(t => t.id === id), through: '2027-05-10' }, dev);
+  const to = (farm, through, dev) => apply(farm, { ...farm.liveTrayPlans.find(t => t.id === id), through }, dev);
+  const widen = (farm, dev) => to(farm, '2027-05-10', dev);
+  /** A page from before this build widening the same way: the same records, each new batch under an id of the device's own. */
+  const older = (farm, dev) => { const had = new Set(farm.plantings.map(p => p.id)), made = widen(farm, dev); return { ...made, plantings: made.plantings.map(p => (had.has(p.id) || !p.liveTray ? p : { ...p, id: dev.uid() })) }; };
   const batches = plan => plan.plantings.filter(p => p.liveTray && p.liveTray.planId === id), week = (plan, w) => batches(plan).filter(p => p.liveTray.week === w);
-  const sow = (plan, dev, day) => record(plan, week(plan, '2027-05-10')[0].id, 'sow', day, dev);
-  // what Harvest shows for the crop: its trays in the week of May 10, and in the season
-  const harvest = plan => { const en = eng(plan), r = F.build(en).rows.find(x => x.cropId === batches(plan)[0].cropId), at = Math.round(E.dayDiff(E.s2d('2027-05-10'), new Date(2027, 0, 1))); let n = 0; for (let d = at; d < at + 7; d++) n += r.days[d] || 0; return [n, r.total]; };
+  const sow = (plan, dev, day, input = {}) => record(plan, week(plan, '2027-05-10')[0].id, 'sow', day, dev, input);
+  // what Harvest shows for the crop: its trays in a week (May 10 unless said), and in the season
+  const harvest = (plan, w = '2027-05-10') => { const en = eng(plan), r = F.build(en).rows.find(x => x.cropId === batches(plan)[0].cropId), at = Math.round(E.dayDiff(E.s2d(w), new Date(2027, 0, 1))); let n = 0; for (let d = at; d < at + 7; d++) n += r.days[d] || 0; return [n, r.total]; };
   const open = plan => week(plan, '2027-05-10').filter(p => { const sw = SL.sowing(eng(plan), p); return sw && !(p.done || {}).sow; }).length;
-  return { start, widen, batches, week, sow, harvest, open, join: (s, m, t) => M.merge(s, m, t, { order: SL.DONE_ORDER }) };
+  return { start, id, apply, to, widen, older, batches, week, sow, harvest, open, join: (s, m, t) => M.merge(s, m, t, { order: SL.DONE_ORDER }) };
 })();
-tryCase('one demand row and one week is one batch: a phone and a laptop each widen the same demand to a new week and the phone sows it; joined either way round there is one batch of three trays, sown, and Harvest shows three', () => {
-  const X = TWIN, phone = X.sow(X.widen(X.start, mine()), mine(), '2027-04-26'), laptop = X.widen(X.start, theirs());
-  const made = X.week(phone, '2027-05-10')[0].id !== X.week(laptop, '2027-05-10')[0].id && same(X.harvest(phone), [3, 6]) && same(X.harvest(laptop), [3, 6]);
+tryCase('two devices that widen one demand plan alike make one record for the new week, under one id worked from the plan and the week; the phone sows it; joined either way round there is that one batch of three trays, sown, Harvest shows three, and no twins to settle; and a second round, a change on each device, joins the same way', () => {
+  const X = TWIN, phone = X.sow(X.widen(X.start, mine()), mine(), '2027-04-26'), laptop = X.widen(X.start, theirs()), W = X.week(laptop, '2027-05-10')[0];
+  const made = !!W && X.week(phone, '2027-05-10').length === 1 && X.week(phone, '2027-05-10')[0].id === W.id && !/^(mine|theirs|first)-/.test(W.id) && same(X.harvest(phone), [3, 6]) && same(X.harvest(laptop), [3, 6]);
   const out = [];
   for (const [me, cloud, name] of [[phone, laptop, 'the phone joins'], [laptop, phone, 'the laptop joins']]) {
     const r = X.join(X.start, me, cloud);
     if (!ok(r)) { out.push([name, r.why]); continue; }
-    const w = X.week(r.plan, '2027-05-10'), told = items(r, 'tray-batch-twice');
-    const good = w.length === 1 && w[0].trays === 3 && (w[0].done || {}).sow === '2027-04-26' && w[0].id === X.week(phone, '2027-05-10')[0].id && w[0].workflow.history.filter(h => h.kind === 'sow' && h.action === 'complete').length === 1
-      && X.open(r.plan) === 0 && same(X.harvest(r.plan), [3, 6]) && told.length === 1 && told[0].conflict === false && same(told[0].dropped, [X.week(laptop, '2027-05-10')[0].id]) && X.batches(r.plan).length === 2
-      ;
+    const w = X.week(r.plan, '2027-05-10');
+    const good = w.length === 1 && w[0].id === W.id && w[0].trays === 3 && (w[0].done || {}).sow === '2027-04-26' && w[0].workflow.history.filter(h => h.kind === 'sow' && h.action === 'complete').length === 1
+      && X.open(r.plan) === 0 && same(X.harvest(r.plan), [3, 6]) && X.batches(r.plan).length === 2 && !r.report.items.length;
     // the joined plan goes to the cloud; the other device takes it in from the plan it sent, having changed a planting of its own since; the first, changed too, takes that in; and once more round
     const one = j => ok(j) && X.week(j.plan, '2027-05-10').length === 1 && (X.week(j.plan, '2027-05-10')[0].done || {}).sow === '2027-04-26' && same(X.harvest(j.plan), [3, 6]) && X.open(j.plan) === 0;
     const other = X.join(cloud, setP(cloud, X1, { note: 'the other device, since' }), r.plan), back = other.ok ? X.join(r.plan, setP(r.plan, X2, { note: 'the first, since' }), other.plan) : other, again = back.ok ? X.join(other.plan, setP(other.plan, X1, { note: 'and round' }), back.plan) : back;
     const steady = [other, back, again].every(one) && planting(again.plan, X2).note === 'the first, since' && planting(again.plan, X1).note === 'and round';
-    if (!good || !steady) out.push([name, good, steady, w.map(p => [p.id, p.trays, p.done]), X.harvest(r.plan), r.report.items.map(x => x.kind)]);
+    // a second round on the plan both now hold: each device widens it a week more, to May 17, and the phone notes the sown batch
+    const held = again.ok ? again.plan : r.plan, phone2 = setP(X.to(held, '2027-05-17', mine()), W.id, { note: 'sown on the phone' }), laptop2 = X.to(held, '2027-05-17', theirs());
+    const second = X.join(held, phone2, laptop2), w17 = second.ok ? X.week(second.plan, '2027-05-17') : [];
+    const round = ok(second) && w17.length === 1 && w17[0].id === X.week(laptop2, '2027-05-17')[0].id && X.week(second.plan, '2027-05-10').length === 1 && planting(second.plan, W.id).note === 'sown on the phone'
+      && (planting(second.plan, W.id).done || {}).sow === '2027-04-26' && same(X.harvest(second.plan, '2027-05-17'), [3, 9]) && X.batches(second.plan).length === 3 && !second.report.items.length;
+    if (!good || !steady || !round) out.push([name, good, steady, round, w.map(p => [p.id, p.trays, p.done]), X.harvest(r.plan), r.report.items.map(x => x.kind), second.ok ? [w17.map(p => p.id), second.report.items.map(x => x.kind)] : second.why]);
   }
-  return [made && out.length === 0, [made, out]];
+  return [made && out.length === 0, [made, W && W.id, out]];
 });
-tryCase('the laptop changed its own unsown batch of that week before it took the phone\'s sown one in: still one batch, the sown one, three trays in Harvest, and the laptop\'s batch is named as dropped (the reviewing agent, on #64)', () => {
+tryCase('the laptop changed that batch before it took the phone\'s sown one in: still one record, sown, and the laptop\'s change joined as on any planting: its note kept; a sowing day set by hand there not applied over the sowing, and said', () => {
   const X = TWIN, phone = X.sow(X.widen(X.start, mine()), mine(), '2027-04-26'), laptop = X.widen(X.start, theirs()), r = X.join(X.start, phone, laptop);
   if (!ok(r)) return [false, r.why];
-  const A = X.week(phone, '2027-05-10')[0].id, B = X.week(laptop, '2027-05-10')[0].id, out = [];
-  for (const change of [{ note: 'a note on the batch that was never sown' }, { trays: 4 }, { sowOn: '2027-04-28' }]) {
-    const j = X.join(laptop, setP(laptop, B, change), r.plan), w = j.ok ? X.week(j.plan, '2027-05-10') : [], told = j.ok ? items(j, 'tray-batch-twice') : [];
-    const good = ok(j) && w.length === 1 && w[0].id === A && w[0].trays === 3 && w[0].done.sow === '2027-04-26' && same(X.harvest(j.plan), [3, 6]) && X.open(j.plan) === 0
-      && told.length === 1 && told[0].conflict === false && same(told[0].dropped, [B]) && same(told[0].kept, [A]) && !j.report.items.some(x => x.kind === 'kept' && x.id === B);
-    // and the phone, taking that in with a change of its own, has one batch too
+  const W = X.week(phone, '2027-05-10')[0].id, out = [];
+  for (const [change, want] of [[{ note: 'a note on the batch' }, j => planting(j.plan, W).note === 'a note on the batch' && !j.report.items.length],
+    [{ sowOn: '2027-04-28' }, j => planting(j.plan, W).sowOn === undefined && items(j, 'move-not-applied').length === 1 && items(j, 'move-not-applied')[0].id === W]]) {
+    const j = X.join(laptop, setP(laptop, W, change), r.plan), w = j.ok ? X.week(j.plan, '2027-05-10') : [];
+    const good = ok(j) && w.length === 1 && w[0].id === W && w[0].done.sow === '2027-04-26' && same(X.harvest(j.plan), [3, 6]) && X.open(j.plan) === 0 && want(j);
+    // and the phone, taking that in with a change of its own, has the one batch too
     const back = good ? X.join(r.plan, setP(r.plan, X1, { note: 'the phone, since' }), j.plan) : j;
-    if (!good || !(ok(back) && X.week(back.plan, '2027-05-10').length === 1 && same(X.harvest(back.plan), [3, 6]))) out.push([change, j.ok ? [w.map(p => [p.id, p.trays, p.done]), X.harvest(j.plan), j.report.items.map(x => [x.kind, x.dropped])] : j.why]);
+    if (!good || !(ok(back) && X.week(back.plan, '2027-05-10').length === 1 && same(X.harvest(back.plan), [3, 6]))) out.push([change, j.ok ? [w.map(p => [p.id, p.trays, p.done, p.sowOn, p.note]), X.harvest(j.plan), j.report.items.map(x => [x.kind, x.id])] : j.why]);
   }
   return [out.length === 0, out];
 });
@@ -237,14 +246,144 @@ tryCase('where the sowing draws seed: the batch is sown once and the seed comes 
   }
   return [drew && out.length === 0, [drew, out]];
 });
-tryCase('the same when neither device has sown it: one batch, the cloud\'s, and nothing is said of the demand plan each stamped at its own moment', () => {
+tryCase('the same when neither device has sown it: one batch, the one record both made, and nothing is said, not even of the demand plan each stamped at its own moment', () => {
   const X = TWIN, a = X.widen(X.start, mine()), b = X.widen(X.start, theirs()), r = X.join(X.start, a, b), w = r.ok ? X.week(r.plan, '2027-05-10') : [];
-  return [ok(r) && w.length === 1 && w[0].id === X.week(b, '2027-05-10')[0].id && same(X.harvest(r.plan), [3, 6]) && !items(r, 'same-box').length && items(r, 'tray-batch-twice').length === 1, r.ok ? [w.map(p => p.id), r.report.items] : r.why];
+  return [ok(r) && w.length === 1 && w[0].id === X.week(a, '2027-05-10')[0].id && w[0].id === X.week(b, '2027-05-10')[0].id && same(X.harvest(r.plan), [3, 6]) && !r.report.items.length, r.ok ? [w.map(p => p.id), r.report.items] : r.why];
 });
-tryCase('both devices sowed their own batch of that row and week: both records stay, with their days, and the report says the two conflict', () => {
-  const X = TWIN, phone = X.sow(X.widen(X.start, mine()), mine(), '2027-04-26'), laptop = X.sow(X.widen(X.start, theirs()), theirs(), '2027-04-27');
+tryCase('both devices sowed that one batch: one record; the cloud\'s sowing stands and this device\'s goes whole, its seed with it, said as recorded twice; the lot gives the seed once, either way round', () => {
+  const X = TWIN, key = SL.sowing(eng(X.start), X.batches(X.start)[0]).key, stocked = addLot(X.start, key, 500, device('stock', 7)), id = stocked.seedInventory.lots[stocked.seedInventory.lots.length - 1].id;
+  const phone = X.sow(X.widen(stocked, mine()), mine(), '2027-04-26', { quantity: 60 }), laptop = X.sow(X.widen(stocked, theirs()), theirs(), '2027-04-27', { quantity: 60 }), out = [];
+  for (const [me, cloud, name, day] of [[phone, laptop, 'the phone joins', '2027-04-27'], [laptop, phone, 'the laptop joins', '2027-04-26']]) {
+    const r = X.join(stocked, me, cloud), w = r.ok ? X.week(r.plan, '2027-05-10') : [], told = r.ok ? items(r, 'recorded-twice') : [];
+    const fine = ok(r) && w.length === 1 && w[0].done.sow === day && told.length === 1 && told[0].id === w[0].id && lot(r.plan, id).quantity === 440 && w[0].workflow.seedUse.length === 1
+      && w[0].workflow.history.filter(h => h.kind === 'sow' && h.action === 'complete').length === 1 && !items(r, 'tray-batch-twice').length;
+    if (!fine) out.push([name, r.ok ? [w.map(p => [p.id, p.done, (p.workflow || {}).seedUse]), lot(r.plan, id).quantity, r.report.items.map(x => x.kind)] : r.why]);
+  }
+  return [out.length === 0, out];
+});
+// the same week made by a page from before this build on the laptop: twins, settled by settleTwins
+tryCase('one demand row and one week is one batch, when one device runs an older page: the laptop made its batch under an id of its own and the phone sowed its own; joined either way round there is one batch of three trays, the sown one, and Harvest shows three', () => {
+  const X = TWIN, phone = X.sow(X.widen(X.start, mine()), mine(), '2027-04-26'), laptop = X.older(X.start, theirs());
+  const made = X.week(phone, '2027-05-10')[0].id !== X.week(laptop, '2027-05-10')[0].id && same(X.harvest(phone), [3, 6]) && same(X.harvest(laptop), [3, 6]);
+  const out = [];
+  for (const [me, cloud, name] of [[phone, laptop, 'the phone joins'], [laptop, phone, 'the laptop joins']]) {
+    const r = X.join(X.start, me, cloud);
+    if (!ok(r)) { out.push([name, r.why]); continue; }
+    const w = X.week(r.plan, '2027-05-10'), told = items(r, 'tray-batch-twice');
+    const good = w.length === 1 && w[0].trays === 3 && (w[0].done || {}).sow === '2027-04-26' && w[0].id === X.week(phone, '2027-05-10')[0].id && w[0].workflow.history.filter(h => h.kind === 'sow' && h.action === 'complete').length === 1
+      && X.open(r.plan) === 0 && same(X.harvest(r.plan), [3, 6]) && told.length === 1 && told[0].conflict === false && same(told[0].dropped, [X.week(laptop, '2027-05-10')[0].id]) && X.batches(r.plan).length === 2;
+    const one = j => ok(j) && X.week(j.plan, '2027-05-10').length === 1 && (X.week(j.plan, '2027-05-10')[0].done || {}).sow === '2027-04-26' && same(X.harvest(j.plan), [3, 6]) && X.open(j.plan) === 0;
+    const other = X.join(cloud, setP(cloud, X1, { note: 'the other device, since' }), r.plan), back = other.ok ? X.join(r.plan, setP(r.plan, X2, { note: 'the first, since' }), other.plan) : other;
+    if (!good || ![other, back].every(one)) out.push([name, good, w.map(p => [p.id, p.trays, p.done]), X.harvest(r.plan), r.report.items.map(x => x.kind)]);
+  }
+  return [made && out.length === 0, [made, out]];
+});
+tryCase('the laptop changed its own unsown batch of that week, made by an older page, before it took the phone\'s sown one in: still one batch, the sown one, three trays in Harvest, and the laptop\'s batch is named as dropped (the reviewing agent, on #64)', () => {
+  const X = TWIN, phone = X.sow(X.widen(X.start, mine()), mine(), '2027-04-26'), laptop = X.older(X.start, theirs()), r = X.join(X.start, phone, laptop);
+  if (!ok(r)) return [false, r.why];
+  const A = X.week(phone, '2027-05-10')[0].id, B = X.week(laptop, '2027-05-10')[0].id, out = [];
+  for (const change of [{ note: 'a note on the batch that was never sown' }, { trays: 4 }, { sowOn: '2027-04-28' }]) {
+    const j = X.join(laptop, setP(laptop, B, change), r.plan), w = j.ok ? X.week(j.plan, '2027-05-10') : [], told = j.ok ? items(j, 'tray-batch-twice') : [];
+    const good = ok(j) && w.length === 1 && w[0].id === A && w[0].trays === 3 && w[0].done.sow === '2027-04-26' && same(X.harvest(j.plan), [3, 6]) && X.open(j.plan) === 0
+      && told.length === 1 && told[0].conflict === false && same(told[0].dropped, [B]) && same(told[0].kept, [A]) && !j.report.items.some(x => x.kind === 'kept' && x.id === B);
+    const back = good ? X.join(r.plan, setP(r.plan, X1, { note: 'the phone, since' }), j.plan) : j;
+    if (!good || !(ok(back) && X.week(back.plan, '2027-05-10').length === 1 && same(X.harvest(back.plan), [3, 6]))) out.push([change, j.ok ? [w.map(p => [p.id, p.trays, p.done]), X.harvest(j.plan), j.report.items.map(x => [x.kind, x.dropped])] : j.why]);
+  }
+  return [out.length === 0, out];
+});
+tryCase('neither sown, one device on an older page: one batch, the cloud\'s', () => {
+  const X = TWIN, a = X.widen(X.start, mine()), b = X.older(X.start, theirs()), r = X.join(X.start, a, b), w = r.ok ? X.week(r.plan, '2027-05-10') : [];
+  return [ok(r) && w.length === 1 && w[0].id === X.week(b, '2027-05-10')[0].id && same(X.harvest(r.plan), [3, 6]) && items(r, 'tray-batch-twice').length === 1, r.ok ? [w.map(p => p.id), r.report.items] : r.why];
+});
+tryCase('both devices sowed their own batch of that row and week, one on an older page: both records stay, with their days, and the report says the two conflict', () => {
+  const X = TWIN, phone = X.sow(X.widen(X.start, mine()), mine(), '2027-04-26'), laptop = X.sow(X.older(X.start, theirs()), theirs(), '2027-04-27');
   const r = X.join(X.start, phone, laptop), w = r.ok ? X.week(r.plan, '2027-05-10') : [], told = items(r, 'tray-batch-twice')[0];
   return [ok(r) && w.length === 2 && same(w.map(p => p.done.sow).sort(), ['2027-04-26', '2027-04-27']) && !!told && told.conflict === true && told.dropped.length === 0 && told.kept.length === 2, r.ok ? [w.map(p => [p.id, p.done]), told] : r.why];
+});
+tryCase('a sown batch taken off its demand plan stays a plain planting under its id: the phone sowed the week and deleted the plan, the laptop changed the plan; joined, the plan stays and the sown batch is plain; the week made again takes the next free id, the sown planting keeps its sowing, and no id is there twice', () => {
+  const X = TWIN, start = X.widen(X.start, device('first', 8)), W = X.week(start, '2027-05-10')[0].id, plan = start.liveTrayPlans.find(t => t.id === X.id);
+  const phone = TR.remove(X.sow(start, mine(), '2027-04-26'), X.id, {}, { keepRecorded: true }), laptop = X.apply(start, { ...plan, rows: plan.rows.map(r => ({ ...r, price: 19 })) }, theirs());
+  const r = X.join(start, phone, laptop);
+  if (!ok(r)) return [false, r.why];
+  const was = planting(r.plan, W), stays = r.plan.liveTrayPlans.some(t => t.id === X.id) && !!was && !was.liveTray && (was.done || {}).sow === '2027-04-26' && X.week(r.plan, '2027-05-10').length === 0;
+  // the week made again: the demand plan saved once more on the joined plan, as the Trays page saves it
+  const again = X.apply(r.plan, { ...r.plan.liveTrayPlans.find(t => t.id === X.id), name: 'Twin demand, again' }, device('again', 10)), ids = again.plantings.map(p => p.id), made = X.week(again, '2027-05-10'), after = planting(again, W);
+  const good = stays && ids.length === new Set(ids).size && made.length === 1 && made[0].id !== W && made[0].id.startsWith(W) && !(made[0].done || {}).sow && !!after && !after.liveTray && (after.done || {}).sow === '2027-04-26';
+  // and the other device takes that in, with a change of its own
+  const j = good ? X.join(r.plan, setP(r.plan, X1, { note: 'since' }), again) : null, jIds = j && j.ok ? j.plan.plantings.map(p => p.id) : [];
+  return [good && ok(j) && jIds.length === new Set(jIds).size && X.week(j.plan, '2027-05-10').length === 1 && (planting(j.plan, W).done || {}).sow === '2027-04-26', [stays, was && [!!was.liveTray, was.done], made.map(p => p.id), after && after.done, r.report.items.map(x => x.kind), j && (j.ok ? '' : j.why)]];
+});
+tryCase('a batch\'s id is worked from its demand plan and its key so that no two give one: a plan "a" with a row "b:c" on one device and a plan "a:b" with a row "c" on the other each keep a batch of their own when joined', () => {
+  const dev = id => ({ uid: () => id, now: '2027-03-01T08:00:00.000Z' }), row = (id, n) => ({ id, name: 'Twin Shoots', days: 14, price: 18, spring: n, summer: n, fall: n });
+  const make = (name, id, rowId, n) => TR.apply(FARM, { ...TR.draft(2027), from: '2027-05-03', through: '2027-05-03', name, rows: [row(rowId, n)] }, { ...dev(id), crop: x => eng(FARM).crop(x), keepRecorded: true }).plan;
+  const a = make('Plan a', 'a', 'b:c', 1), b = make('Plan a:b', 'a:b', 'c', 2), mineOf = (p, id) => p.plantings.filter(x => x.liveTray && x.liveTray.planId === id);
+  const r = M.merge(FARM, a, b), ofA = r.ok ? mineOf(r.plan, 'a') : [], ofB = r.ok ? mineOf(r.plan, 'a:b') : [];
+  return [mineOf(a, 'a')[0].id !== mineOf(b, 'a:b')[0].id && ok(r) && ofA.length === 1 && ofB.length === 1 && ofA[0].trays === 1 && ofB[0].trays === 2 && !items(r, 'same-box').length, [mineOf(a, 'a').map(p => p.id), mineOf(b, 'a:b').map(p => p.id), r.ok ? r.report.items.map(x => x.kind) : r.why]];
+});
+tryCase('a demand plan saved on this build keeps every batch it had under its id, and changes nothing else; only a new week is made, under an id that is no device\'s own', () => {
+  const t = FARM.liveTrayPlans.find(x => x.id === TRAYS.id), d = mine(), after = TR.apply(FARM, { ...t, through: TR.add(t.through, 7) }, { uid: d.uid, now: d.now(), crop: id => eng(FARM).crop(id), keepRecorded: true }).plan;
+  const byId = new Map(after.plantings.map(p => [p.id, p])), had = new Set(FARM.plantings.map(p => p.id)), added = after.plantings.filter(p => !had.has(p.id));
+  const kept = FARM.plantings.every(p => same(byId.get(p.id), p)) && after.plantings.length === FARM.plantings.length + added.length;
+  return [kept && added.length > 0 && added.every(p => p.liveTray && p.liveTray.planId === TRAYS.id && p.liveTray.week > t.through.slice(0, 10) && !/^mine-/.test(p.id)), [kept, added.map(p => [p.id, p.liveTray && p.liveTray.week])]];
+});
+tryCase('undo after a join, as the planner takes a step out of records another device changed since: both devices widened the demand plan alike, each stamping it at its own moment; the step taken back on either device, the demand plan goes back with its batch', () => {
+  const X = TWIN, out = [];
+  for (const [first, second, name] of [[mine, theirs, 'the later stamp is the other device\'s'], [theirs, mine, 'the later stamp is this device\'s']]) {
+    // this device's step, as saveTrays commits it: the list of demand plans before and after, and the batch it made (js/app.js, undoWay)
+    const a = X.widen(X.start, first()), b = X.widen(X.start, second()), r = X.join(X.start, a, b);
+    if (!ok(r)) { out.push([name, r.why]); continue; }
+    const W = X.week(a, '2027-05-10')[0], plans = M.joinOne('liveTrayPlans', a.liveTrayPlans, X.start.liveTrayPlans, r.plan.liveTrayPlans);
+    // the batch is as the step left it, so undo takes it out as made; the demand plan comes back as it was before the step
+    if (!(same(planting(r.plan, W.id), W) && same(plans.value, X.start.liveTrayPlans) && !plans.items.length)) out.push([name, same(planting(r.plan, W.id), W), plans.value.map(t => t.through), plans.items.map(x => x.kind)]);
+  }
+  return [out.length === 0, out];
+});
+tryCase('a demand plan one device changed and changed back, only its stamp moved, while the other widened it: the widening stands with its batch, and nothing is said, either way round', () => {
+  const X = TWIN, t = X.start.liveTrayPlans.find(x => x.id === X.id), d = mine(), there = X.apply(X.start, { ...t, rows: t.rows.map(r => ({ ...r, price: 19 })) }, d);
+  const back = X.apply(there, { ...there.liveTrayPlans.find(x => x.id === X.id), rows: t.rows }, d), wide = X.widen(X.start, theirs()), bare = p => { const { updatedAt, ...rest } = p.liveTrayPlans.find(x => x.id === X.id); return rest; };
+  const moved = same(bare(back), bare(X.start)) && back.liveTrayPlans.find(x => x.id === X.id).updatedAt !== t.updatedAt && same(X.batches(back), X.batches(X.start)), out = [];
+  for (const [me, cloud, name] of [[back, wide, 'this device changed it back'], [wide, back, 'the cloud changed it back']]) {
+    const r = X.join(X.start, me, cloud), p = r.ok && r.plan.liveTrayPlans.find(x => x.id === X.id);
+    if (!(ok(r) && p.through === '2027-05-10' && X.week(r.plan, '2027-05-10').length === 1 && same(X.harvest(r.plan), [3, 6]) && !r.report.items.length)) out.push([name, r.ok ? [p.through, r.report.items.map(x => x.kind)] : r.why]);
+  }
+  return [moved && out.length === 0, [moved, out]];
+});
+// What a demand plan makes besides its batches: the heated greenhouse benches and a crop for a row that names one the plan does not hold.
+const BARE = (() => { const pool = new Set(FARM.gardens.filter(g => g.liveTrayPool === true).map(g => g.id)); return { ...FARM, gardens: FARM.gardens.filter(g => !pool.has(g.id)), beds: FARM.beds.filter(b => b.liveTrayPool !== true), plantings: FARM.plantings.filter(p => !p.liveTray), liveTrayPlans: [] }; })();
+const fresh = (name, rows) => ({ ...TR.draft(2027), from: '2027-05-03', name, rows });
+const NEWCROP = rowId => ({ id: rowId, name: 'Pea tendrils', days: 12, price: 20, spring: 2, summer: 2, fall: 0 });
+const tendrils = p => (p.crops || []).filter(c => TR.norm(c.name) === 'peatendrils');
+tryCase('two devices that each start a demand plan on a farm with no heated greenhouse benches make one garden and one bed for them: joined, one of each, every batch of both plans on that bed, and saving again makes no other', () => {
+  const a = TWIN.apply(BARE, fresh('Phone demand', [{ id: 'row-a', name: 'Borage', days: 12, price: 20, spring: 2, summer: 0, fall: 0 }]), mine());
+  const b = TWIN.apply(BARE, fresh('Laptop demand', [{ id: 'row-b', name: 'Twin Shoots', days: 14, price: 18, spring: 1, summer: 0, fall: 0 }]), theirs()), r = M.merge(BARE, a, b);
+  if (!ok(r)) return [false, r.why];
+  const gardens = r.plan.gardens.filter(g => g.liveTrayPool === true), beds = r.plan.beds.filter(x => x.liveTrayPool === true), trays = r.plan.plantings.filter(p => p.liveTray);
+  let again = null;
+  try { again = TWIN.apply(r.plan, r.plan.liveTrayPlans[0], device('again', 10)); } catch (e) { again = String(e.message); }
+  const good = gardens.length === 1 && beds.length === 1 && beds[0].gardenId === gardens[0].id && trays.length > 0 && trays.every(p => p.bedId === beds[0].id) && new Set(trays.map(p => p.liveTray.planId)).size === 2
+    && typeof again === 'object' && again.gardens.filter(g => g.liveTrayPool === true).length === 1 && again.beds.filter(x => x.liveTrayPool === true).length === 1;
+  return [good, [gardens.map(g => g.id), beds.map(x => [x.id, x.gardenId]), typeof again === 'string' ? again : '']];
+});
+tryCase('a demand plan is made by the grower, not worked out: two devices that each start one keep two, each with all its batches, and nothing of either is dropped or joined half from each', () => {
+  const a = TWIN.apply(FARM, fresh('Weekly', [{ id: 'row-a', name: 'Borage', days: 12, price: 20, spring: 2, summer: 0, fall: 0 }]), mine());
+  const b = TWIN.apply(FARM, fresh('Weekly', [{ id: 'row-b', name: 'Twin Shoots', days: 14, price: 18, spring: 1, summer: 0, fall: 0 }]), theirs()), r = M.merge(FARM, a, b);
+  const own = (p, id) => p.plantings.filter(x => x.liveTray && x.liveTray.planId === id), A = a.liveTrayPlans.find(t => t.name === 'Weekly'), B = b.liveTrayPlans.find(t => t.name === 'Weekly');
+  return [A.id !== B.id && ok(r) && r.plan.liveTrayPlans.filter(t => t.name === 'Weekly').length === 2 && own(r.plan, A.id).length === own(a, A.id).length && own(r.plan, B.id).length === own(b, B.id).length && !r.report.items.length,
+    r.ok ? [r.plan.liveTrayPlans.map(t => t.name), r.report.items.map(x => x.kind)] : r.why];
+});
+tryCase('a crop that a demand row adds, added on two devices, is one crop: two new demand plans that each name it, or one plan that each device gave the same new crop, leave one crop of that name, which the rows name, and none of the planner\'s own', () => {
+  const a = TWIN.apply(FARM, fresh('Phone demand', [NEWCROP('row-a')]), mine()), b = TWIN.apply(FARM, fresh('Laptop demand', [NEWCROP('row-b')]), theirs()), r = M.merge(FARM, a, b);
+  const one = r.ok && tendrils(r.plan), two = ok(r) && tendrils(a).length === 1 && one.length === 1 && r.plan.liveTrayPlans.filter(t => t.rows.some(x => x.cropId === one[0].id)).length === 2 && !Lib.crops.some(c => c.id === one[0].id) && !r.report.items.length;
+  // one plan, the same new crop row added on each device (the rows differ by id): the cloud's demand plan stands, and there is still one crop
+  const add = (dev, rowId) => { const t = FARM.liveTrayPlans.find(x => x.id === TRAYS.id); return TWIN.apply(FARM, { ...t, rows: [...t.rows, NEWCROP(rowId)] }, dev); };
+  const s = M.merge(FARM, add(mine(), 'row-m'), add(theirs(), 'row-t')), single = ok(s) && tendrils(s.plan).length === 1 && s.plan.liveTrayPlans.find(t => t.id === TRAYS.id).rows.some(x => x.cropId === tendrils(s.plan)[0].id);
+  return [two && single, [r.ok ? one.map(c => c.id) : r.why, s.ok ? tendrils(s.plan).map(c => c.id) : s.why]];
+});
+tryCase('a crop row that names a crop the plan holds under another name now is a crop of its own, under the next free id; the renamed crop is left as it is', () => {
+  const a = TWIN.apply(FARM, fresh('Phone demand', [NEWCROP('row-a')]), mine()), c = tendrils(a)[0];
+  const renamed = { ...a, crops: a.crops.map(x => (x.id === c.id ? { ...x, name: 'Micro · Pea tips' } : x)) }, b = TWIN.apply(renamed, fresh('Another', [NEWCROP('row-c')]), device('again', 10));
+  const ids = b.crops.map(x => x.id), made = tendrils(b), kept = b.crops.find(x => x.id === c.id);
+  return [ids.length === new Set(ids).size && made.length === 1 && made[0].id !== c.id && made[0].id.startsWith(c.id) && !!kept && kept.name === 'Micro · Pea tips', [ids.filter(x => x.startsWith(c.id)), made.map(x => x.id)]];
 });
 tryCase('a job put off is taken whole, whatever the job: a from, a to and its own day never come half from each device', () => {
   const put = (plan, kind, delay) => { const p = planting(plan, X1); return putPlanting(plan, { ...p, tasks: { ...(p.tasks || {}), delay: { ...((p.tasks || {}).delay || {}), [kind]: delay } } }); };
