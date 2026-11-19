@@ -159,16 +159,25 @@
     if (step.ops.every(op => alike(now(op), left(op)))) return { ops: step.ops, kept: 0 };
     if (!M || !M.joinOne) return null;
     const worked = p => JSON.stringify([(p && p.done) || null, (p && p.workflow) || null]);
-    const ops = [];
+    const ops = [], made = [];
     let kept = 0;
     for (const op of step.ops) {
       const is = now(op);
       if (alike(is, left(op))) { ops.push(op); continue; }
       if (op.kind === 'inventory' || (!op.kind && worked(op.before) !== worked(op.after))) return null;
+      if (!op.kind && op.before == null && is && is.liveTray && step.ops.some(o => o.kind === 'trays')) { made.push([op, is]); continue; }   // a batch of a demand plan the step changed: below
       if (is == null || op.before == null || op.after == null) { kept++; continue; }   // made or taken out by the step, and changed or gone since: it stays as it is now
       const place = op.kind === 'own' ? 'lrfNext.' + op.key : whole[op.kind] || listOf(op) + '[]', joined = M.joinOne(place, op.after, op.before, is);
       kept += joined.items.length;
       if (!alike(joined.value, is)) ops.push({ ...op, before: joined.value, after: is });
+    }
+    // A weekly batch the step made, and another device changed since with nothing recorded on it, follows its demand plan as the
+    // undo leaves it, as an unsown batch does whenever the demand changes: it goes when that plan no longer lists its week, and stays
+    // when it does. One with work recorded on it stays, as history.
+    if (made.length) {
+      const Trays = root.LRFTrays, back = ops.find(o => o.kind === 'trays'), plans = back ? back.before || [] : plan.liveTrayPlans || [];
+      const listed = p => { const demand = plans.find(t => t.id === p.liveTray.planId); try { return !!demand && Trays.schedule(demand).batches.some(b => b.key === p.liveTray.key); } catch (_) { return false; } };
+      for (const [op, is] of made) if (!Trays.locked(plan, is) && !listed(is)) ops.push({ ...op, after: is }); else kept++;
     }
     return { ops, kept };
   }
@@ -1421,11 +1430,14 @@
   }
 
   function removePlantings(ids, label) {
-    const ops = ids.map(id => state.engine.planting(id)).filter(Boolean).map(before => ({ before, after: null }));
+    // a batch tied to a weekly demand plan follows it: it is changed on Live trays, never removed by itself (LRFTrays.removable)
+    const { ids: free, kept } = root.LRFTrays.removable(state.plan, ids), demand = p => ((state.plan.liveTrayPlans || []).find(t => t.id === p.liveTray.planId) || {}).name || 'its plan';
+    if (kept.length && !free.length) return refuse(`${cropLabel(kept[0])} follows the weekly demand in ${demand(kept[0])}: it stays. Change its weeks or trays on Live trays, in Nursery.`);
+    const ops = free.map(id => state.engine.planting(id)).filter(Boolean).map(before => ({ before, after: null }));
     if (!ops.length) return;
     if (state.sel && state.sel.type === 'planting' && ids.includes(state.sel.id)) select({ type: 'bed', id: ops[0].before.bedId });
     commit(label || (ops.length === 1 ? `Remove ${cropLabel(ops[0].before)}` : `Remove ${ops.length} plantings`), ops);
-    toast(ops.length === 1 ? `Removed ${cropLabel(ops[0].before)}` : `Removed ${ops.length} plantings`, { label: 'Undo', run: undo });
+    toast((ops.length === 1 ? `Removed ${cropLabel(ops[0].before)}` : `Removed ${ops.length} plantings`) + (kept.length ? ` · ${kept.length} live-tray batch${kept.length === 1 ? '' : 'es'} stay${kept.length === 1 ? 's' : ''}: ${kept.length === 1 ? 'it follows' : 'they follow'} weekly demand` : ''), { label: 'Undo', run: undo });
   }
 
   // ─────────────────── placing plantings (drag, tap, move) ───────────────────

@@ -1,7 +1,8 @@
 {
- "build": "Tray batches two devices cannot make twice: a new weekly batch takes an id worked from its demand plan and its week, so two devices that widen one demand plan alike make one record and the join holds one batch; the heated greenhouse benches and a crop a demand row adds are made under worked ids too. Batches already in a plan keep their ids. A thing taken whole that one side only stamped again counts as unchanged there, so undo after such a join takes the week back with its batch.",
+ "build": "Tray batches two devices cannot make twice: a new weekly batch takes an id worked from its demand plan and its week, so two devices that widen one demand plan alike make one record and the join holds one batch; the heated greenhouse benches and a crop a demand row adds are made under worked ids too. Batches already in a plan keep their ids. A thing taken whole that one side only stamped again counts as unchanged there, so undo after such a join takes the week back with its batch. A batch tied to a demand plan is no longer removed by hand (the Delete key, the card's Remove): its plan's next save would make it again under the same id, and a sown one would come back unsown with its seed still drawn. Undo of a widening after such a join takes out the week's unsown batches the other device changed, with the week.",
  "words": [],
  "code": [
+  "app.js",
   "merge.js",
   "trays.js"
  ],
@@ -10,7 +11,7 @@
  "page": [],
  "screens": [],
  "changes": {
-  "did": "Live trays on two devices: when the phone and the laptop each add the same week to a weekly demand plan, they now make the same batch, so after they join the week holds its trays once.",
+  "did": "Live trays on two devices: when the phone and the laptop each add the same week to a weekly demand plan, they now make the same batch, so after they join the week holds its trays once. A batch that follows a demand plan is no longer removed with the Delete key or the card's Remove planting: the page says to change its weeks or trays on Live trays, as the batch's own panel already did.",
   "steps": [
    "With “Keep both, record by record” on both devices, add the same week to one demand plan on each (Nursery, Live trays, “Last week of”) before they join. After the join, Forecast shows that week's trays once.",
    "Sow that week's batch in Tasks on one device before the join. After it, the batch shows as sown on both devices, and its seed came off the lot once.",

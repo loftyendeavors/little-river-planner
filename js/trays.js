@@ -146,7 +146,7 @@
       const base = batchId(plan.id, b.key), line = original ? [] : state.plantings.filter(p => !p.liveTray && nth(base, p.id) && p.bedId === bed.id && p.cropId === crops.get(b.rowId)).sort((x, y) => nth(base, x.id) - nth(base, y.id));
       const plain = line.find(p => locked(state, p, options.records)) || line[0];
       if (plain && locked(state, plain, options.records)) { back++; return { ...plain, liveTray: { planId: plan.id, key: b.key, ready: b.ready, week: b.week, rowId: b.rowId } }; }
-      if (plain) original = plain;   // nothing recorded on it (not reached by the planner's own steps): made the week's batch again, under its id
+      if (plain) original = plain;   // nothing recorded on it (rare: a batch marked failed when its plan was deleted, the mark then taken off): made the week's batch again, under its id
       if (original && done.includes(original)) return original;
       const id = (original && original.id) || free(base, x => taken.has(x));   // held by anything else: only by a file edited by hand
       const p = { ...(original || {}), id, bedId: bed.id, cropId: crops.get(b.rowId), date: b.sow, trays: b.trays, dtm: b.days, timingMode: 'manual', price: b.price, yield: 1,
@@ -177,6 +177,17 @@
     if (done.size && !options.keepRecorded) throw Error('Recorded work is attached to this plan. Keep its production history intact.');
     const plantings = farm.plantings.filter(p => !(p.liveTray && p.liveTray.planId === id) || done.has(p.id)).map(p => { if (!done.has(p.id)) return p; const { liveTray, ...rest } = p; return rest; });
     return { ...farm, plantings, liveTrayPlans: (farm.liveTrayPlans || []).filter(p => p.id !== id) };
+  }
+  /**
+   * Which of these plantings may be removed by hand: { ids, kept }. A batch tied to a demand plan the farm plan holds follows that
+   * demand, as the batch's own panel says (it offers no removal): its weeks and trays change on Live trays, and its plan's next save
+   * would make the week again, under the same id. A sown one so made again would come back unsown while its seed stays drawn, and
+   * two devices' plans could then not be joined. `kept`: the tied batches, which stay.
+   */
+  function removable(farm, ids) {
+    const plans = new Set((farm.liveTrayPlans || []).map(t => t.id)), byId = new Map((farm.plantings || []).map(p => [p.id, p])), kept = [], free = [];
+    for (const id of ids) { const p = byId.get(id); if (p && p.liveTray && plans.has(p.liveTray.planId)) kept.push(p); else free.push(id); }
+    return { ids: free, kept };
   }
   /** The difference between two farm plans as undoable steps, in the form the app commits. */
   function ops(before, after) {
@@ -226,5 +237,5 @@
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  return { POOL_NAME, POOL_NAME_BEFORE, poolRenamed, draft, validate, schedule, locked, apply, remove, ops, batches, weeks, byCrop, monday, mondayOnOrAfter, add, short, norm, SEASONS };
+  return { POOL_NAME, POOL_NAME_BEFORE, poolRenamed, draft, validate, schedule, locked, apply, remove, removable, ops, batches, weeks, byCrop, monday, mondayOnOrAfter, add, short, norm, SEASONS };
 });

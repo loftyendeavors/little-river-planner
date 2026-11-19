@@ -80,6 +80,8 @@ PAGE = [
   ('app: undo puts a record back whole though another device has changed it', 'js/app.js', "    if (step.ops.every(op => alike(now(op), left(op)))) return { ops: step.ops, kept: 0 };", "    if (step.ops.length) return { ops: step.ops, kept: 0 };", 'takes out only what the step changed'),
   ('page: no strip when something was changed on both devices', 'js/backupui.js', "told = App.state.ready && !!j && j.rows.length > 0 && c.status !== 'conflict' && !c.offer,", "told = false,", 'a strip says something was changed on both devices'),
   ('app: "Use mine" leaves the other device\'s value', 'js/app.js', "    const done = commit('Used this device’s value', ops);", "    const done = true;", 'puts this device\'s value back'),
+  ('app: undo leaves a batch the other device changed, though the demand plan no longer lists its week', 'js/app.js', "      for (const [op, is] of made) if (!Trays.locked(plan, is) && !listed(is)) ops.push({ ...op, after: is }); else kept++;", "      for (const [, is] of made) if (is) kept++;", 'the week goes from the demand plan and its batches with it'),
+  ('app: the Delete key removes a batch that follows a demand plan', 'js/app.js', "    if (kept.length && !free.length) return refuse(", "    if (false) return refuse(", 'the Delete key on a batch that follows a weekly demand plan'),
   ('app: this device\'s own notes about its plan are taken from the joined file', 'js/app.js', "        for (const key of Object.keys(mine)) if (!OWN_KEYS.includes(key)) note[key] = mine[key];   // what this device notes for itself stays its own\n", "", 'what this device notes for itself'),
 ]
 if mode == 'list': print(json.dumps({'node': len(NODE), 'page': len(PAGE)})); sys.exit(0)

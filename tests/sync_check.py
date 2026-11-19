@@ -132,7 +132,7 @@ with sync_playwright() as pw:
     def toast(page):
         return page.evaluate("document.getElementById('toast').textContent")
     def change(page, n=1):
-        page.evaluate("(n) => { for (let i = 0; i < n; i++) LRFApp.removePlantings([LRFApp.state.plan.plantings[LRFApp.state.plan.plantings.length - 1].id]); }", n)
+        page.evaluate("(n) => { for (let i = 0; i < n; i++) LRFApp.removePlantings([LRFApp.state.plan.plantings.filter(p => !p.liveTray).pop().id]); }", n)
     def save_text(page):
         return page.evaluate("document.getElementById('saveState').textContent")
     def snaps(page):

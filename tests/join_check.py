@@ -328,6 +328,42 @@ with sync_playwright() as pw:
         look(A)
         check('and the other device reads the same record', A.evaluate(REC, VID) == 'the laptop' and A.evaluate(P, X2)['note'] == 'a page record, the phone', A.evaluate(REC, VID))
 
+        # ── 5f. one live-tray demand plan widened alike on both devices: one batch a week; undo takes the week back with its batches ──
+        where = 'tray batches'
+        DEMAND = "() => { const t = (LRFApp.state.plan.liveTrayPlans || [])[0]; return t ? { through: t.through } : null; }"
+        WEEK = "(w) => LRFApp.state.plan.plantings.filter(p => p.liveTray && p.liveTray.week === w).map(p => ({ id: p.id, note: p.note || '', sown: !!(p.done || {}).sow })).sort((a, b) => a.id < b.id ? -1 : 1)"
+        t0 = A.evaluate(DEMAND)
+        later = A.evaluate("(d) => LRFTrays.add(d, 7)", t0['through']) if t0 else None
+        wk = A.evaluate("(d) => LRFTrays.add(LRFTrays.monday(d), 7)", t0['through']) if t0 else None
+        for D in (A, B): D.evaluate("LRFSync.timing.push = 600000")
+        # each device sets the plan's last week a week later through the page's own save, before it has seen the other's; the second notes one of its new batches
+        WIDEN = "(d) => LRFApp.saveTrays('Last week', { ...LRFApp.state.plan.liveTrayPlans[0], through: d })"
+        if t0:
+            A.evaluate(WIDEN, later); A.wait_for_timeout(600); B.evaluate(WIDEN, later); B.wait_for_timeout(600)
+        mine_b = B.evaluate(WEEK, wk) if t0 else []
+        if mine_b:
+            B.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'checked on the bench' }, 'A note')", mine_b[0]['id'])
+        A.evaluate("void LRFApp.sync().run('change')"); settled(A, 'in-step')
+        B.wait_for_timeout(1700); B.evaluate("void LRFApp.sync().run('change')"); settled(B, 'in-step', 60000)
+        look(A)
+        wa, wb = A.evaluate(WEEK, wk), B.evaluate(WEEK, wk)
+        check('one live-tray demand plan widened alike on both devices before either saw the other: joined, each holds one batch for each crop of the new week, under the ids both made, the note the second wrote on one kept',
+              bool(t0) and len(mine_b) > 0 and wa == wb and [x['id'] for x in wa] == [x['id'] for x in mine_b] and sum(1 for x in wa if x['note'] == 'checked on the bench') == 1 and A.evaluate("LRFApp.contentKey()") == B.evaluate("LRFApp.contentKey()"), [t0, mine_b, wa, wb])
+        A.evaluate("LRFApp.undo()"); A.wait_for_timeout(800)
+        undone = {'through': (A.evaluate(DEMAND) or {}).get('through'), 'week': A.evaluate(WEEK, wk), 'toast': toast(A)}
+        A.evaluate("LRFSync.timing.push = 250; void LRFApp.sync().run('change')"); settled(A, 'in-step')
+        B.evaluate("LRFSync.timing.push = 250"); look(B)
+        check('undo of that widening on the first device, after the join: the week goes from the demand plan and its batches with it, the other device\'s note too, and the other device takes that in',
+              bool(t0) and undone['through'] == t0['through'] and undone['week'] == [] and (B.evaluate(DEMAND) or {}).get('through') == t0['through'] and B.evaluate(WEEK, wk) == [] and A.evaluate("LRFApp.contentKey()") == B.evaluate("LRFApp.contentKey()"), undone)
+        # the Delete key on a batch that follows a demand plan: it stays, and the page says where the demand is changed
+        tied = A.evaluate("() => (LRFApp.state.plan.plantings.find(p => p.liveTray && (LRFApp.state.plan.liveTrayPlans || []).some(t => t.id === p.liveTray.planId)) || {}).id")
+        steps = A.evaluate("LRFApp.state.undo.length")
+        A.evaluate("(id) => LRFApp.select({ type: 'planting', id })", tied); A.wait_for_timeout(300)
+        A.evaluate("document.activeElement && document.activeElement.blur && document.activeElement.blur()"); A.keyboard.press('Delete'); A.wait_for_timeout(400)
+        kept = {'there': A.evaluate("(id) => LRFApp.state.plan.plantings.some(p => p.id === id)", tied), 'toast': toast(A), 'steps': A.evaluate("LRFApp.state.undo.length")}
+        check('the Delete key on a batch that follows a weekly demand plan removes nothing: the batch stays, no step is added, and the page says the demand is changed on Live trays',
+              bool(tied) and kept['there'] and kept['steps'] == steps and 'weekly demand' in kept['toast'] and 'Live trays' in kept['toast'], kept)
+
         # ── 6. turned off: the question it always was ──
         where = 'off'
         B.evaluate("void LRFApp.sync().setJoin(false)"); B.wait_for_timeout(300)
