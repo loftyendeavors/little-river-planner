@@ -31,6 +31,7 @@ NODE = [
  ("plugs are listed under the seed house", SL, "return crop === 'seed' ? '' : supplierOf(v);", "return supplierOf(v);"),
  ("the grower the variety names is not read", SL, "if (own) return own;", ""),
  ("seed is listed under the plug grower", SL, "if (r.unit === 'seeds' || r.unit === 'g') return supplierOf(v);", "if ((r.unit === 'seeds' || r.unit === 'g') && !own) return supplierOf(v);"),
+ ("the seed house's product code is given for plugs from a grower", SL, "sku: house ? v.sku || '' : '', unit: r.unit,", "sku: v.sku || '', unit: r.unit,"),
  ("stock in a variety's second unit is said not to count", SL, "if (isLive(v)) { if (unit && !list.includes(lot.unit)) out.push(", "if (isLive(v)) { if (unit && unit !== lot.unit) out.push("),
  ("the compact plan drops the lot", PI, "'buyFrom', 'buyLot'];", "'buyFrom'];"),
 ]

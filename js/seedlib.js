@@ -596,7 +596,9 @@
       if (!r.variety) { loose.push({ key: r.key, row: r, crop: r.crop, unit: r.unit, amount }); continue; }
       const v = r.variety, name = boughtFrom(r), key = name ? supplierKey(name) || norm(name) : '';
       const cover = coverFor(amount, r.unit, v), sized = !!cover && (cover.how === 'sizes' || cover.how === 'lots');
-      const line = { key: r.key, row: r, variety: v, crop: r.crop, sku: v.sku || '', unit: r.unit, amount, short: r.short || 0, set: set && +asked !== r.short, cover,
+      // a product code is the supplier's own: plugs bought from a grower are not ordered by the seed house's code
+      const house = r.unit === 'seeds' || r.unit === 'g' || name === supplierOf(v);
+      const line = { key: r.key, row: r, variety: v, crop: r.crop, sku: house ? v.sku || '' : '', unit: r.unit, amount, short: r.short || 0, set: set && +asked !== r.short, cover,
         buy: sized && cover.total != null ? cover.total : amount, text: cover ? cover.text : '', sized, cost: cover && cover.cost != null ? cover.cost : null };
       let g = groups.get(key);
       if (!g) groups.set(key, g = { key, name: name || 'No supplier named', lines: [], cost: 0, unpriced: 0 });

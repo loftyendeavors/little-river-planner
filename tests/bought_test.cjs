@@ -132,7 +132,7 @@ tryCase('the order sheet lists plants beside seed: under the grower the variety 
   const pv = eng.variety(plugs.varietyId), mine = lines.find(x => x.l.variety.id === pv.id && x.l.unit === 'plants'), seedOf = lines.find(x => x.l.unit === 'seeds');
   const tw = eng.variety(twoWay.varietyId), twPlants = lines.find(x => x.l.variety.id === tw.id && x.l.unit === 'plants'), twSeeds = lines.find(x => x.l.variety.id === tw.id && x.l.unit === 'seeds');
   const cv = byCrop.varietyId && eng.variety(byCrop.varietyId), crop = cv && lines.find(x => x.l.variety.id === cv.id && x.l.unit === 'plants');
-  return [!!mine && mine.g.name === pv.buyFrom && mine.l.sized && mine.l.buy % pv.buyLot === 0 && mine.l.buy >= mine.l.amount && /plants$/.test(mine.l.text) && !!seedOf
+  return [!!mine && mine.g.name === pv.buyFrom && mine.l.sku === '' && (!pv.sku || !seedOf || lines.some(x => x.l.unit === 'seeds' && x.l.sku)) && mine.l.sized && mine.l.buy % pv.buyLot === 0 && mine.l.buy >= mine.l.amount && /plants$/.test(mine.l.text) && !!seedOf
     && (!twPlants || tw.buyFrom || twPlants.g.key === '') && (!twSeeds || twSeeds.g.name === SL.supplierOf(tw) || !SL.supplierOf(tw))
     && (!crop || crop.g.name === (cv.buyFrom || SL.supplierOf(cv) || 'No supplier named')), { mine: mine && [mine.g.name, mine.l.buy, mine.l.text], tw: twPlants && twPlants.g.name, crop: crop && crop.g.name }];
 });
