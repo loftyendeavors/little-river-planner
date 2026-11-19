@@ -85,7 +85,11 @@
 
   "waiting, compact": 54,
 
-  "what the build changed": 9
+  "what the build changed": 9,
+
+  "year edge, backup": 52,
+
+  "year edge, compact": 52
 
  },
  "build": {
@@ -181,7 +185,9 @@
 
   "trycard": 50,
 
-  "wide": 28
+  "wide": 28,
+
+  "year-edge": 23
 
  },
  "app4": {
@@ -284,7 +290,9 @@
 
   "tour": 4,
 
-  "trycard-site": 50
+  "trycard-site": 50,
+
+  "year-edge-site": 23
 
  },
  "site3": {

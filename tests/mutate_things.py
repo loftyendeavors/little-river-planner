@@ -166,7 +166,7 @@ PAGE = [
  ("a bouquet is added into “All stems”", HV, "for (const r of part.filter(r => cash$ || g !== 'flower' || F.inStems(r))) {", "for (const r of part) {"),
  ("a thing's row has no mark of its own on the Harvest page", HV, "        if (row.thing) body[body.length - 1].dataset.thing = row.thing;   // another thing the crop sells: a row of its own, in its own unit\n", ""),
  ("the list to send leaves the things out", FC, "    for (const row of model.rows) {\n      if (options.group && row.group !== options.group) continue;", "    for (const row of model.rows) {\n      if (row.thing || (options.group && row.group !== options.group)) continue;"),
- ("the spreadsheet leaves the things out", FC, "    for (const row of model.rows) {\n      const n = x => (counted(row.unit)", "    for (const row of model.rows) {\n      if (row.thing) continue;\n      const n = x => (counted(row.unit)"),
+ ("the spreadsheet leaves the things out", FC, "    for (const row of model.rows) {\n      const record = rows.get(row);", "    for (const row of model.rows) {\n      if (row.thing) continue;\n      const record = rows.get(row);"),
  ("the row's button opens the weekly amount on the crop's own line", HV, "onclick: () => App.openAhead({ mode: 'series', by: 'harvest', thing: row.thing, cropId: row.cropId }) }, 'plan…')", "onclick: () => App.openAhead({ mode: 'series', by: 'harvest', thing: '', cropId: row.cropId }) }, 'plan…')"),
  ("the weekly amount offers no choice of thing", SR, "sold.length ? field('Of', h('select', { id: 'srThing',", "false ? field('Of', h('select', { id: 'srThing',"),
  ("the weekly amount is sized by the crop's own line though a thing is chosen", SR, "from: P.hFrom, thing: P.thing });\n", "from: P.hFrom, thing: '' });\n"),

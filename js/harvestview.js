@@ -24,6 +24,12 @@
   let measure = 'amounts', fit = false;
   const dollars = () => measure === 'dollars';
   const seriesOf = (m, x) => (dollars() ? x.value : series === 'picked' && m.keeps ? x.picked : x.days);
+  // Stock picked before Jan 1 and still to sell in the year (js/forecast.js, `carried`) stands on a line of its own under its crop, so
+  // the crop's line is the year's own harvest. On Picked there is none of it: nothing of it is picked in the year.
+  const carries = (m, x) => !!x && x.carriedTotal > 1e-9 && !(series === 'picked' && m.keeps && !dollars());
+  const carriedOf = x => (dollars() ? x.carriedValue : x.carried);
+  /** A crop's or a variety's line without what was carried in (the line under it has that). */
+  const ownOf = (m, x) => { const all = seriesOf(m, x); if (!carries(m, x)) return all; const c = carriedOf(x); return all.map((v, i) => v - c[i]); };
   const opened = new Set();
 
   // Whom it is grown for. Every planting is counted until one is marked for personal use; from then on the page can show
@@ -122,9 +128,9 @@
    * Where a figure comes from: the plantings picked in that stretch, one row each, with how each is picked as tags. A figure in
    * dollars comes only from the plantings that earn it: one for personal use, or with no price, is not among them.
    */
-  function sources(row, col) {
+  function sources(row, col, part) {
     const eng = App.state.engine, picked = !dollars() && series === 'picked' && shownModel().keeps;
-    const list = row.plantings.map(x => ({ ...x, here: F.share(x, col.i0, col.i1, picked) })).filter(x => x.here > 1e-9 && (!dollars() || x.here * (x.price || 0) > 1e-9)).sort((a, b) => b.here - a.here), total = list.reduce((n, x) => n + x.here, 0);
+    const list = row.plantings.map(x => ({ ...x, here: F.share(x, col.i0, col.i1, picked, part) })).filter(x => x.here > 1e-9 && (!dollars() || x.here * (x.price || 0) > 1e-9)).sort((a, b) => b.here - a.here), total = list.reduce((n, x) => n + x.here, 0);
     const worth = list.reduce((n, x) => n + x.here * (x.price || 0), 0);
     const close = () => { dialog.close(); dialog.remove(); };
     const go = x => { close(); App.setDate(x.r.first > App.state.date ? x.r.first : App.state.date); App.setView('map'); App.select({ type: 'planting', id: x.p.id }); };
@@ -138,7 +144,7 @@
     };
     const lead = `${F.amount(total, row.unit, row.group)} ${picked ? 'picked' : 'to sell'} · ${num(list.length)} planting${list.length === 1 ? '' : 's'}`;
     const dialog = h('dialog.dialog.wide', { id: 'hvFrom', dataset: { hook: 'fc-from' }, oncancel: e => { e.preventDefault(); close(); } },
-      h('h2', `${row.name}, ${colTitle(col)}`), h('p', { dataset: { hook: 'fc-from-lead' } }, lead, !picked && worth >= 1 ? ` · ${money(worth)}` : ''),
+      h('h2', `${row.name}${part === 'carried' ? `, carried in from ${(row.carriedFrom && row.carriedFrom.length ? row.carriedFrom : [App.planYear() - 1]).join(' and ')}` : ''}, ${colTitle(col)}`), h('p', { dataset: { hook: 'fc-from-lead' } }, lead, !picked && worth >= 1 ? ` · ${money(worth)}` : ''),
       h('ul.hv-from', list.map(x => h('li.row', { dataset: { hook: 'fc-from-row', planting: x.p.id, pattern: x.pattern, here: String(x.here) } },
         root.LRFThumbs.el({ varietyId: x.p.varietyId, cropId: x.p.cropId, color: eng.cropColor(x.r.c), label: x.r.c.vname || x.r.c.name, size: 40 }),
         h('span', h('b.row-name', { dataset: { hook: 'fc-from-variety' } }, x.r.c.vname || 'No variety chosen'),
@@ -161,7 +167,8 @@
   /** What the figures say beyond their line, for "?": the fullest week, the season's trays and stems, the kinds ready. */
   let figNotes = [];
   function figures(m, noYield) {
-    const wk = thisWeek(m), now = F.glance(m, wk.i0, wk.i1), all = F.glance(m, 0, m.days - 1), s = F.season(m);
+    // picking starts with the year's own harvest: stock carried in from the year before is sold in the year, not picked in it
+    const wk = thisWeek(m), now = F.glance(m, wk.i0, wk.i1), all = F.glance(m, 0, m.days - 1), s = F.season(m, m.rows.map(r => (r.carriedTotal > 1e-9 ? { days: r.days.map((v, i) => v - r.carried[i]) } : r)));
     let best = null;
     for (const c of F.periods(m, 'week')) { const worth = m.rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0); if (!best || worth > best.worth) best = { c, worth }; }
     const kinds = [[now.produce, 'vegetable', 'vegetables'], [now.micros, 'microgreen', 'microgreens'], [now.flowers, 'flower', 'flowers']].filter(x => x[0]).map(([n, one, many]) => `${num(n)} ${n === 1 ? one : many}`).join(' · ');
@@ -172,7 +179,10 @@
       [`Week of ${day(wk.start)}`, `${money(now.worth)} · ${kinds || 'nothing is being picked'}${which ? ' · ' + which : ''}`],
       ['Microgreen trays', `${num(F.shown(now.trays))} that week · ${num(F.shown(all.trays))} over the season`],
       ['Flower stems', `${num(F.shown(now.stems))} that week · ${num(F.shown(all.stems))} over the season`],
-      ...(best && best.worth > 0 ? [['Fullest week', `${day(best.c.start)}, ${money(best.worth)}`]] : [])];
+      ...(best && best.worth > 0 ? [['Fullest week', `${day(best.c.start)}, ${money(best.worth)}`]] : []),
+      // the year's two edges (js/forecast.js): a pound is in the one season it is sold in
+      ...(m.carried && m.carried.total > 1e-9 ? [[`Carried in from ${(m.carried.years.length ? m.carried.years : [m.year - 1]).join(' and ')}`, `${money(m.carried.worth)} of ${m.carried.crops.join(', ')}, picked before Jan 1 and still to sell. It is in this season's figures, on a line of its own under its crop`]] : []),
+      ...(m.after && m.after.total > 1e-9 ? [['After Dec 31', `${money(m.after.worth)} more of ${m.after.crops.join(', ')}, picked or still in store after the year's end. It counts in ${m.year + 1}, not in this season's worth`]] : [])];
     return h('p.frame-figs.fc-figs', { id: 'hvFigs', dataset: { hook: 'fc-figs', use: marked ? m.use : '' } },
       fig('season', 'Season', money(all.worth), worthSays, { cls: 'lead' }),
       fig('week', `Week of ${day(wk.start)}`, money(now.worth), which),
@@ -199,13 +209,13 @@
       cols.map(c => h('th' + (isNow(c) ? '.now' : '') + (c.weekend ? '.wkend' : ''), { scope: 'col', title: `Go to ${colTitle(c)}`, onclick: () => App.setDate(c.start), dataset: { col: c.key } }, h('b', c.top || ''), c.label)));
     const body = [];
     // a line of the table: in amounts, a crop's quantity each period; in dollars, what it is worth then. The figure in full is in its title.
-    const line = (cls, label, total, series, row, maxOf, unit) => {
+    const line = (cls, label, total, series, row, maxOf, unit, part) => {
       const peak = maxOf != null ? maxOf : Math.max(0, ...cols.map(c => F.sum(series, c.i0, c.i1)));
       return h('tr' + cls, label, total, cols.map(c => {
         const v = F.sum(series, c.i0, c.i1), text = cash$ ? cash(v) : qty(v), full = cash$ ? money(v) : unit ? F.amount(v, unit.unit, unit.group) : text;
         if (!text) return h('td.hv-c.zero' + (isNow(c) ? '.now' : ''));
         const p = peak > 0 ? Math.round(10 + 52 * Math.min(1, v / peak)) : 10;
-        return h('td.hv-c' + (isNow(c) ? '.now' : ''), { style: { '--p': p + '%' }, title: row ? `${row.name}, ${colTitle(c)}: ${full}` : `${colTitle(c)}: ${full}`, onclick: row ? () => sources(row, c) : null }, say(text, cash$ ? v : F.shown(v)));
+        return h('td.hv-c' + (isNow(c) ? '.now' : ''), { style: { '--p': p + '%' }, title: row ? `${row.name}, ${colTitle(c)}: ${full}` : `${colTitle(c)}: ${full}`, onclick: row ? () => sources(row, c, part) : null }, say(text, cash$ ? v : F.shown(v)));
       }));
     };
     const plain = (cls, label, total, value) => h('tr' + cls, label, total, cols.map(c => { const n = value(c), v = cash(n); return h('td' + (isNow(c) ? '.now' : ''), { title: v ? `${colTitle(c)}: ${v}` : null }, say(v, n) || ''); }));
@@ -220,15 +230,23 @@
           // more or less of it wanted: the series tool, asked from the harvest end, on this crop's own season
           plannable(row) && row.thing ? h('button.hv-plan', { type: 'button', dataset: { crop: row.cropId, thing: row.thing }, 'aria-label': `Plan ${row.name} to a weekly amount`, title: `Say how much of ${row.name} is wanted each week, and see the plantings that would give it`, onclick: () => App.openAhead({ mode: 'series', by: 'harvest', thing: row.thing, cropId: row.cropId }) }, 'plan…')
           : plannable(row) ? h('button.hv-plan', { type: 'button', dataset: { crop: row.cropId }, 'aria-label': `Plan ${row.name} to a weekly amount`, title: `Say how much ${row.name.toLowerCase()} is wanted each week, and see the plantings that would give it`, onclick: () => App.openAhead({ mode: 'series', by: 'harvest', cropId: row.cropId }) }, 'plan…') : null);
-        const whole = series === 'picked' && m.keeps ? row.pickedTotal : row.total;
-        const season = cash$ ? h('td.hv-total', { title: `${whole > 0 ? F.amount(row.total, row.unit, row.group) : '—'} to sell over the season` }, money(row.worth))
-          : h('td.hv-total', { title: `${money(row.worth)} at its own price${row.keeps ? ` · keeps ${num(row.keeps, 1)} week${row.keeps === 1 ? '' : 's'} after picking` : ''}` }, whole > 0 ? F.amount(whole, row.unit, row.group) : '—');
-        body.push(line('.hv-row', name, season, seriesOf(m, row), row, null, row));
+        // with stock carried in from the year before, the crop's line is the year's own and the carried stock is the line under it
+        const carry = carries(m, row), cut = carry ? row.carriedTotal : 0, cutWorth = carry ? row.carriedWorth : 0;
+        const whole = series === 'picked' && m.keeps ? row.pickedTotal : row.total - cut, worth = row.worth - cutWorth;
+        const season = cash$ ? h('td.hv-total', { title: `${whole > 1e-9 ? F.amount(whole, row.unit, row.group) : '—'} to sell over the season` }, money(worth))
+          : h('td.hv-total', { title: `${money(worth)} at its own price${row.keeps ? ` · keeps ${num(row.keeps, 1)} week${row.keeps === 1 ? '' : 's'} after picking` : ''}` }, whole > 1e-9 ? F.amount(whole, row.unit, row.group) : '—');
+        const peak = Math.max(0, ...cols.map(c => F.sum(seriesOf(m, row), c.i0, c.i1)));
+        body.push(line('.hv-row', name, season, ownOf(m, row), row, carry ? peak : null, row, carry ? 'own' : undefined));
         body[body.length - 1].dataset.crop = row.cropId;
         if (row.thing) body[body.length - 1].dataset.thing = row.thing;   // another thing the crop sells: a row of its own, in its own unit
+        if (carry) {
+          const from = `Carried in from ${(row.carriedFrom.length ? row.carriedFrom : [m.year - 1]).join(' and ')}`;
+          body.push(line('.hv-var', h('td.hv-name', { title: `${row.name}: picked before Jan 1 and still to sell` }, from),
+            h('td.hv-total', cash$ ? money(row.carriedWorth) : F.amount(row.carriedTotal, row.unit, row.group)), carriedOf(row), row, peak, row, 'carried'));
+          Object.assign(body[body.length - 1].dataset, { hook: 'fc-carried', crop: row.cropId });
+        }
         if (many && isOpen) {
-          const peak = Math.max(0, ...cols.map(c => F.sum(seriesOf(m, row), c.i0, c.i1)));
-          for (const v of row.varieties) body.push(line('.hv-var', h('td.hv-name', { title: v.name }, v.name), h('td.hv-total', cash$ ? money(v.worth) : F.amount(v.total, row.unit, row.group)), seriesOf(m, v), null, peak, row));
+          for (const v of row.varieties) { const vc = carries(m, v); body.push(line('.hv-var', h('td.hv-name', { title: v.name }, v.name), h('td.hv-total', cash$ ? money(v.worth - (vc ? v.carriedWorth : 0)) : F.amount(v.total - (vc ? v.carriedTotal : 0), row.unit, row.group)), ownOf(m, v), null, peak, row)); }
           if (g !== 'micro') body.push(h('tr.hv-var', h('td.hv-name', { colSpan: 2 }, 'Listed with ', h('button.linkish.hv-move', { type: 'button', onclick: () => moveCrop(row, g === 'flower' ? 'produce' : 'flower') }, `move to ${g === 'flower' ? 'vegetables' : 'flowers'}`)), h('td', { colSpan: cols.length })));
         }
       }

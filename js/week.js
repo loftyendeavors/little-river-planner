@@ -217,7 +217,11 @@
       return { planting: withTask(p, 'delay', kind, date === own ? null : { from: own, to: date, own }), days, from: was, to: date, moves: false };
     }
     const to = d2s(addDays(s2d(p.date), days));
-    if (to.slice(0, 4) !== String(p.date).slice(0, 4)) throw new Error(`That would take it out of ${String(p.date).slice(0, 4)}.`);
+    // within its own year, or into the season it is for (a December tray sowing for January put off into January)
+    if (!SL.staysIn(engine, p, to)) {
+      const from = String(p.date).slice(0, 4), year = +(engine.plan.settings && engine.plan.settings.year), season = SL.seasonOf(engine, p);
+      throw new Error(+to.slice(0, 4) === year && season === year ? `That would take it out of ${from} and make it ready after the ${season} season it is for.` : `That would take it out of ${from}${+from === year ? ', the plan’s year' : ''}.`);
+    }
     const planting = withTask({ ...p, date: to }, 'delay', kind, date === first ? null : { from: first, to: date });
     // a sowing day set by hand is the day being put off: it goes to the day chosen, and the planting goes out as many days later
     if (kind === 'sow' && p.sowOn) planting.sowOn = date;
@@ -251,11 +255,10 @@
    * bulbs, canes and bought-in plants. Seed sown straight into the ground is a sowing, and is not listed here.
    */
   function lines(engine, plan, year) {
-    const map = new Map(), yr = String(year);
+    const map = new Map();
     for (const p of plan.plantings || []) {
-      if (String(p.date).slice(0, 4) !== yr) continue;
       const r = engine.calc(p);
-      if (!r || r.rack || r.b.active === false || r.g.active === false) continue;
+      if (!r || r.rack || r.b.active === false || r.g.active === false || !SL.onTasks(engine, p, year, r)) continue;   // the year's own, and its season's (js/seedlib.js)
       const s = SL.sowing(engine, p), vkey = s ? s.key : 'c:' + p.cropId;
       for (const st of steps(engine, p)) {
         if (st.kind === 'sow') continue;

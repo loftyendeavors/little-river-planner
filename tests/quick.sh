@@ -48,6 +48,8 @@ node $T/swap_test.cjs $APP $PLAN | named "swap, backup"   # the variety swap: th
 node $T/swap_test.cjs $APP $SHIP | named "swap, compact"
 node $T/failed_test.cjs $APP $PLAN $OLD | named "failed, backup"   # Tasks part 2: a planting marked failed (its bed free from that day, its harvest off the forecast, taken whole by the merge), and a day a year before its plan refused
 node $T/failed_test.cjs $APP $SHIP $OLD | named "failed, compact"
+node $T/year_edge_test.cjs $APP $PLAN $OLD | named "year edge, backup"   # the year's edge: a December sowing for January's trays counted once in Seeds and on Tasks, stock carried in across Jan 1, the plan's own end; nothing else moves
+node $T/year_edge_test.cjs $APP $SHIP $OLD | named "year edge, compact"
 node $T/rails_test.cjs $APP $PLAN | named "rails"
 node $T/assume_test.cjs $APP $PLAN | named "assume"
 node $T/merge_test.cjs $APP $PLAN $FARM/inventory.json | named "merge"   # two copies of one plan joined, record by record: the rules, the five tests, 500 pairs of runs of edits

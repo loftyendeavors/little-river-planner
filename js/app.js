@@ -1207,9 +1207,9 @@
    * they took), what was put off and what was skipped. Notes are kept, and so is a planting marked failed.
    */
   function seasonRecords() {
-    const year = String(planYear()), out = { sowings: 0, jobs: 0, delays: 0, skips: 0, notes: 0, failed: 0, seed: 0, plantings: 0 };
+    const year = planYear(), out = { sowings: 0, jobs: 0, delays: 0, skips: 0, notes: 0, failed: 0, seed: 0, plantings: 0 };
     for (const p of state.plan.plantings) {
-      if (String(p.date).slice(0, 4) !== year) continue;
+      if (!SL.onTasks(state.engine, p, year)) continue;   // the plantings Tasks lists: the year's own and its season's (a December tray batch for January)
       const steps = Week.steps(state.engine, p), sow = sowingOf(p), t = p.tasks && typeof p.tasks === 'object' ? p.tasks : {};
       const jobs = steps.filter(st => st.done), delays = Object.keys(t.delay || {}).length, skips = Object.keys(t.skip || {}).length;
       for (const st of jobs) { if (sownJob(st, sow)) out.sowings++; else out.jobs++; }
@@ -1229,7 +1229,7 @@
     const year = String(planYear()), ctx = { now: new Date().toISOString(), uid, year: planYear(), name: '', today: todayText() }, ops = [], failed = [];
     let inventory = inventoryNow(), touched = false, returned = 0, lost = 0, sowings = 0, jobs = 0, delays = 0, skips = 0;
     for (const p0 of state.plan.plantings) {
-      if (String(p0.date).slice(0, 4) !== year) continue;
+      if (!SL.onTasks(state.engine, p0, planYear())) continue;   // as seasonRecords: what Tasks lists
       // one planting at a time, its seed carried in a copy that is kept only when the whole planting went back. A planting marked
       // failed lists no work, so its work is undone with the mark set aside, and the mark put back after: failed marks stay
       let p = p0.failed ? Week.fail(p0, null) : p0, inv = inventory, back = { returned: 0, lost: 0, sowings: 0, jobs: 0, delays: 0, skips: 0, inv: false };

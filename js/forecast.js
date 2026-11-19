@@ -113,17 +113,20 @@
     const rows = new Map(), unset = [], at = d => Math.round(E.dayDiff(d, start));
     const use = options.use === 'commercial' || options.use === 'personal' ? options.use : 'all';
     let counted = 0, marked = 0;
+    const keepOf = y => Math.max(1, Math.round((y.keep || 0) * 7));
     for (const p of plan.plantings || []) {
       const r = eng.calc(p);
-      if (!r || r.b.active === false || r.g.active === false || !(r.harvestDays > 0) || r.last < start || at(r.first) >= n) continue;
+      if (!r || r.b.active === false || r.g.active === false || !(r.harvestDays > 0) || at(r.first) >= n) continue;
       const y0 = eng.yieldOf(p, r);
       if (!y0) continue;                                            // a cover crop: nothing to pick
-      const personal = useOf(eng, p).personal;
-      if (personal) marked++;
-      if (use !== 'all' && personal !== (use === 'personal')) continue;
       // what it gives of each thing the crop sells: the crop's own line alone, as always, unless another thing counts for it.
       // A thing's row is listed with its crop (a flower's bouquets among the flowers), whatever unit the thing is sold by.
       const parts = (eng.soldOf && eng.soldOf(p, r, y0)) || [y0];
+      // a planting picked before the year is in it while what it gave is still to sell: stock carried in across Jan 1
+      if (!parts.some(y => at(y.last || r.last) + keepOf(y) - 1 >= 0)) continue;
+      const personal = useOf(eng, p).personal;
+      if (personal) marked++;
+      if (use !== 'all' && personal !== (use === 'personal')) continue;
       let any = false;
       for (const part of parts) {
         const y = personal ? { ...part, price: 0 } : part;              // grown for the farm's own table: picked, and not sold
@@ -131,7 +134,9 @@
         let row = rows.get(key);
         if (!row) {
           row = { key, cropId: p.cropId, name: short(crop.name || r.c.name || 'Crop') + (y.thing ? ' · ' + y.name : ''), unit: y.unit, group: groupOf(crop, y.thing ? eng.unitOf(crop) : y.unit, own), color: eng.cropColor(r.c), days: new Float64Array(n), picked: new Float64Array(n), value: new Float64Array(n),
-            total: 0, pickedTotal: 0, worth: 0, plantings: [], varieties: new Map(), unset: 0, first: null, last: null, keeps: 0, patterns: new Set(), ...(y.thing ? { thing: y.thing, sold: y.name } : {}) };
+            total: 0, pickedTotal: 0, worth: 0, plantings: [], varieties: new Map(), unset: 0, first: null, last: null, keeps: 0, patterns: new Set(), ...(y.thing ? { thing: y.thing, sold: y.name } : {}),
+            // of `days` and `value`: what was picked before Jan 1 and is still to sell (carried in); and what is to sell after Dec 31 (in no figure here)
+            carried: new Float64Array(n), carriedValue: new Float64Array(n), carriedTotal: 0, carriedWorth: 0, carriedFrom: [], after: 0, afterWorth: 0 };
           rows.set(key, row);
         }
         // a first thing that is left nothing by the others is not a yield that works out to nothing
@@ -142,23 +147,33 @@
         if (!picked.length || !(y.units > 0)) continue;
         const rate = y.units / picked.length, vId = p.varietyId || '', v = eng.variety(p.varietyId);
         let variety = row.varieties.get(vId);
-        if (!variety) { variety = { id: vId, name: v && v.name ? v.name : 'No variety chosen', days: new Float64Array(n), picked: new Float64Array(n), value: new Float64Array(n), total: 0, worth: 0 }; row.varieties.set(vId, variety); }
-        // what comes out of the ground each day, and what there is to sell: a crop that keeps is drawn down evenly over the weeks it keeps
-        const keep = Math.max(1, Math.round((y.keep || 0) * 7)), lo = picked[0], span = picked[picked.length - 1] - lo + keep, out = new Float64Array(span), avail = new Float64Array(span);
+        if (!variety) { variety = { id: vId, name: v && v.name ? v.name : 'No variety chosen', days: new Float64Array(n), picked: new Float64Array(n), value: new Float64Array(n), total: 0, worth: 0, carried: new Float64Array(n), carriedValue: new Float64Array(n), carriedTotal: 0, carriedWorth: 0 }; row.varieties.set(vId, variety); }
+        // what comes out of the ground each day, and what there is to sell: a crop that keeps is drawn down evenly over the weeks it keeps.
+        // `carry` is the part of `avail` picked before the year (a day number below 0): stock carried in, kept apart so it is shown apart
+        const keep = keepOf(y), lo = picked[0], span = picked[picked.length - 1] - lo + keep, out = new Float64Array(span), avail = new Float64Array(span), carry = new Float64Array(span);
         const lots = y.pattern === 'once' ? [[lo, y.units]] : picked.map(i => [i, rate]);
-        for (const [i, q] of lots) { out[i - lo] += q; if (keep === 1) avail[i - lo] += q; else for (let k = 0; k < keep; k++) avail[i - lo + k] += q / keep; }
-        let inYear = 0, cut = 0;
+        for (const [i, q] of lots) {
+          out[i - lo] += q;
+          for (let k = 0; k < keep; k++) { avail[i - lo + k] += q / keep; if (i < 0) carry[i - lo + k] += q / keep; }
+          const from = i < 0 && i + keep > 0 ? E.addDays(start, i).getFullYear() : null;   // the year a lot still to sell in this one was picked in
+          if (from !== null && !row.carriedFrom.includes(from)) row.carriedFrom.push(from);
+        }
+        let inYear = 0, cut = 0, carried = 0, after = 0;
         for (let k = 0; k < span; k++) {
           const i = lo + k;
-          if (i < 0 || i >= n) continue;
+          if (i >= n) { after += avail[k]; continue; }
+          if (i < 0) continue;
           if (out[k]) { row.picked[i] += out[k]; variety.picked[i] += out[k]; cut += out[k]; }
           if (avail[k]) { row.days[i] += avail[k]; row.value[i] += avail[k] * y.price; variety.days[i] += avail[k]; variety.value[i] += avail[k] * y.price; inYear += avail[k]; }
+          if (carry[k]) { row.carried[i] += carry[k]; row.carriedValue[i] += carry[k] * y.price; variety.carried[i] += carry[k]; variety.carriedValue[i] += carry[k] * y.price; carried += carry[k]; }
         }
+        row.after += after; row.afterWorth += after * y.price;
         if (!(inYear > 0) && !(cut > 0)) continue;
         row.total += inYear; row.pickedTotal += cut; row.worth += inYear * y.price; variety.total += inYear; variety.worth += inYear * y.price; any = true;
+        row.carriedTotal += carried; row.carriedWorth += carried * y.price; variety.carriedTotal += carried; variety.carriedWorth += carried * y.price;
         if (keep > 1) row.keeps = Math.max(row.keeps, y.keep);
         row.patterns.add(y.pattern);
-        row.plantings.push({ p, r, units: y.units, inYear, rate, lo, avail, out, pattern: y.pattern, keep: y.keep || 0, i0: Math.max(0, lo), i1: Math.min(n - 1, lo + span - 1), p0: Math.max(0, lo), p1: Math.min(n - 1, picked[picked.length - 1]), price: y.price, personal, ...(y.first ? { from, to } : {}) });
+        row.plantings.push({ p, r, units: y.units, inYear, rate, lo, avail, out, carry, carried, pattern: y.pattern, keep: y.keep || 0, i0: Math.max(0, lo), i1: Math.min(n - 1, lo + span - 1), p0: Math.max(0, lo), p1: Math.min(n - 1, picked[picked.length - 1]), price: y.price, personal, ...(y.first ? { from, to } : {}) });
         const a = new Date(Math.max(from, start)), z = new Date(Math.min(to, E.addDays(start, n - 1)));
         if (!row.first || a < row.first) row.first = a;
         if (!row.last || z > row.last) row.last = z;
@@ -168,7 +183,13 @@
     const order = { produce: 0, micro: 1, flower: 2 };
     const list = [...rows.values()].filter(r => r.total > 0 || r.unset).sort((a, b) => order[a.group] - order[b.group] || a.name.localeCompare(b.name));
     for (const row of list) row.varieties = [...row.varieties.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
-    return { year, start, days: n, rows: list, unset, counted, use, personal: marked, keeps: list.some(r => r.keeps > 0), date: i => E.addDays(start, i), index: at };
+    // The year's two edges. Carried in: picked before Jan 1, still to sell in the year, and counted in it (in `days`, the totals and
+    // the worth, once). After: to sell after Dec 31 from what is picked in the year, picked or still in store: it counts in the next
+    // year, where it is carried in, and in no figure of this one. A pound is in the one season it is sold in.
+    const edge = (q, w) => { const crops = list.filter(r => r[q] > 1e-9); return { crops: crops.map(r => r.name), total: crops.reduce((t, r) => t + r[q], 0), worth: crops.reduce((t, r) => t + r[w], 0) }; };
+    for (const row of list) row.carriedFrom.sort((a, b) => a - b);
+    const carried = { ...edge('carriedTotal', 'carriedWorth'), years: [...new Set(list.filter(r => r.carriedTotal > 1e-9).flatMap(r => r.carriedFrom))].sort((a, b) => a - b) }, after = edge('after', 'afterWorth');
+    return { year, start, days: n, rows: list, unset, counted, use, personal: marked, keeps: list.some(r => r.keeps > 0), carried, after, date: i => E.addDays(start, i), index: at };
   }
 
   // ── the forecast kept for an engine and its options ──
@@ -205,11 +226,14 @@
     return { year: m.year, cropId, months: MONTHS.slice(), rows };
   }
 
-  /** How much of one planting falls between two days: of what there is to sell, or (`picked`) of what comes out of the ground. */
-  function share(x, i0, i1, picked) {
-    const series = picked ? x.out : x.avail;
+  /**
+   * How much of one planting falls between two days: of what there is to sell, or (`picked`) of what comes out of the ground.
+   * part: 'carried', only what was picked before the year; 'own', what there is to sell without that; otherwise all of it.
+   */
+  function share(x, i0, i1, picked, part) {
+    const series = picked ? x.out : x.avail, carry = !picked && x.carry && (part === 'carried' || part === 'own') ? x.carry : null;
     let total = 0;
-    for (let i = Math.max(i0, x.lo), end = Math.min(i1, x.lo + series.length - 1); i <= end; i++) total += series[i - x.lo];
+    for (let i = Math.max(i0, x.lo), end = Math.min(i1, x.lo + series.length - 1); i <= end; i++) total += part === 'carried' ? (carry ? carry[i - x.lo] : 0) : series[i - x.lo] - (carry ? carry[i - x.lo] : 0);
     return total;
   }
   const sum = (days, i0, i1) => { let total = 0; for (let i = Math.max(0, i0); i <= i1 && i < days.length; i++) total += days[i]; return total; };
