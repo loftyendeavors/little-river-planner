@@ -1392,7 +1392,9 @@
     function standYear(p, r) {
       r = r || calc(p);
       if (!r || !(r.first instanceof Date)) return null;
-      const env = envOf(r.b), early = thingsOf(p.cropId).filter(t => t.counts && (t.from === 'place' ? t.place === env : t.from === 'bed' && p.gives !== 'first' && (!p.gives || p.gives === t.id)));
+      // the things it is picked for, as soldOf gives them (#84): its bed's place thing where one counts, else the bed's by grownFor
+      const env = envOf(r.b), list = thingsOf(p.cropId).filter(t => t.counts), there = list.find(t => t.from === 'place' && t.place === env), g = grownFor(p);
+      const early = there ? [there] : g === 'first' ? [] : list.filter(t => t.from === 'bed' && (!g || g === t.id));
       const ahead = early.reduce((n, t) => Math.max(n, aheadOf(t, r)), 0);
       return (ahead ? addDays(r.first, -ahead) : r.first).getFullYear();
     }
@@ -1474,6 +1476,18 @@
       return out;
     }
     /**
+     * What a planting is grown for (`gives`), read against the things its crop sells from the bed that are in force: 'first' (the
+     * crop's own line alone), a thing's id (that thing on the whole of it), or null (nothing said, or a word that names no thing in
+     * force, taken away or not counted yet: every one of them by the crop's shares). soldOf, standYear and the days-before guard all
+     * read it here, so that they cannot drift (#84).
+     */
+    function grownFor(p) {
+      const g = p && p.gives;
+      if (!g) return null;
+      if (g === 'first') return 'first';
+      return thingsOf(p.cropId).some(t => t.counts && t.from === 'bed' && t.id === g) ? g : null;
+    }
+    /**
      * What one planting gives of each thing its crop sells: null where only the crop's own line applies (no thing counts, or the
      * planting carries a yield of its own, is a live tray, or grows a variety sold by a unit of its own), and then yieldOf is
      * the whole of it, as it always was. Else a list, one part for each thing the planting feeds. A part reads as yieldOf's
@@ -1506,10 +1520,10 @@
       if (there) return [own(there, 1)];
       // Where two things come out of one bed, a planting may say which of them it is grown for (`gives`): 'first', the crop's
       // own line and none of the bed's other things; a thing's id, that thing on the whole of it; nothing, both by the crop's shares.
-      // A word that names no thing in force is read as nothing said.
-      const shared = list.filter(t => t.from === 'bed'), only = p.gives && p.gives !== 'first' ? shared.find(t => t.id === p.gives) : null;
+      // A word that names no thing in force is read as nothing said (grownFor).
+      const shared = list.filter(t => t.from === 'bed'), g = grownFor(p), only = g && g !== 'first' ? shared.find(t => t.id === g) : null;
       if (only) return [own(only, 1)];
-      const beds = p.gives === 'first' ? [] : shared, packs = list.filter(t => t.from === 'harvest');
+      const beds = g === 'first' ? [] : shared, packs = list.filter(t => t.from === 'harvest');
       if (!beds.length && !packs.length) return null;
       const bedLeft = 1 - beds.reduce((n, t) => n + t.share, 0) / 100, packLeft = 1 - packs.reduce((n, t) => n + t.share, 0) / 100, source = y.units * Math.max(0, bedLeft);
       const parts = [{ ...y, units: source * Math.max(0, packLeft), thing: null, name: null, slice: Math.max(0, bedLeft) * Math.max(0, packLeft) }];
@@ -1581,7 +1595,7 @@
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
       heatedTraySpaces, benchRoom, coolRules, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
-      yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, thingsOf, soldOf, givenOf, WEIGHED, COUNTED, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
+      yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, thingsOf, soldOf, grownFor, givenOf, WEIGHED, COUNTED, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
       aheadOf, standAge, standYear, youngFor, pickedFrom, pickingOn, pickWindows,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),

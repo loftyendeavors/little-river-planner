@@ -619,7 +619,9 @@
       // first picked before the crop's days to harvest (E2c part 2): never before a planting it comes from is in its bed, so that
       // the number means the same in every bed
       // only the plantings that give it, as soldOf gives them: one grown for the crop alone, or for another thing, is not (Codex on #83)
-      const gives = r => t.from !== 'bed' || !r.planting.gives || r.planting.gives === t.id;
+      // a `gives` that names no thing in force (taken away, or not counted yet) is nothing said, as soldOf reads it: both, by shares
+      // (#84: eng.grownFor, the one reading soldOf and standYear make too)
+      const gives = r => { const g = eng.grownFor(r.planting); return t.from !== 'bed' || (g !== 'first' && (!g || g === t.id)); };
       const want = Math.round(+change.before), fed = t.from === 'harvest' ? [] : thingPlantings(eng, cropId, t).filter(r => r.harvestDays > 0 && gives(r));
       const room = fed.length ? Math.min(...fed.map(r => E.dayDiff(r.first, r.field) - 1)) : null, tight = room == null ? null : fed.find(r => E.dayDiff(r.first, r.field) - 1 === room);
       if (t.from === 'harvest') return refuse(`${t.name} is packed from ${c.name}’s harvest, so it is picked when ${c.name} is.`);
