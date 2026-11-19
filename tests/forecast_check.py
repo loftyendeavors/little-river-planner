@@ -8,7 +8,7 @@ crop's yield, a price and the harvest choice each leave behind, the page followi
 is found on the plan the page was given: nothing here names a crop, a bed or a number of any plan.
 usage: python3 -I forecast_check.py <app-dir-or-built-site> <shots-dir> [backup.zip]     env: WIDTH=1280, STOP_AT_FAIL=1
 """
-import functools, http.server, json, os, re, sys, threading
+import csv, functools, http.server, json, os, re, sys, threading
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 target, shots = Path(sys.argv[1]), Path(sys.argv[2]); shots.mkdir(parents=True, exist_ok=True)
@@ -298,27 +298,83 @@ with sync_playwright() as pw:
     check("the list to send has every crop of every month in its own words, the forecast's amount", ls["want"] > 5 and ls["missing"] == [], ls)
     check("things counted are whole numbers there, and a thing sold singly says “each”", ls["counted"] > 0 and ls["fractions"] == [] and ls["bare"] == [] and ls["each"] > 0 and ls["eachSaid"] >= ls["each"], ls)
     shot("list")
-    # the spreadsheet of the same list: things counted whole, rounded down, in its season and in every month (Codex on #69)
-    csvt = ""
-    try:
-        if has("#hvCsv"):
+    # Check the actual download button, not only the formatter, with the options growers use.
+    def download_rows():
+        try:
             with page.expect_download(timeout=20000) as dl: page.click("#hvCsv")
-            csvt = open(dl.value.path(), encoding="utf-8", newline="").read()
-    except Exception as e: errors.append("spreadsheet: " + str(e)[:160])
-    cs = js("""const m = HV.model('commercial'), s = F.season(m), cols = F.periods(m, 'month', s.i0, s.i1), rows = arg.split('\\r\\n').slice(1).map(l => l.slice(1, -1).split('","'));
-      const bad = [], kinds = { counted: 0, weighed: 0 };
-      for (const row of m.rows.filter(r => r.total > 0)) { const line = rows.find(l => l[1] === row.name && l[2] === 'All' && l[3] === row.unit); if (!line) { bad.push([row.name, 'no line']); continue; }
-        const each = x => F.counted(row.unit) ? Math.floor(x + 1e-6) : Math.round(x * 100) / 100, want = [each(row.total), ...cols.map(c => each(F.sum(row.days, c.i0, c.i1)))], got = line.slice(4).map(Number);
-        kinds[F.counted(row.unit) ? 'counted' : 'weighed']++; if (JSON.stringify(got) !== JSON.stringify(want)) bad.push([row.name, got.slice(0, 4), want.slice(0, 4)]); }
-      return { bad: bad.slice(0, 3), seen: kinds, fractions: rows.filter(l => l.length > 4 && !['lb', 'oz', 'kg', 'g', 'bu'].includes(l[3])).flatMap(l => l.slice(4)).filter(x => /\\./.test(x)).length };""", csvt)
-    # a crop and a variety of less than one thing counted in all: no line of noughts, as the list leaves them out (Codex on #69)
-    tiny = js("""const days = new Float64Array(365), more = new Float64Array(365); days[200] = 0.6; more[200] = 3.4; const m = { year: 2027, days: 365, rows: [
-        { group: 'produce', name: 'Less than one', unit: 'head', total: 0.6, days, varieties: [{ id: 'a', name: 'Alone', total: 0.6, days }] },
-        { group: 'produce', name: 'Some', unit: 'head', total: 4, days: (() => { const d = new Float64Array(365); d[200] = 4; return d; })(), varieties: [{ id: 'b', name: 'Most', total: 3.4, days: more }, { id: 'c', name: 'A little', total: 0.6, days }] }] };
-      const cols = [{ i0: 0, i1: 364, start: new Date(2027, 0, 1) }], text = F.csv(m, cols, { grain: 'month' });
-      return { none: !text.includes('Less than one') && !text.includes('A little'), some: text.includes('"Some","All","head","4"') && text.includes('"Most"') };""")
-    check("its spreadsheet leaves out a crop or a variety of less than one thing counted in all, and keeps the rest", tiny["none"] and tiny["some"], tiny)
-    check("its spreadsheet gives things counted in whole numbers too, rounded down, and weighed things to two places, each the forecast's", len(csvt) > 200 and cs["bad"] == [] and cs["fractions"] == 0 and cs["seen"]["counted"] > 0 and cs["seen"]["weighed"] > 0, cs)
+            with open(dl.value.path(), encoding="utf-8", newline="") as f: return list(csv.reader(f))
+        except Exception as e: errors.append("spreadsheet: " + str(e)[:160]); return []
+    cs = js("""const m = HV.model('commercial'), s = F.season(m), cols = F.periods(m, 'month', s.i0, s.i1), [head, ...rows] = arg, expected = [];
+      for (const row of m.rows) {
+        const amounts = cols.map(c => { const q = F.sum(row.days, c.i0, c.i1); return F.counted(row.unit) ? Math.floor(q + 1e-6) : F.shown(q); });
+        if (amounts.some(q => q > 0)) expected.push([row.name, 'All', row.unit, ...amounts]);
+      }
+      return { same: JSON.stringify(rows.map(r => [...r.slice(1, 4), ...r.slice(4).map(Number)])) === JSON.stringify(expected),
+        head: !!head && JSON.stringify(head) === JSON.stringify(['Kind', 'Crop', 'Variety', 'Unit', ...cols.map(c => F.MONTHS[c.start.getMonth()] + ' ' + m.year)]),
+        seen: [expected.some(r => F.counted(r[2])), expected.some(r => !F.counted(r[2]))] };""", download_rows())
+    check("its spreadsheet contains the reviewed months and quantities, rounded down as in the text, and no extra totals or varieties", cs["same"] and cs["head"] and all(cs["seen"]), cs)
+
+    page.select_option("#hvShareKind", "flower")
+    flowers = js("""const m = HV.model('commercial'), s = F.season(m), cols = F.periods(m, 'month', s.i0, s.i1), [head, ...rows] = arg, expected = [];
+      const periods = $('hvSheet').textContent.split('\\n\\n').slice(1, -1);
+      const lines = cols.map(() => []);
+      for (const row of m.rows.filter(r => r.group === 'flower')) {
+        const amounts = cols.map((c, i) => {
+          const qty = F.sum(row.days, c.i0, c.i1), amount = F.sendShown(qty, row.unit);
+          if (amount > 0) lines[i].push('    ' + row.name + ': ' + F.sendAmount(qty, row.unit, row.group));
+          return String(amount);
+        });
+        if (amounts.some(q => Number(q) > 0)) expected.push(['Flowers', row.name, 'All', row.unit, ...amounts]);
+      }
+      return { seen: expected.length, rows: JSON.stringify(rows) === JSON.stringify(expected),
+        text: JSON.stringify(periods.map(p => p.split('\\n').filter(l => l.startsWith('    ')))) === JSON.stringify(lines),
+        dates: JSON.stringify(head) === JSON.stringify(['Kind', 'Crop', 'Variety', 'Unit', ...cols.map(c => F.MONTHS[c.start.getMonth()] + ' ' + m.year)]) };""", download_rows())
+    check("the Flowers-only download and preview contain the same commercial flower amounts in each reviewed month, with varieties and prices off",
+          flowers["seen"] > 0 and flowers["rows"] and flowers["text"] and flowers["dates"], flowers)
+
+    page.check("#hvShareVar"); page.check("#hvSharePrice")
+    detailed = js("""const m = HV.model('commercial'), s = F.season(m), cols = F.periods(m, 'month', s.i0, s.i1), [head, ...rows] = arg, text = $('hvSheet').textContent;
+      const named = rows.filter(r => r[2] !== 'All');
+      const checked = rows.filter(r => r[2] === 'All').flatMap(r => {
+        const row = m.rows.find(x => x.group === 'flower' && x.name === r[1] && x.unit === r[3]);
+        return cols.map((c, i) => {
+          const q = row ? F.sum(row.days, c.i0, c.i1) : 0, w = row ? F.sum(row.value, c.i0, c.i1) : 0;
+          const price = F.sendShown(q, r[3]) && w > 0 ? (w / q).toFixed(2) : '';
+          const col = 4 + i * 2;
+          return { price, ok: Number(r[col]) === F.sendShown(q, r[3]) && r[col + 1] === price };
+        });
+      });
+      return { named: named.length, priced: checked.filter(r => r.price).length, ok: rows.every(r => r[0] === 'Flowers') && checked.every(r => r.ok)
+        && named.every(r => text.includes('      ' + r[2] + ': ') && r.slice(4).every((v, i) => i % 2 === 0 || v === ''))
+        && !!head && head.length === 4 + cols.length * 2 && head.slice(4).every((h, i) => i % 2 === 0 || h.endsWith(' unit price (USD)')) };""", download_rows())
+    check("with varieties and prices on, the Flowers-only download names the varieties in the preview and prices the same periods", detailed["named"] > 0 and detailed["priced"] > 0 and detailed["ok"], detailed)
+
+    # A selection containing zero rounded whole items, and a genuine harvest outside the selection.
+    tiny = js("""const at = (qty, i = 200) => { const d = new Float64Array(365); d[i] = qty; return d; };
+      const v = (id, name, qty) => ({ id, name, days: at(qty) });
+      const m = { year: 2027, days: 365, rows: [
+        { group: 'produce', name: 'Less than one', unit: 'head', days: at(0.6), value: at(0), varieties: [v('a', 'Alone', 0.6)] },
+        { group: 'produce', name: 'Some', unit: 'head', days: at(4), value: at(0), varieties: [v('b', 'Most', 3.4), v('c', 'A little', 0.6)] },
+        { group: 'produce', name: 'Later', unit: 'head', days: at(20, 255), value: at(0), varieties: [] }] };
+      const cols = [{ i0: 199, i1: 205, start: new Date(2027, 6, 19) }], text = F.csv(m, cols, { grain: 'week', varieties: true });
+      return { none: !/Less than one|A little|Later/.test(text), some: text.includes('"Some","All","head","4"') && text.includes('"Most","head","3"'),
+        dates: text.includes('"2027-07-19"') && !text.includes('Season total') };""")
+    check("a one-week spreadsheet leaves out crops outside that week and crops or varieties rounded down to zero", tiny["none"] and tiny["some"] and tiny["dates"], tiny)
+
+    breakdown = js("""const cols = [0, 7, 14, 21].map(i => ({i0: i, i1: i + 6, start: new Date(2027, 0, 4 + i), end: new Date(2027, 0, 10 + i)}));
+      const days = (a, b, c) => { const d = new Float64Array(365); d[0] = a; d[7] = b; d[14] = c; return d; };
+      const row = { group: 'flower', name: 'Zinnia', unit: 'stem', days: days(20, 40, 10), value: days(0, 0, 0), varieties: [
+        { id: 'queen', name: 'Queen Lime', days: days(12, 0, 10) }, { id: '', name: 'No variety chosen', days: days(8, 40, 0) }
+      ] };
+      const m = {year: 2027, days: 365, rows: [row]}, options = { grain: 'week', group: 'flower', varieties: true };
+      const rows = F.csv(m, cols, options).split('\\r\\n').slice(1);
+      const week = F.text(m, cols, options).split('\\n\\n')[2];
+      return { rows, week, ok: rows.join('\\n') === [
+        '"Flowers","Zinnia","All","stem","20","40","10","0"',
+        '"Flowers","Zinnia","Queen Lime","stem","12","","10","0"',
+        '"Flowers","Zinnia","No variety chosen","stem","8","","0","0"'
+      ].join('\\n') && week.includes('Zinnia: 40 stems') && !week.includes('      ') };""")
+    check("variety cells are blank when the preview shows only the crop total, and zero where there is nothing on that row", breakdown["ok"], breakdown)
     page.keyboard.press("Escape"); wait(300)
     js("const d = document.querySelector('dialog[open]'); if (d) { d.close(); d.remove(); } return 1;")
 
