@@ -26,8 +26,10 @@ NODE = [
  ("the part does not say how many days early", EN, "...(ahead ? { ahead } : {}),", ""),
  ("the forecast picks a thing only on the crop's own days", FC, "if (y.first || eng.pickedOn(r, d)) picked.push(i);", "if (eng.pickedOn(r, d)) picked.push(i);"),
  ("the forecast does not carry the days early", FC, "...(y.ahead ? { ahead: y.ahead } : {}),", ""),
- ("an early picking is not among the planting's notes", EN, "if (x.ahead) out.push({ k: 'pick',", "if (false) out.push({ k: 'pick',"),
+ ("an early picking is not among the planting's notes", EN, "if (!x.ahead) continue;", "continue;"),
+ ("a planting in its bed fewer days than the days before says nothing", EN, "short = t && t.before > x.ahead;", "short = false;"),
  # a young stand
+ ("a part picked early is aged to its crop's days to harvest, not to its own first picking", EN, "const age = y.age ? standAge(p, r, start.getFullYear()) : null,", "const age = y.age,"),
  ("a stand's year is not read", EN, "const age = own || liveTray ? null : standAge(p, r),", "const age = null,"),
  ("a planting's own yield is cut by its age", EN, "const age = own || liveTray ? null : standAge(p, r),", "const age = liveTray ? null : standAge(p, r),"),
  ("a crop that is not perennial is cut by a year", EN, "|| y > at || !isPerennial(r.c)) return null;", "|| y > at) return null;"),
@@ -42,7 +44,7 @@ NODE = [
  ("a stand that gives nothing yet is counted as having no yield", FC, "if (y.set && y.age && !(y.age.share > 0)) continue;", ""),
  ("the forecast does not carry a young stand's season", FC, "...(y.age && y.age.season < 3 ? { age: y.age } : {})", ""),
  ("a young stand is not among its notes", EN, "if (y && y.age && y.age.season < 3) out.push({ k: 'stand',", "if (false) out.push({ k: 'stand',"),
- ("a thing of a young stand is not cut", EN, "const young = y.age ? y.age.share / 100 : 1;", "const young = 1;"),
+ ("a thing of a young stand is not cut", EN, "const age = y.age ? standAge(p, r, start.getFullYear()) : null, young = age ? age.share / 100 : 1;", "const age = y.age ? standAge(p, r, start.getFullYear()) : null, young = 1;"),
 ]
 PAGE = [
  ("the first-picking cell has no box", TH, "return td(h('span.yc-line', box({ key: key(t, 'before'),", "return td(why('with the crop'), h('span.yc-line', box({ key: key(t, 'before') + 'x',"),

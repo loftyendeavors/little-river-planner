@@ -1049,7 +1049,11 @@
       // E2c part 2: something it sells first picked before its days to harvest, and a young stand's share, said quietly
       if (!isCoverCrop(r.c)) {
         const y = yieldOf(p, r), parts = y ? soldOf(p, r, y) : null;
-        for (const x of parts || []) if (x.ahead) out.push({ k: 'pick', t: `${x.name} first picked ${d2s(x.first)}, ${x.ahead} day${x.ahead === 1 ? '' : 's'} before its days to harvest (${d2s(r.first)}).` });
+        for (const x of parts || []) {
+          if (!x.ahead) continue;
+          const t = thingsOf(p.cropId).find(k => k.id === x.thing), short = t && t.before > x.ahead;   // in its bed fewer days than the card's days before
+          out.push({ k: 'pick', t: `${x.name} first picked ${d2s(x.first)}, ${x.ahead}${short ? ` of the ${t.before}` : ''} day${x.ahead === 1 && !short ? '' : 's'} before its days to harvest (${d2s(r.first)})${short ? ': it goes into its bed only the day before that' : ''}.` });
+        }
         if (y && y.age && y.age.season < 3) out.push({ k: 'stand', t: y.age.share > 0 ? `Planted in ${y.age.year}, its ${y.age.season === 1 ? 'first' : 'second'} season: ${Math.round(y.age.share * 10) / 10}% of a mature stand’s yield.` : `Planted in ${y.age.year}, its ${y.age.season === 1 ? 'first' : 'second'} season: nothing is picked.` });
       }
       if (r.c.frostTender && g.frost) {
@@ -1320,13 +1324,25 @@
      * How old a stand is: { year, season, share } for a planting of a perennial crop whose year he typed, where `season` is 1 in the
      * year it was planted, 2 the year after, 3 from then on, counted to the year it is picked in, and `share` the percent of a mature
      * stand's yield it gives then. null where no year is typed (a mature stand, as before) or the year is after the one it is picked in.
+     * `year`: the year to count to, where not the year of the planting's first picking (something else it sells, picked earlier).
      */
-    function standAge(p, r) {
+    function standAge(p, r, year) {
       r = r || calc(p);
-      const y = p && p.plantedIn, at = r && r.first instanceof Date ? r.first.getFullYear() : null;
+      const y = p && p.plantedIn, at = year != null ? year : r && r.first instanceof Date ? r.first.getFullYear() : null;
       if (!r || !Number.isInteger(y) || y < 1900 || at == null || y > at || !isPerennial(r.c)) return null;
       const season = Math.min(3, at - y + 1), cell = season < 3 ? (youngFor(p.cropId) || [])[season - 1] : null;
       return { year: y, season, share: cell && cell.value != null ? cell.value : 100 };
+    }
+    /**
+     * The earliest year a stand is picked in: that of its first picking, or of something else its crop sells picked before it. The
+     * latest year planted the stand's box takes (a year after its earliest picking is no year for it).
+     */
+    function standYear(p, r) {
+      r = r || calc(p);
+      if (!r || !(r.first instanceof Date)) return null;
+      const env = envOf(r.b), early = thingsOf(p.cropId).filter(t => t.counts && (t.from === 'place' ? t.place === env : t.from === 'bed' && p.gives !== 'first' && (!p.gives || p.gives === t.id)));
+      const ahead = early.reduce((n, t) => Math.max(n, aheadOf(t, r)), 0);
+      return (ahead ? addDays(r.first, -ahead) : r.first).getFullYear();
     }
     /** Is this a day the crop is picked? Any day of its harvest period. */
     const pickedOn = (r, date) => date >= r.first && date <= r.last;
@@ -1406,13 +1422,14 @@
       const env = envOf(r.b), list = all.filter(t => t.counts);
       // a thing with a yield of its own, from `part` of what the planting is counted by; `ahead`: the days it is first picked before
       // the planting's first picking (aheadOf), counted in its days; a young stand gives its share of it too
-      const young = y.age ? y.age.share / 100 : 1;
       const own = (t, part) => {
         const ahead = aheadOf(t, r), start = ahead ? addDays(r.first, -ahead) : r.first;
+        // a young stand gives its share of it by the year this part is first picked in (Codex on #83: a December picking is that year's)
+        const age = y.age ? standAge(p, r, start.getFullYear()) : null, young = age ? age.share / 100 : 1;
         const there = pickedDays(r, t.pattern) + ahead, days = t.days ? Math.min(t.days, there) : there, nominal = t.days || Math.max(1, r.expectedHarvestDays + ahead), weekly = t.pattern === 'weekly';
         const each = weekly ? t.yield * days / 7 : t.yield, cut = weekly ? 1 : clamp(days / Math.max(1, nominal), 0, 1), k = t.counted ? t.weighs : 1;
         return { thing: t.id, name: t.name, from: t.from, basis: y.basis, count: y.count * part, per: each * k, mk: y.mk, part: cut, units: y.count * part * each * k * y.mk * cut * young, unit: t.unit, set: true, own: false,
-          price: t.price, pattern: t.pattern, perWeek: weekly ? t.yield * k : null, nominal, by: 'thing', keep: y.keep, first: start, last: addDays(start, Math.max(0, Math.min(days, r.harvestDays + ahead) - 1)), slice: part, ...(ahead ? { ahead } : {}), ...(y.age ? { age: y.age } : {}) };
+          price: t.price, pattern: t.pattern, perWeek: weekly ? t.yield * k : null, nominal, by: 'thing', keep: y.keep, first: start, last: addDays(start, Math.max(0, Math.min(days, r.harvestDays + ahead) - 1)), slice: part, ...(ahead ? { ahead } : {}), ...(age ? { age } : {}) };
       };
       const there = list.find(t => t.from === 'place' && t.place === env);
       if (there) return [own(there, 1)];
@@ -1494,7 +1511,7 @@
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
       heatedTraySpaces, benchRoom, coolRules, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
       yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, thingsOf, soldOf, givenOf, WEIGHED, COUNTED, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
-      aheadOf, standAge, youngFor,
+      aheadOf, standAge, standYear, youngFor,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, startRule, startFixed, startHint, STARTS, START_LESS, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,

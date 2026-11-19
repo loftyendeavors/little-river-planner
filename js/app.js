@@ -276,7 +276,7 @@
   function setPlantedIn(id, value) {
     const F = root.LRFForecast, eng = state.engine, before = eng.planting(id), r = before ? eng.calc(before) : null;
     if (!before || !r || !eng.isPerennial(r.c)) return false;
-    const year = value == null || String(value).trim() === '' ? null : Math.round(+value), at = r.first.getFullYear();
+    const year = value == null || String(value).trim() === '' ? null : Math.round(+value), at = eng.standYear(before, r);
     if (year != null && !(year >= 1900 && year <= at)) return refuse(`A stand picked in ${at} was planted in ${at} or before. Type a year up to ${at}, or empty the box for a mature stand.`);
     if ((Number.isInteger(before.plantedIn) ? before.plantedIn : null) === year) return false;
     const ops = [{ before, after: changed(before, { plantedIn: year }) }], next = E.create(withOps(state.plan, ops, 'do'), Lib);

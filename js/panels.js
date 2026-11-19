@@ -545,7 +545,7 @@
   }
   /** The box itself: a year, sent through App.setPlantedIn. `cls` is the caller's own part (the panel's field, the card's box). */
   function standBox(eng, p, r, { id, name, disabled, onFail } = {}) {
-    const input = h('input', { type: 'number', id: id || null, name: name || null, min: 1900, max: r.first.getFullYear(), step: 1, value: Number.isInteger(p.plantedIn) ? p.plantedIn : '', placeholder: 'year',
+    const input = h('input', { type: 'number', id: id || null, name: name || null, min: 1900, max: eng.standYear(p, r), step: 1, value: Number.isInteger(p.plantedIn) ? p.plantedIn : '', placeholder: 'year',
       disabled: !!disabled, dataset: { hook: 'stand-year', planting: p.id }, title: 'The year this stand was planted. Empty: a mature stand.',
       onchange: e => { if (!App.setPlantedIn(p.id, e.target.value) && onFail) onFail(); } });
     return input;
@@ -559,8 +559,13 @@
   /** Lines of the Schedule for what it sells that is first picked before its days to harvest (E2c part 2): before the planting's own
    *  first harvest, which then reads "Days to harvest", so that the Schedule stays in order and names each day for what it is. */
   function earlyPicks(eng, p, r) {
-    // in date order, the earliest first; on one day, in the order the things stand on the crop's card
-    return (eng.soldOf(p, r) || []).filter(x => x.ahead).sort((a, b) => a.first - b.first || b.ahead - a.ahead).map(x => h('li', { dataset: { hook: 'early-pick', thing: x.thing } }, h('span', `${x.name} from`), h('b', day(x.first))));
+    // in date order, the earliest first; on one day, the one picked more days early first
+    return (eng.soldOf(p, r) || []).filter(x => x.ahead).sort((a, b) => a.first - b.first || b.ahead - a.ahead).map(x => h('li', { dataset: { hook: 'early-pick', thing: x.thing } }, h('span', `${x.name} from`), h('b', `${day(x.first)}${early(eng, p, x)}`)));
+  }
+  /** Where a planting goes into its bed fewer days before its days to harvest than the card's days before: said, not hidden. */
+  function early(eng, p, x) {
+    const t = eng.thingsOf(p.cropId).find(k => k.id === x.thing);
+    return t && t.before > x.ahead ? ` (${x.ahead} day${x.ahead === 1 ? '' : 's'} early, all the room there is)` : '';
   }
 
   // ── several varieties in one bed (stage c of the bed panel build) ──

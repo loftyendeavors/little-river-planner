@@ -124,6 +124,29 @@ with sync_playwright() as pw:
     big = js("""const eng = S.engine, fed = S.plan.plantings.map(p => ({ p, r: eng.calc(p) })).filter(x => x.r && x.r.harvestDays > 0 && (eng.soldOf(x.p, x.r) || []).some(q => q.thing === arg));
       return { toast: toast(), snap: snap(), room: Math.min(...fed.map(x => days(x.r.first, x.r.field))) - 1 };""", T)
     check("more days before than a planting it comes from is in its bed are refused in a sentence that says how many it can take; nothing changes", "cannot be first picked 3000 days" in big["toast"] and f"Type {max(1, big['room'])} or fewer" in big["toast"] and big["snap"]["plan"] == s2["plan"], [big["toast"], big["room"]])
+    # a thing from one place: the line under its box says the days it comes to, against its crop's, exactly
+    js("""const before = S.plan.assumptions, after = JSON.parse(JSON.stringify(before)), eng = S.engine, env = eng.envOf(eng.bedOf(eng.planting(arg.P0).bedId));
+      after.sell[arg.C].things['t-place-check'] = { id: 't-place-check', n: 3, name: 'Place ones', from: 'place', place: env, unit: arg.unit, price: 2, pattern: 'spread', yield: 0.5, before: arg.N };
+      A.commit('a thing from one place, for the check', [{ kind: 'assume', before, after }], { unchecked: true }); return 1;""", {"C": C, "P0": P0, "N": N, "unit": sub["unit"]}); wait(500)
+    pl = js("""const eng = S.engine, env = eng.envOf(eng.bedOf(eng.planting(arg.P0).bedId)), d = eng.timingFor(arg.C, null, env).value, td = document.querySelector('#ycGrid tr[data-row="first"] td.yc-thing[data-thing="t-place-check"]');
+      return { said: td ? txt(hook('thing-first-said', td)) : null, want: `first picked at ${Math.max(1, d - arg.N)} days, ${eng.crop(arg.C).name} at ${d}` };""", {"C": C, "P0": P0, "N": N})
+    check("for a thing from one place, the line under the box gives the days it is first picked at, against its crop's", pl["said"] is not None and pl["said"].startswith(pl["want"]), pl)
+    js("A.undo(); return 1;"); wait(400)
+    # a planting shortened afterwards: the clamp is said, on the card (the bed named, the days that apply) and in its Schedule; Undo puts both back
+    sh0 = js("return snap();")
+    js("A.updatePlanting(arg, { dtm: 2, timingMode: 'manual' }, 'days to harvest 2, for the check'); return 1;", P0); wait(500)
+    js("A.setView('assume'); LRFAssume.setMode('harvest', 'card', arg); return 1;", C); wait(500)
+    sh = js("""const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p), x = eng.soldOf(p, r).find(q => q.thing === arg.T), td = document.querySelector(`#ycGrid tr[data-row="first"] td.yc-thing[data-thing="${arg.T}"]`);
+      return { ahead: x.ahead, before: S.plan.assumptions.sell[arg.C].things[arg.T].before, said: td ? txt(hook('thing-first-said', td)) : '', want: `in ${A.bedLabel(eng.bedOf(p.bedId))} there is room for ${x.ahead} day${x.ahead === 1 ? '' : 's'}, so it is picked ${x.ahead} day${x.ahead === 1 ? '' : 's'} early there` };""", {"P0": P0, "T": T, "C": C})
+    js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", P0); wait(500)
+    shs = js("return hooks('early-pick').map(li => `${txt(li.querySelector('span'))} ${txt(li.querySelector('b'))}`);")
+    check("a planting shortened afterwards: the stored days before stay; the card names its bed and the days that apply there, and its Schedule says it is picked as early as there is room", sh["ahead"] == 1 and sh["before"] == N and sh["want"] in sh["said"] and len(shs) == 1 and shs[0].endswith("(1 day early, all the room there is)"), [sh, shs])
+    js("A.undo(); return 1;"); wait(400)
+    js("A.setView('assume'); LRFAssume.setMode('harvest', 'card', arg); return 1;", C); wait(500)
+    back = js("""const td = document.querySelector(`#ycGrid tr[data-row="first"] td.yc-thing[data-thing="${arg}"]`); return { said: td ? txt(hook('thing-first-said', td)) : '', plan: snap().plan };""", T)
+    js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", P0); wait(500)
+    shb = js("return hooks('early-pick').map(li => txt(li.querySelector('b')));")
+    check("and Undo puts the planting, the card and the Schedule back", back["plan"] == sh0["plan"] and "there is room" not in back["said"] and len(shb) == 1 and "room" not in shb[0], [back["said"], shb])
     # the planting's panel and its row in the bed's season
     js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", P0); wait(600)
     sched = js("""const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p), part = eng.soldOf(p, r).find(x => x.thing === arg.T), items = [...document.querySelectorAll('#jobList > li')];

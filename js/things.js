@@ -113,6 +113,13 @@
           save: k => save(t, { helper: k }, k == null ? `${hp.label.toLowerCase()} emptied` : `${hp.label.toLowerCase()} ${fig(k)} ${hp.unit}`, 'helper') }), h('span.yc-unit', hp.unit)),
           h('small.yc-total', { dataset: { helper: hp.label } }, hp.label.replace(/^A /, 'a ').replace(/, packed$/, '')));
       }
+      // plantings it comes from that go into their bed fewer days before their days to harvest than this: they start the day after (Codex on #83)
+      // named, with the days that apply there: the box's number is kept, so widening the planting brings it back
+      const shortOf = t => {
+        const list = (eng.plan.plantings || []).filter(p => p.cropId === c.id).map(p => { const r = eng.calc(p), x = r && (eng.soldOf(p, r) || []).find(q => q.thing === t.id); return x && x.ahead < t.before ? { p, x } : null; }).filter(Boolean);
+        const say = ({ p, x }) => `in ${App.bedLabel(eng.bedOf(p.bedId), eng)} there is room for ${x.ahead} day${x.ahead === 1 ? '' : 's'}, so it is picked ${x.ahead} day${x.ahead === 1 ? '' : 's'} early there`;
+        return list.length ? `; ${list.slice(0, 2).map(say).join('; ')}${list.length > 2 ? `; and ${list.length - 2} more` : ''}` : '';
+      };
       if (id === 'first') {
         if (!own) return td(why(`with ${c.name}: it is packed from ${c.name}’s harvest`));
         // first picked before the crop's own days to harvest (E2c part 2), as baby carrots are pulled before the big ones are cleared:
@@ -121,7 +128,7 @@
         const days = [...new Set(envs.map(env => eng.timingFor(c.id, null, env)).filter(tm => tm && tm.value != null).map(tm => tm.value))];
         // empty, it is 0 days before, in grey as what the plan uses now: picked with the crop; typed, the line under it says what it comes to
         const said = t.before == null ? null
-          : days.length === 1 ? `first picked at ${Math.max(1, days[0] - t.before)} days, ${c.name} at ${days[0]}` : `first picked ${t.before} days before ${c.name}, wherever it grows`;
+          : (days.length === 1 ? `first picked at ${Math.max(1, days[0] - t.before)} days, ${c.name} at ${days[0]}` : `first picked ${t.before} days before ${c.name}, wherever it grows`) + shortOf(t);
         return td(h('span.yc-line', box({ key: key(t, 'before'), mine: t.before, fallback: 0, whole: true, min: 1, label: label(t, `days before ${c.name}’s first picking`),
           tip: t.before != null ? `Your number: ${t.name} is first picked ${t.before} days before ${c.name}’s days to harvest, and never before a planting is in its bed. No date of a planting moves. Clear it to pick it with ${c.name}.`
             : `Only you can fill this: how many days before ${c.name}’s days to harvest ${t.name} is first picked, as baby carrots are before the big ones. Empty: picked with ${c.name}.`,

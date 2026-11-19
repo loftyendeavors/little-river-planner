@@ -102,6 +102,10 @@ const mine = x => x.parts.find(q => q.thing === T);
   check('Clear: all of it on its own first day, that many days before the crop’s, the same total', !!c0 && !!c1 && near(c0.units, c1.units) && days(c0.first, c1.first) === N && !!atc && atc.out[0] > 0 && Array.from(atc.out).slice(1).every(v => v === 0), [c0 && iso(c0.first), c1 && iso(c1.first)]);
   const big = E.create(plan({ before: 3650 }), Lib), xb = partOf(big, P0), qbig = mine(xb);
   check('never before the planting is in its bed: the day after at the earliest', !!qbig && days(qbig.first, xb.r.field) === 1, qbig && [iso(qbig.first), iso(xb.r.field)]);
+  // a planting changed after the days before were typed, so it goes into its bed fewer days before its days to harvest: it starts the
+  // day after it goes in, and its notes say how many of the days it gets and why (Codex on #83: the number keeps one meaning, said)
+  const late = E.create(plan({ before: N }, { dtm: 4, timingMode: 'manual' }), Lib), xl = partOf(late, P0), ql = mine(xl), nl = late.warnings(late.planting(P0)).filter(w => w.k === 'pick');
+  check('a planting changed afterwards to go into its bed fewer days before: picked from the day after, and its notes say how many of the days and why', !!ql && days(xl.r.first, xl.r.field) === 4 && ql.ahead === 3 && nl.length === 1 && nl[0].t.includes(`3 of the ${N} days`) && nl[0].t.includes('only the day before'), [ql && ql.ahead, nl]);
   const none = E.create(plan({ before: N }, { harvestEnd: iso(E.addDays(e1.calc(beds[0]).first, -1)) }), Lib), xn = partOf(none, P0);
   check('a planting that is not picked at all is not picked early either', xn.r.harvestDays === 0 && !(xn.parts || []).some(q => q.ahead), [xn.r.harvestDays, (xn.parts || []).map(q => q.ahead)]);
   // On demand with no days of its own, its planting's harvest cut short by a last day of its own: the share of its total its days
@@ -147,6 +151,13 @@ check('the plan has a cane stand that follows the list, and one with a yield of 
   check('a young stand gives its share of what else its crop sells out of the bed too', !!tp(ct0) && !!tp(ct2) && near(tp(ct2).units, tp(ct0).units * 0.8), [tp(ct0) && tp(ct0).units, tp(ct2) && tp(ct2).units]);
   const n1 = y1.warnings(y1.planting(S1.id)).filter(w => w.k === 'stand'), n2 = y2.warnings(y2.planting(S1.id)).filter(w => w.k === 'stand');
   check('its notes say its season and what it gives', n1.length === 1 && n1[0].t.includes(`Planted in ${at}`) && n1[0].t.includes('nothing is picked') && n2.length === 1 && n2[0].t.includes('second season') && n2[0].t.includes('80%') && !y3.warnings(y3.planting(S1.id)).some(w => w.k === 'stand'), [n1, n2]);
+  // something else the stand's crop sells, picked early across the New Year: the stand is aged to the year picking begins (Codex on #83)
+  {
+    const dated = `${at - 1}-11-01`, pl = withSell(withPlanting(given, S1.id, { date: dated, plantedIn: at - 1 }), S1.cropId, { things: { 't-cane': { id: 't-cane', n: 1, name: 'Seconds', from: 'bed', unit: 'lb', price: 2, pattern: 'spread', share: 50, yield: 0.4 } } });
+    const plain = E.create(pl, Lib), earlyPl = withSell(pl, S1.cropId, { things: { 't-cane': { ...pl.assumptions.sell[S1.cropId].things['t-cane'], before: 90 } } }), xe = E.create(earlyPl, Lib);
+    const q0 = plain.planting(S1.id), q1 = xe.planting(S1.id), r1 = xe.calc(q1), part = (xe.soldOf(q1, r1) || []).find(x => x.thing === 't-cane');
+    check('a stand planted the year before, its crop ready in the new year, and something it sells picked early in December: that part is its first season (nothing), its crop’s own line its second (80%)', plain.calc(q0).first.getFullYear() === at && xe.standAge(q1).season === 2 && near(xe.yieldOf(q1, r1).units, plain.yieldOf(q0).units) && !!part && part.first.getFullYear() === at - 1 && part.age && part.age.season === 1 && part.units === 0 && xe.standYear(q1, r1) === at - 1, [iso(plain.calc(q0).first), part && iso(part.first), part && part.age, part && part.units]);
+  }
   // a perennial crop with no published figures: an empty box is all of it; his figure counts
   const other = given.plantings.find(p => !e3.isPerennial(e3.crop(p.cropId)) && follows(e3, p) && p.cropId !== C), oc = other && other.cropId;
   const asPerennial = pl => ({ ...pl, crops: [...(pl.crops || []).filter(c => c.id !== oc), { ...((pl.crops || []).find(c => c.id === oc) || { id: oc }), perennial: true }] });
