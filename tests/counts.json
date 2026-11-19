@@ -87,9 +87,9 @@
 
   "what the build changed": 9,
 
-  "year edge, backup": 36,
+  "year edge, backup": 41,
 
-  "year edge, compact": 36
+  "year edge, compact": 41
 
  },
  "build": {
@@ -185,7 +185,9 @@
 
   "trycard": 50,
 
-  "wide": 28
+  "wide": 28,
+
+  "year-edge": 16
 
  },
  "app4": {
@@ -288,7 +290,9 @@
 
   "tour": 4,
 
-  "trycard-site": 50
+  "trycard-site": 50,
+
+  "year-edge-site": 16
 
  },
  "site3": {

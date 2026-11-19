@@ -51,6 +51,7 @@ forecast
 trycard
 swap
 tasks2
+yearedge
 merge
 join
 shape
@@ -100,6 +101,7 @@ script() {
     trycard) SCRIPT=$T/mutate_trycard.py; ARGS="$APP $F $T" ;;
     swap) SCRIPT=$T/mutate_swap.py; ARGS="$APP $F $T $PLAN" ;;
     tasks2) SCRIPT=$T/mutate_tasks2.py; ARGS="$APP $F $T $PLAN" ;;
+    yearedge) SCRIPT=$T/mutate_yearedge.py; ARGS="$APP $F $T $PLAN" ;;
     *) return 1 ;;
   esac
 }

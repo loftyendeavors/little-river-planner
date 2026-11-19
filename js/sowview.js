@@ -201,7 +201,8 @@
     if (taskCache.has(eng)) return taskCache.get(eng);
     // `before`: every planting it is for is dated before the plan's year (it came onto Tasks for its season, js/seedlib.js onTasks);
     // `next`: every planting it is for gives its first harvest in a later season, which counts it (its work is still done this year)
-    const year = App.planYear(), before = l => l.members.every(m => SL.yearOfDate(m.p) !== null && SL.yearOfDate(m.p) < year), next = l => l.members.every(m => SL.seasonOf(eng, m.p, m.r) > year);
+    const year = App.planYear(), before = l => l.members.every(m => SL.yearOfDate(m.p) !== null && SL.yearOfDate(m.p) < year);
+    const next = l => { const seasons = l.members.map(m => SL.seasonOf(eng, m.p, m.r)); return seasons.every(x => x > year) ? Math.min(...seasons) : null; };   // the season it is for, when every planting is a later one
     const make = (l, id, sow) => ({ key: l.key, line: l, sow, id, half: halfOf(id), state: l.skipped ? 'skipped' : l.state, due: !sow && l.state === 'done' && l.planned ? l.planned : l.date, on: l.skipped || (l.state === 'done' ? l.doneOn : null),
       title: `${ACT[id]} ${cropWord(l.crop.name)}`, items: () => l.open.map(m => ({ id: m.p.id, kind: sow ? m.s.kind : l.kind })), before: before(l), next: next(l) });
     const out = [...figures().list.map(l => make(l, l.kind, true)), ...jobs().filter(l => !l.passed || l.skipped).map(l => make(l, l.section, false))];
@@ -219,11 +220,12 @@
   // ── what a row says ──
   /**
    * The year, where it is not the plan's: a task on a day of another year says which ("in 2026, the year before": a Dec 21 sowing for
-   * January's trays), and the work of a planting whose produce is for the next season says that season ("for 2028").
+   * January's trays; a year further off is named alone), and the work of a planting whose produce is for a later season says
+   * that season ("for 2028").
    */
   function yearText(t) {
     const year = App.planYear(), at = +String(isOpen(t) ? t.due : t.on || t.due).slice(0, 4);
-    return at < year ? `in ${at}, the year before` : at > year ? `in ${at}` : t.next ? `for ${year + 1}` : '';
+    return at === year - 1 ? `in ${at}, the year before` : at !== year ? `in ${at}` : t.next ? `for ${t.next}` : '';
   }
   /** The line under a task's name: the variety, how much, where; then anything that sets it apart. It wraps, and is never cut. */
   function detail(t) {
@@ -282,7 +284,7 @@
     const l = t.line, open = isOpen(t), late = open && t.due < now ? diff(now, t.due) : 0, shown = open && ui.open === t.key, flag = flagText(t, stock);
     const right = t.state === 'skipped' ? h('span.tk-when.skip', 'Skipped') : !open ? h('span.tk-when', t.on === now ? 'Done' : `Done ${shortDay(t.on)}`)
       : h('button.tk-put' + (late ? '.late' : ''), { type: 'button', dataset: { act: 'delay' }, title: 'Put it off to another day', 'aria-label': `${late ? `${days(late)} late. ` : ''}Delay ${t.title}, ${l.name}` }, late ? `${days(late)} late` : 'Delay');
-    return h('div.tk-row' + (open ? '' : '.done') + (shown ? '.open' : '') + (ui.pop && ui.pop.key === t.key ? '.pending' : ''), { dataset: { line: t.key, kind: t.id, state: t.state, due: t.due } },
+    return h('div.tk-row' + (open ? '' : '.done') + (shown ? '.open' : '') + (ui.pop && ui.pop.key === t.key ? '.pending' : ''), { dataset: { line: t.key, kind: t.id, state: t.state, due: t.due, hook: 'tasks-row' } },
       h('div.tk-main',
         h('button.tk-tick', { type: 'button', role: 'checkbox', 'aria-checked': String(!open), 'aria-label': `${t.title}, ${l.name}`, dataset: { act: 'tick' } }, h('i', TICK())),
         Thumbs.el({ varietyId: l.variety && l.variety.id, cropId: l.crop.id, color: App.state.engine.cropColor(l.crop), label: l.name, size: 42, cls: 'tk-thumb' }),

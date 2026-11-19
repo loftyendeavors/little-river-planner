@@ -43,7 +43,7 @@ const eng = E.create(given, Lib);
 const demand = (given.liveTrayPlans || []).find(d => d.rows && d.rows.some(r => r.cropId));
 const microId = demand && demand.rows.find(r => r.cropId).cropId;
 const crops = [...new Set(given.plantings.map(p => p.cropId))].map(id => eng.crop(id)).filter(Boolean);
-const keeper = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'TP' && c.material !== 'bulb' && +c.dtm >= 45 && +c.dtm <= 120);
+const keeper = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'TP' && +c.gh >= 1 && c.material !== 'bulb' && +c.dtm >= 45 && +c.dtm <= 120);
 const late = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'DS' && c.material !== 'bulb' && +c.dtm >= 32 && +c.dtm <= 90 && c.id !== (keeper && keeper.id));
 const fall = Lib.crops.find(c => c.method === 'DS' && !c.frostTender && !c.micro && +c.dtm >= 180 && c.material !== 'bulb');
 // covered ground (no frost there) with nothing in it before a day, and ground with nothing in it at all
@@ -51,11 +51,11 @@ const firstIn = b => given.plantings.filter(p => p.bedId === b.id).map(p => p.da
 const lastIn = b => given.plantings.filter(p => p.bedId === b.id).map(p => { const r = eng.calc(p); return r ? iso(eng.occupancyThrough(p, r)) || '9999-12-31' : '0000'; }).sort().pop() || '0000-01-01';
 const soil = b => { const g = eng.gardenOf(b); return !!g && g.active !== false && b.active !== false && !eng.isRack(b) && !eng.isTower(b) && !eng.isCt(b) && !b.liveTrayPool; };
 const covered = given.beds.filter(b => soil(b) && eng.gardenOf(b).frost === false).sort((a, b) => firstIn(b).localeCompare(firstIn(a)));
-const empty = given.beds.find(b => soil(b) && firstIn(b) === '9999-12-31');
+const empties = given.beds.filter(b => soil(b) && firstIn(b) === '9999-12-31'), empty = empties[0];
 const lateBed = given.beds.filter(b => soil(b) && eng.gardenOf(b).frost === false).find(b => lastIn(b) < `${Y}-11-01`);
 check('the plan has a live-tray demand with a crop, a hardy transplanted crop, a hardy crop sown in place, covered ground free in the early months, empty ground, and a crop of the library planted in the fall, for the check to work on',
-  demand && microId && keeper && late && covered.length >= 2 && firstIn(covered[1]) >= `${Y}-05-01` && empty && lateBed && fall, { demand: !!demand, keeper: keeper && keeper.id, late: late && late.id, covered: covered.length, empty: !!empty, lateBed: !!lateBed, fall: fall && fall.id });
-if (!(demand && microId && keeper && late && covered.length >= 2 && empty && lateBed && fall)) { finished = true; process.exit(0); }
+  demand && microId && keeper && late && covered.length >= 2 && firstIn(covered[1]) >= `${Y}-05-01` && empties.length >= 2 && lateBed && fall, { demand: !!demand, keeper: keeper && keeper.id, late: late && late.id, covered: covered.length, empty: !!empty, lateBed: !!lateBed, fall: fall && fall.id });
+if (!(demand && microId && keeper && late && covered.length >= 2 && empties.length >= 2 && lateBed && fall)) { finished = true; process.exit(0); }
 
 // ── the copy: the cases added ──
 let n = 0; const uid = () => 'ye-' + (++n);
@@ -74,7 +74,12 @@ const dec = { id: 'ye-dec', bedId: covered[0].id, cropId: keeper.id, date: at(`$
 const mar = { id: 'ye-mar', bedId: covered[1].id, cropId: keeper.id, date: at(`${Y}-03-25`, keeper), ft: 10 };
 const garlic = { id: 'ye-fall', bedId: empty.id, cropId: fall.id, date: `${Y0}-10-15`, ft: 20 };
 const end = { id: 'ye-end', bedId: lateBed.id, cropId: late.id, date: `${Y}-12-10`, ft: 10 };
-plan.plantings.push(dec, mar, garlic, end);
+// a transplant planted out late in the year before and picked at the start of the plan's year: its sowing and its planting out are
+// both in the year before, and its stock is all sold in the year (so nothing of it is carried in)
+const winter = { id: 'ye-winter', bedId: empties[1].id, cropId: keeper.id, date: at(`${Y}-02-01`, keeper), ft: 10 };
+// planted out in the plan's first days, sown in the nursery in the year before: listed and counted by 0.69 already
+const jan = { id: 'ye-jan', bedId: covered[0].id, cropId: keeper.id, date: `${Y}-01-05`, ft: 10 };
+plan.plantings.push(dec, mar, garlic, end, winter, jan);
 const eng0 = E.create(base, Lib), eng1 = E.create(plan, Lib), old0 = E0.create(base, Lib), old1 = E0.create(plan, Lib);
 const batch = plan.plantings.find(p => p.liveTray && p.liveTray.ready === ready), spring = plan.plantings.find(p => p.liveTray && p.liveTray.ready === april);
 const rb = eng1.calc(batch), rs = eng1.calc(spring);
@@ -133,10 +138,29 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   const n0 = need(SL, eng0, key, before), n1 = need(SL, eng1, key, before), o0 = need(SL0, old0, key, before), o1 = need(SL0, old1, key, before);
   // the build before counts the April batch; the December one it does not (case 1), so its difference is the April batch alone
   check('inside the year: a batch sown in March for April is counted once in Seeds, on this build and on the build before', near(o1.toSow - o0.toSow, s.amount) && near(n1.toSow - n0.toSow - SL.sowing(eng1, batch).amount, s.amount), [n0, n1, o0, o1]);
-  const rm = eng1.calc(mar), ym = eng1.yieldOf(mar, rm), m0 = F.build(eng0), m1 = F.build(eng1), om0 = F0.build(old0), om1 = F0.build(old1);
+  const noMar = { ...plan, plantings: plan.plantings.filter(p => p.id !== mar.id) };
+  const rm = eng1.calc(mar), ym = eng1.yieldOf(mar, rm), m0 = F.build(E.create(noMar, Lib)), m1 = F.build(eng1), om0 = F0.build(E0.create(noMar, Lib)), om1 = F0.build(old1);
   const marApr = (m, z) => monthOf(m, keeper.id, 2) + monthOf(m, keeper.id, 3) - (monthOf(z, keeper.id, 2) + monthOf(z, keeper.id, 3));
   check('inside the year: stock picked in March is to sell in March and April, once, on this build and on the build before', iso(rm.first).slice(5, 7) === '03' && near(marApr(m1, m0), ym.units) && near(marApr(om1, om0), ym.units) && near(monthOf(m1, keeper.id, 3), monthOf(om1, keeper.id, 3)), [marApr(m1, m0), marApr(om1, om0), ym.units]);
   check('inside the year nothing is carried in: that is stock from before the plan\'s year only', near(monthOf(m1, keeper.id, 3, 'carried'), 0) && near(monthOf(m1, keeper.id, 2, 'carried'), 0));
+}
+
+// ── 3b. a planting dated in the plan's year whose sowing falls in the year before: listed and counted as before, late or not ──
+{
+  const key = keyOf(eng1, jan), s = SL.sowing(eng1, jan), without = E.create({ ...plan, plantings: plan.plantings.filter(p => p.id !== jan.id) }, Lib);
+  check('the case: planted in the plan\'s year, sown in the nursery in the year before', jan.date.slice(0, 4) === Y && iso(s.planned).slice(0, 4) === Y0 && iso(s.planned) < after, [jan.date, iso(s.planned)]);
+  check('its seed is still to sow once its day is past with nothing recorded: what is dated in the plan\'s year is not folded as earlier work', near(need(SL, eng1, key, after).toSow - need(SL, without, key, after).toSow, s.amount) && SL.onTasks(eng1, jan, year), [need(SL, eng1, key, after), need(SL, without, key, after), s.amount]);
+}
+
+// ── 3c. a transplant planted out late in the year before, for the plan's year ──
+{
+  const rw = eng1.calc(winter), mine = l => l.members.some(m => m.p.id === winter.id);
+  check('the case: sown and planted out in the year before, first picked in the plan\'s year', winter.date.slice(0, 4) === Y0 && iso(rw.first).slice(0, 4) === Y && iso(rw.plannedSow || rw.field).slice(0, 4) === Y0, [winter.date, iso(rw.first)]);
+  const now = W.lines(eng1, plan, year).filter(mine), before0 = W0.lines(old1, plan, year).filter(mine);
+  check('Tasks\' other jobs list its planting out, on its own day in the year before; the build before did not', now.some(l => l.section === 'plant' && l.date === winter.date) && before0.length === 0, [now.map(l => l.section + ' ' + l.date), before0.length]);
+  const m1 = F.build(eng1), x = m1.rows.flatMap(r => r.plantings).find(q => q.p.id === winter.id), at0 = x ? x.lo : 0;
+  check('all of its stock is sold in the plan\'s year: nothing of it is carried in, and every week of it is its own',
+    x && x.carried === 0 && near(F.share(x, at0, at0 + 6, false, 'own'), F.share(x, at0, at0 + 6, false)) && F.share(x, at0, at0 + 6, false, 'carried') === 0 && F.share(x, at0, at0 + 6, false) > 0, x ? [x.carried, F.share(x, at0, at0 + 6, false, 'carried')] : null);
 }
 
 // ── 4. planted in the fall of the year before, for the plan's year ──
