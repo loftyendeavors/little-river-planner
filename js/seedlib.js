@@ -161,10 +161,17 @@
    * for Jan 11 trays), and the work of every planting dated in the year, whatever season it is for (it is done this year).
    */
   const onTasks = (engine, p, year, r) => yearOfDate(p) === +year || seasonOf(engine, p, r) === +year;
-  /** The seed a sowing recorded as used, in the unit its lots are kept in; null when none is recorded that way. */
+  /**
+   * The seed a sowing recorded as used, in the unit its lots are kept in. A sowing recorded through its review (recordSowing) says
+   * what it used, none included: its batch's uses are counted, and a recorded nothing is 0. An older record says it only by its
+   * uses. Null when nothing says it, or when it was recorded in another unit: the plan's own count stands then.
+   */
   function seedUsed(p, unit) {
     const flow = p && p.workflow && typeof p.workflow === 'object' ? p.workflow : {}, uses = Array.isArray(flow.seedUse) ? flow.seedUse.filter(u => u && u.unit === unit && Number(u.quantity) > 0) : [];
-    return uses.length ? trim6(uses.reduce((n, u) => n + Number(u.quantity), 0)) : null;
+    const sum = list => trim6(list.reduce((n, u) => n + Number(u.quantity), 0));
+    const last = Array.isArray(flow.history) ? flow.history.slice().reverse().find(x => x && x.action === 'complete' && x.sowingReview && x.sowingReview.batchId) : null;
+    if (last) return last.sowingReview.unit && last.sowingReview.unit !== unit ? null : sum(uses.filter(u => u.batchId === last.sowingReview.batchId));
+    return uses.length ? sum(uses) : null;
   }
   const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   /**

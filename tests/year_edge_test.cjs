@@ -107,6 +107,10 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   const rec = SL.recordSowing(eng1, inv, batch, { date: batch.date, quantity: used }, { now: `${Y0}-12-21T15:00:00.000Z`, uid, year, name: '', today: batch.date });
   const sownPlan = { ...plan, plantings: plan.plantings.map(p => (p.id === batch.id ? rec.planting : p)) }, c = need(SL, E.create(sownPlan, Lib), key, before);
   check('recorded as sown with less seed than planned: the plan counts the seed used, and none of it is still to sow', near(c.total - a.total, used + springAmount) && near(c.toSow - a.toSow, springAmount) && near(rec.quantity, used), [a, c, used]);
+  // recorded as sown with nothing used, said outright: the plan counts nothing for it
+  const zero = SL.recordSowing(eng1, inv, batch, { date: batch.date, quantity: 0 }, { now: `${Y0}-12-21T15:00:00.000Z`, uid, year, name: '', today: batch.date });
+  const z = need(SL, E.create({ ...plan, plantings: plan.plantings.map(p => (p.id === batch.id ? zero.planting : p)) }, Lib), key, before);
+  check('recorded as sown with nothing used: the plan counts nothing for it, not the planned amount', zero.quantity === 0 && near(z.total - a.total, springAmount) && near(z.toSow - a.toSow, springAmount), [a, z]);
   // its day past and nothing recorded: counted for the plan, not as still to sow
   const d = need(SL, eng1, key, after), out = SL.required(eng1, { today: after }).outside;
   check('its day past with nothing recorded: counted for the plan, not as still to sow, and said as earlier', near(d.toSow - need(SL, eng0, key, after).toSow, springAmount) && near(d.total - need(SL, eng0, key, after).total, s.amount + springAmount) && out.earlier >= 1, [d, out]);
