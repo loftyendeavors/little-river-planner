@@ -973,6 +973,7 @@
         h('button.sd-pl', { type: 'button', title: 'Show on the map', onclick: () => { App.setView('map'); App.setDate(c.field); App.select({ type: 'planting', id: p.id }); } },
           h('b', day(c.field)), h('span', { title: App.bedLabel(c.b) }, h('em', `${{ bed: 'Bed', tower: 'Tower', bench: 'Bench' }[eng.spaceKind(c.b)] || ''} ${c.b.bed}`.trim()), ` ${(eng.gardenOf(c.b) || {}).name || ''}`), h('small', `harvest ${day(c.first)}${eng.pinned(p) ? ' · own days' : ''}`)),
         choosing ? fromSwitch(p, c, v, s) : null,
+        choosing ? keptNote(p, c) : null,
         s ? h('button.sd-sowbtn' + (s.sown ? '.done' : ''), { type: 'button', 'aria-expanded': String(open), dataset: { sowfor: p.id }, title: s.sown ? 'See what was recorded, or take it back' : s.kind === 'sow' ? 'Record that this was sown: the seed comes off stock' : 'Record that this was planted: the plants come off stock', onclick: () => { ui.sowOpen = open ? null : p.id; ui.panelKey = ''; schedule(); } }, s.sown ? (s.kind === 'sow' ? '✓ sown' : '✓ planted') : s.kind === 'sow' ? 'Sown…' : 'Planted…') : h('span.sd-sowbtn.none', 'in place')),
         open ? root.LRFPanels.sowingBox(p) : null];
     })), mine.length > 40 ? h('p.dlg-hint', `and ${mine.length - 40} more`) : null);
@@ -989,10 +990,22 @@
   const FROM_WORDS = [['Seed', 'Sown on the farm: a sowing day, trays, mix and room on a bench, and seed counted with germination.'],
     ['Bought in', 'Plugs, plants or bare-root bought from a grower: no sowing, tray, mix or bench room. It goes on Tasks as Plant out, and Seeds counts its plants with the plan’s spare, rounded up to the lot it is sold in.']];
   const fromHelp = () => UI.help(null, null, FROM_WORDS, { label: 'What Seed and Bought in mean', hook: 'from-help', card: { hook: 'from-help-card' } });
+  /**
+   * Where a planting stands: 'plant', bought in; 'seed', sown and its seed counted; 'kept', a crop bought in only by the library's
+   * word (raspberry, blackberry) that has nursery work in its plan, which is kept as it was before N2: sown here, its plants counted
+   * on Seeds. Neither Seed nor Bought in is pressed for it, and either writes the planting's own word.
+   */
+  const fromOf = q => { const eng = App.state.engine; return eng.boughtInOf(q) ? 'plant' : eng.startedFrom(q) === 'plant' ? 'kept' : 'seed'; };
+  /** The line under a kept planting's switch: what it is, and what each choice would do. */
+  function keptNote(p, r) {
+    if (!canChoose(p, r) || fromOf(p) !== 'kept') return null;
+    return h('p.sd-fromnote', { dataset: { hook: 'planting-from-kept' } },
+      `Kept as planned: sown here${r.plannedSow ? ` ${day(r.plannedSow)}` : ''}, with ${num(Math.ceil(r.plants))} plants counted on Seeds. Seed counts its seed instead; Bought in buys its plants.`);
+  }
   /** The planting's own switch: Seed | Bought in. Its harvest does not move; what it needs, and where its work falls, do. */
   function fromSwitch(p, r, v, s) {
     if (!canChoose(p, r)) return h('span');
-    const eng = App.state.engine, from = q => (App.state.engine.boughtInOf(q) ? 'plant' : 'seed'), now = from(p), fixed = !!(s && s.sown);
+    const eng = App.state.engine, from = fromOf, now = from(p), fixed = !!(s && s.sown);
     const set = async to => {
       // the planting and the engine as they stand now, not as the panel was drawn
       const eng = App.state.engine, cur = eng.planting(p.id) || p, s = App.sowingOf(cur);

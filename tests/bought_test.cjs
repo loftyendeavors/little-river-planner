@@ -97,6 +97,10 @@ tryCase('its sowing is gone from the forecast of nothing: the season\'s worth is
       const q = { ...berry, sowOn: yr('03-25') }, e = E.create(put(plan, q), Lib), p = e.planting(q.id), r = e.calc(p), s = SL.sowing(e, p);
       return [!r.boughtIn && !r.plannedSow && !!s && s.unit === 'plants' && s.amount === Math.ceil(r.plants), { bought: r.boughtIn, s: s && [s.unit, s.amount] }];
     });
+    tryCase('the same planting with weeks in the nursery, said sown from seed on itself: sown, and Seeds counts its seed', () => {
+      const q = { ...snap, startedFrom: 'seed' }, e = E.create(noRec(put(plan, q)), Lib), p = e.planting(q.id), r = e.calc(p), s = SL.sowing(e, p);
+      return [!r.boughtIn && !!r.plannedSow && r.trays > 0 && e.startedFrom(p) === 'seed' && !!s && s.unit === 'seeds' && s.amount === r.seeds && r.seeds > 0, { s: s && [s.unit, s.amount, r.seeds] }];
+    });
     tryCase('the same planting with weeks in the nursery, said bought in on itself: bought in', () => {
       const q = { ...snap, startedFrom: 'plant' }, e = E.create(noRec(put(plan, q)), Lib), p = e.planting(q.id), r = e.calc(p);
       return [r.boughtIn === true && !r.plannedSow && r.trays === 0 && !prop(e, p), { sow: D(r.plannedSow), trays: r.trays }];

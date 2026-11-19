@@ -3,9 +3,9 @@
 
   "assume": 12,
 
-  "bought in, backup": 42,
+  "bought in, backup": 43,
 
-  "bought in, compact": 42,
+  "bought in, compact": 43,
   "bought in kept, backup": 28,
   "bought in kept, compact": 28,
 
@@ -153,7 +153,7 @@
 
   "bedpanel": 59,
 
-  "bought": 40,
+  "bought": 45,
 
   "card": 110,
 
@@ -270,7 +270,7 @@
  },
  "site2": {
 
-  "bought-site": 40,
+  "bought-site": 45,
 
   "f053-site": 22,
 

@@ -727,6 +727,7 @@ table.sd td { overflow: hidden; text-overflow: ellipsis; }
 .sd-plrow.from > .sd-pl { grid-row: 1; grid-column: 1; }
 .sd-plrow.from > .sd-sowbtn { grid-row: 1; grid-column: 2; }
 .sd-plrow.from .sd-from { grid-row: 2; grid-column: 1 / -1; justify-self: start; margin-bottom: 4px; }
+.sd-plrow.from > .sd-fromnote { grid-row: 3; grid-column: 1 / -1; margin: 0 0 var(--space-4); font-size: var(--type-11); color: var(--muted); }
 .sd-from { height: var(--control-in); }
 .sd-from button { padding: 0 var(--space-8); font-size: var(--type-11); white-space: nowrap; }
 .sd-from button:disabled { opacity: 0.5; }

@@ -191,15 +191,28 @@ def run(pw):
     check("the plan has a planting of a library crop bought in as plants, with a variety, for the check to work on", berry, berry)
     if berry:
         js(page, "LRFSeeds.select({ type: 'variety', id: arg.v }); return null;", berry); page.wait_for_timeout(900)
-        k = js(page, """const p = S.engine.planting(arg.id), r = S.engine.calc(p), s = sw(arg.id);
-          const pressed = s ? [...s.querySelectorAll('button')].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.textContent) : [];
-          return { bought: !!r.boughtIn, sow: iso(r.plannedSow), trays: r.trays, steps: LRFWeek.steps(S.engine, p).map(st => st.kind).filter(x => ['sow', 'harden'].includes(x)).join(','), bench: S.engine.benchItems().some(it => it.p.id === arg.id && it.kind === 'prop'), from: s ? s.dataset.from : '', pressed, undo: S.undo.length };""", berry)
-        check("given weeks in the nursery, a library crop bought in as plants is sown as before N2: its sowing and hardening off in its weeks, its tray on a bench, and its switch at Seed", not k["bought"] and k["sow"] and k["trays"] > 0 and k["steps"] == "sow,harden" and k["bench"] and k["from"] == "seed" and k["pressed"] == ["Seed"] and k["undo"] == start["undo"] + 1, k)
-        js(page, "const s = sw(arg.id); const b = s && [...s.querySelectorAll('button')].find(x => x.dataset.to === 'plant'); if (b) b.click(); return null;", berry); page.wait_for_timeout(900)
-        m = js(page, "const p = S.engine.planting(arg.id), r = S.engine.calc(p); return { from: p.startedFrom || '', bought: !!r.boughtIn, steps: LRFWeek.steps(S.engine, p).some(st => ['sow', 'potup', 'harden'].includes(st.kind)), bench: S.engine.benchItems().some(it => it.p.id === arg.id && it.kind === 'prop'), undo: S.undo.length };", berry)
-        check("Bought in on it writes the planting's own word: bought in, no nursery work in its weeks and no bench room, in one step", m["from"] == "plant" and m["bought"] and not m["steps"] and not m["bench"] and m["undo"] == start["undo"] + 2, m)
+        STATE = """const p = S.engine.planting(arg.id), r = S.engine.calc(p), s = sw(arg.id), note = hooks('planting-from-kept').find(el => el.closest('.sd-plrow') && el.closest('.sd-plrow').contains(s));
+          const pressed = s ? [...s.querySelectorAll('button')].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.textContent) : [], need = SL.sowing(S.engine, p);
+          return { said: p.startedFrom || '', bought: !!r.boughtIn, sow: iso(r.plannedSow), trays: r.trays, plants: Math.ceil(r.plants), seeds: r.seeds,
+            steps: LRFWeek.steps(S.engine, p).map(st => st.kind).filter(x => ['sow', 'harden'].includes(x)).join(','), bench: S.engine.benchItems().some(it => it.p.id === arg.id && it.kind === 'prop'),
+            from: s ? s.dataset.from : '', pressed, note: drawn(note) ? note.textContent : '', unit: need ? need.unit : '', amount: need ? need.amount : 0, undo: S.undo.length };"""
+        press_to = lambda to: js(page, "const s = sw(arg.id); const b = s && [...s.querySelectorAll('button')].find(x => x.dataset.to === '%s'); if (b) b.click(); return null;" % to, berry) or page.wait_for_timeout(900)
+        k = js(page, STATE, berry)
+        js(page, "const s = sw(arg.id); if (s) s.closest('.sd-plrow').scrollIntoView({ block: 'center' }); return null;", berry); page.wait_for_timeout(300); page.screenshot(path=str(shots / "kept.png"))
+        check("given weeks in the nursery, a library crop bought in as plants is sown as before N2: its sowing and hardening off in its weeks, its tray on a bench, its plants counted on Seeds", not k["bought"] and k["sow"] and k["trays"] > 0 and k["steps"] == "sow,harden" and k["bench"] and k["unit"] == "plants" and k["amount"] == k["plants"] and k["undo"] == start["undo"] + 1, k)
+        check("its switch says it is kept as planned: neither Seed nor Bought in pressed, and a line saying it is sown here with its plants counted", k["from"] == "kept" and k["pressed"] == [] and "Kept as planned" in k["note"] and ("%d plants" % k["plants"]) in k["note"].replace(",", ""), k)
+        press_to("seed"); a1 = js(page, STATE, berry)
+        check("Seed on it writes the planting's own word, in one step: still sown, and Seeds counts its seed", a1["said"] == "seed" and a1["from"] == "seed" and a1["pressed"] == ["Seed"] and not a1["note"] and a1["sow"] == k["sow"] and a1["unit"] == "seeds" and a1["amount"] == a1["seeds"] > 0 and a1["undo"] == start["undo"] + 2, a1)
+        js(page, "A.undo(); return null;"); page.wait_for_timeout(800); u1 = js(page, STATE, berry)
+        check("Undo gives it back kept as planned", u1["said"] == "" and u1["from"] == "kept" and u1["unit"] == "plants" and u1["undo"] == start["undo"] + 1, u1)
+        press_to("plant"); m = js(page, STATE, berry)
+        check("Bought in on it writes the planting's own word: bought in, no nursery work in its weeks and no bench room, in one step", m["said"] == "plant" and m["bought"] and not m["steps"] and not m["bench"] and m["pressed"] == ["Bought in"] and m["undo"] == start["undo"] + 2, m)
+        press_to("seed"); m2 = js(page, STATE, berry)
+        check("then Seed: the planting's own word is seed, not the kept plan, and Seeds counts its seed", m2["said"] == "seed" and m2["from"] == "seed" and m2["unit"] == "seeds" and m2["undo"] == start["undo"] + 3, m2)
         js(page, "A.undo(); A.undo(); return null;"); page.wait_for_timeout(800)
-        check("two Undos give the plan back exactly", js(page, "return JSON.stringify(S.plan);") == start["plan"])
+        check("two Undos give it back kept as planned", js(page, STATE, berry)["from"] == "kept")
+        js(page, "A.undo(); return null;"); page.wait_for_timeout(800)
+        check("one Undo more gives the plan back exactly", js(page, "return JSON.stringify(S.plan);") == start["plan"])
     check("no error on the page", not errors, errors[:3])
     finish()
 
