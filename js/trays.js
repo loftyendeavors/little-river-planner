@@ -93,6 +93,8 @@
   const cropIdOf = name => (norm(name) ? 'micro-' + norm(name) : null);
   /** The worked id, or where something else already holds it the first of id~2, id~3 … that is free: worked from the plan as it stands, so two devices that hold one plan choose alike. */
   const free = (id, taken) => { let out = id; for (let n = 2; taken(out); n++) out = id + '~' + n; return out; };
+  /** Where an id stands in that line: 1 for the worked id, n for id~n, 0 for any other. */
+  const nth = (base, id) => (id === base ? 1 : typeof id === 'string' && id.startsWith(base + '~') && /^[1-9]\d*$/.test(id.slice(base.length + 1)) ? +id.slice(base.length + 1) : 0);
   /** Has work been recorded on this batch? Such a batch is history and is never regenerated or removed with its plan. */
   function locked(plan, p, records) {
     const harvests = (records && records.harvests) || plan.harvests, picks = ((records && records.fieldRecords) || plan.fieldRecords || {}).picks;
@@ -138,11 +140,13 @@
       // A sown batch taken off its demand plan stays a plain planting under its id (remove, keepRecorded). Where it meets its plan
       // again (one device deleted the plan while the other changed it, and the join kept both), its id says which week it is: it is
       // that week's batch again, as it was recorded, and the week is not made a second time beside it.
-      const plain = original ? null : state.plantings.find(p => p.id === batchId(plan.id, b.key) && !p.liveTray);
+      // (or under one of the free ids after it, where the worked one was held when the batch was made: the one with work recorded first)
+      const base = batchId(plan.id, b.key), line = original ? [] : state.plantings.filter(p => !p.liveTray && nth(base, p.id)).sort((x, y) => nth(base, x.id) - nth(base, y.id));
+      const plain = line.find(p => locked(state, p, options.records)) || line[0];
       if (plain && locked(state, plain, options.records)) { back++; return { ...plain, liveTray: { planId: plan.id, key: b.key, ready: b.ready, week: b.week, rowId: b.rowId } }; }
       if (plain) original = plain;   // nothing recorded on it (not reached by the planner's own steps): made the week's batch again, under its id
       if (original && done.includes(original)) return original;
-      const id = (original && original.id) || free(batchId(plan.id, b.key), x => taken.has(x));   // held by a planting of another plan: only by a file edited by hand
+      const id = (original && original.id) || free(base, x => taken.has(x));   // held by a planting of another plan: only by a file edited by hand
       const p = { ...(original || {}), id, bedId: bed.id, cropId: crops.get(b.rowId), date: b.sow, trays: b.trays, dtm: b.days, timingMode: 'manual', price: b.price, yield: 1,
         liveTray: { ...((original && original.liveTray) || {}), planId: plan.id, key: b.key, ready: b.ready, week: b.week, rowId: b.rowId } };
       p.growingDefaults = { v: 1, cropId: p.cropId, crop: { mk: { present: true, value: 1 }, baseUnit: { present: true, value: 'tray' }, yBasis: { present: true, value: 'tray' }, gh: { present: true, value: 0 } } };
