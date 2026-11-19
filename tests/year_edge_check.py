@@ -65,12 +65,19 @@ SETUP = """
   const c = S.engine.crop(keeper.id), dec = { id: A.uid(), bedId: covered[0].id, cropId: keeper.id, date: E.d2s(E.addDays(E.s2d((Y - 1) + '-12-21'), -c.dtm)), ft: 10 };
   const garlic = { id: A.uid(), bedId: empty.id, cropId: fall.id, date: (Y - 1) + '-10-15', ft: 20 }, end = { id: A.uid(), bedId: lateBed.id, cropId: late.id, date: Y + '-12-10', ft: 10 };
   // sown the same day in the same garden, with days of its own that bring it in this season: one task with the late sowing
-  const twinBed = S.plan.beds.find(b => b.gardenId === lateBed.gardenId && b !== lateBed && soil(b)), twin = twinBed ? { id: A.uid(), bedId: twinBed.id, cropId: late.id, date: end.date, ft: 10, dtm: 14, timingMode: 'manual' } : null;
-  if (!twin) return null;
-  const added = A.addPlantings([dec, garlic, end, twin], 'The year edge cases');
+  const twins = S.plan.beds.filter(b => b.gardenId === lateBed.gardenId && b !== lateBed && soil(b) && lastIn(b) < Y + '-11-01');
+  if (twins.length < 2) return null;
+  const twin = { id: A.uid(), bedId: twins[0].id, cropId: late.id, date: end.date, ft: 10, dtm: 14, timingMode: 'manual' };
+  // and one sown the same day, first picked two seasons on: their task is for the next two seasons, and partly this one
+  const third = { id: A.uid(), bedId: twins[1].id, cropId: late.id, date: end.date, ft: 10, dtm: 400, timingMode: 'manual' };
+  // two transplants potted up on one day in December, one planted out in the year before and one in the plan's year: one task of both
+  const potter = crops.find(c => c.method === 'TP' && c.prop === 'potup' && +c.potUpWk >= 1), rooms = S.plan.beds.filter(b => soil(b) && firstIn(b) === '9999-12-31' && b !== empty).slice(0, 2), sowOn = (Y - 1) + '-12-01';
+  if (!potter || rooms.length < 2) return null;
+  const potA = { id: A.uid(), bedId: rooms[0].id, cropId: potter.id, date: (Y - 1) + '-12-30', ft: 10, sowOn }, potB = { id: A.uid(), bedId: rooms[1].id, cropId: potter.id, date: Y + '-01-06', ft: 10, sowOn };
+  const added = A.addPlantings([dec, garlic, end, twin, third, potA, potB], 'The year edge cases');
   const batch = S.plan.plantings.find(p => p.liveTray && p.liveTray.ready === ready);
   return { saved: !!saved, kept, added, batch: batch && batch.id, batchDate: batch && batch.date, key: batch && (SL.sowing(S.engine, batch).key + '|' + SL.sowing(S.engine, batch).unit), amount: batch && SL.sowing(S.engine, batch).amount,
-    dec: dec.id, garlic: garlic.id, end: end.id, keeper: keeper.id, ready };
+    dec: dec.id, garlic: garlic.id, end: end.id, keeper: keeper.id, ready, potA: potA.id, potB: potB.id };
 """
 
 def open_page(pw, day):
@@ -100,6 +107,16 @@ def run(pw):
       return { line: line && drawn(line) ? line.textContent : null, task: g ? g.key : null, due: g ? g.due : null, shown: g ? !!row(g.key) : null, late: hooks('tasks-row').filter(r => r.dataset.due < A.today() && r.dataset.state !== 'done').map(r => r.dataset.line) };""", case)
     check("Tasks on a day before the plan's year: the fall planting's work, past and not recorded, is one quiet line and no late row", t["line"] == f"1 earlier job from {YEAR - 1}, not recorded" and t["task"] and not t["shown"] and t["due"] < f"{YEAR - 1}-11-18", t)
     page.screenshot(path=str(shots / "tasks-earlier.png"))
+    strip = js(page, "const c = hooks('tasks-day').find(b => b.dataset.day === A.today()); return c ? c.title : null;")
+    check("the day strip does not count the earlier work as late on today", strip is not None and "late" not in strip, strip)
+    # the day the fall planting was due, in the past: its work is not said to be on today's list, where it is not
+    for _ in range(12):
+        if js(page, "return hooks('tasks-day').some(b => b.dataset.day === arg);", t["due"]): break
+        page.locator("[data-act=week][data-by='-7']").first.click(); page.wait_for_timeout(250)
+    if js(page, "return hooks('tasks-day').some(b => b.dataset.day === arg);", t["due"]): page.locator(f'[data-hook="tasks-day"][data-day="{t["due"]}"]').first.click(); page.wait_for_timeout(400)
+    past = js(page, "const m = hook('tasks-missed'); return { day: hooks('tasks-day').find(b => b.getAttribute('aria-pressed') === 'true') ? hooks('tasks-day').find(b => b.getAttribute('aria-pressed') === 'true').dataset.day : null, missed: m ? m.textContent : null };")
+    check("on the past day the fall planting was due, it is not said to be on today's list", past["day"] == t["due"] and past["missed"] is None, past)
+    page.locator("[data-act=today]").first.click(); page.wait_for_timeout(400)
     if page.locator('[data-hook="tasks-earlier"]').count(): page.locator('[data-hook="tasks-earlier"]').first.click(); page.wait_for_timeout(400)
     o = js(page, "const r = row(arg); return r ? { state: r.dataset.state, due: r.dataset.due, text: r.textContent } : null;", t["task"])
     check("pressed, the line opens that work as a late row, its row saying it is in the year before", o and o["state"] == "open" and f"in {YEAR - 1}, the year before" in o["text"] and not page.locator('[data-hook="tasks-earlier"]').count(), o)
@@ -116,17 +133,20 @@ def run(pw):
     js(page, "A.setDate(E.s2d(S.engine.planting(arg).date)); V.open(); return true;", case["end"]); page.wait_for_timeout(600)
     e = js(page, "const t = V.tasks().find(x => x.line.members.some(m => m.p.id === arg)), r = t && row(t.key); return { row: r ? r.textContent : null, due: t ? t.due : null };", case["end"])
     check("Tasks: a sowing late in the plan's year for the next season is listed on its day, its row saying the season it is for", e["row"] and f"for {YEAR + 1}" in e["row"], e)
-    check("Tasks: sown in one task with a planting of this season, its row says it is partly for the next", e["row"] and f"partly for {YEAR + 1}" in e["row"], e)
+    check("Tasks: sown in one task with plantings of this season and of two later ones, its row says it is partly for the next two", e["row"] and f"partly for {YEAR + 1} and {YEAR + 2}" in e["row"], e)
 
     # Seeds: the batch counted to sow once; the foot says what is left out, and why
     page.evaluate("LRFApp.setView('seeds')"); page.wait_for_timeout(800)
     s = js(page, """const sl = hook('seeds-later'), se = hook('seeds-earlier'), withOut = S.plan.plantings.filter(p => p.id !== arg.batch);
       const without = E.create({ ...S.plan, plantings: withOut }, LRFLibrary);
       const shown = el => !!el && drawn(el.lastElementChild);   // a line of the foot is laid out by its parts
+      const noEnd = E.create({ ...S.plan, plantings: S.plan.plantings.filter(p => p.id !== arg.end) }, LRFLibrary), endKey = SL.sowing(S.engine, S.engine.planting(arg.end)).key + '|seeds';
       return { later: shown(sl) ? sl.textContent : null, earlier: shown(se) ? se.textContent : null, diff: toSow(S.engine, arg.key) - toSow(without, arg.key), amount: arg.amount,
-        out: SL.required(S.engine, { today: A.today() }).outside };""", case)
+        out: SL.required(S.engine, { today: A.today() }).outside, endUp: toSow(S.engine, endKey) - toSow(noEnd, endKey), endAmount: SL.sowing(S.engine, S.engine.planting(arg.end)).amount, leftOut: !!hook('seeds-left-out') };""", case)
     check("Seeds counts the batch's seed to sow once, for the plan's year", s["amount"] > 0 and abs(s["diff"] - s["amount"]) < 1e-6, s)
-    check("Seeds' foot says one planting counts with the next season, and one planting of the year before is earlier work not recorded", s["later"] and s["later"].startswith(f"For {YEAR + 1}1 planting dated in {YEAR} gives its first harvest in {YEAR + 1}") and s["earlier"] and str(YEAR - 1) in s["earlier"] and s["out"]["later"] == 1 and s["out"]["earlier"] == 1, s)
+    check("Seeds' foot says two plantings dated in the plan's year are first picked in later seasons, and one of the year before is earlier work not recorded", s["later"] and s["later"].startswith(f"For {YEAR + 1} and {YEAR + 2}2 plantings dated in {YEAR} give their first harvest in {YEAR + 1} or {YEAR + 2}. Their seed is counted here") and s["earlier"] and str(YEAR - 1) in s["earlier"] and s["out"]["later"] == 2 and s["out"]["earlier"] == 1, s)
+    check("Seeds still counts to sow the seed of a sowing late in the plan's year for the next: nothing dated in the year is taken away", s["endAmount"] > 0 and abs(s["endUp"] - s["endAmount"]) < 1e-6, s)
+    check("Seeds' foot does not count the earlier work as already sown", not s["leftOut"], s)
 
     # Forecast, January: the stock carried in, apart, counted once
     page.evaluate("LRFApp.setView('harvest')"); page.wait_for_timeout(400)
@@ -171,6 +191,11 @@ def run(pw):
     if before["row"]: page.locator(f'[data-hook="tasks-row"][data-line="live:{case2["batch"]}"] [data-act=tick]').first.click(); page.wait_for_timeout(1500)
     after = js(page, "const p = S.engine.planting(arg.batch); return { toSow: toSow(S.engine, arg.key), done: p && p.done ? p.done.sow : null, toast: (document.querySelector('#toast span') || {}).textContent || '' };", case2)
     check("on its own day the December sowing is on today's list; a tick records it on that day and its seed is no longer to sow", before["row"] and after["done"] == case2["batchDate"] and abs(before["toSow"] - after["toSow"] - case2["amount"]) < 1e-6 and "sown" in after["toast"], [before, after])
+    pot = js(page, "const t = V.tasks().find(x => x.id === 'potup' && x.line.members.some(m => m.p.id === arg.potA) && x.line.members.some(m => m.p.id === arg.potB)), r = t && row(t.key); return { due: t ? t.due : null, row: r ? r.dataset.state : null };", case2)
+    check("a pot-up shared by a planting of the year before and one of the plan's year stays a late row, as before: only what is all of the year before is folded", pot["due"] and pot["due"] < f"{YEAR - 1}-12-21" and pot["row"] == "open", pot)
+    tb = js(page, "const n = A.seasonRecords(); const done = await A.takeBackSeason(); const p = S.engine.planting(arg.batch); return { sowings: n.sowings, back: !!done, sown: !!(p && p.done && p.done.sow), toSow: toSow(S.engine, arg.key) };", case2)
+    check("\"Take back everything recorded\" counts the December sowing as the season's, and takes it back with its seed", tb["sowings"] >= 1 and tb["back"] and not tb["sown"] and abs(tb["toSow"] - before["toSow"]) < 1e-6, tb)
+    js(page, "A.undo(); return true;"); page.wait_for_timeout(400)
     js(page, "A.undo(); return true;"); page.wait_for_timeout(400)
     back = js(page, "const p = S.engine.planting(arg.batch); return { toSow: toSow(S.engine, arg.key), done: !!(p && p.done && p.done.sow) };", case2)
     check("Undo takes the sowing back: its seed is to sow again", not back["done"] and abs(back["toSow"] - before["toSow"]) < 1e-6, back)

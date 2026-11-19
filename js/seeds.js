@@ -850,8 +850,8 @@
     // whose day passed with nothing recorded, which is counted for the plan and not as still to sow
     const out = m.need.outside || { later: 0, earlier: 0 }, year = out.year || App.planYear(), later = out.seasons && out.seasons.length ? out.seasons : [year + 1];
     const so = [m.live.length && bare === m.live.length ? item('Figures only', 'These varieties carry planning figures only. Supplier, product code and page come in when you load your backup here.') : null,
-      sown ? item('Left out', `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted.`) : null,
-      out.later ? h('li', { dataset: { hook: 'seeds-later' } }, h('b', `For ${later.join(' and ')}`), h('span', `${out.later} planting${out.later === 1 ? '' : 's'} dated in ${year} ${out.later === 1 ? 'gives its' : 'give their'} first harvest in ${later.join(' or ')}. ${out.later === 1 ? 'Its' : 'Their'} seed counts with ${later.length === 1 ? 'that season' : 'those seasons'}.`)) : null,
+      sown ? h('li', { dataset: { hook: 'seeds-left-out' } }, h('b', 'Left out'), h('span', `${sown} planting${sown === 1 ? ' is' : 's are'} already sown or planted.`)) : null,
+      out.later ? h('li', { dataset: { hook: 'seeds-later' } }, h('b', `For ${later.join(' and ')}`), h('span', `${out.later} planting${out.later === 1 ? '' : 's'} dated in ${year} ${out.later === 1 ? 'gives its' : 'give their'} first harvest in ${later.join(' or ')}. ${out.later === 1 ? 'Its' : 'Their'} seed is counted here, where ${out.later === 1 ? 'it is' : 'they are'} sown.`)) : null,
       out.earlier ? h('li', { dataset: { hook: 'seeds-earlier' } }, h('b', 'Earlier'), h('span', `${out.earlier} planting${out.earlier === 1 ? '' : 's'} dated in ${(out.years && out.years.length ? out.years : [year - 1]).join(' or ')} ${out.earlier === 1 ? 'was' : 'were'} due before today, with nothing recorded: not counted as still to sow. Record ${out.earlier === 1 ? 'it' : 'them'} on Tasks.`)) : null].filter(Boolean);
     add(clear($('sdFoot')), so.length ? h('ul.sd-foot-list', so) : null,
       h('button.link', { type: 'button', onclick: () => download(m) }, 'Download seeds required (.csv)'));
@@ -1021,7 +1021,7 @@
       const m = model(), rows = [...m.need.rows];
       for (const id of added) { const r = m.byV.get(id); if (r && !rows.includes(r)) rows.push(r); }
       const sheet = SL.orderSheet(rows, (amount, unit, v) => App.coverFor(amount, unit, v), amounts), pairs = root.LRFAudit.pairs(m.eng).size, waiting = App.waiting().length;
-      const blind = [...new Set(m.need.rows.filter(r => r.unit === 'g' && r.plantings > r.established && !(r.total > 0)).map(r => cropName(r.crop)))];
+      const blind = [...new Set(m.need.rows.filter(r => r.unit === 'g' && r.plantings > r.established && !(r.planned > 0)).map(r => cropName(r.crop)))];   // no seed figure: not one recorded as using none
       const notes = [pairs ? `Seed for both plantings is counted where ground is booked twice (${pairs} pair${pairs === 1 ? '' : 's'} in the plan).` : '', waiting ? `${waiting} planting${waiting === 1 ? '' : 's'} waiting to be placed ${waiting === 1 ? 'is' : 'are'} not counted.` : '',
         blind.length ? `No seed is counted for ${blind.length} tray crop${blind.length === 1 ? '' : 's'} with no seed figure yet: ${blind.join(', ')}.` : '', 'Prices and sizes are as each supplier’s page gave them when it was last read.'].filter(Boolean);
       return { m, sheet, notes };

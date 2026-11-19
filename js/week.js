@@ -217,7 +217,8 @@
       return { planting: withTask(p, 'delay', kind, date === own ? null : { from: own, to: date, own }), days, from: was, to: date, moves: false };
     }
     const to = d2s(addDays(s2d(p.date), days));
-    if (to.slice(0, 4) !== String(p.date).slice(0, 4)) throw new Error(`That would take it out of ${String(p.date).slice(0, 4)}.`);
+    // within its own year, or into the season it is for (a December tray sowing for January put off into January)
+    if (!SL.staysIn(engine, p, to)) throw new Error(`That would take it out of ${String(p.date).slice(0, 4)}${SL.seasonOf(engine, p) !== +String(p.date).slice(0, 4) ? ` and of the ${SL.seasonOf(engine, p)} season it is for` : ''}.`);
     const planting = withTask({ ...p, date: to }, 'delay', kind, date === first ? null : { from: first, to: date });
     // a sowing day set by hand is the day being put off: it goes to the day chosen, and the planting goes out as many days later
     if (kind === 'sow' && p.sowOn) planting.sowOn = date;

@@ -8,9 +8,9 @@
  * an error in words. The season's figures are read from an engine.
  */
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module === 'object' && module.exports ? require('./seedlib.js') : root.LRFSeedLib);
   if (typeof module === 'object' && module.exports) module.exports = api; else root.LRFNursery = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof self !== 'undefined' ? self : this, function (SL) {
   'use strict';
   const clone = x => JSON.parse(JSON.stringify(x));
   // In the order a seedling meets them.
@@ -234,8 +234,10 @@
       const r = eng.calc(p);
       if (r && r.sow && r.cells && lost <= r.sow && r.b.active !== false && r.g.active !== false) items.push({ p, r, kind: 'prop', from: r.sow, to: r.sow });
     }
+    // the plantings Tasks lists for the year (js/seedlib.js onTasks): its own and its season's, a December tray batch for January among them
+    const listed = (p, r) => SL ? SL.onTasks(eng, p, year, r) : String(p.date).slice(0, 4) === text;
     for (const it of items) {
-      if (String(it.p.date).slice(0, 4) !== text) continue;
+      if (!listed(it.p, it.r)) continue;
       const r = it.r, c = r.c;
       if (it.kind === 'live') {
         const how = eng.liveSow(c);
@@ -262,9 +264,9 @@
     }
     // crates filled this year: every planting in a crate takes fresh mix. Round pots that stand outside are not nursery work and are left out.
     for (const p of (eng.plan.plantings || [])) {
-      if (String(p.date).slice(0, 4) !== text) continue;
       const r = eng.calc(p);
-      if (!r || !r.ct || !(r.len > 0) || r.b.active === false || r.g.active === false) continue;
+      if (!r || !listed(p, r)) continue;
+      if (!r.ct || !(r.len > 0) || r.b.active === false || r.g.active === false) continue;
       const t = eng.ctOf(r.b);
       if (!t || t.shape === 'round') continue;
       const [w, l] = eng.ctDims(t), id = 'crate-' + (t.id || 'crate'), row = crates.get(id) || { id, name: t.name || 'Crate', ft2: w * l, filled: 0, plantings: 0, spans: [] };

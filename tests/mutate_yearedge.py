@@ -14,6 +14,7 @@ SL, WK, FC, SV, SD, HV = "js/seedlib.js", "js/week.js", "js/forecast.js", "js/so
 NODE = [
  ("a sowing recorded with nothing used counts the plan's amount", SL, "if (last) return last.sowingReview.unit", "if (false) return last.sowingReview.unit"),
  ("a sowing taken back still counts its batch", SL, "const last = at >= 0 && !history.slice(at + 1).some(", "const last = at >= 0 && ![].some("),
+ ("the plan's own count follows what was used", SL, "row.planned += amount || 0;", "row.planned += used != null ? used : amount || 0;"),
  ("Seeds goes by the planting's own date again", SL, "const season = seasonOf(engine, p, r), dated = yearOfDate(p);", "const season = yearOfDate(p), dated = yearOfDate(p);"),
  ("the season is the year of the planting's date", SL, "return calc.first instanceof Date && !Number.isNaN(+calc.first) ? calc.first.getFullYear() : own;", "return own;"),
  ("earlier work not recorded is still counted to sow", SL, "if (dated !== null && dated < year && start && isoOf(start) < today) {", "if (false) {"),
@@ -21,7 +22,11 @@ NODE = [
  ("earlier work not recorded is left out of the plan too", SL, "{ outside.earlier++; row.earlier++; if (", "{ outside.earlier++; row.earlier++; row.total -= amount || 0; if ("),
  ("work dated in the plan's year is folded as earlier too", SL, "if (dated !== null && dated < year && start && isoOf(start) < today) {", "if (dated !== null && dated <= year && start && isoOf(start) < today) {"),
  ("the seed used is not what counts for a sown planting", SL, "row.total += used != null ? used : amount || 0;", "row.total += amount || 0;"),
- ("a sowing for the next season is counted in this one", SL, "if (season !== year) { if (dated === year", "if (season !== year && dated !== year) { if (dated === year"),
+ ("a sowing late in the year for the next season is taken away", SL, "if (season !== year && dated !== year) continue;", "if (season !== year) continue;"),
+ ("a cover crop goes by its first harvest", SL, "if (!calc || (engine.isCoverCrop && engine.isCoverCrop(calc.c))) return own;", "if (!calc) return own;"),
+ ("the Nursery's supplies go by the planting's date again", "js/nursery.js", "const listed = (p, r) => SL ? SL.onTasks(eng, p, year, r) : String(p.date).slice(0, 4) === text;", "const listed = (p, r) => String(p.date).slice(0, 4) === text;"),
+ ("a delay into the season it is for is refused", SL, "const staysIn = (engine, p, to) => String(to).slice(0, 4) === String(p.date).slice(0, 4) || +String(to).slice(0, 4) === seasonOf(engine, p);", "const staysIn = (engine, p, to) => String(to).slice(0, 4) === String(p.date).slice(0, 4);"),
+ ("a delay may leave the season it is for", SL, "const staysIn = (engine, p, to) => String(to).slice(0, 4) === String(p.date).slice(0, 4) || +String(to).slice(0, 4) === seasonOf(engine, p);", "const staysIn = (engine, p, to) => true;"),
  ("the plan's own end is not said", SL, "if (dated === year && season > year) { outside.later++;", "if (false) { outside.later++;"),
  ("a season two years on is not said", SL, "if (dated === year && season > year) { outside.later++;", "if (dated === year && season === year + 1) { outside.later++;"),
  ("Tasks lists only plantings dated in the year", SL, "const onTasks = (engine, p, year, r) => yearOfDate(p) === +year || seasonOf(engine, p, r) === +year;", "const onTasks = (engine, p, year, r) => yearOfDate(p) === +year;"),
@@ -36,6 +41,12 @@ NODE = [
  ("a figure's carried part is all of it", FC, "part === 'carried' ? (carry ? carry[i - x.lo] : 0)", "part === 'carried' ? series[i - x.lo]"),
 ]
 PAGE = [
+ ("the day strip counts earlier work as late", SV, "if (ui.shown.earlier || !isEarlier(t, now)) late++;", "late++;"),
+ ("a past day's work not done counts earlier work as on today's list", SV, "t.due === k && (ui.shown.earlier || !isEarlier(t, now))).length;", "t.due === k).length;"),
+ ("a task with one planting of the year before is folded as earlier", SV, "before = l => l.members.every(m => SL.yearOfDate(m.p) !== null", "before = l => l.members.some(m => SL.yearOfDate(m.p) !== null"),
+ ("a task names only the earliest later season", SV, "later = [...new Set(seasons.filter(x => x > year))].sort((a, b) => a - b);", "later = [...new Set(seasons.filter(x => x > year))].sort((a, b) => a - b).slice(0, 1);"),
+ ("Seeds' Left out counts earlier work as sown", SD, " - (r.earlier || 0)), 0);", "), 0);"),
+ ("Take back everything recorded goes by the planting's date again", "js/app.js", "      if (!SL.onTasks(state.engine, p0, planYear())) continue;", "      if (String(p0.date).slice(0, 4) !== year) continue;"),
  ("a task partly for a later season says it is all for it", SV, "`${t.next.part ? 'partly ' : ''}for", "`${''}for"),
  ("a task for a later season does not say so", SV, "t.next ? `${t.next.part ? 'partly ' : ''}for ${t.next.later.join(' and ')}` : ''", "''"),
  ("a task in the year before does not say so", SV, "return at === year - 1 ? `in ${at}, the year before`", "return at === year - 1 ? ''"),

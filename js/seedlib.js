@@ -161,6 +161,9 @@
    * for Jan 11 trays), and the work of every planting dated in the year, whatever season it is for (it is done this year).
    */
   const onTasks = (engine, p, year, r) => yearOfDate(p) === +year || seasonOf(engine, p, r) === +year;
+  /** Can a planting's own date move to another day without leaving its year? A day in the season it is for is in it too (a Dec 28
+   * tray batch for January put off into January). */
+  const staysIn = (engine, p, to) => String(to).slice(0, 4) === String(p.date).slice(0, 4) || +String(to).slice(0, 4) === seasonOf(engine, p);
   /**
    * The seed a sowing recorded as used, in the unit its lots are kept in. A sowing recorded through its review (recordSowing) says
    * what it used, none included: its batch's uses are counted, and a recorded nothing is 0. An older record says it only by its
@@ -177,12 +180,16 @@
   }
   const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   /**
-   * What the plan's season needs (seasonOf), wherever its work falls. options.today ('YYYY-MM-DD', the real day when left out):
+   * What the plan needs: the plantings dated in its year, as before, and the plantings of its season (seasonOf) wherever their work
+   * falls, so a tray batch sown on Dec 21 for Jan 11 is counted with the plan it is for. Nothing dated in the year is taken away:
+   * a sowing late in the year for a harvest in the next is still counted here, where it is sown, and said (`outside.later`). Once a
+   * plan holds a second season (HP8) such a sowing is dated in one season and is for the next, and the two must not both count it.
+   * options.today ('YYYY-MM-DD', the real day when left out):
    * a planting dated before the plan's year whose seed was due before today and is not recorded is counted for the plan but not
    * as still to sow: the planner was not told whether it was sown, and seed is not ordered for a day that has passed
-   * (Tasks says the same of its work in one line). `outside` counts what is left out, for the page to say: `later`, plantings
-   * dated in the plan's year whose produce is for a later season (they count there), and `seasons`, which; `earlier`, those not
-   * counted to sow, and `years`, the years they are dated in.
+   * (Tasks says the same of its work in one line). `outside` counts, for the page to say: `later`, plantings dated in the plan's
+   * year whose produce is for a later season (counted here all the same), and `seasons`, which; `earlier`, those not counted to
+   * sow, and `years`, the years they are dated in. Each row's `planned` is the plan's own count, whatever was recorded as used.
    * A planting recorded as sown counts for the plan the seed recorded as used, where that is recorded in its unit.
    */
   function required(engine, options = {}) {
@@ -192,18 +199,19 @@
       const r = engine.calc(p);
       if (!r || r.b.active === false) continue;
       const season = seasonOf(engine, p, r), dated = yearOfDate(p);
-      if (season !== year) { if (dated === year && season > year) { outside.later++; if (!outside.seasons.includes(season)) outside.seasons.push(season); } continue; }
+      if (season !== year && dated !== year) continue;
+      if (dated === year && season > year) { outside.later++; if (!outside.seasons.includes(season)) outside.seasons.push(season); }
       const c = r.c, saved = engine.variety(p.varietyId), v = saved && saved.cropId === p.cropId ? saved : null;
       const material = r.rack ? 'seed' : c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed');
       const unit = r.rack ? liveUnit(engine, c) : material === 'seed' ? 'seeds' : material + 's';
       const key = (v ? 'v:' + v.id : 'c:' + p.cropId) + '|' + unit;
       let row = rows.get(key);
-      if (!row) rows.set(key, row = { key, crop: engine.crop(p.cropId), variety: v, unit, plantings: 0, waiting: 0, total: 0, toSow: 0, trays: 0, first: null, established: 0, earlier: 0 });
+      if (!row) rows.set(key, row = { key, crop: engine.crop(p.cropId), variety: v, unit, plantings: 0, waiting: 0, total: 0, planned: 0, toSow: 0, trays: 0, first: null, established: 0, earlier: 0 });
       row.plantings++;
       if (p.established === true) { row.established++; continue; }
       const amount = unit === 'g' ? r.seedG : unit === 'seeds' ? r.seeds : (r.bulbs || Math.ceil(r.plants));
       const done = p.done || {}, sown = SOWN_KINDS.some(k => typeof done[k] === 'string' && done[k]), used = sown ? seedUsed(p, stockUnit(unit)) : null;
-      row.total += used != null ? used : amount || 0;
+      row.total += used != null ? used : amount || 0; row.planned += amount || 0;
       if (sown || (engine.failedOn && engine.failedOn(p))) continue;   // a planting marked failed and never sown needs no seed
       const start = r.sow || r.field;
       if (dated !== null && dated < year && start && isoOf(start) < today) { outside.earlier++; row.earlier++; if (!outside.years.includes(dated)) outside.years.push(dated); continue; }
@@ -700,6 +708,6 @@
     return out;
   }
 
-  return { norm, startOf, BASES, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, seasonOf, yearOfDate, onTasks, seedUsed, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
+  return { norm, startOf, BASES, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, seasonOf, yearOfDate, onTasks, staysIn, seedUsed, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
     sizeOf, packs, cover, toCover, money, perGram, orderSheet, orderText, orderCsv, supplierOf, sowing, lotsToUse, recordSowing, takeBackSowing, doneDate, realDay, yearAway, YEAR_DAYS, DONE_ORDER, DONE_WORD, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
 });

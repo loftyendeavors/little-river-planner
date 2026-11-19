@@ -366,7 +366,7 @@
     if (k > now) return s.open.length || s.done.length ? [group('', '', s.open, stock, now), fold(id, s.done, 'Already done', stock, now)] : h('div.tk-empty', h('p', 'Nothing is planned.'));
     const missed = tasks().filter(t => t.half === id && isOpen(t) && t.due === k && (ui.shown.earlier || !isEarlier(t, now))).length;
     return [s.done.length ? group('', '', s.done, stock, now) : h('div.tk-empty', h('p', 'Nothing was recorded.')),
-      missed ? h('p.tk-missed', `${plural(missed, 'task')} of that day ${missed === 1 ? 'was' : 'were'} not done, and ${missed === 1 ? 'is' : 'are'} on today’s list.`) : null];
+      missed ? h('p.tk-missed', { dataset: { hook: 'tasks-missed' } }, `${plural(missed, 'task')} of that day ${missed === 1 ? 'was' : 'were'} not done, and ${missed === 1 ? 'is' : 'are'} on today’s list.`) : null];
   }
   /** A whole week, a day at a time: the same rows under a line for each day. */
   function weekBody(id, name, stock, now) {
@@ -676,7 +676,7 @@
       const said = `${FULL[d(x).getDay()]} ${day(d(x))}: ${x < now ? `${num(dn)} done` : `${num(open)} to do${lateHere ? `, ${num(lateHere)} of them late` : ''}${dn ? `, ${num(dn)} done` : ''}`}`;
       const ring = x === now ? RING(18.5, 42) : null;
       if (ring) { dayRing = ring; dayShare = open + dn ? dn / (open + dn) : 0; }
-      return h('button.tk-day' + (x === now ? '.now' : '') + (x < now ? '.gone' : ''), { type: 'button', dataset: { act: 'day', day: x }, 'aria-pressed': String(x === k), 'aria-label': said, title: said },
+      return h('button.tk-day' + (x === now ? '.now' : '') + (x < now ? '.gone' : ''), { type: 'button', dataset: { act: 'day', day: x, hook: 'tasks-day' }, 'aria-pressed': String(x === k), 'aria-label': said, title: said },
         h('small', wd(x)), h('span.tk-face', ring, h('b', String(d(x).getDate()))), h('em' + (lateHere ? '.late' : !open && dn ? '.ok' : ''), open ? num(open) : dn ? `✓ ${num(dn)}` : ''));
     });
     const dated = k ? d(k) : null, near = k && Math.abs(diff(k, now)) < 2;

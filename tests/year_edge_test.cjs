@@ -25,15 +25,15 @@ process.on('exit', () => {
 });
 global.window = global;
 const req = f => require(path.resolve(app, 'js', f)), old = f => require(path.resolve(oldDir, f));
-const Lib = req('library.js'), E = req('engine.js'), IO = req('planio.js'), SL = req('seedlib.js'), F = req('forecast.js'), T = req('trays.js'), W = req('week.js');
-const E0 = old('engine.js'), SL0 = old('seedlib.js'), F0 = old('forecast.js'), W0 = old('week.js');
+const Lib = req('library.js'), E = req('engine.js'), IO = req('planio.js'), SL = req('seedlib.js'), F = req('forecast.js'), T = req('trays.js'), W = req('week.js'), N = req('nursery.js');
+const E0 = old('engine.js'), SL0 = old('seedlib.js'), F0 = old('forecast.js'), W0 = old('week.js'), N0 = old('nursery.js');
 const raw = JSON.parse(fs.readFileSync(planFile, 'utf8'));
 const given = raw.format ? IO.unpack(raw) : IO.split(raw).core;
 const year = +given.settings.year, Y = String(year), Y0 = String(year - 1);
 const copy = x => JSON.parse(JSON.stringify(x)), near = (a, b, e = 1e-6) => Math.abs(a - b) <= e * Math.max(1, Math.abs(a), Math.abs(b));
 const add = (iso, n) => E.d2s(E.addDays(E.s2d(iso), n)), iso = d => (d && E.validDate(d) ? E.d2s(d) : null);
 const withYear = (pl, y) => ({ ...pl, settings: { ...pl.settings, year: y } });
-const need = (lib, e, key, today) => { const row = lib.required(e, { today }).rows.find(r => r.key === key); return row ? { toSow: row.toSow, total: row.total, waiting: row.waiting, plantings: row.plantings } : { toSow: 0, total: 0, waiting: 0, plantings: 0 }; };
+const need = (lib, e, key, today) => { const row = lib.required(e, { today }).rows.find(r => r.key === key); return row ? { toSow: row.toSow, total: row.total, planned: row.planned, waiting: row.waiting, plantings: row.plantings } : { toSow: 0, total: 0, planned: 0, waiting: 0, plantings: 0 }; };
 const keyOf = (e, p) => { const s = SL.sowing(e, p); return s ? s.key + '|' + s.unit : null; };
 const monthOf = (m, cropId, k, part) => { const a = m.index(new Date(m.year, k, 1)), z = m.index(new Date(m.year, k + 1, 0)); return m.rows.filter(r => r.cropId === cropId).reduce((n, r) => n + F.sum(part === 'carried' ? r.carried : part === 'own' ? r.days.map((v, i) => v - r.carried[i]) : r.days, a, z), 0); };
 const worthOf = m => m.rows.reduce((n, r) => n + r.worth, 0);
@@ -45,7 +45,8 @@ const microId = demand && demand.rows.find(r => r.cropId).cropId;
 const crops = [...new Set(given.plantings.map(p => p.cropId))].map(id => eng.crop(id)).filter(Boolean);
 const keeper = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'TP' && +c.gh >= 1 && c.material !== 'bulb' && +c.dtm >= 45 && +c.dtm <= 120);
 const late = crops.find(c => !c.micro && !c.frostTender && !eng.isPerennial(c) && c.method === 'DS' && c.material !== 'bulb' && +c.dtm >= 32 && +c.dtm <= 90 && c.id !== (keeper && keeper.id));
-const fall = Lib.crops.find(c => c.method === 'DS' && !c.frostTender && !c.micro && +c.dtm >= 180 && c.material !== 'bulb');
+const fall = Lib.crops.find(c => c.method === 'DS' && !c.frostTender && !c.micro && +c.dtm >= 180 && c.material !== 'bulb' && !eng.isCoverCrop(c));
+const cover = Lib.crops.find(c => eng.isCoverCrop(c) && +c.dtm >= 120);   // a cover crop sown in the fall, whose days run into the next year
 // covered ground (no frost there) with nothing in it before a day, and ground with nothing in it at all
 const firstIn = b => given.plantings.filter(p => p.bedId === b.id).map(p => p.date).sort()[0] || '9999-12-31';
 const lastIn = b => given.plantings.filter(p => p.bedId === b.id).map(p => { const r = eng.calc(p); return r ? iso(eng.occupancyThrough(p, r)) || '9999-12-31' : '0000'; }).sort().pop() || '0000-01-01';
@@ -54,8 +55,8 @@ const covered = given.beds.filter(b => soil(b) && eng.gardenOf(b).frost === fals
 const empties = given.beds.filter(b => soil(b) && firstIn(b) === '9999-12-31'), empty = empties[0];
 const lateBed = given.beds.filter(b => soil(b) && eng.gardenOf(b).frost === false).find(b => lastIn(b) < `${Y}-11-01`);
 check('the plan has a live-tray demand with a crop, a hardy transplanted crop, a hardy crop sown in place, covered ground free in the early months, empty ground, and a crop of the library planted in the fall, for the check to work on',
-  demand && microId && keeper && late && covered.length >= 2 && firstIn(covered[1]) >= `${Y}-05-01` && empties.length >= 2 && lateBed && fall, { demand: !!demand, keeper: keeper && keeper.id, late: late && late.id, covered: covered.length, empty: !!empty, lateBed: !!lateBed, fall: fall && fall.id });
-if (!(demand && microId && keeper && late && covered.length >= 2 && empties.length >= 2 && lateBed && fall)) { finished = true; process.exit(0); }
+  demand && microId && keeper && late && covered.length >= 2 && firstIn(covered[1]) >= `${Y}-05-01` && empties.length >= 2 && lateBed && fall && cover, { demand: !!demand, keeper: keeper && keeper.id, late: late && late.id, covered: covered.length, empty: !!empty, lateBed: !!lateBed, fall: fall && fall.id });
+if (!(demand && microId && keeper && late && covered.length >= 2 && empties.length >= 2 && lateBed && fall && cover)) { finished = true; process.exit(0); }
 
 // ── the copy: the cases added ──
 let n = 0; const uid = () => 'ye-' + (++n);
@@ -83,7 +84,9 @@ const jan = { id: 'ye-jan', bedId: covered[0].id, cropId: keeper.id, date: `${Y}
 const far = { id: 'ye-far', bedId: lateBed.id, cropId: late.id, date: `${Y}-06-01`, ft: 10, dtm: 600, timingMode: 'manual' };
 // sown two years before the plan's year with days of its own that bring its first harvest into the plan's year
 const older = { id: 'ye-older', bedId: empties[1].id, cropId: late.id, date: `${year - 2}-06-01`, ft: 10, dtm: 600, timingMode: 'manual' };
-plan.plantings.push(dec, mar, garlic, end, winter, jan, far, older);
+// a cover crop sown in the fall before: its days run into the plan's year, but it gives nothing to pick, so it goes by its date
+const rye = { id: 'ye-cover', bedId: empties[0].id, cropId: cover.id, date: `${Y0}-09-20`, ft: 20 };
+plan.plantings.push(dec, mar, garlic, end, winter, jan, far, older, rye);
 const eng0 = E.create(base, Lib), eng1 = E.create(plan, Lib), old0 = E0.create(base, Lib), old1 = E0.create(plan, Lib);
 const batch = plan.plantings.find(p => p.liveTray && p.liveTray.ready === ready), spring = plan.plantings.find(p => p.liveTray && p.liveTray.ready === april);
 const rb = eng1.calc(batch), rs = eng1.calc(spring);
@@ -100,7 +103,9 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   check('Seeds counts its seed for the plan, once: still to sow before its day, with the April batch beside it', s && s.amount > 0 && near(b.toSow - a.toSow, s.amount + springAmount) && b.waiting - a.waiting === 2, [a, b, s && s.amount, springAmount]);
   check('the build before left it out of Seeds: it counted the April batch only', near(o.toSow - oa.toSow, springAmount), [oa, o]);
   const back = need(SL, E.create(withYear(plan, year - 1), Lib), key, before), backBase = need(SL, E.create(withYear(base, year - 1), Lib), key, before);
-  check('the year before counts none of it: across the two seasons its seed is counted once', near(back.toSow, backBase.toSow) && near(back.total, backBase.total), [back, backBase]);
+  // a plan holds one season: the year before's plan is this plan with its year set back, where the batch is dated. It counts it there
+  // too, as 0.69 did: nothing counted by date is taken away. Once one plan holds two seasons (HP8), one of the two must count it
+  check('the year before\'s plan counts it too, where it is dated, as the build before did', near(back.toSow - backBase.toSow, s.amount), [back, backBase]);
   check('it is on Tasks for the plan\'s year, on the day it is sown (and for the year before\'s plan, the year that work is done in)', SL.onTasks(eng1, batch, year) && iso(s.planned) === batch.date && SL.onTasks(eng1, batch, year - 1) && SL.onTasks(eng1, spring, year));
   // recorded as sown, with less seed than planned: the seed used is what counts for the plan, and nothing of it is still to sow
   const used = Math.round(s.amount * 5 / 6 * 1e6) / 1e6, inv = plan.seedInventory || SL.emptyInventory();
@@ -111,6 +116,7 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   const zero = SL.recordSowing(eng1, inv, batch, { date: batch.date, quantity: 0 }, { now: `${Y0}-12-21T15:00:00.000Z`, uid, year, name: '', today: batch.date });
   const z = need(SL, E.create({ ...plan, plantings: plan.plantings.map(p => (p.id === batch.id ? zero.planting : p)) }, Lib), key, before);
   check('recorded as sown with nothing used: the plan counts nothing for it, not the planned amount', zero.quantity === 0 && near(z.total - a.total, springAmount) && near(z.toSow - a.toSow, springAmount), [a, z]);
+  check('what the plan itself counts (a crop with a seed figure, whatever was used) stays the planned amount', near(z.planned - a.planned, s.amount + springAmount), [a, z]);
   // its day past and nothing recorded: counted for the plan, not as still to sow
   const d = need(SL, eng1, key, after), out = SL.required(eng1, { today: after }).outside;
   check('its day past with nothing recorded: counted for the plan, not as still to sow, and said as earlier', near(d.toSow - need(SL, eng0, key, after).toSow, springAmount) && near(d.total - need(SL, eng0, key, after).total, s.amount + springAmount) && out.earlier >= 1, [d, out]);
@@ -197,13 +203,29 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   check('the case: sown late in the plan\'s year, first picked in the next', re && iso(re.first).slice(0, 4) === String(year + 1), [iso(re && re.first)]);
   const here = SL.required(eng1, { today: before }), there = E.create(withYear(plan, year + 1), Lib), thereBase = E.create(withYear(base, year + 1), Lib);
   const noEnd = E.create({ ...plan, plantings: plan.plantings.filter(p => p.id !== end.id) }, Lib);
-  check('it is the next season: Seeds for the plan\'s year leaves it out and says so, and the next year counts it', SL.seasonOf(eng1, end) === year + 1 && need(SL, eng1, key, before).plantings === need(SL, noEnd, key, before).plantings && here.outside.later >= 1
+  const se = SL.sowing(eng1, end);
+  check('it is the next season, and Seeds for the plan\'s year still counts it to sow, where it is sown, and says so; the next year counts it too', SL.seasonOf(eng1, end) === year + 1 && near(need(SL, eng1, key, before).toSow - need(SL, noEnd, key, before).toSow, se.amount) && here.outside.later >= 1
     && need(SL, there, key, before).plantings - need(SL, thereBase, key, before).plantings === 1, [here.outside, need(SL, there, key, before)]);
   check('its work is on Tasks for the plan\'s year, where it is done, and for the next, whose season it is', SL.onTasks(eng1, end, year) && SL.onTasks(eng1, end, year + 1));
   const rf = eng1.calc(far);
-  check('one first picked two seasons on is left out too, and said with its own season', SL.seasonOf(eng1, far) === year + 2 && iso(rf.first).slice(0, 4) === String(year + 2) && here.outside.later === 2 && JSON.stringify(here.outside.seasons) === JSON.stringify([year + 1, year + 2]) && SL.onTasks(eng1, far, year), [iso(rf && rf.first), here.outside]);
+  check('one first picked two seasons on is counted too, and said with its own season', SL.seasonOf(eng1, far) === year + 2 && SL.required(eng1, { today: before }).rows.some(r => r.key === keyOf(eng1, far) && r.plantings >= 2) && iso(rf.first).slice(0, 4) === String(year + 2) && here.outside.later === 2 && JSON.stringify(here.outside.seasons) === JSON.stringify([year + 1, year + 2]) && SL.onTasks(eng1, far, year), [iso(rf && rf.first), here.outside]);
   const m1 = F.build(eng1);
   check('the forecast has nothing of it in the plan\'s year, and the next year\'s has its harvest', !m1.rows.some(r => r.plantings.some(x => x.p.id === end.id)) && F.build(there).rows.some(r => r.plantings.some(x => x.p.id === end.id)));
+}
+
+// ── 5b. a cover crop of the fall before; the Nursery's supplies; a delay into the season it is for ──
+{
+  const rc = eng1.calc(rye), noRye = E.create({ ...plan, plantings: plan.plantings.filter(p => p.id !== rye.id) }, Lib), key = keyOf(eng1, rye);
+  check('a cover crop sown the fall before, its days running into the plan\'s year, goes by its date: not the plan\'s season, not counted, not on Tasks',
+    rc && iso(rc.first).slice(0, 4) === Y && SL.seasonOf(eng1, rye) === year - 1 && need(SL, eng1, key, before).plantings === need(SL, noRye, key, before).plantings && !SL.onTasks(eng1, rye, year), [iso(rc && rc.first), SL.seasonOf(eng1, rye)]);
+  const noBatch = { ...plan, plantings: plan.plantings.filter(p => p.id !== batch.id) };
+  const sup = (n, e) => n.supplies(e, year, null).liveOpen, up = sup(N, eng1) - sup(N, E.create(noBatch, Lib)), up0 = sup(N0, old1) - sup(N0, E0.create(noBatch, Lib));
+  check('the Nursery\'s supplies count the December batch\'s trays for the plan it is for; the build before did not', up === batch.trays && up0 === 0, [up, up0, batch.trays]);
+  const later = add(batch.date, 13), moved = W.delay(eng1, batch, 'sow', later);
+  let refused0 = ''; try { W0.delay(old1, batch, 'sow', later); } catch (e) { refused0 = e.message; }
+  check('a December tray sowing can be put off into the January of the season it is for; the build before refused it', moved && moved.planting.date === later && later.slice(0, 4) === Y && /out of/.test(refused0), [moved && moved.planting.date, refused0]);
+  let refused = ''; try { W.delay(eng1, jan, 'field', add(jan.date, 366)); } catch (e) { refused = e.message; }
+  check('one of the plan\'s own season is still kept in its year', new RegExp(`out of ${Y}`).test(refused), refused);
 }
 
 // ── 6. on the plan as given, nothing moves ──
