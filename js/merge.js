@@ -112,6 +112,13 @@
   };
   /** Where a planting is, and when: each is one value. */
   const PLACE = ['bedId', 'ft', 'startFt', 'bedLayout', 'seat'], TIME = ['date', 'sowOn'];
+  // The demand editor changes these on unsown trays. Once sown, the batch keeps the figures it was sown with.
+  const TRAY_DEMAND = ['cropId', 'varietyId', 'trays', 'dtm', 'price', 'yield', 'yieldBasis', 'growingDefaults', 'customerId', 'timingMode'];
+  function sameTraySlot(a, b) {
+    const from = a?.liveTray, to = b?.liveTray;
+    return isObj(from) && isObj(to) && from.planId != null && from.key != null
+      && ['planId', 'key', 'rowId', 'week'].every(key => from[key] === to[key]);
+  }
 
   // ───────────────────────────── by shape ─────────────────────────────
   const said = (ctx, item) => { ctx.report.items.push(item); };
@@ -333,6 +340,20 @@
       for (const key of keys) special[key] = from[key];
     }
     together(ctx, pat, path, s0, m, t, special);
+    if (recorder && done.sow && !doneOf(s0).sow) {
+      const sown = recorder === 'm' ? m : t, unsown = recorder === 'm' ? t : m;
+      if (doneOf(sown).sow && !doneOf(unsown).sow && sameTraySlot(s0, unsown)
+        && (!sown.liveTray || sameTraySlot(s0, sown)) && s0.bedId === sown.bedId && s0.bedId === unsown.bedId) {
+        const changed = key => !same(unsown[key], s0[key]) && !same(unsown[key], sown[key]);
+        // The same week can acquire a different ready day when the other device edits the plan's opening date.
+        // Keep the link as recorded, or let settleTrays restore it if that device deleted the demand plan.
+        special.liveTray = sown.liveTray;
+        if (TRAY_DEMAND.some(changed)) {
+          for (const key of TRAY_DEMAND) special[key] = sown[key];
+          said(ctx, { kind: 'move-not-applied', path, id, what: 'tray-demand', whose: recorder === 'm' ? 'theirs' : 'mine' });
+        }
+      }
+    }
     return joinObject(ctx, pat, path, s0, m, t, special);
   }
 
@@ -521,14 +542,17 @@
    */
   function settleTrays(ctx, start, mine, theirs, plan) {
     const stands = new Map();   // demand plan id -> the side whose version stands
+    const keptAfterDelete = new Set();
     for (const x of ctx.report.items) {
       if (!Array.isArray(x.path) || x.path.length !== 2 || x.path[0] !== 'liveTrayPlans') continue;
       if (x.kind === 'same-box') stands.set(String(x.path[1]).slice(1), 't');
       else if (x.kind === 'kept') stands.set(String(x.path[1]).slice(1), x.removedBy === 'mine' ? 't' : 'm');
+      if (x.kind === 'kept') keptAfterDelete.add(String(x.path[1]).slice(1));
     }
     if (!stands.size || !Array.isArray(plan.plantings)) return plan;
     const planOf = p => (isObj(p) && isObj(p.liveTray) && stands.has(String(p.liveTray.planId)) ? String(p.liveTray.planId) : null);
     const T = new Map(listOf(theirs, 'plantings').map(p => [p.id, p])), M = new Map(listOf(mine, 'plantings').map(p => [p.id, p])), work = p => [doneOf(p), linesOf(p, 'history'), linesOf(p, 'seedUse')];
+    const S = new Map(listOf(start, 'plantings').map(p => [p.id, p]));
     const sideOf = id => (stands.get(id) === 'm' ? M : T);
     const told = new Map(), tell = (id, key, pid) => { if (!told.has(id)) told.set(id, { kind: 'tray-batches', path: ['liveTrayPlans', '#' + id], id, whose: stands.get(id) === 'm' ? 'mine' : 'theirs', dropped: [], back: [], reset: [] }); told.get(id)[key].push(pid); };
     const out = [], here = new Set();
@@ -538,7 +562,18 @@
       if (id == null) for (const side of [T, M]) { const q = side.get(p.id), qid = planOf(q); if (qid != null && sideOf(qid) === side) id = qid; }
       if (id == null) { out.push(p); continue; }
       const own = sideOf(id).get(p.id);
-      if (own && planOf(own) === id) { const keep = same(work(p), work(own)) ? own : p; if (keep === own && !same(p, own)) tell(id, 'reset', p.id); out.push(keep); here.add(p.id); }
+      if (own && planOf(own) === id) {
+        const keep = same(work(p), work(own)) ? own : p;
+        if (keep === own && !same(p, own)) tell(id, 'reset', p.id);
+        const detached = (sideOf(id) === M ? T : M).get(p.id), was = S.get(p.id);
+        // The other device still names this exact batch and week, including for batches whose IDs predate the worked IDs.
+        if (keep === p && !p.liveTray && keptAfterDelete.has(id) && doneOf(p).sow && doneOf(detached).sow
+          && !detached.liveTray && sameTraySlot(was, own) && was.bedId === p.bedId && p.bedId === own.bedId) {
+          out.push({ ...p, liveTray: was.liveTray });
+          tell(id, 'back', p.id);
+        } else out.push(keep);
+        here.add(p.id);
+      }
       else if (Object.keys(doneOf(p)).length) { out.push(p); here.add(p.id); }   // work recorded on a batch the version that stands does not have: it stays
       else tell(id, 'dropped', p.id);
     }
