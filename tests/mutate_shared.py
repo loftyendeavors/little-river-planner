@@ -1,5 +1,5 @@
 """Deliberate faults for the files the merge writes (tests/shared_test.cjs: tools/shared.cjs, tools/take_main.cjs, the counts'
-join in tests/counts.py), for the hooks (tests/hooks_test.cjs) and for the job that takes main in (tests/take_main_job_test.cjs): each is put into a copy of the repository, and a named line
+join in tests/counts.py), for the hooks (tests/hooks_test.cjs) and for the job that takes main in and the checks it starts (tests/take_main_job_test.cjs): each is put into a copy of the repository, and a named line
 of the check must then fail where it passed before.
 usage: python3 -I mutate_shared.py <the repository> <scratch> <fontsource dir> [node | list] [words…]     env FROM=, TO= to run a part
 """
@@ -8,7 +8,7 @@ repo, scratch, fonts = [os.path.abspath(x) for x in sys.argv[1:4]]
 mode = sys.argv[4] if len(sys.argv) > 4 else 'node'; words = [w.lower() for w in sys.argv[5:]]
 SH, TM, CP, CH, CSS = 'tools/shared.cjs', 'tools/take_main.cjs', 'tests/counts.py', 'js/changes.js', 'css/app.css'
 S, H, J = 'shared', 'hooks', 'job'
-WF = '.github/workflows/take-main.yml'
+WF, CK = '.github/workflows/take-main.yml', '.github/workflows/checks.yml'
 
 # (what the fault is, which check, the file, the text as it is, the text as the fault has it, words of the line that must fail)
 FAULTS = [
@@ -43,6 +43,20 @@ FAULTS = [
   ('the job that pushes reads one folder for every pull request', J, WF, 'IN="$RUNNER_TEMP/in/taken-$number"', 'IN="$RUNNER_TEMP/in/taken-all"', 'only from that pull request'),
   ('the job that pushes pushes over whatever the branch holds now', J, WF, '--force-with-lease="refs/heads/$branch:$at" ', '--force ', 'takes the pull request, its branch'),
   ('the job that pushes stops when nothing was handed on', J, WF, "        continue-on-error: true   # with no artifact", "        # with no artifact", 'nothing at all was handed on'),
+  ('the checks are not started after the push', J, WF, '                gh workflow run checks.yml --repo', '                : gh workflow run checks.yml --repo', 'starts the checks on the branch'),
+  ('the checks are started on main, not on the branch pushed', J, WF, 'gh workflow run checks.yml --repo "$GITHUB_REPOSITORY" --ref "$branch"', 'gh workflow run checks.yml --repo "$GITHUB_REPOSITORY" --ref main', 'starts the checks on the branch'),
+  ('the verdict of the checks is named otherwise than the protection waits for', J, CK, '    name: All checks\n', '    name: Every check\n', 'name their verdict'),
+  ('a run started by dispatch says nothing as a status', J, CK, "github.event_name == 'workflow_dispatch'", "github.event_name == 'push'", 'started by dispatch says'),
+  ('the status is said under another name', J, CK, '-f context="All checks" ', '-f context="Every check" ', 'started by dispatch says'),
+  ('the status is said on another commit than the one checked', J, CK, 'statuses/$GITHUB_SHA"', 'statuses/$(git ls-remote origin HEAD | cut -f1)"', 'started by dispatch says'),
+  ('the status says success whatever the checks found', J, CK, 'if [ "$OUTCOME" = success ]; then state=success;', 'if true; then state=success;', 'follows the outcome'),
+  ('the status is said only when the checks passed', J, CK, "if: ${{ !cancelled() && github.event_name", "if: ${{ success() && github.event_name", 'follows the outcome'),
+  ('the status is read from the parts alone, not from "All checks"', J, CK, '    needs: all\n', '    needs: [part]\n', 'follows the outcome'),
+  ('the job that says the status checks the branch out', J, CK, "      statuses: write\n    steps:\n", "      statuses: write\n    steps:\n      - uses: actions/checkout@v4\n", 'may only write statuses'),
+  ('the job that says the status may write the repository', J, CK, "      statuses: write\n", "      statuses: write\n      contents: write\n", 'may only write statuses'),
+  ('the job that says the status runs a script of the branch', J, CK, '          if [ "$OUTCOME" = success ]', '          python3 -I tests/counts.py . || true\n          if [ "$OUTCOME" = success ]', 'may only write statuses'),
+  ('a job that runs the branch\'s code may write', J, CK, "  lint:\n    name: lint\n", "  lint:\n    name: lint\n    permissions:\n      contents: write\n", 'no other job of the checks'),
+  ('the checks as a whole may write', J, CK, "permissions:\n  contents: read\n", "permissions:\n  contents: write\n", 'no other job of the checks'),
   ('a hook a check reads is no longer written', H, CH, "h('span.wc-new', { dataset: { hook: 'changes-new' } }, 'New')", "h('span.wc-new', 'New')", 'every hook a check reads'),
   ('the style sheet styles a thing by its hook', H, CSS, '.dialog.wc {', '[data-hook="changes-new"] { color: inherit; }\n.dialog.wc {', 'no style sheet rule reads a hook'),
   ('a script of the planner finds a thing by its hook', H, CH, "  const $ = id => document.getElementById(id);\n", "  const $ = id => document.getElementById(id);\n  const fresh = () => document.querySelector('[data-hook=\"changes-new\"]');\n", 'no script of the planner finds'),

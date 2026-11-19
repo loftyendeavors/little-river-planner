@@ -11,9 +11,11 @@
 #   send   for each pull request of the list (its number, branch and commit taken from "list", not from what "take" handed on),
 #          pushes the commit "take" made, only onto the commit the branch was read at (--force-with-lease: a chat's push since
 #          then wins), starts the checks for it, and says on the pull request what was done. It runs nothing of any branch
-# A push made with this workflow's key starts no workflow by itself, so the checks are started for the branch here: "All checks"
-# on its newest commit is still what a merge waits for. How it fits with a chat that is building: tests/README.md, "Two builds
-# side by side". tests/take_main_job_test.cjs holds the three jobs to this.
+# A push made with this workflow's key starts no workflow by itself, so the checks are started for the branch here, with
+# workflow_dispatch: "All checks" on its newest commit is still what a merge waits for. GitHub does not count the checks of a
+# dispatched run for the protection of main, so that run also says "All checks" on the commit as a commit status, which is
+# counted (checks.yml, the job "counted"); no empty commit is needed to merge after a taking in. How it fits with a chat that is
+# building: tests/README.md, "Two builds side by side". tests/take_main_job_test.cjs holds the three jobs, and that job, to this.
 name: Take main in
 on:
   push:
