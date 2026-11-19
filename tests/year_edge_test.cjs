@@ -157,6 +157,12 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
 {
   const key = keyOf(eng1, jan), s = SL.sowing(eng1, jan), without = E.create({ ...plan, plantings: plan.plantings.filter(p => p.id !== jan.id) }, Lib);
   check('the case: planted in the plan\'s year, sown in the nursery in the year before', jan.date.slice(0, 4) === Y && iso(s.planned).slice(0, 4) === Y0 && iso(s.planned) < after, [jan.date, iso(s.planned)]);
+  // sown, planted out, then the sowing alone taken back: still sown by its planting out, its count the plan's own again
+  const ctxJ = { now: `${Y}-01-10T12:00:00.000Z`, uid, year, name: '', today: `${Y}-01-10` }, inv = plan.seedInventory || SL.emptyInventory();
+  const sw = SL.recordSowing(eng1, inv, jan, { date: iso(s.planned), quantity: 1 }, ctxJ), out1 = W.record(eng1, sw.inventory || inv, sw.planting, 'field', { date: jan.date, follow: false }, ctxJ);
+  const back = SL.takeBackSowing(eng1, out1.inventory || sw.inventory || inv, out1.planting, ctxJ), withBack = E.create({ ...plan, plantings: plan.plantings.map(p => (p.id === jan.id ? back.planting : p)) }, Lib);
+  check('sown, planted out, and the sowing alone taken back: it counts the plan\'s own seed, not the nothing left of the batch taken back', !!(back.planting.done && back.planting.done.field) && !(back.planting.done && back.planting.done.sow)
+    && near(need(SL, withBack, key, after).total - need(SL, without, key, after).total, s.amount) && near(need(SL, withBack, key, after).toSow, need(SL, without, key, after).toSow), [need(SL, withBack, key, after), need(SL, without, key, after), s.amount]);
   check('its seed is still to sow once its day is past with nothing recorded: what is dated in the plan\'s year is not folded as earlier work', near(need(SL, eng1, key, after).toSow - need(SL, without, key, after).toSow, s.amount) && SL.onTasks(eng1, jan, year), [need(SL, eng1, key, after), need(SL, without, key, after), s.amount]);
 }
 

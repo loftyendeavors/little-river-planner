@@ -169,7 +169,9 @@
   function seedUsed(p, unit) {
     const flow = p && p.workflow && typeof p.workflow === 'object' ? p.workflow : {}, uses = Array.isArray(flow.seedUse) ? flow.seedUse.filter(u => u && u.unit === unit && Number(u.quantity) > 0) : [];
     const sum = list => trim6(list.reduce((n, u) => n + Number(u.quantity), 0));
-    const last = Array.isArray(flow.history) ? flow.history.slice().reverse().find(x => x && x.action === 'complete' && x.sowingReview && x.sowingReview.batchId) : null;
+    // the latest reviewed sowing, unless it was taken back after (a clear-work of its kind): planting out may still say it was sown
+    const history = Array.isArray(flow.history) ? flow.history : [], at = history.map(x => !!(x && x.action === 'complete' && x.sowingReview && x.sowingReview.batchId)).lastIndexOf(true);
+    const last = at >= 0 && !history.slice(at + 1).some(x => x && x.action === 'clear-work' && x.kind === history[at].kind) ? history[at] : null;
     if (last) return last.sowingReview.unit && last.sowingReview.unit !== unit ? null : sum(uses.filter(u => u.batchId === last.sowingReview.batchId));
     return uses.length ? sum(uses) : null;
   }

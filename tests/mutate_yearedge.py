@@ -13,6 +13,7 @@ old = os.environ.get("OLD") or str(Path(os.environ.get("LRF_WORK", "/tmp/lrf-wor
 SL, WK, FC, SV, SD, HV = "js/seedlib.js", "js/week.js", "js/forecast.js", "js/sowview.js", "js/seeds.js", "js/harvestview.js"
 NODE = [
  ("a sowing recorded with nothing used counts the plan's amount", SL, "if (last) return last.sowingReview.unit", "if (false) return last.sowingReview.unit"),
+ ("a sowing taken back still counts its batch", SL, "const last = at >= 0 && !history.slice(at + 1).some(", "const last = at >= 0 && ![].some("),
  ("Seeds goes by the planting's own date again", SL, "const season = seasonOf(engine, p, r), dated = yearOfDate(p);", "const season = yearOfDate(p), dated = yearOfDate(p);"),
  ("the season is the year of the planting's date", SL, "return calc.first instanceof Date && !Number.isNaN(+calc.first) ? calc.first.getFullYear() : own;", "return own;"),
  ("earlier work not recorded is still counted to sow", SL, "if (dated !== null && dated < year && start && isoOf(start) < today) {", "if (false) {"),
