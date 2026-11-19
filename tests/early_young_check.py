@@ -238,13 +238,19 @@ with sync_playwright() as pw:
     js("LRFCard.turn(true); A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", P0); wait(600)
     bar = lambda pid: js("""const eng = S.engine, p = eng.planting(arg), r = eng.calc(p), segs = [...document.querySelectorAll('[data-hook="card-bar"] .card-bar-track i')].filter(i => /card-bar-(grow|pick)/.test(i.dataset.hook || '')).map(i => [i.dataset.hook.replace('card-bar-', ''), i.dataset.from, i.dataset.to]);
       const w = eng.pickWindows(p, r), want = [['grow', E.d2s(r.field), E.d2s(E.addDays(w[0][0], -1))]]; w.forEach(([a, b], k) => { if (k) want.push(['grow', E.d2s(E.addDays(w[k - 1][1], 1)), E.d2s(E.addDays(a, -1))]); want.push(['pick', E.d2s(a), E.d2s(b)]); });
-      return { segs, want, own: [E.d2s(r.first), E.d2s(r.last)] };""", pid)
+      if (w[w.length - 1][1] < r.last) want.push(['grow', E.d2s(E.addDays(w[w.length - 1][1], 1)), E.d2s(r.last)]);
+      // no blank anywhere: from the day it goes in to its own last picking, each part starting the day after the one before ends
+      const whole = segs.length > 0 && segs[0][1] === E.d2s(r.field) && segs[segs.length - 1][2] === E.d2s(r.last) && segs.every((x, k) => !k || x[1] === E.d2s(E.addDays(E.s2d(segs[k - 1][2]), 1)));
+      return { segs, want, whole, own: [E.d2s(r.first), E.d2s(r.last)], field: E.d2s(r.field) };""", pid)
     b_gap = bar(P0)
+    # grown for the short thing alone (two days, early): picked only in its window, then growing to the planting's own last picking (Codex on #86)
+    js("A.setGives(arg.P0, arg.T); A.select({ type: 'planting', id: arg.P0 }); return 1;", {"P0": P0, "T": T}); wait(600)
+    b_short = bar(P0); b_short["x"] = js("const eng = S.engine, p = eng.planting(arg.P0), x = eng.soldOf(p, eng.calc(p)).find(q => q.thing === arg.T); return [E.d2s(x.first), E.d2s(x.last), E.d2s(E.addDays(x.last, 1))];", {"P0": P0, "T": T})
     other = js("const eng = S.engine; const p = S.plan.plantings.find(q => q.cropId !== arg && eng.calc(q) && eng.calc(q).harvestDays > 0 && eng.isSoilBed(eng.bedOf(q.bedId))); return p.id;", C)
     js("A.select({ type: 'planting', id: arg }); return 1;", other); wait(500)
     b_old = bar(other)
     js("LRFCard.turn(false); return 1;"); wait(300)
-    check("the card's life bar draws growing and picking from the same windows as the Pick label, the gap as growing; a planting with no early product grows to its first picking and is picked to its last, as before", b_gap["segs"] == b_gap["want"] and len(b_gap["segs"]) == 4 and b_old["segs"] == b_old["want"] and len(b_old["segs"]) == 2 and b_old["segs"][1][1:] == b_old["own"], [b_gap, b_old])
+    check("the card's life bar draws growing and picking from the same windows as the Pick label, the gap as growing, with no blank anywhere; grown for a short thing alone, picked in its window and growing after it to the planting's last picking; a planting with no early product grows to its first picking and is picked to its last, as before", b_gap["segs"] == b_gap["want"] and len(b_gap["segs"]) == 4 and b_gap["whole"] and b_short["whole"] and b_short["segs"] == b_short["want"] and [x[0] for x in b_short["segs"]] == ["grow", "pick", "grow"] and b_short["segs"][1][1:] == b_short["x"][:2] and b_short["segs"][2][1:] == [b_short["x"][2], b_short["own"][1]] and b_old["segs"] == b_old["want"] and b_old["whole"] and len(b_old["segs"]) == 2 and b_old["segs"][1][1:] == b_old["own"], [b_gap, b_short, b_old])
     while js("return S.undo.length;") > u_alone: js("A.undo(); return 1;"); wait(200)
     js("A.undo(); return 1;"); wait(500)
     u1 = js("return { snap: snap(), dates: dates(S.engine) };")

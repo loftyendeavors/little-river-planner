@@ -61,6 +61,7 @@ PAGE = [
  ("a planting grown for the crop alone bounds the days before of a thing", AP, "return t.from !== 'bed' || (g !== 'first' && (!g || g === t.id)); };", "return true; };"),
  ("a planting grown for a thing since taken away is left out of the bound", AP, "const gives = r => { const g = eng.grownFor(r.planting);", "const gives = r => { const g = r.planting.gives;"),
  ("the card's life bar is picking from the crop's first picking to its last", CD, "...segments(e.pickWindows(p, r), r.field, pickEnd)", "...segments(r.harvestDays ? [[r.first, r.last]] : [], r.field, pickEnd)"),
+ ("the card's life bar is blank after the last window of a short thing", CD, "    if (end < pickEnd) out.push(['grow', end, pickEnd]);\n", ""),
  ("too many days before are taken", AP, "if (room != null && want > room) return refuse(", "if (false) return refuse("),
  ("the line under the box does not say what it comes to", TH, "`first picked at ${Math.max(1, days[0] - t.before)} days, ${c.name} at ${days[0]}`", "`first picked with ${c.name}`"),
  ("the Schedule does not say when the thing is first picked", PN, "          earlyPicks(eng, p, r),\n", ""),
