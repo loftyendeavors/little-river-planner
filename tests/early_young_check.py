@@ -236,7 +236,7 @@ with sync_playwright() as pw:
     check("a gap between the thing picked early and the crop's own picking: the season text gives the two windows, and the badge is not picking in the gap", [x["picking"] for x in gap] == [True, False, True] and all(gw["text"] in x["text"] for x in gap), [gap, gw])
     # the card's life bar: drawn from the same windows, a gap drawn as growing; a planting with no early product as before
     js("LRFCard.turn(true); A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", P0); wait(600)
-    bar = lambda pid: js("""const eng = S.engine, p = eng.planting(arg), r = eng.calc(p), segs = [...document.querySelectorAll('[data-hook="card-bar"] .card-bar-track i')].filter(i => /card-bar-(grow|pick)/.test(i.dataset.hook || '')).map(i => [i.dataset.hook.replace('card-bar-', ''), i.dataset.from, i.dataset.to]);
+    bar = lambda pid: js("""const eng = S.engine, p = eng.planting(arg), r = eng.calc(p), segs = [...document.querySelectorAll('[data-hook="card-bar"] [data-hook="card-bar-grow"], [data-hook="card-bar"] [data-hook="card-bar-pick"]')].map(i => [i.dataset.hook.replace('card-bar-', ''), i.dataset.from, i.dataset.to]);   // by their hooks, in the page's order (#87)
       const w = eng.pickWindows(p, r), want = [['grow', E.d2s(r.field), E.d2s(E.addDays(w[0][0], -1))]]; w.forEach(([a, b], k) => { if (k) want.push(['grow', E.d2s(E.addDays(w[k - 1][1], 1)), E.d2s(E.addDays(a, -1))]); want.push(['pick', E.d2s(a), E.d2s(b)]); });
       if (w[w.length - 1][1] < r.last) want.push(['grow', E.d2s(E.addDays(w[w.length - 1][1], 1)), E.d2s(r.last)]);
       // no blank anywhere: from the day it goes in to its own last picking, each part starting the day after the one before ends

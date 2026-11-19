@@ -154,10 +154,12 @@
         sow ? h('i.cb-nursery', { style: at(sow, r.field) }) : null,
         // growing to the first picking, then picking in each window it is picked in (engine.pickWindows, as its Pick label says), a
         // gap between two, and any days after the last, drawn as growing; with no early product, one window, its harvest days, as before
-        ...segments(e.pickWindows(p, r), r.field, pickEnd).map(([kind, from, to]) => h(`i.cb-${kind}`, { style: at(from, to), dataset: { hook: `card-bar-${kind}`, from: E.d2s(from), to: E.d2s(E.addDays(to, -1)) } })),
+        ...segments(e.pickWindows(p, r), r.field, pickEnd).map(([kind, from, to]) => h(`i.cb-${kind}`, { style: at(from, to), dataset: { ...BAR_PART[kind], from: E.d2s(from), to: E.d2s(E.addDays(to, -1)) } })),
         free ? h('i.cb-turn', { style: at(pickEnd, free) }) : null),
       h('div.card-bar-days', items.map(([k, v]) => h('span', { dataset: { day: k.toLowerCase() } }, k, h('b', v)))));
   }
+  // each part of the life bar by its hook, written out so the checks can find who writes it (tests/hooks_test.cjs; #87)
+  const BAR_PART = { grow: { hook: 'card-bar-grow' }, pick: { hook: 'card-bar-pick' } };
   /** One line of what a planting comes to: its amount, its price and its worth, as the forecast counts them. */
   function comesTo(p, r) {
     const e = eng(), F = root.LRFForecast, y = e.yieldOf(p, r);
@@ -489,6 +491,12 @@
     if (restore) restore(card);
     else if (focus >= 0) { const again = controls()[focus]; if (again) again.focus({ preventScroll: true }); }   // the box that was in use keeps the keyboard
   }
+  /** Docked by a wider window: the bed picked, or the bed of the planting picked, moved clear of the card (Codex on #85). */
+  function revealPicked() {
+    const sel = App.state.sel, p = sel && sel.type === 'planting' ? eng().planting(sel.id) : null, bedId = sel && sel.type === 'bed' ? sel.id : p && p.bedId;
+    if (!bedId) return;
+    requestAnimationFrame(() => { if (card && App.state.view === 'map') root.LRFMap.revealBed(bedId, card.getBoundingClientRect()); });
+  }
   function revealBed(id) {
     requestAnimationFrame(() => {
       if (App.state.view === 'map' && App.state.sel?.type === 'bed' && App.state.sel.id === id && card?.dataset.kind === 'bed') {
@@ -693,7 +701,7 @@
     document.addEventListener('wheel', () => { if (hint || hintBar) hideHint(); }, { passive: true });
     NARROW.addEventListener('change', () => { draw(); root.LRFPanels.redraw(); });
     // docked or floating: placed again, and the view makes room or takes it back; docked, a bed it would hide is moved clear (Codex on #85)
-    DOCKED.addEventListener('change', () => { draw(); if (DOCKED.matches && App.state.sel && App.state.sel.type === 'bed') revealBed(App.state.sel.id); });
+    DOCKED.addEventListener('change', () => { draw(); if (DOCKED.matches) revealPicked(); });
     root.addEventListener('resize', () => { if (card) place(); closePops(); });
     new MutationObserver(() => draw()).observe(document.body, { attributes: true, attributeFilter: ['data-layout'] });   // Edit layout opened or closed
     draw();

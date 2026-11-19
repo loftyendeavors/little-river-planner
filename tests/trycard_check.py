@@ -126,8 +126,14 @@ def run(pw):
       let p = null; for (let y = v.bottom - 140; y > v.top + 80 && !p; y -= 23) for (let x = v.left + 30; x < v.left + v.width / 2 && !p; x += 23) {{ const e = document.elementFromPoint(x, y);
         if (e && e.closest('#map') && !e.closest('#mapBeds > g') && !(c && x >= c.left && x <= c.right && y >= c.top && y <= c.bottom)) p = {{ x, y }}; }}
       return p && {{ x: Math.round(p.x), y: Math.round(p.y), dx: Math.round(v.right - 8 - b.right) }};""")
+    def pan(g):
+        """The map dragged by hand on empty ground, a move at a time as a hand moves it (a burst of moves can be taken as one)."""
+        page.mouse.move(g["x"], g["y"]); page.mouse.down()
+        for k in range(1, 15):
+            page.mouse.move(g["x"] + g["dx"] * k / 14, g["y"]); wait(20)
+        page.mouse.up(); wait(400)
     if grab:
-        page.mouse.move(grab["x"], grab["y"]); page.mouse.down(); page.mouse.move(grab["x"] + grab["dx"], grab["y"], steps=14); page.mouse.up(); wait(400)
+        pan(grab)
     edge = js(f"const v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed=\"{BED}\"]').getBoundingClientRect(); return {{ gap: Math.round(v.right - b.right), sel: S.sel && S.sel.id }};")
     # widened to 1280 whatever the check's width: docked there, the map is narrower than it was at 1100, so the bed is at stake
     page.set_viewport_size({"width": 1280, "height": 960}); wait(900)
@@ -135,6 +141,16 @@ def run(pw):
       return {{ card: !!c, sel: S.sel && S.sel.id, seen: b.left >= v.left - 1 && b.right <= v.right + 1, clear: r ? Math.round(r.left - v.right) : null }};""")
     check("a bed at the map's right edge while the card floats is moved clear when the window widens and the card docks (Codex on #85)",
           bool(grab) and 0 <= edge["gap"] <= 40 and edge["sel"] == BED and redock["card"] and redock["sel"] == BED and redock["seen"] and redock["clear"] is not None and redock["clear"] >= 0, [grab, edge, redock])
+    # the same with a planting of that bed picked: docked by the wider window, the map is asked to move that planting's bed clear,
+    # as it is for a bed picked (the moving itself is the line above) (Codex on #85, on 4cf52d7)
+    page.set_viewport_size({"width": 1100, "height": 960}); wait(500)
+    js(f"A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(500)
+    js("window.__asked = []; const o = LRFMap.revealBed; window.__putBack = () => { LRFMap.revealBed = o; }; LRFMap.revealBed = function (id) { window.__asked.push(id); return o.apply(this, arguments); }; return null;")
+    page.set_viewport_size({"width": 1280, "height": 960}); wait(900)
+    asked = js("const a = window.__asked; window.__putBack(); return { asked: a, kind: card() && card().dataset.kind, sel: S.sel && S.sel.type + ':' + S.sel.id };")
+    check("a planting picked while the card floats: widened to dock the card, the map is asked to move the planting's bed clear of it (Codex on #85)",
+          asked["asked"] == [BED] and asked["kind"] == "planting" and asked["sel"] == "planting:" + PID, asked)
+    js(f"A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(300)
     page.set_viewport_size({"width": WIDTH, "height": 960}); wait(500)
     page.screenshot(path=str(shots / f"map-bed-{WIDTH}.png"))
 
