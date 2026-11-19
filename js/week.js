@@ -218,7 +218,10 @@
     }
     const to = d2s(addDays(s2d(p.date), days));
     // within its own year, or into the season it is for (a December tray sowing for January put off into January)
-    if (!SL.staysIn(engine, p, to)) throw new Error(`That would take it out of ${String(p.date).slice(0, 4)}${SL.seasonOf(engine, p) !== +String(p.date).slice(0, 4) ? ` and of the ${SL.seasonOf(engine, p)} season it is for` : ''}.`);
+    if (!SL.staysIn(engine, p, to)) {
+      const from = String(p.date).slice(0, 4), year = +(engine.plan.settings && engine.plan.settings.year), season = SL.seasonOf(engine, p);
+      throw new Error(+to.slice(0, 4) === year && season === year ? `That would take it out of ${from} and make it ready after the ${season} season it is for.` : `That would take it out of ${from}${+from === year ? ', the plan’s year' : ''}.`);
+    }
     const planting = withTask({ ...p, date: to }, 'delay', kind, date === first ? null : { from: first, to: date });
     // a sowing day set by hand is the day being put off: it goes to the day chosen, and the planting goes out as many days later
     if (kind === 'sow' && p.sowOn) planting.sowOn = date;

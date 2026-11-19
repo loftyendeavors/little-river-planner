@@ -226,6 +226,8 @@ const before = `${Y0}-11-18`, after = `${Y}-01-05`;
   check('a December tray sowing can be put off into the January of the season it is for; the build before refused it', moved && moved.planting.date === later && later.slice(0, 4) === Y && /out of/.test(refused0), [moved && moved.planting.date, refused0]);
   let gone = ''; try { W.delay(eng1, batch, 'sow', `${Y}-12-30`); } catch (e) { gone = e.message; }
   check('put off so far into the plan\'s year that it would be ready in the next, it is refused: it stays the season it is for', new RegExp(`out of ${Y0}`).test(gone), gone);
+  let out = ''; try { W.delay(eng1, end, 'field', `${year + 1}-01-03`); } catch (e) { out = e.message; }
+  check('a sowing late in the plan\'s year for the next season cannot be put off out of the plan\'s year: it would leave every list', new RegExp(`out of ${Y}, the plan`).test(out), out);
   let refused = ''; try { W.delay(eng1, jan, 'field', add(jan.date, 366)); } catch (e) { refused = e.message; }
   check('one of the plan\'s own season is still kept in its year', new RegExp(`out of ${Y}`).test(refused), refused);
 }

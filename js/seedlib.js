@@ -161,12 +161,15 @@
    * for Jan 11 trays), and the work of every planting dated in the year, whatever season it is for (it is done this year).
    */
   const onTasks = (engine, p, year, r) => yearOfDate(p) === +year || seasonOf(engine, p, r) === +year;
-  /** Can a planting's own date move to another day without leaving its year? A day in the season it is for is in it too (a Dec 28
-   * tray batch for January put off into January), so long as the planting, moved there, is still for that season. */
+  /**
+   * Can a planting's own date move to another day without leaving its year? It may cross the New Year only into the plan's own
+   * year, when it is of the plan's season and stays so (a Dec 28 tray batch for January put off into January). Out of the plan's
+   * year it would leave Tasks, Seeds and Take back with no other season to hold it.
+   */
   function staysIn(engine, p, to) {
     if (String(to).slice(0, 4) === String(p.date).slice(0, 4)) return true;
-    const season = seasonOf(engine, p);
-    return +String(to).slice(0, 4) === season && seasonOf(engine, { ...p, date: to }) === season;
+    const year = +(engine.plan && engine.plan.settings && engine.plan.settings.year), season = seasonOf(engine, p);
+    return +String(to).slice(0, 4) === year && season === year && seasonOf(engine, { ...p, date: to }) === season;
   }
   /**
    * The seed a sowing recorded as used, in the unit its lots are kept in. A sowing recorded through its review (recordSowing) says
