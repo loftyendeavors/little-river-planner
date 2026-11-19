@@ -119,13 +119,14 @@
         // his to type. Empty, it is picked with the crop. No date of a planting moves; the line under the box says what it comes to
         const envs = t.from === 'place' ? [t.place] : [...x.places.keys()].filter(env => eng.ENVS.includes(env));
         const days = [...new Set(envs.map(env => eng.timingFor(c.id, null, env)).filter(tm => tm && tm.value != null).map(tm => tm.value))];
-        const said = t.before == null ? `empty: first picked with ${c.name}, on its days to harvest`
+        // empty, it is 0 days before, in grey as what the plan uses now: picked with the crop; typed, the line under it says what it comes to
+        const said = t.before == null ? null
           : days.length === 1 ? `first picked at ${Math.max(1, days[0] - t.before)} days, ${c.name} at ${days[0]}` : `first picked ${t.before} days before ${c.name}, wherever it grows`;
-        return td(h('span.yc-line', box({ key: key(t, 'before'), mine: t.before, fallback: null, whole: true, min: 1, label: label(t, `days before ${c.name}’s first picking`),
+        return td(h('span.yc-line', box({ key: key(t, 'before'), mine: t.before, fallback: 0, whole: true, min: 1, label: label(t, `days before ${c.name}’s first picking`),
           tip: t.before != null ? `Your number: ${t.name} is first picked ${t.before} days before ${c.name}’s days to harvest, and never before a planting is in its bed. No date of a planting moves. Clear it to pick it with ${c.name}.`
             : `Only you can fill this: how many days before ${c.name}’s days to harvest ${t.name} is first picked, as baby carrots are before the big ones. Empty: picked with ${c.name}.`,
           save: k => save(t, { before: k }, k == null ? `first picked with ${c.name}` : `first picked ${k} days before ${c.name}`, 'before') }), h('span.yc-unit', 'days before')),
-          h('small.yc-total', { dataset: { hook: 'thing-first-said' } }, said));
+          said ? h('small.yc-total', { dataset: { hook: 'thing-first-said' } }, said) : null);
       }
       if (id === 'pick') {
         if (!own) return td(why(`as ${c.name} is picked`));

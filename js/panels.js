@@ -556,7 +556,8 @@
       UI.help(null, null, STAND_WORDS, { label: 'What Stand planted in means', hook: 'stand-help', card: { hook: 'stand-help-card' } })),
       standBox(eng, p, r, { id: 'fStand', onFail: () => render() }), h('small', { dataset: { hook: 'stand-said' } }, standSays(eng, p, r)));
   }
-  /** Lines of the Schedule for what it sells that is first picked before its days to harvest (E2c part 2). */
+  /** Lines of the Schedule for what it sells that is first picked before its days to harvest (E2c part 2): before the planting's own
+   *  first harvest, which then reads "Days to harvest", so that the Schedule stays in order and names each day for what it is. */
   function earlyPicks(eng, p, r) {
     return (eng.soldOf(p, r) || []).filter(x => x.ahead).map(x => h('li', { dataset: { hook: 'early-pick', thing: x.thing } }, h('span', `${x.name} from`), h('b', day(x.first))));
   }
@@ -708,8 +709,8 @@
         h('h3', 'Schedule'),
         h('ol.schedule', { id: 'jobList' },
           jobItems(p, r, c, sow),
-          h('li', h('span', 'First harvest'), h('b', day(r.first))),
           earlyPicks(eng, p, r),
+          h('li', { dataset: { hook: 'schedule-first' } }, h('span', eng.soldOf(p, r)?.some(x => x.ahead) ? 'Days to harvest' : 'First harvest'), h('b', day(r.first))),
           h('li', h('span', 'Last harvest'), h('b', r.harvestDays ? day(r.last) : 'None before the season ends')),
           h('li', h('span', 'Ground free again'), h('b', through === Infinity ? 'Stays planted' : day(E.addDays(through, 1)))))),
       failSection(p),

@@ -133,7 +133,8 @@
     const list = row.plantings.map(x => ({ ...x, here: F.share(x, col.i0, col.i1, picked, part) })).filter(x => x.here > 1e-9 && (!dollars() || x.here * (x.price || 0) > 1e-9)).sort((a, b) => b.here - a.here), total = list.reduce((n, x) => n + x.here, 0);
     const worth = list.reduce((n, x) => n + x.here * (x.price || 0), 0);
     const close = () => { dialog.close(); dialog.remove(); };
-    const go = x => { close(); App.setDate(x.r.first > App.state.date ? x.r.first : App.state.date); App.setView('map'); App.select({ type: 'planting', id: x.p.id }); };
+    // to the day it is first picked: a thing's own first picking, where it has one (E2c part 2: it may be days before its crop's)
+    const go = x => { const first = x.from || x.r.first; close(); App.setDate(first > App.state.date ? first : App.state.date); App.setView('map'); App.select({ type: 'planting', id: x.p.id }); };
     const when = x => x.pattern === 'once' ? `all of it ${day(x.from || x.r.first)}` : `picked ${UI.span(x.from || x.r.first, x.to || x.r.last)}`;   // a thing picked on days of its own says those
     const tag = (kind, text, title) => h('span.fc-tag', { dataset: { hook: 'fc-tag', tag: kind }, title: title || null }, text);
     const tags = x => {

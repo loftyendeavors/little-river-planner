@@ -62,7 +62,7 @@ with sync_playwright() as pw:
     def wait(ms): page.wait_for_timeout(ms)
     def shot(name): page.screenshot(path=str(shots / f"{name}.png"))
     def close_dialogs(): js("for (const d of document.querySelectorAll('dialog[open]')) { const b = d.querySelector('.btn.primary'); if (b) b.click(); } return 1;"); wait(300)
-    def popup_tags(crop, thing, pid, before_first):
+    def popup_tags(crop, thing, pid, before_first, go=False):
         """Open the Forecast's popup on a week the planting gives in (before its own first picking when asked) and give its row's tags."""
         js("A.setView('harvest'); return 1;"); wait(600)
         btn = page.locator('[data-hook="fc-season-btn"]')
@@ -75,6 +75,10 @@ with sync_playwright() as pw:
         if not at: return None
         page.locator('[data-hook="fc-table"] tbody tr.hv-row').nth(at["ri"]).locator("td.hv-c").nth(at["ci"]).click(); wait(600)
         tags = js("const d = hook('fc-from'); if (!d) return null; const li = hooks('fc-from-row', d).find(x => x.dataset.planting === arg); return li ? hooks('fc-tag', li).map(x => [x.dataset.tag, txt(x)]) : [];", pid)
+        if go:
+            # "Show on the map" goes to the day it is first picked: a thing's own first picking, days before its crop's
+            js("A.setDate(new Date(A.planYear(), 0, 2)); const d = hook('fc-from'), li = d && hooks('fc-from-row', d).find(x => x.dataset.planting === arg); const b = li && li.querySelector('button.link'); if (b) b.click(); return 1;", pid); wait(500)
+            return tags, js("return { date: E.d2s(S.date), view: S.view, sel: S.sel && S.sel.id };")
         js("const d = document.querySelector('dialog[open]'); if (d) { d.close(); d.remove(); } return 1;"); wait(200)
         return tags
     start = js("return snap();")
@@ -98,9 +102,9 @@ with sync_playwright() as pw:
     check("the case: a thing out of each bed that counts, and one planting grown for it alone", set0["counts"] and set0["gives"] == T, set0)
     js("A.setView('assume'); LRFAssume.setMode('harvest', 'card', arg); return 1;", C); wait(700)
     cell = lambda: js("""const td = document.querySelector(`#ycGrid tr[data-row="first"] td.yc-thing[data-thing="${arg}"]`), box = td && td.querySelector('input[data-yk]');
-      return td ? { yk: box ? box.dataset.yk : null, value: box ? box.value : null, amber: !!(box && box.closest('.yc-box.amber')), mine: !!(box && box.closest('.yc-box.mine')), label: box ? box.getAttribute('aria-label') : '', tip: box ? box.title : '', said: txt(hook('thing-first-said', td)), text: txt(td) } : null;""", T)
+      return td ? { yk: box ? box.dataset.yk : null, value: box ? box.value : null, placeholder: box ? box.placeholder : null, amber: !!(box && box.closest('.yc-box.amber')), mine: !!(box && box.closest('.yc-box.mine')), label: box ? box.getAttribute('aria-label') : '', tip: box ? box.title : '', said: txt(hook('thing-first-said', td)), text: txt(td) } : null;""", T)
     c0 = cell()
-    check("the crop's card: its First picking row has, in the thing's column, a box for days before, empty and not amber, and says an empty box is picked with the crop", c0 and c0["yk"] == f"t|{T}|before" and c0["value"] == "" and not c0["amber"] and c0["said"].startswith("empty: first picked with") and "days before" in c0["label"] and "Only you can fill this" in c0["tip"], c0)
+    check("the crop's card: its First picking row has, in the thing's column, a box for days before, empty and not amber, 0 in grey (picked with the crop), and says it is his to fill", c0 and c0["yk"] == f"t|{T}|before" and c0["value"] == "" and c0["placeholder"] == "0" and not c0["amber"] and c0["said"] == "" and "days before" in c0["label"] and "days before" in c0["text"] and "Only you can fill this" in c0["tip"] and "Empty: picked with" in c0["tip"], c0)
     shot("card-empty")
     s1 = js("return snap();"); d1 = js("return dates(S.engine);")
     js("return typeIn(document.querySelector(`[data-yk=\"t|${arg}|before\"]`), %d);" % N, T); wait(600); close_dialogs()
@@ -122,15 +126,20 @@ with sync_playwright() as pw:
     check("more days before than a planting it comes from is in its bed are refused in a sentence that says how many it can take; nothing changes", "cannot be first picked 3000 days" in big["toast"] and f"Type {max(1, big['room'])} or fewer" in big["toast"] and big["snap"]["plan"] == s2["plan"], [big["toast"], big["room"]])
     # the planting's panel and its row in the bed's season
     js("A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", P0); wait(600)
-    sched = js("const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p), part = eng.soldOf(p, r).find(x => x.thing === arg.T); return { lines: hooks('early-pick').map(li => `${txt(li.querySelector('span'))} ${txt(li.querySelector('b'))}`), want: `Early ones from ${UI.day(part.first)}` };", {"P0": P0, "T": T})
-    check("its panel's Schedule says when the thing is first picked", sched["lines"] == [sched["want"]], sched)
+    sched = js("""const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p), part = eng.soldOf(p, r).find(x => x.thing === arg.T), items = [...document.querySelectorAll('#jobList > li')];
+      const line = li => `${txt(li.querySelector('span'))} ${txt(li.querySelector('b'))}`, early = hooks('early-pick'), own = hook('schedule-first');
+      return { lines: early.map(line), want: `Early ones from ${UI.day(part.first)}`, own: own ? line(own) : null, wantOwn: `Days to harvest ${UI.day(r.first)}`, order: early.length && own ? items.indexOf(early[0]) < items.indexOf(own) : false };""", {"P0": P0, "T": T})
+    check("its panel's Schedule says when the thing is first picked, before the planting's own days to harvest, which no longer reads as its first harvest", sched["lines"] == [sched["want"]] and sched["own"] == sched["wantOwn"] and sched["order"] is True, sched)
     shot("panel-schedule")
     row = js("""const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p), part = eng.soldOf(p, r).find(x => x.thing === arg.T); A.select({ type: 'bed', id: p.bedId });
       return { day: UI.day(part.first) };""", {"P0": P0, "T": T}); wait(600)
     detail = js("const b = document.querySelector(`[data-hook=\"card-planting\"][data-planting=\"${arg}\"]`); return b ? txt(b.querySelector('.row-detail')) : null;", P0)
     check("its row in the bed's season reads its picking from that day", detail is not None and f"pick {row['day']}" in detail, [detail, row])
-    tags = popup_tags(C, T, P0, True)
+    got_go = popup_tags(C, T, P0, True, go=True)
+    tags, went = got_go if isinstance(got_go, tuple) else (got_go, {})
     check("the Forecast's popup, on a week before its days to harvest, lists it with a tag for the days it is picked early", tags is not None and ["early", f"{N} d early"] in tags, tags)
+    first_day = js("const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p); return E.d2s(eng.soldOf(p, r).find(x => x.thing === arg.T).first);", {"P0": P0, "T": T})
+    check("“Show on the map” from it goes to the day the thing is first picked, not to its crop's days to harvest", went.get("date") == first_day and went.get("view") == "map" and went.get("sel") == P0, [went, first_day])
     js("A.undo(); return 1;"); wait(500)
     u1 = js("return { snap: snap(), dates: dates(S.engine) };")
     check("Undo takes the days before back: the plan is as it was", u1["snap"]["plan"] == s1["plan"] and u1["dates"] == d1)

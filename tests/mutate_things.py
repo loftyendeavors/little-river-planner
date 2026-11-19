@@ -104,7 +104,7 @@ PAGE = [
  ("the helper row is shown for a thing whose yield is in its own unit", TH, "if (t.from !== 'harvest') return t.counted ? { label: `A ${one(t.counted)} weighs, packed`, unit: t.unit, value: t.weighs } : null;", "if (t.from !== 'harvest') return { label: `A ${one(t.counted || t.unit)} weighs, packed`, unit: t.unit, value: t.weighs };"),
  ("the card does not say a thing is not counted", TH, "const needs = () => list.filter(t => !t.counts).map(", "const needs = () => list.filter(t => false).map("),
  ("what is still empty in a thing's column is not named beside the button", YC, "    for (const e of root.LRFThings.of({ eng, c, hc, x: of(eng, c.id), box }).empties()) out.push(e);\n", ""),
- ("the first-picking cell does not say an empty box is picked with the crop", TH, "`empty: first picked with ${c.name}, on its days to harvest`", "``"),
+ ("the first-picking cell does not say its box is days before", TH, "h('span.yc-unit', 'days before')),", "h('span.yc-unit', 'days')),"),
  ("the crop's own share is shown as 100", TH, "const inForce = kind => 100 - counting.filter(t => t.from === kind).reduce((n, t) => n + t.share, 0);", "const inForce = kind => 100;"),
  ("the share once the others count is not said", TH, "Math.abs(now - typed) > 1e-9 ? h('small.yc-total.warn'", "false ? h('small.yc-total.warn'"),
  ("a place a thing takes stays a column of the crop's own", TH, "const places = cols => { const left = cols.list.filter(env => !taken.has(env)); return left.length ? { ...cols, list: left } : cols; };", "const places = cols => cols;"),
