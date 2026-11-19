@@ -133,6 +133,15 @@ with sync_playwright() as pw:
     gv = js("return { before: S.plan.assumptions.sell[arg.C].things[arg.T].before, toast: toast() };", {"C": C, "T": T})
     check("a planting grown for the crop alone, however short, does not refuse the days before of a thing it does not give", gv["before"] == N + 1 and "cannot be first picked" not in gv["toast"], gv)
     while js("return S.undo.length;") > u_g: js("A.undo(); return 1;"); wait(200)
+    # a planting grown for a thing since taken away gives every thing of the bed by shares, as soldOf reads it: so it bounds them
+    js("""const before = S.plan.assumptions, after = JSON.parse(JSON.stringify(before)); after.sell[arg.C].things['t-gone-check'] = { ...after.sell[arg.C].things[arg.T], id: 't-gone-check', n: 4, name: 'Gone ones', share: 10, before: undefined };
+      A.commit('another thing, for the check', [{ kind: 'assume', before, after }], { unchecked: true }); A.setGives(arg.P1, 't-gone-check'); A.updatePlanting(arg.P1, { dtm: 2, timingMode: 'manual' }, 'short, for the check');
+      const b2 = S.plan.assumptions, a2 = JSON.parse(JSON.stringify(b2)); delete a2.sell[arg.C].things['t-gone-check']; A.commit('taken away, for the check', [{ kind: 'assume', before: b2, after: a2 }], { unchecked: true }); return 1;""", {"C": C, "T": T, "P1": sub["p1"]}); wait(400)
+    js("A.setView('assume'); LRFAssume.setMode('harvest', 'card', arg); return 1;", C); wait(500)
+    js("return typeIn(document.querySelector(`[data-yk=\"t|${arg.T}|before\"]`), arg.n);", {"T": T, "n": N + 1}); wait(500); close_dialogs()
+    st_g = js("const eng = S.engine, p = eng.planting(arg.P1); return { before: S.plan.assumptions.sell[arg.C].things[arg.T].before, toast: toast(), who: `${A.cropLabel(p)} in ${A.bedLabel(eng.bedOf(p.bedId))}`, gives: p.gives };", {"C": C, "T": T, "P1": sub["p1"]})
+    check("a planting grown for a thing since taken away gives the bed's things by shares: when it is short it refuses the days before, naming it", st_g["gives"] == "t-gone-check" and st_g["before"] == N and "cannot be first picked" in st_g["toast"] and st_g["who"] in st_g["toast"], st_g)
+    while js("return S.undo.length;") > u_g: js("A.undo(); return 1;"); wait(200)
     # a thing from one place: the line under its box says the days it comes to, against its crop's, exactly
     js("""const before = S.plan.assumptions, after = JSON.parse(JSON.stringify(before)), eng = S.engine, env = eng.envOf(eng.bedOf(eng.planting(arg.P0).bedId));
       after.sell[arg.C].things['t-place-check'] = { id: 't-place-check', n: 3, name: 'Place ones', from: 'place', place: env, unit: arg.unit, price: 2, pattern: 'spread', yield: 0.5, before: arg.N };
@@ -225,6 +234,17 @@ with sync_playwright() as pw:
       return { days: [E.d2s(x.first), E.d2s(E.addDays(x.last, 1)), E.d2s(r.first)], text: `pick ${say(x.first, x.last)}, ${say(r.first, r.last)}` };""", {"P0": P0, "T": T})
     gap = bed_reads(gw["days"])
     check("a gap between the thing picked early and the crop's own picking: the season text gives the two windows, and the badge is not picking in the gap", [x["picking"] for x in gap] == [True, False, True] and all(gw["text"] in x["text"] for x in gap), [gap, gw])
+    # the card's life bar: drawn from the same windows, a gap drawn as growing; a planting with no early product as before
+    js("LRFCard.turn(true); A.setView('map'); A.select({ type: 'planting', id: arg }); return 1;", P0); wait(600)
+    bar = lambda pid: js("""const eng = S.engine, p = eng.planting(arg), r = eng.calc(p), segs = [...document.querySelectorAll('[data-hook="card-bar"] .card-bar-track i')].filter(i => /card-bar-(grow|pick)/.test(i.dataset.hook || '')).map(i => [i.dataset.hook.replace('card-bar-', ''), i.dataset.from, i.dataset.to]);
+      const w = eng.pickWindows(p, r), want = [['grow', E.d2s(r.field), E.d2s(E.addDays(w[0][0], -1))]]; w.forEach(([a, b], k) => { if (k) want.push(['grow', E.d2s(E.addDays(w[k - 1][1], 1)), E.d2s(E.addDays(a, -1))]); want.push(['pick', E.d2s(a), E.d2s(b)]); });
+      return { segs, want, own: [E.d2s(r.first), E.d2s(r.last)] };""", pid)
+    b_gap = bar(P0)
+    other = js("const eng = S.engine; const p = S.plan.plantings.find(q => q.cropId !== arg && eng.calc(q) && eng.calc(q).harvestDays > 0 && eng.isSoilBed(eng.bedOf(q.bedId))); return p.id;", C)
+    js("A.select({ type: 'planting', id: arg }); return 1;", other); wait(500)
+    b_old = bar(other)
+    js("LRFCard.turn(false); return 1;"); wait(300)
+    check("the card's life bar draws growing and picking from the same windows as the Pick label, the gap as growing; a planting with no early product grows to its first picking and is picked to its last, as before", b_gap["segs"] == b_gap["want"] and len(b_gap["segs"]) == 4 and b_old["segs"] == b_old["want"] and len(b_old["segs"]) == 2 and b_old["segs"][1][1:] == b_old["own"], [b_gap, b_old])
     while js("return S.undo.length;") > u_alone: js("A.undo(); return 1;"); wait(200)
     js("A.undo(); return 1;"); wait(500)
     u1 = js("return { snap: snap(), dates: dates(S.engine) };")

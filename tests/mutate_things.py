@@ -83,8 +83,8 @@ NODE = [
  # a planting says which of the two it is grown for
  ("a planting said to be for the thing still gives both", EN, "if (only) return [own(only, 1)];", "if (only && false) return [own(only, 1)];"),
  ("a planting said to be for the thing gives it on its share only", EN, "if (only) return [own(only, 1)];", "if (only) return [own(only, only.share / 100)];"),
- ("a planting said to be for the crop alone is still shared out", EN, "const beds = p.gives === 'first' ? [] : shared,", "const beds = shared,"),
- ("a word that names no thing is read as the crop alone", EN, "const beds = p.gives === 'first' ? [] : shared,", "const beds = p.gives ? [] : shared,"),
+ ("a planting said to be for the crop alone is still shared out", EN, "const beds = g === 'first' ? [] : shared,", "const beds = shared,"),
+ ("a word that names no thing is read as the crop alone", EN, "const beds = g === 'first' ? [] : shared,", "const beds = p.gives ? [] : shared,"),
 ]
 PAGE = [
  # adding

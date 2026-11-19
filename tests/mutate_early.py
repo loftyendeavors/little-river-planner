@@ -26,6 +26,9 @@ NODE = [
  ("the part does not say how many days early", EN, "...(ahead ? { ahead } : {}),", ""),
  ("the forecast picks a thing only on the crop's own days", FC, "if (y.first || eng.pickedOn(r, d)) picked.push(i);", "if (eng.pickedOn(r, d)) picked.push(i);"),
  ("the forecast does not carry the days early", FC, "...(y.ahead ? { ahead: y.ahead } : {}),", ""),
+ ("a stand grown for a thing since taken away leaves the bed's things out of its earliest year", EN, "list.filter(t => t.from === 'bed' && (!g || g === t.id));", "list.filter(t => t.from === 'bed' && (!p.gives || p.gives === t.id));"),
+ ("a stand's earliest year takes a bed thing where its place has a thing of its own", EN, "const early = there ? [there] : g === 'first'", "const early = there ? list.filter(t => t.from === 'bed' || t === there) : g === 'first'"),
+ ("soldOf reads a word that names no thing in force as the planting being for the crop alone", EN, "return thingsOf(p.cropId).some(t => t.counts && t.from === 'bed' && t.id === g) ? g : null;", "return thingsOf(p.cropId).some(t => t.counts && t.from === 'bed' && t.id === g) ? g : 'first';"),
  ("an early picking is not among the planting's notes", EN, "if (!x.asked) continue;", "continue;"),
  ("a planting in its bed fewer days than the days before says nothing", EN, "out.push({ k: 'pick', t: x.ahead === x.asked ?", "out.push({ k: 'pick', t: true ?"),
  ("none can apply is not said among the notes", EN, ": `${x.name}: ${x.asked} days early asked; none can apply: it goes into its bed ${d2s(r.field)} and is first picked with ${r.c.name} on ${d2s(x.first)}.` });", ": '' });"),
@@ -55,7 +58,9 @@ NODE = [
 ]
 PAGE = [
  ("the first-picking cell has no box", TH, "return td(h('span.yc-line', box({ key: key(t, 'before'),", "return td(why('with the crop'), h('span.yc-line', box({ key: key(t, 'before') + 'x',"),
- ("a planting grown for the crop alone bounds the days before of a thing", AP, "const gives = r => t.from !== 'bed' || !r.planting.gives || r.planting.gives === t.id;", "const gives = r => true;"),
+ ("a planting grown for the crop alone bounds the days before of a thing", AP, "return t.from !== 'bed' || (g !== 'first' && (!g || g === t.id)); };", "return true; };"),
+ ("a planting grown for a thing since taken away is left out of the bound", AP, "const gives = r => { const g = eng.grownFor(r.planting);", "const gives = r => { const g = r.planting.gives;"),
+ ("the card's life bar is picking from the crop's first picking to its last", CD, "...segments(e.pickWindows(p, r), r.field, pickEnd)", "...segments(r.harvestDays ? [[r.first, r.last]] : [], r.field, pickEnd)"),
  ("too many days before are taken", AP, "if (room != null && want > room) return refuse(", "if (false) return refuse("),
  ("the line under the box does not say what it comes to", TH, "`first picked at ${Math.max(1, days[0] - t.before)} days, ${c.name} at ${days[0]}`", "`first picked with ${c.name}`"),
  ("the Schedule does not say when the thing is first picked", PN, "          earlyPicks(eng, p, r),\n", ""),

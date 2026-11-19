@@ -131,6 +131,13 @@
   }
   const box = (label, control) => h('label.card-box', h('span', label), control);
 
+  /** The bar's growing and picking parts, in order: [kind, from, to (the day after)], from the windows it is picked in. */
+  function segments(windows, field, pickEnd) {
+    if (!windows.length) return [['grow', field, pickEnd]];
+    const out = [['grow', field, windows[0][0]]];
+    windows.forEach(([a, b], i) => { if (i) out.push(['grow', E.addDays(windows[i - 1][1], 1), a]); out.push(['pick', a, E.addDays(b, 1)]); });
+    return out;
+  }
   /** A planting's life as one bar, drawn as the Timeline draws it: the nursery a thin line, growing a tint, picking in full, turnover hatched. */
   function lifeBar(p, r) {
     const e = eng(), color = e.cropColor(r.c), through = e.occupancyThrough(p, r), free = through === Infinity ? null : E.addDays(through, 1);
@@ -141,8 +148,9 @@
     return h('div.card-bar', { dataset: { hook: 'card-bar' }, style: { '--crop': color } },
       h('div.card-bar-track',
         sow ? h('i.cb-nursery', { style: at(sow, r.field) }) : null,
-        h('i.cb-grow', { style: at(r.field, r.harvestDays ? r.first : pickEnd) }),
-        r.harvestDays ? h('i.cb-pick', { style: at(r.first, pickEnd) }) : null,
+        // growing to the first picking, then picking in each window it is picked in (engine.pickWindows, as its Pick label says), a
+        // gap between two drawn as growing; with no early product, one window, its harvest days, as before
+        ...segments(e.pickWindows(p, r), r.field, pickEnd).map(([kind, from, to]) => h(`i.cb-${kind}`, { style: at(from, to), dataset: { hook: `card-bar-${kind}`, from: E.d2s(from), to: E.d2s(E.addDays(to, -1)) } })),
         free ? h('i.cb-turn', { style: at(pickEnd, free) }) : null),
       h('div.card-bar-days', items.map(([k, v]) => h('span', { dataset: { day: k.toLowerCase() } }, k, h('b', v)))));
   }
