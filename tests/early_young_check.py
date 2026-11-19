@@ -122,8 +122,17 @@ with sync_playwright() as pw:
     s2 = js("return snap();")
     js("return typeIn(document.querySelector(`[data-yk=\"t|${arg}|before\"]`), 3000);", T); wait(500); close_dialogs()
     big = js("""const eng = S.engine, fed = S.plan.plantings.map(p => ({ p, r: eng.calc(p) })).filter(x => x.r && x.r.harvestDays > 0 && (eng.soldOf(x.p, x.r) || []).some(q => q.thing === arg));
-      return { toast: toast(), snap: snap(), room: Math.min(...fed.map(x => days(x.r.first, x.r.field))) - 1 };""", T)
-    check("more days before than a planting it comes from is in its bed are refused in a sentence that says how many it can take; nothing changes", "cannot be first picked 3000 days" in big["toast"] and f"Type {max(1, big['room'])} or fewer" in big["toast"] and big["snap"]["plan"] == s2["plan"], [big["toast"], big["room"]])
+      const room = Math.min(...fed.map(x => days(x.r.first, x.r.field))) - 1, tight = fed.find(x => days(x.r.first, x.r.field) - 1 === room);
+      return { toast: toast(), snap: snap(), room, who: `${A.cropLabel(tight.p)} in ${A.bedLabel(tight.r.b)}` };""", T)
+    check("more days before than a planting it comes from is in its bed are refused in a sentence that names that planting and says how many it can take; nothing changes", "cannot be first picked 3000 days" in big["toast"] and big["who"] in big["toast"] and f"Type {max(1, big['room'])} or fewer" in big["toast"] and big["snap"]["plan"] == s2["plan"], [big["toast"], big["room"], big["who"]])
+    # a planting of the crop grown for the crop alone gives nothing of the thing: however short it is, it does not bound the days before
+    u_g = js("return S.undo.length;")
+    js("A.setGives(arg.P1, 'first'); A.updatePlanting(arg.P1, { dtm: 2, timingMode: 'manual' }, 'a short planting for the crop alone, for the check'); return 1;", {"P1": sub["p1"]}); wait(400)
+    js("A.setView('assume'); LRFAssume.setMode('harvest', 'card', arg); return 1;", C); wait(500)
+    js("return typeIn(document.querySelector(`[data-yk=\"t|${arg.T}|before\"]`), arg.n);", {"T": T, "n": N + 1}); wait(500); close_dialogs()
+    gv = js("return { before: S.plan.assumptions.sell[arg.C].things[arg.T].before, toast: toast() };", {"C": C, "T": T})
+    check("a planting grown for the crop alone, however short, does not refuse the days before of a thing it does not give", gv["before"] == N + 1 and "cannot be first picked" not in gv["toast"], gv)
+    while js("return S.undo.length;") > u_g: js("A.undo(); return 1;"); wait(200)
     # a thing from one place: the line under its box says the days it comes to, against its crop's, exactly
     js("""const before = S.plan.assumptions, after = JSON.parse(JSON.stringify(before)), eng = S.engine, env = eng.envOf(eng.bedOf(eng.planting(arg.P0).bedId));
       after.sell[arg.C].things['t-place-check'] = { id: 't-place-check', n: 3, name: 'Place ones', from: 'place', place: env, unit: arg.unit, price: 2, pattern: 'spread', yield: 0.5, before: arg.N };

@@ -55,6 +55,7 @@ NODE = [
 ]
 PAGE = [
  ("the first-picking cell has no box", TH, "return td(h('span.yc-line', box({ key: key(t, 'before'),", "return td(why('with the crop'), h('span.yc-line', box({ key: key(t, 'before') + 'x',"),
+ ("a planting grown for the crop alone bounds the days before of a thing", AP, "const gives = r => t.from !== 'bed' || !r.planting.gives || r.planting.gives === t.id;", "const gives = r => true;"),
  ("too many days before are taken", AP, "if (room != null && want > room) return refuse(", "if (false) return refuse("),
  ("the line under the box does not say what it comes to", TH, "`first picked at ${Math.max(1, days[0] - t.before)} days, ${c.name} at ${days[0]}`", "`first picked with ${c.name}`"),
  ("the Schedule does not say when the thing is first picked", PN, "          earlyPicks(eng, p, r),\n", ""),

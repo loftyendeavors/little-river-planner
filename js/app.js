@@ -618,10 +618,13 @@
     if ('before' in change && change.before != null) {
       // first picked before the crop's days to harvest (E2c part 2): never before a planting it comes from is in its bed, so that
       // the number means the same in every bed
-      const want = Math.round(+change.before), fed = t.from === 'harvest' ? [] : thingPlantings(eng, cropId, t).filter(r => r.harvestDays > 0), room = fed.length ? Math.min(...fed.map(r => E.dayDiff(r.first, r.field) - 1)) : null;
+      // only the plantings that give it, as soldOf gives them: one grown for the crop alone, or for another thing, is not (Codex on #83)
+      const gives = r => t.from !== 'bed' || !r.planting.gives || r.planting.gives === t.id;
+      const want = Math.round(+change.before), fed = t.from === 'harvest' ? [] : thingPlantings(eng, cropId, t).filter(r => r.harvestDays > 0 && gives(r));
+      const room = fed.length ? Math.min(...fed.map(r => E.dayDiff(r.first, r.field) - 1)) : null, tight = room == null ? null : fed.find(r => E.dayDiff(r.first, r.field) - 1 === room);
       if (t.from === 'harvest') return refuse(`${t.name} is packed from ${c.name}’s harvest, so it is picked when ${c.name} is.`);
       if (!(want >= 1)) return refuse('Days before are a whole number from 1. Empty the box to pick it with the crop.');
-      if (room != null && want > room) return refuse(`${t.name} cannot be first picked ${want} days before ${c.name}: a planting it comes from goes into its bed only ${room + 1} days before its days to harvest. Type ${Math.max(1, room)} or fewer, or empty the box to pick it with ${c.name}.`);
+      if (room != null && want > room) return refuse(`${t.name} cannot be first picked ${want} days before ${c.name}: ${cropLabel(tight.planting)} in ${bedLabel(tight.b)} goes into its bed only ${room + 1} days before its days to harvest. Type ${Math.max(1, room)} or fewer, or empty the box to pick it with ${c.name}.`);
     }
     if ('days' in change && change.days != null && t.from !== 'harvest') {
       // a thing is never picked after its planting's last picking: more days than its plantings have would only cut what it counts as
