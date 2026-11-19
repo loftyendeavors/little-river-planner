@@ -193,6 +193,30 @@ with sync_playwright() as pw:
         went2.append(g[1].get("date") if isinstance(g, tuple) else None)
     check("“Show on the map” from each goes to its own first day", went2 == [two["firsts"][T2], two["firsts"][T]], [went2, two["firsts"]])
     js("A.undo(); return 1;"); wait(300)
+    # the map's badge and the bed's season text come from the same windows: grown for the thing alone, or for both with the thing at 100%
+    # of the bed, they are the same on its last day, the day after and its crop's first day; and a gap between two parts stays a gap
+    def bed_reads(days_):
+        out = []
+        for d in days_:
+            js("A.setDate(E.s2d(arg.d)); A.setView('map'); A.select({ type: 'bed', id: S.engine.planting(arg.p).bedId }); return 1;", {"d": d, "p": P0}); wait(400)
+            out.append(js("""const row = document.querySelector(`[data-hook="card-planting"][data-planting="${arg}"]`), f = document.querySelector(`#mapBeds .bed-fill[data-planting="${arg}"]`);
+              return { text: row ? txt(row.querySelector('.row-detail')) : null, picking: f ? f.classList.contains('pick') : null };""", P0))
+        return out
+    win = js("""const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p), x = eng.soldOf(p, r).find(q => q.thing === arg.T), say = (a, b) => a.getMonth() === b.getMonth() ? `${UI.day(a)} – ${b.getDate()}` : UI.span(a, b);
+      return { days: [E.d2s(x.last), E.d2s(E.addDays(x.last, 1)), E.d2s(r.first)], text: `pick ${say(x.first, x.last)}` };""", {"P0": P0, "T": T})
+    alone = bed_reads(win["days"]); u_alone = js("return S.undo.length;")
+    js("""const before = S.plan.assumptions, after = JSON.parse(JSON.stringify(before)); after.sell[arg.C].things[arg.T].share = 100;
+      A.commit('the thing at 100% of the bed, for the check', [{ kind: 'assume', before, after }], { unchecked: true }); A.setGives(arg.P0, 'both'); return 1;""", {"C": C, "T": T, "P0": P0}); wait(400)
+    shares = bed_reads(win["days"])
+    check("grown for the thing alone, or for both with the thing at 100% of the bed: the same badge and the same season text on its last day, the day after and its crop's first day, picking on the first only", [x["picking"] for x in alone] == [True, False, False] and alone == shares and all(win["text"] in x["text"] and "," not in x["text"].split("pick")[1] for x in alone), [alone, shares, win])
+    while js("return S.undo.length;") > u_alone: js("A.undo(); return 1;"); wait(200)
+    js("""const before = S.plan.assumptions, after = JSON.parse(JSON.stringify(before)); after.sell[arg.C].things[arg.T].days = 2;
+      A.commit('two days of the thing, for the check', [{ kind: 'assume', before, after }], { unchecked: true }); A.setGives(arg.P0, 'both'); return 1;""", {"C": C, "T": T, "P0": P0}); wait(400)
+    gw = js("""const eng = S.engine, p = eng.planting(arg.P0), r = eng.calc(p), x = eng.soldOf(p, r).find(q => q.thing === arg.T), say = (a, b) => a.getMonth() === b.getMonth() ? `${UI.day(a)} – ${b.getDate()}` : UI.span(a, b);
+      return { days: [E.d2s(x.first), E.d2s(E.addDays(x.last, 1)), E.d2s(r.first)], text: `pick ${say(x.first, x.last)}, ${say(r.first, r.last)}` };""", {"P0": P0, "T": T})
+    gap = bed_reads(gw["days"])
+    check("a gap between the thing picked early and the crop's own picking: the season text gives the two windows, and the badge is not picking in the gap", [x["picking"] for x in gap] == [True, False, True] and all(gw["text"] in x["text"] for x in gap), [gap, gw])
+    while js("return S.undo.length;") > u_alone: js("A.undo(); return 1;"); wait(200)
     js("A.undo(); return 1;"); wait(500)
     u1 = js("return { snap: snap(), dates: dates(S.engine) };")
     check("Undo takes the days before back: the plan is as it was", u1["snap"]["plan"] == s1["plan"] and u1["dates"] == d1)

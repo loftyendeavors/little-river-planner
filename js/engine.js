@@ -1351,29 +1351,24 @@
       return (ahead ? addDays(r.first, -ahead) : r.first).getFullYear();
     }
     /**
-     * The first day a planting is picked, for the screens that say "picking" (the map, the bed's season): the earliest first picking of
-     * what it is grown for, something else its crop sells perhaps days before its days to harvest, with the days that apply; a part
-     * picked before its stand is planted does not count.
+     * The days a planting is picked, for the screens that say "picking" (the map, the bed's season): a list of windows [from, to], in
+     * order, joined where they touch. Where what it is grown for has a day before or a stand's age in it (E2c part 2), the own days of
+     * each sold part that gets something (not one picked before its stand is planted, nor one with a share or an amount of 0); a gap
+     * between two parts stays a gap. Otherwise its harvest period, as before. Empty where it is not picked.
      */
-    function pickedFrom(p, r) {
+    function pickWindows(p, r) {
       r = r || calc(p);
-      const parts = r ? soldOf(p, r) : null;
-      if (!parts) return r ? r.first : null;
-      return new Date(Math.min(+r.first, ...parts.filter(x => !(x.age && x.age.season === 0)).map(x => +(x.first || r.first))));
+      if (!r || !(r.harvestDays > 0)) return [];
+      const y = yieldOf(p, r), parts = y ? soldOf(p, r, y) || [y] : null;
+      if (!parts || !parts.some(x => x && (x.asked || x.age))) return [[r.first, r.last]];
+      const list = parts.filter(x => x && x.units > 0 && !(x.age && !(x.age.share > 0))).map(x => [x.first || r.first, x.last || r.last]).sort((a, b) => a[0] - b[0]), out = [];
+      for (const [a, b] of list) { const last = out[out.length - 1]; if (last && +a <= +addDays(last[1], 1)) { if (b > last[1]) last[1] = b; } else out.push([a, b]); }
+      return out;
     }
-    /**
-     * Is a planting being picked on a day, for the screens that say "picking" (the map, the bed's season)? Where what it is grown for is
-     * picked on days of its own with a day before or a stand's age in it (E2c part 2), only inside one of those parts' own days that
-     * counts: not across a gap between two, and not a part that gives nothing (picked before its stand is planted, or a share of 0).
-     * Otherwise its harvest period, as before.
-     */
-    function pickingOn(p, r, date) {
-      r = r || calc(p);
-      if (!r) return false;
-      const y = yieldOf(p, r), parts = y ? soldOf(p, r, y) : null, live = x => !(x.age && !(x.age.share > 0));
-      if (!(parts || [y]).some(x => x && (x.asked || x.age))) return pickedOn(r, date);
-      return (parts || [y]).some(x => live(x) && date >= (x.first || r.first) && date <= (x.last || r.last));
-    }
+    /** The first day a planting is picked, for those screens: its first window's. */
+    const pickedFrom = (p, r) => { const w = pickWindows(p, r); return w.length ? w[0][0] : (r || calc(p) || {}).first || null; };
+    /** Is a planting being picked on a day, for those screens: inside one of its windows. */
+    const pickingOn = (p, r, date) => pickWindows(p, r).some(([a, b]) => date >= a && date <= b);
     /** Is this a day the crop is picked? Any day of its harvest period. */
     const pickedOn = (r, date) => date >= r.first && date <= r.last;
     /** The harvest days a total is shared over: those there are, but for a crop cleared in one day before the frost cut its days short. */
@@ -1541,7 +1536,7 @@
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
       heatedTraySpaces, benchRoom, coolRules, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
       yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, thingsOf, soldOf, givenOf, WEIGHED, COUNTED, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
-      aheadOf, standAge, standYear, youngFor, pickedFrom, pickingOn,
+      aheadOf, standAge, standYear, youngFor, pickedFrom, pickingOn, pickWindows,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, startRule, startFixed, startHint, STARTS, START_LESS, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,

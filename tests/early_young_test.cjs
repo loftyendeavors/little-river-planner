@@ -98,6 +98,17 @@ const mine = x => x.parts.find(q => q.thing === T);
     const sample = [0, 60, 120, 180, 240, 300].map(k => E.addDays(new Date(year, 0, 1), k)), e0 = E.create(given, Lib);
     check('with the boxes empty, “picking” is the planting’s own harvest days, as before, for every planting and day', given.plantings.every(p => { const r = e0.calc(p); return !r || sample.every(d => e0.pickingOn(p, r, d) === e0.pickedOn(r, d)); }));
   }
+  // the windows: grown for the thing alone, or for both with the thing at 100% of the bed (the base part gets nothing): the same; and
+  // a gap between the thing picked early and the crop's own line stays a gap (Codex on #83)
+  {
+    const w = e => e.pickWindows(e.planting(P0)).map(([x, y]) => iso(x) + '..' + iso(y)).join(' '), alone = typed;
+    const all = E.create(withPlanting(withSell(given, C, { things: { [T]: thing({ days: 5, before: N, share: 100 }) } }), P0, {}), Lib);
+    check('a planting grown for the thing alone, and one grown for both by shares with the thing at 100% of the bed, are picked in the same window', w(alone) === w(all) && w(alone) === `${iso(qb.first)}..${iso(qb.last)}`, [w(alone), w(all)]);
+    const gap = E.create(withPlanting(withSell(given, C, { things: { [T]: thing({ days: 2, before: N }) } }), P0, {}), Lib), xg = partOf(gap, P0), qg = mine(xg), wg = gap.pickWindows(gap.planting(P0));
+    check('grown for both by shares, the thing picked two days from N days early and the crop from its own first picking: two windows, and no picking in the gap', N > 2 && wg.length === 2 && +wg[0][0] === +qg.first && +wg[0][1] === +qg.last && +wg[1][0] === +xg.r.first && !gap.pickingOn(gap.planting(P0), null, E.addDays(qg.last, 1)), wg.map(([x, y]) => [iso(x), iso(y)]));
+    const e0 = E.create(given, Lib), e00 = E0.create(given, Lib);
+    check('with the boxes empty every planting’s window is its own harvest days, as the build before has them', given.plantings.every(p => { const r = e0.calc(p), r0 = e00.calc(p); if (!r) return true; const ww = e0.pickWindows(p, r); return r.harvestDays > 0 ? ww.length === 1 && +ww[0][0] === +r0.first && +ww[0][1] === +r0.last : ww.length === 0; }));
+  }
   const notes = typed.warnings(typed.planting(P0)).filter(w => w.k === 'pick');
   check('the planting’s notes say when it is first picked, and how many days before its days to harvest', notes.length === 1 && notes[0].t.includes(iso(qb.first)) && notes[0].t.includes(`${N} days before`) && notes[0].t.includes(iso(b.r.first)), notes);
   check('and say nothing where no days before are typed', !base.warnings(base.planting(P0)).some(w => w.k === 'pick'));
