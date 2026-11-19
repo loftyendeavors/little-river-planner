@@ -12,9 +12,11 @@
  "code": [
   "engine.js",
   "planio.js",
+  "rails.js",
   "seedlib.js",
   "seeds.js",
-  "sowing.js"
+  "sowing.js",
+  "succession.js"
  ],
  "added": [],
  "removed": [],

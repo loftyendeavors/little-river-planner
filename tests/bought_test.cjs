@@ -24,7 +24,7 @@ process.on('exit', () => {
 });
 global.window = global;
 const req = f => require(path.resolve(app, 'js', f));
-const Lib = req('library.js'), E = req('engine.js'), IO = req('planio.js'), SL = req('seedlib.js'), W = req('week.js'), N = req('nursery.js'), M = req('merge.js'), F = req('forecast.js');
+const Lib = req('library.js'), E = req('engine.js'), IO = req('planio.js'), SL = req('seedlib.js'), W = req('week.js'), N = req('nursery.js'), M = req('merge.js'), F = req('forecast.js'), Rails = req('rails.js'), S = req('succession.js');
 const Held = require('./bought_held.cjs');
 const raw = JSON.parse(fs.readFileSync(planFile, 'utf8'));
 const plan = raw.format ? IO.unpack(raw) : IO.split(raw).core;
@@ -95,6 +95,33 @@ tryCase('a live tray is always sown, and a standing crop needs nothing, whatever
   const q = { ...tray, startedFrom: 'plant' }, e = E.create(put(plan, q), Lib), r = e.calc(q), r0 = eng.calc(tray);
   const sq = { ...seedTP, established: true, startedFrom: 'plant' }, se = E.create(put(plan, sq), Lib), rs = se.calc(sq);
   return [e.startedFrom(q) === 'seed' && !r.boughtIn && r.seedG === r0.seedG && r.seeds === r0.seeds && !!rs && !rs.boughtIn && !(rs.buy > 0) && rs.seeds === 0 && rs.trays === 0, [r0.seeds, r.seeds, rs && rs.buy]];
+});
+tryCase('a sowing recorded before a crop was bought in stays on record: the planting reads as sown, its sowing on Tasks, and it can be taken back', () => {
+  const ctx = { now: `${year}-12-31T12:00:00.000Z`, uid: (() => { let n = 0; return () => 'r-' + (++n); })(), year, name: '', today: `${year}-12-31` };
+  const asSeed = { ...byCrop, startedFrom: 'seed' }, e0 = E.create(put(plan, asSeed), Lib), s0 = SL.sowing(e0, asSeed);
+  const rec = SL.recordSowing(e0, plan.seedInventory || SL.emptyInventory(), asSeed, { date: E.d2s(s0.planned) }, ctx), q = { ...rec.planting }; delete q.startedFrom;
+  const e = E.create({ ...put(plan, q), seedInventory: rec.inventory || plan.seedInventory }, Lib), r = e.calc(q), st = W.steps(e, q);
+  const back = SL.takeBackSowing(e, rec.inventory || plan.seedInventory, q, ctx);
+  return [e.startedFrom(q) === 'seed' && !r.boughtIn && !!r.plannedSow && st.some(x => x.kind === 'sow' && x.done) && prop(e, q) && !!back && !(back.planting.done && back.planting.done.sow), { from: e.startedFrom(q), steps: st.map(x => x.kind + (x.done ? '✓' : '')) }];
+});
+tryCase('two devices: one says bought in, the other records the sowing: joined, the recorded sowing stands', () => {
+  const ctx = { now: `${year}-12-31T12:00:00.000Z`, uid: (() => { let n = 0; return () => 'm-' + (++n); })(), year, name: '', today: `${year}-12-31` }, s0 = SL.sowing(eng, seedTP);
+  const rec = SL.recordSowing(eng, plan.seedInventory || SL.emptyInventory(), seedTP, { date: E.d2s(s0.planned) }, ctx);
+  const mine = put(plan, { ...seedTP, startedFrom: 'plant' }), theirs = { ...put(plan, rec.planting), seedInventory: rec.inventory || plan.seedInventory }, r = M.merge(plan, mine, theirs), p = r.plan.plantings.find(x => x.id === seedTP.id), e = E.create(r.plan, Lib);
+  return [p.startedFrom === 'plant' && !!(p.done && p.done.sow) && e.startedFrom(p) === 'seed' && !e.calc(p).boughtIn && !!e.calc(p).plannedSow, { from: p.startedFrom, said: e.startedFrom(p) }];
+});
+tryCase('a copy of a planting bought in is a later succession: it follows its crop; a move keeps the planting\'s word', () => {
+  const r0 = eng.calc(plugs), at = { bedId: plugs.bedId, date: E.addDays(r0.field, 120) }, copy = Rails.propose(eng, { plantingId: plugs.id, copy: true }, at), move = Rails.propose(eng, { plantingId: plugs.id }, at);
+  return [!!copy.p && copy.p.startedFrom === undefined && !!move.p && move.p.startedFrom === 'plant', { copy: copy.p && copy.p.startedFrom, move: move.p && move.p.startedFrom }];
+});
+check('a series modelled on a planting bought in drops its word, as it drops what was recorded', S.RECORD_FIELDS ? S.RECORD_FIELDS.includes('startedFrom') : /'startedFrom'\]/.test(fs.readFileSync(path.resolve(app, 'js', 'succession.js'), 'utf8')));
+tryCase('marking one planting bought in changes no other planting\'s days, and another\'s cells, seed or trays only where it shared a sowing batch with it', () => {
+  const e = E.create(put(plan, { ...seedTP, startedFrom: 'plant' }), Lib), batch = (eng.calc(seedTP).sowing || {}).batchId, group = ((eng.calc(seedTP).sowing || {}).trayGroup || {}).id;
+  const off = plan.plantings.filter(p => p.id !== seedTP.id).filter(p => { const a = eng.calc(p), b = e.calc(e.planting(p.id)); if (!a !== !b) return true; if (!a) return false;
+    if ([a.sow, a.field, a.first, a.last].map(D).join() !== [b.sow, b.field, b.first, b.last].map(D).join()) return true;
+    const same = a.cells === b.cells && a.seeds === b.seeds && Math.abs(a.trays - b.trays) < 1e-9, mate = (a.sowing && (a.sowing.batchId === batch || (a.sowing.trayGroup && a.sowing.trayGroup.id === group)));
+    return !same && !mate; });
+  return [off.length === 0, off.slice(0, 5).map(p => p.id)];
 });
 check('a value other than seed or bought in is not read', (() => { const q = { ...seedTP, startedFrom: 'bulb' }; return E.create(put(plan, q), Lib).startedFrom(q) === 'seed'; })());
 

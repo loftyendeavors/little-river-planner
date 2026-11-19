@@ -112,6 +112,13 @@ def run(pw):
     js(page, "A.undo(); return null;"); page.wait_for_timeout(700)
     check("Undo gives the plan back exactly, again", js(page, "return JSON.stringify(S.plan);") == start["plan"])
 
+    # ── Bought in, then Seed, on one planting, before the panel is drawn again: each reads the planting as it stands ──
+    js(page, "const s = sw(arg.sown); for (const to of ['plant', 'seed']) { const b = s && [...s.querySelectorAll('button')].find(x => x.dataset.to === to); if (b) b.click(); } return null;", pick); page.wait_for_timeout(900)
+    q = js(page, "const p = S.engine.planting(arg.sown); return { said: S.engine.startedFrom(p), undo: S.undo.length };", pick)
+    check("Bought in then Seed at once on one planting: the second reads the first, and the planting is sown again, in two steps", q["said"] == "seed" and q["undo"] == start["undo"] + 2, q)
+    js(page, "A.undo(); A.undo(); return null;"); page.wait_for_timeout(700)
+    check("two Undos give the plan back exactly", js(page, "return JSON.stringify(S.plan);") == start["plan"])
+
     # ── the list: a variety counted two ways has a second line, in plants ──
     js(page, "LRFSeeds.select(null); return null;"); page.wait_for_timeout(700)
     lines = js(page, """const row = document.querySelector('tr.sd-var[data-variety="' + arg.tv + '"]'), alt = hooks('seeds-alt-row').filter(r => r.dataset.altFor === arg.tv);
@@ -130,6 +137,20 @@ def run(pw):
     check("the lot typed in the panel is the variety's, in one step, and its plants are covered in lots of it", c["lot"] == 72 and c["undo"] == start["undo"] + 1 and c["cover"] and c["cover"]["total"] % 72 == 0, c)
     js(page, "A.undo(); return null;"); page.wait_for_timeout(700)
     check("Undo takes the lot back", js(page, "return JSON.stringify(S.plan);") == start["plan"])
+
+    # ── the grower, then the lot, typed one after the other before the panel is drawn again (Codex on #81): both are kept, and the
+    # other way round too; the order sheet then lists the plants under that grower in whole lots ──
+    for first, second, a1, a2 in (("buy-from", "buy-lot", "A plug grower", "72"), ("buy-lot", "buy-from", "72", "A plug grower")):
+        js(page, "LRFSeeds.select({ type: 'variety', id: arg.tv }); return null;", pick); page.wait_for_timeout(900)
+        # both changes in one turn of the page, before it can draw the panel again: what a quick hand can do, every time
+        js(page, "for (const [n, x] of arg) { const el = hook(n); if (el) { el.value = x; el.dispatchEvent(new Event('change', { bubbles: true })); } } return null;", [[first, a1], [second, a2]]); page.wait_for_timeout(1200)
+        g = js(page, """const v = S.engine.variety(arg.tv), rows = SL.required(S.engine, { today: A.today() }).rows.map(r => ({ ...r, short: r.toSow }));
+          const sheet = SL.orderSheet(rows, (a, u, x) => SL.toCover(a, u, x)), grp = sheet.groups.find(x => x.lines.some(l => l.variety.id === arg.tv && l.unit === 'plants')), line = grp && grp.lines.find(l => l.variety.id === arg.tv && l.unit === 'plants');
+          return { from: v.buyFrom || '', lot: v.buyLot || 0, undo: S.undo.length, group: grp ? grp.name : '', buy: line ? line.buy : 0, amount: line ? line.amount : 0 };""", pick)
+        check("the %s typed, then the %s at once: both are kept, in two steps, and the plants are listed under that grower in whole lots of 72" % (first.replace("buy-", ""), second.replace("buy-", "")),
+              g["from"] == "A plug grower" and g["lot"] == 72 and g["undo"] == start["undo"] + 2 and g["group"] == "A plug grower" and g["buy"] % 72 == 0 and g["buy"] >= g["amount"] > 0, g)
+        js(page, "A.undo(); A.undo(); return null;"); page.wait_for_timeout(800)
+        check("two Undos take both back", js(page, "return JSON.stringify(S.plan);") == start["plan"])
 
     # ── the order sheet: plants beside seed, under the grower, in whole lots; ordered, then arrived ──
     js(page, "LRFSeeds.select(null); return null;"); page.wait_for_timeout(500)

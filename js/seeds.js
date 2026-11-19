@@ -498,6 +498,8 @@
     return { eng, plan, live, need, stock, used, usedCrop, byV, byCrop, unlisted, hasStock: Object.keys(stock).length > 0 };
   }
   // a live-tray crop sown in cells is counted in seeds; broadcast in an open tray, by weight
+  /** A variety's own unit for a new lot: plants where every planting of it is bought in, otherwise its crop's. */
+  const unitOfVariety = v => { const eng = App.state.engine, mine = App.state.plan.plantings.filter(p => p.varietyId === v.id && eng.calc(p)); return mine.length && mine.every(p => eng.startedFrom(p) === 'plant') ? 'plants' : unitFor(eng.crop(v.cropId)); };
   const unitFor = crop => (crop && crop.micro ? (App.state.engine.liveSow(crop).how === 'cells' ? 'seeds' : 'g') : crop && crop.plantingMaterial === 'plant' ? 'plants' : 'seeds');
   // ── stock, edited where it is shown ──
   function receive(key, unit, name) {
@@ -669,7 +671,7 @@
   // The line at the top of the view is for a packet named by typing. From a variety's own row, "+ lot" opens this one
   // under that row, so the eye does not leave it; × or Escape closes it and nothing is added.
   const lotRow = { varietyId: '', vendor: '', year: String(new Date().getFullYear()), amount: '', status: 'usable', focus: '', node: null };
-  const stockUnitOf = v => { const stock = App.stockNow(); return SL.STOCK_UNITS.find(u => stock['v:' + v.id + '|' + u]) || unitFor(App.state.engine.crop(v.cropId)); };
+  const stockUnitOf = v => { const stock = App.stockNow(); return SL.STOCK_UNITS.find(u => stock['v:' + v.id + '|' + u]) || unitOfVariety(v); };
   function knownVendors() {
     const seen = new Map(), live = App.state.plan.varieties.filter(v => v.active !== false && !v.deleted);
     for (const s of [...live.map(v => v.supplier || (v.source === 'Farm entry' ? '' : v.source) || ''), ...((App.inventoryNow().lots || []).map(l => (l && l.supplier) || ''))]) { const key = SL.supplierKey(s); if (key && !/\.[a-z]{2,}$/i.test(s.trim()) && !seen.has(key)) seen.set(key, s.trim()); }
@@ -928,7 +930,7 @@
     if (!ui.sel) {
       // with nothing picked the panel holds the page's one line of figures, and one action for the day the box comes. What stood
       // here as notices is in Loose ends in the header; seed on order is a filter of the list (DESIGN.md, rules 1 and 4)
-      const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), plants = rows.reduce((n, r) => n + (r.unit === 'plants' ? r.toSow : 0), 0), short = [...m.byV.values()].filter(r => r.short > 0).length, onOrder = m.live.filter(v => passes(m, v, 'ordered')).length;
+      const rows = m.need.rows.filter(r => r.toSow > 0), seeds = rows.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0), plants = rows.reduce((n, r) => n + (r.unit === 'plants' ? r.toSow : 0), 0), short = [...m.byV.values()].filter(r => rowsOf(r).some(x => (x.unit === 'seeds' || x.unit === 'g') && x.short > 0)).length, onOrder = m.live.filter(v => passes(m, v, 'ordered')).length;
       add(el, h('header.sd-ph.plain', h('div', h('p.eyebrow', `${App.planYear()} season`), h('h2', 'Seed library'))),
         h('p.frame-figs', { id: 'sdFigs' }, h('span', h('b', num(m.live.length)), ' varieties, ', h('b', num(m.live.filter(v => m.used.has(v.id)).length)), ' planted'), h('span', h('b', num(seeds)), ' seeds to sow'), plants ? h('span', { dataset: { hook: 'seeds-plants-figure' } }, h('b', num(plants)), ' plants to buy') : null, h('span', h('b', num(short)), ' short of seed'), onOrder ? h('span', h('b', num(onOrder)), ' on order') : null),
         Object.values(m.stock).some(x => x.onOrder > 0) ? h('p.sd-arrived', h('button.btn.small', { type: 'button', id: 'sdReceiveAll', title: 'When the box comes: every order becomes seed on hand, as ordered. One Undo puts them back. To count one order, click it.', onclick: receiveAll }, 'All orders arrived…')) : null);
@@ -991,13 +993,15 @@
     if (!canChoose(p, r)) return h('span');
     const eng = App.state.engine, now = eng.startedFrom(p), fixed = !!(s && s.sown);
     const set = async to => {
-      if (to === now) return;
-      if (fixed) { toast('Work is already recorded for this planting. Take it back on Tasks first.'); return; }
+      // the planting and the engine as they stand now, not as the panel was drawn
+      const eng = App.state.engine, cur = eng.planting(p.id) || p, s = App.sowingOf(cur);
+      if (to === eng.startedFrom(cur)) return;
+      if (s && s.sown) { toast('Work is already recorded for this planting. Take it back on Tasks first.'); return; }
       // the crop's own word (as the planting holds its crop) needs nothing written; anything else is the planting's
-      const plain = { ...p }; delete plain.startedFrom;
+      const plain = { ...cur }; delete plain.startedFrom;
       const after = eng.startedFrom(plain) === to ? plain : { ...plain, startedFrom: to };
-      const need = eng.calc(p), what = to === 'plant' ? `bought in, ${num(Math.ceil(need.plants * (1 + (+App.state.plan.settings.buffer || 0) / 100) - 1e-9))} plants to buy${need.sow ? `, no sowing on ${day(need.sow)}` : ''}` : 'sown from seed';
-      if (await App.revise(`${v.name}, ${day(r.field)}: ${what}`, [{ before: p, after }])) { ui.panelKey = ''; schedule(); }
+      const need = eng.calc(cur), what = to === 'plant' ? `bought in, ${num(Math.ceil(need.plants * (1 + (+App.state.plan.settings.buffer || 0) / 100) - 1e-9))} plants to buy${need.sow ? `, no sowing on ${day(need.sow)}` : ''}` : 'sown from seed';
+      if (await App.revise(`${v.name}, ${day(r.field)}: ${what}`, [{ before: cur, after }])) { ui.panelKey = ''; schedule(); }
     };
     return h('div.seg.sd-from', { role: 'group', 'aria-label': `${v.name}, ${day(r.field)}: started from`, dataset: { from: now, hook: 'planting-from' } },
       [['seed', 'Seed'], ['plant', 'Bought in']].map(([id, label]) => h('button', { type: 'button', 'aria-pressed': String(now === id), disabled: fixed && now !== id, dataset: { to: id }, title: fixed ? 'Work is recorded for this planting' : id === 'plant' ? 'Bought in as plugs or plants: no sowing, tray or mix' : 'Sown on the farm', onclick: () => set(id) }, label)));
@@ -1011,11 +1015,13 @@
     const bought = plan.plantings.some(p => p.varietyId === v.id && eng.startedFrom(p) === 'plant');
     if (!bought && said === 'seed' && !v.buyLot && !v.buyFrom) return null;
     const unit = said === 'bulb' ? 'bulbs' : said === 'clove' ? 'cloves' : said === 'piece' ? 'seed pieces' : 'plants';
+    // read the variety as it stands when the box is changed, not as the panel was drawn: a second box changed before the panel is
+    // drawn again would otherwise write the first one's value back over it
     const put = async (key, raw, label) => {
-      const after = { ...v };
+      const was = App.state.engine.variety(v.id) || v, after = { ...was };
       if (raw === '' || raw == null) delete after[key]; else after[key] = raw;
-      if (JSON.stringify(after) === JSON.stringify(v)) return;
-      if (!(await App.revise(label, [{ kind: 'variety', before: v, after }]))) { ui.panelKey = ''; schedule(); }
+      if (JSON.stringify(after) === JSON.stringify(was)) return;
+      if (!(await App.revise(label, [{ kind: 'variety', before: was, after }]))) { ui.panelKey = ''; schedule(); }
     };
     const lot = h('input', { type: 'number', min: 1, step: 1, value: v.buyLot || '', placeholder: '—', 'aria-label': `${v.name}: sold in lots of`, dataset: { hook: 'buy-lot' }, onkeydown: e => { if (e.key === 'Enter') e.target.blur(); },
       onchange: e => {
@@ -1198,7 +1204,7 @@
     add(host, form, say);
 
     const picked = () => (quick.varietyId ? eng().variety(quick.varietyId) : null);
-    const stockUnitOf = v => { const crop = eng().crop(v.cropId), stock = App.stockNow(); return SL.STOCK_UNITS.find(u => stock['v:' + v.id + '|' + u]) || unitFor(crop); };
+    const stockUnitOf = v => { const stock = App.stockNow(); return SL.STOCK_UNITS.find(u => stock['v:' + v.id + '|' + u]) || unitOfVariety(v); };
     const typedMatch = () => { const key = SL.norm(name.value); return key ? live().filter(v => SL.norm(v.name) === key) : []; };
     function unit() { const v = picked(); return v ? stockUnitOf(v) : unitFor(cropPick.value ? eng().crop(cropPick.value) : null); }
     function sync() {

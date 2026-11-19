@@ -11,11 +11,14 @@ app, scratch, tests, plan = [Path(x).resolve() for x in sys.argv[1:5]]
 mode = sys.argv[5] if len(sys.argv) > 5 else "node"; words = [w.lower() for w in sys.argv[6:]]
 EN, SW, SL, PI, SD = "js/engine.js", "js/sowing.js", "js/seedlib.js", "js/planio.js", "js/seeds.js"
 NODE = [
- ("a planting's own word is not read", EN, "return SOURCES.includes(said) && SOURCES.includes(p.startedFrom) ? p.startedFrom : said;", "return said;"),
- ("a planting's word is read over a bulb crop's", EN, "return SOURCES.includes(said) && SOURCES.includes(p.startedFrom) ? p.startedFrom : said;", "return SOURCES.includes(p.startedFrom) ? p.startedFrom : said;"),
- ("any word a planting says is read", EN, "return SOURCES.includes(said) && SOURCES.includes(p.startedFrom) ? p.startedFrom : said;", "return SOURCES.includes(said) && p.startedFrom ? p.startedFrom : said;"),
+ ("a planting's own word is not read", EN, "return SOURCES.includes(p.startedFrom) ? p.startedFrom : said;", "return said;"),
+ ("a planting's word is read over a bulb crop's", EN, "if (!SOURCES.includes(said)) return said;", ""),
+ ("any word a planting says is read", EN, "return SOURCES.includes(p.startedFrom) ? p.startedFrom : said;", "return p.startedFrom ? p.startedFrom : said;"),
  ("the planting's old record of its crop is not read", EN, "const held = c || (p ? growingCrop(p) : null);", "const held = p ? crop(p.cropId) : c;"),
  ("a live tray can be bought in", EN, "if (!held || held.micro) return 'seed';", "if (!held) return 'seed';"),
+ ("a recorded sowing does not say it was sown here", EN, "if (['sow', 'potup', 'harden'].some(k => doneOf(p, k))) return 'seed';", ""),
+ ("a copy keeps the planting's word", "js/rails.js", "delete next.startedFrom; }", "}"),
+ ("a series keeps the planting's word", "js/succession.js", "'tasks', 'failed', 'startedFrom'];", "'tasks', 'failed'];"),
  ("a bought-in planting is still sown", EN, "if (boughtIn) { seeds = 0; seedG = 0; cells = 0; trays = 0; gh = null; }", "if (boughtIn) { seeds = 0; seedG = 0; }"),
  ("a bought-in planting keeps its sowing day", EN, "if (boughtIn) { seeds = 0; seedG = 0; cells = 0; trays = 0; gh = null; }", "if (boughtIn) { seeds = 0; seedG = 0; cells = 0; trays = 0; }"),
  ("no spare on plants bought in", EN, "const buy = boughtIn ? Math.ceil(plants * buffer - 1e-9) : 0;", "const buy = boughtIn ? Math.ceil(plants) : 0;"),
@@ -42,6 +45,8 @@ PAGE = [
  ("the answer does not say the sowing that goes", SD, "${need.sow ? `, no sowing on ${day(need.sow)}` : ''}", ""),
  ("the \"?\" gives one term", SD, "const fromHelp = () => UI.help(null, null, FROM_WORDS,", "const fromHelp = () => UI.help(null, null, FROM_WORDS.slice(0, 1),"),
  ("the box shows the crop's supplier as the grower", SD, "const from = h('input', { type: 'text', maxLength: 120, value: v.buyFrom || '',", "const from = h('input', { type: 'text', maxLength: 120, value: v.supplier || '',"),
+ ("the box saves from the variety as the panel was drawn", SD, "const was = App.state.engine.variety(v.id) || v, after = { ...was };", "const was = v, after = { ...was };"),
+ ("the switch saves from the planting as the panel was drawn", SD, "const eng = App.state.engine, cur = eng.planting(p.id) || p, s = App.sowingOf(cur);", "const eng = App.state.engine, cur = p, s = App.sowingOf(cur);"),
  ("the lot typed is not kept", SD, "put('buyLot', t === '' ? '' : n,", "put('buyLot', '',"),
  ("a variety counted two ways shows one line", SD, "const alts = (r && r.alt ? r.alt : []).map(a => altRow(v, a, flat, ids));", "const alts = [];"),
  ("no lot on file is not said", SD, "'lot not on file') : h('td.sd-num.sd-size');", "'') : h('td.sd-num.sd-size');"),

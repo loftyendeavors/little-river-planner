@@ -131,7 +131,7 @@
     const grown = gardensFor(eng, crop), pick = grown.find(g => g.planted) || grown[0];
     return pick ? (eng.plan.beds || []).find(b => b.gardenId === pick.garden.id && suits(eng, crop, b)) || null : null;
   }
-  const SPACE_FIELDS = ['bedId', 'ft', 'startFt', 'bedLayout', 'trays', 'shelter', 'out'], RECORD_FIELDS = ['done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'sowOn', 'harvestEnd', 'liveTray', 'seedUses', 'tasks', 'failed'];
+  const SPACE_FIELDS = ['bedId', 'ft', 'startFt', 'bedLayout', 'trays', 'shelter', 'out'], RECORD_FIELDS = ['done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'sowOn', 'harvestEnd', 'liveTray', 'seedUses', 'tasks', 'failed', 'startedFrom'];   // a later succession follows its crop, sown or bought in (N2)
   /** A planting of the series that has no bed: the crop, or a copy of the planting the series is modelled on, with its date and why it waits. */
   function heldFor(o, date, k, extra = {}) {
     const base = o.source ? { ...o.source } : { cropId: o.crop.id };
@@ -147,7 +147,7 @@
     const payload = o.source ? { plantingId: o.source.id, copy: true } : { cropId: o.crop.id, varietyId: o.variety ? o.variety.id : undefined };
     // a copy keeps its own settings only where they still describe the space: its length means nothing in a bed of another size
     let source = o.source;
-    if (source) { source = { ...source }; if (o.variety) source.varietyId = o.variety.id; if (o.unit === 'ft' || source.bedId !== bed.id) { delete source.ft; delete source.startFt; delete source.bedLayout; delete source.trays; } delete source.sowOn; delete source.harvestEnd; }
+    if (source) { source = { ...source }; if (o.variety) source.varietyId = o.variety.id; if (o.unit === 'ft' || source.bedId !== bed.id) { delete source.ft; delete source.startFt; delete source.bedLayout; delete source.trays; } delete source.sowOn; delete source.startedFrom; delete source.harvestEnd; }
     return Rails.propose(eng, payload, { bedId: bed.id, date }, { source, noShrink: false });
   }
   // ── sized by harvest ──

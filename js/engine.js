@@ -835,7 +835,11 @@
       const held = c || (p ? growingCrop(p) : null);
       if (!held || held.micro) return 'seed';
       const said = held.plantingMaterial || (held.material === 'bulb' ? 'bulb' : 'seed');
-      return SOURCES.includes(said) && SOURCES.includes(p.startedFrom) ? p.startedFrom : said;
+      if (!SOURCES.includes(said)) return said;
+      // nursery work recorded on it (a sowing, a potting up, a hardening off) says it was raised here, whatever else says otherwise:
+      // a sowing ticked on Tasks before a crop was bought in, or joined from another device, stays on record and can be taken back
+      if (['sow', 'potup', 'harden'].some(k => doneOf(p, k))) return 'seed';
+      return SOURCES.includes(p.startedFrom) ? p.startedFrom : said;
     }
     function calcRaw(p) {
       const b = plantingBed(p), c = effective(p);
