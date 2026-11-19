@@ -177,7 +177,10 @@
     if (made.length) {
       const Trays = root.LRFTrays, back = ops.find(o => o.kind === 'trays'), plans = back ? back.before || [] : plan.liveTrayPlans || [];
       const listed = p => { const demand = plans.find(t => t.id === p.liveTray.planId); try { return !!demand && Trays.schedule(demand).batches.some(b => b.key === p.liveTray.key); } catch (_) { return false; } };
-      for (const [op, is] of made) if (!Trays.locked(plan, is) && !listed(is)) ops.push({ ...op, after: is }); else kept++;
+      // work can also be recorded in the records kept beside the plan (harvests, picks): read where they are loaded; where they are
+      // kept and not loaded, nothing is taken out
+      const kept0 = state.attic ? state.attic.rest || {} : ((plan.lrfNext || {}).attic || 'none') === 'none' ? {} : null, records = kept0 && { harvests: kept0.harvests, fieldRecords: kept0.fieldRecords };
+      for (const [op, is] of made) if (records && !Trays.locked(plan, is, records) && !listed(is)) ops.push({ ...op, after: is }); else kept++;
     }
     return { ops, kept };
   }

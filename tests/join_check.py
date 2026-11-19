@@ -341,20 +341,25 @@ with sync_playwright() as pw:
         if t0:
             A.evaluate(WIDEN, later); A.wait_for_timeout(600); B.evaluate(WIDEN, later); B.wait_for_timeout(600)
         mine_b = B.evaluate(WEEK, wk) if t0 else []
-        if mine_b:
+        if len(mine_b) > 1:
             B.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'checked on the bench' }, 'A note')", mine_b[0]['id'])
+            B.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'picked early' }, 'A note')", mine_b[1]['id'])
         A.evaluate("void LRFApp.sync().run('change')"); settled(A, 'in-step')
         B.wait_for_timeout(1700); B.evaluate("void LRFApp.sync().run('change')"); settled(B, 'in-step', 60000)
         look(A)
         wa, wb = A.evaluate(WEEK, wk), B.evaluate(WEEK, wk)
         check('one live-tray demand plan widened alike on both devices before either saw the other: joined, each holds one batch for each crop of the new week, under the ids both made, the note the second wrote on one kept',
-              bool(t0) and len(mine_b) > 0 and wa == wb and [x['id'] for x in wa] == [x['id'] for x in mine_b] and sum(1 for x in wa if x['note'] == 'checked on the bench') == 1 and A.evaluate("LRFApp.contentKey()") == B.evaluate("LRFApp.contentKey()"), [t0, mine_b, wa, wb])
+              bool(t0) and len(mine_b) > 1 and wa == wb and [x['id'] for x in wa] == [x['id'] for x in mine_b] and sum(1 for x in wa if x['note'] == 'checked on the bench') == 1 and A.evaluate("LRFApp.contentKey()") == B.evaluate("LRFApp.contentKey()"), [t0, mine_b, wa, wb])
+        # a harvest of the second, among the records kept beside the plan on the first device (as a backup brings them): work recorded there
+        if len(mine_b) > 1:
+            A.evaluate("(id) => { const a = LRFApp.state.attic || { v: 1, rest: {}, varieties: {} }; LRFApp.state.attic = { ...a, rest: { ...(a.rest || {}), harvests: { ...((a.rest || {}).harvests || {}), [id]: { '2027-12-06': 1 } } } }; }", mine_b[1]['id'])
         A.evaluate("LRFApp.undo()"); A.wait_for_timeout(800)
         undone = {'through': (A.evaluate(DEMAND) or {}).get('through'), 'week': A.evaluate(WEEK, wk), 'toast': toast(A)}
         A.evaluate("LRFSync.timing.push = 250; void LRFApp.sync().run('change')"); settled(A, 'in-step')
         B.evaluate("LRFSync.timing.push = 250"); look(B)
-        check('undo of that widening on the first device, after the join: the week goes from the demand plan and its batches with it, the other device\'s note too, and the other device takes that in',
-              bool(t0) and undone['through'] == t0['through'] and undone['week'] == [] and (B.evaluate(DEMAND) or {}).get('through') == t0['through'] and B.evaluate(WEEK, wk) == [] and A.evaluate("LRFApp.contentKey()") == B.evaluate("LRFApp.contentKey()"), undone)
+        left = [x['id'] for x in undone['week']]
+        check('undo of that widening on the first device, after the join: the week goes from the demand plan and its batches with it, the other device\'s note too; the one with a harvest kept beside the plan stays, and the other device takes that in',
+              bool(t0) and len(mine_b) > 1 and undone['through'] == t0['through'] and left == [mine_b[1]['id']] and (B.evaluate(DEMAND) or {}).get('through') == t0['through'] and [x['id'] for x in B.evaluate(WEEK, wk)] == left and A.evaluate("LRFApp.contentKey()") == B.evaluate("LRFApp.contentKey()"), undone)
         # the Delete key on a batch that follows a demand plan: it stays, and the page says where the demand is changed
         tied = A.evaluate("() => (LRFApp.state.plan.plantings.find(p => p.liveTray && (LRFApp.state.plan.liveTrayPlans || []).some(t => t.id === p.liveTray.planId)) || {}).id")
         steps = A.evaluate("LRFApp.state.undo.length")
