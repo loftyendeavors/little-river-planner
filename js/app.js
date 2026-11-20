@@ -360,12 +360,13 @@
     return ops ? assume(label, ops, how && how.shown ? { shown: true } : {}) : Promise.resolve(false);
   }
   /**
-   * The step setYield makes, not yet taken (E2d). `how`, from the card's box: { rows } the rows of the bed the figure was typed for, or
+   * The step setYield makes, not yet taken (E2d). `how`, from the card's box, for a crop's own figure only: { rows } the rows of the bed the figure was typed for, or
    * { inRow } the spacing in the row a plant's figure was typed at; the figure is then kept to six places, since it was typed for a
    * whole bed and divided by its length. Without `how` the figure alone changes, and what the cell says of rows or spacing stays.
    * Clearing a figure clears what was said with it.
    */
   function yieldOps(kind, id, env, value, how) {
+    if (kind !== 'crops') how = undefined;   // only a crop's own figure says rows or a spacing: a variety's is as it was (Codex on #92)
     const none = value == null || value === '' || !(+value >= 0), whole = v => Number.isSafeInteger(v) && v >= 1 ? v : null, inches = v => typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
     return listStep(next => {
       setCell(next, kind, id, env, 'yield', none ? null : how ? Math.round(+value * 1e6) / 1e6 : figure3(+value));

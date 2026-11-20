@@ -1626,8 +1626,11 @@
       statedCache.set(key, out);
       return out;
     }
-    /** What a yield is counted by, in the page's words (E2d: every screen says it from here). `rows`: the figure says its rows. */
-    const perSaid = (basis, rows) => basis === 'tray' ? 'a tray' : basis === 'container' ? 'a container' : basis === 'ft' ? (rows ? 'a row-foot' : 'a bed-foot, rows not said') : 'a plant';
+    /**
+     * What a yield is counted by, in the page's words (E2d: every screen says it from here). `rows`: the figure says its rows.
+     * `short`: where the words stand inside a longer phrase ("a bed-foot of its 30 %"), a figure with no rows is "a bed-foot".
+     */
+    const perSaid = (basis, rows, short) => basis === 'tray' ? 'a tray' : basis === 'container' ? 'a container' : basis === 'ft' ? (rows ? 'a row-foot' : short ? 'a bed-foot' : 'a bed-foot, rows not said') : 'a plant';
 
     const benchList = () => benches().map(sp => ({ id: sp.id, name: sp.name || 'Bench', area: (((S.nursery || {}).benchAreas || []).find(a => a.id === (sp.benchLayout || {}).areaId) || {}).name || '', areaId: (sp.benchLayout || {}).areaId || '',
       w: nonNegative(sp.w), l: nonNegative(sp.l), kind: benchKind(sp), heated: sp.kind !== 'outside', active: sp.active !== false, cap: benchCap(sp), holds: benchHolds(sp), estimate: benchEstimate(sp) }));

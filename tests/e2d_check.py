@@ -131,6 +131,12 @@ with sync_playwright() as pw:
     check("a figure typed on the list's own row keeps the rows the cell says", kept == {"yield": round(sub["figure"] * 2, 3), "rows": ST["rows"]}, kept)
     js("return A.setYield('crops', arg.crop, arg.env, null, 'cleared');", {"crop": C, "env": ENV}); wait(500)
     close_dialogs()
+    vid = js("const v = S.plan.varieties.find(v => v.cropId === arg && v.active !== false); return v ? v.id : null;", C)
+    if vid:
+        js("return A.setYield('varieties', arg.v, arg.env, 1.25, 'a variety, with rows asked for', { rows: 3, inRow: 4 });", {"v": vid, "env": ENV}); wait(500); close_dialogs()
+        check("a variety's own figure takes no rows and no spacing, whoever asks: only a crop's own figure says them", js("return ((S.plan.assumptions || {}).varieties || {})[arg.v][arg.env];", {"v": vid, "env": ENV}) == {"yield": 1.25}, js("return ((S.plan.assumptions || {}).varieties || {})[arg.v];", {"v": vid}))
+        js("A.undo(); return 1;"); wait(300)
+    else: check("a variety's own figure takes no rows and no spacing (the crop has no variety on the plan: not tried)", False)
     check("a figure cleared takes its rows with it", js("return (((S.plan.assumptions || {}).crops || {})[arg.crop] || {})[arg.env] || null;", {"crop": C, "env": ENV}) is None)
     while js("return S.undo.length;") > 0: js("A.undo(); return 1;"); wait(150)
 

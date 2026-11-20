@@ -103,7 +103,7 @@ if (sown) {
   check('with nothing planted it is the commonest soil bed of the place, with the rows the crop’s record gives on it', !none || (!!sn && sn.n === 0 && sn.rows >= 1 && sn.ft > 0 && sn.mixed === false), sn);
   check('a tower has no bed to speak of', eng.statedFor(sown.cropId, 'tower') === null);
 }
-check('the words for what a yield is counted by come from the engine: a row-foot where rows are said, and plainly where they are not', eng.perSaid('ft', 3) === 'a row-foot' && eng.perSaid('ft') === 'a bed-foot, rows not said' && eng.perSaid('plant') === 'a plant' && eng.perSaid('tray') === 'a tray' && eng.perSaid('container') === 'a container');
+check('the words for what a yield is counted by come from the engine: a row-foot where rows are said, and plainly where they are not', eng.perSaid('ft', 3) === 'a row-foot' && eng.perSaid('ft') === 'a bed-foot, rows not said' && eng.perSaid('ft', null, true) === 'a bed-foot' && eng.perSaid('ft', 2, true) === 'a row-foot' && eng.perSaid('plant') === 'a plant' && eng.perSaid('tray') === 'a tray' && eng.perSaid('container') === 'a container');
 
 // ── 6. two devices: the figure and its rows are one value ──
 {

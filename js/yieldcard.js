@@ -503,9 +503,12 @@
           else kept = cell.inRow ? h('small.yc-total', { dataset: hook, title: 'A planting at another spacing in the row gives the same from a foot of row: more plants, each giving less. Type the figure again to say another spacing.' }, `typed at ${fig(cell.inRow)} in apart: held a row-foot where a planting’s spacing differs`)
             : cell.mine != null && !amber ? h('small.yc-total', { dataset: hook }, say) : null;
         }
+        // beside the columns of other things sold the card has no room to spare: the bed and what the figure is kept as, in one short line
+        if (kept && T.any) kept = h('small.yc-total', { dataset: { ...kept.dataset }, title: `${bx.said}. ${kept.title || ''}` }, bx.bed ? `${fig(bx.st.ft)} ft, ${plural(bx.st.rows, 'row')} · ${cell.rows ? `${fig(cell.value / cell.rows)} a row-foot` : 'rows not said'}` : cell.inRow ? `held a row-foot (${fig(cell.inRow)} in)` : null);
+        if (kept && !kept.textContent) kept = null;
         // what the figure read before "Picked" turned it: the same amount over the crop's harvest days, said another way
         const old = was && was.weekly !== weekly && was.cells[env] != null && cell.value != null ? h('small.yc-total.yc-turned', { dataset: { was: String(was.cells[env]), now: String(cell.value) } }, `read ${fig(was.cells[env] * kk)}${u} ${was.weekly ? 'a week' : 'in all'} before “Picked” was changed: the same over ${was.nominal} harvest days`) : null;
-        return h('td', { dataset: { place: env } }, h('span.yc-line', input, h('span.yc-unit', { dataset: { hook: 'yield-of', place: env } }, tenths ? 'of 10' : bx && bx.bed ? `${unit === 'each' ? '' : unit + ' '}from ${of}` : unit === 'each' ? '' : unit)), beside, kept, old);
+        return h('td', { dataset: { place: env } }, h('span.yc-line', input, h('span.yc-unit', { dataset: { hook: 'yield-of', place: env } }, tenths ? 'of 10' : bx && bx.bed && !T.any ? `${unit === 'each' ? '' : unit + ' '}from ${of}` : unit === 'each' ? '' : unit)), beside, kept, old);
       })));
     }
 
