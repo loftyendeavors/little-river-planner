@@ -150,6 +150,48 @@ def run(pw):
     asked = js("const a = window.__asked; window.__putBack(); return { asked: a, kind: card() && card().dataset.kind, sel: S.sel && S.sel.type + ':' + S.sel.id };")
     check("a planting picked while the card floats: widened to dock the card, the map is asked to move the planting's bed clear of it (Codex on #85)",
           asked["asked"] == [BED] and asked["kind"] == "planting" and asked["sel"] == "planting:" + PID, asked)
+    # a length being typed in the card when the window narrows past 1200: the card is placed again, not drawn again, so the box keeps
+    # what is typed and the keyboard, and gives it to the planting when it is left (Codex on #85, on 84db107)
+    typed = js(f"const p = eng.planting('{PID}'), r = eng.calc(p); let n = Math.round(r.cap * 0.3); if (Math.abs(n - r.physicalLength) < 1) n = Math.round(r.cap * 0.7); return String(Math.max(1, n));")
+    if not page.locator("[data-hook='card-length']").count(): press(page, "[data-hook='card-row'][data-row='share'] .card-row-head", 300)
+    page.locator("[data-hook='card-length']").click(); page.keyboard.press("Control+A"); page.keyboard.type(typed); wait(150)
+    was = js(f"window.__box = hook('card-length'); return rec('{PID}');")
+    page.set_viewport_size({"width": 1100, "height": 960}); wait(500)
+    mid = js(f"const b = window.__box; return {{ same: !!b && b.isConnected && b === hook('card-length'), focus: document.activeElement === b, value: b ? b.value : null, held: rec('{PID}') === arg }};", was)
+    page.keyboard.press("Tab"); wait(500)
+    left = js(f"return {{ moved: rec('{PID}') !== arg, box: hook('card-length') ? hook('card-length').value : null }};", was)
+    js("A.undo(); return null;"); wait(400)
+    check("a length typed in the card and not yet left is kept when the window narrows past 1200 and the card floats: the same box, with the keyboard, and given to the planting when it is left (Codex on #85)",
+          mid["same"] and mid["focus"] and mid["value"] == typed and mid["held"] and left["moved"] and left["box"] == typed, [typed, mid, left])
+    # a bench, a tower or containers clicked at the map's right edge with no card open: the docked card comes and the map, the card's
+    # width narrower, moves that space clear, as it does a bed (Codex on #85, on 84db107)
+    page.set_viewport_size({"width": 1280, "height": 960}); js("A.select(null); return null;"); wait(600)
+    sp = js("""const v = $('mapView').getBoundingClientRect(), tools = document.querySelector('.map-tools').getBoundingClientRect();
+      const list = S.plan.beds.filter(b => b.active !== false && !eng.isSoilBed(b) && !eng.isPool(b)).map(b => ({ id: b.id, el: document.querySelector(`#map [data-bed="${b.id}"] .bed-base`) })).filter(x => x.el)
+        .map(x => { const r = x.el.getBoundingClientRect(); return { id: x.id, kind: eng.spaceKind(eng.bedOf(x.id)), w: r.width, h: r.height, right: r.right, cy: r.top + r.height / 2 }; })
+        .filter(x => x.w >= 12 && x.h >= 12 && x.w < v.width / 3).sort((a, b) => b.w - a.w);
+      const s = list[0]; if (!s) return null;
+      let g = null; for (let y = v.bottom - 140; y > v.top + 80 && !g; y -= 23) for (let x = v.left + 30; x < v.left + v.width / 2 && !g; x += 23) { const e = document.elementFromPoint(x, y); if (e && e.closest('#map') && !e.closest('#mapBeds > g')) g = { x, y }; }
+      const ty = Math.min(Math.max(s.cy, tools.bottom + 80), v.bottom - 140);
+      return g && { id: s.id, kind: s.kind, x: Math.round(g.x), y: Math.round(g.y), dx: Math.round(v.right - 8 - s.right), dy: Math.round(ty - s.cy) };""")
+    def pan2(g):
+        page.mouse.move(g["x"], g["y"]); page.mouse.down()
+        for k in range(1, 15):
+            page.mouse.move(g["x"] + g["dx"] * k / 14, g["y"] + g["dy"] * k / 14); wait(20)
+        page.mouse.up(); wait(400)
+    spot = None
+    if sp:
+        pan2(sp)
+        spot = js(f"""const el = document.querySelector('#map [data-bed="{sp['id']}"] .bed-base'), r = el.getBoundingClientRect(), v = $('mapView').getBoundingClientRect();
+          const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2), at = document.elementFromPoint(x, y);
+          return {{ x, y, hit: !!at && at.closest('[data-bed]')?.dataset.bed === '{sp['id']}', gap: Math.round(v.right - r.right), card: !!card() }};""")
+    if spot and spot["hit"]:
+        js("window.__asked = []; const o = LRFMap.revealBed; window.__putBack = () => { LRFMap.revealBed = o; }; LRFMap.revealBed = function (id) { window.__asked.push(id); return o.apply(this, arguments); }; return null;")
+        page.mouse.click(spot["x"], spot["y"]); wait(900)
+    bench = js(f"""const a = window.__asked || []; if (window.__putBack) window.__putBack(); const c = card(), v = $('mapView').getBoundingClientRect(), el = document.querySelector('#map [data-bed="{sp['id'] if sp else ''}"] .bed-base'), r = el ? el.getBoundingClientRect() : null, sel = S.sel, p = sel && sel.type === 'planting' ? eng.planting(sel.id) : null;
+      return {{ asked: a, card: !!c, of: sel ? (sel.type === 'bed' ? sel.id : p && p.bedId) : null, seen: !!r && r.left >= v.left - 1 && r.right <= v.right + 1, clear: c ? Math.round(c.getBoundingClientRect().left - v.right) : null }};""")
+    check("a bench, a tower or containers clicked at the map's right edge with no card open: the docked card comes, and the map moves that space clear of it (Codex on #85)",
+          bool(sp) and bool(spot) and spot["hit"] and 0 <= spot["gap"] <= 40 and not spot["card"] and bench["card"] and bench["of"] == sp["id"] and bench["asked"] == [sp["id"]] and bench["seen"] and bench["clear"] is not None and bench["clear"] >= 0, [sp, spot, bench])
     js(f"A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(300)
     page.set_viewport_size({"width": WIDTH, "height": 960}); wait(500)
     page.screenshot(path=str(shots / f"map-bed-{WIDTH}.png"))

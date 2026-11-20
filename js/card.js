@@ -34,6 +34,7 @@
   const mark = () => { acting = true; clearTimeout(actTimer); actTimer = setTimeout(() => { acting = false; }, 0); };
   const watchActs = el => { el.addEventListener('click', mark, true); el.addEventListener('change', mark, true); el.addEventListener('keydown', mark, true); return el; };   // which card was open when the last change was first seen (as the panel's "Saved" line keeps it)
   let card = null, menu = null, cal = null, hint = null, hintTimer = 0, hintBar = null;
+  let shown = '', revealing = 0;   // the pick the card last stood for, and a reveal asked for the next frame
   const opened = new Set();   // the rows of a planting's card that are open, by name: they stay open as the card is drawn again
   let bedRow = null;
   let openingSource = null;
@@ -405,7 +406,7 @@
       const row = [...document.querySelectorAll('.bed-planting-trigger')].find(el => el.dataset.planting === plantingId);
       row?.scrollIntoView({ block: 'nearest' });
     }
-    revealBed(bedId);
+    revealPicked();
   }
 
   function bedCard(bed) {
@@ -476,7 +477,7 @@
   function draw() {
     const standingNow = sync();
     const what = standingNow ? held() : null;
-    if (!what) { if (card) { card.remove(); card = null; } closePops(); return; }
+    if (!what) { if (card) { card.remove(); card = null; } shown = ''; closePops(); return; }
     const stage = document.querySelector('.stage');
     if (!card) { card = watchActs(h('aside.card.float.lrf-card', { role: 'dialog', 'aria-label': 'Details', dataset: { hook: 'card' } })); stage.append(card); }
     const controls = () => [...card.querySelectorAll('button, input, select')];
@@ -486,22 +487,24 @@
     card.dataset.kind = what.kind;
     add(card, what.kind === 'planting' ? plantingCard(what.p, what.r) : bedCard(what.bed));
     place();
+    // docked, the map is narrower by the card's width: a space just picked, a bench or a tower as much as a bed, is moved clear of it
+    // as the card first comes or turns to it (Codex on #85); a bed picked on the map asks the same itself (openBedFromMap)
+    const key = keyOf(App.state.sel);
+    if (DOCKED.matches && key !== shown) revealPicked();
+    shown = key;
     card.scrollTop = keep;
     fillSaid();
     if (restore) restore(card);
     else if (focus >= 0) { const again = controls()[focus]; if (again) again.focus({ preventScroll: true }); }   // the box that was in use keeps the keyboard
   }
-  /** Docked by a wider window: the bed picked, or the bed of the planting picked, moved clear of the card (Codex on #85). */
+  /** The space picked, or the space of the planting picked, moved clear of the card in the next frame, once however often it is
+   *  asked in this one: docked by a wider window, a pick the docked card comes for, a bed opened from the map (Codex on #85). */
   function revealPicked() {
-    const sel = App.state.sel, p = sel && sel.type === 'planting' ? eng().planting(sel.id) : null, bedId = sel && sel.type === 'bed' ? sel.id : p && p.bedId;
-    if (!bedId) return;
-    requestAnimationFrame(() => { if (card && App.state.view === 'map') root.LRFMap.revealBed(bedId, card.getBoundingClientRect()); });
-  }
-  function revealBed(id) {
-    requestAnimationFrame(() => {
-      if (App.state.view === 'map' && App.state.sel?.type === 'bed' && App.state.sel.id === id && card?.dataset.kind === 'bed') {
-        root.LRFMap.revealBed(id, card.getBoundingClientRect());
-      }
+    if (revealing) return;
+    revealing = requestAnimationFrame(() => {
+      revealing = 0;
+      const sel = App.state.sel, p = sel && sel.type === 'planting' ? eng().planting(sel.id) : null, id = sel && sel.type === 'bed' ? sel.id : p && p.bedId;
+      if (id && card && App.state.view === 'map') root.LRFMap.revealBed(id, card.getBoundingClientRect());
     });
   }
 
@@ -700,8 +703,9 @@
     document.addEventListener('pointerdown', () => { if (hint || hintBar) hideHint(); });
     document.addEventListener('wheel', () => { if (hint || hintBar) hideHint(); }, { passive: true });
     NARROW.addEventListener('change', () => { draw(); root.LRFPanels.redraw(); });
-    // docked or floating: placed again, and the view makes room or takes it back; docked, a bed it would hide is moved clear (Codex on #85)
-    DOCKED.addEventListener('change', () => { draw(); if (DOCKED.matches) revealPicked(); });
+    // docked or floating: placed again, not drawn again, so a box being typed in keeps what is typed (Codex on #85); the view makes room
+    // or takes it back, and docked, a space it would hide is moved clear (Codex on #85)
+    DOCKED.addEventListener('change', () => { place(); if (DOCKED.matches) revealPicked(); });
     root.addEventListener('resize', () => { if (card) place(); closePops(); });
     new MutationObserver(() => draw()).observe(document.body, { attributes: true, attributeFilter: ['data-layout'] });   // Edit layout opened or closed
     draw();
