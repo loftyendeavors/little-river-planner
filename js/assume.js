@@ -402,7 +402,7 @@
       th('.ah-price', 'Price $', 'What one unit sells for. A variety can have its own.'),
       th('.ah-pick', 'Picked', 'The harvest pattern. Gradually: a week’s picking, every week. Clear: all of it the day it is ready. On demand: a total, spread evenly.'),
       th('.ah-days', 'Picked to', 'The harvest window: to the season’s end where it grows, or for a set number of days. The ground is held that long.'),
-      App.state.engine.ENVS.map(env => th('.ah-y', SHORT[env], `Yield ${LABEL[env].toLowerCase()}, for a plant or a foot of bed as the row says (a figure typed on the crop’s card says the rows it is for): a total, or a week’s picking where the crop is picked each week`, 'Yield')),
+      App.state.engine.ENVS.map(env => th('.ah-y', SHORT[env], `Yield ${LABEL[env].toLowerCase()}, for a plant or a bed-foot as the row says: a total, or a week’s picking where the crop is picked each week`, 'Yield')),
       th('.ah-comes', 'Comes to', 'The total and the week’s figure, where the crop mostly grows. One is yours; the other follows from the harvest window.'),
       h('th.ah-s', { title: 'The part of what is packed that is sold: what is left after the share for personal use', hidden: App.state.plan.settings.houseKeeps === false }, 'Sold %'),
       th('.ah-s', 'Keeps wk', 'Weeks the crop keeps after picking. What is picked is then counted as there to sell evenly over those weeks.'),
