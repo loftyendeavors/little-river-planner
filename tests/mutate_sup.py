@@ -49,7 +49,7 @@ IMP = [
  ("the reason under what to do instead", "js/seeds.js", "button('Cancel', () => d.close())), failed, fallback);", "button('Cancel', () => d.close())), fallback, failed);"),
  ("the paste box left without the focus", "js/seeds.js", "pasteText.focus({ preventScroll: true });", ""),
  ("the old sentence about pasting kept under the box", "js/seeds.js", "'Links are read through Cloud sync once this device is connected (Backup, Cloud sync…).';", "'Links are read through Cloud sync once this device is connected (Backup, Cloud sync…). Until then, paste the page below.';"),
- ("the fetch service of his own cannot be opened", "js/seeds.js", "h('button.linkish', { type: 'button', id: 'sdSettings', onclick: () => openSettings() },", "h('button.linkish', { type: 'button', id: 'sdSettings' },"),
+ ("the fetch service of his own cannot be opened", "js/seeds.js", "h('button.btn.quiet.small', { type: 'button', id: 'sdSettings', dataset: { hook: 'seeds-fetch-own' }, onclick: () => openSettings() },", "h('button.btn.quiet.small', { type: 'button', id: 'sdSettings', dataset: { hook: 'seeds-fetch-own' } },"),
 ]
 if which == "list": print(json.dumps({"page": len(PAGE), "importer": len(IMP)})); sys.exit(0)
 def unfaulted(names, ran):

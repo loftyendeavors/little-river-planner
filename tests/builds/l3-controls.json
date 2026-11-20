@@ -1,0 +1,46 @@
+{
+ "build": "L3, part 2: the plain controls (#91). Every link-drawn button is given its part by DESIGN.md: what goes somewhere (a bed's name, Planting details, Show on the map, the way to Tasks or to a crop) stays an underlined link, in one look; what changes the plan, takes a step back or starts a job (Undo, record, Make them equal, Plan a series…, Add a lot, Rename…) is a bounded or a quiet button. A planting's full panel has \"⋯\" at its head with Send to To place and Remove planting, as its card has; Several varieties… and Plan a longer series… are quiet buttons. Nursery › Set-up says how trays and crates are counted with two square ticks, each with what it comes to under it. Seeds shows Edit crop and Add a variety as two small buttons on a crop's heading while it is pointed at or has the keyboard. The Timeline reads Days · Weeks · Months in one 32-high switch, as the Forecast does, with − and + after it; its filter of growing spaces is the filter pills of the Forecast and Seeds. Backup's choice of how two devices' plans meet is one switch. A drop is answered once, by the page's answer with its Undo: the planting's panel no longer says it again. A plant's yield box with a figure not kept for a spacing reads as the plain figure, the spacing said only in its offer; with no figure, its tip names the spacing as the label does. Words that carry meaning and read below 4.5:1 are mended: the counts on pills and in switches, the frost words on the season strip, the Forecast's week, the planning week's tag, \"your day\" in the schedule, and the Assumptions list's grey and green notes. To settle's \"Show the other N\" is a quiet button; its titles stay links. Nothing stored, no figure moves, no drag is changed.",
+ "changes": {
+  "did": "Plain controls: a link goes somewhere and is underlined, a button does something; a planting's panel keeps Send to To place and Remove planting in “⋯” at its head; Days · Weeks · Months is one switch on the Timeline and the Forecast.",
+  "steps": [
+   "Open a planting's Planting details: “⋯” at its head holds Send to To place and Remove planting, and its bed's name above is a link back to the bed.",
+   "On the Timeline, Days · Weeks · Months is one switch, as on the Forecast, and the growing spaces are filter pills with their counts.",
+   "On Nursery › Set-up, how trays and crates are counted is two ticks, each saying what it does."
+  ]
+ },
+ "words": [],
+ "code": [
+  "ahead.js",
+  "app.js",
+  "backupui.js",
+  "bench.js",
+  "card.js",
+  "harvestview.js",
+  "map.js",
+  "mapedit.js",
+  "panels.js",
+  "seeds.js",
+  "series.js",
+  "things.js",
+  "timeline.js",
+  "traysview.js",
+  "yieldcard.js"
+ ],
+ "added": [],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html"
+ ],
+ "screens": [
+  "map",
+  "timeline",
+  "forecast",
+  "nursery-bench-room",
+  "nursery-live-trays",
+  "nursery-set-up",
+  "seeds",
+  "assumptions-days",
+  "assumptions-yield"
+ ]
+}

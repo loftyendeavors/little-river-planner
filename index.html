@@ -125,14 +125,16 @@
 
     <div class="view view-timeline" id="timelineView">
       <div class="tl-tools">
-        <div class="seg tl-filters" id="tlFilters" role="group" aria-label="Which growing spaces to show"></div>
+        <div class="sd-filters tl-filters" id="tlFilters" role="group" aria-label="Which growing spaces to show"></div>
         <button type="button" id="tlOpenToggle" aria-pressed="true" title="Show where whole beds stand open before, after or between crops">Openings</button>
-        <div class="tl-zoom" role="group" aria-label="Timeline zoom" title="Months, Weeks, Days set the scale; − and + step it. Ctrl and the wheel zoom at the pointer; drag empty chart to move it.">
-          <button type="button" class="tl-step" id="tlZoomOut" aria-label="Zoom out">−</button>
-          <button type="button" data-tl-zoom="months" aria-pressed="true" title="The whole year">Months</button>
-          <button type="button" data-tl-zoom="weeks" aria-pressed="false">Weeks</button>
-          <button type="button" data-tl-zoom="days" aria-pressed="false">Days</button>
-          <button type="button" class="tl-step" id="tlZoomIn" aria-label="Zoom in">+</button>
+        <div class="tl-zoom" role="group" aria-label="Timeline zoom" title="Days, Weeks, Months set the scale; − and + step it. Ctrl and the wheel zoom at the pointer; drag empty chart to move it.">
+          <div class="seg tl-by" role="group" aria-label="Show by" data-hook="tl-by">
+            <button type="button" data-tl-zoom="days" data-hook="tl-by-choice" aria-pressed="false">Days</button>
+            <button type="button" data-tl-zoom="weeks" data-hook="tl-by-choice" aria-pressed="false">Weeks</button>
+            <button type="button" data-tl-zoom="months" data-hook="tl-by-choice" aria-pressed="true" title="The whole year">Months</button>
+          </div>
+          <button type="button" class="tl-step" id="tlZoomOut" data-hook="tl-zoom-out" aria-label="Zoom out">−</button>
+          <button type="button" class="tl-step" id="tlZoomIn" data-hook="tl-zoom-in" aria-label="Zoom in">+</button>
         </div>
         <span class="tl-end"><span class="tl-room-line" id="tlRoomLine" data-hook="room-line" hidden></span><span class="tl-key"><i class="k-nursery"></i>nursery <i class="k-grow"></i>growing <i class="k-pick"></i>harvest <i class="k-turn"></i>turnover <i class="k-open"></i>open</span></span>
       </div>

@@ -31,11 +31,11 @@ PRICE = ("const y = personal ? { ...part, price: 0 } : part;", "const y = part;"
 ATEND = ("if (direction === 'undo' && Number.isInteger(op.at) && op.at <= list.length) list.splice(op.at, 0, to); else list.push(to);", "list.push(to);")
 PAGE = [
  ("the panel never says Saved", PN, "      if (headEl) headEl.after(savedLine(!!season));\n", ""),
- ("Saved comes with no Undo", PN, "last.canUndo ? h('button.link', { type: 'button', dataset: { saved: 'undo',", "false ? h('button.link', { type: 'button', dataset: { saved: 'undo',"),
+ ("Saved comes with no Undo", PN, "last.canUndo ? h('button.btn.small', { type: 'button', dataset: { saved: 'undo',", "false ? h('button.btn.small', { type: 'button', dataset: { saved: 'undo',"),
  ("Saved does not say what changed", PN, "h('span', ` · ${last.label} · ${clock(last.at)}`)", "h('span', ` · ${clock(last.at)}`)"),
  ("Saved never goes quiet", PN, "    el.lrfTimer = setTimeout(() => { if (el.isConnected) fillSaved(el); }, SAID_FOR - (Date.now() - last.at) + 30);\n", ""),
  ("a refusal is said in a toast only", AP, "if (no) { const text = refusalText(no, engine); state.last = { kind: 'refused', text, at: Date.now() }; toast(text); emit('refused'); return false; }", "if (no) { toast(refusalText(no, engine)); return false; }"),
- ("a change is said again in the next panel opened", PN, "const fresh = last && Date.now() - last.at < SAID_FOR && lastSel === selKey();", "const fresh = last && Date.now() - last.at < SAID_FOR;"),
+ ("a change is said again in the next panel opened", PN, "const fresh = last && !last.page && Date.now() - last.at < SAID_FOR && lastSel === selKey();", "const fresh = last && !last.page && Date.now() - last.at < SAID_FOR;"),
  ("a change that closes its own panel is never said", PN, "      sayIfGone();\n", ""),
  ("the bed's panel has no such line", PN, "if (!season || !root.LRFCard.standing()) { renderBed(host, bed); own = true; }", "if (!season || !root.LRFCard.standing()) { renderBed(host, bed); }"),
  ("the layout's panel has no such line", ME, "    if (headEl && root.LRFPanels && root.LRFPanels.savedLine) {", "    if (false) {"),

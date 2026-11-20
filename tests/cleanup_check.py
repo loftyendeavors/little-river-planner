@@ -229,6 +229,14 @@ with sync_playwright() as pw:
     bench = js("const r = $('bnRules'); return r ? { helps: r.querySelectorAll('[data-hook=bench-help]').length, paras: [...r.querySelectorAll('p')].filter(p => p.textContent.length >= 100).length } : null;")
     said, cool = card("bench-help") or {}, card("bench-help", 1) or {}   # each "?" opened and read: the rules', then the unheated benches'
     check("the Nursery's hardening-off and growing-on rules say what they do behind two “?”, each led by its term in bold, and no paragraph stands beside their heads", bench == {"helps": 2, "paras": 0} and (said.get("rows") or [""])[0] == "Hardening off and growing on" and "harden off" in said.get("text", "") and (cool.get("rows") or [""])[0] == "On the unheated benches" and "plug trays and pots stand on the unheated benches" in cool.get("text", ""), {"bench": bench, "said": said, "cool": cool})
+    # L3, part 2: a setting is never a sentence with a link. The words of those sentences are gone where they stood.
+    RETIRED = ["Count them on the benches instead", "Let varieties of one crop share trays", "Count every variety in trays of its own", "They stand on the floor", "plan one now", "Plan a longer series: see it first"]
+    old_words, shown = {}, "return " + json.dumps(RETIRED) + ".filter(w => document.body.innerText.includes(w));"
+    js("A.select(null); A.setView('trays'); LRFTraysView.setTab('setup'); return 1;"); wait(700); old_words["Nursery's Set-up"] = js(shown)
+    js("A.setView('map'); A.select(null); return 1;"); wait(400); page.click("#mapHelp"); wait(300); old_words["the Map's “?”"] = js(shown); page.keyboard.press("Escape"); wait(200)
+    js("const p = S.plan.plantings.find(q => { const r = eng.calc(q); return r && eng.isSoilBed(r.b); }); A.setView('timeline'); A.select({ type: 'planting', id: p.id }); return 1;"); wait(500); old_words["a planting's panel"] = js(shown)
+    js("A.select(null); return 1;")
+    check("the words of the old sentences with a link are gone where they stood: the Nursery's Set-up, the Map's “?” and a planting's panel (L3)", len(old_words) == 3 and all(v == [] for v in old_words.values()), old_words)
     dtm = {}
     for where, how in [("map", "A.setView('map'); A.select(null);"), ("timeline", "A.setView('timeline');"), ("forecast", "A.setView('harvest');"), ("tasks", "A.setView('sow');"), ("nursery", "A.setView('trays'); LRFTraysView.setTab('room');"),
                        ("seeds", "A.setView('seeds');"), ("days to harvest", "A.setView('assume'); LRFAssume.setMode('days');"), ("yield and price, one crop at a time", "A.setView('assume'); LRFAssume.setMode('harvest'); document.querySelector('[data-ah-way=card]').click();")]:

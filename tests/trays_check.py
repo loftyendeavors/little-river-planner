@@ -173,7 +173,7 @@ with sync_playwright() as pw:
     # where the sheltered crates stand
     before_peak = stats()["Benches at their fullest"][0]
     tab("setup")   # 0.31: where the crates are counted is said on Set-up, under "How trays and crates are counted"
-    link = page.locator("#bnCount .bn-crates .linkish")
+    link = page.locator("#bnCount [data-hook='bench-crates-floor']")   # L3: a square tick, "Sheltered crates stand on the floor"
     check("where the sheltered crates are counted is a choice on the Set-up tab (0.31)", link.count() == 1, link.count())
     if link.count():
         link.click()

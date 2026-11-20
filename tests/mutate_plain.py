@@ -51,7 +51,7 @@ PAGE = [
  ("the older sync service is taken as able to read links", SE, "return !c ? 'none' : c.v >= 2 ? 'cloud' : 'cloud-old'; }", "return !c ? 'none' : 'cloud'; }"),
  ("Cloud sync is used though his own service is set", SE, "function linkHow() { const own = ownService(); if (Reader.serviceBase(own.base) && own.key.trim()) return 'own'; const c", "function linkHow() { const own = ownService(); if (false) return 'own'; const c"),
  ("the reader is handed his own (empty) service, not the cloud's", SE, "return how === 'cloud' ? { base: c.base, key: c.key } : ownService(); }", "return ownService(); }"),
- ("the fetch service of his own cannot be reached any more", SE, "h('button.linkish', { type: 'button', id: 'sdSettings', onclick: () => openSettings() },", "h('button.linkish', { type: 'button', id: 'sdSettings' },"),
+ ("the fetch service of his own cannot be reached any more", SE, "h('button.btn.quiet.small', { type: 'button', id: 'sdSettings', dataset: { hook: 'seeds-fetch-own' }, onclick: () => openSettings() },", "h('button.btn.quiet.small', { type: 'button', id: 'sdSettings', dataset: { hook: 'seeds-fetch-own' } },"),
 ]
 WORKER = [
  ("a supplier page is read for anyone", "worker/lrf-plan-sync.js", "      const left = await tokenLeft(env, viaKey ? 'Bearer ' + viaKey : request.headers.get('authorization'), now);\n      if (!left) return json(401, { error: 'signin' }, origin);", "      const left = url.pathname === '/fetch' ? 1e9 : await tokenLeft(env, viaKey ? 'Bearer ' + viaKey : request.headers.get('authorization'), now);\n      if (!left) return json(401, { error: 'signin' }, origin);"),

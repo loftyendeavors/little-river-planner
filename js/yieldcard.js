@@ -198,7 +198,7 @@
     return [from, ...own.slice(at + 1), ...own.slice(0, at), ...all.filter(el => column(el) !== col)];
   };
   /** Words on the card that name something kept on the list: a press opens "All on one page" at this crop's row. */
-  const toList = (c, text, varieties) => h('button.link', { type: 'button', dataset: { tolist: c.id }, title: `Opens “All on one page” at ${c.name}’s row.`, onclick: () => root.LRFAssume.setMode('harvest', 'list', c.id, { varieties: !!varieties }) }, text);
+  const toList = (c, text, varieties) => h('button.link', { type: 'button', dataset: { tolist: c.id, hook: 'yield-to-list' }, title: `Opens “All on one page” at ${c.name}’s row.`, onclick: () => root.LRFAssume.setMode('harvest', 'list', c.id, { varieties: !!varieties }) }, text);
 
   // ───────────────────────── the harvest window: to the season's end, or for a set number of days ─────────────────────────
   const owns = o => !!o && (o.harvestMode === 'season' || o.harvestMode === 'window' || (o.hw != null && o.hw !== '' && Number.isFinite(+o.hw) && +o.hw >= 0));
@@ -420,7 +420,7 @@
       h('button.btn.primary', { type: 'button', id: 'ycNext', dataset: { next: next || '' }, title: `Ticks ${c.name} as looked at for ${year}${nextCrop ? `, and opens ${nextCrop.name}` : ''}.${still.length ? ` Still empty: ${still.map(e => e.say).join(', ')}.` : ' Enter does the same from any box.'}`,
         onclick: e => { if (e.detail === 0) enter(null, q); else looksRight(App.state.engine, q, true); } }, nextCrop ? `Looks right. Next: ${nextCrop.name}` : 'Looks right.'),
       still.length ? h('p.yc-still', { id: 'ycStill' }, `Still empty: ${still.map(e => e.say).join(', ')}.`) : null,
-      looked ? h('button.link', { type: 'button', id: 'ycUntick', title: `${c.name} is no longer counted as looked at for ${year}.`, onclick: () => App.setLooked(c.id, false) }, 'Take the tick off') : null,
+      looked ? h('button.btn.quiet.small', { type: 'button', id: 'ycUntick', dataset: { hook: 'yield-untick' }, title: `${c.name} is no longer counted as looked at for ${year}.`, onclick: () => App.setLooked(c.id, false) }, 'Take the tick off') : null,
       h('p.yc-key', h('i.amber'), 'only you can fill', h('i.mine'), 'yours', h('i'), 'what the plan uses now'));
     if (cover) return finish(h('p.yc-plain', { id: 'ycPlain' }, 'A cover crop: nothing is picked from it and nothing is sold, so there is no figure to set here.'));
 
@@ -434,8 +434,8 @@
             tip: empty ? 'Nothing is set: all that is packed counts as sold. Type the part the house keeps.' : `${fig(hc.house.sold)}% of what is packed counts as sold. ${typed != null ? 'Yours. Clear it to go back to the crop’s record.' : 'From the crop’s record.'}`,
             save: k => App.setSell(c.id, { share: k == null ? null : 100 - k }, k == null ? `${c.name}: sold share back to ${hc.share.fallback}%` : `${c.name}: ${fig(100 - k)}% sold`) }),
           ' % of what is packed'),
-        h('p.yc-why', { id: 'ycHouseWhy' }, hc.house.marked ? `Shown because ${c.name} is marked as grown for sale and personal use, on its record under Seeds.` : `Shown because ${fig(hc.house.sold)}% of ${c.name} counts as sold today, so the rest is taken to be for personal use.`,
-          ' ', h('button.link', { type: 'button', id: 'ycSoldAll', title: 'Counts all that is packed as sold. What that does to the season’s worth is shown first.', onclick: () => App.setHouse(c.id, false) }, 'Sold in full…')));
+        h('p.yc-why', { id: 'ycHouseWhy' }, hc.house.marked ? `Shown because ${c.name} is marked as grown for sale and personal use, on its record under Seeds.` : `Shown because ${fig(hc.house.sold)}% of ${c.name} counts as sold today, so the rest is taken to be for personal use.`),
+        h('button.btn.small', { type: 'button', id: 'ycSoldAll', dataset: { hook: 'yield-sold-all' }, title: 'Counts all that is packed as sold. What that does to the season’s worth is shown first.', onclick: () => App.setHouse(c.id, false) }, 'Sold in full…'));
     }
 
     // ── the grid ──
@@ -481,7 +481,9 @@
         const cell = hc.cells[env], at = x.places.get(env), where = `${c.name}, ${PLACE[env].toLowerCase()}`, amber = w.places.includes(env);
         // what the box speaks of (E2d): a bed with its rows, a plant at a spacing, or what it always was
         const bx = boxFor(eng, c, hc, env, tenths), k = tenths ? 10 : bx ? bx.k : 1;
-        const showsBasis = bx && (bx.bed || bx.how), of = showsBasis ? bx.said : env === 'tower' && hc.basis === 'ft' ? 'a plant' : per;
+        // a plant's figure that is not kept for a spacing reads as the plain figure it is: the spacing is said in "Say it is for …" beside it
+        const unkept = bx && !bx.bed && cell.mine != null && !cell.inRow;
+        const showsBasis = bx && (bx.bed || bx.how) && !unkept, of = showsBasis ? bx.said : env === 'tower' && hc.basis === 'ft' ? 'a plant' : per;
         const stored = v => v == null ? null : bx && bx.bed ? v / bx.st.ft : tenths ? v / 10 : v;
         const what = `${weekly ? 'picked each week from' : 'in all from'} ${of}`, kk = tenths ? 1 : k,
           // what the plan uses with no figure of his says no rows and no spacing: for the box's bed it is its length times it, whatever the figure in the box says (Codex on #92)
@@ -489,7 +491,7 @@
         const mine = cell.mine == null ? null : cell.mine * k, fallback = cell.fallback == null ? null : cell.fallback * (tenths ? 10 : kf);
         const take = v => saveYield(c, env, stored(v), bx, v == null ? `${where}: yield back to ${back}` : `${where}: ${fig(bx && bx.bed ? v : stored(v))}${u} ${weekly ? 'a week' : 'in all'}${bx && bx.bed ? ` from ${of}` : ''}`);
         const input = box({ key: `y|${env}`, mine, fallback, amber, max: tenths ? 10 : undefined, label: `${where}: ${tenths ? 'of every 10 planted, fit to sell' : `yield, ${of}${weekly ? ' a week' : ''}`}`,
-          tip: cell.mine != null ? `Your figure: ${fig(cell.mine * kk)}${u} ${what}. Clear it to go back to ${back}.` : cell.fallback == null ? 'No yield is set for this crop.' : `${amber ? 'A starting value nobody has checked' : 'From the crop’s record, not yet checked'}: ${fig(cell.fallback * kf)}${u} ${what}.`,
+          tip: cell.mine != null ? `Your figure: ${fig(cell.mine * kk)}${u} ${what}. Clear it to go back to ${back}.` : cell.fallback == null ? `No yield is set for this crop: type what ${of} gives${weekly ? ' each week' : ' in all'}.` : `${amber ? 'A starting value nobody has checked' : 'From the crop’s record, not yet checked'}: ${fig(cell.fallback * kf)}${u} ${what}.`,
           save: take });
         // one meaning for the box, and beside a week's picking the season's total it comes to: the engine's own figure for the
         // plantings there that follow this line (they differ where one is picked for more days than another)
@@ -506,7 +508,7 @@
         let kept = null;
         if (bx && cell.value != null) {
           const hook = { hook: 'yield-kept', place: env, rows: cell.rows ? String(cell.rows) : '', inrow: cell.inRow ? String(cell.inRow) : '' };
-          const say = cell.mine != null && !amber ? h('button.link', { type: 'button', dataset: { hook: 'yield-say', place: env }, title: `Keeps ${fig(mine)}${u} for ${bx.said}, and says so: a planting on other ${bx.bed ? 'rows' : 'spacing'} then follows ${bx.bed ? 'its rows' : 'the row-foot'}. What that moves is shown first.`,
+          const say = cell.mine != null && !amber ? h('button.btn.quiet.small', { type: 'button', dataset: { hook: 'yield-say', place: env }, title: `Keeps ${fig(mine)}${u} for ${bx.said}, and says so: a planting on other ${bx.bed ? 'rows' : 'spacing'} then follows ${bx.bed ? 'its rows' : 'the row-foot'}. What that moves is shown first.`,
             onclick: () => saveYield(c, env, stored(mine), bx, `${where}: ${fig(mine)}${u} ${weekly ? 'a week' : 'in all'} from ${bx.said}`, true).then(done => { if (!done) ui.redraw(); }) }, bx.bed ? `Say it is for ${plural(bx.st.rows, 'row')}` : `Say it is for ${fig(bx.st.inRow)} in apart`) : null;
           if (bx.bed) kept = cell.rows ? h('small.yc-total', { dataset: hook, title: `Kept a row-foot: a bed gives it by its rows and its length. Typed for a bed of ${plural(cell.rows, 'row')}.` }, `${fig(cell.value / cell.rows)}${u} a row-foot${weekly ? ' a week' : ''}`)
             : h('small.yc-total', { dataset: hook, title: 'This figure does not say the rows it is for, so every bed gives it by its length alone, whatever its rows. Type a figure in the box, and it is kept for the rows the box says.' }, `a bed-foot, rows not said${bx.st.mixed ? ': its beds differ in rows' : ''}`, say ? ' · ' : null, say);
@@ -533,7 +535,7 @@
     // first picking: the crop's days to harvest for the place, shown and not changed here
     const timing = hc.micro ? [] : cols.list.map(env => eng.timingFor(c.id, null, env)), after = t => t && t.value != null ? `days after ${t.fixed ? FIXED[t.fixed] : FROM[t.start]}` : '';
     const oneStart = timing.length > 0 && timing.every(t => after(t) && after(t) === after(timing[0]));
-    body.append(row('first', 'First picking', h('span', oneStart ? `${after(timing[0])}, set under ` : 'Set under ', h('button.link', { type: 'button', id: 'ycToDays', title: 'Days to harvest are set on the other half of this list, for each place.', onclick: () => root.LRFAssume.setMode('days') }, 'Days to harvest')), cols.list.map((env, i) => {
+    body.append(row('first', 'First picking', h('span', oneStart ? `${after(timing[0])}, set under ` : 'Set under ', h('button.link', { type: 'button', id: 'ycToDays', dataset: { hook: 'yield-to-days' }, title: 'Days to harvest are set on the other half of this list, for each place.', onclick: () => root.LRFAssume.setMode('days') }, 'Days to harvest')), cols.list.map((env, i) => {
       if (hc.micro) return h('td', { dataset: { place: env } }, why('set on the tray plan, under Nursery'));
       const t = timing[i];
       if (!t || t.value == null) return h('td', { dataset: { place: env } }, why('no days are set for this place'));
@@ -579,7 +581,7 @@
     if (hc.house.part && hc.house.sold >= 100) need.push('What is kept for personal use. The crop is marked as partly kept, and no part is set.');
     for (const line of T.needs()) need.push(line);
     if (T.apart()) need.push(T.apart());
-    if (x.own) need.push([`${plural(x.own, 'planting')} ${x.own === 1 ? 'carries a yield of its own and does' : 'carry a yield of their own and do'} not follow these boxes. `, h('button.link', { type: 'button', id: 'ycDiffers', title: 'Opens the window that lists the plantings that differ from the list, with what letting each go would change.', onclick: () => root.LRFAssume.openAudit() }, '“See what differs…”'), ' lets them.']);
+    if (x.own) need.push([`${plural(x.own, 'planting')} ${x.own === 1 ? 'carries a yield of its own and does' : 'carry a yield of their own and do'} not follow these boxes. `, h('button.link', { type: 'button', id: 'ycDiffers', dataset: { hook: 'yield-differs' }, title: 'Opens the window that lists the plantings that differ from the list, with what letting each go would change.', onclick: () => root.LRFAssume.openAudit() }, '“See what differs…”'), ' lets them.']);
     const ownYield = varieties.filter(v => eng.ENVS.some(env => eng.harvestFor(c.id, v.id).cells[env].mine != null)).length;
     if (ownYield) need.push([`${plural(ownYield, 'variety', 'varieties')} ${ownYield === 1 ? 'has' : 'have'} a yield of ${ownYield === 1 ? 'its' : 'their'} own, on `, toList(c, '“All on one page”', true), '.']);
     if (s.waiting.get(c.id)) need.push(`${plural(s.waiting.get(c.id), 'planting')} ${s.waiting.get(c.id) === 1 ? 'waits' : 'wait'} under To place, and ${s.waiting.get(c.id) === 1 ? 'is' : 'are'} not counted until ${s.waiting.get(c.id) === 1 ? 'it has' : 'they have'} a bed.`);
@@ -749,7 +751,7 @@
         firstNow.length ? h('li.yc-sec', firstNow.some(id => waits(eng, eng.crop(id), eng.harvestFor(id)).any) ? 'No price, or a yield not yet checked' : 'Now set') : null, firstNow.map(item),
         restNow.length ? h('li.yc-sec', 'The rest, biggest first') : null, restNow.map(item),
         !shown.length ? h('li.yc-sec', q ? 'No crop matches.' : 'No crops yet.') : null),
-      typed.length ? h('p.yc-typed', { id: 'ycTyped' }, 'Sold shares you typed: ', typed.map((id, i) => [i ? ' · ' : '', h('button.link', { type: 'button', dataset: { crop: id }, title: 'Open this crop’s card', onclick: () => open(id) }, `${eng.crop(id).name} ${fig(eng.harvestFor(id).share.mine)}%`)])) : null);
+      typed.length ? h('p.yc-typed', { id: 'ycTyped' }, 'Sold shares you typed: ', typed.map((id, i) => [i ? ' · ' : '', h('button.link', { type: 'button', dataset: { crop: id, hook: 'yield-typed-crop' }, title: 'Open this crop’s card', onclick: () => open(id) }, `${eng.crop(id).name} ${fig(eng.harvestFor(id).share.mine)}%`)])) : null);
     const c = eng.crop(ui.cur), main = c ? card(eng, plan, c, q) : h('section.yc-card', { id: 'ycCard' }, h('p.yc-plain', 'No crops yet.'));
     main.addEventListener('keydown', e => { onKey(e, App.state.engine, q); });
     const keepScroll = host.querySelector('.yc-list') ? host.querySelector('.yc-list').scrollTop : 0;
