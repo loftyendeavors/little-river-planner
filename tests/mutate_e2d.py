@@ -1,8 +1,8 @@
 """Deliberate faults for E2d: a sown crop's figure that says the rows it was typed for, a plant's figure that says its spacing, the
 row-foot that holds, the bed a box speaks of, and the figure joined with its rows as one value (the engine and the merge): each
 is put into a copy of the app folder, and a line of e2d_test.cjs that passed with no fault in it must fail.
-usage: python3 -I mutate_e2d.py <app> <scratch> <tests-dir> <plan.json> [node | list] [words…]     env FROM=, TO= to run a part
-node: seconds a fault. list: how many faults there are, and nothing else.
+usage: python3 -I mutate_e2d.py <app> <scratch> <tests-dir> <plan.json> [node | page | list] [words…]     env FROM=, TO= to run a part
+node: seconds a fault (e2d_test.cjs). page: the card in a browser, about half a minute a fault (e2d_check.py). list: how many faults there are, and nothing else.
 """
 import json, os, shutil, subprocess, sys
 from pathlib import Path
@@ -43,20 +43,40 @@ NODE = [
  ("the rows are joined apart from the figure", MG, "'assumptions.crops.*.*': [['yield', 'rows', 'inRow']] };", "'assumptions.crops.*.*': [['yield', 'inRow']] };"),
  ("a place written with * is not found", MG, "      if (hit) return hit[1];\n", ""),
 ]
-if mode == "list": print(json.dumps({"node": len(NODE)})); sys.exit(0)
-faults = NODE
+YC = "js/yieldcard.js"; AP = "js/app.js"; PN = "js/panels.js"
+PAGE = [
+ ("a figure that moves other beds is taken with no sheet", YC, "if (m && m.held && m.list.length) {", "if (false) {"),
+ ("the figure is kept for other rows than the box says", YC, "how: { rows: st.rows }, said:", "how: { rows: st.rows + 1 }, said:"),
+ ("the figure typed for a bed is kept as if for a foot", YC, "bx && bx.bed ? v / bx.st.ft : tenths", "bx && bx.bed ? v : tenths"),
+ ("the box shows a foot's figure, not the bed's", YC, "return { bed: true, st, k: st.ft * (cell.rows ? st.rows / cell.rows : 1),", "return { bed: true, st, k: (cell.rows ? st.rows / cell.rows : 1),"),
+ ("a figure kept for other rows is shown as if for the box's", YC, "k: st.ft * (cell.rows ? st.rows / cell.rows : 1),", "k: st.ft,"),
+ ("what clearing goes back to takes the typed figure's rows", YC, "kf = bx && bx.bed ? bx.st.ft : 1,", "kf = k,"),
+ ("the sheet's worth is not the engine's", YC, "return { held, list, worth: [study(eng).worth, F.build(next)", "return { held, list, worth: [study(eng).worth, 1 + F.build(next)"),
+ ("the sheet leaves a planting out", YC, "if (Math.abs(ya.units - yb.units) > 1e-9) list.push(", "if (Math.abs(ya.units - yb.units) > 1e-9 && !list.length) list.push("),
+ ("the sheet does not say the bed's rows", YC, "` ${at.bed ? plural(x.rows, 'row') : `${fig(x.inRow)} in apart`}, ${fig(x.ft)} ft: ", "` ${fig(x.ft)} ft: "),
+ ("the line under the box does not say the row-foot", YC, "`${fig(cell.value / cell.rows)}${u} a row-foot${weekly ? ' a week' : ''}`)", "`${fig(cell.value)}${u}`)"),
+ ("a figure with no rows is not said to have none", YC, "`a bed-foot, rows not said${bx.st.mixed ? ': its beds differ in rows' : ''}`", "''"),
+ ("the box does not say its bed", YC, "bx && bx.bed && !T.any ? `${unit === 'each' ? '' : unit + ' '}from ${of}` :", "false ? '' :"),
+ ("a plant's figure at one spacing is kept without it", YC, "how: cell.inRow || st.spacings <= 1 ? { inRow: st.inRow } : null,", "how: null,"),
+ ("a variety's figure takes rows", AP, "    if (kind !== 'crops') how = undefined;", "    "),
+ ("a figure typed on the list drops the cell's rows", AP, "if (none || how) { setCell(next, kind, id, env, 'rows', none ? null : whole(how.rows));", "how = how || {}; { setCell(next, kind, id, env, 'rows', none ? null : whole(how.rows));"),
+ ("a figure cleared leaves its rows", AP, "if (none || how) { setCell(next, kind, id, env, 'rows', none ? null : whole(how.rows));", "if (how) { setCell(next, kind, id, env, 'rows', none ? null : whole(how.rows));"),
+ ("the planting's panel does not say the row-foot", PN, "a row-foot × ${num(r.rows)} row", "a foot × ${num(r.rows)} row"),
+]
+if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)
+faults = PAGE if mode == "page" else NODE
 if words: faults = [f for f in faults if any(w in f[0].lower() for w in words)]
 faults = faults[int(os.environ.get("FROM", "0")):int(os.environ.get("TO", "999"))]
 copy = scratch / "mutant-e2d"; caught, missed, broken = [], [], []
 already = None
 for name, rel, was, new in ([(None, None, None, None)] if faults else []) + faults:
     if copy.exists(): shutil.rmtree(copy)
-    shutil.copytree(app, copy, ignore=shutil.ignore_patterns("thumbs.json", "farm-map.jpg", "dev"))
+    shutil.copytree(app, copy, ignore=shutil.ignore_patterns("dev") if mode == "page" else shutil.ignore_patterns("thumbs.json", "farm-map.jpg", "dev"))
     if name is not None:
         f = copy / rel; s = f.read_text(encoding="utf-8")
         if s.count(was) != 1 or was == new: broken.append(name); print(f"BROKEN {name} :: the text to change is there {s.count(was)} times", flush=True); continue
         f.write_text(s.replace(was, new), encoding="utf-8")
-    try: out = subprocess.run(["node", str(tests / "e2d_test.cjs"), str(copy), str(plan), str(app.parent / "old" / "js")], capture_output=True, text=True, timeout=300).stdout
+    try: out = subprocess.run((["python3", "-I", str(tests / "e2d_check.py"), str(copy), str(scratch / "shots")] if mode == "page" else ["node", str(tests / "e2d_test.cjs"), str(copy), str(plan), str(app.parent / "old" / "js")]), capture_output=True, text=True, timeout=300).stdout
     except subprocess.TimeoutExpired: out = "timed out"
     try: d = json.loads(out[out.rfind('{"passed"'):]); names = [str(x) for x in d["failed"]]; ran = True
     except Exception: names = []; ran = False; print("   no result: " + out[-300:].replace("\n", " "), flush=True)

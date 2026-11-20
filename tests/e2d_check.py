@@ -97,12 +97,12 @@ with sync_playwright() as pw:
     check("each line names the bed, its rows and its length", bool(sh) and all(" row" in m["text"] and " ft" in m["text"] and "→" in m["text"] for m in sh["moves"]), sh and sh["moves"][:2])
     check("it gives the season's worth before and after, the engine's own", bool(sh) and bool(sh["worth"]) and near(sh["worth"][0], want["worth"][0]) and near(sh["worth"][1], want["worth"][1]) and "goes from" in sh["wtext"], [sh and sh["worth"], want["worth"]])
     check("it says what the figure is for, and that one Undo takes it back", bool(sh) and ("%g-ft bed of %d row" % (ST["ft"], ST["rows"])) in sh["text"] and "row-foot" in sh["text"] and "undo" in sh["text"].lower(), sh and sh["text"][:300])
-    js("const d = document.querySelector('dialog[open]'); const b = [...d.querySelectorAll('button')].find(x => !x.classList.contains('primary')); b.click(); return 1;"); wait(500)
+    js("const d = document.querySelector('dialog[open]'), b = d && [...d.querySelectorAll('button')].find(x => !x.classList.contains('primary')); if (b) b.click(); else if (S.undo.length) A.undo(); return 1;"); wait(500)
     check("Cancel leaves the plan as it was, and the box as it was", js("return snap().plan;") == start["plan"] and js("return S.undo.length;") == 0 and (cell() or {}).get("value") == "", cell())
 
     # ── taken: one step ──
     card(); type_it(typed); wait(700)
-    js("const d = document.querySelector('dialog[open]'); d.querySelector('.btn.primary').click(); return 1;"); wait(900)
+    js("const d = document.querySelector('dialog[open]'), b = d && d.querySelector('.btn.primary'); if (b) b.click(); return 1;"); wait(900)
     got = js("""const eng = S.engine, c = ((S.plan.assumptions || {}).crops || {})[arg.crop] || {}; return { cell: c[arg.env] || null, others: Object.keys(c).filter(k => k !== arg.env), undo: S.undo.length, rows: rowsOf(eng), toast: toast(),
       units: Object.fromEntries(S.plan.plantings.filter(p => p.cropId === arg.crop).map(p => [p.id, (eng.givenOf(p) || {}).units])) };""", {"crop": C, "env": ENV})
     check("taken, it is one step, and the plan holds the figure a foot of that bed with its rows beside it", got["undo"] == 1 and got["cell"] == want["cell"] and got["cell"]["rows"] == ST["rows"] and not got["others"], [got["cell"], want["cell"]])
