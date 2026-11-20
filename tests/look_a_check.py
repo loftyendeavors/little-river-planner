@@ -95,7 +95,7 @@ with sync_playwright() as pw:
     check("the groups run from the one in most spaces to the one in fewest", len(legend.get("order") or []) >= 6 and legend.get("order") == sorted(legend.get("order") or [], reverse=True), legend.get("order"))
     MORE = "const more = $('legendMore'), hidden = q('#mapLegend .legend-chip').filter(c => c.hidden).length; return { hidden: more.hidden, text: more.textContent, chipsHidden: hidden, title: more.title };"
     seen = []
-    for w in (3440, 1000):
+    for w in (3440, 800):   # the key wraps to a second line before it hides (L3): narrow enough that two lines cannot hold every group
         page.set_viewport_size({"width": w, "height": 900}); wait(500); seen.append(js(MORE) or {})
     page.set_viewport_size({"width": WIDTH, "height": 900}); wait(500); js("LRFMap.fit(true);"); wait(500)
     check("the button at the end of the line is always there: “Key” on a window where every group fits, “+n” where n do not; either way it says it leads to how beds are drawn", len(seen) == 2 and seen[0].get("hidden") is False and seen[0].get("chipsHidden") == 0 and seen[0].get("text") == "Key" and seen[1].get("hidden") is False and seen[1].get("chipsHidden", 0) >= 1 and seen[1].get("text") == "+%d" % seen[1].get("chipsHidden") and all("how beds are drawn" in (s.get("title") or "").lower() for s in seen), seen)

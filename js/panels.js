@@ -22,7 +22,7 @@
   function renderLibrary() {
     if (!App.state.ready) return;
     // the third side of the switch: the plantings that wait for a bed, drawn by the series tool that made them
-    if (lib.scope === 'wait' && root.LRFSeries) { root.LRFSeries.fillWaiting(clear($('libList')), lib.query); $('libHint').textContent = 'Drag one onto a bed or a row. It keeps its date.'; return; }
+    if (lib.scope === 'wait' && root.LRFSeries) { root.LRFSeries.fillWaiting(clear($('libList')), lib.query); $('libHint').textContent = 'Drag one onto a bed or a row. It keeps its date.'; $('libDone').hidden = !App.state.armed; return; }
     const eng = App.state.engine, plan = App.state.plan, host = clear($('libList')), q = lib.query.trim().toLowerCase();
     const used = new Map();
     for (const p of plan.plantings) used.set(p.cropId, (used.get(p.cropId) || 0) + 1);
@@ -57,7 +57,9 @@
       host.append(row);
     }
     if (!shown) host.append(h('p.empty', q ? `No crop or variety matches “${lib.query}”.` : 'No crops yet.'));
-    $('libHint').textContent = App.state.armed ? (App.state.view === 'timeline' ? 'Click where it fits, or on any row at a date. Press Esc when done.' : 'Click beds to plant. Press Esc when done.') : 'Drag a crop onto a bed. Or click it, then click beds.';
+    // While a crop is carried, Done at the foot puts it down (L3); Esc still does
+    $('libHint').textContent = App.state.armed ? (App.state.view === 'timeline' ? 'Click where it fits, or on any row at a date.' : 'Click beds to plant.') : 'Drag a crop onto a bed. Or click it, then click beds.';
+    $('libDone').hidden = !App.state.armed;
   }
   /** Turn the library's switch: 'mine', 'all', or 'wait' (To place). */
   function setScope(scope) {
@@ -103,6 +105,7 @@
     host.addEventListener('click', e => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) return; activate(e); });
     host.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.lib-row') && !e.target.closest('.lib-more, .lib-series')) { e.preventDefault(); activate(e); } });
     $('libSearch').addEventListener('input', e => { lib.query = e.target.value; renderLibrary(); });
+    $('libDone').addEventListener('click', () => App.arm(null));
     for (const button of document.querySelectorAll('[data-lib-scope]')) {
       button.addEventListener('click', () => setScope(button.dataset.libScope));
     }
@@ -680,7 +683,7 @@
     const split = f && f.rows && f.rows.count < f.rows.total, totalRows = f ? (f.rows ? f.rows.total : r.rows) : 0;
     const whereText = !f ? null : r.partial || split ? `Feet ${num(f.a0, 1)}–${num(Math.min(f.a1, r.cap), 1)} of ${num(r.cap, 1)}. Drag its ends on the map to change them.` : 'Whole bed. Shorten it here, or drag its ends on the map, to share the bed.';
     const dtmSource = timing.activeMode === 'catalog' ? `From the supplier's ${timing.printed}-day figure${timing.conversion === 'seed-minus-nursery' ? `, less ${timing.nurseryDays} nursery days` : timing.conversion === 'direct-less' ? `, which is for seed sown in place: ${timing.off} days less as a transplant` : ''}.${timing.basisBy === 'guess' ? ' What those days are counted from is a guess from the wording of the supplier’s page: set it on the Assumptions list.' : ''}`
-      : p.dtm > 0 ? 'Pinned: this planting keeps its own days. Clear the field and it follows the assumptions list.' : v && v.dtm > 0 ? 'Your figure for this variety.' : 'Crop default. Set your own on the Assumptions list.';
+      : p.dtm > 0 ? 'Its own days. Empty the box to follow your list.' : v && v.dtm > 0 ? 'Your figure for this variety.' : 'Crop default. Set your own on the Assumptions list.';
     // Whom it is grown for: a flag, which follows the bed (and the bed its garden) until it is set here.
     const F = root.LRFForecast, use = F.useOf(eng, p), bedUse = F.useOfBed(eng, bed);
     const useBtn = (value, text) => h('button', { type: 'button', 'aria-pressed': String(use.use === value), dataset: { use: value }, onclick: () => { if (use.use !== value) App.setUse('planting', [p.id], value); } }, text);
@@ -706,6 +709,16 @@
         h('button.link', { type: 'button', dataset: fromBedSeason ? { hook: 'bed-planting-back' } : {},
           onclick: () => fromBedSeason ? root.LRFCard.backToBed(bed.id) : App.select({ type: 'bed', id: bed.id }) }, App.bedLabel(bed)),
         h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select(null) }, '×')),
+      // the schedule and what it is expected to give come first, the boxes after (L3; the card's order)
+      h('section.insp-section', { dataset: { hook: 'panel-schedule' } },
+        h('h3', 'Schedule'),
+        h('ol.schedule', { id: 'jobList' },
+          jobItems(p, r, c, sow),
+          earlyPicks(eng, p, r),
+          h('li', { dataset: { hook: 'schedule-first' } }, h('span', eng.soldOf(p, r)?.some(x => x.ahead) ? 'Days to harvest' : 'First harvest'), h('b', day(r.first))),
+          h('li', h('span', 'Last harvest'), h('b', r.harvestDays ? day(r.last) : 'None before the season ends')),
+          h('li', h('span', 'Ground free again'), h('b', through === Infinity ? 'Stays planted' : day(E.addDays(through, 1))))),
+        yieldLine(eng, p, r)),
       h('section.insp-section.form',
         field(c.method === 'TP' ? 'Transplant date' : sow && sow.kind === 'field' && sow.done ? 'Planned sowing date' : 'Sowing date', h('input', { type: 'date', id: 'fDate', value: p.date, onchange: e => { const ed = edit.date(e.target.value); if (ed) set(...ed); else render(); } })),
         field('Variety', variety, canMix && !several ? h('button.linkish', { type: 'button', id: 'fSeveral', title: 'Grow several varieties in this bed: each becomes a planting of its own beside this one, and the bed is shared equally', onclick: () => { several = { id: p.id, picked: new Set(), by: 'length' }; render(); } }, 'Several varieties in this bed…') : null),
@@ -721,19 +734,10 @@
             onchange: e => set(...edit.dtm(p, e.target.value)) })),
           field('Harvest days', h('input', { type: 'number', id: 'fHw', min: 0, max: 400, value: p.hw != null && p.hw !== '' ? p.hw : '', placeholder: r.harvestMode === 'season' ? 'To season end' : String(c.hw),
             onchange: e => set(...edit.hw(e.target.value)) }))),
-        h('p.help', fromList || dtmSource),
+        h('p.help', { dataset: { hook: 'dtm-said' } }, fromList || dtmSource),
         standField(eng, p, r),
         useField,
-        givesField,
-        yieldLine(eng, p, r)),
-      h('section.insp-section',
-        h('h3', 'Schedule'),
-        h('ol.schedule', { id: 'jobList' },
-          jobItems(p, r, c, sow),
-          earlyPicks(eng, p, r),
-          h('li', { dataset: { hook: 'schedule-first' } }, h('span', eng.soldOf(p, r)?.some(x => x.ahead) ? 'Days to harvest' : 'First harvest'), h('b', day(r.first))),
-          h('li', h('span', 'Last harvest'), h('b', r.harvestDays ? day(r.last) : 'None before the season ends')),
-          h('li', h('span', 'Ground free again'), h('b', through === Infinity ? 'Stays planted' : day(E.addDays(through, 1)))))),
+        givesField),
       failSection(p),
       sow && !(sow.failed && !sow.done) ? h('section.insp-section', h('h3', sow.kind === 'sow' || sow.unit === 'seeds' ? 'Sowing' : 'Planting'), sowingBox(p)) : null,
       h('section.insp-section',
@@ -826,36 +830,43 @@
           h('span', h('span.row-name', r.name), h('span.row-detail', r.detail)), h('span.row-word', r.word, h('i', { 'aria-hidden': 'true' }, '›')))));
     }
   }
-  const looseAway = e => { if (looseBox && !looseBox.contains(e.target) && !$('settleBadge').contains(e.target)) closeLoose(); };
-  const looseKey = e => { if (e.key === 'Escape' && looseBox) { closeLoose(); $('settleBadge').focus(); } };
+  // the list opens under what was pressed: the header's button, or the Assumptions page's quiet link while nothing is counted (L3)
+  let looseFrom = null;
+  const looseAway = e => { if (looseBox && !looseBox.contains(e.target) && !(looseFrom && looseFrom.contains(e.target))) closeLoose(); };
+  const looseKey = e => { if (e.key === 'Escape' && looseBox) { const from = looseFrom; closeLoose(); if (from) from.focus(); } };
   function closeLoose() {
     if (!looseBox) return;
-    looseBox.remove(); looseBox = null; $('settleBadge').setAttribute('aria-expanded', 'false');
+    looseBox.remove(); looseBox = null;
+    if (looseFrom) looseFrom.setAttribute('aria-expanded', 'false');
+    looseFrom = null;
     document.removeEventListener('pointerdown', looseAway, true); document.removeEventListener('keydown', looseKey, true);
   }
-  function openLoose() {
-    const badge = $('settleBadge');
-    if (looseBox) { closeLoose(); return; }
-    if (!needsYou(looseRows)) return;
+  function openLoose(from = $('settleBadge')) {
+    if (looseBox) { const again = looseFrom === from; closeLoose(); if (again) return; }
+    if (from === $('settleBadge') ? !needsYou(looseRows) : !looseRows.length) return;
     looseBox = h('div.loose', { id: 'looseList', role: 'group', 'aria-label': 'Loose ends' });
+    looseFrom = from;
     fillLoose();
     document.body.append(looseBox);
-    const r = badge.getBoundingClientRect();
+    const r = from.getBoundingClientRect();
     looseBox.style.left = Math.round(Math.max(12, Math.min(r.right - looseBox.offsetWidth, root.innerWidth - looseBox.offsetWidth - 12))) + 'px';
     looseBox.style.top = Math.round(r.bottom + 8) + 'px';
     looseBox.style.maxHeight = Math.round(Math.max(160, root.innerHeight - r.bottom - 24)) + 'px';
-    badge.setAttribute('aria-expanded', 'true');
+    from.setAttribute('aria-expanded', 'true');
     document.addEventListener('pointerdown', looseAway, true); document.addEventListener('keydown', looseKey, true);
   }
   function drawSettle() {
-    const badge = $('settleBadge');
+    const badge = $('settleBadge'), link = $('asLoose');
     if (!badge || !App.state.ready) return;
     looseRows = looseEnds();
     const n = needsYou(looseRows);
-    // The button is shown only while something needs the grower (his, Nov 16): with nothing counted it is not in the header, and
-    // what can wait is listed under what needs him the next time something does.
+    // The button is shown only while something needs the grower (his, Nov 16): with nothing counted it is not in the header. What
+    // can wait is then reached from one quiet link on the Assumptions page, where most of it is listed (L3, his to turn back).
     badge.hidden = !n;
-    if (!n) { closeLoose(); return; }
+    const k = n ? 0 : looseRows.length;
+    if (link) { link.hidden = !k; link.textContent = k ? `${num(k)} loose end${k === 1 ? '' : 's'}` : ''; }
+    if (!n) { if (link && looseFrom === link && k) fillLoose(); else closeLoose(); return; }
+    if (link && looseFrom === link) closeLoose();
     clear(badge); add(badge, 'Loose ends', h('b', num(n)));
     badge.title = `${num(n)} ${n === 1 ? 'thing needs' : 'things need'} you: ground booked twice, plantings longer than their bed, or seed no row can count. What can wait is under it.`;
     if (looseBox) fillLoose();
@@ -871,7 +882,9 @@
   }
   function initInspector() {
     const badge = $('settleBadge');
-    if (badge) { badge.setAttribute('aria-haspopup', 'true'); badge.setAttribute('aria-expanded', 'false'); badge.addEventListener('click', openLoose); App.on('plan', laterSettle); App.on('view', closeLoose); }
+    if (badge) { badge.setAttribute('aria-haspopup', 'true'); badge.setAttribute('aria-expanded', 'false'); badge.addEventListener('click', () => openLoose(badge)); App.on('plan', laterSettle); App.on('view', closeLoose); }
+    const link = $('asLoose');
+    if (link) link.addEventListener('click', () => openLoose(link));
     const host = $('inspectorBody');
     for (const kind of ['wheel', 'touchmove', 'keydown']) host.addEventListener(kind, () => { holdSettle = false; }, { passive: true });
     let press = null;

@@ -82,7 +82,10 @@
       </div>
     </header>
     <div class="lib-list" id="libList"></div>
-    <p class="lib-hint" id="libHint" data-hook="lib-hint">Drag a crop onto a bed. Or click it, then click beds.</p>
+    <div class="lib-foot">
+      <p class="lib-hint" id="libHint" data-hook="lib-hint">Drag a crop onto a bed. Or click it, then click beds.</p>
+      <button type="button" class="btn small" id="libDone" data-hook="lib-done" title="Put the crop down (Esc)" hidden>Done</button>
+    </div>
   </aside>
 
   <section class="stage">
@@ -113,11 +116,11 @@
         <div class="map-bar" id="mapBar">
           <span class="bar-title">In the ground</span>
           <div class="map-legend" id="mapLegend" aria-label="The colours of the map: the groups of crops in the ground. Click a group to show only that group."></div>
-          <button type="button" class="legend-more" id="legendMore" aria-expanded="false" hidden></button>
+          <button type="button" class="legend-more" id="legendMore" data-hook="legend-more" aria-expanded="false" hidden></button>
           <p class="map-key" aria-label="How beds are drawn"><i class="k-grow"></i>growing <i class="k-pick"></i>harvest <i class="k-turn"></i>turning over <label class="k-dim" title="Grey and darken the farm photo a little behind the beds. Kept on this computer."><input type="checkbox" id="mapDimToggle">Dim photo</label></p>
         </div>
       </div>
-      <div class="tip" id="tip" hidden></div>
+      <div class="tip" id="tip" data-hook="map-tip" hidden></div>
     </div>
 
     <div class="view view-timeline" id="timelineView">
@@ -154,6 +157,7 @@
           <p class="eyebrow">One list the whole plan rests on</p>
           <h2 id="asTitle">Days to first harvest</h2>
           <p id="asLead">Days to harvest for each crop in each place it grows. Each row says what its days are counted from. Each number is used as it stands, whatever the month or the house. Grey is the default: type over it to make it yours. A variety with its own figure keeps it; a planting with no variety uses the crop’s row.</p>
+          <button type="button" class="link as-loose" id="asLoose" data-hook="loose-link" aria-haspopup="true" aria-expanded="false" title="What can wait, when you have a minute. Loose ends is in the header only while something needs you." hidden></button>
           <p class="frame-figs" id="asCount"></p>
         </header>
         <div class="seg as-mode" role="group" aria-label="Which half of the list">
@@ -245,7 +249,7 @@
   </aside>
 </main>
 
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" data-hook="toast"></div>
 <div class="file-drop" aria-hidden="true"><p>Drop the backup to load it</p></div>
 
 <script src="js/library.js"></script>

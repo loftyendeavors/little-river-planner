@@ -834,7 +834,12 @@
       const openEl = e.target.closest('.tl-open');
       if (openEl) { App.select({ type: 'opening', id: openEl.dataset.opening, bedId: row.dataset.bed }); return; }
       App.select({ type: 'bed', id: row.dataset.bed });
-      if (spot && e.target.closest('.tl-lane')) App.setDate(spot.date);
+      // the date moves to the day clicked, and says so, with the way back (L3)
+      if (spot && e.target.closest('.tl-lane')) {
+        const was = App.state.date;
+        App.setDate(spot.date);
+        if (+App.state.date !== +was) UI.toast(`The date is now ${day(App.state.date)} (was ${day(was)})`, { label: 'Undo', run: () => App.setDate(was) });
+      }
     });
     $('tlScale').addEventListener('click', e => {
       const box = $('tlScale').getBoundingClientRect(), index = Math.floor((e.clientX - box.left) / ppd);
