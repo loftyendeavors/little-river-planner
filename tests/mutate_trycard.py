@@ -45,7 +45,7 @@ PAGE = [
  ("the card writes a variety its own way", CD, "dataset: { hook: 'card-variety' }, onchange: ev => set(Ed.variety(ev.target.value)) }", "dataset: { hook: 'card-variety' }, onchange: ev => set([{ varietyId: ev.target.value, variety: ev.target.selectedOptions[0].text }, 'Change variety']) }"),
  ("the card writes a share of the bed its own way", CD, "onchange: ev => set(Ed.length(e, p, ev.target.value)) }", "onchange: ev => set([{ ft: +ev.target.value + 1 }, 'Change length']) }"),
  ("Grown for sale on a planting's card sets its bed", CD, "if (!App.setUse('planting', [p.id], ev.target.checked ? 'commercial' : 'personal')) draw();", "if (!App.setUse('bed', [bed.id], ev.target.checked ? 'commercial' : 'personal')) draw();"),
- ("an answer is said in a toast as well as on the card", UI, "    if (answerTo && answerTo(message, action)) return;", "    if (answerTo) answerTo(message, action);"),
+ ("an answer is said in a toast as well as on the card", UI, "    if (answerTo && actions.length <= 1 && answerTo(message, actions[0])) return;", "    if (answerTo && actions.length <= 1) answerTo(message, actions[0]);"),
  ("Undo on the card's “Saved” does nothing", CD, "onclick: () => App.undo() }, 'Undo')", "onclick: () => {} }, 'Undo')"),
  ("after a drop with no variety the variety box is not ringed", CD, "    if (justPlanted && !p.varietyId && varieties.length) variety.classList.add('ask');\n", ""),
  ("a bar shows no hint", CD, "    hintTimer = setTimeout(() => showHint(bar), 350);", "    hintTimer = 0;"),
