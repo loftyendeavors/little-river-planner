@@ -38,7 +38,8 @@
   const PATTERN = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' };
   const PATTERN_SAY = { weekly: 'picked gradually', once: 'cleared at once', spread: 'picked on demand' };
   const PATTERN_TIP = { spread: 'On demand: the yield is a total, held and spread evenly over the harvest window.', weekly: 'Gradually: the yield is a week’s picking, every week of the harvest window.', once: 'Clear: the yield is a total, all of it counted the day the crop is ready.' };
-  const BASIS = { plant: 'a plant', ft: 'a bed-foot', tray: 'a tray' };
+  // what a figure of the list is for, in words: the engine's own (E2d), with the rows or the spacing the figure says
+  const fromSaid = (eng, x, cell) => x.basis === 'ft' && cell && cell.rows ? `a foot of a bed of ${cell.rows} row${cell.rows === 1 ? '' : 's'} (a row-foot gives 1/${cell.rows} of it)` : x.basis === 'plant' && cell && cell.inRow ? `a plant ${fig(cell.inRow)} in apart (held a row-foot where a planting’s spacing differs)` : eng.perSaid(x.basis);
   const soldBy = unit => unit === 'each' ? 'sold each' : `sold by the ${unit}`;
   // which of the two ways the second half was last looked at: a preference kept in this browser, not a figure of the plan
   const WAY_KEY = 'lrf-next:yield-way';
@@ -401,7 +402,7 @@
       th('.ah-price', 'Price $', 'What one unit sells for. A variety can have its own.'),
       th('.ah-pick', 'Picked', 'The harvest pattern. Gradually: a week’s picking, every week. Clear: all of it the day it is ready. On demand: a total, spread evenly.'),
       th('.ah-days', 'Picked to', 'The harvest window: to the season’s end where it grows, or for a set number of days. The ground is held that long.'),
-      App.state.engine.ENVS.map(env => th('.ah-y', SHORT[env], `Yield ${LABEL[env].toLowerCase()}, for a plant or a bed-foot as the row says: a total, or a week’s picking where the crop is picked each week`, 'Yield')),
+      App.state.engine.ENVS.map(env => th('.ah-y', SHORT[env], `Yield ${LABEL[env].toLowerCase()}, for a plant or a foot of bed as the row says (a figure typed on the crop’s card says the rows it is for): a total, or a week’s picking where the crop is picked each week`, 'Yield')),
       th('.ah-comes', 'Comes to', 'The total and the week’s figure, where the crop mostly grows. One is yours; the other follows from the harvest window.'),
       h('th.ah-s', { title: 'The part of what is packed that is sold: what is left after the share for personal use', hidden: App.state.plan.settings.houseKeeps === false }, 'Sold %'),
       th('.ah-s', 'Keeps wk', 'Weeks the crop keeps after picking. What is picked is then counted as there to sell evenly over those weeks.'),
@@ -411,9 +412,9 @@
     const cell = hc.cells[env];
     if (hc.micro) return h('td.as-seed.ah-comes', 'a tray is a tray');
     if (!cell || cell.value == null) return h('td.as-seed.ah-comes.bad', { title: 'No yield is set, so nothing is forecast for this crop.' }, 'no yield');
-    const u = unit === 'each' ? '' : ' ' + unit, weeks = fig(hc.nominal / 7), per = BASIS[hc.basis];
+    const u = unit === 'each' ? '' : ' ' + unit, weeks = fig(hc.nominal / 7), per = fromSaid(App.state.engine, hc, cell);
     const tip = `${LABEL[env]}: ${fig(cell.total)}${u} from ${per} over ${hc.nominal} harvest days, which is ${fig(cell.weekly)} a week. ${hc.house.sold}% of it is counted as sold.`;
-    const from = hc.basis === 'ft' ? 'a bed-ft' : per;
+    const from = hc.basis === 'ft' ? (cell.rows ? `a bed-ft of ${cell.rows} rows` : 'a bed-ft') : 'a plant';
     return h('td.as-seed.ah-comes', { title: tip }, h('b', `${fig(cell.total)}${u}`), h('small', hc.weekly ? `${fig(cell.weekly)} × ${weeks} wk · ${from}` : `${fig(cell.weekly)}/wk · ${from}`));
   }
   /** The harvest window, as on the card: one joined choice, to the season's end or for a set number of days (js/yieldcard.js). */
@@ -459,7 +460,7 @@
         const cell = x.cells[env];
         if (x.micro) return fixed('—', 'A live tray is one tray.');
         if (!cell.used) return fixed('—', `Nothing on the farm is ${LABEL[env].toLowerCase()} yet`);
-        const what = `${x.weekly ? 'picked each week from' : 'in all from'} ${BASIS[x.basis]}`, back = cell.fallback == null ? 'no yield at all' : fig(cell.fallback);
+        const what = `${x.weekly ? 'picked each week from' : 'in all from'} ${fromSaid(eng, x, cell)}`, back = cell.fallback == null ? 'no yield at all' : fig(cell.fallback);
         const away = !!planted && planted.size > 0 && !planted.has(env) && cell.mine == null;
         return figCell({ cls: '.ah-y' + (away ? '.ah-away' : ''), key: `y|${kind}|${id}|${env}`, mine: cell.mine, fallback: away ? null : cell.fallback, open: kind === 'crops' && loose && !away, label: `${name}, ${LABEL[env].toLowerCase()}: yield`,
           tip: away ? `Nothing of ${name} is planted in this kind of place (${LABEL[env].toLowerCase()}) this season, so no figure is shown. One typed here waits for a planting there.` : cell.mine != null ? `Your figure: ${fig(cell.mine)}${u} ${what}. Clear it to go back to ${back}.` : cell.by === 'crop-mine' ? `Your figure for the crop: ${fig(cell.fallback)}${u} ${what}.` : cell.fallback == null ? 'No yield is set for this crop.' : `${kind === 'crops' && loose ? 'A starting value nobody has checked' : 'From the crop’s record, not yet checked'}: ${fig(cell.fallback)}${u} ${what}.`,
@@ -515,7 +516,7 @@
   }
   const HEAD = {
     days: ['Days to first harvest', 'Days to harvest for each crop in each place it grows. Each row says what its days are counted from. Each number is used as it stands, whatever the month or the house. Grey is the default: type over it to make it yours. A variety with its own figure keeps it; a planting with no variety uses the crop’s row.'],
-    harvest: ['Yield and price', 'Each crop’s unit, price, harvest pattern and marketable yield (a plant or a bed-foot) in each place it grows. Grey is the default: type over it to make it yours. A planting with its own figure keeps it until “See what differs…” lets it go.'],
+    harvest: ['Yield and price', 'Each crop’s unit, price, harvest pattern and marketable yield (a plant, or a foot of bed) in each place it grows. Grey is the default: type over it to make it yours. A planting with its own figure keeps it until “See what differs…” lets it go.'],
     card: ['Yield and price', 'One crop at a time: its unit, price, marketable yield in each place it grows, and harvest pattern. Each box says what it means. “All on one page” shows the same figures as a list.']
   };
   function chrome() {
@@ -621,7 +622,7 @@
     const WORDS = {
       days: [['Transplanting', 'Days count from the day the crop goes in the bed.'], ['Seeding in trays', 'Days count from sowing in the nursery, so the nursery time comes off.'],
         ['Direct seeding', 'A figure for seed sown in place. As a transplant the crop is in the bed about two weeks less.'], ['Seed to harvest', 'Days in the nursery plus days in the bed, where the crop mostly grows.']],
-      harvest: [['Marketable yield', 'What is packed and fit to sell, from a plant, a bed-foot or a tray.'], ['Gradually', 'The yield is a week’s picking, every week of the harvest window.'],
+      harvest: [['Marketable yield', 'What is packed and fit to sell: from a plant, from a tray, or, for a crop sown in rows, from a whole bed whose length and rows the box says.'], ['Row-foot', 'One foot of one row. A sown crop’s yield typed for a bed is kept a row-foot, so a bed gives it by its rows and its length. A figure that does not say its rows is a bed-foot: every bed gives it by its length alone.'], ['Gradually', 'The yield is a week’s picking, every week of the harvest window.'],
         ['Clear', 'The yield is a total, all of it on the day it is ready.'], ['On demand', 'The yield is a total, spread evenly over the harvest window.'], ['Harvest window', 'The days a planting is picked: to the season’s end, or a set number.'],
         ['Days before', 'How many days before the crop’s days to harvest something else it sells is first picked, as baby carrots are before the big ones. Empty: picked with the crop. No date moves.'],
         ['A young stand', 'A cane stand gives a share of a mature stand’s yield the year it is planted and the year after, all of it from the third. The grey figures are published ones and count only once a stand’s year is typed on its planting; yours replace them. An empty year is a mature stand.']]

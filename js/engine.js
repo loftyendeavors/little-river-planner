@@ -484,6 +484,15 @@
       const x = (varietyId && S.assumptions && S.assumptions.sellV && S.assumptions.sellV[varietyId]) || {};
       return { unit: word(x.unit), price: amount0(x.price) };
     }
+    // ── E2d: a figure of the list that says the rows, or the spacing, it was typed for ──
+    // A sown crop's figure on the list is for a foot of a bed. Typed in the card's box ("A 30-ft bed of 2 rows gives") it says those
+    // rows beside it (`rows`), and a planting then gives it in proportion to its own rows: the row-foot yield, figure ÷ rows, is what
+    // holds. A figure typed a plant says the spacing in the row it was typed at (`inRow`), and is held a row-foot the same way where
+    // a planting's spacing differs. A figure that says neither is read as it always was: where the two are equal the factor is
+    // exactly 1, so nothing moves by a bit. Soil beds only: a tower, a crate and a tray are counted as before.
+    const listedCell = (kind, id, env) => { const a = S.assumptions, x = a && a[kind] && a[kind][id] && a[kind][id][env]; return x && typeof x === 'object' ? x : null; };
+    const forRows = v => Number.isSafeInteger(v) && v >= 1 && v <= 1000 ? v : null, forInRow = v => typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
+    const heldScale = (cell, basis, r) => !cell || r.tw || r.ct || r.rack ? 1 : basis === 'ft' && forRows(cell.rows) ? r.totalRows / forRows(cell.rows) : basis === 'plant' && forInRow(cell.inRow) ? r.inRow / forInRow(cell.inRow) : 1;
     const listedYield = (kind, id, env) => { const a = S.assumptions, x = a && a[kind] && a[kind][id] && a[kind][id][env]; return x ? amount0(x.yield) : null; };
     /** The harvest days a total is spoken of over: what turns a total into a weekly figure and back. */
     const nominalDays = c => c.harvestBy === 'list' ? Math.max(1, c.hw) : c.harvestMode === 'season' ? positive(c.yieldDays, positive(c.hw, 1)) : Math.max(1, nonNegative(c.hw));
@@ -1335,9 +1344,11 @@
       const set = liveTray || (c.yield != null && c.yield !== '' && Number.isFinite(+c.yield)) || own || mine != null;
       const figure = liveTray ? 1 : nonNegative(own ? p.yield : mine != null ? mine : c.yield);
       const perWeek = weekly ? (mine != null ? mine : figure * 7 / nominal) : null, each = weekly ? perWeek * r.harvestDays / 7 : figure;
+      // the crop's own figure on the list, where it says its rows or its spacing (E2d); a variety's figure, a planting's own and the crop's record say neither
+      const cell = fromC != null ? listedCell('crops', p.cropId, env) : null, scale = heldScale(cell, basis, r), soil = !r.tw && !r.ct && !r.rack, rowsFor = basis === 'ft' && cell && soil ? forRows(cell.rows) : null, inRowFor = basis === 'plant' && cell && soil ? forInRow(cell.inRow) : null;
       // a young stand gives its share of the list's yield; a yield of the planting's own is his for that planting, and stands
       const age = own || liveTray ? null : standAge(p, r), young = age ? age.share / 100 : 1;
-      return { basis, count, per: each, mk, part: weekly ? 1 : part, units: count * each * mk * (weekly ? 1 : part) * young, ...(age ? { age } : {}), unit: unitOf(c, v), set, own, price: priceOf(p, c, v),
+      return { basis, count, per: each, mk, part: weekly ? 1 : part, units: count * each * mk * (weekly ? 1 : part) * young * scale, scale, ...(rowsFor ? { rowsFor, rowFeet: r.rows * r.physicalLength, perRowFt: each / rowsFor } : {}), ...(inRowFor ? { inRowFor } : {}), ...(age ? { age } : {}), unit: unitOf(c, v), set, own, price: priceOf(p, c, v),
         pattern: own && pattern === 'weekly' ? 'spread' : pattern, perWeek, nominal, by: own ? 'own' : fromV != null ? 'variety' : fromC != null ? 'crop' : 'default', keep: liveTray ? 0 : rule.keep || 0 };
     }
     /**
@@ -1563,7 +1574,8 @@
       for (const env of ENVS) {
         const fromC = listedYield('crops', cropId, env), mine = micro ? null : v ? listedYield('varieties', v.id, env) : fromC;
         const fallback = v && fromC != null ? fromC : total0 == null ? null : weekly ? total0 * 7 / nominal : total0, value = mine != null ? mine : fallback;
-        cells[env] = { used: usedEnvs.has(env), mine, fallback, value, by: mine != null ? 'mine' : v && fromC != null ? 'crop-mine' : 'default',
+        const held = !micro && env !== 'tower' && (v ? mine == null && fromC != null : mine != null) ? listedCell('crops', cropId, env) : null;
+        cells[env] = { used: usedEnvs.has(env), mine, fallback, value, by: mine != null ? 'mine' : v && fromC != null ? 'crop-mine' : 'default', rows: held && c.yBasis === 'ft' ? forRows(held.rows) : null, inRow: held && c.yBasis !== 'ft' ? forInRow(held.inRow) : null,
           total: value == null ? null : weekly ? value * nominal / 7 : value, weekly: value == null ? null : weekly ? value : value * 7 / nominal };
       }
       const pick = (mine, fallback) => ({ mine, fallback, value: mine != null ? mine : fallback });
@@ -1582,6 +1594,41 @@
         open: { yield: !micro && (total0 == null || (total0 === 1 && unit0 === 'each')), price: !(price0 > 0) } };
     }
 
+    /**
+     * The bed a crop's box speaks of in a place (E2d): the commonest among the crop's plantings on soil beds there, by the bed's
+     * length and the rows the planting stands on, with the commonest spacing in the row; with nothing planted there, the commonest
+     * soil bed of the place, with the rows and the spacing the crop's record gives on it. null where the place has no soil bed.
+     * { ft, rows, inRow, n: the plantings counted (0 where it is read off the beds), mixed: the crop stands on more than one row count there,
+     *   spacings: how many spacings in the row it stands at there }
+     */
+    const statedCache = new Map();
+    function statedFor(cropId, env) {
+      const key = cropId + '|' + env;
+      if (statedCache.has(key)) return statedCache.get(key);
+      const c = crop(cropId), tally = () => new Map(), beds = tally(), spacings = tally(), rowsSeen = new Set(), bump = (m, k, v) => { const x = m.get(k) || { n: 0, v }; x.n++; m.set(k, x); };
+      const top = m => [...m.values()].sort((a, b) => b.n - a.n)[0];
+      let out = null, n = 0;
+      if (c && !c.micro && env !== 'tower') {
+        for (const p of S.plantings || []) {
+          if (p.cropId !== cropId) continue;
+          const r = calc(p);
+          if (!r || r.tw || r.ct || r.rack || envOf(r.b) !== env) continue;
+          n++; rowsSeen.add(r.totalRows); bump(beds, r.cap + '|' + r.totalRows, { ft: r.cap, rows: r.totalRows }); bump(spacings, String(r.inRow), r.inRow);
+        }
+        if (!n) for (const b of S.beds || []) {
+          if (b.active === false || !isSoilBed(b) || envOf(b) !== env || !(capOf(b) > 0)) continue;
+          const chosen = rowsPerBedValue(c.rowsPerBed), rows = Number.isFinite(chosen) ? chosen : Math.max(1, Math.floor(b.w * 12 / positive(c.rowSp, 12)));
+          bump(beds, capOf(b) + '|' + rows, { ft: capOf(b), rows });
+        }
+        const bed = top(beds);
+        if (bed) out = { ft: bed.v.ft, rows: bed.v.rows, inRow: n ? top(spacings).v : positive(c.inRow, 12), n, mixed: rowsSeen.size > 1, spacings: spacings.size };
+      }
+      statedCache.set(key, out);
+      return out;
+    }
+    /** What a yield is counted by, in the page's words (E2d: every screen says it from here). `rows`: the figure says its rows. */
+    const perSaid = (basis, rows) => basis === 'tray' ? 'a tray' : basis === 'container' ? 'a container' : basis === 'ft' ? (rows ? 'a row-foot' : 'a bed-foot, rows not said') : 'a plant';
+
     const benchList = () => benches().map(sp => ({ id: sp.id, name: sp.name || 'Bench', area: (((S.nursery || {}).benchAreas || []).find(a => a.id === (sp.benchLayout || {}).areaId) || {}).name || '', areaId: (sp.benchLayout || {}).areaId || '',
       w: nonNegative(sp.w), l: nonNegative(sp.l), kind: benchKind(sp), heated: sp.kind !== 'outside', active: sp.active !== false, cap: benchCap(sp), holds: benchHolds(sp), estimate: benchEstimate(sp) }));
 
@@ -1595,7 +1642,7 @@
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
       heatedTraySpaces, benchRoom, coolRules, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
-      yieldOf, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, thingsOf, soldOf, grownFor, givenOf, WEIGHED, COUNTED, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
+      yieldOf, statedFor, perSaid, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, thingsOf, soldOf, grownFor, givenOf, WEIGHED, COUNTED, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
       aheadOf, standAge, standYear, youngFor, pickedFrom, pickingOn, pickWindows,
       sowingBatches, sowingOn, shareTrays, base: baseOf,
       plantingsIn, planting: id => plantingById.get(id),

@@ -210,10 +210,21 @@ with sync_playwright() as pw:
                     if isinstance(a, dict) and len(a): out.append(yk + " is a box on a live tray")
                     continue
             if not (isinstance(a, dict) and len(a)) or not (isinstance(b, dict) and len(b)): out.append(yk + " missing"); continue
+            # a sown crop's box on the card speaks of a whole bed (E2d): the list's figure, a foot of bed, times that bed's length
+            ft = BED_FT.get(f"{c}|{yk[2:]}") if yk.startswith("y|") and walk[c]["basis"] == "ft" else None
+            if ft:
+                num = lambda v: None if v in ("", None) else float(v)
+                for what in ("value", "placeholder"):
+                    x, y = num(a[what]), num(b[what])
+                    if what == "placeholder" and a["amber"]: continue
+                    if (x is None) != (y is None) or (x is not None and abs(x - y * ft) > 0.006 * max(1, abs(y * ft))): out.append(f"{yk}: {what} {a[what]!r} against the list's {b[what]!r} for a bed of {ft} ft")
+                if bool(a["mine"]) != bool(b["mine"]): out.append(f"{yk}: mine {a['mine']!r} against the list's {b['mine']!r}")
+                continue
             if a["value"] != b["value"] or bool(a["mine"]) != bool(b["mine"]): out.append(f"{yk}: {a['value']!r} against the list's {b['value']!r}")
             # what stands in grey: the same figure, unless the box is amber, which is empty on purpose
             if not a["amber"] and a["placeholder"] != b["placeholder"] and not (yk == "price" and b["placeholder"] in ("0", "")): out.append(f"{yk}: grey {a['placeholder']!r} against the list's {b['placeholder']!r}")
         return out
+    BED_FT = js("const out = {}; for (const c of S.engine.crops()) for (const e of S.engine.ENVS) { const st = S.engine.statedFor(c.id, e); if (st) out[c.id + '|' + e] = st.ft; } return out;")
     bad = {names.get(c): same_as_list(c) for c in ids if same_as_list(c)}
     check("the card and the list show the same figures: price, unit, how it is picked, harvest days, and the yield in each place", bad == {}, dict(list(bad.items())[:4]))
     def amber_ok(c):
@@ -260,7 +271,7 @@ with sync_playwright() as pw:
     k = walk[sub["multi"]]["card"]
     check("a crop grown in several places has a yield box for each, and one unit and one price across them all", len(k["cols"]) >= 2 and len(k["rows"]["yield"]["cells"]) == len(k["cols"]) and [c["place"] for c in k["rows"]["yield"]["cells"]] == k["cols"] and all(c["inputs"] == 1 for c in k["rows"]["yield"]["cells"]) and len(k["rows"]["unit"]["cells"]) == 1 and nth(k["rows"]["unit"]["cells"], 0)["span"] == len(k["cols"]) and nth(k["rows"]["price"]["cells"], 0)["span"] == len(k["cols"]) and "wherever it grows" in nth(k["rows"]["unit"]["cells"], 0)["text"], k["rows"]["yield"])
     k = walk[sub["single"]]["card"]; kf = walk[sub["ft"]]["card"]
-    check("the label of a yield box says what the box means: the marketable yield, per plant, or per bed-foot where the crop is counted so, its packed weight", k["rows"]["yield"]["label"] == "Marketable yield per plant" and "in all" in k["rows"]["yield"]["hint"] and "packed weight" in k["rows"]["yield"]["hint"] and kf["rows"]["yield"]["label"] == "Marketable yield per bed-foot" and walk[sub["ft"]]["basis"] == "ft", [k["rows"]["yield"], kf["rows"]["yield"]["label"]])
+    check("the label of a yield box says what the box means: the marketable yield, per plant, or of a bed where the crop is sown in rows, its packed weight", k["rows"]["yield"]["label"] == "Marketable yield per plant" and "in all" in k["rows"]["yield"]["hint"] and "packed weight" in k["rows"]["yield"]["hint"] and kf["rows"]["yield"]["label"] == "Marketable yield of a bed" and walk[sub["ft"]]["basis"] == "ft", [k["rows"]["yield"], kf["rows"]["yield"]["label"]])
     k = walk[sub["micro"]]["card"]
     check("a live tray's card has one column, a price to type, and says why the rest is not asked: a tray is a tray", k["cols"] == ["tray"] and "living trays" in str(nth(k["heads"], 0)).lower() and sorted(k["boxes"]) == ["price"] and "a tray is a tray" in nth(k["rows"]["yield"]["cells"], 0)["na"] and "tray" in nth(k["rows"]["unit"]["cells"], 0)["na"] and nth(k["rows"]["pick"]["cells"], 0)["na"] != "" and not k["house"], {"cols": k["cols"], "boxes": sorted(k["boxes"])})
     k = walk[sub["season"]]["card"]
@@ -375,17 +386,19 @@ with sync_playwright() as pw:
     f1b = card(); s1b = js("return { steps: S.undo.map(u => u.label), looked: S.engine.sellRule(%s).looked };" % json.dumps(cid))
     check("Enter takes what was typed, and with another box still empty goes to that box: the crop is not ticked", len(places) >= 2 and len(s1b["steps"]) == 2 and not s1b["looked"] and f1b["crop"] == cid and f1b["focus"] == y_last and f1b["boxes"][y_last]["amber"] is True and "Still empty" in js("return txt('ycStill');"), {"steps": s1b, "focus": f1b["focus"], "still": js("return txt('ycStill');")})
     page.keyboard.type("3"); wait(100)
+    # the figure typed in each place; a crop counted a plant keeps beside it the spacing in the row it was typed at (E2d), and nothing else
+    figs = lambda cells: {e: v.get("yield") for e, v in cells.items() if set(v) <= {"yield", "inRow"}}
     order_now = [i["id"] for i in side()["items"]]; expect_next = order_now[(order_now.index(cid) + 1) % len(order_now)] if cid in order_now else None
     said_next = card()["next"]
     page.keyboard.press("Enter"); wait(700)
     f2 = card(); s2 = js("return { steps: S.undo.map(u => u.label), looked: S.engine.sellRule(%s).looked, y: (((S.plan.assumptions || {}).crops || {})[%s] || {}), toast: txt('toast') };" % (json.dumps(cid), json.dumps(cid)))
-    check("with nothing left empty, Enter takes what was typed, ticks the crop as looked at for the year, and opens the next crop down", len(s2["steps"]) == 4 and s2["looked"] == year and s2["y"] == {nth(places, 0): {"yield": 2}, nth(places, -1): {"yield": 3}} and "looked at for %s" % year in s2["steps"][-1] and f2["crop"] == expect_next and said_next["id"] == expect_next and names.get(expect_next, "?") in said_next["text"] and said_next["text"].startswith("Looks right. Next: "), {"steps": s2["steps"], "now": names.get(f2["crop"]), "want": names.get(expect_next), "button": said_next})
+    check("with nothing left empty, Enter takes what was typed, ticks the crop as looked at for the year, and opens the next crop down", len(s2["steps"]) == 4 and s2["looked"] == year and figs(s2["y"]) == {nth(places, 0): 2, nth(places, -1): 3} and "looked at for %s" % year in s2["steps"][-1] and f2["crop"] == expect_next and said_next["id"] == expect_next and names.get(expect_next, "?") in said_next["text"] and said_next["text"].startswith("Looks right. Next: "), {"steps": s2["steps"], "now": names.get(f2["crop"]), "want": names.get(expect_next), "button": said_next})
     amber_next = [yk for yk, b in walk[expect_next]["card"]["boxes"].items() if b["amber"]] if expect_next in walk else []
     check("and the pointer lands in that crop's first empty box", f2["focus"] == (amber_next[0] if amber_next else "price") and (not amber_next or f2["boxes"][f2["focus"]]["amber"] is True), {"focus": f2["focus"], "amber": amber_next})
     check("the tick has a message of its own: it names the crop and the year, not the figure typed before it", s2["toast"].startswith(f"{names[cid]}: looked at for {year}") and "$" not in s2["toast"], s2["toast"])
     click("#toast .toast-action", 500)
     un = js("return { looked: S.engine.sellRule(%s).looked, y: (((S.plan.assumptions || {}).crops || {})[%s] || {}), price: S.engine.sellRule(%s).price, n: S.undo.length };" % (json.dumps(cid), json.dumps(cid), json.dumps(cid)))
-    check("and its Undo takes back the tick and nothing before it: the figures typed stand", not un["looked"] and un["price"] == 4.5 and un["y"] == {nth(places, 0): {"yield": 2}, nth(places, -1): {"yield": 3}} and un["n"] == 3, un)
+    check("and its Undo takes back the tick and nothing before it: the figures typed stand", not un["looked"] and un["price"] == 4.5 and figs(un["y"]) == {nth(places, 0): 2, nth(places, -1): 3} and un["n"] == 3, un)
     js("A.redo(); return 1;"); wait(400)
     sd = side(); it = [i for i in sd["items"] if i["id"] == cid]
     check("the crop is ticked on the checklist, the bar counts it, and one fewer is left to set", len(it) == 1 and it[0]["done"] is True and it[0]["open"] is False and sd["looked"] == 1 and f"1 of {len(ids)}" in sd["prog"] and sd["left"] == nleft - 1 and sd["meter"] not in ("0%", "0", ""), {"item": it, "prog": sd["prog"], "left": sd["left"]})

@@ -25,7 +25,6 @@
   const PATTERN = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' };
   const PATTERN_SAY = { weekly: 'picked gradually', once: 'cleared at once', spread: 'picked on demand' };
   const PATTERN_TIP = { spread: 'On demand: its yield is a total, spread evenly over its harvest window.', weekly: 'Gradually: its yield is a week’s picking.', once: 'Clear: its yield is a total, all of it counted the first day it is picked.' };
-  const PER = { plant: 'a plant', ft: 'a bed-foot', tray: 'a tray' };
   const KIND = { place: 'A different thing from one place', bed: 'Two things out of one bed', harvest: 'One harvest, packed two ways' };
   const fig = n => root.LRFAssume.fig(n);
   const money = n => '$' + Math.round(n).toLocaleString('en-US');
@@ -57,7 +56,7 @@
    * the helper row, the empty boxes, the lines under the grid, and the button that adds a thing.
    */
   function of(ctx) {
-    const { eng, c, hc, x, year, box } = ctx, can = !hc.micro && !eng.isCoverCrop(c), list = can ? eng.thingsOf(c.id) : [], per = PER[hc.basis];
+    const { eng, c, hc, x, year, box } = ctx, can = !hc.micro && !eng.isCoverCrop(c), list = can ? eng.thingsOf(c.id) : [], per = eng.perSaid(hc.basis);
     const beds = list.filter(t => t.from === 'bed'), packs = list.filter(t => t.from === 'harvest'), counting = list.filter(t => t.counts);
     const taken = new Set(counting.filter(t => t.from === 'place').map(t => t.place)), rowsOf = new Map();
     if (list.length) for (const line of forecast(eng).rows) if (line.cropId === c.id && line.thing) rowsOf.set(line.thing, line);
@@ -247,7 +246,7 @@
    * ctx: { eng, c, hc, figCell (the list's own box), places (how many yield columns the list has), house (is "Sold %" shown) }.
    */
   function listRows(ctx) {
-    const { eng, c, hc, figCell } = ctx, list = hc.micro || eng.isCoverCrop(c) ? [] : eng.thingsOf(c.id), per = PER[hc.basis];
+    const { eng, c, hc, figCell } = ctx, list = hc.micro || eng.isCoverCrop(c) ? [] : eng.thingsOf(c.id), per = eng.perSaid(hc.basis);
     if (!list.length) return [];
     const rows = new Map();
     for (const line of forecast(eng).rows) if (line.cropId === c.id && line.thing) rows.set(line.thing, line);

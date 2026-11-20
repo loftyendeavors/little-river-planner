@@ -1,0 +1,17 @@
+{
+ "build": "E2d: a sown crop's yield is typed for a bed and kept a row-foot. On a crop's card (Assumptions, Yield and price) the yield box of a sown crop speaks of a bed, the commonest the crop stands on in that place, with its length and rows said on the box; the figure typed is kept as a foot of that bed with the rows beside it (assumptions.crops.*.*.rows), and a planting then gives it by its own rows, so that the row-foot yield is what holds. A crop counted a plant keeps the spacing in the row its figure was typed at (assumptions.crops.*.*.inRow) and is held a row-foot where a planting's spacing differs; not a crop cleared once and counted singly. Where a planting's rows or spacing differ from the box's, what the figure moves is shown first, planting by planting, with the season's worth, and taken as one step. A figure that says neither is read as before, to the bit, and the card says so (\"a bed-foot, rows not said\"); nothing is written when a plan is opened. The words for what a yield is counted by come from one function of the engine. The figure and what it says are joined as one value when two devices' plans meet (js/merge.js TOGETHER, on a cell under keys the data chose). A variety's own figure, a planting's own yield, the other things a crop sells, towers, crates and trays are as they were.",
+ "changes": {
+  "did": "A sown crop's yield is now typed for a whole bed, with its length and rows said on the box, and beds with more rows give more; nothing changes until you type a figure.",
+  "steps": [
+   "Under Assumptions, Yield and price, open a sown crop such as beets: the yield box reads for a bed of so many feet and rows, and under it \"a bed-foot, rows not said\".",
+   "Type a figure for that bed: if the crop also stands on beds with other rows, a sheet lists each planting that changes, before and after, and the season's worth, before anything is taken.",
+   "Take it, then open one of those plantings: its Expected line says the yield a row-foot, its rows and its length. Undo takes it all back."
+  ]
+ },
+ "words": [],
+ "code": ["app.js", "assume.js", "engine.js", "merge.js", "panels.js", "series.js", "succession.js", "things.js", "yieldcard.js"],
+ "added": [],
+ "removed": [],
+ "page": [],
+ "screens": []
+}
