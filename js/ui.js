@@ -56,14 +56,17 @@
   let toastTimer = null;
   // While the card is open (card.js, behind its tick) the answer to an action is said on the card: the one answer (DESIGN.md, rule 3)
   let answerTo = null;
+  /** `action` is one { label, run } or a list of them: Undo first, then what the answer offers to do next (L3: his own days typed
+   *  for a crop offer its varieties and its plantings). The card takes an answer with one action; one that offers more is said here. */
   function toast(message, action) {
-    if (answerTo && answerTo(message, action)) return;
+    const actions = [].concat(action || []).filter(Boolean);
+    if (answerTo && actions.length <= 1 && answerTo(message, actions[0])) return;
     const host = document.getElementById('toast');
     clear(host).append(h('span', message));
-    if (action) host.append(h('button.toast-action', { type: 'button', onclick: () => { host.classList.remove('show'); action.run(); } }, action.label));
+    for (const a of actions) host.append(h('button.toast-action', { type: 'button', dataset: { hook: 'toast-action' }, onclick: () => { host.classList.remove('show'); a.run(); } }, a.label));
     host.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => host.classList.remove('show'), action ? 9000 : 4200);
+    toastTimer = setTimeout(() => host.classList.remove('show'), actions.length > 1 ? 14000 : actions.length ? 9000 : 4200);
   }
 
   /** In-page confirmation (the page's frame has no window.confirm). */

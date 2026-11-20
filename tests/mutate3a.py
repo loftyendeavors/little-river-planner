@@ -76,7 +76,7 @@ PAGE = [
  ('an offer stays after it is taken', 'js/assume.js', "return hint && !rule.set && (hint.from !== 'transplant' || guessed) ? hint : null;", "return hint && (hint.from !== 'transplant' || guessed) ? hint : null;"),
  ('an offer is made to every row with a guide line, wanted or not', 'js/assume.js', "return hint && !rule.set && (hint.from !== 'transplant' || guessed) ? hint : null;", "return hint && !rule.set ? hint : null;"),
  ('taking every offer does not ask first', 'js/assume.js', "`${plural(offers.length, 'crop')}: days counted from where Johnny’s says`, { ask: true })", "`${plural(offers.length, 'crop')}: days counted from where Johnny’s says`)"),
- ('the question about every offer does not say what moves', 'js/app.js', "body: `${moves}. No ground ends up booked twice. One undo takes it all back.`, detail })", "body: `${moves}. No ground ends up booked twice. One undo takes it all back.` })"),
+ ('the question about every offer does not say what moves', 'js/app.js', "body: `${moves}. No new double bookings. One undo takes it all back.`, detail })", "body: `${moves}. No new double bookings. One undo takes it all back.` })"),
  ('the summary counts tray batches as keeping their own days', 'js/assume.js', "fig('own days', d.own,", "fig('own days', d.own + s.trays,"),
  ('Escape leaves the review window half open', 'js/assume.js', "{ id: 'auditDlg', oncancel: e => { e.preventDefault(); close(); } },", "{ id: 'auditDlg' },"),
  ('the × applies the step', 'js/assume.js', "title: 'Close. Nothing is changed.', onclick: () => close() }, '×'),", "title: 'Close. Nothing is changed.', onclick: () => apply.click() }, '×'),"),

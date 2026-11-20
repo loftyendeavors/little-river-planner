@@ -54,6 +54,7 @@ tasks2
 yearedge
 bought
 tlpick
+messages
 early
 e2d
 merge
@@ -110,6 +111,7 @@ script() {
     early) SCRIPT=$T/mutate_early.py; ARGS="$APP $F $T $PLAN" ;;
     e2d) SCRIPT=$T/mutate_e2d.py; ARGS="$APP $F $T $PLAN" ;;
     tlpick) SCRIPT=$T/mutate_tlpick.py; ARGS="$APP $F $T" ;;
+    messages) SCRIPT=$T/mutate_messages.py; ARGS="$APP $F $T" ;;
     *) return 1 ;;
   esac
 }

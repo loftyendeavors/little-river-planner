@@ -141,6 +141,11 @@ body[data-view="map"] .view-map, body[data-view="timeline"] .view-timeline, body
 .seg button small { font: 500 var(--type-11) var(--mono); opacity: 0.65; margin-left: 4px; }
 .lib-hint { padding: var(--space-8) var(--space-12); border-top: 1px solid var(--line-soft); color: var(--ink-2); font-size: var(--type-13); }
 body.armed .lib-hint { background: var(--flag-soft); color: var(--ink); font-weight: 600; }
+/* the library's foot: its line, and Done while a crop is carried (L3) */
+.lib-foot { display: flex; align-items: center; border-top: 1px solid var(--line-soft); }
+.lib-foot .lib-hint { flex: 1; min-width: 0; border-top: 0; }
+.lib-foot .btn { flex: none; margin: 0 var(--space-12) 0 0; }
+body.armed .lib-foot { background: var(--flag-soft); }
 .empty, .note { color: var(--muted); padding: var(--space-12); }
 
 /* ── map ── */
@@ -205,11 +210,11 @@ body.armed #map, body.armed #map * { cursor: crosshair; }
 .map-scale::before { content: ""; position: absolute; inset: -5px -9px -6px; z-index: -1; border: 1px solid var(--line); border-radius: var(--corner-8); background: color-mix(in srgb, var(--raised) 92%, transparent); box-shadow: 0 1px 4px rgba(19, 36, 28, 0.2); }
 .map-scale::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 6px; border: 1.5px solid var(--ink); border-top: 0; }
 .map-foot { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; pointer-events: none; }
-/* what is in the ground: one quiet line, not a cloud of pills */
+/* what is in the ground: one quiet line (two before anything hides), not a cloud of pills */
 .map-bar { pointer-events: auto; display: flex; align-items: center; gap: var(--space-4); max-width: 100%; min-width: 0; background: color-mix(in srgb, var(--raised) 94%, transparent); border: 1px solid var(--line); border-radius: var(--corner-12); padding: var(--space-4) var(--space-4) var(--space-4) var(--space-12); box-shadow: 0 2px 10px rgba(19, 36, 28, 0.12); }
 .map-bar.open { align-items: flex-start; flex-wrap: wrap; row-gap: 2px; padding-bottom: var(--space-4); }
 .bar-title { flex: none; font: 500 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); padding-right: var(--space-4); line-height: 24px; }
-.map-legend { position: relative; flex: 0 1 auto; min-width: 0; display: flex; flex-wrap: nowrap; overflow: hidden; gap: 1px; }
+.map-legend { position: relative; flex: 0 1 auto; min-width: 0; display: flex; flex-wrap: wrap; overflow: hidden; gap: 1px; }
 .map-bar.open .map-legend { flex-wrap: wrap; flex: 1 1 0; }
 .legend-chip { flex: none; display: flex; align-items: center; gap: var(--space-4); height: 24px; border: 0; background: none; border-radius: var(--corner-8); padding: 0 var(--space-4); font-size: var(--type-13); font-weight: 500; color: var(--ink-2); white-space: nowrap; }
 .legend-chip:hover { background: var(--paper); color: var(--ink); }
@@ -1676,7 +1681,9 @@ body > .work { grid-row: 4; }
 .as th.as-th-start { text-align: left; }
 .as-start .as-fixed { padding: 0 0 0 var(--space-8); }
 .as-startbox { display: flex; align-items: center; gap: var(--space-4); }
-.as-from { height: 28px; max-width: 118px; border: 1px solid transparent; border-radius: var(--corner-8); background: transparent; padding: 0 var(--space-4); font: 500 var(--type-13) var(--body); color: var(--ink-2); }
+.as-from { height: 28px; max-width: 136px; border: 1px solid transparent; border-radius: var(--corner-8); background: transparent; padding: 0 var(--space-4); font: 500 var(--type-13) var(--body); color: var(--ink-2); }
+/* room for “Seeding in trays” (L3); beside the days-less box of direct seeding the box keeps to what that row shows, so the cell does not spill */
+.as-startbox:has(.as-less) .as-from { max-width: 118px; }
 .as-from:hover { border-color: var(--ink-2); }
 .as-from:focus { outline: none; border-color: var(--flag); background: var(--raised); }
 .as-from.mine { background: var(--flag-soft); border-color: color-mix(in srgb, var(--flag) 55%, var(--line)); color: var(--ink); font-weight: 600; }
@@ -2492,6 +2499,8 @@ body.phone .top { padding-block: var(--space-4); }   /* the header stays one sho
 #sdFigs { display: grid; gap: var(--space-4); }
 .sd-arrived { margin: var(--space-16) 0 0; }
 .view-assume .as-head #asCount { display: block; flex-basis: 100%; font-size: var(--type-13); color: var(--muted); }
+/* what can wait, while Loose ends is not in the header: one quiet link at the end of the title's line (L3) */
+.view-assume .as-head .as-loose { margin-left: auto; }
 /* one crop at a time: the card leads with that crop's own figures, and the head gives its room to the card */
 .view-assume[data-way="card"] .as-head #asCount { display: none; }
 /* the Nursery's figures: one line under the title, the values in ink and bold; each figure's second line is behind "?" */

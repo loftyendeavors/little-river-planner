@@ -323,10 +323,11 @@
       if (!ok) return false;
     } else if (options.ask && hit.changed && !options.shown) {
       // Several lines of the list changed at once: say what moves before it does.
-      if (!await UI.confirm({ title: label, confirmLabel: 'Apply', body: `${moves}. No ground ends up booked twice. One undo takes it all back.`, detail })) return false;
+      if (!await UI.confirm({ title: label, confirmLabel: 'Apply', body: `${moves}. No new double bookings. One undo takes it all back.`, detail })) return false;
     }
     commit(label, ops, { unchecked: true });
-    toast(`${label} · ${hit.changed || !also ? moves.charAt(0).toLowerCase() + moves.slice(1) : ''}${hit.changed && also ? ' · ' : ''}${also}`, { label: 'Undo', run: undo });
+    // `options.more` and `options.offers`: what else is so after the step, and what can be done about it from the answer (L3)
+    toast(`${label} · ${hit.changed || !also ? moves.charAt(0).toLowerCase() + moves.slice(1) : ''}${hit.changed && also ? ' · ' : ''}${also}${options.more ? ' · ' + options.more : ''}`, [{ label: 'Undo', run: undo }, ...(options.offers || [])]);
     return true;
   }
   const blankList = () => ({ v: 1, crops: {}, varieties: {} });
@@ -350,7 +351,34 @@
   /** Set, or with no days clear, the grower's days to harvest for a crop or variety in one growing condition. */
   function setAssumption(kind, id, env, days, label) {
     const ops = listStep(next => setCell(next, kind, id, env, 'dtm', days > 0 ? Math.round(days) : null));
-    return ops ? assume(label, ops) : Promise.resolve(false);
+    return ops ? assume(label, ops, kind === 'crops' && days > 0 ? keptOwn(id, env, Math.round(days), label, ops) : {}) : Promise.resolve(false);
+  }
+  /**
+   * His own days typed for a crop do not reach a planting whose variety has days of its own there (its row on the list, or the
+   * supplier's figure), nor one that carries its own. The answer says so, and offers to set those varieties to the same days, as
+   * a step of its own with its own Undo, and to see the plantings that differ from the list (L3). { more, offers }, or {}.
+   */
+  function keptOwn(cropId, env, days, label, ops) {
+    const eng = E.create(withOps(state.plan, ops, 'do'), Lib), kept = new Map();
+    let own = 0;
+    for (const p of eng.plan.plantings) {
+      const b = p.cropId === cropId ? eng.bedOf(p.bedId) : null, x = b && eng.envOf(b) === env ? eng.effective(p) : null;
+      if (!x) continue;
+      if (eng.pinned(p)) { own++; continue; }
+      const v = eng.variety(p.varietyId);
+      if (!(x.assumed && x.assumed.level === 'crop') && v && v.cropId === cropId) kept.set(v.id, v);
+    }
+    if (!kept.size && !own) return {};
+    const list = [...kept.values()], n = list.length, offers = [];
+    const see = root.LRFAssume && root.LRFAssume.openDiffer ? { label: 'See the plantings', run: () => root.LRFAssume.openDiffer() } : null;
+    // the varieties' days are a step of their own: what it moves is shown first (`ask`), and its answer still offers the plantings (Codex on #93)
+    if (n) offers.push({ label: `Set its ${n === 1 ? 'variety' : `${n} varieties`} too`, run: () => {
+      const more = listStep(next => { for (const v of list) setCell(next, 'varieties', v.id, env, 'dtm', days); });
+      if (more) assume(`${label}, for ${names(list.map(v => v.name))} too`, more, { ask: true, offers: see ? [see] : [] });
+    } });
+    if (see) offers.push(see);
+    const said = [n ? `${names(list.map(v => v.name))} keep${n === 1 ? 's' : ''} days of ${n === 1 ? 'its' : 'their'} own` : '', own ? `${UI.num(own)} planting${own === 1 ? ' keeps its' : 's keep their'} own` : ''];
+    return { more: said.filter(Boolean).join(' · '), offers };
   }
   // ── the second half of the list: what a crop is sold as, how it is picked, what it yields ──
   const figure3 = x => Math.round(x * 1000) / 1000;
@@ -1576,7 +1604,7 @@
     const eng = state.engine, w = waitingOne(id), bed = eng.bedOf(bedId);
     if (!w || !bed) return null;
     const result = previewWaiting(id, { bedId, ...aim });
-    if (result.state === 'blocked') { toast(result.why === 'held' ? `${bedLabel(bed)}: ${result.text.charAt(0).toLowerCase()}${result.text.slice(1)}` : result.text); return null; }
+    if (result.state === 'blocked') { toast(result.why === 'held' ? heldSaid(bed, result, { waitingId: id }, E.s2d(w.date)) : result.text); return null; }
     let ops, p;
     if (result.state === 'ok' || !eng.isSoilBed(bed) || pick === 'free') { if (!result.p || result.state === 'split') return null; p = result.p; ops = [{ before: null, after: p }]; }
     else {
@@ -1784,21 +1812,37 @@
   on('sel', () => { const m = state.mixing, sel = state.sel; if (!m || !sel) return; const inBed = sel.type === 'planting' ? (state.engine.planting(sel.id) || {}).bedId === m.bedId : sel.type === 'bed' && sel.id === m.bedId; if (!inBed) setMixing(null); });
   on('view', () => { if (state.mixing && state.view !== 'map') setMixing(null); });
   root.addEventListener('keydown', e => { if (e.key === 'Escape' && state.mixing && !asking && !(root.LRFDrag && root.LRFDrag.active()) && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '')) setMixing(null); });
+  /**
+   * A drop turned down because the ground is held names the day it was judged on (L3): on the map a crop from the library goes in
+   * on the map's date and a planting keeps its own; on the Timeline it is the day it was dropped on.
+   */
+  function heldSaid(bed, result, payload, date) {
+    const source = payload.plantingId ? state.engine.planting(payload.plantingId) : null, own = !!payload.waitingId || (!!source && E.d2s(date) === source.date);
+    const when = own ? `judged on its own date, ${day(date)}` : state.view === 'map' ? `judged on ${day(date)}, the map’s date` : `judged on ${day(date)}`;
+    return `${bedLabel(bed)}: ${result.text.charAt(0).toLowerCase()}${result.text.slice(1)} · ${when}`;
+  }
+  /** How far a planting moved, said with the move (L3): "4 days later, May 19 → May 23". Nothing when its day stayed. */
+  function movedSaid(was, now) {
+    const n = was && now ? E.dayDiff(now, was) : 0;
+    return n ? `${Math.abs(n)} day${Math.abs(n) === 1 ? '' : 's'} ${n > 0 ? 'later' : 'earlier'}, ${day(was)} → ${day(now)}` : '';
+  }
   function place(payload, bedId, date, aim = {}) {
     if (payload.waitingId) { placeWaiting(payload.waitingId, bedId, aim); return null; }   // it may ask how to share the bed first
     const result = preview(payload, { bedId, date, ...aim }), bed = state.engine.bedOf(bedId);
     if (state.mixing && state.mixing.bedId !== bedId) setMixing(null);   // a drop somewhere else ends the mixing of a bed
     if (result.state === 'split') { shareDrop(payload, { bedId, date, ...aim }, result); return null; }   // it asks first, unless this bed is being mixed
-    if (result.state === 'blocked') { toast(bed && result.why === 'held' ? `${bedLabel(bed)}: ${result.text.charAt(0).toLowerCase()}${result.text.slice(1)}` : result.text); return null; }
+    if (result.state === 'blocked') { toast(bed && result.why === 'held' ? heldSaid(bed, result, payload, date) : result.text); return null; }
     const p = result.p, before = payload.plantingId && !payload.copy ? state.engine.planting(payload.plantingId) : null;
     if (before && sameSpot(before, p)) return null;
-    const what = cropLabel(p), where = bedLabel(bed), unit = state.engine.capUnit(bed);
+    const what = cropLabel(p), where = bedLabel(bed), unit = state.engine.capUnit(bed), r0 = before ? state.engine.calc(before) : null;
     const ops = result.state === 'swap' ? result.ops : [{ before, after: p }];
     const label = result.state === 'swap' ? `Trade ${what} with ${names(result.traded.map(q => cropLabel(q)))}` : before ? `Move ${what}` : payload.copy ? `Copy ${what}` : `Plant ${what}`;
     if (!commit(label, ops)) return null;
     select({ type: 'planting', id: p.id });
     const r = state.engine.calc(p), size = result.state === 'partial' || r.partial ? ` · ${UI.num(r.physicalLength, 1)} ${unit}` : '';
-    toast(result.state === 'swap' ? `${what} traded places with ${names(result.traded.map(q => cropLabel(q)))}` : `${what} → ${where} · ${day(r.field)}${size}`, { label: 'Undo', run: undo });
+    const moved = result.state !== 'swap' && r0 ? movedSaid(r0.field, r.field) : '';
+    toast(result.state === 'swap' ? `${what} traded places with ${names(result.traded.map(q => cropLabel(q)))}`
+      : moved ? (before.bedId === bedId ? `${what}, ${where}: ${moved}${size}` : `${what} → ${where} · ${moved}${size}`) : `${what} → ${where} · ${day(r.field)}${size}`, { label: 'Undo', run: undo });
     return p;
   }
   /**

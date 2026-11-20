@@ -374,13 +374,13 @@
     for (const { g, beds, crops } of rows) {
       const on = highlightGroup === g.id, n = beds.size;
       crops.sort((a, b) => b.n - a.n || a.c.name.localeCompare(b.c.name));
-      host.append(h('button.legend-chip.group' + (on ? '.on' : ''), { type: 'button', dataset: { group: g.id }, 'aria-pressed': String(on),
+      host.append(h('button.legend-chip.group' + (on ? '.on' : ''), { type: 'button', dataset: { group: g.id, hook: 'legend-chip' }, 'aria-pressed': String(on),
         title: on ? `Showing only ${g.name}. Click to show everything.` : `${g.name}: ${spaces(n)}. ${crops.map(x => `${x.c.name} ${x.n}`).join(', ')}. Click to show only these.`,
         onclick: () => { highlightGroup = on ? null : g.id; highlightCrop = null; paint(); } },
         h('i', { style: { background: g.color } }), h('span', g.name), h('b', n)));
       if (on) for (const { c, n: m } of crops) {
         const one = highlightCrop === c.id;
-        host.append(h('button.legend-chip.crop' + (one ? '.on' : ''), { type: 'button', dataset: { crop: c.id }, 'aria-pressed': String(one),
+        host.append(h('button.legend-chip.crop' + (one ? '.on' : ''), { type: 'button', dataset: { crop: c.id, hook: 'legend-chip' }, 'aria-pressed': String(one),
           title: one ? `Showing only ${c.name}. Click to show all of ${g.name}.` : `${c.name}: ${spaces(m)}. Click to show only this crop.`,
           onclick: () => { highlightCrop = one ? null : c.id; paint(); } },
           h('span', c.name), h('b', m)));
@@ -394,9 +394,11 @@
     bar.classList.toggle('open', legendOpen && chips.length > 0);
     more.hidden = !chips.length; more.textContent = legendOpen ? 'Less' : '+00'; more.title = ''; more.setAttribute('aria-expanded', String(legendOpen));
     if (legendOpen || !chips.length) return;
-    const room = host.clientWidth;
+    // the line wraps once before anything waits behind "+n" (L3): what does not fit in two lines is hidden. The key stands over the
+    // map, so a second line moves nothing on it
+    const top = chips[0].offsetTop, step = chips[0].offsetHeight;
     let hidden = 0;
-    for (const chip of chips) { if (chip.offsetLeft + chip.offsetWidth > room + 1) { chip.hidden = true; hidden++; } }
+    for (const chip of chips) { if (chip.offsetTop - top > step * 1.5) { chip.hidden = true; hidden++; } }
     more.textContent = hidden ? `+${hidden}` : 'Key'; more.title = hidden ? `${hidden} more, and how beds are drawn` : 'How beds are drawn';
   }
 
@@ -414,7 +416,7 @@
     const { item, part } = cur, geo = item.geo, f = preview || part.f, b = boxOf(geo, f), t = 7 / view.z, layer = s('g.sel-layer', { transform: bedTransform(geo) });
     layer.append(s('rect.sel-box' + (preview ? '.live' : ''), { x: b.x, y: b.y, width: b.w, height: b.h }));
     if (b.h * view.z >= 34 && b.w * view.z >= 9) {
-      const grip = edge => s('rect.sel-grip', { x: b.x + b.w * 0.15, y: (edge === 'start' ? b.y + b.h : b.y) - t / 2, width: b.w * 0.7, height: t, rx: t / 2, 'data-handle': edge }, s('title', 'Drag to change the length'));
+      const grip = edge => s('rect.sel-grip', { x: b.x + b.w * 0.15, y: (edge === 'start' ? b.y + b.h : b.y) - t / 2, width: b.w * 0.7, height: t, rx: t / 2, 'data-handle': edge, dataset: { hook: 'planting-end' } }, s('title', 'Drag to change the length'));
       layer.append(grip('start'), grip('end'));
     }
     over.append(layer);
@@ -626,8 +628,9 @@
     if (!done || e.type === 'pointercancel') { paintHandles(); return; }
     if (done.kind === 'stretch') {
       hideTip();
-      const res = done.result;
-      const moved = res && !res.same && (res.ops ? App.commit(`Move the line between ${App.cropLabel(done.cur.p)} and ${App.cropLabel(res.other.p)}`, res.ops) : App.updatePlanting(done.cur.p.id, res.change, `Resize ${App.cropLabel(done.cur.p)}`));
+      const res = done.result, label = res && !res.same ? stretchSaid(done.cur, res) : '';
+      const moved = !!label && (res.ops ? App.commit(label, res.ops) : App.updatePlanting(done.cur.p.id, res.change, label));
+      // what it did is said by the step's own label, in the planting's panel or card, with its Undo: the one answer (Codex on #93)
       if (!moved) paintHandles();
       return;
     }
@@ -662,9 +665,16 @@
   function onWheel(e) { e.preventDefault(); settle(); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0016))); }
 
   // ── hover card ──
+  /** What an end dragged along its bed did, from the feet it held to the feet it holds: the step's label and its answer (L3). */
+  function stretchSaid(cur, res) {
+    const eng = App.state.engine, held = p => { const r = eng.calc(p), f = r && eng.footprint(p, r); return f ? Math.min(f.a1, r.cap) - f.a0 : 0; };
+    const cap = eng.calc(cur.p).cap, ft = n => num(n, 1), was = held(cur.p);
+    if (res.ops) return `Move the line between ${App.cropLabel(cur.p)} and ${App.cropLabel(res.other.p)}: ${App.cropLabel(cur.p)} ${ft(was)} → ${ft(res.len)} ft, ${App.cropLabel(res.other.p)} ${ft(held(res.other.p))} → ${ft(res.other.len)} ft`;
+    return `Resize ${App.cropLabel(cur.p)}: ${ft(was)} → ${ft(res.len)} ft, feet ${ft(res.a0)}–${ft(res.a1)} of ${ft(cap)}`;
+  }
   function showTip(e, nodes) {
     const tip = $('tip');
-    clear(tip).append(...nodes);
+    UI.add(clear(tip), nodes);   // a part left out is left out, never printed as "null" (L3)
     tip.hidden = false;
     const host = $('mapView').getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
     tip.style.left = clamp(e.clientX - host.left + 14, 8, host.width - tw - 8) + 'px';
