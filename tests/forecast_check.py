@@ -133,7 +133,7 @@ with sync_playwright() as pw:
       const wantKinds = F.GROUPS.map(([k]) => all.list.filter(x => x.row.group === k).reduce((n, x) => n + x.worth, 0)).filter(v => v >= 1);
       return { season: fig('season'), week: fig('week'), ready: fig('ready'), trays: fig('trays-season'), stems: fig('stems-season'), kinds, wantKinds: wantKinds.length,
         want: { season: money(all.worth), worth: all.worth, week: money(g.worth), ready: g.crops, trays: F.shown(all.trays), stems: F.shown(all.stems) },
-        size: el('season') ? getComputedStyle(el('season').querySelector('b')).fontSize : '', sizes: line ? [...new Set([...line.querySelectorAll('.fc-fig:not(.lead) b')].map(b => getComputedStyle(b).fontSize))] : [],
+        size: el('season') ? getComputedStyle(el('season').querySelector('b')).fontSize : '', sizes: line ? [...new Set(hooks('fc-fig', line).filter(e => e.dataset.fig !== 'season').map(e => getComputedStyle(e.querySelector('b')).fontSize))] : [],
         beside: !!lead && !!week && Math.abs(lead.bottom - week.bottom) < 12 && week.left > lead.right + 200, under: !!lead && !!el('picking') && box('picking').top > lead.bottom,
         tall: line ? Math.round(line.getBoundingClientRect().height) : 0, tiles: document.querySelectorAll('#hvWrap .tr-stat').length };""")
     check("projected revenue leads, at 32 and alone at that size, and is the forecast's own; the week in hand's revenue and crops in harvest stand at the right of the same line", figs["season"] == figs["want"]["season"] and figs["size"] == "32px" and figs["sizes"] == ["13px"] and figs["beside"] and figs["week"] == figs["want"]["week"] and str(figs["ready"]).startswith(str(figs["want"]["ready"]) + " crop"), figs)
@@ -142,16 +142,19 @@ with sync_playwright() as pw:
     check("the words are a grower's and an accountant's: projected revenue, Harvest, Peak week, and Revenue in the table's foot; never worth", "projected revenue" in str(words["lead"]) and "Harvest " in str(words["line"]) and "Peak week " in str(words["line"]) and words["foot"] == "Revenue" and "worth" not in (str(words["line"]) + str(words["foot"])).lower(), words)
     # the season's revenue week by week, beside projected revenue: one bar a week with revenue, the week in hand in orange
     sp = js("""const m = HV.model(), i = m.index(S.date), now = F.periods(m, 'week', i, i)[0], all = F.periods(m, 'week').map(c => ({ key: c.key, worth: m.rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0) }));
+      const probe = document.body.appendChild(Object.assign(document.createElement('i'), { style: 'color: var(--flag)' })), flag = getComputedStyle(probe).color; probe.remove();
+      const fillOf = g => { const p = g.querySelector('path'); return p ? getComputedStyle(p).fill : null; };
       const lo = all.findIndex(w => w.worth >= 1), hi = all.length - 1 - [...all].reverse().findIndex(w => w.worth >= 1), ws = all.slice(lo, hi + 1), svg = hook('fc-spark'), wks = hooks('fc-spark-week');
       const tall = wks.map(g => { const p = g.querySelector('path'); return p ? p.getBBox().height : 0; }), peak = ws.reduce((b, w) => (w.worth > b.worth ? w : b), ws[0]);
-      return { n: wks.length, want: ws.length, keys: wks.every((g, k) => g.dataset.week === ws[k].key && Math.abs(+g.dataset.worth - ws[k].worth) < 0.005), now: wks.filter(g => g.classList.contains('now')).map(g => g.dataset.week), wantNow: now.key,
+      return { n: wks.length, want: ws.length, keys: wks.every((g, k) => g.dataset.week === ws[k].key && Math.abs(+g.dataset.worth - ws[k].worth) < 0.005), now: wks.filter(g => fillOf(g) === flag).map(g => g.dataset.week), wantNow: now.key,
         nowFill: (() => { const g = wks.find(x => x.dataset.week === now.key); const p = g && g.querySelector('path'); return p ? getComputedStyle(p).fill : null; })(), otherFill: (() => { const g = wks.find(x => x.dataset.week !== now.key && x.querySelector('path')); return g ? getComputedStyle(g.querySelector('path')).fill : null; })(),
         tallest: wks[tall.indexOf(Math.max(...tall))] ? wks[tall.indexOf(Math.max(...tall))].dataset.week : null, peak: peak.key, height: svg ? Math.round(svg.getBoundingClientRect().height) : 0,
         prop: wks.every((g, k) => Math.abs(tall[k] - (ws[k].worth >= 1 ? Math.max(2, Math.round(ws[k].worth / peak.worth * 28)) : 0)) < 0.6), label: svg ? svg.getAttribute('aria-label') : '' };""")
     check("beside projected revenue, the season's revenue week by week: a bar a week from the first week with revenue to the last, each as tall as its week's revenue, the tallest the peak week", sp["n"] == sp["want"] and sp["n"] > 10 and sp["keys"] and sp["prop"] and sp["tallest"] == sp["peak"] and 0 < sp["height"] <= 32 and "peak week" in str(sp["label"]), sp)
     check("the week in hand is the one orange bar", sp["now"] == [sp["wantNow"]] and sp["nowFill"] != sp["otherFill"] and sp["nowFill"] is not None, sp)
     go = js("""const wks = hooks('fc-spark-week'), g = wks[Math.floor(wks.length / 3)]; if (!g) return null; const key = g.dataset.week; g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      const m = HV.model(), i = m.index(S.date), wk = F.periods(m, 'week', i, i)[0]; return { key, at: wk.key, now: (hooks('fc-spark-week').find(x => x.classList.contains('now')) || {}).dataset };""")
+      const m = HV.model(), i = m.index(S.date), wk = F.periods(m, 'week', i, i)[0], probe = document.body.appendChild(Object.assign(document.createElement('i'), { style: 'color: var(--flag)' })), flag = getComputedStyle(probe).color; probe.remove();
+      return { key, at: wk.key, now: (hooks('fc-spark-week').find(x => x.querySelector('path') && getComputedStyle(x.querySelector('path')).fill === flag) || {}).dataset };""")
     check("a click on a week's bar goes to that week, and its bar turns orange", go["key"] == go["at"] and go["now"] and go["now"]["week"] == go["key"], go)
     page.evaluate("LRFApp.setDate(new Date(LRFApp.planYear(), 6, 14))"); wait(400)
     click("#hvNext", 500)
@@ -454,6 +457,15 @@ with sync_playwright() as pw:
     # E2c: the first fall frost moved, under Season…: a frost-tender crop picked past it in open ground is cut
     follows_change("the first fall frost moved", """const d = A.farmDates(), first = E.s2d(`${d.year}-${d.dates.frostFirst}`), md = E.d2s(E.addDays(first, -21)).slice(5);
       return A.setFarmDates({ ...d.dates, frostFirst: md }) ? md : false;""")
+
+    # a narrow window with the full planner (Codex on #94): the weekly bars shrink with their line and stay inside it. A year of
+    # weeks is 362 px of bars, the made-up farm's season about 240, so the window is made narrower than the farm's bars need
+    page.set_viewport_size({"width": 260, "height": 800}); wait(400)
+    page.evaluate("LRFSowView.leavePhone(); LRFApp.setView('harvest')"); wait(900)
+    narrow = js("""const line = hook('fc-figs'), sp = hook('fc-spark'); if (!line || !sp) return null; const a = line.getBoundingClientRect(), b = sp.getBoundingClientRect();
+      return { view: S.view, line: [Math.round(a.left), Math.round(a.right)], bars: [Math.round(b.left), Math.round(b.right)], width: Math.round(b.width), height: Math.round(b.height), weeks: hooks('fc-spark-week').length };""")
+    check("in a narrow window the weekly bars shrink with their line, keep their shape, and stay inside it", narrow["view"] == "harvest" and narrow["weeks"] > 10 and narrow["bars"][0] >= narrow["line"][0] - 1 and narrow["bars"][1] <= narrow["line"][1] + 1 and narrow["width"] > 0 and narrow["width"] < narrow["weeks"] * 7 - 2 and abs(narrow["height"] / narrow["width"] - 28 / (narrow["weeks"] * 7 - 2)) < 0.02, narrow)
+    page.set_viewport_size({"width": WIDTH, "height": 900}); wait(300)
 
     check("the page raised no error", not errors, errors[:4])
     browser.close()

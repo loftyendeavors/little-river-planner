@@ -44,6 +44,7 @@ PAGE = [
  ("the weekly bars leave out the last week with revenue", HV, "const shown = weeks.slice(first, last + 1),", "const shown = weeks.slice(first, last),"),
  ("the orange bar is not the week in hand", HV, "svg('g.fc-spark-week' + (w.c.key === wk.key ? '.now' : '')", "svg('g.fc-spark-week' + (i === 0 ? '.now' : '')"),
  ("a click on a bar goes nowhere", HV, "onclick: () => App.setDate(w.c.start) },\n        svg('title'", "onclick: null },\n        svg('title'"),
+ ("the weekly bars keep their full width in a narrow window", CSS, ".fc-spark { flex: 0 1 auto; min-width: 0; max-width: 100%; height: auto;", ".fc-spark { flex: none;"),
  ("the table's foot still says worth", HV, "model().personal > 0 ? 'Revenue, commercial only' : 'Revenue'),", "model().personal > 0 ? 'Revenue, commercial only' : 'Worth, at each crop’s own price'),"),
  ("a dollar cell is the amount", HV, "const v = F.sum(series, c.i0, c.i1), text = cash$ ? cash(v) : qty(v),", "const v = F.sum(series, c.i0, c.i1), text = qty(v),"),
  ("dollars read what is picked, not what is sold", HV, "const seriesOf = (m, x) => (dollars() ? x.value :", "const seriesOf = (m, x) => (dollars() ? x.days :"),
