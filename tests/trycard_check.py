@@ -97,14 +97,119 @@ def run(pw):
 
     # ══ the Map: a bed's card ══
     js(f"A.setView('map'); A.select(null); return null;"); wait(500)
+    zoom0 = js("return LRFMap.zoom();")
     box = js(f"const el = document.querySelector('#map [data-bed=\"{BED}\"]'); if (!el) return null; const r = el.getBoundingClientRect(); return {{ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }};")
     if box: page.mouse.click(box["x"], box["y"]); wait(500)
     bed = js(f"""const c = card(); if (!c) return null; const r = c.getBoundingClientRect(), v = $('mapView').getBoundingClientRect(), t = document.querySelector('.map-tools').getBoundingClientRect(), use = LRFForecast.useOfBed(eng, eng.bedOf('{BED}'));
       return {{ kind: c.dataset.kind, title: hook('card-title').textContent, rows: hooks('card-planting').length, opens: hooks('card-opening').length, year: drawn(hook('card-year')), layout: drawn(hook('card-layout')), sale: hook('card-sale') ? hook('card-sale').checked : null, saleWant: !use.personal,
-        panel: panel(), sel: S.sel && S.sel.id, w: Math.round(r.width), inside: r.left >= v.left && r.right <= v.right + 1 && r.top >= t.bottom && r.bottom <= v.bottom + 1, right: Math.round(v.right - r.right), radius: getComputedStyle(c).borderTopLeftRadius }};""")
+        panel: panel(), sel: S.sel && S.sel.id, w: Math.round(r.width), radius: getComputedStyle(c).borderTopLeftRadius, zoom: LRFMap.zoom(),
+        ...(() => {{ const s = document.querySelector('.stage').getBoundingClientRect(), k = $('mapBar'), kr = k ? k.getBoundingClientRect() : null, b = document.querySelector('#map [data-bed="{BED}"]').getBoundingClientRect();
+          return {{ top: Math.round(r.top - s.top), bottom: Math.round(s.bottom - r.bottom), right: Math.round(s.right - r.right), clear: Math.round(r.left - v.right), toolsClear: Math.round(r.left - t.right), keyClear: kr ? Math.round(r.left - kr.right) : null, bedSeen: b.left >= v.left && b.right <= v.right }}; }})() }};""")
     check("a click on a bed on the map opens its card in place of the side panel: the bed's name, Edit layout as a button, the bed's year, its plantings and its openings, Grown for sale as a tick",
           bool(bed) and bed["kind"] == "bed" and bed["title"].endswith(" " + pick["bedName"]) and bed["rows"] == pick["n"] and bed["opens"] == pick["open"] and bed["year"] and bed["layout"] and bed["sale"] == bed["saleWant"] and not bed["panel"] and bed["sel"] == BED, [bed, pick])
-    check("the card floats at the top right of the map, under its tools, inside the map, 340 wide, on a corner of 20", bool(bed) and bed["inside"] and bed["w"] == min(340, WIDTH) and 8 <= bed["right"] <= 16 and bed["radius"] == "20px", bed)
+    check("the card is docked at the top right, never taller than the view, 384 wide, on a corner of 20, and the map, its tools and its key make room for it: nothing of them under it",
+          bool(bed) and bed["w"] == min(384, WIDTH) and bed["radius"] == "20px" and 8 <= bed["right"] <= 16 and 8 <= bed["top"] <= 16 and bed["bottom"] >= 8 and bed["clear"] >= 0 and bed["toolsClear"] >= 0 and (bed["keyClear"] is None or bed["keyClear"] >= 0), bed)
+    # what follows from the card in the page's own layout (on GitHub at 1280 the key wrapped on the narrower map) moves nothing either
+    js("$('mapBar').style.paddingBottom = '40px'; return null;"); wait(400)
+    zoom2 = js("const z = LRFMap.zoom(); $('mapBar').style.paddingBottom = ''; return z;"); wait(300)
+    check("the card coming leaves the map's zoom as it was, and the bed clicked still in view; the map's height changing beside it (the key wrapping) leaves it too",
+          bool(bed) and abs(bed["zoom"] - zoom0) < 1e-9 and bed["bedSeen"] and zoom2 is not None and abs(zoom2 - zoom0) < 1e-9, [bed, zoom0, zoom2])
+    shade = js("const c = card(), t = document.createElement('div'); t.style.boxShadow = 'var(--shadow-card)'; document.body.append(t); const want = getComputedStyle(t).boxShadow; t.remove(); return { got: c ? getComputedStyle(c).boxShadow : null, want };")
+    check("the docked card rests beside the view with a card's soft shadow, not a floating one's (Codex on #85)", shade["got"] == shade["want"], shade)
+    # below 1200 wide the view would be left too narrow beside it: the card floats under the map's tools, and the map keeps its width
+    page.set_viewport_size({"width": 1100, "height": 960}); wait(500)
+    narrow = js("""const c = card(), s = document.querySelector('.stage'), v = $('mapView').getBoundingClientRect(), t = document.querySelector('.map-tools').getBoundingClientRect(), r = c ? c.getBoundingClientRect() : null;
+      return { card: !!c, pad: getComputedStyle(s).paddingRight, over: r ? r.left < v.right && r.right <= v.right + 1 : null, under: r ? r.top >= t.bottom : null, mapW: Math.round(v.width) };""")
+    check("below 1200 wide the card floats under the map's tools over the map, and the map keeps the stage's width (Codex on #85)", narrow["card"] and narrow["pad"] == "0px" and narrow["over"] and narrow["under"] and narrow["mapW"] > 700, narrow)
+    # the bed dragged to the map's right edge while the card floats; then the window widened past 1200: docked, the card hides it not
+    grab = js(f"""const v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed="{BED}"]').getBoundingClientRect(), c = card() ? card().getBoundingClientRect() : null;
+      let p = null; for (let y = v.bottom - 140; y > v.top + 80 && !p; y -= 23) for (let x = v.left + 30; x < v.left + v.width / 2 && !p; x += 23) {{ const e = document.elementFromPoint(x, y);
+        if (e && e.closest('#map') && !e.closest('#mapBeds > g') && !(c && x >= c.left && x <= c.right && y >= c.top && y <= c.bottom)) p = {{ x, y }}; }}
+      return p && {{ x: Math.round(p.x), y: Math.round(p.y), dx: Math.round(v.right - 8 - b.right) }};""")
+    def pan(g):
+        """The map dragged by hand on empty ground, a move at a time as a hand moves it (a burst of moves can be taken as one)."""
+        page.mouse.move(g["x"], g["y"]); page.mouse.down()
+        for k in range(1, 15):
+            page.mouse.move(g["x"] + g["dx"] * k / 14, g["y"]); wait(20)
+        page.mouse.up(); wait(400)
+    if grab:
+        pan(grab)
+    edge = js(f"const v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed=\"{BED}\"]').getBoundingClientRect(); return {{ gap: Math.round(v.right - b.right), sel: S.sel && S.sel.id }};")
+    # widened to 1280 whatever the check's width: docked there, the map is narrower than it was at 1100, so the bed is at stake
+    page.set_viewport_size({"width": 1280, "height": 960}); wait(900)
+    redock = js(f"""const c = card(), v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed="{BED}"]').getBoundingClientRect(), r = c ? c.getBoundingClientRect() : null;
+      return {{ card: !!c, sel: S.sel && S.sel.id, seen: b.left >= v.left - 1 && b.right <= v.right + 1, clear: r ? Math.round(r.left - v.right) : null }};""")
+    check("a bed at the map's right edge while the card floats is moved clear when the window widens and the card docks (Codex on #85)",
+          bool(grab) and 0 <= edge["gap"] <= 40 and edge["sel"] == BED and redock["card"] and redock["sel"] == BED and redock["seen"] and redock["clear"] is not None and redock["clear"] >= 0, [grab, edge, redock])
+    # the same with a planting of that bed picked: docked by the wider window, the map is asked to move that planting's bed clear,
+    # as it is for a bed picked (the moving itself is the line above) (Codex on #85, on 4cf52d7)
+    page.set_viewport_size({"width": 1100, "height": 960}); wait(500)
+    js(f"A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(500)
+    js("window.__asked = []; const o = LRFMap.revealBed; window.__putBack = () => { LRFMap.revealBed = o; }; LRFMap.revealBed = function (id) { window.__asked.push(id); return o.apply(this, arguments); }; return null;")
+    page.set_viewport_size({"width": 1280, "height": 960}); wait(900)
+    asked = js("const a = window.__asked; window.__putBack(); return { asked: a, kind: card() && card().dataset.kind, sel: S.sel && S.sel.type + ':' + S.sel.id };")
+    check("a planting picked while the card floats: widened to dock the card, the map is asked to move the planting's bed clear of it (Codex on #85)",
+          asked["asked"] == [BED] and asked["kind"] == "planting" and asked["sel"] == "planting:" + PID, asked)
+    # a length being typed in the card when the window narrows past 1200: the card is placed again, not drawn again, so the box keeps
+    # what is typed and the keyboard, and gives it to the planting when it is left (Codex on #85, on 84db107)
+    typed = js(f"const p = eng.planting('{PID}'), r = eng.calc(p); let n = Math.round(r.cap * 0.3); if (Math.abs(n - r.physicalLength) < 1) n = Math.round(r.cap * 0.7); return String(Math.max(1, n));")
+    if not page.locator("[data-hook='card-length']").count(): press(page, "[data-hook='card-row'][data-row='share'] .card-row-head", 300)
+    page.locator("[data-hook='card-length']").click(); page.keyboard.press("Control+A"); page.keyboard.type(typed); wait(150)
+    was = js(f"window.__box = hook('card-length'); return rec('{PID}');")
+    page.set_viewport_size({"width": 1100, "height": 960}); wait(500)
+    mid = js(f"const b = window.__box; return {{ same: !!b && b.isConnected && b === hook('card-length'), focus: document.activeElement === b, value: b ? b.value : null, held: rec('{PID}') === arg }};", was)
+    page.keyboard.press("Tab"); wait(500)
+    left = js(f"return {{ moved: rec('{PID}') !== arg, box: hook('card-length') ? hook('card-length').value : null }};", was)
+    js("A.undo(); return null;"); wait(400)
+    check("a length typed in the card and not yet left is kept when the window narrows past 1200 and the card floats: the same box, with the keyboard, and given to the planting when it is left (Codex on #85)",
+          mid["same"] and mid["focus"] and mid["value"] == typed and mid["held"] and left["moved"] and left["box"] == typed, [typed, mid, left])
+    # a bench, a tower or containers clicked at the map's right edge with no card open: the docked card comes and the map, the card's
+    # width narrower, moves that space clear, as it does a bed (Codex on #85, on 84db107)
+    page.set_viewport_size({"width": 1280, "height": 960}); js("A.select(null); return null;"); wait(600)
+    sp = js("""const v = $('mapView').getBoundingClientRect(), tools = document.querySelector('.map-tools').getBoundingClientRect();
+      const list = S.plan.beds.filter(b => b.active !== false && !eng.isSoilBed(b) && !eng.isPool(b)).map(b => ({ id: b.id, el: document.querySelector(`#map [data-bed="${b.id}"] .bed-base`) })).filter(x => x.el)
+        .map(x => { const r = x.el.getBoundingClientRect(); return { id: x.id, kind: eng.spaceKind(eng.bedOf(x.id)), w: r.width, h: r.height, right: r.right, cy: r.top + r.height / 2 }; })
+        .filter(x => x.w >= 12 && x.h >= 12 && x.w < v.width / 3).sort((a, b) => b.w - a.w);
+      const s = list[0]; if (!s) return null;
+      let g = null; for (let y = v.bottom - 140; y > v.top + 80 && !g; y -= 23) for (let x = v.left + 30; x < v.left + v.width / 2 && !g; x += 23) { const e = document.elementFromPoint(x, y); if (e && e.closest('#map') && !e.closest('#mapBeds > g')) g = { x, y }; }
+      const ty = Math.min(Math.max(s.cy, tools.bottom + 80), v.bottom - 140);
+      return g && { id: s.id, kind: s.kind, x: Math.round(g.x), y: Math.round(g.y), dx: Math.round(v.right - 8 - s.right), dy: Math.round(ty - s.cy) };""")
+    def pan2(g):
+        page.mouse.move(g["x"], g["y"]); page.mouse.down()
+        for k in range(1, 15):
+            page.mouse.move(g["x"] + g["dx"] * k / 14, g["y"] + g["dy"] * k / 14); wait(20)
+        page.mouse.up(); wait(400)
+    spot = None
+    if sp:
+        pan2(sp)
+        spot = js(f"""const el = document.querySelector('#map [data-bed="{sp['id']}"] .bed-base'), r = el.getBoundingClientRect(), v = $('mapView').getBoundingClientRect();
+          const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2), at = document.elementFromPoint(x, y);
+          return {{ x, y, hit: !!at && at.closest('[data-bed]')?.dataset.bed === '{sp['id']}', gap: Math.round(v.right - r.right), card: !!card() }};""")
+    if spot and spot["hit"]:
+        js("window.__asked = []; const o = LRFMap.revealBed; window.__putBack = () => { LRFMap.revealBed = o; }; LRFMap.revealBed = function (id) { window.__asked.push(id); return o.apply(this, arguments); }; return null;")
+        page.mouse.click(spot["x"], spot["y"]); wait(900)
+    bench = js(f"""const a = window.__asked || []; if (window.__putBack) window.__putBack(); const c = card(), v = $('mapView').getBoundingClientRect(), el = document.querySelector('#map [data-bed="{sp['id'] if sp else ''}"] .bed-base'), r = el ? el.getBoundingClientRect() : null, sel = S.sel, p = sel && sel.type === 'planting' ? eng.planting(sel.id) : null;
+      return {{ asked: a, card: !!c, of: sel ? (sel.type === 'bed' ? sel.id : p && p.bedId) : null, seen: !!r && r.left >= v.left - 1 && r.right <= v.right + 1, clear: c ? Math.round(c.getBoundingClientRect().left - v.right) : null }};""")
+    check("a bench, a tower or containers clicked at the map's right edge with no card open: the docked card comes, and the map moves that space clear of it (Codex on #85)",
+          bool(sp) and bool(spot) and spot["hit"] and 0 <= spot["gap"] <= 40 and not spot["card"] and bench["card"] and bench["of"] == sp["id"] and bench["asked"] == [sp["id"]] and bench["seen"] and bench["clear"] is not None and bench["clear"] >= 0, [sp, spot, bench])
+    # a planting picked on the Timeline, its bed at the map's right edge as the map was left with no card: back on the Map with the card
+    # docked, the map, the card's width narrower, moves that bed clear (Codex on #85, on 98154ee)
+    js("A.select(null); return null;"); wait(600)
+    bk = js(f"""const v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed="{BED}"] .bed-base').getBoundingClientRect();
+      let g = null; for (let y = v.bottom - 140; y > v.top + 80 && !g; y -= 23) for (let x = v.left + 30; x < v.left + v.width / 2 && !g; x += 23) {{ const e = document.elementFromPoint(x, y); if (e && e.closest('#map') && !e.closest('#mapBeds > g')) g = {{ x, y }}; }}
+      return g && {{ x: Math.round(g.x), y: Math.round(g.y), dx: Math.round(v.right - 8 - b.right), dy: 0 }};""")
+    if bk: pan2(bk)
+    left_at = js(f"const v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed=\"{BED}\"] .bed-base').getBoundingClientRect(); return {{ gap: Math.round(v.right - b.right), card: !!card() }};")
+    js(f"A.setView('timeline'); A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(600)
+    on_tl = js("return { kind: card() && card().dataset.kind, docked: LRFCard.docked() };")
+    js("window.__asked = []; const o = LRFMap.revealBed; window.__putBack = () => { LRFMap.revealBed = o; }; LRFMap.revealBed = function (id) { window.__asked.push(id); return o.apply(this, arguments); }; return null;")
+    js("A.setView('map'); return null;"); wait(900)
+    back_map = js(f"""const a = window.__asked; window.__putBack(); const c = card(), v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed="{BED}"] .bed-base').getBoundingClientRect();
+      return {{ asked: a, kind: c && c.dataset.kind, seen: b.left >= v.left - 1 && b.right <= v.right + 1, clear: c ? Math.round(c.getBoundingClientRect().left - v.right) : null }};""")
+    check("a planting picked on the Timeline, its bed at the map's right edge: back on the Map with the card docked, the map moves that bed clear of it (Codex on #85)",
+          bool(bk) and 0 <= left_at["gap"] <= 40 and not left_at["card"] and on_tl["kind"] == "planting" and on_tl["docked"] and back_map["asked"] == [BED] and back_map["kind"] == "planting" and back_map["seen"] and back_map["clear"] is not None and back_map["clear"] >= 0, [bk, left_at, on_tl, back_map])
+    js(f"A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(300)
+    page.set_viewport_size({"width": WIDTH, "height": 960}); wait(500)
     page.screenshot(path=str(shots / f"map-bed-{WIDTH}.png"))
 
     # a planting picked directly (for example from a Timeline bar), the bed's name back, x to close.
@@ -130,8 +235,9 @@ def run(pw):
     check("the Timeline has a bar clear of where the card stands, for the check to click", bool(tb), tb)
     if tb:
         page.mouse.click(tb["x"], tb["y"]); wait(500)
-        t1 = js("const c = card(); return { kind: c && c.dataset.kind, sel: S.sel && S.sel.id, panel: panel(), top: c ? Math.round(c.getBoundingClientRect().top - document.querySelector('.tl-tools').getBoundingClientRect().bottom) : null };")
-        check("on the Timeline a click on a bar opens the planting's card under the Timeline's tools, in place of the side panel", t1["kind"] == "planting" and t1["sel"] == tb["id"] and not t1["panel"] and t1["top"] is not None and 4 <= t1["top"] <= 12, t1)
+        t1 = js("const c = card(), s = document.querySelector('.stage').getBoundingClientRect(), r = c ? c.getBoundingClientRect() : null, v = $('timelineView').getBoundingClientRect(), m = document.querySelector('.tl-months'); return { kind: c && c.dataset.kind, sel: S.sel && S.sel.id, panel: panel(), top: r ? Math.round(r.top - s.top) : null, clear: r ? Math.round(r.left - v.right) : null, monthsClear: r && m ? Math.round(r.left - m.getBoundingClientRect().right) : null };")
+        check("on the Timeline a click on a bar opens the planting's card in place of the side panel, docked where it stands on the Map, and the Timeline and its months make room for it",
+              t1["kind"] == "planting" and t1["sel"] == tb["id"] and not t1["panel"] and t1["top"] is not None and 8 <= t1["top"] <= 16 and t1["clear"] is not None and t1["clear"] >= 0 and (t1["monthsClear"] is None or t1["monthsClear"] >= 0), t1)
         page.screenshot(path=str(shots / f"timeline-planting-{WIDTH}.png"))
         press(page, "[data-hook='card-bed']", 400)
         t2 = js("return { kind: card() && card().dataset.kind, sel: S.sel && S.sel.type + ':' + S.sel.id };")
@@ -147,7 +253,7 @@ def run(pw):
         # the right-click menu
         page.mouse.click(tb["x"], tb["y"], button="right"); wait(400)
         mn = js("const m = hook('card-menu'); return { menu: drawn(m), acts: hooks('card-menu-item').map(x => x.dataset.act), sel: S.sel && S.sel.id, card: card() && card().dataset.kind };")
-        check("a right-click on a bar opens the card's menu where the pointer is: Open, Change the date…, All of this planting…, Send to To place, Remove planting; the planting is picked",
+        check("a right-click on a bar opens the card's menu where the pointer is: Open, Change the date…, Planting details…, Send to To place, Remove planting; the planting is picked",
               mn["menu"] and all(a in mn["acts"] for a in ["open", "date", "full", "wait", "remove"]) and mn["sel"] == tb["id"] and mn["card"] == "planting", mn)
         page.screenshot(path=str(shots / f"timeline-menu-{WIDTH}.png"))
         press(page, "[data-hook='card-menu-item'][data-act='date']", 400)
@@ -316,7 +422,7 @@ def run(pw):
     set_value("#fDtm", days["dtm"]); wait(300)
     js(f"A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(400)
     stale = js("const s = hook('card-said'); return { card: !!card(), said: drawn(s) ? s.textContent : '' };")
-    check("a change made in the side panel (“All of this planting…”) is not said, with its Undo, on the bed's card opened after it", stale["card"] and stale["said"] == "", stale)
+    check("a change made in the side panel (“Planting details”) is not said, with its Undo, on the bed's card opened after it", stale["card"] and stale["said"] == "", stale)
     js("A.undo(); A.select(null); return null;"); wait(300)
 
     # ══ a drop: answered on the card ══
@@ -352,7 +458,7 @@ def run(pw):
     js(f"A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(400)
     press(page, "[data-hook='card-full']", 400)
     fl = js("return { card: !!card(), panel: panel(), date: drawn($('fDate')) };")
-    check("“All of this planting…” opens it whole in the side panel, in place of the card", not fl["card"] and fl["panel"] and fl["date"], fl)
+    check("“Planting details” opens it whole in the side panel, in place of the card", not fl["card"] and fl["panel"] and fl["date"], fl)
     js(f"A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(400)
     press(page, "[data-hook='card-opening']", 400)
     op = js("return { card: !!card(), panel: panel(), sel: S.sel && S.sel.type };")
@@ -379,8 +485,9 @@ def run(pw):
     ph = {"x": hi("[data-hook='card-close']"), "date": hi("[data-hook='card-date']"), "variety": hi("[data-hook='card-variety']"), "row": hi("[data-hook='card-row'] .card-row-head")}
     press(page, "[data-hook='card-more']", 300); ph["menu"] = hi("[data-hook='card-menu-item']"); page.keyboard.press("Escape"); wait(200)
     press(page, "[data-hook='card-date']", 300); ph["day"] = hi("[data-hook='card-cal-day']"); page.keyboard.press("Escape"); wait(200)
+    ph["help"] = hi("[data-hook='card'] [data-hook='use-help']"); ph["full"] = hi("[data-hook='card-full']")
     ph["inside"] = js("const c = card(); if (!c) return false; const r = c.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth;")
-    check("on a phone (390 wide) the card stands inside the screen, and its ×, date, variety, rows, menu and calendar days are 44 high", ph["inside"] and all(ph[k] >= 44 for k in ["x", "date", "variety", "row", "menu", "day"]), ph)
+    check("on a phone (390 wide) the card stands inside the screen, and its ×, date, variety, rows, menu and calendar days, Grown for sale's \"?\" and Planting details are 44 high", ph["inside"] and all(ph[k] >= 44 for k in ["x", "date", "variety", "row", "menu", "day", "help", "full"]), ph)
     page.set_viewport_size({"width": WIDTH, "height": 960}); wait(400)
     js("A.setView('map'); return null;"); wait(300)
 

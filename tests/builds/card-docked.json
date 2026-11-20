@@ -1,0 +1,17 @@
+{
+ "build": "The card, behind \"Try the card\", refined and docked. From 1200 wide the card stands at the top right of the Map and the Timeline in one place, as tall as what it holds and never taller than the view, 384 wide, and the view, its tools, its key, the Timeline's months and the date bar end at its left edge, so nothing is under it; its head and its foot stay while the middle scrolls; on the Map its coming leaves the zoom as it was, and a bed, a bench, a tower or containers it would hide are moved clear; a box being typed in keeps what is typed when the window crosses 1200. Narrower, it floats under the view's tools as before. A bed's card: its year first, then one line of what it comes to, Grown for sale with its \"?\", the plantings, the openings, and Edit layout and Plan a series here at the foot; the title at 24; \"...\" and x together. The year white with a line a month, the open row's bar in full colour with an orange edge. A row's line of detail breaks only between its parts. A row's state is a dot and a word. The open row is white with an orange edge. Openings are rows like the plantings, with what fits written out and a crop sold each said \"each\". \"All of this planting\" reads \"Planting details\" everywhere, and \"All of this bed...\" reads \"Bed details...\". A planting's card has the \"?\" beside Grown for sale. Look and words only: nothing stored, no figure moves; the side panel, with the tick off, is as it was but for the bed's season it shares.",
+ "changes": {
+  "did": "The card (Try the card, under the Map's ?) stands in one place at the right of the Map and the Timeline, and they make room for it; it reads cleaner, and \"Planting details\" replaces \"All of this planting\".",
+  "steps": [
+   "Tick Try the card under the Map's ?, then click a bed: the card stands at the right and the map, its buttons and its key end beside it; the map does not zoom.",
+   "Go to the Timeline with the card open: it stands in the same place and all the months show beside it, none under it.",
+   "Open a planting's row in the bed's card: its bar in the year turns full colour with an orange edge, and Planting details opens everything about it."
+  ]
+ },
+ "words": [],
+ "code": ["card.js", "map.js"],
+ "added": [],
+ "removed": [],
+ "page": ["css/app.css"],
+ "screens": []
+}

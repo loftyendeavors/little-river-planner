@@ -199,7 +199,7 @@
 
   "tasks2": 88,
 
-  "trycard": 50,
+  "trycard": 58,
 
   "wide": 28,
 
@@ -310,7 +310,7 @@
 
   "tour": 4,
 
-  "trycard-site": 50,
+  "trycard-site": 58,
 
   "year-edge-site": 23
 
@@ -348,7 +348,7 @@
 
   "stepF-site @1480": 47,
 
-  "trycard-site": 50
+  "trycard-site": 58
 
  },
  "site5": {
@@ -377,7 +377,7 @@
 
   "tasks2-site @3440": 88,
 
-  "trycard-site @3440": 50
+  "trycard-site @3440": 58
 
  },
  "site6": {

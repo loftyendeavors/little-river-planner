@@ -4,6 +4,7 @@ usage: python3 -I bed_season_check.py <app-or-site-dir> <shots-dir> [backup.zip]
 import functools
 import http.server
 import json
+import re
 import os
 import sys
 import threading
@@ -209,7 +210,7 @@ def run_surface(context, floating):
     date(gap["date"])
     gap_card = page.locator(opening(gap["id"]))
     fits = gap_card.locator(hook("bed-opening-fit")).all_text_contents() if gap_card.count() else []
-    verify("an opening shows the engine's days, predecessor, three crop fits with amounts, and remaining count", gap_card.is_visible() and all(part in gap_card.inner_text() for part in (f"Open {gap['days']} days", gap["after"], f"+{gap['more']} more")) and len(fits) == 3 and all(name in fit and " · " in fit for name, fit in zip(gap["fits"], fits)), fits)
+    verify("an opening shows the engine's days, predecessor, three crop fits with amounts each with its unit (a crop sold each says each), and remaining count", gap_card.is_visible() and all(part in gap_card.inner_text() for part in (f"Open {gap['days']} days", gap["after"], f"+{gap['more']} more")) and len(fits) == 3 and all(re.fullmatch(re.escape(name) + r" [\d,.]+ [a-z]+.*", fit) for name, fit in zip(gap["fits"], fits)), fits)
     verify("the planning date marks the opening that contains it", gap_card.locator(hook("bed-opening-now")).is_visible() and gap["label"] in gap_card.locator(hook("bed-opening-now")).inner_text())
     gap_card.click()
     top_fits = page.locator("#ahFits button[data-crop]").evaluate_all("chips => chips.slice(0, 3).map(chip => chip.dataset.crop)")

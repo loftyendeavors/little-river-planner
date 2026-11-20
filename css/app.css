@@ -2507,27 +2507,43 @@ body.phone .top { padding-block: var(--space-4); }   /* the header stays one sho
 
 /* ───────────────────────────── The card, part 1 (DESIGN.md, rule 2), behind "Try the card" ─────────────────────────────
    Only while the tick is on (body[data-card="on"], set by js/card.js): the side panel leaves the Map and the Timeline, and a
-   bed or a planting picked opens one floating card at the top right of the view, under its tools. Off, none of this applies. */
+   bed or a planting picked opens one card. On a screen 1200 wide or more it is docked at the right, the same on Map and
+   Timeline, as tall as what it holds and never taller than the view, and the view makes room for it; narrower, it floats
+   under the view's tools.
+   Off, none of this applies. */
 body[data-card="on"] .inspector { display: none; }
 body[data-card="on"] .work { grid-template-columns: 268px minmax(0, 1fr); }
 @media (max-width: 1080px) { body[data-card="on"] .work { grid-template-columns: 232px minmax(0, 1fr); } }
 @media (max-width: 700px) { body[data-card="on"] .work { grid-template-columns: minmax(0, 1fr); } }
 body[data-card="on"] .stage { position: relative; }
-.lrf-card { position: absolute; right: var(--space-12); z-index: 25; width: min(340px, calc(100% - 24px)); overflow-y: auto; overscroll-behavior: contain;
-  padding: var(--space-16); display: grid; gap: var(--space-12); font-size: var(--type-13); color: var(--ink-2); }
-.card-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: start; column-gap: var(--space-8); }
+.lrf-card { position: absolute; right: var(--space-12); z-index: 25; width: min(384px, calc(100% - 24px)); overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-16); display: grid; align-content: start; gap: var(--space-12); font-size: var(--type-13); color: var(--ink-2); }
+/* docked from 1200 wide (below it the view would be left too narrow: the card floats as on a phone): the view's tools, key,
+   header and date bar end at the card's left edge; its head and foot stay while the middle scrolls */
+@media (min-width: 1200px) {
+  body[data-card="on"] .stage:has(> .lrf-card) { padding-right: calc(384px + 2 * var(--space-12)); }
+  .lrf-card { top: var(--space-12); max-height: calc(100% - 2 * var(--space-12)); padding-top: 0; padding-bottom: 0; animation: card-in var(--speed-move) var(--ease); }
+  .card.float.lrf-card { box-shadow: var(--shadow-card); }   /* resting beside the view, not floating over it */
+  .lrf-card > .card-head { position: sticky; top: 0; z-index: 3; margin: 0 calc(-1 * var(--space-16)); padding: var(--space-16) var(--space-16) var(--space-8); background: var(--raised); box-shadow: 0 1px 0 var(--line-soft); }
+  .lrf-card > :last-child:not(.card-foot):not(.bed-season) { margin-bottom: var(--space-12); }
+  .lrf-card .card-foot { position: sticky; bottom: 0; z-index: 3; margin: 0 calc(-1 * var(--space-16)); padding: var(--space-12) var(--space-16); background: var(--raised); border-top: 0; box-shadow: 0 -1px 0 var(--line-soft); }
+}
+@keyframes card-in { from { opacity: 0; transform: translateX(var(--space-16)); } }
+@media (prefers-reduced-motion: reduce) { .lrf-card { animation: none; } }
+.card-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; column-gap: var(--space-8); }
+.lrf-card .card-head:not(:has(> .thumb)) { grid-template-columns: minmax(0, 1fr) auto auto; }   /* no photograph: "⋯" and × stay together at the right */
 .card-head > .thumb { border-radius: var(--corner-12); }
 .card-title { min-width: 0; }
-.card-title h2 { margin: 0; font: 700 var(--type-18)/1.15 var(--display); font-stretch: 80%; color: var(--ink); overflow-wrap: anywhere; }
+.card-title h2 { margin: 0; font: 700 var(--type-24)/1.1 var(--display); font-stretch: 80%; color: var(--ink); overflow-wrap: anywhere; }
 .card-sub { margin: var(--space-4) 0 0; font-size: var(--type-13); color: var(--muted); }
 .card-sub .link { font-size: var(--type-13); }
-.card-head .icon-btn { width: var(--control-in); height: var(--control-in); font-size: var(--type-15); border-color: transparent; background: var(--paper); border-radius: var(--corner-pill); }
-.card-head .icon-btn:hover { border-color: var(--line); }
+.card-head .icon-btn { align-self: start; width: var(--control-in); height: var(--control-in); font-size: var(--type-15); border-color: transparent; background: none; color: var(--muted); border-radius: var(--corner-pill); }
+.card-head .icon-btn:hover { background: var(--paper); color: var(--ink); }
 .card-said { margin: 0; padding: var(--space-8) var(--space-12); border-radius: var(--corner-12); background: var(--paper); font-size: var(--type-13); color: var(--ink-2); }
 .card-said b { color: var(--ink); }
 .card-said .link { margin-left: var(--space-8); font-weight: 600; }
 .card-said[data-state="refused"] b { color: var(--bad); }
-.card-sums { margin: 0; font-size: var(--type-13); color: var(--ink); font-weight: 600; }
+.card-sums { margin: 0; font-size: var(--type-15); color: var(--ink); font-weight: 600; }
 /* a planting's life as one bar */
 .card-bar { display: grid; gap: var(--space-8); }
 .card-bar-track { position: relative; height: 18px; }
@@ -2538,7 +2554,7 @@ body[data-card="on"] .stage { position: relative; }
 .card-bar-track .cb-turn { background: repeating-linear-gradient(135deg, var(--crop) 0 2px, transparent 2px 6px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--crop) 50%, transparent); border-radius: 0 var(--corner-4) var(--corner-4) 0; }
 .card-bar-days { display: flex; justify-content: space-between; gap: var(--space-8); }
 .card-bar-days span { display: grid; font-size: var(--type-11); color: var(--muted); white-space: nowrap; }
-.card-bar-days b { font: 600 var(--type-11) var(--mono); color: var(--ink); }
+.card-bar-days b { font: 600 var(--type-13) var(--body); font-variant-numeric: tabular-nums; color: var(--ink); }
 /* the boxes changed most, side by side */
 .card-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-8); }
 .card-box { display: grid; gap: var(--space-4); min-width: 0; }
@@ -2560,16 +2576,19 @@ body[data-card="on"] .stage { position: relative; }
 .card-note { margin: 0; font-size: var(--type-11); color: var(--muted); }
 .card-repeat { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
 .card-repeat input { width: 56px; height: var(--control-in); padding: 0 var(--space-8); border: 1px solid var(--line); border-radius: var(--corner-8); background: var(--raised); }
-.card-foot, .card-acts { display: flex; flex-wrap: wrap; gap: var(--space-8); }
-.card-foot { border-top: 1px solid var(--line-soft); padding-top: var(--space-8); }
+.card-foot, .card-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+.card-foot { border-top: 1px solid var(--line-soft); padding-top: var(--space-12); }
 /* a bed's year, its plantings and its openings */
 .card-year { display: grid; gap: var(--space-4); }
-.cy-track { position: relative; height: 56px; border-radius: var(--corner-4); background: var(--paper); overflow: hidden; }
+/* white, a hairline a month; the open row's bar in full colour with an orange edge, so the row and its bar are seen as one */
+.cy-track { position: relative; height: 48px; border-radius: var(--corner-8); background-color: var(--raised); box-shadow: inset 0 0 0 1px var(--line-soft); overflow: hidden;
+  background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(100% / 12 - 1px), var(--line-soft) calc(100% / 12 - 1px), var(--line-soft) calc(100% / 12)); }
 .cy-track i { position: absolute; }
-.cy-bar { background: color-mix(in srgb, var(--crop) 70%, var(--raised)); box-shadow: inset 0 0 0 1px var(--raised); }
-.cy-open { border: 1px dashed var(--muted); box-sizing: border-box; }
+.cy-bar { background: color-mix(in srgb, var(--crop) 55%, var(--raised)); border-radius: var(--corner-4); box-shadow: inset 0 0 0 1px var(--raised); }
+.cy-bar.on { z-index: 1; background: var(--crop); box-shadow: inset 0 0 0 1px var(--raised), 0 0 0 2px var(--flag); }
+.cy-open { border: 1px dashed color-mix(in srgb, var(--muted) 75%, transparent); border-radius: var(--corner-4); box-sizing: border-box; }
 .cy-now { top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--flag); }
-.cy-months { display: flex; justify-content: space-between; font: 500 var(--type-11) var(--mono); color: var(--muted); }
+.cy-months { display: flex; justify-content: space-between; font: 500 var(--type-11) var(--body); color: var(--muted); }
 .cy-months span { flex: 1; text-align: center; }
 .card-list { display: grid; margin: 0 calc(-1 * var(--space-16)); }
 .card-item { width: 100%; padding: var(--space-8) var(--space-16); border: 0; border-top: 1px solid var(--line-soft); background: none; text-align: left; color: var(--ink); }
@@ -2582,16 +2601,28 @@ body[data-card="on"] .stage { position: relative; }
 .bed-season { display: grid; gap: var(--space-12); min-width: 0; }
 #inspectorBody .bed-season { padding: var(--space-12); }
 .bed-season-saved[data-state="idle"] { display: none; }
-.bed-season-use { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-8); }
-.bed-season-use > small { flex-basis: 100%; color: var(--muted); font-size: var(--type-11); }
+/* Grown for sale with its "?", on a bed's card and a planting's */
+.bed-season-use, .card-use { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-8); }
+.bed-season-use > small, .card-use > small { flex-basis: 100%; padding-left: var(--space-24); color: var(--muted); font-size: var(--type-11); }
+.bed-season-use .help-btn, .card-use .help-btn { width: 24px; height: 24px; font-size: var(--type-11); border-color: var(--line-soft); }
+/* a line of detail breaks only between its parts */
+.dpart { white-space: nowrap; }
 .bed-plantings { border: 1px solid var(--line-soft); border-radius: var(--corner-12); overflow: hidden; }
 .bed-planting + .bed-planting { border-top: 1px solid var(--line-soft); }
 .bed-planting-trigger { border: 0; padding: var(--space-8); column-gap: var(--space-8); }
-.bed-planting-trigger[aria-expanded="true"], .bed-planting-fields { background: var(--paper); }
+.bed-planting-trigger[aria-expanded="true"], .bed-planting-fields { background: var(--raised); }
+/* the open row is the thing picked: an orange edge over it, on white (never a coloured panel) */
+.bed-planting:has(> .bed-planting-trigger[aria-expanded="true"]) { position: relative; }
+.bed-planting:has(> .bed-planting-trigger[aria-expanded="true"])::after { content: ''; position: absolute; inset: 0; border-radius: var(--corner-12); box-shadow: inset 0 0 0 2px var(--flag); pointer-events: none; }
+.bed-planting .row-detail, .bed-opening .row-detail { white-space: normal; overflow: visible; text-overflow: clip; }
 .bed-planting-trigger:focus-visible { outline: 2px solid var(--flag-deep); outline-offset: -2px; }
 .bed-planting-copy { min-width: 0; }
 .bed-planting-tail { display: flex; align-items: center; gap: var(--space-4); }
-.bed-planting-tail .row-word { max-width: 9ch; color: var(--flag-deep); white-space: normal; text-align: right; }
+/* how a row stands: a dot and a word; the orange dot is the map's date, as the orange line is */
+.bed-planting-tail .row-word { max-width: 11ch; display: inline-flex; align-items: center; gap: var(--space-4); color: var(--ink-2); font-weight: 600; white-space: normal; text-align: left; }
+.bed-planting-tail .row-word::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: var(--corner-pill); background: var(--flag); }
+.bed-planting[data-state="turnover"] .row-word { color: var(--muted); font-weight: 400; }
+.bed-planting[data-state="turnover"] .row-word::before, .bed-planting[data-state="failed"] .row-word::before { background: var(--muted); }
 .bed-planting-chevron { color: var(--muted); transition: transform var(--speed-press) var(--ease); }
 .bed-planting-trigger[aria-expanded="true"] .bed-planting-chevron { transform: rotate(90deg); }
 .bed-planting[data-state="failed"] .row-word, .bed-planting[data-state="failed"] .row-name { color: var(--muted); }
@@ -2600,12 +2631,18 @@ body[data-card="on"] .stage { position: relative; }
 .bed-planting-fields .link { justify-self: start; }
 .bed-planting-fields :disabled, .bed-season-use input:disabled { opacity: 0.62; }
 .bed-openings { display: grid; gap: var(--space-8); }
-.bed-openings h3 { margin: 0; font-size: var(--type-13); }
-.bed-opening { padding: var(--space-8) var(--space-12); border: 1px solid var(--line-soft); border-radius: var(--corner-12); }
-.bed-opening b { font-family: var(--body); white-space: normal; }
-.bed-opening .bed-opening-now { color: var(--good); }
-.bed-opening-fits { display: flex; flex-wrap: wrap; gap: var(--space-4); }
-.bed-opening-fits > span { flex: none; max-width: 100%; padding: 0 var(--space-4); border-radius: var(--corner-4); background: var(--paper); font-size: var(--type-11); }
+.bed-openings h3 { margin: 0; font-size: var(--type-13); font-weight: 600; color: var(--muted); }
+/* openings: rows in one bounded list like the plantings, a dashed tile where a photograph would be */
+.bed-opening-list { display: grid; border: 1px solid var(--line-soft); border-radius: var(--corner-12); overflow: hidden; }
+.bed-opening.card-open { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: var(--space-8); align-items: start; padding: var(--space-8); border: 0; }
+.bed-opening + .bed-opening { border-top: 1px solid var(--line-soft); }
+.bed-opening-tile { width: 40px; height: 40px; box-sizing: border-box; border: 2px dashed color-mix(in srgb, var(--muted) 55%, transparent); border-radius: var(--corner-12); }
+.bed-opening-copy { display: grid; gap: 2px; min-width: 0; }
+.bed-opening .row-name { font-size: var(--type-15); font-weight: 600; color: var(--ink); }
+.bed-opening .row-detail { font-size: var(--type-13); color: var(--muted); }
+.bed-opening-fits { font-size: var(--type-13); color: var(--muted); }
+.bed-opening-fits b { font: 600 var(--type-13) var(--body); color: var(--ink-2); }
+.bed-opening .bed-planting-tail { align-self: center; }
 /* the menu: the card's "⋯", and a right-click */
 .card-menu { position: fixed; z-index: 70; width: 236px; padding: var(--space-4); border-radius: var(--corner-12); background: var(--raised); box-shadow: var(--shadow-float); display: grid; }
 .card-menu-head { display: grid; padding: var(--space-8) var(--space-8) var(--space-4); }
@@ -2650,6 +2687,8 @@ body[data-card="on"] .stage { position: relative; }
   .card-box select, .card-box input, .card-date, .card-row-head, .card-repeat input, .lrf-card .btn.small, .card-menu-item, .card-cal-day, .card-cal-month .icon-btn { min-height: var(--control-phone); }
   .card-cal-day, .card-cal-month .icon-btn { width: var(--control-phone); height: var(--control-phone); }
   .card-cal { width: min(340px, calc(100vw - 16px)); }
+  .lrf-card .card-use .help-btn, .lrf-card .bed-season-use .help-btn { width: var(--control-phone); height: var(--control-phone); }   /* Codex on #85 */
+  .lrf-card .card-foot .link { display: inline-flex; align-items: center; min-height: var(--control-phone); }
 }
 
 /* ───────────────────────────── The Forecast page in the frame (DESIGN.md, rule 1) ─────────────────────────────
