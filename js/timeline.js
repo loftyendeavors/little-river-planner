@@ -607,8 +607,11 @@
   /** Bring the row of what is picked into view, up or down only, and only when none of it can be seen: the date stays where it
    *  is, and a row that shows at all is left where it is, so nothing jumps under the pointer (#88). */
   function showRow() {
-    const scroll = $('tlScroll'), bar = pick.bar && barOf(pick.bar);
-    const row = (bar && bar.closest('.tl-row')) || (pick.bed && document.querySelector(`#tlBody .tl-row[data-bed="${CSS.escape(pick.bed)}"]`));
+    const scroll = $('tlScroll'), eng = App.state.engine;
+    const find = () => { const bar = pick.bar && barOf(pick.bar); return (bar && bar.closest('.tl-row')) || (pick.bed && document.querySelector(`#tlBody .tl-row[data-bed="${CSS.escape(pick.bed)}"]`)); };
+    let row = find();
+    // hidden by the filter, a closed garden or a bank of towers: opened to, then found again on the page drawn afresh (Codex on #89)
+    if (!row && pick.bed && revealSpace(eng, eng.bedOf(pick.bed))) row = find();
     if (!row || !scroll.clientHeight) return;
     const box = row.getBoundingClientRect(), view = scroll.getBoundingClientRect(), head = scroll.querySelector('.tl-head');
     const top = view.top + (head ? head.offsetHeight : 0), bottom = view.top + scroll.clientHeight;
@@ -661,14 +664,20 @@
   }
   /** Open whatever summary holds this planting, so its own bar is on the page. */
   function reveal(plantingId) {
-    const eng = App.state.engine, p = eng.planting(plantingId), bed = p && eng.bedOf(p.bedId), garden = bed && eng.gardenOf(bed);
+    const eng = App.state.engine, p = eng.planting(plantingId);
+    return revealSpace(eng, p && eng.bedOf(p.bedId), p && p.cropId);
+  }
+  /** Open whatever hides a space's row: the filter that leaves its kind out, its garden closed, its bank of towers as one row, and
+   *  (for a planting's crop) a crate's crop drawn as one bar. A bed picked is opened to as a planting picked is (Codex on #89). */
+  function revealSpace(eng, bed, cropId) {
+    const garden = bed && eng.gardenOf(bed);
     if (!bed || !garden) return false;
     const s = sectionOf(eng, bed, garden), key = `${s}:${garden.id}`;
     let changed = false;
     if (prefs.filter !== 'all' && prefs.filter !== s && s !== 'trays') { prefs.filter = s; changed = true; }
     if (s === 'tower' && !prefs.open[key]) { prefs.open[key] = true; changed = true; }
     if (s !== 'tower' && s !== 'trays' && prefs.shut[key]) { delete prefs.shut[key]; changed = true; }
-    if (s === 'crate') { const k = `crop:${bed.id}:${p.cropId}`; if (!prefs.open[k] && eng.plantingsIn(bed.id).length > CROWDED) { prefs.open[k] = true; changed = true; } }
+    if (s === 'crate' && cropId) { const k = `crop:${bed.id}:${cropId}`; if (!prefs.open[k] && eng.plantingsIn(bed.id).length > CROWDED) { prefs.open[k] = true; changed = true; } }
     if (changed) { savePrefs(); render(); }
     return changed;
   }

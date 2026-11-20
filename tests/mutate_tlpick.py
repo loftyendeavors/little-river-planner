@@ -32,6 +32,8 @@ CD, TL, AH, CSS = "js/card.js", "js/timeline.js", "js/ahead.js", "css/app.css"
 PAGE = [
  ("the picked bed's row has no orange along it", CSS, ".tl-row.sel::after { content: ''; position: absolute; inset: 0; border-block: 2px solid var(--flag); pointer-events: none; z-index: 5; }\n", ""),
  ("Codex on #89: the orange is drawn on the Timeline round the row, not on the row", CSS, ".tl-row.sel::after { content: ''; position: absolute; inset: 0;", ".tl-row.sel::after { content: ''; position: absolute; inset: -120px 0;"),
+ ("Codex on #89: a bed hidden by the Timeline's filter or a closed garden is not opened to", TL, "    if (!row && pick.bed && revealSpace(eng, eng.bedOf(pick.bed))) row = find();\n", ""),
+ ("Codex on #89: a bed picked does not open its closed garden", TL, "    if (s !== 'tower' && s !== 'trays' && prefs.shut[key]) { delete prefs.shut[key]; changed = true; }", "    void key;"),
  ("the planting open in the bed's season is not ringed", TL, "bar: (C && C.openRow && C.openRow()) || null, bed: sel.id };", "bar: null, bed: sel.id };"),
  ("the card does not tell the Timeline it opened a row", CD, "        if (root.LRFTimeline && root.LRFTimeline.showPick) root.LRFTimeline.showPick();   // the Timeline rings the row opened (#88)\n", ""),
  ("going to the Timeline, what the card opened while it was away is not shown", TL, "      if (dirty) render(); else markSel();", "      if (dirty) render();"),

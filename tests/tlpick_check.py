@@ -121,6 +121,29 @@ def run(pw):
       return { hidden, seen: seen(arg.bed), ringed: ringed(), before, after: at() };""", arg)
     check("a planting picked from elsewhere, its row out of sight, is ringed and brought into view, up or down only", plant["hidden"] is False and plant["seen"] is True and plant["ringed"] == [P1] and plant["before"]["left"] > 0 and plant["after"]["left"] == plant["before"]["left"], plant)
 
+    # ── hidden by the Timeline's own settings, kept by the browser: its kind filtered out, its garden closed (Codex on #89) ──
+    hid = js("""const T = LRFTimeline, P = T.prefs(), g = eng.gardenOf(eng.bedOf(arg.bed)).id;
+      A.select(null); await sleep(150);
+      let left = null;
+      for (const k of ['field', 'cover', 'tower', 'crate']) { T.setFilter(k); await sleep(300); if (!rowOf(arg.bed)) { left = k; break; } }
+      const out = { left };
+      if (left) {
+        A.setView('map'); await sleep(300); A.select({ type: 'bed', id: arg.bed }); await sleep(300);
+        A.setView('timeline'); await sleep(800);
+        out.filtered = { row: !!rowOf(arg.bed), edged: edged(), seen: seen(arg.bed) };
+      }
+      T.setFilter('all'); await sleep(300); A.select(null); await sleep(150);
+      P.shut['field:' + g] = true; P.shut['cover:' + g] = true; T.setFilter('field'); T.setFilter('all'); await sleep(400);
+      out.shutRow = !!rowOf(arg.bed);
+      A.select({ type: 'bed', id: arg.bed }); await sleep(500);
+      out.shut = { row: !!rowOf(arg.bed), edged: edged(), seen: seen(arg.bed) };
+      delete P.shut['field:' + g]; delete P.shut['cover:' + g]; T.setFilter('field'); T.setFilter('all'); await sleep(300);
+      return out;""", arg)
+    f = hid.get("filtered") or {}
+    check("with the Timeline filtered to another kind of space, going to it with a bed picked opens its kind, and its row is edged and in view", bool(hid.get("left")) and f.get("row") and f.get("edged") == [BED] and f.get("seen") is True, hid)
+    s = hid.get("shut") or {}
+    check("with the bed's garden closed on the Timeline, a bed picked from elsewhere opens its garden, and its row is edged and in view", hid.get("shutRow") is False and s.get("row") and s.get("edged") == [BED] and s.get("seen") is True, hid)
+
     # ══ the card on ══
     page.evaluate("try { localStorage.setItem('lrf.tryCard', '1'); } catch (_) {}")
     open_page()
