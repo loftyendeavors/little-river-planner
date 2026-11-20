@@ -82,6 +82,8 @@ for n in "$@"; do
     tlpick-site) python3 -I $T/tlpick_check.py $SITE $S/tlpick-site $ZIP 2>&1 | tally timeline-shows-the-pick-built-site ;;
     messages) python3 -I $T/messages_check.py $APP $S/messages 2>&1 | tally l3-messages ;;   # #91, L3 part 1: the messages and small fixes
     messages-site) python3 -I $T/messages_check.py $SITE $S/messages-site $ZIP 2>&1 | tally l3-messages-built-site ;;
+    controls) python3 -I $T/controls_check.py $APP $S/controls 2>&1 | tally l3-controls ;;   # #91, L3 part 2: the plain controls
+    controls-site) python3 -I $T/controls_check.py $SITE $S/controls-site $ZIP 2>&1 | tally l3-controls-built-site ;;
     swap) python3 -I $T/swap_check.py $APP $S/swap 2>&1 | tally variety-swap ;;   # the variety swap: one variety put in the place of another, the sowing days kept
     swap-site) python3 -I $T/swap_check.py $SITE $S/swap-site $ZIP 2>&1 | tally variety-swap-built-site ;;
     tasks2) python3 -I $T/tasks2_check.py $APP $S/tasks2 2>&1 | tally tasks-part-2 ;;   # Tasks part 2: Upcoming weeks, Trays to fill, Mark all done, the bed flag, a tick ahead asked first, everything recorded taken back, a planting marked failed

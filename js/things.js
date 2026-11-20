@@ -74,8 +74,8 @@
       h('span.yc-tname', { title: `${KIND[t.from]}. ${t.counts ? 'It is counted in the forecast.' : 'Not counted yet.'}` }, t.name),
       h('small', whence(t, c, x)),
       h('small.yc-tacts', h('span.yc-tstate' + (t.counts ? '.on' : ''), t.counts ? 'counted' : 'not counted yet'),
-        h('button.link', { type: 'button', dataset: { thingName: t.id }, title: `Call ${t.name} something else. Nothing but the name changes.`, onclick: () => rename(c, t) }, 'Rename…'),
-        h('button.link', { type: 'button', dataset: { thingRemove: t.id }, title: `Take ${t.name} away again. What that does to the season’s worth is shown first.`, onclick: () => App.removeThing(c.id, t.id) }, 'Take away…'))));
+        h('button.btn.quiet.small', { type: 'button', dataset: { thingName: t.id, hook: 'thing-rename' }, title: `Call ${t.name} something else. Nothing but the name changes.`, onclick: () => rename(c, t) }, 'Rename…'),
+        h('button.btn.quiet.small', { type: 'button', dataset: { thingRemove: t.id, hook: 'thing-remove' }, title: `Take ${t.name} away again. What that does to the season’s worth is shown first.`, onclick: () => App.removeThing(c.id, t.id) }, 'Take away…'))));
 
     const share = (t, kind) => {
       if (t.from !== kind) return why(t.from === 'place' ? 'all of its own plantings' : kind === 'bed' ? `packed from ${c.name}’s own share` : 'has its own share of the bed');
@@ -258,7 +258,7 @@
       const state = t.counts ? 'counted' : t.waits.length ? `not counted yet: waits on ${App.thingWaits(t).join(', ')}` : `not counted: ${App.thingWhy(t)}`;
       return h('tr.as-thing', { dataset: { thing: t.id, crop: c.id, unit: t.unit, price: t.price == null ? '' : String(t.price), share: t.share == null ? '' : String(t.share), yield: t.yield == null ? '' : String(t.yield), helper: hp && hp.value != null ? String(hp.value) : '',
         pattern: own ? t.pattern : '', days: t.days == null ? '' : String(t.days), counts: String(t.counts), total: line ? String(line.total) : '', worth: line ? String(line.worth) : '' } },
-        h('td', h('div.as-name', h('span.as-more'), h('span.as-nc', h('button.linkish.as-tname', { type: 'button', title: `Something else ${c.name} sells: ${KIND[t.from].toLowerCase()}. Opens its column on the card, where its figures are typed.`, onclick: () => root.LRFAssume.setMode('harvest', 'card', c.id) }, `↳ ${t.name}`),
+        h('td', h('div.as-name', h('span.as-more'), h('span.as-nc', h('button.link.as-tname', { type: 'button', dataset: { hook: 'thing-open' }, title: `Something else ${c.name} sells: ${KIND[t.from].toLowerCase()}. Opens its column on the card, where its figures are typed.`, onclick: () => root.LRFAssume.setMode('harvest', 'card', c.id) }, `↳ ${t.name}`),
           h('small.as-tstate' + (t.counts ? '.on' : ''), state)))),
         h('td.as-start', h('span.as-fixed', { title: `${t.name} is ${soldBy(t.unit)}. Changed on the card.` }, t.unit)),
         figCell({ cls: '.ah-price' + (t.price == null ? '.amber' : ''), key: `tprice|${t.id}`, mine: t.price, fallback: null, open: t.price == null, label: `${c.name} · ${t.name}: price`, tip: t.price == null ? `No price is set, so ${t.name} is not counted yet.` : `Your price for ${t.unit === 'each' ? 'one' : 'one ' + t.unit} of ${t.name}. What a change does to the season’s worth is shown first.`,

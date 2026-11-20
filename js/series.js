@@ -295,7 +295,7 @@
           field('Of', kind === 'bed' ? h('select', { id: 'srUnit', onchange: e => set({ unit: e.target.value, amount: e.target.value === 'ft' ? 30 : 1 }) }, h('option', { value: 'whole', selected: P.unit === 'whole' }, 'whole beds'), h('option', { value: 'ft', selected: P.unit === 'ft' }, 'feet of bed')) : h('input', { type: 'text', value: unitWord, disabled: true, id: 'srUnitWord' }))),
         ]),
         h('div.field', h('span', 'Where they go'), where), whereBody,
-        h('button.linkish.sr-moretoggle', { type: 'button', id: 'srMore', 'aria-expanded': String(P.more), onclick: () => { P.more = !P.more; redraw(); } }, P.more ? 'Fewer settings' : 'More settings'),
+        h('button.btn.quiet.small.sr-moretoggle', { type: 'button', id: 'srMore', dataset: { hook: 'series-more' }, 'aria-expanded': String(P.more), onclick: () => { P.more = !P.more; redraw(); } }, P.more ? 'Fewer settings' : 'More settings'),
         P.more ? h('div.sr-more', { id: 'srMoreBody' },
           modelSel ? field('Days and settings', modelSel) : sized() ? h('p.help', 'Nothing more to set: the days and the yield are the crop’s own.') : null,
           sized() ? null : h('div.field', h('span', 'Dates are for'), h('div.seg', { role: 'group' },
@@ -310,7 +310,7 @@
       const { n, m } = P.done;
       add(out, h('p.sr-sum', { id: 'srDone' }, [n ? `Added ${plural(n, 'planting')}.` : '', m ? `${plural(m, 'planting')} ${m === 1 ? 'waits' : 'wait'} under “To place”: not counted until ${m === 1 ? 'it is' : 'they are'} on a bed.` : ''].filter(Boolean).join(' ')),
         h('div.sr-actions', h('button.btn', { type: 'button', id: 'srUndo', onclick: () => { App.undo(); P.done = null; refresh(); } }, 'Undo'), h('button.btn.primary', { type: 'button', id: 'srAgain', onclick: () => { P.done = null; refresh(); } }, 'Plan another'),
-          App.state.view !== 'timeline' ? h('button.linkish', { type: 'button', id: 'srSee', onclick: () => App.setView('timeline') }, 'See them on the timeline') : null));
+          App.state.view !== 'timeline' ? h('button.link', { type: 'button', id: 'srSee', dataset: { hook: 'series-see' }, onclick: () => App.setView('timeline') }, 'See them on the timeline') : null));
     } else if (!result || result.error) add(out, h('p.sr-sum.bad', { id: 'srError', dataset: result && result.unchecked ? { unchecked: '1' } : {} }, (result && result.error) || 'Choose a crop.'),
       result && result.unchecked && root.LRFAssume ? h('div.sr-actions', h('button.btn', { type: 'button', id: 'srToYield', onclick: () => { App.setView('assume'); root.LRFAssume.setMode('harvest'); } }, 'Open Yield and price')) : null);
     else {
@@ -354,13 +354,13 @@
           toast([n ? `Added ${plural(n, 'planting')} of ${lower(crop)}` : '', m ? `${num(m)} ${n ? 'more ' : ''}${lower(crop)} to place` : ''].filter(Boolean).join(' · '), { label: 'Undo', run: () => { App.undo(); P.done = null; refresh(); } });
           refresh();
         } }, label),
-        App.state.view !== 'timeline' ? h('button.linkish', { type: 'button', id: 'srSee', onclick: () => { App.setView('timeline'); requestAnimationFrame(() => root.LRFTimeline.showGhosts()); } }, 'See it on the timeline')
-          : h('small', 'Dashed on the timeline: ', h('button.linkish', { type: 'button', id: 'srFind', onclick: () => { if (!root.LRFTimeline.showGhosts()) toast('They are in a part of the timeline that is filtered out or folded shut.'); } }, 'show me'), '. Nothing is added yet.')),
+        App.state.view !== 'timeline' ? h('button.link', { type: 'button', id: 'srSee', dataset: { hook: 'series-see' }, onclick: () => { App.setView('timeline'); requestAnimationFrame(() => root.LRFTimeline.showGhosts()); } }, 'See it on the timeline')
+          : h('small', 'Dashed on the timeline: ', h('button.link', { type: 'button', id: 'srFind', dataset: { hook: 'series-find' }, onclick: () => { if (!root.LRFTimeline.showGhosts()) toast('They are in a part of the timeline that is filtered out or folded shut.'); } }, 'show me'), '. Nothing is added yet.')),
         h('p.help', 'One step, and it can be undone. A date is never moved to make a planting fit.'));
     }
     add(host, out,
       h('section.insp-section', { id: 'srRoom' },
-        h('button.linkish.sr-roomtoggle', { type: 'button', id: 'srRoomToggle', 'aria-expanded': String(P.room), onclick: () => { P.room = !P.room; redraw(); } }, h('span.caret', P.room ? '▾ ' : '▸ '), `Where could ${lower(crop)} go this season?`),
+        h('button.btn.quiet.small.sr-roomtoggle', { type: 'button', id: 'srRoomToggle', dataset: { hook: 'series-room' }, 'aria-expanded': String(P.room), onclick: () => { P.room = !P.room; redraw(); } }, h('span.caret', P.room ? '▾ ' : '▸ '), `Where could ${lower(crop)} go this season?`),
         P.room ? roomList(eng, crop) : null));
     return true;
   }
@@ -409,7 +409,7 @@
           : h('p.note.sr-none', { id: 'wtNoHome' }, 'No space is free for all of its days, in season. Drag it onto a bed to share one, or change its date.'),
         wait.why ? h('p.help', { id: 'wtWhy' }, wait.from ? `Why it waits: ${wait.why.charAt(0).toLowerCase()}${wait.why.slice(1)}${eng.bedOf(wait.from) ? ` (${App.bedLabel(eng.bedOf(wait.from))})` : ''}. It keeps its date.` : `Why it waits: ${wait.why.charAt(0).toLowerCase()}${wait.why.slice(1)} in the ${wait.beds ? 'beds' : 'gardens'} it was sent to.`) : null),
       h('div.insp-actions.wt-actions', h('button.btn.danger', { type: 'button', id: 'wtRemove', onclick: () => App.removeWaiting([w.id]) }, 'Remove'),
-        mates.length > 1 ? h('button.linkish', { type: 'button', id: 'wtRemoveAll', onclick: () => App.removeWaiting(mates.map(q => q.id), `Remove ${plural(mates.length, 'planting')} of a series, not yet placed`) }, `Remove all ${num(mates.length)} of this series still to place`) : null));
+        mates.length > 1 ? h('button.btn', { type: 'button', id: 'wtRemoveAll', dataset: { hook: 'waiting-remove-all' }, onclick: () => App.removeWaiting(mates.map(q => q.id), `Remove ${plural(mates.length, 'planting')} of a series, not yet placed`) }, `Remove all ${num(mates.length)} of this series still to place`) : null));
     return true;
   }
 

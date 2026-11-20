@@ -130,7 +130,9 @@
     state.undo.push(step);
     if (state.undo.length > 200) state.undo.shift();
     state.redo.length = 0;
-    state.last = { kind: 'saved', label, at: Date.now(), step };
+    // options.page: the change is answered by the page's own answer (a drop on the map or the timeline), so the panel that shows
+    // what it changed does not say it again (L3, DESIGN.md rule 3)
+    state.last = { kind: 'saved', label, at: Date.now(), step, page: !!options.page };
     adopt(plan, engine);
     return true;
   }
@@ -140,7 +142,7 @@
   function lastChange() {
     const l = state.last;
     if (!l) return null;
-    return l.kind === 'saved' ? { kind: 'saved', label: l.label, at: l.at, canUndo: state.undo[state.undo.length - 1] === l.step } : { kind: 'refused', text: l.text, at: l.at };
+    return l.kind === 'saved' ? { kind: 'saved', label: l.label, at: l.at, canUndo: state.undo[state.undo.length - 1] === l.step, page: !!l.page } : { kind: 'refused', text: l.text, at: l.at };
   }
   /**
    * How a step is undone. While every record it touched is still as the step left it: as it was made ({ ops: the step's own }).
@@ -1617,7 +1619,7 @@
     }
     ops.push(waitingOp(waiting().filter(x => x.id !== id)));
     const what = cropLabel(p), shared = ops.length > 2;
-    if (!commit(shared ? `Place ${what}, sharing ${bedLabel(bed)}` : `Place ${what}`, ops)) return null;
+    if (!commit(shared ? `Place ${what}, sharing ${bedLabel(bed)}` : `Place ${what}`, ops, { page: true })) return null;
     select({ type: 'planting', id: p.id });
     const r = state.engine.calc(p), unit = state.engine.capUnit(bed), f = state.engine.footprint(p, r);
     const size = f && f.rows && f.rows.count < f.rows.total ? ` · ${f.rows.count} of ${f.rows.total} rows` : r.partial ? ` · ${UI.num(r.physicalLength, 1)} ${unit}` : '';
@@ -1717,7 +1719,7 @@
     const gone = sh.holders.map(o => cropLabel(o.p));
     const label = by === 'replace' ? `Replace ${names(gone)} with ${what}` : `Split ${where} for ${what}`;
     const was = worthOf(eng);
-    if (!commit(label, ops)) return null;
+    if (!commit(label, ops, { page: true })) return null;
     const now = worthOf(state.engine), n = way.shares.length;
     setMixing(by === 'replace' ? null : { bedId: bed.id, by });
     select({ type: 'planting', id: way.p.id });
@@ -1837,7 +1839,7 @@
     const what = cropLabel(p), where = bedLabel(bed), unit = state.engine.capUnit(bed), r0 = before ? state.engine.calc(before) : null;
     const ops = result.state === 'swap' ? result.ops : [{ before, after: p }];
     const label = result.state === 'swap' ? `Trade ${what} with ${names(result.traded.map(q => cropLabel(q)))}` : before ? `Move ${what}` : payload.copy ? `Copy ${what}` : `Plant ${what}`;
-    if (!commit(label, ops)) return null;
+    if (!commit(label, ops, { page: true })) return null;
     select({ type: 'planting', id: p.id });
     const r = state.engine.calc(p), size = result.state === 'partial' || r.partial ? ` · ${UI.num(r.physicalLength, 1)} ${unit}` : '';
     const moved = result.state !== 'swap' && r0 ? movedSaid(r0.field, r.field) : '';

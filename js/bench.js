@@ -223,14 +223,18 @@
       h('div.bn-edit-foot', option('bnHarden', fig.hardenDays, 'Hardening off', 'days before planting out', 'harden', v => `Hardening off starts ${v} days before planting out`, 0, 21)),
       coolBox);
   }
-  /** How trays and crates are counted: two choices that change what the room and the sowing lists add up to. */
+  /** How trays and crates are counted: two choices that change what the room and the sowing lists add up to. Each is a square tick
+   *  that says what it sets, with what that comes to under it (L3: a setting is never a sentence with a link). */
   function countBox(fig) {
     const eng = App.state.engine, apart = eng.shareTrays === false, SHEET = root.LRFSowing.ROCKWOOL_SHEET;
-    const crates = fig.onBenches
-      ? ['Sheltered crates are counted as standing on the benches. ', h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', null, 'Sheltered crates stand on the floor') }, 'They stand on the floor')]
-      : fig.floorMost ? [`Up to ${num(fig.floorMost)} are sheltered under heat${fig.floorUntil ? ` until ${day(fig.floorUntil)}` : ''}. They stand on the floor and take no bench room. `, h('button.linkish', { type: 'button', onclick: () => App.setOwn('crates', 'bench', 'Count sheltered crates on the benches') }, 'Count them on the benches instead')] : null;
-    const sharing = eng.sowingBatches().length ? [apart ? 'Every variety is counted in trays of its own. ' : `Varieties of one crop sown the same day share trays in whole rows; tower crops share rockwool sheets of ${SHEET.cells}, whatever the crop. `,
-      h('button.linkish', { type: 'button', onclick: () => App.setOwn('trays', apart ? null : 'variety', apart ? 'Varieties of one crop share trays' : 'Every variety in trays of its own') }, apart ? 'Let varieties of one crop share trays' : 'Count every variety in trays of its own')] : null;
+    const tick = (dataset, on, label, does, set) => h('label.bn-check', h('input', { type: 'checkbox', checked: on, dataset, onchange: e => { if (!set(e.target.checked)) e.target.checked = on; } }),
+      h('span', h('b', label), h('small', does)));
+    const crates = fig.onBenches || fig.floorMost ? tick({ hook: 'bench-crates-floor' }, !fig.onBenches, 'Sheltered crates stand on the floor',
+      fig.onBenches ? 'They are counted as standing on the benches.' : `Up to ${num(fig.floorMost)} are sheltered under heat${fig.floorUntil ? ` until ${day(fig.floorUntil)}` : ''}. They take no bench room.`,
+      on => App.setOwn('crates', on ? null : 'bench', on ? 'Sheltered crates stand on the floor' : 'Count sheltered crates on the benches')) : null;
+    const sharing = eng.sowingBatches().length ? tick({ hook: 'bench-share-trays' }, !apart, 'Varieties of one crop share trays',
+      apart ? 'Every variety is counted in trays of its own.' : `Varieties of one crop sown the same day share trays in whole rows; tower crops share rockwool sheets of ${SHEET.cells}, whatever the crop.`,
+      on => App.setOwn('trays', on ? null : 'variety', on ? 'Varieties of one crop share trays' : 'Every variety in trays of its own')) : null;
     if (!crates && !sharing) return null;
     return h('div.bn-edit.bn-counting', { id: 'bnCount', role: 'group', 'aria-label': 'How trays and crates are counted' },
       h('div.bn-edit-head', h('h3', 'How trays and crates are counted')),
@@ -280,7 +284,7 @@
     const parts = fig.shown.map(kind => { const p = wk && wk.pools ? wk.pools[kind] : null; return p && (p.used > 1e-9 || p.cap) ? { kind, used: p.used, cap: p.cap, over: p.cap > 0 && p.over > 0.05 } : null; }).filter(Boolean);
     return h('p.bn-line', { id: 'bnLine', dataset: { state: parts.some(x => x.over) ? 'over' : '' } }, h('b', 'On the benches this week'),
       parts.length ? parts.map(x => h('span', { dataset: { pool: x.kind } }, `${N.kindName(x.kind)} ${x.cap ? `${num(x.used, 0)} of ${num(x.cap)}` : `${num(x.used, 0)} tray spaces`}${x.over ? ' ▲' : ''}`)) : h('span', 'nothing'),
-      h('button.linkish', { type: 'button', id: 'bnLineGo', onclick: () => { if (root.LRFTraysView) root.LRFTraysView.open('room'); } }, 'Bench room, in Nursery'));
+      h('button.link', { type: 'button', id: 'bnLineGo', dataset: { hook: 'bench-line-go' }, onclick: () => { if (root.LRFTraysView) root.LRFTraysView.open('room'); } }, 'Bench room, in Nursery'));
   }
 
   // ── what the season uses, less what is on the shelf ──

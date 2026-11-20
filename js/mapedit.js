@@ -784,7 +784,7 @@
           h('dt', 'Ctrl'), h('dd', 'drag freely, with no lining up')),
         h('p.help', 'Plantings stay with their beds. Every change is one Undo (Ctrl+Z).')),
       h('section.insp-section', h('h3', 'The photo'), h('p.note', { id: 'leScaleNow' }, `One pixel of the photo is ${num(M.feetPerPx(), 3)} ft.`),
-        h('button.linkish', { type: 'button', id: 'leTapeLink', onclick: () => setTool('tape') }, 'Measure a distance, or set the scale…')));
+        h('button.btn.small', { type: 'button', id: 'leTapeLink', dataset: { hook: 'layout-tape' }, onclick: () => setTool('tape') }, 'Measure a distance, or set the scale…')));
   }
   function panelPicked() {
     const beds = S.picked.map(bedOf).filter(Boolean), first = beds[0], garden = wholeGarden(), soil = beds.filter(b => kindOf(b) === 'bed'), one = beds.length === 1 ? first : null;
@@ -815,7 +815,7 @@
       h('p', h('b', 'Not set yet. '), `${offer.why ? offer.why.charAt(0).toUpperCase() + offer.why.slice(1) + '; ' : ''}${beds.length === 1 ? 'the bed is' : 'the beds are'} ${l == null ? 'of mixed lengths' : `${num(l, 2)} ft`} now.`),
       h('div.le-offer-acts',
         h('button.btn.primary', { type: 'button', id: 'leOfferSet', onclick: () => resize('l', offer.l) }, `Set ${beds.length === 1 ? 'it' : `all ${beds.length}`} to ${num(offer.l, 1)} ft`),
-        h('button.link', { type: 'button', id: 'leOfferDrop', onclick: () => { S.propose = null; refresh(); } }, beds.length === 1 ? 'Leave it as it is' : 'Leave them as they are'))));
+        h('button.btn', { type: 'button', id: 'leOfferDrop', onclick: () => { S.propose = null; refresh(); } }, beds.length === 1 ? 'Leave it as it is' : 'Leave them as they are'))));
     if (one && kindOf(one) === 'containers') {
       const cells = M.cellsOf(one.id) || { columns: 1 }, layout = one.potLayout || {};
       form.append(field('Kind of container', h('select', { id: 'leCt', onchange: e => setGroup(one, { ct: e.target.value }) }, (plan().containers || []).map(c => h('option', { value: c.id, selected: c.id === one.ct }, c.name)))),

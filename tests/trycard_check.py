@@ -357,11 +357,13 @@ def run(pw):
     whole = lambda before: js("return JSON.stringify([S.plan.plantings, A.waiting()]);")
     def card_menu(act):
         press(page, "[data-hook='card-more']", 300); press(page, f"[data-hook='card-menu-item'][data-act='{act}']", 400)
-    a, aback, _ = through_panel(lambda: press(page, "#fToWait", 400), whole)
+    def panel_menu(act):   # L3: the panel keeps them in "⋯" at its head, as the card does
+        press(page, "[data-hook='panel-more']", 300); press(page, f"[data-hook='card-menu-item'][data-act='{act}']", 400)
+    a, aback, _ = through_panel(lambda: panel_menu("wait"), whole)
     b, bback, bsaid, _ = through_card(lambda: card_menu("wait"), whole)
     check("“Send to To place” in the card's menu does what the panel's button does; the bed's card says it, with an Undo that gives the plan back",
           a == b and PID in json.dumps(json.loads(a)[1]) and aback and bback and "To place" in bsaid["said"] and bsaid["undo"] and not bsaid["toast"], [a[:300] if a else a, b[:300] if b else b, aback, bback, bsaid])
-    a, aback, _ = through_panel(lambda: press(page, "[data-hook='panel-remove']", 400), whole)
+    a, aback, _ = through_panel(lambda: panel_menu("remove"), whole)
     b, bback, bsaid, _ = through_card(lambda: card_menu("remove"), whole)
     check("“Remove planting” in the card's menu does what the panel's button does; the bed's card says it, with an Undo that gives the plan back",
           a == b and f'"id":"{PID}"' not in a and aback and bback and "Removed" in bsaid["said"] and bsaid["undo"] and not bsaid["toast"], [aback, bback, bsaid])

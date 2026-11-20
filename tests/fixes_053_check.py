@@ -157,7 +157,7 @@ with sync_playwright() as pw:
     check("Escape closes the card and gives “?” the focus back; a click elsewhere closes it; nothing has changed", not esc2["card"] and esc2["focus"] and esc2["open"] == "false" and not away["card"] and away["key"] == key0 and away["undo"] == 0, [esc2, away])
     went = press("#mapHelp", 300) and press("#ovSeries", 700) and js("return { sel: S.sel && S.sel.type, form: !!document.querySelector('#inspectorBody #srForm'), card: !!$('mapHelpCard'), view: S.view, ...saved() }")
     js("A.select(null)"); wait(300)
-    check("“plan one now” in it opens the tool for a succession with no crop picked, in the side panel, and the card gives way to it", bool(went) and went["sel"] == "series" and went["form"] and not went["card"] and went["view"] == "map" and went["key"] == key0, went)
+    check("“Plan a series…” in it opens the tool for a succession with no crop picked, in the side panel, and the card gives way to it", bool(went) and went["sel"] == "series" and went["form"] and not went["card"] and went["view"] == "map" and went["key"] == key0, went)
 
     # ══ several varieties in a bed: a tick leaves the list where it was ══
     # the subject: a planting that offers "Several varieties…" and whose crop has more varieties than the list shows at once
