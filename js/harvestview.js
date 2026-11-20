@@ -154,7 +154,7 @@
         h('span', h('b.row-name', { dataset: { hook: 'fc-from-variety' } }, x.r.c.vname || 'No variety chosen'),
           h('span.row-detail', h('span', { dataset: { hook: 'fc-from-bed' } }, App.bedLabel(x.r.b, eng)), ` · ${when(x)}`), h('span.fc-tags', tags(x))),
         h('span.row-word', h('span', { dataset: { hook: 'fc-from-amount' } }, F.amount(x.here, row.unit, row.group)),
-          h('button.link', { type: 'button', onclick: () => go(x) }, 'Show on the map'))))),
+          h('button.link', { type: 'button', dataset: { hook: 'fc-from-map' }, onclick: () => go(x) }, 'Show on the map'))))),
       h('div.dialog-actions',
         // more of it wanted that week: the series tool, asked from the harvest end, opens on this crop from that day
         plannable(row)
@@ -251,7 +251,7 @@
         }
         if (many && isOpen) {
           for (const v of row.varieties) { const vc = carries(m, v); body.push(line('.hv-var', h('td.hv-name', { title: v.name }, v.name), h('td.hv-total', cash$ ? money(v.worth - (vc ? v.carriedWorth : 0)) : F.amount(v.total - (vc ? v.carriedTotal : 0), row.unit, row.group)), ownOf(m, v), null, peak, row)); }
-          if (g !== 'micro') body.push(h('tr.hv-var', h('td.hv-name', { colSpan: 2 }, 'Listed with ', h('button.linkish.hv-move', { type: 'button', onclick: () => moveCrop(row, g === 'flower' ? 'produce' : 'flower') }, `move to ${g === 'flower' ? 'vegetables' : 'flowers'}`)), h('td', { colSpan: cols.length })));
+          if (g !== 'micro') body.push(h('tr.hv-var', h('td.hv-name', { colSpan: 2 }, 'Listed with ', h('button.btn.quiet.small.hv-move', { type: 'button', dataset: { hook: 'fc-move-group' }, onclick: () => moveCrop(row, g === 'flower' ? 'produce' : 'flower') }, `move to ${g === 'flower' ? 'vegetables' : 'flowers'}`)), h('td', { colSpan: cols.length })));
         }
       }
       // in dollars every kind adds up; in amounts trays add up, and so do stems, and pounds and heads and bunches do not

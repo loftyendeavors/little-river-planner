@@ -287,7 +287,7 @@
   }
   function drawFilters(counts) {
     const host = clear($('tlFilters'));
-    for (const [id, name] of FILTERS) host.append(h('button', { type: 'button', dataset: { tlFilter: id }, 'aria-pressed': String(prefs.filter === id), title: id === 'all' ? 'Every growing space' : `Only ${SECTION_NAME[id].toLowerCase()}`, onclick: () => setFilter(id) }, name, h('small', num(counts[id] || 0))));
+    for (const [id, name] of FILTERS) host.append(h('button.chip', { type: 'button', dataset: { tlFilter: id, hook: 'tl-filter' }, 'aria-pressed': String(prefs.filter === id), title: id === 'all' ? 'Every growing space' : `Only ${SECTION_NAME[id].toLowerCase()}`, onclick: () => setFilter(id) }, name, h('small', num(counts[id] || 0))));
   }
 
   // ── rows ──

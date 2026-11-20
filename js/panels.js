@@ -132,13 +132,14 @@
     const last = App.lastChange();
     // the change is said in the panel that was open when it was made, not in whichever is opened next
     if (last && last.at !== lastSeen) { lastSeen = last.at; lastSel = selKey(); }
-    const fresh = last && Date.now() - last.at < SAID_FOR && lastSel === selKey();
+    // a drop is answered by the page's answer, with its Undo: the panel does not say it a second time (L3, DESIGN.md rule 3)
+    const fresh = last && !last.page && Date.now() - last.at < SAID_FOR && lastSel === selKey();
     clearTimeout(el.lrfTimer);
     clear(el);
     if (!fresh) { el.dataset.state = 'idle'; if (!el.classList.contains('bed-season-saved')) add(el, 'Changes apply as you make them.'); return el; }
     el.dataset.state = last.kind;
     el.style.setProperty('--since', `${last.at - Date.now()}ms`);
-    if (last.kind === 'saved') add(el, h('b', 'Saved'), h('span', ` · ${last.label} · ${clock(last.at)}`), last.canUndo ? h('button.link', { type: 'button', dataset: { saved: 'undo', hook: 'panel-saved-undo' }, onclick: () => App.undo() }, 'Undo') : null);
+    if (last.kind === 'saved') add(el, h('b', 'Saved'), h('span', ` · ${last.label} · ${clock(last.at)}`), last.canUndo ? h('button.btn.small', { type: 'button', dataset: { saved: 'undo', hook: 'panel-saved-undo' }, onclick: () => App.undo() }, 'Undo') : null);
     else add(el, h('b', 'Not changed'), h('span', ` · ${last.text}`));
     el.lrfTimer = setTimeout(() => { if (el.isConnected) fillSaved(el); }, SAID_FOR - (Date.now() - last.at) + 30);
     return el;
@@ -297,18 +298,18 @@
       h('div.stats', stat(`On ${day(date)}`, status.crops.length ? `${num(status.used, 1)} of ${num(status.cap, 1)} ${unit} planted` : status.resting ? 'Turning over' : 'Free'),
         stat('This season', `${all.length} planting${all.length === 1 ? '' : 's'}`)));
     if (root.LRFCard.bedSeasonOn(bed)) { host.append(root.LRFCard.renderBedSeason(bed, all, status)); return; }
-    if (root.LRFMapEdit && (soil || !eng.isPool(bed))) host.append(h('p.insp-aside', h('button.link', { type: 'button', id: 'bedLayoutEdit',
+    if (root.LRFMapEdit && (soil || !eng.isPool(bed))) host.append(h('p.insp-aside', h('button.btn.small', { type: 'button', id: 'bedLayoutEdit', dataset: { hook: 'bed-layout-edit' },
       title: soil ? 'Sizes are changed in Edit layout: move, turn or resize this bed on the map itself' : 'Move or set out this space on the map itself', onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit the layout…')));
     // whom this ground is grown for is a fact about the farm too: shown here, set in the layout (for a bed, or a whole garden)
     if (root.LRFMapEdit && (soil || !eng.isPool(bed))) {
       const use = root.LRFForecast.useOfBed(eng, bed);
-      host.append(h('p.insp-aside.bed-use', { id: 'bedUse', dataset: { use: use.use, by: use.by } }, 'Grown for ', h('b', use.personal ? 'personal use' : 'sale (commercial)'), use.by === 'garden' ? `, as all of ${g.name || 'its garden'} is` : '', '. ',
-        h('button.link', { type: 'button', id: 'bedUseEdit', title: 'Personal use or commercial is set in Edit layout, for a bed or a whole garden. A planting can say otherwise in its own panel.', onclick: () => root.LRFMapEdit.open({ bedId: bed.id, field: 'leUse' }) }, 'Change…')));
+      host.append(h('p.insp-aside.bed-use', { id: 'bedUse', dataset: { use: use.use, by: use.by } }, h('span', 'Grown for ', h('b', use.personal ? 'personal use' : 'sale (commercial)'), use.by === 'garden' ? `, as all of ${g.name || 'its garden'} is` : '', '.'),
+        h('button.btn.quiet.small', { type: 'button', id: 'bedUseEdit', dataset: { hook: 'bed-use-edit' }, title: 'Personal use or commercial is set in Edit layout, for a bed or a whole garden. A planting can say otherwise in its own panel.', onclick: () => root.LRFMapEdit.open({ bedId: bed.id, field: 'leUse' }) }, 'Change…')));
     }
     const list = h('ul.p-list');
     for (const { p, r } of all) list.append(plantingRow(p, r));
     host.append(h('section.insp-section', h('h3', 'Plantings'), all.length ? list : h('p.note', 'Nothing planned here yet. Drag a crop onto this bed.'),
-      eng.isRack(bed) ? null : h('button.linkish', { type: 'button', id: 'bedSeries', title: 'One crop every so many days, starting in this space', onclick: () => App.openAhead({ mode: 'series', bedId: bed.id }) }, `Plan a series in this ${{ tower: 'tower', containers: 'space' }[eng.spaceKind(bed)] || 'bed'}…`)));
+      eng.isRack(bed) ? null : h('button.btn.quiet.small', { type: 'button', id: 'bedSeries', dataset: { hook: 'bed-series' }, title: 'One crop every so many days, starting in this space', onclick: () => App.openAhead({ mode: 'series', bedId: bed.id }) }, `Plan a series in this ${{ tower: 'tower', containers: 'space' }[eng.spaceKind(bed)] || 'bed'}…`)));
     // room before, after and between what is planned here, and what would go in it
     const Ahead = root.LRFSuccession;
     if (soil && Ahead && all.length) {
@@ -356,7 +357,7 @@
     const box = h('div.sow', { dataset: { sowing: p.id, state: s.done ? 'done' : s.sown ? 'later' : 'open' } });
     if (s.done) {
       return add(box, h('p.sow-done', h('b', `✓ ${act} ${dayY(E.s2d(s.done))}`), h('span', sownText(s))),
-        h('button.link', { type: 'button', dataset: { sow: 'back' }, onclick: () => {
+        h('button.btn.small', { type: 'button', dataset: { sow: 'back', hook: 'sow-back' }, onclick: () => {
           const done = App.takeBackSowing(p.id);
           if (done) toast(`${App.cropLabel(p)}: sowing taken back${done.returned ? ` · ${qty(done.returned, done.stockUnit)} returned to stock` : ''}${done.lost ? ` · ${qty(done.lost, done.stockUnit)} could not go back: that lot is gone` : ''}${done.restored ? ' · back on the day first planned' : ''}`, { label: 'Undo', run: App.undo });
         } }, 'Take it back'));
@@ -407,13 +408,13 @@
       const date = open ? h('input', { type: 'date', value: today, max: today, min: E.d2s(E.addDays(st.planned, 1 - root.LRFSeedLib.YEAR_DAYS)), 'aria-label': `${w[1]} on`, dataset: { job: 'date' }, onkeydown: e => { if (e.key === 'Enter') save(e.target); else if (e.key === 'Escape') { e.stopPropagation(); jobOpen = null; render(); } } }) : null;
       return h('li' + (st.done ? '.done' : st.passed ? '.passed' : ''), { dataset: { job: st.kind, state: st.done ? 'done' : st.passed ? 'passed' : 'open' } },
         h('span', st.done ? w[1] : w[0],
-          st.kind === 'sow' && r.sowSet && !st.done ? h('button.link.sow-own', { type: 'button', title: `You set this day. The plan works out ${day(r.sowDefault)}. Click to use the plan’s day.`, onclick: () => App.planSowings([p.id], null) }, 'your day') : null,
+          st.kind === 'sow' && r.sowSet && !st.done ? h('button.btn.quiet.small.sow-own', { type: 'button', dataset: { hook: 'job-own-day' }, title: `You set this day. The plan works out ${day(r.sowDefault)}. Click to use the plan’s day.`, onclick: () => App.planSowings([p.id], null) }, 'your day') : null,
           late ? h('small.job-late', late) : null,
           pushed ? h('small.job-late', { title: 'Its seedlings were sown or hardened off late, so the day moved with them. Edit “Transplant date” to choose another day.' }, `${num(pushed.days)} d later`) : null,
           st.passed ? h('small.job-late', 'no day recorded') : null,
           // the job that uses the seed, the bulbs or the plants is recorded below, with what was used
-          !st.done && !st.passed && !st.seed && !open ? h('button.link.job-tick', { type: 'button', dataset: { job: 'tick' }, onclick: () => { jobOpen = { id: p.id, kind: st.kind }; render(); } }, 'record') : null,
-          st.done && !st.seed ? h('button.link.job-tick', { type: 'button', dataset: { job: 'back' }, onclick: () => { const done = App.takeBackWork([{ id: p.id, kind: st.kind }]); if (done) toast(`${App.cropLabel(p)}: ${w[0].toLowerCase()} taken back${done.restored ? ' · back on the day first planned' : ''}`, { label: 'Undo', run: App.undo }); } }, 'take back') : null),
+          !st.done && !st.passed && !st.seed && !open ? h('button.btn.small.job-tick', { type: 'button', dataset: { job: 'tick', hook: 'job-record' }, onclick: () => { jobOpen = { id: p.id, kind: st.kind }; render(); } }, 'record') : null,
+          st.done && !st.seed ? h('button.btn.quiet.small.job-tick', { type: 'button', dataset: { job: 'back', hook: 'job-take-back' }, onclick: () => { const done = App.takeBackWork([{ id: p.id, kind: st.kind }]); if (done) toast(`${App.cropLabel(p)}: ${w[0].toLowerCase()} taken back${done.restored ? ' · back on the day first planned' : ''}`, { label: 'Undo', run: App.undo }); } }, 'take back') : null),
         open ? h('span.job-record', date, h('button.btn.small', { type: 'button', dataset: { job: 'save' }, onclick: () => save(date) }, 'Record'), h('button.icon-btn.job-x', { type: 'button', 'aria-label': 'Leave it', title: 'Leave it', onclick: () => { jobOpen = null; render(); } }, '×'))
           : h('b', day(st.done ? E.s2d(st.done) : st.planned)));
     });
@@ -435,7 +436,7 @@
     if (p.failed && p.failed.on) {
       return h('section.insp-section.fail', { dataset: { hook: 'panel-failed' } },
         h('p.fail-said', h('b', `Failed ${UI.dayLong(E.s2d(p.failed.on)).replace(/, \d{4}$/, '')}`), ' · its bed is free from that day, nothing after it is picked, and its work is off Tasks.'),
-        h('button.link', { type: 'button', dataset: { hook: 'panel-failed-back' }, onclick: () => {
+        h('button.btn.small', { type: 'button', dataset: { hook: 'panel-failed-back' }, onclick: () => {
           const done = App.markFailed(p.id, null);
           if (done) toast(`${App.cropLabel(p)} is no longer marked failed${done.overlaps ? ` · it now overlaps ${done.overlaps === 1 ? 'another planting' : done.overlaps + ' plantings'}: see To settle` : ''}`, { label: 'Undo', run: App.undo });
         } }, 'Take the mark off'));
@@ -507,7 +508,7 @@
       h('header.insp-head.planting', { style: { '--crop': color } },
         root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color, label: name, size: 64, cls: 'head' }),
         h('p.eyebrow', 'Live tray batch'), h('h2', name),
-        h('button.link', { type: 'button', onclick: () => root.LRFTraysView.open('live') }, plan ? plan.name : 'Live trays'),
+        h('button.link', { type: 'button', dataset: { hook: 'panel-live-trays' }, onclick: () => root.LRFTraysView.open('live') }, plan ? plan.name : 'Live trays'),
         h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select(null) }, '×')),
       h('section.insp-section',
         h('div.stats', stat('Trays', num(r.len)), stat('Days', num(c.dtm)), stat('Expected', money(r.len * price))),
@@ -621,7 +622,7 @@
       r.rows >= 2 && r.rows <= 12 ? h('div.seg', { id: 'mixBy', role: 'group', 'aria-label': 'How the bed is shared' }, seg('length', 'Along the bed'), seg('rows', 'By rows')) : null,
       h('p.mix-pick-says' + (plan && plan.no ? '.bad' : ''), { id: 'mixSays' }, says),
       h('div.mix-pick-acts', h('button.btn.primary', { type: 'button', id: 'mixDivide', disabled: !plan || !!plan.no, onclick: () => { const added = App.addVarieties(p.id, picked, by); if (added) several = null; render(); } }, 'Divide the bed'),
-        h('button.link', { type: 'button', id: 'mixCancel', onclick: () => { several = null; render(); } }, 'Cancel')));
+        h('button.btn', { type: 'button', id: 'mixCancel', onclick: () => { several = null; render(); } }, 'Cancel')));
   }
   /** Who a planting shares its bed with, and a way back to equal shares. */
   function matesBox(eng, p) {
@@ -632,11 +633,13 @@
     // That is said as what it is, and equal shares are offered as one more way to settle it, not as a tidy-up.
     const twice = eng.conflicts(p, eng.calc(p)).some(o => !o.rest);
     if (twice) return h('div.field', { id: 'fMatesField', dataset: { twice: '1' } }, h('span', `Booked into the same ground in ${App.bedLabel(eng.bedOf(p.bedId))}`),
-      h('ul.mix-mates', { id: 'fMates' }, mates.map(x => h('li', { dataset: { mate: x.p.id } }, x.p.id === p.id ? h('b', `${App.cropLabel(x.p)} (this one)`) : h('button.link', { type: 'button', onclick: () => App.select({ type: 'planting', id: x.p.id }) }, App.cropLabel(x.p)), h('span', size(x))))),
-      h('small', 'They are in the ground on the same days. ', h('button.linkish', { type: 'button', id: 'fEqual', title: 'Each takes an equal share of the bed, so it is no longer booked twice. Plant counts follow the feet; no date changes.', onclick: () => App.equalShares(p.id) }, 'Share the bed between them'), ', or settle it by date under To settle.'));
+      h('ul.mix-mates', { id: 'fMates' }, mates.map(x => h('li', { dataset: { mate: x.p.id } }, x.p.id === p.id ? h('b', `${App.cropLabel(x.p)} (this one)`) : h('button.link', { type: 'button', dataset: { hook: 'panel-mate' }, onclick: () => App.select({ type: 'planting', id: x.p.id }) }, App.cropLabel(x.p)), h('span', size(x))))),
+      h('small', 'They are in the ground on the same days. Share the bed between them, or settle it by date under To settle.'),
+      h('button.btn.small', { type: 'button', id: 'fEqual', dataset: { hook: 'panel-equal' }, title: 'Each takes an equal share of the bed, so it is no longer booked twice. Plant counts follow the feet; no date changes.', onclick: () => App.equalShares(p.id) }, 'Share the bed between them'));
     return h('div.field', { id: 'fMatesField' }, h('span', `Shares ${App.bedLabel(eng.bedOf(p.bedId))} with`),
-      h('ul.mix-mates', { id: 'fMates' }, mates.map(x => h('li', { dataset: { mate: x.p.id } }, x.p.id === p.id ? h('b', `${App.cropLabel(x.p)} (this one)`) : h('button.link', { type: 'button', onclick: () => App.select({ type: 'planting', id: x.p.id }) }, App.cropLabel(x.p)), h('span', size(x))))),
-      h('small', h('button.linkish', { type: 'button', id: 'fEqual', onclick: () => App.equalShares(p.id) }, 'Make them equal'), ' · on the map, push an end into its neighbour to move the line between them.'));
+      h('ul.mix-mates', { id: 'fMates' }, mates.map(x => h('li', { dataset: { mate: x.p.id } }, x.p.id === p.id ? h('b', `${App.cropLabel(x.p)} (this one)`) : h('button.link', { type: 'button', dataset: { hook: 'panel-mate' }, onclick: () => App.select({ type: 'planting', id: x.p.id }) }, App.cropLabel(x.p)), h('span', size(x))))),
+      h('small', 'On the map, push an end into its neighbour to move the line between them.'),
+      h('button.btn.small', { type: 'button', id: 'fEqual', dataset: { hook: 'panel-equal' }, title: 'Each takes an equal share of the bed. Plant counts follow the feet; no date changes.', onclick: () => App.equalShares(p.id) }, 'Make them equal'));
   }
 
   // ── what a change to a planting's own boxes writes: one function for each, used by this panel and by the card (card.js) ──
@@ -708,8 +711,10 @@
       h('header.insp-head.planting', { style: { '--crop': color } },
         root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color, label: c.vname || c.name, size: 64, cls: 'head' }),
         h('p.eyebrow', c.name), h('h2', c.vname || c.name),
-        h('button.link', { type: 'button', dataset: fromBedSeason ? { hook: 'bed-planting-back' } : {},
+        h('button.link', { type: 'button', dataset: fromBedSeason ? { hook: 'bed-planting-back' } : { hook: 'panel-bed' },
           onclick: () => fromBedSeason ? root.LRFCard.backToBed(bed.id) : App.select({ type: 'bed', id: bed.id }) }, App.bedLabel(bed)),
+        // what takes the planting out of its bed is in "⋯" at the head, as on its card (L3)
+        h('button.icon-btn.insp-more', { type: 'button', 'aria-label': 'More', 'aria-haspopup': 'menu', title: 'More', dataset: { hook: 'panel-more' }, onclick: e => root.LRFCard.menu(plantingMore(p, bed, r), e.currentTarget) }, '⋯'),
         h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select(null) }, '×')),
       // the schedule and what it is expected to give come first, the boxes after (L3; the card's order)
       h('section.insp-section', { dataset: { hook: 'panel-schedule' } },
@@ -723,7 +728,7 @@
         yieldLine(eng, p, r)),
       h('section.insp-section.form',
         field(c.method === 'TP' ? 'Transplant date' : sow && sow.kind === 'field' && sow.done ? 'Planned sowing date' : 'Sowing date', h('input', { type: 'date', id: 'fDate', value: p.date, onchange: e => { const ed = edit.date(e.target.value); if (ed) set(...ed); else render(); } })),
-        field('Variety', variety, canMix && !several ? h('button.linkish', { type: 'button', id: 'fSeveral', title: 'Grow several varieties in this bed: each becomes a planting of its own beside this one, and the bed is shared equally', onclick: () => { several = { id: p.id, picked: new Set(), by: 'length' }; render(); } }, 'Several varieties in this bed…') : null),
+        field('Variety', variety, canMix && !several ? h('button.btn.quiet.small', { type: 'button', id: 'fSeveral', dataset: { hook: 'panel-several' }, title: 'Grow several varieties in this bed: each becomes a planting of its own beside this one, and the bed is shared equally', onclick: () => { several = { id: p.id, picked: new Set(), by: 'length' }; render(); } }, 'Several varieties in this bed…') : null),
         canMix && several ? severalBox(eng, p, r, varieties) : null,
         field('Growing space', space),
         eng.isSoilBed(bed) ? matesBox(eng, p) : null,
@@ -756,11 +761,17 @@
           h('input', { type: 'number', id: 'fRepeatCount', min: 1, max: 30, value: 3, 'aria-label': 'How many more' }), h('span', 'more, every'),
           h('input', { type: 'number', id: 'fRepeatEvery', min: 1, max: 120, value: Math.max(7, Math.min(28, r.c.hw || 14)), 'aria-label': 'Days apart' }), h('span', 'days'),
           h('button.btn', { type: 'button', onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+$('fRepeatCount').value) || 1)), Math.max(1, Math.round(+$('fRepeatEvery').value) || 14)) }, 'Add')),
-        h('p.help', `Each one takes this ${unit === 'sites' ? 'tower' : 'bed'} if it is free by then, otherwise the next free one in ${eng.gardenOf(bed).name}. `,
-          canSeries(eng, r.c) ? h('button.linkish', { type: 'button', id: 'fSeriesLink', onclick: () => App.openAhead({ mode: 'series', sourceId: p.id }) }, 'Plan a longer series: see it first, name gardens or beds, or leave them to place') : null)),
-      h('div.insp-actions',
-        h('button.btn', { type: 'button', id: 'fToWait', title: 'Take it out of this bed and keep it, with its date, under To place. What it shared the bed with takes up its ground.', onclick: () => App.sendToWait(p.id) }, 'Send to To place'),
-        h('button.btn.danger', { type: 'button', dataset: { hook: 'panel-remove' }, onclick: () => App.removePlantings([p.id]) }, 'Remove planting')));
+        h('p.help', `Each one takes this ${unit === 'sites' ? 'tower' : 'bed'} if it is free by then, otherwise the next free one in ${eng.gardenOf(bed).name}.`),
+        canSeries(eng, r.c) ? h('button.btn.quiet.small', { type: 'button', id: 'fSeriesLink', dataset: { hook: 'panel-series' }, title: 'See it first, name gardens or beds, or leave them to place', onclick: () => App.openAhead({ mode: 'series', sourceId: p.id }) }, 'Plan a longer series…') : null));
+  }
+  /** "⋯" at the head of a planting's panel: what takes it out of its bed, as its card's menu has it (L3). */
+  function plantingMore(p, bed, r) {
+    return {
+      title: App.cropLabel(p), sub: `${App.bedLabel(bed)} · in ${day(r.field)}`,
+      items: [
+        ['wait', 'Send to To place', () => App.sendToWait(p.id)],
+        ['remove', 'Remove planting', () => App.removePlantings([p.id]), null, 'bad']]
+    };
   }
 
   // Removing a focused field can fire its change handler, which asks for another render: finish this one first.

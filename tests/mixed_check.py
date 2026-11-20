@@ -161,7 +161,7 @@ with sync_playwright() as pw:
     check("pressed again it changes nothing and says they already are", js("return { undo: S.undo.length, toast: txt('toast') }") == {"undo": 6, "toast": "They already have equal shares."})
 
     # ══ send one to To place ══
-    click("#fToWait", 600)
+    click("[data-hook='panel-more']", 300); click("[data-hook='card-menu-item'][data-act='wait']", 600)   # L3: in "⋯" at the head of the panel
     sent = js("return { list: inBed(arg[0].bedId), waiting: A.waiting().map(w => ({ id: w.id, date: w.date, bed: w.bedId || null, why: w.wait && w.wait.why, from: w.wait && w.wait.from })), undo: S.undo.length, toast: txt('toast'), badge: $('waitBadge').hidden ? '' : txt('waitBadge'), sel: S.sel }", [sub])
     w = [x for x in sent["waiting"] if x["id"] == ids[1]]
     check("“Send to To place” takes a planting out of the bed and keeps it, with its date, under To place", len(w) == 1 and w[0]["bed"] is None and w[0]["from"] == sub["bedId"] and len(sent["waiting"]) == start["waiting"] + 1 and "to place" in sent["badge"] and "waits under To place" in sent["toast"], sent)

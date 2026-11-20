@@ -121,7 +121,7 @@
         h('li', h('label', { for: 'sdPasteText' }, 'Paste it here.'), pasteText),
         h('li', h('label', { for: 'sdPasteName' }, 'Type the variety’s name, as the supplier gives it.'), pasteName)),
       h('div.sd-row', pasteBtn, h('span.dlg-hint', 'The link above is kept as the variety’s source.')),
-      h('p.dlg-hint.sd-linkhow', { id: 'sdLinkHow', dataset: { how } }, h('button.linkish', { type: 'button', id: 'sdSettings', onclick: () => openSettings() }, how === 'own' ? 'A fetch service of your own is set in this browser…' : 'Use a fetch service of your own instead…')));
+      h('p.dlg-hint.sd-linkhow', { id: 'sdLinkHow', dataset: { how } }, h('button.btn.quiet.small', { type: 'button', id: 'sdSettings', dataset: { hook: 'seeds-fetch-own' }, onclick: () => openSettings() }, how === 'own' ? 'A fetch service of your own is set in this browser…' : 'Use a fetch service of your own instead…')));
     pasteText.id = 'sdPasteText'; pasteName.id = 'sdPasteName';
     const intake = h('form.sd-intake', { dataset: { how }, onsubmit: e => { e.preventDefault(); read('link'); } },
       fld('Product link', url, hint), h('div.sd-row', readBtn, button('Cancel', () => d.close())), failed, fallback);
@@ -540,10 +540,10 @@
     const rate = SL.perGram(u.variety), q = Number(lot.quantity), turned = !(rate > 0) || !(q > 0) ? null : lot.unit === 'g' && u.unit === 'seeds' ? Math.floor(q * rate) : lot.unit === 'seeds' && u.unit === 'g' ? Math.round(q / rate * 10) / 10 : null;
     const rateText = rate > 0 ? `${num(rate, rate < 10 ? 1 : 0)} seeds a gram` : '';
     return [h('p.sd-odd', `Recorded as ${n} ${unitWord(lot.unit)}, but the plan counts ${name} in ${unitWord(u.unit)}, so no row counts this lot.${turned != null ? '' : ' One of the two is wrong.'}`),
-      turned != null ? h('button.link', { type: 'button', dataset: { fix: 'turn' }, onclick: () => refile(u, { unit: u.unit, quantity: turned, reason: `${n} ${unitWord(lot.unit)} turned into ${unitWord(u.unit)} at ${rateText}, the figure on the variety.` }, `${name}: ${n} ${unitWord(lot.unit)} counted as ${num(turned, u.unit === 'g' ? 1 : 0)} ${unitWord(u.unit)}`) }, `Count it as ${num(turned, u.unit === 'g' ? 1 : 0)} ${unitWord(u.unit)} (${rateText}, from the variety’s record)`) : null,
-      h('button.link', { type: 'button', dataset: { fix: 'unit' }, onclick: () => refile(u, { unit: u.unit, reason: `Counted in ${u.unit}, as the plan counts ${name}.` }, `${name}: ${n} counted as ${unitWord(u.unit)}`) }, `The lot is wrong: count ${n} ${unitWord(u.unit)}`),
-      crop && lot.unit === 'seeds' && u.unit === 'plants' && boughtIn(crop) && soldAsSeed(u.variety) ? h('button.link', { type: 'button', dataset: { fix: 'seed' }, onclick: () => sowFromSeed(crop) }, `The crop is wrong: ${cropName(crop)} is sown from seed`)
-        : crop ? h('button.link', { type: 'button', dataset: { fix: 'crop' }, onclick: () => select({ type: 'crop', id: crop.id }) }, `The crop is wrong: open ${cropName(crop)}`) : null];
+      turned != null ? h('button.btn.small', { type: 'button', dataset: { fix: 'turn', hook: 'seeds-fix' }, onclick: () => refile(u, { unit: u.unit, quantity: turned, reason: `${n} ${unitWord(lot.unit)} turned into ${unitWord(u.unit)} at ${rateText}, the figure on the variety.` }, `${name}: ${n} ${unitWord(lot.unit)} counted as ${num(turned, u.unit === 'g' ? 1 : 0)} ${unitWord(u.unit)}`) }, `Count it as ${num(turned, u.unit === 'g' ? 1 : 0)} ${unitWord(u.unit)} (${rateText}, from the variety’s record)`) : null,
+      h('button.btn.small', { type: 'button', dataset: { fix: 'unit', hook: 'seeds-fix' }, onclick: () => refile(u, { unit: u.unit, reason: `Counted in ${u.unit}, as the plan counts ${name}.` }, `${name}: ${n} counted as ${unitWord(u.unit)}`) }, `The lot is wrong: count ${n} ${unitWord(u.unit)}`),
+      crop && lot.unit === 'seeds' && u.unit === 'plants' && boughtIn(crop) && soldAsSeed(u.variety) ? h('button.btn.small', { type: 'button', dataset: { fix: 'seed', hook: 'seeds-fix' }, onclick: () => sowFromSeed(crop) }, `The crop is wrong: ${cropName(crop)} is sown from seed`)
+        : crop ? h('button.link', { type: 'button', dataset: { fix: 'crop', hook: 'seeds-open-crop' }, onclick: () => select({ type: 'crop', id: crop.id }) }, `The crop is wrong: open ${cropName(crop)}`) : null];
   }
   /** The On hand cell: a number typed in place, and any order beneath it with one click to mark it arrived. */
   function stockCell(r, name) {
@@ -568,10 +568,10 @@
       else if (u.twin) {
         const to = u.twin, toCrop = cropName(m.eng.crop(to.cropId));
         row.append(h('p', `Filed under a ${was} that was removed from the library. There is another ${to.name} under ${toCrop}.`),
-          h('button.link', { type: 'button', onclick: () => refile(u, { key: 'v:' + to.id, name: `${toCrop} · ${to.name}`, reason: `Moved from a removed variety record (${v.id}).` }, `${to.name}: ${lotText(u)}, moved from the removed record`) }, `Move it to ${to.name} · ${toCrop}`));
+          h('button.btn.small', { type: 'button', dataset: { hook: 'seeds-move-lot' }, onclick: () => refile(u, { key: 'v:' + to.id, name: `${toCrop} · ${to.name}`, reason: `Moved from a removed variety record (${v.id}).` }, `${to.name}: ${lotText(u)}, moved from the removed record`) }, `Move it to ${to.name} · ${toCrop}`));
       } else if (v && crop && crop.active !== false && !crop.deleted) {
         row.append(h('p', `${was} was removed from the library, so it has no row.`),
-          h('button.link', { type: 'button', onclick: async () => { const after = { ...v, active: true }; delete after.deleted; if (await App.revise(`Bring ${v.name} back to the library`, [{ kind: 'variety', before: v, after }])) toast(`${v.name} is back in the library`, { label: 'Undo', run: App.undo }); } }, `Bring ${was} back under ${cropName(crop)}`));
+          h('button.btn.small', { type: 'button', dataset: { hook: 'seeds-bring-back' }, onclick: async () => { const after = { ...v, active: true }; delete after.deleted; if (await App.revise(`Bring ${v.name} back to the library`, [{ kind: 'variety', before: v, after }])) toast(`${v.name} is back in the library`, { label: 'Undo', run: App.undo }); } }, `Bring ${was} back under ${cropName(crop)}`));
       } else {
         // Nothing is left to bring back or to move it to: the lot can only be let go. It is kept, marked as removed, in the stock's
         // own record, and Undo puts it back.
@@ -603,7 +603,7 @@
         from ? h('small', from) : null,
         odd ? h('div.sd-oddbox', unitChoice(odd, name)) : null));
     }
-    box.append(h('button.link', { type: 'button', id: 'sdAddLot', onclick: () => { App.editStock(`${name}: add a lot`, (lib, ctx) => SL.addLot(lib, { key, unit, quantity: 0, status: 'usable' }, ctx), name); } }, lots.length ? '+ Add another lot' : '+ Add a lot'));
+    box.append(h('button.btn.small', { type: 'button', id: 'sdAddLot', dataset: { hook: 'seeds-add-lot' }, onclick: () => { App.editStock(`${name}: add a lot`, (lib, ctx) => SL.addLot(lib, { key, unit, quantity: 0, status: 'usable' }, ctx), name); } }, lots.length ? '+ Add another lot' : '+ Add a lot'));
     return box;
   }
   const rowsOf = r => (r ? [r, ...(r.alt || [])] : []);
@@ -748,7 +748,7 @@
     ui.colsKey = plan.key;
     $('sdTable').style.minWidth = `${plan.fixed + NAME_MIN}px`;
     const folds = grouped ? groupsOf(m, list).map(g => g.id) : [], allShut = folds.length > 0 && folds.every(id => ui.closed.has(id));
-    const fold = folds.length > 1 ? h('button.link.sd-fold', { type: 'button', id: 'sdFold', onclick: () => { if (allShut) ui.closed.clear(); else folds.forEach(id => ui.closed.add(id)); schedule(); } }, allShut ? 'Expand all' : 'Collapse all') : null;
+    const fold = folds.length > 1 ? h('button.btn.quiet.small.sd-fold', { type: 'button', id: 'sdFold', dataset: { hook: 'seeds-fold' }, onclick: () => { if (allShut) ui.closed.clear(); else folds.forEach(id => ui.closed.add(id)); schedule(); } }, allShut ? 'Expand all' : 'Collapse all') : null;
     clear($('sdHead')).append(h('tr', plan.cols.map(([id, t, n, w]) => h('th' + (n ? '.sd-num' : ''), w ? { style: { width: w + 'px' } } : {}, t, id === 'name' ? fold : null))));
     // a redraw while a lot is being typed (a photo arriving, say) must not take the cursor out of it
     const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('.sd-lotrow') ? document.activeElement.id : '';
@@ -820,13 +820,13 @@
       for (const g of groups) {
         const closed = ui.closed.has(g.id), color = g.crop ? eng.cropColor(g.crop) : 'var(--line)', plain = (m.byCrop.get(g.id) || []).filter(r => r.toSow > 0 && ui.filter !== 'short' && ui.filter !== 'open');
         const seeds = g.list.reduce((n, v) => { const r = m.byV.get(v.id); return n + (r && r.unit === 'seeds' ? r.toSow : 0); }, 0) + plain.reduce((n, r) => n + (r.unit === 'seeds' ? r.toSow : 0), 0);
-        wanted.push(...kept('c:' + g.id, JSON.stringify([cols, closed, color, cropName(g.crop), g.list.length, g.crop ? howPlanted(g.crop) : '', seeds, thumbSig((g.list.find(v => T.has(v.id)) || {}).id), T.forCrop(g.id).length]), () => true, () => [h('tr.sd-crop' + (closed ? '.closed' : ''), { dataset: { crop: g.id }, onclick: e => { if (e.target.closest('.link')) return; closed ? ui.closed.delete(g.id) : ui.closed.add(g.id); schedule(); } }, h('td', { colSpan: cols }, h('div.as-name',
+        wanted.push(...kept('c:' + g.id, JSON.stringify([cols, closed, color, cropName(g.crop), g.list.length, g.crop ? howPlanted(g.crop) : '', seeds, thumbSig((g.list.find(v => T.has(v.id)) || {}).id), T.forCrop(g.id).length]), () => true, () => [h('tr.sd-crop' + (closed ? '.closed' : ''), { dataset: { crop: g.id }, onclick: e => { if (e.target.closest('.sd-crop-act')) return; closed ? ui.closed.delete(g.id) : ui.closed.add(g.id); schedule(); } }, h('td', { colSpan: cols }, h('div.as-name',
           h('button.as-more', { type: 'button', 'aria-expanded': String(!closed), 'aria-label': `${closed ? 'Show' : 'Hide'} ${cropName(g.crop)}` }, closed ? '▸' : '▾'),
           T.el({ cropId: g.id, color, label: cropName(g.crop), size: 26, cls: 'key' }), h('b', g.crop ? g.crop.name : 'A crop that is no longer in the library'),
           h('small', `${g.list.length} variet${g.list.length === 1 ? 'y' : 'ies'}${g.crop ? ' · ' + howPlanted(g.crop) : ''}${seeds ? ` · ${num(seeds)} seeds to sow` : ''}`),
           h('span.grow'),
-          g.crop ? h('button.link', { type: 'button', onclick: () => select({ type: 'crop', id: g.id }) }, 'Edit crop') : null,
-          g.crop ? h('button.link', { type: 'button', onclick: () => openVariety(null, g.id) }, 'Add a variety') : null)))]));
+          g.crop ? h('button.btn.small.sd-crop-act', { type: 'button', dataset: { hook: 'seeds-edit-crop' }, onclick: () => select({ type: 'crop', id: g.id }) }, 'Edit crop') : null,
+          g.crop ? h('button.btn.small.sd-crop-act', { type: 'button', dataset: { hook: 'seeds-add-variety' }, onclick: () => openVariety(null, g.id) }, 'Add a variety') : null)))]));
         if (closed) continue;
         for (const v of g.list) { wanted.push(...row(v, false)); shown++; }
         for (const r of plain) {
@@ -878,7 +878,7 @@
       out.later ? h('li', { dataset: { hook: 'seeds-later' } }, h('b', `For ${later.join(' and ')}`), h('span', `${out.later} planting${out.later === 1 ? '' : 's'} dated in ${year} ${out.later === 1 ? 'gives its' : 'give their'} first harvest in ${later.join(' or ')}. ${out.later === 1 ? 'Its' : 'Their'} seed is counted here, where ${out.later === 1 ? 'it is' : 'they are'} sown.`)) : null,
       out.earlier ? h('li', { dataset: { hook: 'seeds-earlier' } }, h('b', 'Earlier'), h('span', `${out.earlier} planting${out.earlier === 1 ? '' : 's'} dated in ${(out.years && out.years.length ? out.years : [year - 1]).join(' or ')} ${out.earlier === 1 ? 'was' : 'were'} due before today, with nothing recorded: not counted as still to sow. Record ${out.earlier === 1 ? 'it' : 'them'} on Tasks.`)) : null].filter(Boolean);
     add(clear($('sdFoot')), so.length ? h('ul.sd-foot-list', so) : null,
-      h('button.link', { type: 'button', onclick: () => download(m) }, 'Download seeds required (.csv)'));
+      h('button.btn.small', { type: 'button', dataset: { hook: 'seeds-download' }, onclick: () => download(m) }, 'Download seeds required (.csv)'));
   }
   function gallery(m, list, q) {
     const host2 = clear($('sdGallery')), { eng } = m, cards = h('div.sd-cards');
@@ -956,7 +956,7 @@
     add(el, h('header.sd-ph', T.el({ varietyId: v.id, color, label: v.name, size: 120 }),
         h('div', h('p.eyebrow', cropName(crop)), h('h2', v.name),
           h('p.sd-sub', supplierShort(v) || 'Entered by hand', v.sku ? ` · ${v.sku}` : '', site ? h('a', { href: v.url, target: '_blank', rel: 'noopener noreferrer' }, ' ↗') : null),
-          h('button.link', { type: 'button', onclick: () => pick.click() }, T.get(v.id) ? 'Change photo' : 'Add a photo'), pick),
+          h('button.btn.small', { type: 'button', dataset: { hook: 'seeds-photo' }, onclick: () => pick.click() }, T.get(v.id) ? 'Change photo' : 'Add a photo'), pick),
         shut),
       h('div.sd-stats', n ? h('button.sd-stat.jump', { type: 'button', title: 'Go to its plantings, where a sowing is recorded', onclick: () => { const to = $('sdPlan'); if (to) to.scrollIntoView({ block: 'start' }); } }, h('small', 'Plantings'), h('b', String(n)), h('span', 'sowing ↓')) : stat('Plantings', '—'),
         stat(r && r.unit !== 'seeds' && r.unit !== 'g' ? 'To buy' : 'To sow', r && r.toSow > 0 ? num(r.toSow, r.unit === 'g' ? 1 : 0) : '—', [r && r.toSow > 0 ? (r.unit === 'seeds' ? SL.measures(r.toSow, v).weight || 'seeds' : SL.UNIT_WORD[r.unit]) : null,
@@ -1061,7 +1061,7 @@
     if (!can && !said) return null;
     return h('div.sd-swap',
       can ? h('button.btn.small', { type: 'button', dataset: { hook: 'swap-open' }, title: `Sold out? Put another variety of ${cropName(crop)} in the plantings that use ${v.name}. What moves is shown before anything changes.`, onclick: () => W.open(v.id, () => { ui.panelKey = ''; schedule(); }) }, 'Put another in its place…') : null,
-      said ? h('p.sd-swapsay', { role: 'status', dataset: { hook: 'swap-said' } }, h('span', said.text), said.canUndo ? h('button.link', { type: 'button', dataset: { hook: 'swap-undo' }, onclick: () => App.undo() }, 'Undo') : null) : null);
+      said ? h('p.sd-swapsay', { role: 'status', dataset: { hook: 'swap-said' } }, h('span', said.text), said.canUndo ? h('button.btn.small', { type: 'button', dataset: { hook: 'swap-undo' }, onclick: () => App.undo() }, 'Undo') : null) : null);
   }
 
   /** The sizes this variety's vendor sells, and which of them covers what is short. */
@@ -1089,7 +1089,7 @@
     for (const text of sizes.notes) box.append(h('p.sd-odd', '† ' + text));
     if (sizes.list.some(p => p.worked === 'seeds')) box.append(h('p.dlg-hint', 'Seed counts marked ≈ come from the page’s seeds per ounce or pound, which is an average.'));
     if (r && r.unit === 'plants' && boughtIn(crop) && soldAsSeed(v)) box.append(h('div.sd-oddbox', h('p.sd-odd', `${vendor} sells ${v.name} as seed, but ${cropName(crop)} is set to bought-in plants, so the plan counts plants and asks for no seed.`),
-      h('button.link', { type: 'button', dataset: { fix: 'seed' }, onclick: () => sowFromSeed(crop) }, `${cropName(crop)} is sown from seed`)));
+      h('button.btn.small', { type: 'button', dataset: { fix: 'seed', hook: 'seeds-fix' }, onclick: () => sowFromSeed(crop) }, `${cropName(crop)} is sown from seed`)));
     box.append(h('p.dlg-hint', 'Prices are as the page gave them when it was last read.'));
     return box;
   }

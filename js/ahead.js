@@ -69,7 +69,7 @@
       sched,
       t.ok && t.rotation ? h('p.help', `${crop.name} would follow ${lower(o.after.r.c)} here, the same family (${t.family}).`) : null,
       h('div.ah-actions', h('button.btn.primary', { type: 'button', id: 'ahAdd', disabled: !t.ok, onclick: () => addFit(o, t, crop) }, 'Add planting'), h('button.btn', { type: 'button', onclick: () => { O.pick = null; redraw(); } }, 'Cancel')),
-      t.ok ? h('button.linkish', { type: 'button', id: 'ahSeries', title: `${crop.name} every so many days, the first on this day, in ${o.garden.name}`, onclick: () => App.openAhead({ mode: 'series', cropId: crop.id, varietyId: O.pick.varietyId || undefined, from: t.p.date, gardenId: o.garden.id }) }, `Or plan a series of ${lower(crop)} from this day…`) : null);
+      t.ok ? h('button.btn.quiet.small', { type: 'button', id: 'ahSeries', dataset: { hook: 'opening-series' }, title: `${crop.name} every so many days, the first on this day, in ${o.garden.name}`, onclick: () => App.openAhead({ mode: 'series', cropId: crop.id, varietyId: O.pick.varietyId || undefined, from: t.p.date, gardenId: o.garden.id }) }, `Or plan a series of ${lower(crop)} from this day…`) : null);
   }
   /**
    * Draw the opening that is selected into the details panel. False when it is no longer there (something was planted

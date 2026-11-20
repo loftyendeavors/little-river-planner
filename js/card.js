@@ -103,10 +103,10 @@
     if (mine && !change) {
       el.dataset.state = 'said';
       const run = said.action;
-      add(el, h('span', said.text), run ? h('button.link', { type: 'button', dataset: { hook: 'card-undo' }, onclick: () => { said = null; run.run(); } }, run.label) : null);
+      add(el, h('span', said.text), run ? h('button.btn.small', { type: 'button', dataset: { hook: 'card-undo' }, onclick: () => { said = null; run.run(); } }, run.label) : null);
     } else if (change) {
       el.dataset.state = last.kind;
-      if (last.kind === 'saved') add(el, h('b', 'Saved'), h('span', ` · ${last.label}`), last.canUndo ? h('button.link', { type: 'button', dataset: { hook: 'card-undo' }, onclick: () => App.undo() }, 'Undo') : null);
+      if (last.kind === 'saved') add(el, h('b', 'Saved'), h('span', ` · ${last.label}`), last.canUndo ? h('button.btn.small', { type: 'button', dataset: { hook: 'card-undo' }, onclick: () => App.undo() }, 'Undo') : null);
       else add(el, h('b', 'Not changed'), h('span', ` · ${last.text}`));
     } else { el.dataset.state = 'idle'; el.hidden = true; return; }
     el.hidden = false;
@@ -721,6 +721,6 @@
     draw();
   }
 
-  root.LRFCard = { init, tick, on: () => on, docked: () => !!card && DOCKED.matches, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, openBedFromMap, keepBedFocus, openRow };
+  root.LRFCard = { init, tick, on: () => on, docked: () => !!card && DOCKED.matches, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, openBedFromMap, keepBedFocus, openRow, menu: (spec, anchor) => openMenu(spec, anchor) };
   init();
 })(window);
