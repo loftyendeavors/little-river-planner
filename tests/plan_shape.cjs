@@ -51,7 +51,9 @@
     'assumptions.crops.*': 'map',
     'assumptions.crops.*.*': 'object',
     'assumptions.crops.*.*.dtm': 'number',
-    'assumptions.crops.*.*.yield': 'number',
+    'assumptions.crops.*.*.inRow': 'number together',     // the spacing in the row a plant's figure was typed at (E2d): one value with the figure
+    'assumptions.crops.*.*.rows': 'number together',      // the rows of the bed a sown crop's figure was typed for (E2d): one value with the figure
+    'assumptions.crops.*.*.yield': 'number together',
     'assumptions.sell': 'map',
     'assumptions.sell.*': 'object whole',
     'assumptions.sell.*.days': 'number',

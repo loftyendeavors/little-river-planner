@@ -383,9 +383,29 @@
   // ── the second half of the list: what a crop is sold as, how it is picked, what it yields ──
   const figure3 = x => Math.round(x * 1000) / 1000;
   /** Set, or with null clear, a yield for a crop or variety in one growing condition. It is in the crop's pattern: a total, or a week's picking. */
-  function setYield(kind, id, env, value, label) {
-    const ops = listStep(next => setCell(next, kind, id, env, 'yield', value == null || value === '' || !(+value >= 0) ? null : figure3(+value)));
-    return ops ? assume(label, ops) : Promise.resolve(false);
+  function setYield(kind, id, env, value, label, how) {
+    const ops = yieldOps(kind, id, env, value, how);
+    return ops ? assume(label, ops, how && how.shown ? { shown: true } : {}) : Promise.resolve(false);
+  }
+  /**
+   * The step setYield makes, not yet taken (E2d). `how`, from the card's box, for a crop's own figure only: { rows } the rows of the bed the figure was typed for, or
+   * { inRow } the spacing in the row a plant's figure was typed at; the figure is then kept to six places, since it was typed for a
+   * whole bed and divided by its length. Without `how` the figure alone changes if it already had a yield.
+   * Clearing a yield or replacing one cleared by an older device also clears its rows or spacing.
+   */
+  function yieldOps(kind, id, env, value, how) {
+    if (kind !== 'crops') how = undefined;   // only a crop's own figure says rows or a spacing: a variety's is as it was (Codex on #92)
+    const none = value == null || value === '' || !(+value >= 0), whole = v => Number.isSafeInteger(v) && v >= 1 ? v : null, inches = v => typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
+    return listStep(next => {
+      const was = next[kind]?.[id]?.[env]?.yield;
+      const hadYield = was != null && was !== '' && Number.isFinite(+was) && +was >= 0;
+      setCell(next, kind, id, env, 'yield', none ? null : how ? Math.round(+value * 1e6) / 1e6 : figure3(+value));
+      if (none || how || !hadYield) {
+        const rows = none || !how ? null : whole(how.rows);
+        setCell(next, kind, id, env, 'rows', rows);
+        setCell(next, kind, id, env, 'inRow', none || !how || rows ? null : inches(how.inRow));
+      }
+    });
   }
   /**
    * Change a crop's line: `change` may hold unit, price, pattern, days, keep, share, turnover, until and young; a null goes back to the default.
@@ -2634,7 +2654,7 @@
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, failedRange, previewFailed, markFailed, seasonRecords, takeBackSeason, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
-    engineAfter: ops => E.create(withOps(state.plan, ops, 'do'), Lib),
+    yieldOps, engineAfter: ops => E.create(withOps(state.plan, ops, 'do'), Lib),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (elsewhere()) { refuse(elsewhere()); return null; } if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
     saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, editNursery, setSupply, setLiveSow, traysToMonday: () => applyTrayStart(),
     snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, joined: () => state.joined || null, useMine, doneJoined: () => { state.joined = null; emit('joined'); }, windowState: () => (store ? store.readOnly : ''), useThisWindow, sync: () => sync, syncInfo, linkService: () => (sync && sync.linkService ? sync.linkService() : null), snapshotsKept: () => !!Snaps

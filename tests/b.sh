@@ -76,6 +76,8 @@ for n in "$@"; do
     bought-site) python3 -I $T/bought_check.py $SITE $S/bought-site $ZIP 2>&1 | tally bought-in-built-site ;;
     early-young) python3 -I $T/early_young_check.py $APP $S/early-young 2>&1 | tally early-and-young ;;   # E2c part 2: days before on a crop's card, a stand's year planted, the Forecast's tags
     early-young-site) python3 -I $T/early_young_check.py $SITE $S/early-young-site $ZIP 2>&1 | tally early-and-young-built-site ;;
+    e2d) python3 -I $T/e2d_check.py $APP $S/e2d 2>&1 | tally rows-in-the-figure ;;   # E2d: a sown crop's yield typed for a bed with its rows on the crop's card, what it moves shown first, the row-foot said
+    e2d-site) python3 -I $T/e2d_check.py $SITE $S/e2d-site $ZIP 2>&1 | tally rows-in-the-figure-built-site ;;
     tlpick) python3 -I $T/tlpick_check.py $APP $S/tlpick 2>&1 | tally timeline-shows-the-pick ;;   # #88: the Timeline shows the bed the card is showing; an opening's way back at its head
     tlpick-site) python3 -I $T/tlpick_check.py $SITE $S/tlpick-site $ZIP 2>&1 | tally timeline-shows-the-pick-built-site ;;
     messages) python3 -I $T/messages_check.py $APP $S/messages 2>&1 | tally l3-messages ;;   # #91, L3 part 1: the messages and small fixes

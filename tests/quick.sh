@@ -46,6 +46,8 @@ node $T/frost_test.cjs $APP $PLAN | named "frost, backup"   # E2c: the first fal
 node $T/frost_test.cjs $APP $SHIP | named "frost, compact"
 node $T/early_young_test.cjs $APP $PLAN $OLD | named "early and young, backup"   # E2c part 2: a thing first picked days before its crop's days to harvest, and a cane stand by its age; nothing moves with the boxes empty
 node $T/early_young_test.cjs $APP $SHIP $OLD | named "early and young, compact"
+node $T/e2d_test.cjs $APP $PLAN $OLD | named "rows in the figure, backup"   # E2d: a sown crop's figure says the rows it was typed for, a plant's its spacing; a row-foot holds; nothing moves with neither said; the two joined as one value
+node $T/e2d_test.cjs $APP $SHIP $OLD | named "rows in the figure, compact"
 node $T/swap_test.cjs $APP $PLAN | named "swap, backup"   # the variety swap: the sowing days kept, the harvest moved by the difference in days
 node $T/swap_test.cjs $APP $SHIP | named "swap, compact"
 node $T/failed_test.cjs $APP $PLAN $OLD | named "failed, backup"   # Tasks part 2: a planting marked failed (its bed free from that day, its harvest off the forecast, taken whole by the merge), and a day a year before its plan refused

@@ -41,6 +41,10 @@
 
   "rockwool": 13,
 
+  "rows in the figure, backup": 31,
+
+  "rows in the figure, compact": 31,
+
   "scale": 8,
 
   "shape": 29,
@@ -165,6 +169,8 @@
 
   "cleanup": 36,
 
+  "e2d": 32,
+
   "early-young": 51,
 
   "f053": 22,
@@ -283,6 +289,8 @@
  "site2": {
 
   "bought-site": 45,
+
+  "e2d-site": 32,
 
   "early-young-site": 51,
 

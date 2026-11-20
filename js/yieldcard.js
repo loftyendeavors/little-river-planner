@@ -32,7 +32,7 @@
  */
 (function (root) {
   'use strict';
-  const App = root.LRFApp, UI = root.LRFUI, F = root.LRFForecast;
+  const App = root.LRFApp, UI = root.LRFUI, F = root.LRFForecast, E = root.LRFEngine;
   const { h, clear, num } = UI;
   const $ = id => document.getElementById(id);
   const PLACE = { field: 'Field', tunnel: 'Unheated tunnel', heated: 'Heated greenhouse', tower: 'Towers', tray: 'Living trays' };
@@ -42,7 +42,7 @@
   const PATTERN = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' };
   const PATTERN_SAY = { weekly: 'picked gradually', once: 'cleared at once', spread: 'picked on demand' };
   const PATTERN_TIP = { spread: 'On demand: the yield is a total, held and spread evenly over the harvest window.', weekly: 'Gradually: the yield is a week’s picking, every week of the harvest window.', once: 'Clear: the yield is a total, all of it counted the day the crop is ready.' };
-  const PER = { plant: 'a plant', ft: 'a bed-foot', tray: 'a tray' }, PER_SAY = { plant: 'per plant', ft: 'per bed-foot', tray: 'per tray' };
+  const PER_SAY = { plant: 'per plant', ft: 'of a bed', tray: 'per tray' };
   const COUNTED = ['each', 'head'];
   const fig = n => root.LRFAssume.fig(n);
   const money = n => '$' + Math.round(n).toLocaleString('en-US');
@@ -343,11 +343,68 @@
   }
 
   // ───────────────────────── the card ─────────────────────────
+  // ───────────────────────── a yield typed for a bed, or for a plant at a spacing (E2d) ─────────────────────────
+  /**
+   * What a place's yield box speaks of. A sown crop's is a bed: the commonest bed the crop stands on there, its length and rows said
+   * on the box; the figure typed is kept a foot of that bed with its rows beside it, so that a planting gives it by its own rows
+   * (the row-foot yield holds). A crop counted a plant says the spacing in the row its figure was typed at, and is held a row-foot
+   * where a planting's spacing differs; not a crop cleared once and counted singly, where a plant is a head whatever the spacing.
+   * `k`: the box shows the stored figure times this. null: the box is what it was (a tower, a place with no soil bed).
+   */
+  function boxFor(eng, c, hc, env, tenths) {
+    const st = hc.micro || tenths ? null : eng.statedFor(c.id, env), cell = hc.cells[env];
+    if (!st) return null;
+    if (hc.basis === 'ft') return { bed: true, st, k: st.ft * (cell.rows ? st.rows / cell.rows : 1), how: { rows: st.rows }, said: `a ${fig(st.ft)}-ft bed of ${plural(st.rows, 'row')}` };
+    if (hc.basis !== 'plant' || (hc.pattern.value === 'once' && COUNTED.includes(hc.unit.value))) return null;
+    // a plant's figure typed where the crop stands at more than one spacing says none by itself: it is the plain figure it always
+    // was, taken at once. "Say it is for … in apart" under the box is there for it, and shows what that moves first.
+    return { bed: false, st, k: cell.inRow ? st.inRow / cell.inRow : 1, how: cell.inRow || st.spacings <= 1 ? { inRow: st.inRow } : null, say: { inRow: st.inRow }, said: `a plant ${fig(st.inRow)} in apart`, plain: !cell.inRow && st.spacings > 1 };
+  }
+  /** Every planting of the crop whose yield a step would change, and whether its rows or its spacing has a part in it. */
+  function yieldMoves(eng, c, ops) {
+    const next = App.engineAfter(ops), list = [];
+    let held = false;
+    for (const p of eng.plan.plantings || []) {
+      if (p.cropId !== c.id) continue;
+      const a = eng.calc(p), q = next.planting(p.id), b = a && q ? next.calc(q) : null, ya = a ? eng.givenOf(p, a) : null, yb = b ? next.givenOf(q, b) : null;
+      if (!ya || !yb) continue;
+      if ((ya.scale != null && ya.scale !== 1) || (yb.scale != null && yb.scale !== 1)) held = true;
+      if (Math.abs(ya.units - yb.units) > 1e-9) {
+        const variety = eng.variety(p.varietyId);
+        list.push({ id: p.id, bed: App.bedLabel(a.b, eng), field: E.d2s(a.field), variety: variety && variety.name, rows: a.rows, bedRows: a.totalRows, inRow: a.inRow, ft: a.physicalLength, was: ya.units, now: yb.units, unit: yb.unit });
+      }
+    }
+    return { held, list, worth: [study(eng).worth, F.build(next).rows.reduce((t, r) => t + r.worth, 0)] };
+  }
+  /**
+   * Take a figure typed in a place's box. Where a planting's rows (or spacing) differ from the bed the box speaks of, what the
+   * figure moves is shown first, planting by planting, with the season's worth; then it is the list's own step, with one Undo.
+   */
+  async function saveYield(c, env, stored, at, label, say) {
+    const eng = App.state.engine, how = stored == null || !at ? undefined : (say && at.say) || at.how || undefined, ops = App.yieldOps('crops', c.id, env, stored, how);
+    if (!ops) return false;
+    const m = how ? yieldMoves(eng, c, ops) : null;
+    if (m && m.held && m.list.length) {
+      const moved = Math.abs(m.worth[1] - m.worth[0]) >= 0.5, worth = moved ? `the season’s worth goes from ${money(m.worth[0])} to ${money(m.worth[1])}` : `the season’s worth stays ${money(m.worth[0])}`;
+      const shown = m.list.slice(0, 12), more = m.list.slice(12);
+      const line = x => h('li', { dataset: { hook: 'yield-move', planting: x.id, was: String(x.was), now: String(x.now) } },
+        h('b', x.bed), ` · ${x.field}${x.variety ? ` · ${x.variety}` : ''} · ${at.bed ? plural(x.rows, 'row') : `${fig(x.inRow)} in apart`}${at.bed && x.rows !== x.bedRows ? ` of ${fig(x.bedRows)}` : ''}, ${fig(x.ft)} ft: ${fig(x.was)} → ${fig(x.now)}${unitWord(x.unit)}`);
+      const detail = h('div.yc-moves', { dataset: { hook: 'yield-moves', n: String(m.list.length) } },
+        h('ul.moves', shown.map(line)),
+        more.length ? h('details', { dataset: { hook: 'yield-more' } }, h('summary', `See ${plural(more.length, 'more planting')}`), h('ul.moves', more.map(line))) : null,
+        h('p.yc-moves-worth', { dataset: { hook: 'yield-worth', was: String(m.worth[0]), now: String(m.worth[1]) } }, worth.charAt(0).toUpperCase() + worth.slice(1), '.'));
+      const why = at.bed ? `The figure is for ${at.said}. A planting on other rows gives it by its rows: a row-foot gives the same everywhere.` : `The figure is for ${at.said}. A planting at another spacing gives the same from a foot of row, not from a plant.`;
+      if (!await UI.confirm({ title: `${label}?`, body: `${why} ${m.list.length === 1 ? 'One planting’s yield changes' : `The yield of ${num(m.list.length)} plantings changes`}, worked out on your plan as it stands. One undo takes it back.`, confirmLabel: 'Take the figure', detail })) return false;
+      return App.setYield('crops', c.id, env, stored, label, { ...how, shown: true });
+    }
+    return App.setYield('crops', c.id, env, stored, label, how);
+  }
+
   function card(eng, plan, c, q) {
     const s = study(eng), x = s.crops.get(c.id) || NONE, hc = eng.harvestFor(c.id), year = s.year, unit = hc.unit.value, u = unitWord(unit), w = waits(eng, c, hc), cover = eng.isCoverCrop(c);
     // the other things the crop sells: a column each after the crop's own (js/things.js)
     const T = root.LRFThings.of({ eng, c, hc, x, year, box, redraw: () => ui.redraw() });
-    const cols = T.places(placesOf(eng, c, hc, x)), n = cols.list.length, per = PER[hc.basis], varieties = hc.micro ? [] : eng.varietiesOf(c.id);
+    const cols = T.places(placesOf(eng, c, hc, x)), n = cols.list.length, per = eng.perSaid(hc.basis), varieties = hc.micro ? [] : eng.varietiesOf(c.id);
     const next = nextAfter(eng, q, c.id), nextCrop = next && eng.crop(next), looked = hc.looked === year, still = empties(eng, c);
     const head = h('header.yc-head',
       root.LRFThumbs.el({ cropId: c.id, color: eng.cropColor(c), label: c.name, size: 30, cls: 'key' }),
@@ -421,26 +478,47 @@
       const label = tenths ? 'Of every 10 planted, fit to sell' : `Marketable yield ${PER_SAY[hc.basis]}${weekly ? ' per week' : ''}`;
       const hint = tenths ? 'cut once: the ten that go in, less the ones that do not make it' : weekly ? 'packed weight or count, picked each week, for as many weeks as it is picked' : pattern === 'once' ? 'packed weight or count, in all, taken the day it is cleared' : 'packed weight or count, in all, over its harvest days';
       body.append(row('yield', label, hint, cols.list.map(env => {
-        const cell = hc.cells[env], at = x.places.get(env), k = tenths ? 10 : 1, where = `${c.name}, ${PLACE[env].toLowerCase()}`, amber = w.places.includes(env);
-        const what = `${weekly ? 'picked each week from' : 'in all from'} ${per}`, back = cell.fallback == null ? 'no yield at all' : fig(cell.fallback);
-        const mine = cell.mine == null ? null : cell.mine * k, fallback = cell.fallback == null ? null : cell.fallback * k;
-        const input = box({ key: `y|${env}`, mine, fallback, amber, max: tenths ? 10 : undefined, label: `${where}: ${tenths ? 'of every 10 planted, fit to sell' : `yield, ${per}${weekly ? ' a week' : ''}`}`,
-          tip: cell.mine != null ? `Your figure: ${fig(cell.mine)}${u} ${what}. Clear it to go back to ${back}.` : cell.fallback == null ? 'No yield is set for this crop.' : `${amber ? 'A starting value nobody has checked' : 'From the crop’s record, not yet checked'}: ${fig(cell.fallback)}${u} ${what}.`,
-          save: v => { const y = v == null ? null : v / k; return App.setYield('crops', c.id, env, y, y == null ? `${where}: yield back to ${back}` : `${where}: ${fig(y)}${u} ${weekly ? 'a week' : 'in all'}`); } });
+        const cell = hc.cells[env], at = x.places.get(env), where = `${c.name}, ${PLACE[env].toLowerCase()}`, amber = w.places.includes(env);
+        // what the box speaks of (E2d): a bed with its rows, a plant at a spacing, or what it always was
+        const bx = boxFor(eng, c, hc, env, tenths), k = tenths ? 10 : bx ? bx.k : 1;
+        const showsBasis = bx && (bx.bed || bx.how), of = showsBasis ? bx.said : env === 'tower' && hc.basis === 'ft' ? 'a plant' : per;
+        const stored = v => v == null ? null : bx && bx.bed ? v / bx.st.ft : tenths ? v / 10 : v;
+        const what = `${weekly ? 'picked each week from' : 'in all from'} ${of}`, kk = tenths ? 1 : k,
+          // what the plan uses with no figure of his says no rows and no spacing: for the box's bed it is its length times it, whatever the figure in the box says (Codex on #92)
+          kf = bx && bx.bed ? bx.st.ft : 1, back = cell.fallback == null ? 'no yield at all' : fig(cell.fallback * kf);
+        const mine = cell.mine == null ? null : cell.mine * k, fallback = cell.fallback == null ? null : cell.fallback * (tenths ? 10 : kf);
+        const take = v => saveYield(c, env, stored(v), bx, v == null ? `${where}: yield back to ${back}` : `${where}: ${fig(bx && bx.bed ? v : stored(v))}${u} ${weekly ? 'a week' : 'in all'}${bx && bx.bed ? ` from ${of}` : ''}`);
+        const input = box({ key: `y|${env}`, mine, fallback, amber, max: tenths ? 10 : undefined, label: `${where}: ${tenths ? 'of every 10 planted, fit to sell' : `yield, ${of}${weekly ? ' a week' : ''}`}`,
+          tip: cell.mine != null ? `Your figure: ${fig(cell.mine * kk)}${u} ${what}. Clear it to go back to ${back}.` : cell.fallback == null ? 'No yield is set for this crop.' : `${amber ? 'A starting value nobody has checked' : 'From the crop’s record, not yet checked'}: ${fig(cell.fallback * kf)}${u} ${what}.`,
+          save: take });
         // one meaning for the box, and beside a week's picking the season's total it comes to: the engine's own figure for the
         // plantings there that follow this line (they differ where one is picked for more days than another)
         let beside = null;
         if (cell.value == null) beside = h('small.yc-total.warn', 'nothing is forecast until this is typed');
-        else if (amber) beside = h('small.yc-total.warn', `the plan counts ${fig(cell.value)}${u} meanwhile: a starting value nobody has checked`);
+        else if (amber) beside = h('small.yc-total.warn', `the plan counts ${fig(cell.value * kk)}${u} meanwhile: a starting value nobody has checked`);
         else if (weekly) {
-          const list = at && at.per.length ? at.per : [cell.total], lo = Math.min(...list), hi = Math.max(...list), range = fig(lo) === fig(hi) ? fig(lo) : `${fig(lo)} to ${fig(hi)}`;
-          beside = h('small.yc-total', { dataset: { lo: String(lo), hi: String(hi), by: at && at.per.length ? 'plantings' : 'line' }, title: at && at.per.length ? `${fig(cell.value)}${u} a week, for the weeks each planting there is picked.${fig(lo) === fig(hi) ? '' : ' The plantings differ in how long they are picked.'}` : `${fig(cell.value)}${u} a week over ${hc.nominal} harvest days.` },
-            `comes to ${range}${u} ${per} over the season`);
-        } else if (pattern === 'spread' && !tenths) beside = h('small.yc-total', { title: `${fig(cell.total)}${u} over ${hc.nominal} harvest days` }, `about ${fig(cell.weekly)}${u} a week`);
+          const list = (at && at.per.length ? at.per : [cell.total]).map(v => v * kk), lo = Math.min(...list), hi = Math.max(...list), range = fig(lo) === fig(hi) ? fig(lo) : `${fig(lo)} to ${fig(hi)}`;
+          beside = h('small.yc-total', { dataset: { lo: String(lo), hi: String(hi), by: at && at.per.length ? 'plantings' : 'line' }, title: at && at.per.length ? `${fig(cell.value * kk)}${u} a week, for the weeks each planting there is picked.${fig(lo) === fig(hi) ? '' : ' The plantings differ in how long they are picked.'}` : `${fig(cell.value * kk)}${u} a week over ${hc.nominal} harvest days.` },
+            `comes to ${range}${u} ${bx && bx.bed ? 'from the bed' : per} over the season`);
+        } else if (pattern === 'spread' && !tenths) beside = h('small.yc-total', { title: `${fig(cell.total * k)}${u} over ${hc.nominal} harvest days` }, `about ${fig(cell.weekly * k)}${u} a week`);
         else if (tenths) beside = h('small.yc-total', `${fig(cell.value)}${u} from each plant`);
+        // what the figure is kept as (E2d): a row-foot where it says its rows; and plainly where it does not
+        let kept = null;
+        if (bx && cell.value != null) {
+          const hook = { hook: 'yield-kept', place: env, rows: cell.rows ? String(cell.rows) : '', inrow: cell.inRow ? String(cell.inRow) : '' };
+          const say = cell.mine != null && !amber ? h('button.link', { type: 'button', dataset: { hook: 'yield-say', place: env }, title: `Keeps ${fig(mine)}${u} for ${bx.said}, and says so: a planting on other ${bx.bed ? 'rows' : 'spacing'} then follows ${bx.bed ? 'its rows' : 'the row-foot'}. What that moves is shown first.`,
+            onclick: () => saveYield(c, env, stored(mine), bx, `${where}: ${fig(mine)}${u} ${weekly ? 'a week' : 'in all'} from ${bx.said}`, true).then(done => { if (!done) ui.redraw(); }) }, bx.bed ? `Say it is for ${plural(bx.st.rows, 'row')}` : `Say it is for ${fig(bx.st.inRow)} in apart`) : null;
+          if (bx.bed) kept = cell.rows ? h('small.yc-total', { dataset: hook, title: `Kept a row-foot: a bed gives it by its rows and its length. Typed for a bed of ${plural(cell.rows, 'row')}.` }, `${fig(cell.value / cell.rows)}${u} a row-foot${weekly ? ' a week' : ''}`)
+            : h('small.yc-total', { dataset: hook, title: 'This figure does not say the rows it is for, so every bed gives it by its length alone, whatever its rows. Type a figure in the box, and it is kept for the rows the box says.' }, `a bed-foot, rows not said${bx.st.mixed ? ': its beds differ in rows' : ''}`, say ? ' · ' : null, say);
+          else kept = cell.inRow ? h('small.yc-total', { dataset: hook, title: 'A planting at another spacing in the row gives the same from a foot of row: more plants, each giving less. Type the figure again to say another spacing.' }, `typed at ${fig(cell.inRow)} in apart: held a row-foot where a planting’s spacing differs`)
+            : cell.mine != null && !amber ? h('small.yc-total', { dataset: hook }, say) : null;
+        }
+        // beside the columns of other things sold the card has no room to spare: the bed and what the figure is kept as, in one short line
+        if (kept && T.any) kept = h('small.yc-total', { dataset: { ...kept.dataset }, title: `${bx.said}. ${kept.title || ''}` }, bx.bed ? `${fig(bx.st.ft)} ft, ${plural(bx.st.rows, 'row')} · ${cell.rows ? `${fig(cell.value / cell.rows)} a row-foot` : 'rows not said'}` : cell.inRow ? `held a row-foot (${fig(cell.inRow)} in)` : null);
+        if (kept && !kept.textContent) kept = null;
         // what the figure read before "Picked" turned it: the same amount over the crop's harvest days, said another way
-        const old = was && was.weekly !== weekly && was.cells[env] != null && cell.value != null ? h('small.yc-total.yc-turned', { dataset: { was: String(was.cells[env]), now: String(cell.value) } }, `read ${fig(was.cells[env])}${u} ${was.weekly ? 'a week' : 'in all'} before “Picked” was changed: the same over ${was.nominal} harvest days`) : null;
-        return h('td', { dataset: { place: env } }, h('span.yc-line', input, h('span.yc-unit', tenths ? 'of 10' : unit === 'each' ? '' : unit)), beside, old);
+        const old = was && was.weekly !== weekly && was.cells[env] != null && cell.value != null ? h('small.yc-total.yc-turned', { dataset: { was: String(was.cells[env]), now: String(cell.value) } }, `read ${fig(was.cells[env] * kk)}${u} ${was.weekly ? 'a week' : 'in all'} before “Picked” was changed: the same over ${was.nominal} harvest days`) : null;
+        return h('td', { dataset: { place: env } }, h('span.yc-line', input, h('span.yc-unit', { dataset: { hook: 'yield-of', place: env } }, tenths ? 'of 10' : showsBasis && (!bx.bed || !T.any) ? `${unit === 'each' ? '' : unit + ' '}from ${of}` : unit === 'each' ? '' : unit)), beside, kept, old);
       })));
     }
 
@@ -546,7 +624,7 @@
   async function setUnit(c, value) {
     const eng = App.state.engine, hc = eng.harvestFor(c.id), was = hc.unit.value, to = value === '(default)' ? hc.unit.fallback : value, w = waits(eng, c, hc), year = study(eng).year;
     if (to === was) return false;
-    const x = of(eng, c.id), cols = placesOf(eng, c, hc, x), per = `${PER[hc.basis]}${hc.weekly ? ' a week' : ''}`;
+    const x = of(eng, c.id), cols = placesOf(eng, c, hc, x), per = `${eng.perSaid(hc.basis)}${hc.weekly ? ' a week' : ''}`;
     const yields = cols.list.filter(env => hc.cells[env].value != null && !w.places.includes(env)).map(env => `${PLACE[env].toLowerCase()} ${fig(hc.cells[env].value)}`), price = hc.price.value > 0 ? hc.price.value : null;
     // what the new unit would do to the other things the crop sells (one packed from its harvest was given a figure for the old unit)
     const unitTo = value === '(default)' || value === hc.unit.fallback ? null : value, hit = App.thingsAfter(c.id, App.sellOps(c.id, { unit: unitTo }));
@@ -583,7 +661,7 @@
     const label = `${c.name}: ${value === 'unset' ? 'picked as before' : PATTERN_SAY[value]}`;
     if (!await App.setSell(c.id, { pattern: to }, label)) { ui.redraw(); return false; }
     if (!turns) return true;
-    const now = App.state.engine, hc2 = now.harvestFor(c.id), u = unitWord(hc.unit.value), per = PER[hc.basis];
+    const now = App.state.engine, hc2 = now.harvestFor(c.id), u = unitWord(hc.unit.value), per = now.perSaid(hc.basis);
     if (!ui.turned.has(c.id)) ui.turned.set(c.id, { weekly: hc.weekly, nominal: hc.nominal, cells: Object.fromEntries(eng.ENVS.map(env => [env, hc.cells[env].value])) });
     const moved = places.filter(env => hc.cells[env] && hc.cells[env].value != null && hc2.cells[env].value != null).map(env => `${PLACE[env].toLowerCase()} ${fig(hc.cells[env].value)}${u} ${hc.weekly ? 'a week' : 'in all'} is now ${fig(hc2.cells[env].value)}${u} ${hc2.weekly ? 'a week' : 'in all'}`);
     UI.toast(`${label} · ${moved.length ? `the yield of ${per} is written the other way, the same over ${hc.nominal} harvest days: ${moved.join('; ')}` : 'no yield is set to be turned'} · ${worthSaid(was, study(now).worth)}`, { label: 'Undo', run: App.undo });
