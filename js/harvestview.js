@@ -291,6 +291,7 @@
         body.push(line('.hv-row', name, season, ownOf(m, row), row, carry ? peak : null, row, carry ? 'own' : undefined));
         body[body.length - 1].dataset.crop = row.cropId;
         body[body.length - 1].dataset.group = g;
+        body[body.length - 1].dataset.hook = 'fc-row';
         if (row.thing) body[body.length - 1].dataset.thing = row.thing;   // another thing the crop sells: a row of its own, in its own unit
         if (carry) {
           const from = `Carried in from ${(row.carriedFrom.length ? row.carriedFrom : [m.year - 1]).join(' and ')}`;

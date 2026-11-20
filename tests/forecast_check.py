@@ -462,7 +462,7 @@ with sync_playwright() as pw:
     # the Season heading sorts the crops under each heading by revenue (his word, Nov 20): highest first, lowest first, then A to Z
     page.set_viewport_size({"width": WIDTH, "height": 900}); page.evaluate("LRFHarvestView.setFit(false); LRFHarvestView.setMeasure('amounts')"); wait(500)
     ORDER = """const m = HV.model(), worth = tr => { const r = m.rows.find(x => x.cropId === tr.dataset.crop && (x.thing || '') === (tr.dataset.thing || '')); return r ? r.worth : NaN; };
-      const groups = {}; for (const tr of document.querySelectorAll('#hvTable tbody tr.hv-row')) (groups[tr.dataset.group] = groups[tr.dataset.group] || []).push({ key: tr.dataset.crop + '|' + (tr.dataset.thing || ''), worth: worth(tr) });
+      const groups = {}; for (const tr of hooks('fc-row', hook('fc-table'))) (groups[tr.dataset.group] = groups[tr.dataset.group] || []).push({ key: tr.dataset.crop + '|' + (tr.dataset.thing || ''), worth: worth(tr) });
       const b = hook('fc-sort'), c = b && b.closest('th'); return { order: b ? b.dataset.order : null, label: b ? b.getAttribute('aria-label') : '', groups, h: b ? Math.round(b.getBoundingClientRect().height) : 0, w: b && c ? Math.round(c.clientWidth - b.getBoundingClientRect().width) : 99 };"""
     def sorted_as(o, how):
         gs = o["groups"] if o else {}
