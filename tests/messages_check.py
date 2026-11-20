@@ -241,14 +241,27 @@ def run(pw):
     # ══ 10. the unheated benches, and a celled tray with no cells set, in plain words: on the page, in each step's words, and in what is refused ══
     words = js("""A.setView('trays'); LRFTraysView.setTab('setup'); await sleep(600); const heads = [...document.querySelectorAll('#bnCool h4')].map(x => x.textContent);
       const pick = document.getElementById('bnCoolCrop'), out = { heads, pick: pick ? pick.getAttribute('aria-label') : null, old: /grown on without heat/i.test(document.getElementById('traysView').innerText) };
+      const help = document.querySelector('#bnCool [data-hook="bench-help"]');
+      out.help = help && help.getAttribute('aria-label');
       // a crop put on the unheated benches by the page's own controls, and its first day set: each step says it in the new words
       const opt = pick ? [...pick.options].find(o => o.value) : null;
       if (opt) {
-        const name = opt.textContent, steps = S.undo.length; pick.value = opt.value; document.getElementById('bnCoolAdd').click(); await sleep(400);
+        const name = opt.textContent, steps = S.undo.length, before = JSON.stringify(S.plan.nursery); pick.value = opt.value; document.getElementById('bnCoolAdd').click(); await sleep(400);
         out.added = { name, label: S.undo.length > steps ? S.undo[S.undo.length - 1].label : null };
-        const from = document.querySelector('#bnCool tr[data-cool="' + CSS.escape(opt.value) + '"] input[data-f="from"]');
-        if (from) { from.value = A.planYear() + '-05-01'; from.dispatchEvent(new Event('change', { bubbles: true })); await sleep(400); out.from = { label: S.undo[S.undo.length - 1].label, day: UI.day(new Date(A.planYear(), 4, 1)) }; }
+        const row = () => document.querySelector('#bnCool tr[data-cool="' + CSS.escape(opt.value) + '"]');
+        const editDate = async (key, monthDay, month, day) => {
+          const input = row()?.querySelector('input[data-f="' + key + '"]');
+          if (!input) return null;
+          const control = input.getAttribute('aria-label'), value = A.planYear() + monthDay;
+          input.value = value; input.dispatchEvent(new Event('change', { bubbles: true })); await sleep(400);
+          return { label: S.undo[S.undo.length - 1].label, control, day: UI.day(new Date(A.planYear(), month, day)), saved: row()?.querySelector('input[data-f="' + key + '"]')?.value === value };
+        };
+        out.from = await editDate('from', '-05-01', 4, 1);
+        out.to = await editDate('to', '-06-15', 5, 15);
+        row()?.querySelector('[data-f="remove"]')?.click(); await sleep(300);
+        out.removed = { gone: !row(), answer: said() };
         while (S.undo.length > steps) { A.undo(); await sleep(150); }
+        out.restored = JSON.stringify(S.plan.nursery) === before;
       }
       try { LRFNursery.setCool(S.plan.nursery || LRFNursery.blank(), '', {}); out.refused = null; } catch (e) { out.refused = e.message; }
       LRFTraysView.setTab('room'); await sleep(500); const edit = document.getElementById('bnEdit'); out.edit = edit ? edit.title : null;
@@ -257,8 +270,15 @@ def run(pw):
       return out;""")
     check("on the Nursery's set-up, the crops grown on the unheated benches stand under “On the unheated benches”, and “grown on without heat” is not on the page", words["heads"] == ["On the unheated benches"] and words["old"] is False, words)
     check("its box to add a crop is “Crop to put on the unheated benches”, and Edit benches says what stands on the unheated benches is on the Set-up tab", words.get("pick") == "Crop to put on the unheated benches" and "what stands on the unheated benches" in (words.get("edit") or ""), words)
-    ad, fr = words.get("added") or {}, words.get("from") or {}
+    check("the help button is named “What the unheated benches take”", words.get("help") == "What the unheated benches take", words)
+    ad, fr, to = words.get("added") or {}, words.get("from") or {}, words.get("to") or {}
     check("a crop added there is said to be on the unheated benches, and its first day set says it is there from that day", ad.get("label") == "%s is on the unheated benches, all year until its days are set" % ad.get("name") and fr.get("label") == "%s is on the unheated benches from %s" % (ad.get("name"), fr.get("day")), words)
+    check("the dates both name the unheated benches, the last day is saved and named in its answer, and removing the crop can be undone",
+          fr.get("control") == f"{ad.get('name')}: on the unheated benches from"
+          and to.get("control") == f"{ad.get('name')}: on the unheated benches through"
+          and fr.get("saved") and to.get("saved") and to.get("label") == f"{ad.get('name')} is on the unheated benches through {to.get('day')}"
+          and words.get("removed") == {"gone": True, "answer": ad.get("name", "") + " is raised under heat again"}
+          and words.get("restored"), words)
     check("with no crop chosen, it is refused in the same words: “Choose the crop to put on the unheated benches.”", words.get("refused") == "Choose the crop to put on the unheated benches.", words)
     check("a live tray sown in cells with no cells set is a supply named “Celled tray, cells a tray not set”, said to be set under Live trays, in the Sown column", bool(words.get("row")) and words["row"].get("name") == "Celled tray, cells a tray not set" and "under Live trays, in the Sown column" in words["row"].get("text", ""), words)
 

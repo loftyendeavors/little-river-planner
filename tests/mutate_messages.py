@@ -69,6 +69,8 @@ PAGE = [
  ("the map frames the farm again when its key is fitted (#85)", MP, "    bar.classList.toggle('open', legendOpen && chips.length > 0);\n", "    bar.classList.toggle('open', legendOpen && chips.length > 0); fit();\n"),
  ("Grown on without heat is back", BN, "h('h4', 'On the unheated benches')", "h('h4', 'Grown on without heat')"),
  ("the add box asks for a crop to grow on without heat again", BN, "'aria-label': 'Crop to put on the unheated benches'", "'aria-label': 'Crop to grow on without heat'"),
+ ("the unheated benches' help has its old label", BN, "label: 'What the unheated benches take'", "label: 'What growing on without heat does'"),
+ ("the last unheated bench date says from instead of through", BN, "${f === 'from' ? 'from' : 'through'}", "${f === 'from' ? 'from' : 'from'}"),
  ("a crop added is said to be grown on without heat again", BN, "change(`${cropName(id)} is on the unheated benches, all year until its days are set`", "change(`${cropName(id)} is grown on without heat, all year until its days are set`"),
  ("a crop's first day is said in the old words again", BN, "change(`${name} is on the unheated benches ${f === 'from' ? 'from' : 'through'}", "change(`${name} is grown on without heat ${f === 'from' ? 'from' : 'through'}"),
  ("Edit benches names growing on without heat again", BN, "what stands on the unheated benches are on the Set-up tab", "what is grown on without heat are on the Set-up tab"),
