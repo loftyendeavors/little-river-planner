@@ -85,7 +85,7 @@ with sync_playwright() as pw:
     want = js("""const eng = S.engine, next = copy(); next.assumptions = { v: 1, crops: {}, varieties: {}, ...(next.assumptions || {}) };
       next.assumptions.crops[arg.crop] = { ...(next.assumptions.crops[arg.crop] || {}), [arg.env]: { yield: Math.round(arg.typed / arg.ft * 1e6) / 1e6, rows: arg.rows } };
       const e2 = engineOf(next), moved = [];
-      for (const p of S.plan.plantings) { if (p.cropId !== arg.crop) continue; const a = eng.givenOf(p), b = e2.givenOf(e2.planting(p.id)); if (a && b && Math.abs(a.units - b.units) > 1e-9) moved.push({ id: p.id, was: a.units, now: b.units }); }
+      for (const p of S.plan.plantings) { if (p.cropId !== arg.crop) continue; const a = eng.givenOf(p), b = e2.givenOf(e2.planting(p.id)); if (a && b && Math.abs(a.units - b.units) > 1e-9) moved.push({ id: p.id, was: a.units, now: b.units, field: E.d2s(eng.calc(p).field) }); }
       return { moved, worth: [worthOf(eng), worthOf(e2)], dates: dates(e2) === dates(eng), rows: rowsOf(e2), cell: next.assumptions.crops[arg.crop][arg.env] };""", {"crop": C, "env": ENV, "typed": typed, "ft": ST["ft"], "rows": ST["rows"]})
     def type_it(v): return js("const box = document.querySelector(`#ycCard [data-yk=\"y|${arg.env}\"]`); return typeIn(box, arg.v);", {"env": ENV, "v": v})
     def sheet(): return js("const d = document.querySelector('dialog[open]'); if (!d) return null; const m = hook('yield-moves', d), w = hook('yield-worth', d); return { text: txt(d), n: m ? +m.dataset.n : null, moves: hooks('yield-move', d).map(li => ({ id: li.dataset.planting, was: +li.dataset.was, now: +li.dataset.now, text: txt(li) })), worth: w ? [+w.dataset.was, +w.dataset.now] : null, wtext: txt(w), buttons: [...d.querySelectorAll('button')].map(txt) };")
@@ -93,8 +93,9 @@ with sync_playwright() as pw:
     shot("sheet")
     check("a figure typed is not taken at once: nothing is written, and a sheet is up", bool(sh) and js("return snap().plan;") == start["plan"] and js("return S.undo.length;") == 0, sh)
     near = lambda a, b: abs(a - b) <= 1e-6 * max(1, abs(a), abs(b))
-    check("the sheet lists every planting whose yield the figure changes, before and after, as the engine works them out", bool(sh) and sh["n"] == len(want["moved"]) and len(want["moved"]) > 1 and all(any(m["id"] == w["id"] and near(m["was"], w["was"]) and near(m["now"], w["now"]) for m in sh["moves"]) for w in want["moved"][:12]), [sh and sh["moves"][:3], want["moved"][:3]])
-    check("each line names the bed, its rows and its length", bool(sh) and all(" row" in m["text"] and " ft" in m["text"] and "→" in m["text"] for m in sh["moves"]), sh and sh["moves"][:2])
+    check("the sheet lists every planting whose yield the figure changes, before and after, as the engine works them out", bool(sh) and len(sh["moves"]) == sh["n"] == len(want["moved"]) and len(want["moved"]) > 1 and all(any(m["id"] == w["id"] and near(m["was"], w["was"]) and near(m["now"], w["now"]) for m in sh["moves"]) for w in want["moved"]), [sh and sh["moves"][:3], want["moved"][:3]])
+    fields = {m["id"]: m["field"] for m in want["moved"]}
+    check("each line says the planting date, bed, rows and length", bool(sh) and all(m["id"] in fields and fields[m["id"]] in m["text"] and " row" in m["text"] and " ft" in m["text"] and "→" in m["text"] for m in sh["moves"]), sh and sh["moves"][:2])
     check("it gives the season's worth before and after, the engine's own", bool(sh) and bool(sh["worth"]) and near(sh["worth"][0], want["worth"][0]) and near(sh["worth"][1], want["worth"][1]) and "goes from" in sh["wtext"], [sh and sh["worth"], want["worth"]])
     check("it says what the figure is for, and that one Undo takes it back", bool(sh) and ("%g-ft bed of %d row" % (ST["ft"], ST["rows"])) in sh["text"] and "row-foot" in sh["text"] and "undo" in sh["text"].lower(), sh and sh["text"][:300])
     js("const d = document.querySelector('dialog[open]'), b = d && [...d.querySelectorAll('button')].find(x => !x.classList.contains('primary')); if (b) b.click(); else if (S.undo.length) A.undo(); return 1;"); wait(500)
@@ -161,6 +162,23 @@ with sync_playwright() as pw:
         check("a figure typed for it is taken at once, no sheet: nothing but the figure moves", not took["sheet"] and took["undo"] == 1, took)
         check("the plan holds it with the spacing in the row it was typed at, and the card says it is held a row-foot", took["cell"] == {"yield": v, "inRow": pl["inRow"]} and "held a row-foot" in took["kept"], took)
         js("A.undo(); return 1;"); wait(400)
+    js("""const p = S.engine.planting(arg);
+      const ops = Array.from({ length: 13 }, (_, i) => ({ before: null, after: { ...p, id: 'yield-overflow-' + i } }));
+      return A.commit('Make a long list of example changes', ops, { unchecked: true });""",
+       next(x["id"] for x in sub["list"] if x["rows"] == ST["rows"]))
+    card(); type_it(typed); wait(700)
+    summary = page.locator('[data-hook="yield-more"] summary')
+    more_rows = page.locator('[data-hook="yield-more"] [data-hook="yield-move"]')
+    collapsed = summary.count() == 1 and more_rows.count() > 0 and not more_rows.first.is_visible()
+    if collapsed:
+        summary.click()
+    overflow = sheet()
+    check("beyond the first twelve changes, every remaining planting can be inspected before saving",
+          bool(overflow) and collapsed and more_rows.last.is_visible() and len(overflow["moves"]) == overflow["n"] > 12
+          and js("return S.undo.length;") == 1, overflow and overflow["n"])
+    if overflow:
+        page.locator("dialog[open]").get_by_role("button", name="Cancel", exact=True).click()
+    while js("return S.undo.length;") > 0: js("A.undo(); return 1;"); wait(150)
     check("every step undone, the plan is the one the page was given", js("return snap().plan;") == start["plan"])
     check("no error on the page", not errors, errors[:4])
     finish()

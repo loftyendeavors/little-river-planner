@@ -32,7 +32,7 @@
  */
 (function (root) {
   'use strict';
-  const App = root.LRFApp, UI = root.LRFUI, F = root.LRFForecast;
+  const App = root.LRFApp, UI = root.LRFUI, F = root.LRFForecast, E = root.LRFEngine;
   const { h, clear, num } = UI;
   const $ = id => document.getElementById(id);
   const PLACE = { field: 'Field', tunnel: 'Unheated tunnel', heated: 'Heated greenhouse', tower: 'Towers', tray: 'Living trays' };
@@ -369,7 +369,10 @@
       const a = eng.calc(p), q = next.planting(p.id), b = a && q ? next.calc(q) : null, ya = a ? eng.givenOf(p, a) : null, yb = b ? next.givenOf(q, b) : null;
       if (!ya || !yb) continue;
       if ((ya.scale != null && ya.scale !== 1) || (yb.scale != null && yb.scale !== 1)) held = true;
-      if (Math.abs(ya.units - yb.units) > 1e-9) list.push({ id: p.id, bed: App.bedLabel(a.b, eng), rows: a.totalRows, inRow: a.inRow, ft: a.physicalLength, was: ya.units, now: yb.units, unit: yb.unit });
+      if (Math.abs(ya.units - yb.units) > 1e-9) {
+        const variety = eng.variety(p.varietyId);
+        list.push({ id: p.id, bed: App.bedLabel(a.b, eng), field: E.d2s(a.field), variety: variety && variety.name, rows: a.totalRows, inRow: a.inRow, ft: a.physicalLength, was: ya.units, now: yb.units, unit: yb.unit });
+      }
     }
     return { held, list, worth: [study(eng).worth, F.build(next).rows.reduce((t, r) => t + r.worth, 0)] };
   }
@@ -383,9 +386,12 @@
     const m = how ? yieldMoves(eng, c, ops) : null;
     if (m && m.held && m.list.length) {
       const moved = Math.abs(m.worth[1] - m.worth[0]) >= 0.5, worth = moved ? `the season’s worth goes from ${money(m.worth[0])} to ${money(m.worth[1])}` : `the season’s worth stays ${money(m.worth[0])}`;
-      const shown = m.list.slice(0, 12), line = x => h('li', { dataset: { hook: 'yield-move', planting: x.id, was: String(x.was), now: String(x.now) } }, h('b', x.bed), ` ${at.bed ? plural(x.rows, 'row') : `${fig(x.inRow)} in apart`}, ${fig(x.ft)} ft: ${fig(x.was)} → ${fig(x.now)}${unitWord(x.unit)}`);
+      const shown = m.list.slice(0, 12), more = m.list.slice(12);
+      const line = x => h('li', { dataset: { hook: 'yield-move', planting: x.id, was: String(x.was), now: String(x.now) } },
+        h('b', x.bed), ` · ${x.field}${x.variety ? ` · ${x.variety}` : ''} · ${at.bed ? plural(x.rows, 'row') : `${fig(x.inRow)} in apart`}, ${fig(x.ft)} ft: ${fig(x.was)} → ${fig(x.now)}${unitWord(x.unit)}`);
       const detail = h('div.yc-moves', { dataset: { hook: 'yield-moves', n: String(m.list.length) } },
-        h('ul.moves', shown.map(line), m.list.length > shown.length ? h('li', `and ${plural(m.list.length - shown.length, 'planting')} more`) : null),
+        h('ul.moves', shown.map(line)),
+        more.length ? h('details', { dataset: { hook: 'yield-more' } }, h('summary', `See ${plural(more.length, 'more planting')}`), h('ul.moves', more.map(line))) : null,
         h('p.yc-moves-worth', { dataset: { hook: 'yield-worth', was: String(m.worth[0]), now: String(m.worth[1]) } }, worth.charAt(0).toUpperCase() + worth.slice(1), '.'));
       const why = at.bed ? `The figure is for ${at.said}. A planting on other rows gives it by its rows: a row-foot gives the same everywhere.` : `The figure is for ${at.said}. A planting at another spacing gives the same from a foot of row, not from a plant.`;
       if (!await UI.confirm({ title: `${label}?`, body: `${why} ${m.list.length === 1 ? 'One planting’s yield changes' : `The yield of ${num(m.list.length)} plantings changes`}, worked out on your plan as it stands. One undo takes it back.`, confirmLabel: 'Take the figure', detail })) return false;
