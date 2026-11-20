@@ -130,13 +130,14 @@ with sync_playwright() as pw:
     figs = js("""const m = HV.model(), i = m.index(S.date), wk = F.periods(m, 'week', i, i)[0], g = F.glance(m, wk.i0, wk.i1), all = F.glance(m, 0, m.days - 1), line = hook('fc-figs');
       const el = n => line && line.querySelector(`[data-fig="${n}"]`), fig = n => { const e = el(n); return e ? txt(e.querySelector('b')) : null; }, box = n => { const e = el(n); return e ? e.querySelector('b').getBoundingClientRect() : null; };
       const lead = box('season'), week = box('week'), kinds = line ? [...line.querySelectorAll('[data-fig="kind"] b')].map(b => parse(b.textContent)) : [];
-      const wantKinds = F.GROUPS.map(([k]) => all.list.filter(x => x.row.group === k).reduce((n, x) => n + x.worth, 0)).filter(v => v >= 1);
+      const wantKinds = F.GROUPS.map(([k]) => m.rows.filter(r => r.group === k).reduce((n, r) => n + r.worth, 0)).filter(v => v >= 1);
       return { season: fig('season'), week: fig('week'), ready: fig('ready'), trays: fig('trays-season'), stems: fig('stems-season'), kinds, wantKinds: wantKinds.length,
-        want: { season: money(all.worth), worth: all.worth, week: money(g.worth), ready: g.crops, trays: F.shown(all.trays), stems: F.shown(all.stems) },
+        want: { season: money(m.rows.reduce((n, r) => n + r.worth, 0)), worth: m.rows.reduce((n, r) => n + r.worth, 0), week: money(m.rows.reduce((n, r) => n + F.sum(r.value, wk.i0, wk.i1), 0)), ready: g.crops, trays: F.shown(all.trays), stems: F.shown(all.stems) },
+        foot: (() => { const t = hook('fc-table'), k = t ? [...t.querySelectorAll('thead th[data-col]')].findIndex(th => th.dataset.col === wk.key) : -1, f = hook('fc-week-totals'); return k >= 0 && f ? txt(f.querySelectorAll('td')[k + 2]) : null; })(),
         size: el('season') ? getComputedStyle(el('season').querySelector('b')).fontSize : '', sizes: line ? [...new Set(hooks('fc-fig', line).filter(e => e.dataset.fig !== 'season').map(e => getComputedStyle(e.querySelector('b')).fontSize))] : [],
         beside: !!lead && !!week && Math.abs(lead.bottom - week.bottom) < 12 && week.left > lead.right + 200, under: !!lead && !!el('picking') && box('picking').top > lead.bottom,
         tall: line ? Math.round(line.getBoundingClientRect().height) : 0, tiles: document.querySelectorAll('#hvWrap .tr-stat').length };""")
-    check("projected revenue leads, at 32 and alone at that size, and is the forecast's own; the week in hand's revenue and crops in harvest stand at the right of the same line", figs["season"] == figs["want"]["season"] and figs["size"] == "32px" and figs["sizes"] == ["13px"] and figs["beside"] and figs["week"] == figs["want"]["week"] and str(figs["ready"]).startswith(str(figs["want"]["ready"]) + " crop"), figs)
+    check("projected revenue leads, at 32 and alone at that size, and is the forecast's own; the week in hand's revenue and crops in harvest stand at the right of the same line", figs["season"] == figs["want"]["season"] and figs["size"] == "32px" and figs["sizes"] == ["13px"] and figs["beside"] and figs["week"] == figs["want"]["week"] and (figs["foot"] in (None, "") and figs["want"]["week"] == "$0" or figs["foot"] == figs["want"]["week"]) and str(figs["ready"]).startswith(str(figs["want"]["ready"]) + " crop"), figs)
     check("under them the season's own figures: revenue by kind adds up to projected revenue, the season's trays and stems are the forecast's, and there is no row of tiles", figs["under"] and len(figs["kinds"]) == figs["wantKinds"] and len(figs["kinds"]) >= 2 and abs(sum(figs["kinds"]) - figs["want"]["worth"]) <= len(figs["kinds"]) * 0.5 + 1 and str(figs["trays"]).replace(",", "") == str(figs["want"]["trays"]).replace(".0", "") and str(figs["stems"]).replace(",", "") == str(figs["want"]["stems"]).replace(".0", "") and figs["tiles"] == 0 and 0 < figs["tall"] <= 80, figs)
     words = js("""const line = hook('fc-figs'), foot = hook('fc-revenue-label'); return { line: txt(line), foot: txt(foot), lead: txt(line && line.querySelector('[data-fig="season"]')) };""")
     check("the words are a grower's and an accountant's: projected revenue, Harvest, Peak week, and Revenue in the table's foot; never worth", "projected revenue" in str(words["lead"]) and "Harvest " in str(words["line"]) and "Peak week " in str(words["line"]) and words["foot"] == "Revenue" and "worth" not in (str(words["line"]) + str(words["foot"])).lower(), words)
@@ -159,7 +160,7 @@ with sync_playwright() as pw:
     page.evaluate("LRFApp.setDate(new Date(LRFApp.planYear(), 6, 14))"); wait(400)
     click("#hvNext", 500)
     step = js("""const m = HV.model(), i = m.index(S.date), wk = F.periods(m, 'week', i, i)[0], g = F.glance(m, wk.i0, wk.i1), e = hook('fc-figs').querySelector('[data-fig="week"]');
-      return { said: txt(e), want: `Week of ${LRFUI.day(wk.start)} ${money(g.worth)}`, season: txt(hook('fc-figs').querySelector('[data-fig="season"] b')) };""")
+      return { said: txt(e), want: `Week of ${LRFUI.day(wk.start)} ${money(m.rows.reduce((n, r) => n + F.sum(r.value, wk.i0, wk.i1), 0))}`, season: txt(hook('fc-figs').querySelector('[data-fig="season"] b')) };""")
     check("› moves the week and its figures with it; projected revenue stays", str(step["said"]).startswith(str(step["want"])) and step["season"] == figs["season"], step)
     click("#hvPrev", 500)
 

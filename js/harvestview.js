@@ -202,26 +202,29 @@
     const weeks = F.periods(m, 'week').map(c => ({ c, worth: m.rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0) }));
     let best = null;
     for (const w of weeks) if (!best || w.worth > best.worth) best = w;
+    // one rule for every revenue figure here, the table's own (Codex on #94): the forecast's values summed, the season's as its foot
+    // gives it and a week's as its column's foot does, so the lead, each kind, the week, the bars and the peak week all agree with it
+    const season = m.rows.reduce((n, r) => n + r.worth, 0), weekWorth = m.rows.reduce((n, r) => n + F.sum(r.value, wk.i0, wk.i1), 0);
     const kinds = [[now.produce, 'vegetable', 'vegetables'], [now.micros, 'microgreen', 'microgreens'], [now.flowers, 'flower', 'flowers']].filter(x => x[0]).map(([n, one, many]) => `${num(n)} ${n === 1 ? one : many}`).join(' · ');
     // once anything is marked for personal use, each figure says which plantings it counts
     const marked = model().personal > 0, which = !marked ? '' : m.use === 'commercial' ? 'commercial only' : m.use === 'personal' ? 'personal use only' : 'personal use included';
     const worthSays = m.use === 'personal' ? 'personal use is not counted as revenue' : marked ? 'commercial only' : '';
-    figNotes = [['Projected revenue', `${money(all.worth)}, gross, at each crop’s price${worthSays ? ' · ' + worthSays : ''}`],
-      [`Week of ${day(wk.start)}`, `${money(now.worth)} · ${kinds ? kinds + ' in harvest' : 'nothing in harvest'}${which ? ' · ' + which : ''}`],
+    figNotes = [['Projected revenue', `${money(season)}, gross, at each crop’s price${worthSays ? ' · ' + worthSays : ''}`],
+      [`Week of ${day(wk.start)}`, `${money(weekWorth)} · ${kinds ? kinds + ' in harvest' : 'nothing in harvest'}${which ? ' · ' + which : ''}`],
       ['Microgreen trays', `${num(F.shown(now.trays))} that week · ${num(F.shown(all.trays))} for the season`],
       ['Flower stems', `${num(F.shown(now.stems))} that week · ${num(F.shown(all.stems))} for the season`],
       ...(best && best.worth > 0 ? [['Peak week', `${day(best.c.start)}, ${money(best.worth)}`]] : []),
       // the year's two edges (js/forecast.js): a pound is in the one season it is sold in
       ...(m.carried && m.carried.total > 1e-9 ? [[`Carried in from ${(m.carried.years.length ? m.carried.years : [m.year - 1]).join(' and ')}`, `${money(m.carried.worth)} of ${m.carried.crops.join(', ')}, picked before Jan 1 and still to sell. It is in this season's figures, on a line of its own under its crop`]] : []),
       ...(m.after && m.after.total > 1e-9 ? [['After Dec 31', `${money(m.after.worth)} more of ${m.after.crops.join(', ')}, picked or still in store after the year's end. It counts in ${m.year + 1}, not in this season's revenue`]] : [])];
-    // revenue by kind, from the same entries as the season's own, so the kinds add up to it
-    const byKind = F.GROUPS.map(([g, short]) => ({ g, short, worth: all.list.filter(x => x.row.group === g).reduce((n, x) => n + x.worth, 0) })).filter(k => k.worth >= 1);
+    // revenue by kind, from the same rows as the season's own, so the kinds add up to it
+    const byKind = F.GROUPS.map(([g, short]) => ({ g, short, worth: m.rows.filter(r => r.group === g).reduce((n, r) => n + r.worth, 0) })).filter(k => k.worth >= 1);
     const trays = F.shown(all.trays), stems = F.shown(all.stems);
     return h('p.frame-figs.fc-figs', { id: 'hvFigs', dataset: { hook: 'fc-figs', use: marked ? m.use : '' } },
-      fig('season', '', money(all.worth), `projected revenue${worthSays ? ' · ' + worthSays : ''}`, { cls: 'lead', title: GROSS }),
+      fig('season', '', money(season), `projected revenue${worthSays ? ' · ' + worthSays : ''}`, { cls: 'lead', title: GROSS }),
       // the season's revenue week by week, and the week in hand, which the stepper under it moves: its revenue and the crops in harvest
       spark(weeks, wk, best),
-      fig('week', `Week of ${day(wk.start)}`, money(now.worth), which, { cls: now.worth >= 1 ? 'now.keyed' : 'now', title: `Revenue the week of ${day(wk.start)}, at each crop’s price` }),
+      fig('week', `Week of ${day(wk.start)}`, money(weekWorth), which, { cls: weekWorth >= 1 ? 'now.keyed' : 'now', title: `Revenue the week of ${day(wk.start)}, at each crop’s price` }),
       fig('ready', '', `${num(now.crops)} crop${now.crops === 1 ? '' : 's'}`, 'in harvest'),
       h('span.fc-break', { 'aria-hidden': 'true' }),
       byKind.length > 1 ? byKind.map(k => fig('kind', k.short, money(k.worth), '', { title: `${k.short}: projected revenue for the season` })) : null,

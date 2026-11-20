@@ -51,7 +51,7 @@ with sync_playwright() as pw:
     page.wait_for_timeout(150)
     figs = page.evaluate("Object.fromEntries([...document.querySelectorAll('[data-hook=\"fc-fig\"]')].map(e => [e.dataset.fig, e.querySelector('b').textContent]))")
     facts = page.evaluate("""() => { const F = LRFForecast, m = LRFHarvestView.model(), i = m.index(LRFApp.state.date), wk = F.periods(m, 'week', i, i)[0], g = F.glance(m, wk.i0, wk.i1), all = F.glance(m, 0, m.days - 1);
-      return { crops: g.crops, worth: Math.round(g.worth), rows: m.rows.filter(r => r.total > 0).length, seasonTrays: F.shown(all.trays), seasonStems: F.shown(all.stems), week: wk.key }; }""")
+      return { crops: g.crops, worth: Math.round(m.rows.reduce((n, r) => n + F.sum(r.value, wk.i0, wk.i1), 0)), rows: m.rows.filter(r => r.total > 0).length, seasonTrays: F.shown(all.trays), seasonStems: F.shown(all.stems), week: wk.key }; }""")
     # his note of Nov 20: the season's own figures under projected revenue; the week's crops in harvest beside it
     check('the figures: crops in harvest that week, the season’s trays and stems, the harvest season', all(k in figs for k in ('season', 'week', 'ready', 'trays-season', 'stems-season', 'picking')) and figs['ready'].startswith(str(facts['crops'])) and figs['trays-season'].replace(',', '') == str(facts['seasonTrays']).replace('.0', '') and figs['stems-season'].replace(',', '') == str(facts['seasonStems']).replace('.0', ''), [figs, facts])
     check('the week’s figure is its value in dollars', figs.get('week', '').replace('$', '').replace(',', '') == str(facts['worth']), [figs.get('week'), facts['worth']])

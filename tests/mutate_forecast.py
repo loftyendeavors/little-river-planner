@@ -33,10 +33,11 @@ PAGE = [
  ("the page's paragraph stands on the page", HV, "h('div.fc-lead', { id: 'hvLead', hidden: true,", "h('div.fc-lead', { id: 'hvLead', hidden: false,"),
  ("\"?\" says DTM", HV, "' Days to harvest are the same in every month,", "' DTM is the same in every month,"),
  ("\"?\" names two patterns", HV, "h('br'), 'Clear: all of it on the day it is ready.', ", ""),
- ("the season figure is the week's", HV, "fig('season', '', money(all.worth), `projected revenue", "fig('season', '', money(now.worth), `projected revenue"),
+ ("the season figure is the week's", HV, "fig('season', '', money(season), `projected revenue", "fig('season', '', money(weekWorth), `projected revenue"),
  # his note of Nov 20: projected revenue leads at the largest size, with the season's own figures under it, in financial words
  ("projected revenue is no larger than the figures beside it", CSS, ".fc-fig.lead b { font: 800 var(--type-32)/1 var(--display);", ".fc-fig.lead b { font: 800 var(--type-18)/1 var(--display);"),
- ("revenue by kind is the week's", HV, "worth: all.list.filter(x => x.row.group === g)", "worth: now.list.filter(x => x.row.group === g)"),
+ ("revenue by kind is the week's", HV, "worth: m.rows.filter(r => r.group === g).reduce((n, r) => n + r.worth, 0)", "worth: now.list.filter(x => x.row.group === g).reduce((n, x) => n + x.worth, 0)"),
+ ("the week's figure leaves out the microgreens the bars count", HV, "weekWorth = m.rows.reduce((n, r) => n + F.sum(r.value, wk.i0, wk.i1), 0);", "weekWorth = m.rows.filter(r => r.group !== 'micro').reduce((n, r) => n + F.sum(r.value, wk.i0, wk.i1), 0);"),
  ("the season's trays are the week's", HV, "const trays = F.shown(all.trays), stems = F.shown(all.stems);", "const trays = F.shown(now.trays), stems = F.shown(all.stems);"),
  ("the week's revenue stands under the lead, not beside it", CSS, ".fc-fig.now { margin-left: auto; }", ".fc-fig.now { flex: 0 0 100%; }"),
  ("the lead still says worth", HV, "`projected revenue${worthSays ?", "`the season’s worth${worthSays ?"),
