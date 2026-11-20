@@ -235,7 +235,7 @@ with sync_playwright() as pw:
         if ev("!!document.getElementById('asHintsAll')"): page.evaluate("LRFAssume.openGuide()"); settle(200); page.click('#asHintsAll'); settle(900)
         calm = asking()
         check('a subject is found: offers that move plantings and book no ground twice (%d left, %d taken one by one first)' % (rest, one_by_one), rest >= 2 and calm is not None and 'booked into the same ground' not in calm['body'], [rest, one_by_one, calm])
-        check('the one button asks then too, since several lines change at once: it says what moves, crop by crop, and that no ground ends up booked twice', calm is not None and 'No ground ends up booked twice' in calm['body'] and 'planting' in calm['body'] and calm['moves'] > 0, calm)
+        check('the one button asks then too, since several lines change at once: it says what moves, crop by crop, and that there are no new double bookings', calm is not None and 'No new double bookings' in calm['body'] and 'planting' in calm['body'] and calm['moves'] > 0, calm)
         if calm: answer(False)
         check('Cancel there changes nothing', ev("LRFApp.state.undo.length") == depth1)
         while ev("LRFApp.state.undo.length") > depth0: undo()

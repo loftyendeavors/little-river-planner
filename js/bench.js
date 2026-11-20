@@ -195,7 +195,7 @@
         h('button.btn', { type: 'button', id: 'bnAdd', onclick: () => { const done = change('Bench added', n => N.addBench(n, { uid: App.uid }), null); if (done && done.bench) { refocus = [done.bench.id, 'name']; App.emit('nursery'); } } }, '+ Add a bench'),
         option('bnPacking', packing, 'Share of a bench that takes trays', '%', 'packing', v => `${v}% of a bench takes trays`, 30, 100)));
   }
-  /** How long seedlings harden off, and the crops grown on without heat: a line a crop, with its season and the days it has under heat first. */
+  /** How long seedlings harden off, and the crops on the unheated benches: a line a crop, with its season and the days it has under heat first. */
   function rulesBox(fig) {
     const eng = App.state.engine, year = App.planYear(), rules = eng.coolRules(), cropName = id => { const c = eng.crop(id); return c ? c.name : 'A crop no longer in the library'; };
     const said = () => { const c = figures().cool; return c.most > 0.05 ? `up to ${num(c.most, 1)} tray spaces on the unheated benches (${dayName(c.on)})` : 'nothing of it is in the nursery on those days'; };
@@ -205,7 +205,7 @@
     const coolBody = h('tbody');
     for (const rule of rules) {
       const name = cropName(rule.cropId), row = { id: 'cool:' + rule.cropId };
-      const date = (f, value, label) => { const input = h('input.tr-date', { type: 'date', value: value ? `${year}-${value}` : '', min: `${year}-01-01`, max: `${year}-12-31`, 'aria-label': `${name}: ${label}`, dataset: { f } }); input.addEventListener('change', () => { if (!change(`${name} is grown on without heat ${f === 'from' ? 'from' : 'through'} ${input.value ? day(d(input.value)) : 'no set day'}`, n => N.setCool(n, rule.cropId, { [f]: input.value }), [row.id, f], said)) input.value = value ? `${year}-${value}` : ''; }); return input; };
+      const date = (f, value, label) => { const input = h('input.tr-date', { type: 'date', value: value ? `${year}-${value}` : '', min: `${year}-01-01`, max: `${year}-12-31`, 'aria-label': `${name}: ${label}`, dataset: { f } }); input.addEventListener('change', () => { if (!change(`${name} is on the unheated benches ${f === 'from' ? 'from' : 'through'} ${input.value ? day(d(input.value)) : 'no set day'}`, n => N.setCool(n, rule.cropId, { [f]: input.value }), [row.id, f], said)) input.value = value ? `${year}-${value}` : ''; }); return input; };
       const after = h('input.tr-n', { type: 'number', min: 0, max: 60, step: 1, value: rule.after == null ? 0 : rule.after, 'aria-label': `${name}: days under heat first`, inputMode: 'numeric', dataset: { f: 'after' } });
       after.addEventListener('focus', () => after.select());
       after.addEventListener('keydown', e => { if (e.key === 'Enter') after.blur(); else if (e.key === 'Escape') { after.value = rule.after; after.blur(); } });
@@ -213,9 +213,9 @@
       coolBody.append(h('tr', { dataset: { bench: row.id, cool: rule.cropId } }, h('td', h('b', name)), h('td', date('from', rule.from, 'on the unheated benches from')), h('td', date('to', rule.to, 'on the unheated benches through')), h('td', after),
         h('td.bn-tools', h('button.tr-x', { type: 'button', 'aria-label': `${name} is raised under heat again`, title: `Take ${name} off this list`, dataset: { f: 'remove' }, onclick: () => change(`${name} is raised under heat again`, n => N.removeCool(n, rule.cropId), ['', 'bnCoolCrop']) }, '×'))));
     }
-    const pick = h('select.bn-house', { id: 'bnCoolCrop', 'aria-label': 'Crop to grow on without heat', dataset: { f: 'bnCoolCrop' } }, h('option', { value: '' }, 'Choose a crop…'), free.map(([id, name]) => h('option', { value: id }, name)));
-    const addCool = () => { if (!pick.value) { pick.focus(); return; } const id = pick.value; change(`${cropName(id)} is grown on without heat, all year until its days are set`, n => N.setCool(n, id, {}), ['cool:' + id, 'from'], said); };
-    const coolBox = h('div.bn-cool', { id: 'bnCool' }, h('div.bn-edit-head', h('h4', 'Grown on without heat'), UI.help(null, null, [['Grown on without heat', 'From its first day through its last, a crop’s plug trays and pots stand on the unheated benches once they have had their days under heat to come up. Tower seedlings stay under heat.']], { label: 'What growing on without heat does', hook: 'bench-help', card: { hook: 'bench-help-card' } })),
+    const pick = h('select.bn-house', { id: 'bnCoolCrop', 'aria-label': 'Crop to put on the unheated benches', dataset: { f: 'bnCoolCrop' } }, h('option', { value: '' }, 'Choose a crop…'), free.map(([id, name]) => h('option', { value: id }, name)));
+    const addCool = () => { if (!pick.value) { pick.focus(); return; } const id = pick.value; change(`${cropName(id)} is on the unheated benches, all year until its days are set`, n => N.setCool(n, id, {}), ['cool:' + id, 'from'], said); };
+    const coolBox = h('div.bn-cool', { id: 'bnCool' }, h('div.bn-edit-head', h('h4', 'On the unheated benches'), UI.help(null, null, [['On the unheated benches', 'From its first day through its last, a crop’s plug trays and pots stand on the unheated benches once they have had their days under heat to come up. Tower seedlings stay under heat.']], { label: 'What the unheated benches take', hook: 'bench-help', card: { hook: 'bench-help-card' } })),
       rules.length ? h('table.as.bn-benches.bn-cool-table', h('thead', h('tr', h('th', 'Crop'), h('th', 'From'), h('th', 'Through'), h('th', { title: 'Days from sowing that the trays stay under heat, to germinate' }, 'Days under heat first'), h('th', ''))), coolBody) : null,
       h('div.bn-edit-foot', pick, h('button.btn', { type: 'button', id: 'bnCoolAdd', onclick: addCool }, '+ Add a crop')));
     return h('div.bn-edit.bn-rules', { id: 'bnRules', role: 'group', 'aria-label': 'Hardening off and growing on' },
@@ -261,7 +261,7 @@
     return h('section.bn', { id: 'bnRoom' },
       h('div.bn-head', h('h3', 'Through the season'),
         h('span.bn-count', used.length ? `${plural(used.length, 'bench', 'benches')} · ${num(used.reduce((n, b) => n + b.cap, 0))} tray spaces` : 'no bench listed'),
-        h('button.btn.small', { type: 'button', id: 'bnEdit', title: 'The benches, hardening off and what is grown on without heat are on the Set-up tab', onclick: toSetup }, fig.benches.length ? 'Edit benches and rules' : 'Add benches')),
+        h('button.btn.small', { type: 'button', id: 'bnEdit', title: 'The benches, hardening off and what stands on the unheated benches are on the Set-up tab', onclick: toSetup }, fig.benches.length ? 'Edit benches and rules' : 'Add benches')),
       poolLines(fig),
       fig.weeks.length ? h('div.bn-legend', { 'aria-label': 'What the colours stand for' }, fig.kinds.map(([k, label]) => h('span', h('i', { 'data-kind': k }), label))) : null,
       charts,

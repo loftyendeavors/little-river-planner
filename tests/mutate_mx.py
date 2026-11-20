@@ -52,7 +52,7 @@ PAGE = [
  ("selecting another bed keeps the mixing going", AP, "if (!inBed) setMixing(null); });", "});"),
  ("the line between two shares does not move", MP, "res = Rails.slide(App.state.engine, cur.p, gesture.edge,", "res = Rails.stretch(App.state.engine, cur.p, gesture.edge,"),
  ("the tip does not say what the neighbour keeps", MP, "res.other ? h('span.tip-spec', { id: 'tipOther' }", "false ? h('span.tip-spec', { id: 'tipOther' }"),
- ("the moved line is two steps", MP, "(res.ops ? App.commit(`Move the line between ${App.cropLabel(done.cur.p)} and ${App.cropLabel(res.other.p)}`, res.ops)", "(res.ops ? (App.commit('Move the line between, one', [res.ops[0]], { unchecked: true }), App.commit(`Move the line between ${App.cropLabel(done.cur.p)} and ${App.cropLabel(res.other.p)}`, [res.ops[1]], { unchecked: true }))"),
+ ("the moved line is two steps", MP, "(res.ops ? App.commit(label, res.ops)", "(res.ops ? (App.commit('Move the line between, one', [res.ops[0]], { unchecked: true }), App.commit(label, [res.ops[1]], { unchecked: true }))"),
  ("the panel does not list who shares the bed", PN, "        eng.isSoilBed(bed) ? matesBox(eng, p) : null,\n", ""),
  ("“Make them equal” does nothing", PN, "id: 'fEqual', onclick: () => App.equalShares(p.id) }", "id: 'fEqual', onclick: () => {} }"),
  ("equal shares that are equal already are written again", AP, "    if (!res.ops.length) { toast('They already have equal shares.'); return false; }\n", "    if (!res.ops.length) { commit('Equal shares', [{ before: p, after: { ...p } }], { unchecked: true }); return false; }\n"),

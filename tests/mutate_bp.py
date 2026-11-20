@@ -31,7 +31,7 @@ PRICE = ("const y = personal ? { ...part, price: 0 } : part;", "const y = part;"
 ATEND = ("if (direction === 'undo' && Number.isInteger(op.at) && op.at <= list.length) list.splice(op.at, 0, to); else list.push(to);", "list.push(to);")
 PAGE = [
  ("the panel never says Saved", PN, "      if (headEl) headEl.after(savedLine(!!season));\n", ""),
- ("Saved comes with no Undo", PN, "last.canUndo ? h('button.link', { type: 'button', dataset: { saved: 'undo' }", "false ? h('button.link', { type: 'button', dataset: { saved: 'undo' }"),
+ ("Saved comes with no Undo", PN, "last.canUndo ? h('button.link', { type: 'button', dataset: { saved: 'undo',", "false ? h('button.link', { type: 'button', dataset: { saved: 'undo',"),
  ("Saved does not say what changed", PN, "h('span', ` · ${last.label} · ${clock(last.at)}`)", "h('span', ` · ${clock(last.at)}`)"),
  ("Saved never goes quiet", PN, "    el.lrfTimer = setTimeout(() => { if (el.isConnected) fillSaved(el); }, SAID_FOR - (Date.now() - last.at) + 30);\n", ""),
  ("a refusal is said in a toast only", AP, "if (no) { const text = refusalText(no, engine); state.last = { kind: 'refused', text, at: Date.now() }; toast(text); emit('refused'); return false; }", "if (no) { toast(refusalText(no, engine)); return false; }"),
@@ -55,7 +55,7 @@ PAGE = [
  ("marking says nothing of the season's worth", AP, "    toast(`${label} · ${moved} · ${Math.abs(now - was) >= 0.5 ?", "    if (false) toast(`${label} · ${moved} · ${Math.abs(now - was) >= 0.5 ?"),
  ("marking counts no planting in its toast", AP, "const q = eng.planting(p.id), a = !!q && F.useOf(eng, q).personal, b = F.useOf(engine, p).personal;", "const a = F.useOf(eng, p).personal, b = F.useOf(engine, p).personal;"),
  ("Commercial pressed back is written on the planting", AP, "if (want && want !== F.follows(eng, kind, after)) after.use = want;", "if (want) after.use = want;"),
- ("the planting's panel has no Grown for", PN, "        useField,\n        givesField,\n", "        givesField,\n"),
+ ("the planting's panel has no Grown for", PN, "        useField,\n        givesField),\n", "        givesField),\n"),
  ("a personal planting's panel still shows dollars", PN, "${personal ? ', for personal use: not counted as revenue' : y.price > 0 ?", "${false ? ', for personal use: not counted as revenue' : y.price > 0 ?"),
  ("the planting's panel does not say whose word it follows", PN, "dataset: { use: use.use, by: use.by } }, useBtn('commercial', 'Commercial')", "dataset: { use: use.use, by: 'default' } }, useBtn('commercial', 'Commercial')"),
  ("the bed's panel does not say whom it is grown for", "js/card.js", "id: 'bedUse', dataset: { use: use.use, by: use.by }", "id: 'bedUse'"),

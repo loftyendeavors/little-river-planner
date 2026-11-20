@@ -106,7 +106,7 @@
    */
   function setCool(nursery, cropId, change) {
     const n = open(nursery), list = Array.isArray(n.cool) ? n.cool.filter(x => x && x.cropId) : [], at = list.findIndex(x => x.cropId === cropId);
-    if (!cropId) throw Error('Choose the crop that is grown on without heat.');
+    if (!cropId) throw Error('Choose the crop to put on the unheated benches.');
     const rule = { cropId, from: '', to: '', after: 5, ...(at >= 0 ? list[at] : {}) };
     const md = (value, what) => { const text = String(value || '').trim(), m = /^(?:\d{4}-)?(\d{2})-(\d{2})$/.exec(text); if (!text) return ''; if (!m || +m[1] < 1 || +m[1] > 12 || +m[2] < 1 || +m[2] > new Date(2028, +m[1], 0).getDate()) throw Error(`${what}: choose a day of the year, or leave it open.`); return `${m[1]}-${m[2]}`; };
     if ('from' in change) rule.from = md(change.from, 'From');
@@ -295,7 +295,7 @@
     if (fig.flats.carriers) row('open-holes', 'Open 10 × 20 tray, with holes', fig.flats.carriers, [{ n: fig.flats.carriers, text: 'one under each rockwool sheet, at the most at once', on: fig.flats.carriersOn }], 0);
     if (liveOpen) row('open', 'Open 10 × 20 tray', liveOpen, [{ n: liveOpen, text: 'go out as live trays' }], liveOpen);
     // sown in cells, but how many cells a tray is not said yet: the kind of tray is not known
-    if (liveUnsaid) row('live-unsaid', 'Celled tray, cells not yet said', liveUnsaid, [{ n: liveUnsaid, text: 'go out as live trays; say the cells a tray in the demand table' }], liveUnsaid);
+    if (liveUnsaid) row('live-unsaid', 'Celled tray, cells a tray not set', liveUnsaid, [{ n: liveUnsaid, text: 'go out as live trays; set the cells a tray under Live trays, in the Sown column' }], liveUnsaid);
     if (sheets) row('rockwool', `Rockwool sheet${woolCells ? `, ${woolCells} cells` : ''}`, sheets, [{ n: sheets, text: 'sown over the season' }], 0, { pack: CASES.rockwool });
     for (const [size, n] of [...pots].sort((a, b) => a[0] - b[0])) row('pot-' + size, `${size} in pot`, whole(n), [{ n: whole(n), text: 'filled over the season' }], whole(n));
     // carrying trays come back: whole trays for each potting lot, at the most in use on one day

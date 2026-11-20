@@ -183,6 +183,8 @@
 
   "loose": 36,
 
+  "messages": 56,
+
   "mixed": 61,
 
   "photo": 13,
@@ -301,6 +303,8 @@
   "join-site": 50,
 
   "loose-site": 37,
+
+  "messages-site @1480": 56,
 
   "plain-site": 47,
 
