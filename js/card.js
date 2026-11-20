@@ -324,6 +324,7 @@
         if (ev.detail && press && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) > 5) return;
         bedRow = expanded ? null : { bedId: bed.id, id: p.id };
         redraw();
+        if (root.LRFTimeline && root.LRFTimeline.showPick) root.LRFTimeline.showPick();   // the Timeline rings the row opened (#88)
       } },
       root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color: e.cropColor(r.c), label: r.c.vname || r.c.name, size: 40 }),
       h('span.bed-planting-copy', h('span.row-name', r.c.vname ? `${r.c.name} · ${r.c.vname}` : r.c.name), h('span.row-detail', parts(`${day(r.field)} · pick ${pickedSaid(p, r)}${part}`))),
@@ -390,6 +391,14 @@
     }
     const name = active.name;
     return ['bed-date', 'bed-variety', 'bed-sale', 'bed-stand'].includes(name) ? next => next.querySelector(`[name="${name}"]`)?.focus({ preventScroll: true }) : null;
+  }
+
+  /** The planting whose row is open in the bed's season, while that bed is the pick and its season is shown (on the card, or in
+   *  the side panel with the card off): the Timeline rings its bar (#88). */
+  function openRow() {
+    const sel = App.state.sel, e = eng();
+    if (!bedRow || !sel || sel.type !== 'bed' || sel.id !== bedRow.bedId || !bedSeasonOn(e.bedOf(sel.id))) return null;
+    return e.planting(bedRow.id) ? bedRow.id : null;
   }
 
   function backToBed(id) {
@@ -712,6 +721,6 @@
     draw();
   }
 
-  root.LRFCard = { init, tick, on: () => on, docked: () => !!card && DOCKED.matches, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, openBedFromMap, keepBedFocus };
+  root.LRFCard = { init, tick, on: () => on, docked: () => !!card && DOCKED.matches, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, openBedFromMap, keepBedFocus, openRow };
   init();
 })(window);

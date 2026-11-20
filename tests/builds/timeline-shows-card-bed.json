@@ -1,0 +1,17 @@
+{
+ "build": "The Timeline shows the bed the card is showing (#88), and an opening's way back to its bed is at its head. A bed picked (on the Map, in the card or in the side panel) is drawn on the Timeline with orange along its row, as a picked bed is edged on the Map, beside the orange at the left of its name it had; the planting row open in the bed's card (or in the side panel's season, with the card off) has its bar ringed as a planting picked is, and the ring follows as another row is opened or the row is closed. Picked anywhere but on the Timeline itself, or shown on going to the Timeline, the row is brought into view, up or down only, when none of it can be seen: a row that shows at all stays where it is, the date across stays where it was, and a click on the Timeline moves nothing. An opening's panel leads with the way back, \"‹\" and the bed's name, in place of \"Everything in ...\" at its foot; opened from the bed's card it goes back to that card. Look and behaviour only: nothing stored, no figure moves.",
+ "changes": {
+  "did": "On the Timeline the bed you have picked is edged in orange along its row, and the planting open in its card is ringed; an opening's way back to its bed is now at its top.",
+  "steps": [
+   "Pick a bed low on the farm on the Map, then go to the Timeline: its row is brought into view with orange along it.",
+   "With Try the card ticked, open one of the bed's plantings in its card: that planting's bar on the Timeline is ringed, and the ring moves when you open another.",
+   "Open one of the bed's openings: \"‹\" and the bed's name at the top go back to the bed."
+  ]
+ },
+ "words": [],
+ "code": ["ahead.js", "card.js", "timeline.js"],
+ "added": [],
+ "removed": [],
+ "page": ["css/app.css"],
+ "screens": []
+}

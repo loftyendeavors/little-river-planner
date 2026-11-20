@@ -368,6 +368,8 @@ body[data-view="timeline"] .view-timeline { display: grid; grid-template-rows: a
 .tl-group-name .caret { width: 10px; color: var(--muted); }
 .tl-row { display: flex; border-bottom: 1px solid var(--line-soft); }
 .tl-row.sel .tl-label { box-shadow: inset 3px 0 0 var(--flag); }
+/* the bed the card or the panel is showing reads as picked at a glance: orange along its row, as a picked bed's edge on the Map (#88) */
+.tl-row.sel::after { content: ''; position: absolute; inset: 0; border-block: 2px solid var(--flag); pointer-events: none; z-index: 5; }
 .tl-row.drop-target { background: var(--flag-soft); }
 .tl-label { position: sticky; left: 0; z-index: 4; flex: none; background: var(--surface); border-right: 1px solid var(--line); padding: 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: var(--type-13); cursor: pointer; }
 .tl-label small { font: 500 var(--type-11) var(--mono); color: var(--muted); }
@@ -449,6 +451,9 @@ button.as-more:hover { background: var(--paper); color: var(--ink); }
 .insp-head.planting { border-left: 6px solid var(--crop); }
 .eyebrow { font: 500 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
 .insp-head h2 { font-size: var(--type-24); text-wrap: balance; }
+/* the way back to the bed, first in the head (his, Nov 19: "Everything in …" at the foot was no way back) */
+.insp-head > .insp-back { justify-self: start; display: inline-flex; align-items: center; gap: var(--space-4); min-height: var(--control-in); font-size: var(--type-13); font-weight: 600; }
+.insp-back > span { font-size: var(--type-18); line-height: 1; text-decoration: none; }
 .spec { color: var(--ink-2); font-family: var(--mono); font-size: var(--type-13); }
 .link { border: 0; background: none; padding: 0; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; text-align: left; justify-self: start; }
 .icon-btn.close { position: absolute; top: 10px; right: 10px; border: 0; background: none; font-size: var(--type-24); color: var(--muted); }
