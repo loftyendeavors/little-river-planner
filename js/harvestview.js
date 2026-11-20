@@ -255,8 +255,9 @@
     const i = todayIndex(m), isNow = c => c.i0 <= i && c.i1 >= i, cash$ = dollars();
     const say = (text, n) => (fit ? tight(text, n) : text);
     const next = ORDERS[(ORDERS.indexOf(order) + 1) % ORDERS.length];
-    const sortBtn = h('button.hv-sort', { type: 'button', dataset: { hook: 'fc-sort', order }, title: `${ORDER_SAYS[order]}. Click for ${ORDER_SAYS[next].toLowerCase()}`, 'aria-label': `Season: ${ORDER_SAYS[order]}. Click for ${ORDER_SAYS[next].toLowerCase()}`,
-      onclick: e => { e.stopPropagation(); order = next; render(); } }, 'Season', order === 'name' ? null : h('span.hv-sort-arrow', { 'aria-hidden': 'true' }, order === 'high' ? ' ↓' : ' ↑'));
+    // the table is drawn afresh at a click: a keyboard keeps its place on the button (Codex on #99)
+    const sortBtn = h('button.hv-sort', { type: 'button', id: 'hvSort', dataset: { hook: 'fc-sort', order }, title: `${ORDER_SAYS[order]}. Click for ${ORDER_SAYS[next].toLowerCase()}`, 'aria-label': `Season: ${ORDER_SAYS[order]}. Click for ${ORDER_SAYS[next].toLowerCase()}`,
+      onclick: e => { e.stopPropagation(); const kept = document.activeElement === e.currentTarget; order = next; render(); if (kept && $('hvSort')) $('hvSort').focus(); } }, 'Season', order === 'name' ? null : h('span.hv-sort-arrow', { 'aria-hidden': 'true' }, order === 'high' ? ' ↓' : ' ↑'));
     const head = h('tr', h('th.hv-name', 'Crop'), h('th.hv-total', { 'aria-sort': order === 'high' ? 'descending' : order === 'low' ? 'ascending' : 'none' }, sortBtn),
       cols.map(c => h('th' + (isNow(c) ? '.now' : '') + (c.weekend ? '.wkend' : ''), { scope: 'col', title: `Go to ${colTitle(c)}`, onclick: () => App.setDate(c.start), dataset: { col: c.key } }, h('b', c.top || ''), c.label)));
     const body = [];

@@ -50,6 +50,7 @@ PAGE = [
  ("highest first is lowest first", HV, "(order === 'high' ? b[0].worth - a[0].worth : a[0].worth - b[0].worth)", "(a[0].worth - b[0].worth)"),
  ("the sort goes from highest straight back to A to Z", HV, "const ORDERS = ['high', 'low', 'name'];", "const ORDERS = ['high', 'name', 'low'];"),
  ("the sort button is only as tall as its word", CSS, "width: 100%; min-height: var(--control-in); border: 0; background: none;", "border: 0; background: none;"),
+ ("the sort button loses the keyboard's focus", HV, "if (kept && $('hvSort')) $('hvSort').focus();", ""),
  ("the table's foot still says worth", HV, "model().personal > 0 ? 'Revenue, commercial only' : 'Revenue'),", "model().personal > 0 ? 'Revenue, commercial only' : 'Worth, at each crop’s own price'),"),
  ("a dollar cell is the amount", HV, "const v = F.sum(series, c.i0, c.i1), text = cash$ ? cash(v) : qty(v),", "const v = F.sum(series, c.i0, c.i1), text = qty(v),"),
  ("dollars read what is picked, not what is sold", HV, "const seriesOf = (m, x) => (dollars() ? x.value :", "const seriesOf = (m, x) => (dollars() ? x.days :"),

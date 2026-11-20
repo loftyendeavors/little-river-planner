@@ -480,6 +480,10 @@ with sync_playwright() as pw:
     click('[data-hook="fc-sort"]', 500); o2 = js(ORDER)
     click('[data-hook="fc-sort"]', 500); o3 = js(ORDER)
     check("a second click puts the lowest first, a third the crops back by name as they were", o2["order"] == "low" and sorted_as(o2, "low") and o3["order"] == "name" and o3["groups"] == o0["groups"], {"second": o2["order"], "third": o3["order"]})
+    # from the keyboard: Enter on the button sorts, and the button keeps the focus for the next press
+    page.focus('[data-hook="fc-sort"]'); page.keyboard.press("Enter"); wait(400); k1 = js(ORDER); kf = js("return document.activeElement === hook('fc-sort');")
+    page.keyboard.press("Enter"); wait(400); k2 = js(ORDER); page.keyboard.press("Enter"); wait(400)
+    check("from the keyboard, Enter sorts and the button keeps the focus, so a second Enter gives lowest first", k1["order"] == "high" and kf is True and k2["order"] == "low" and sorted_as(k2, "low"), {"first": k1["order"], "focused": kf, "second": k2["order"]})
     click("#hvPrev", 400); click('[data-hook="fc-measure"] [data-measure="amounts"]', 400)
 
     # a narrow window with the full planner (Codex on #94): the weekly bars shrink with their line and stay inside it. A year of
