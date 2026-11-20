@@ -142,6 +142,18 @@ def run(pw):
     if drop:
         undone = js("const b = hooks('toast-action').find(x => x.textContent === 'Undo'); if (b) b.click(); await sleep(400); return fieldOf(arg);", drop["id"])
         check("Undo in that answer puts it back on its day", undone == drop["was"], [drop, undone])
+    # a copy dropped from the planting the panel shows picks the copy: what the page says, it says once (Codex on #97)
+    copy = js("""A.setView('timeline'); await sleep(300);
+      for (const p of S.plan.plantings) { const r = eng().calc(p); if (!r || !eng().isSoilBed(r.b) || p.done) continue;
+        const to = S.plan.beds.find(b => b.id !== p.bedId && b.active !== false && eng().isSoilBed(b) && A.preview({ plantingId: p.id, copy: true }, { bedId: b.id, date: r.field }).state === 'ok'); if (!to) continue;
+        A.setDate(r.field); A.select({ type: 'planting', id: p.id }); await sleep(300); hush(); const t = hook('toast'), heard = [];
+        const own = t.append; t.append = function (...a) { for (const x of a) if (x && x.tagName === 'SPAN') heard.push(x.textContent); return own.apply(this, a); };   // every message, as it is said
+        const n = S.plan.plantings.length; A.place({ plantingId: p.id, copy: true }, to.id, r.field); await sleep(500); delete t.append;
+        const out = { heard, made: S.plan.plantings.length === n + 1, picked: !!S.sel && S.sel.id !== p.id, line: hook('panel-saved') && hook('panel-saved').dataset.state };
+        A.undo(); await sleep(300); out.back = S.plan.plantings.length === n; return out; }
+      return null;""")
+    check("a copy dropped from the planting the panel shows picks the copy, and the page says it once: nothing says Saved in passing (Codex on #97)",
+          bool(copy) and copy["made"] and copy["picked"] and len(copy["heard"]) == 1 and not copy["heard"][0].startswith("Saved") and copy["line"] == "idle" and copy["back"], copy)
 
     # ══ 3. the card ══
     if sub:

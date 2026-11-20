@@ -47,6 +47,7 @@ PAGE = [
  ("the Saved line's Undo takes nothing back", PN, "dataset: { saved: 'undo', hook: 'panel-saved-undo' }, onclick: () => App.undo() }", "dataset: { saved: 'undo', hook: 'panel-saved-undo' }, onclick: () => {} }"),
  # one answer for a drop
  ("a drop is answered twice again, by the page and by the panel", AP, "    if (!commit(label, ops, { page: true })) return null;\n    select({ type: 'planting', id: p.id });", "    if (!commit(label, ops)) return null;\n    select({ type: 'planting', id: p.id });"),
+ ("Codex on #97: a drop that picks another planting is said in passing too", PN, "if (!last || last.kind !== 'saved' || last.page || last.at !== lastSeen", "if (!last || last.kind !== 'saved' || last.at !== lastSeen"),
  ("the panel takes no word from a drop's step", PN, "const fresh = last && !last.page && Date.now()", "const fresh = last && Date.now()"),
  # the card
  ("Planting details on the card is a bounded button", CD, "h('div.card-foot', h('button.link', { type: 'button', dataset: { hook: 'card-full' }", "h('div.card-foot', h('button.btn.small', { type: 'button', dataset: { hook: 'card-full' }"),

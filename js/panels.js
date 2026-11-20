@@ -150,7 +150,8 @@
   let saidAway = null;
   function sayIfGone() {
     const last = App.lastChange();
-    if (!last || last.kind !== 'saved' || last.at !== lastSeen || last.at === saidAway || !lastSel || lastSel === selKey() || Date.now() - last.at > 1500) return;
+    // a drop is answered by the page's answer: not said again in passing as its pick moves to what it planted (Codex on #97)
+    if (!last || last.kind !== 'saved' || last.page || last.at !== lastSeen || last.at === saidAway || !lastSel || lastSel === selKey() || Date.now() - last.at > 1500) return;
     saidAway = last.at;
     const host = $('toast');
     if (host && host.classList.contains('show') && host.textContent.includes(last.label)) return;   // it is already being said
