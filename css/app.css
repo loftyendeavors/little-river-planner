@@ -138,7 +138,7 @@ body[data-view="map"] .view-map, body[data-view="timeline"] .view-timeline, body
 .lib-meta { font: 500 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: var(--space-4) var(--space-8) var(--space-4); }
 .lib-var { height: 26px; padding-right: var(--space-8); }
 .lib-var .lib-name { font-weight: 500; font-size: var(--type-13); color: var(--ink-2); }
-.seg button small { font: 500 var(--type-11) var(--mono); opacity: 0.65; margin-left: 4px; }
+.seg button small { font: 500 var(--type-11) var(--mono); opacity: 0.85; margin-left: 4px; }   /* a count reads at 4.5:1 or more (L3) */
 .lib-hint { padding: var(--space-8) var(--space-12); border-top: 1px solid var(--line-soft); color: var(--ink-2); font-size: var(--type-13); }
 body.armed .lib-hint { background: var(--flag-soft); color: var(--ink); font-weight: 600; }
 /* the library's foot: its line, and Done while a crop is carried (L3) */
@@ -341,7 +341,7 @@ body.le-dragging #map, body.le-dragging #map * { cursor: grabbing !important; }
 .season-line { fill: none; stroke: var(--ink-2); stroke-width: 1.5px; }
 .season-marks { position: absolute; inset: 0; pointer-events: none; }
 .season-month { position: absolute; bottom: 0; font: 500 var(--type-11) var(--mono); color: var(--muted); text-transform: uppercase; padding-left: var(--space-4); border-left: 1px solid var(--line); height: 100%; display: flex; align-items: flex-end; }
-.season-frost { position: absolute; top: 0; bottom: 16px; font: 500 var(--type-11) var(--mono); color: var(--frost); white-space: nowrap; padding-left: var(--space-4); }
+.season-frost { position: absolute; top: 0; bottom: 16px; font: 500 var(--type-11) var(--mono); color: color-mix(in srgb, var(--frost) 70%, var(--ink)); white-space: nowrap; padding-left: var(--space-4); }
 .season-frost i { position: absolute; left: 0; top: 0; bottom: 0; border-left: 1.5px dashed var(--frost); }
 .season-frost b { font-weight: inherit; background: var(--surface); padding: 0 2px; }   /* the month lines pass behind the words, not through them */
 .season-cursor { position: absolute; top: -4px; bottom: 12px; width: 3px; margin-left: -1.5px; background: var(--flag); border-radius: 2px; pointer-events: none; }
@@ -573,7 +573,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none;
 .sd-actions { display: flex; gap: var(--space-8); flex-wrap: wrap; margin-left: auto; }
 .sd-filters { display: flex; gap: var(--space-4); flex-wrap: wrap; margin: 0 0 10px; }
 .chip { border: 1px solid var(--line); background: var(--raised); border-radius: var(--corner-pill); padding: var(--space-4) var(--space-12); font-size: var(--type-13); font-weight: 600; color: var(--ink-2); }
-.chip small { font: 500 var(--type-11) var(--mono); opacity: 0.7; margin-left: 6px; }
+.chip small { font: 500 var(--type-11) var(--mono); opacity: 0.85; margin-left: 6px; }   /* a count reads at 4.5:1 or more (L3) */
 .chip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 table.sd th { text-align: left; }
 .sd-crop td { background: color-mix(in srgb, var(--paper) 60%, var(--surface)); height: 34px; }
@@ -866,7 +866,7 @@ button.sd-stat.jump:hover { border-color: var(--ink-2); }
 .tr-note, .bn-note { color: var(--ink-2); font-size: var(--type-13); max-width: 92ch; margin-top: 8px; }
 .bn-note.small, .bn-crates, .bn-share { color: var(--muted); font-size: var(--type-13); max-width: 110ch; margin-top: 6px; }
 .bn h3 { font: 800 var(--type-18)/1.1 var(--display); font-stretch: 80%; }
-.tr-demand th small { display: block; margin-top: 1px; font: 500 var(--type-11) var(--mono); letter-spacing: 0.02em; text-transform: none; color: var(--muted); opacity: 0.85; }
+.tr-demand th small { display: block; margin-top: 1px; font: 500 var(--type-11) var(--mono); letter-spacing: 0.02em; text-transform: none; color: var(--muted); }
 .tr-callout { display: flex; align-items: center; gap: var(--space-12); flex-wrap: wrap; margin: 12px 0 0; padding: var(--space-8) var(--space-12); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line)); border-radius: var(--corner-8); background: var(--warn-soft); color: var(--ink); font-size: var(--type-13); }
 .tr-callout span { flex: 1 1 420px; }
 .tr-callout .btn { margin: 0; white-space: nowrap; }
@@ -907,7 +907,7 @@ i[data-kind="live"] { background: var(--tr-live); } i[data-kind="tray"] { backgr
 .tr-week tbody tr:hover td { background: color-mix(in srgb, var(--ink) 4%, transparent); }
 .tr-week tr.now td { background: color-mix(in srgb, var(--flag) 9%, transparent); }
 .tr-week td.tr-sow { text-align: left; white-space: normal; }
-.tr-nowtag { display: block; font: 500 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--flag); }
+.tr-nowtag { display: block; font: 500 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.05em; color: color-mix(in srgb, var(--flag-deep) 85%, var(--ink)); }   /* reads at 4.5:1 at its size (L3) */
 .tr-chip { display: inline-flex; align-items: center; gap: var(--space-4); margin: 2px 6px 2px 0; padding: 1px var(--space-8) 1px var(--space-4); border: 1px solid var(--line-soft); border-radius: var(--corner-20); background: var(--raised); font-size: var(--type-13); color: var(--ink); white-space: nowrap; }
 .tr-chip i { width: 8px; height: 8px; border-radius: var(--corner-pill); background: var(--crop, var(--muted)); }
 .tr-chip small { font: 500 var(--type-11) var(--mono); color: var(--muted); }
@@ -931,8 +931,7 @@ i[data-kind="live"] { background: var(--tr-live); } i[data-kind="tray"] { backgr
 td.sd-days small { display: block; color: var(--muted); font-size: var(--type-11); line-height: 1.1; }
 td.sd-days { line-height: 1.15; }
 .fix[hidden] { display: none; }
-.fix-more { justify-self: start; border: 0; background: none; padding: 2px 0; color: var(--ink-2); font: 600 var(--type-13) var(--body); text-decoration: underline; text-underline-offset: 2px; }
-.fix-more:hover { color: var(--ink); }
+.fix-more { justify-self: start; margin-left: calc(-1 * var(--space-8)); }   /* a quiet button: it unfolds the list in place (L3) */
 .season-frost.before { padding-left: 0; padding-right: var(--space-4); transform: translateX(-100%); }
 .season-frost.before i { left: auto; right: 0; }
 .tr-stat { border-color: var(--line-soft); border-radius: var(--corner-8); background: var(--raised); padding: var(--space-8) var(--space-12) var(--space-12); }
@@ -1199,7 +1198,7 @@ body[data-view="sow"] .view-sow { background: var(--paper); }
 .tr-weeks-head { justify-content: flex-start; }
 
 /* varieties of one crop sharing trays: one row says so and draws each tray, row by row */
-.btn.quiet.sow-own { margin-left: 8px; font: 500 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--flag-deep); }
+.btn.quiet.sow-own { margin-left: 8px; font: 500 var(--type-11) var(--mono); text-transform: uppercase; letter-spacing: 0.04em; color: color-mix(in srgb, var(--flag-deep) 85%, var(--ink)); }   /* reads at 4.5:1 at its size (L3) */
 
 /* the plan folder, in the Backup menu */
 .menu-pop .menu-note { margin: 0; padding: var(--space-4) var(--space-8) var(--space-4); border-top: 0; font: 400 var(--type-13)/1.4 var(--body); color: var(--ink-2); }
@@ -1234,7 +1233,7 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 .hv th, .hv td { height: 30px; padding: 0 6px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
 .hv thead th { position: sticky; top: 0; z-index: 3; background: var(--raised); font: 500 var(--type-11) var(--mono); color: var(--muted); text-align: center; vertical-align: bottom; padding-bottom: 5px; height: 40px; border-bottom: 1px solid var(--line); cursor: pointer; }
 .hv thead th b { display: block; height: 13px; font: 600 var(--type-11) var(--mono); color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.05em; text-align: left; }
-.hv thead th.now { color: var(--flag); font-weight: 700; box-shadow: inset 0 -2px 0 var(--flag); }
+.hv thead th.now { color: color-mix(in srgb, var(--flag-deep) 85%, var(--ink)); font-weight: 700; box-shadow: inset 0 -2px 0 var(--flag); }
 .hv thead th.wkend { color: color-mix(in srgb, var(--muted) 60%, transparent); }
 .hv .hv-name, .hv .hv-total { position: sticky; z-index: 2; background: var(--raised); text-align: left; }
 .hv .hv-name { left: 0; min-width: 210px; max-width: 260px; }
@@ -1697,9 +1696,9 @@ body > .work { grid-row: 4; }
 .as-seed { width: 128px; text-align: right; font: 500 var(--type-11) var(--mono); color: var(--muted); white-space: nowrap; }
 .as-seed b { font-weight: 600; color: var(--ink-2); }
 .as-seed.bad, .as-seed.bad b { color: var(--bad); }
-.as-hint { flex: none; border: 1px solid color-mix(in srgb, var(--good) 45%, var(--line)); background: color-mix(in srgb, var(--good) 9%, transparent); color: var(--good); border-radius: var(--corner-pill); padding: 1px var(--space-8); font: 600 var(--type-11) var(--body); white-space: nowrap; }
+.as-hint { flex: none; border: 1px solid color-mix(in srgb, var(--good) 45%, var(--line)); background: color-mix(in srgb, var(--good) 9%, transparent); color: color-mix(in srgb, var(--good) 85%, var(--ink)); border-radius: var(--corner-pill); padding: 1px var(--space-8); font: 600 var(--type-11) var(--body); white-space: nowrap; }
 .as-hint:hover { background: color-mix(in srgb, var(--good) 18%, transparent); }
-.as-name small.as-guess { color: var(--warn); }
+.as-name small.as-guess { color: color-mix(in srgb, var(--warn) 85%, var(--ink)); }
 /* Plantings that differ from the list, and published guidance not used: two sheets, opened from Loose ends in the header. They
    stood on the page as notices until the frame (DESIGN.md, rules 1 and 4). A title, one sentence, the actions, the count. */
 .dialog.as-sheet { width: min(520px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 40px); overflow: auto; }
@@ -1768,7 +1767,7 @@ ul.moves b { font-weight: 600; color: var(--ink); }
 .view-assume .as.ah th.ah-y { width: 64px; }
 .view-assume .as.ah th.ah-comes { width: 146px; }
 .view-assume .as.ah th.ah-s { width: 70px; }
-.as.ah th small { display: block; font: inherit; font-size: var(--type-11); opacity: 0.75; }
+.as.ah th small { display: block; font: inherit; font-size: var(--type-11); }
 .as.ah td { padding: 2px var(--space-4); }
 .as.ah td:first-child { padding-left: var(--space-8); }
 .as.ah .as-cell.ah-c input { width: 100%; padding: 0 var(--space-4); font-size: var(--type-13); }
@@ -2420,8 +2419,8 @@ table.as tr.as-thing td { background: var(--surface); }
 
 /* A link goes somewhere and is underlined: one look, wherever it stands (L3). It shows a view, a panel, a list or a card and
    changes nothing by itself. What changes the plan, takes a step back or starts a job ("Plan a series…") is a button, above. */
-.link { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; font: 600 var(--type-13) var(--body); color: var(--ink-2); text-align: left; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.link:hover { color: var(--ink); }
+button.link, .link { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; font: 600 var(--type-13) var(--body); color: var(--ink-2); text-align: left; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+button.link:hover, .link:hover { color: var(--ink); }
 
 /* One switch: bordered, the chosen side in ink. */
 .seg, .tk-mode, .tk-tabs { gap: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--corner-8); background: var(--raised); overflow: hidden; }

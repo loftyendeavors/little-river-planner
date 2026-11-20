@@ -225,7 +225,7 @@
       const { r, want, cap } = list[0], garden = eng.gardenOf(r.b) || {}, unit = eng.capUnit(r.b), n = list.length;
       const mates = App.state.plan.beds.filter(b => b.gardenId === r.b.gardenId && b.active !== false && eng.isSoilBed(b)), uniform = eng.isSoilBed(r.b) && mates.every(b => eng.capOf(b) === cap);
       return h('div.fix',
-        h('button.fix-title', { type: 'button', onclick: () => { App.setDate(list[0].r.field); App.select({ type: 'planting', id: list[0].p.id }); } }, garden.name || 'Garden'),
+        h('button.fix-title', { type: 'button', dataset: { hook: 'settle-bed' }, onclick: () => { App.setDate(list[0].r.field); App.select({ type: 'planting', id: list[0].p.id }); } }, garden.name || 'Garden'),
         h('p', tooLong(eng, list)),
         h('div.fix-actions',
           action(`Make ${n === 1 ? 'it' : 'them'} ${num(cap, 1)} ${unit}`, unit === 'ft' ? 'Plant counts follow the shorter length' : '', () => run(`Fit ${n} planting${n === 1 ? '' : 's'} to ${n === 1 ? 'its bed' : 'their beds'}`, Rails.trimOps(eng, list))),
@@ -243,7 +243,7 @@
         return action(`No gap before ${late}`, `${o.days ? `${early} ends ${day(o.date)}, ${o.days} harvest day${o.days === 1 ? '' : 's'} less` : `${early} harvest unchanged`} · skips the ${o.gap}-day turnover`, () => run(`No turnover gap before ${late}`, o.ops));
       });
       return h('div.fix',
-        h('button.fix-title', { type: 'button', title: 'Show on the map', onclick: () => { App.setDate(g.from); App.select({ type: 'planting', id: g.late.id }); } }, App.bedLabel(g.bed)),
+        h('button.fix-title', { type: 'button', title: 'Show on the map', dataset: { hook: 'settle-bed' }, onclick: () => { App.setDate(g.from); App.select({ type: 'planting', id: g.late.id }); } }, App.bedLabel(g.bed)),
         h('p', Number.isFinite(until) ? `${late} goes in ${day(g.r.field)}, ${g.days} day${g.days === 1 ? '' : 's'} before the ground is clear of ${early} (${day(E.addDays(new Date(until), 1))}).` : `${late} goes in ${day(g.r.field)} on ground that ${early} never leaves.`),
         h('div.fix-actions', actions),
         h('p.help', 'Or drag either one to other ground on the map.'));
@@ -251,7 +251,7 @@
     // A long list is folded after its first three, so the overview stays an overview.
     const FIRST = 3, folds = makers.length > FIRST + 1;
     for (const make of folds && !cleanupOpen ? makers.slice(0, FIRST) : makers) section.append(make());
-    if (folds) section.append(h('button.fix-more', { type: 'button', 'aria-expanded': String(cleanupOpen), onclick: () => { cleanupOpen = !cleanupOpen; render(); } }, cleanupOpen ? 'Show the first three only' : `Show the other ${makers.length - FIRST}`));
+    if (folds) section.append(h('button.btn.quiet.small.fix-more', { type: 'button', dataset: { hook: 'settle-more' }, 'aria-expanded': String(cleanupOpen), onclick: () => { cleanupOpen = !cleanupOpen; render(); } }, cleanupOpen ? 'Show the first three only' : `Show the other ${makers.length - FIRST}`));
     host.append(section);
   }
   let cleanupOpen = false;

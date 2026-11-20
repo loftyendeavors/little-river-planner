@@ -302,8 +302,8 @@
     const needle = query.trim().toLowerCase();
     const rows = m.rows.filter(r => r.total > 0 && (group === 'all' || r.group === group) && (!needle || r.name.toLowerCase().includes(needle) || r.varieties.some(v => v.name.toLowerCase().includes(needle))));
     const cols = columns(m);
-    const seg = (value, label) => h('button', { type: 'button', 'aria-pressed': String(!fit && grain === value), dataset: { hvGrain: value }, onclick: () => { grain = value; fit = false; render(); } }, label);
-    const chip = (value, label, n) => h('button.chip', { type: 'button', 'aria-pressed': String(group === value), dataset: { hvGroup: value }, onclick: () => { group = value; render(); } }, label, h('small', num(n)));
+    const seg = (value, label) => h('button', { type: 'button', 'aria-pressed': String(!fit && grain === value), dataset: { hvGrain: value, hook: 'fc-by-choice' }, onclick: () => { grain = value; fit = false; render(); } }, label);
+    const chip = (value, label, n) => h('button.chip', { type: 'button', 'aria-pressed': String(group === value), dataset: { hvGroup: value, hook: 'fc-filter' }, onclick: () => { group = value; render(); } }, label, h('small', num(n)));
     const search = h('input', { type: 'search', id: 'hvSearch', placeholder: 'Find a crop', value: query, autocomplete: 'off', 'aria-label': 'Find a crop or variety' });
     search.addEventListener('input', () => { query = search.value; render(); const again = $('hvSearch'); again.focus(); again.setSelectionRange(query.length, query.length); });
     const noYield = m.unset.filter(u => u.why.startsWith('no yield'));
@@ -319,7 +319,7 @@
       h('div.hv-bar',
         h('span.tr-stepper', h('button.icon-btn', { type: 'button', 'aria-label': 'Back one week', id: 'hvPrev', onclick: () => App.setDate(E.addDays(App.state.date, -7)) }, '‹'),
           h('b', { id: 'hvWeek' }, `Week of ${day(wk.start)}`), h('button.icon-btn', { type: 'button', 'aria-label': 'Forward one week', id: 'hvNext', onclick: () => App.setDate(E.addDays(App.state.date, 7)) }, '›')),
-        h('div.seg', { role: 'group', 'aria-label': 'Show by' }, seg('day', 'Days'), seg('week', 'Weeks'), seg('month', 'Months'),
+        h('div.seg', { role: 'group', 'aria-label': 'Show by', dataset: { hook: 'fc-by' } }, seg('day', 'Days'), seg('week', 'Weeks'), seg('month', 'Months'),
           // the one press: every week of the season on the screen at once, each week's total under it and the season's beside
           h('button', { type: 'button', id: 'hvSeason', 'aria-pressed': String(fit), dataset: { hvGrain: 'season', hook: 'fc-season-btn' }, title: 'Every week of the season on one screen, with each week’s worth under it and the season’s total beside each crop', onclick: () => { fit = true; grain = 'week'; render(); } }, 'Whole season')),
         h('div.seg.fc-measure', { role: 'group', 'aria-label': 'Show as', dataset: { hook: 'fc-measure' } },
