@@ -475,11 +475,13 @@
         const cell = hc.cells[env], at = x.places.get(env), where = `${c.name}, ${PLACE[env].toLowerCase()}`, amber = w.places.includes(env);
         // what the box speaks of (E2d): a bed with its rows, a plant at a spacing, or what it always was
         const bx = boxFor(eng, c, hc, env, tenths), k = tenths ? 10 : bx ? bx.k : 1, of = bx && bx.bed ? bx.said : env === 'tower' && hc.basis === 'ft' ? 'a plant' : per, stored = v => v == null ? null : bx && bx.bed ? v / bx.st.ft : tenths ? v / 10 : v;
-        const what = `${weekly ? 'picked each week from' : 'in all from'} ${of}`, kk = tenths ? 1 : k, back = cell.fallback == null ? 'no yield at all' : fig(cell.fallback * kk);
-        const mine = cell.mine == null ? null : cell.mine * k, fallback = cell.fallback == null ? null : cell.fallback * k;
+        const what = `${weekly ? 'picked each week from' : 'in all from'} ${of}`, kk = tenths ? 1 : k,
+          // what the plan uses with no figure of his says no rows and no spacing: for the box's bed it is its length times it, whatever the figure in the box says (Codex on #92)
+          kf = bx && bx.bed ? bx.st.ft : 1, back = cell.fallback == null ? 'no yield at all' : fig(cell.fallback * kf);
+        const mine = cell.mine == null ? null : cell.mine * k, fallback = cell.fallback == null ? null : cell.fallback * (tenths ? 10 : kf);
         const take = v => saveYield(c, env, stored(v), bx, v == null ? `${where}: yield back to ${back}` : `${where}: ${fig(bx && bx.bed ? v : stored(v))}${u} ${weekly ? 'a week' : 'in all'}${bx && bx.bed ? ` from ${of}` : ''}`);
         const input = box({ key: `y|${env}`, mine, fallback, amber, max: tenths ? 10 : undefined, label: `${where}: ${tenths ? 'of every 10 planted, fit to sell' : `yield, ${of}${weekly ? ' a week' : ''}`}`,
-          tip: cell.mine != null ? `Your figure: ${fig(cell.mine * kk)}${u} ${what}. Clear it to go back to ${back}.` : cell.fallback == null ? 'No yield is set for this crop.' : `${amber ? 'A starting value nobody has checked' : 'From the crop’s record, not yet checked'}: ${fig(cell.fallback * kk)}${u} ${what}.`,
+          tip: cell.mine != null ? `Your figure: ${fig(cell.mine * kk)}${u} ${what}. Clear it to go back to ${back}.` : cell.fallback == null ? 'No yield is set for this crop.' : `${amber ? 'A starting value nobody has checked' : 'From the crop’s record, not yet checked'}: ${fig(cell.fallback * kf)}${u} ${what}.`,
           save: take });
         // one meaning for the box, and beside a week's picking the season's total it comes to: the engine's own figure for the
         // plantings there that follow this line (they differ where one is picked for more days than another)

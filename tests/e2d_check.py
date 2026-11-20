@@ -127,6 +127,13 @@ with sync_playwright() as pw:
     close_dialogs()
     js("return A.setYield('crops', arg.crop, arg.env, arg.y, 'a figure typed on the list');", {"crop": C, "env": ENV, "y": sub["figure"] * 2}); wait(500)
     close_dialogs()
+    # a figure kept for other rows than the box's bed: the box shows it for the box's rows; what clearing goes back to says no rows
+    js("return A.setYield('crops', arg.crop, arg.env, arg.y, 'a figure for a bed of other rows', { rows: arg.rows });", {"crop": C, "env": ENV, "y": sub["figure"] * 2, "rows": ST["rows"] + 1}); wait(500); close_dialogs()
+    card(); odd = js("const box = document.querySelector(`#ycCard [data-yk=\"y|${arg}\"]`); return { value: box.value, tip: box.title };", ENV)
+    import re
+    back = re.search(r"go back to ([0-9.,]+)", odd["tip"] or ""); shown = float(odd["value"] or 0); wantv = sub["figure"] * 2 * ST["ft"] * ST["rows"] / (ST["rows"] + 1)
+    check("a figure kept for a bed of other rows is shown for the box's rows, and clearing it is said to go back to the crop's own figure for the box's bed, by its length alone", abs(shown - wantv) < 0.006 * max(1, wantv) + 0.51 and bool(back) and abs(float(back.group(1).replace(",", "")) - sub["figure"] * ST["ft"]) < 0.51, [odd, wantv, sub["figure"] * ST["ft"]])
+    js("A.undo(); return 1;"); wait(300)
     kept = js("return ((S.plan.assumptions || {}).crops || {})[arg.crop][arg.env];", {"crop": C, "env": ENV})
     check("a figure typed on the list's own row keeps the rows the cell says", kept == {"yield": round(sub["figure"] * 2, 3), "rows": ST["rows"]}, kept)
     js("return A.setYield('crops', arg.crop, arg.env, null, 'cleared');", {"crop": C, "env": ENV}); wait(500)
