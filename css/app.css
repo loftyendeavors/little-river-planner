@@ -2323,7 +2323,7 @@ table.yc-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .yc-grid thead th.yc-thing .yc-tacts { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
 /* the buttons of a column's head and of a cell keep to the height of the words round them, so the card is no taller for them (L3) */
 .yc-grid .btn.quiet { margin: -6px 0; padding-inline: var(--space-4); }
-.yc-grid thead th.yc-thing .yc-tacts .btn { padding-inline: 2px; font-size: var(--type-11); }   /* a column's head keeps to one line, as it did: its words at 11 */
+.yc-grid thead th.yc-thing .yc-tacts .btn { margin-block: -7px; padding-inline: 2px; font-size: var(--type-11); }   /* a column's head keeps to one line, as it did: its words at 11 */
 .yc-tstate { font: 600 var(--type-11) var(--mono); letter-spacing: 0.04em; color: var(--warn); border: 1px solid var(--warn); border-radius: var(--corner-4); padding: 0 var(--space-4); }
 .yc-tstate.on { color: var(--good); border-color: color-mix(in srgb, var(--good) 50%, var(--line)); }
 .dialog.th-add { width: min(560px, calc(100vw - 32px)); max-width: none; }
@@ -2426,7 +2426,7 @@ table.as tr.as-thing td { background: var(--surface); }
 button.link, .link { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; font: 600 var(--type-13) var(--body); color: var(--ink-2); text-align: left; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 button.link:hover, .link:hover { color: var(--ink); }
 /* in the yield card a link takes the size of the words it stands in, as it did (11 in a note, 13 in a line) */
-.yc .link { font-size: inherit; }
+.yc .link { font: inherit; font-weight: 600; }
 
 /* One switch: bordered, the chosen side in ink. */
 .seg, .tk-mode, .tk-tabs { gap: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--corner-8); background: var(--raised); overflow: hidden; }
