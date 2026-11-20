@@ -99,7 +99,9 @@
    * both to different values, the cloud's, and this device's are reported once. (A planting's place and its day are two more
    * such groups, with rules of their own below.)
    */
-  const TOGETHER = { 'nursery.spaces[]': [['from', 'to']], 'crops[]': [['yield', 'yBasis']], 'plantings[]': [['yield', 'yieldBasis']] };
+  const TOGETHER = { 'nursery.spaces[]': [['from', 'to']], 'crops[]': [['yield', 'yBasis']], 'plantings[]': [['yield', 'yieldBasis']],
+    // a crop's figure on the list and the rows, or the spacing, it was typed for (E2d): one value, in a cell under keys the data chose
+    'assumptions.crops.*.*': [['yield', 'rows', 'inRow']] };
   const STAMPS = new Set(['updatedAt', 'savedAt']);
   /**
    * Lists that hold records with no id and are still joined line by line, and what answers for each. Any other list whose
@@ -146,7 +148,16 @@
     return false;
   }
   /** The keys of a record that are read together, joined as one value each group: into `special`, for joinObject. */
-  const groupsOf = pat => { for (const p of alike(pat)) if (TOGETHER[p]) return TOGETHER[p]; return null; };
+  const TOGETHER_STARRED = Object.keys(TOGETHER).filter(p => p.includes('*')).map(p => [p.split('.'), TOGETHER[p]]);
+  const groupsOf = pat => {
+    for (const p of alike(pat)) {
+      if (TOGETHER[p]) return TOGETHER[p];
+      // a place written with * for a key the data chose, as for a thing taken whole
+      const mine = TOGETHER_STARRED.length ? parts(p) : null, hit = mine && TOGETHER_STARRED.find(([w]) => w.length === mine.length && w.every((x, i) => (x === '*' ? !mine[i].endsWith('[]') : x === mine[i])));
+      if (hit) return hit[1];
+    }
+    return null;
+  };
   function together(ctx, pat, path, s, m, t, special) {
     for (const keys of groupsOf(pat) || []) {
       const at = o => keys.map(k => o[k]), ms = same(at(m), at(s)), ts = same(at(t), at(s)), mt = same(at(m), at(t));

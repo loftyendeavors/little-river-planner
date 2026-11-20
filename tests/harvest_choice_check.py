@@ -168,7 +168,7 @@ with sync_playwright() as pw:
     names = sub["names"]
     open_crop(sub["plant"]); lab = js("const tr = $('ycCard').querySelector('tr[data-row=yield]'); return { name: (hook('card-row-name', tr) || {}).textContent, hint: (hook('card-row-hint', tr) || {}).textContent };")
     open_crop(sub["ft"]); lab2 = js("const tr = $('ycCard').querySelector('tr[data-row=yield]'); return { name: (hook('card-row-name', tr) || {}).textContent, hint: (hook('card-row-hint', tr) || {}).textContent };")
-    check("the yield's row reads “Marketable yield per plant”, or “per bed-foot” where the crop is counted so, and its hint says it is the packed weight", lab["name"] == "Marketable yield per plant" and "packed weight" in str(lab["hint"]) and lab2["name"] == "Marketable yield per bed-foot" and "packed weight" in str(lab2["hint"]), [lab, lab2])
+    check("the yield's row reads “Marketable yield per plant”, or “of a bed” where the crop is sown in rows, and its hint says it is the packed weight", lab["name"] == "Marketable yield per plant" and "packed weight" in str(lab["hint"]) and lab2["name"] == "Marketable yield of a bed" and "packed weight" in str(lab2["hint"]), [lab, lab2])
 
     # ── the list: the same choice on every row ──
     click('[data-ah-way="list"]', 700)

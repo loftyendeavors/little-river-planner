@@ -55,6 +55,7 @@ yearedge
 bought
 tlpick
 early
+e2d
 merge
 join
 shape
@@ -107,6 +108,7 @@ script() {
     yearedge) SCRIPT=$T/mutate_yearedge.py; ARGS="$APP $F $T $PLAN" ;;
     bought) SCRIPT=$T/mutate_bought.py; ARGS="$APP $F $T $PLAN" ;;
     early) SCRIPT=$T/mutate_early.py; ARGS="$APP $F $T $PLAN" ;;
+    e2d) SCRIPT=$T/mutate_e2d.py; ARGS="$APP $F $T $PLAN" ;;
     tlpick) SCRIPT=$T/mutate_tlpick.py; ARGS="$APP $F $T" ;;
     *) return 1 ;;
   esac

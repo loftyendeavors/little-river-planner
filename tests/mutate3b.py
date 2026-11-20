@@ -80,7 +80,7 @@ PAGE = [
  ('the toast does not say what happens to the season’s worth', 'js/app.js', "const also = [worth, settles].filter(Boolean).join(' · ');", "const also = '';"),
  ('a yield typed for one growing condition is saved for another', 'js/assume.js', "save: n => App.setYield(kind, id, env, n, n == null ?", "save: n => App.setYield(kind, id, eng.ENVS.find(x => x !== env), n, n == null ?"),
  ('switching to a weekly figure leaves the typed yields as they were', 'js/app.js', "if (before && 'pattern' in change && weekly !== before.weekly) {", "if (false) {"),
- ('clearing a cell leaves a nought behind', 'js/app.js', "value == null || value === '' || !(+value >= 0) ? null : figure3(+value)));", "figure3(+value || 0)));"),
+ ('clearing a cell leaves a nought behind', 'js/app.js', "setCell(next, kind, id, env, 'yield', none ? null : how ? Math.round(+value * 1e6) / 1e6 : figure3(+value));", "setCell(next, kind, id, env, 'yield', figure3(+value || 0));"),
  ('Tab from a cell loses the place', 'js/assume.js', "focus.vstart ? ['vstart', focus.vstart] : focus.hk ? ['hk', focus.hk] : null);", "focus.vstart ? ['vstart', focus.vstart] : null);"),
  ('turnover does not say what it settles', 'js/app.js', "const settles = hit.settled ? `", "const settles = false ? `"),
  ('a variety’s price is saved on its crop', 'js/assume.js', "save: n => App.setSellV(v.id, { price: n },", "save: n => App.setSell(c.id, { price: n },"),

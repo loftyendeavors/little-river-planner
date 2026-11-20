@@ -220,7 +220,10 @@
       const kind = take.level === 'crop' ? 'crops' : 'varieties';
       a[kind] = a[kind] || {};
       const record = { ...(a[kind][take.id] || {}) };
-      record[take.env] = { ...(record[take.env] || {}), yield: take.typed };
+      const cell = { ...(record[take.env] || {}) };
+      // A yield borrowed from a planting has no basis left over from a cleared list figure.
+      if (cell.yield == null || cell.yield === '') { delete cell.rows; delete cell.inRow; }
+      record[take.env] = { ...cell, yield: take.typed };
       a[kind][take.id] = record;
     } else { a.sell = a.sell || {}; a.sell[take.id] = { ...(a.sell[take.id] || {}), [take.what === 'window' ? 'days' : 'turnover']: take.typed }; }
   }

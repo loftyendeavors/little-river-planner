@@ -358,7 +358,7 @@
       units: all.reduce((n, x) => n + x.units, 0), unit: all.length ? all[0].unit : sized ? rests.y.unit : eng.unitOf(o.crop), ground: all.reduce((n, x) => n + (x.r.tw ? 1 : x.r.len), 0), groundUnit: o.spaces.length ? unitOfKind[eng.spaceKind(o.spaces[0])] : 'ft',
       ...(sized ? { sized: { want: o.want, unit: rests.y.unit, every: o.every, until: o.until, net: !!supply, asked: waves.reduce((n, w) => n + w.asked, 0), have: waves.reduce((n, w) => n + w.have, 0), covered: waves.filter(w => w.skipped === 'covered').length,
         feet: all.reduce((n, x) => n + (probeSoil(eng, x.bed) ? x.r.physicalLength : 0), 0), heldFeet: waves.flatMap(w => w.held).reduce((n, w) => n + (+w.ft || 0), 0),
-        rests: { per: rests.per, soil: rests.soil, each: rests.y.per, mk: rests.y.mk, basis: rests.y.basis, pattern: rests.y.pattern, by: rests.y.by, env: rests.env, days: rests.there, meant: rests.meant, keep: rests.y.keep || 0, perWeek: rests.y.perWeek, bed: rests.bed, ...(rests.y.slice != null && rests.y.slice < 1 ? { slice: rests.y.slice } : {}), ...(rests.y.packed ? { packed: rests.y.packed } : {}) } } } : {}) };
+        rests: { per: rests.per, soil: rests.soil, each: rests.y.per, mk: rests.y.mk, basis: rests.y.basis, rowsFor: rests.y.rowsFor || null, pattern: rests.y.pattern, by: rests.y.by, env: rests.env, days: rests.there, meant: rests.meant, keep: rests.y.keep || 0, perWeek: rests.y.perWeek, bed: rests.bed, ...(rests.y.slice != null && rests.y.slice < 1 ? { slice: rests.y.slice } : {}), ...(rests.y.packed ? { packed: rests.y.packed } : {}) } } } : {}) };
   }
   const probeSoil = (eng, bed) => !!bed && eng.isSoilBed(bed);
   function heldWhy(eng, res) {
