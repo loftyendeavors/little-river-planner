@@ -15,7 +15,7 @@
 (function (root) {
   'use strict';
   const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, F = root.LRFForecast;
-  const { h, clear, num, day } = UI;
+  const { h, s: svg, clear, num, day } = UI;
   const $ = id => document.getElementById(id);
   const money = n => Number(n || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
   const TITLES = Object.fromEntries(F.GROUPS.map(([g, short, long]) => [g, { short, long }]));
@@ -165,35 +165,70 @@
   }
 
   // ── the page ──
-  /** The page's one line of figures (DESIGN.md, rule 1): the season's worth leads; the week in hand; what is ready; trays; stems. */
+  /**
+   * The page's figures (DESIGN.md, rule 1). Projected revenue for the season leads, at the largest size, as drawn in the audit
+   * (round 5, section 2), with the week in hand's revenue at the right of the same line; under it one line of the season's own
+   * figures: revenue by kind, the harvest season, the peak week, the season's trays and stems. The words are a grower's and an
+   * accountant's: revenue, peak week, harvest (his, Nov 20: technical or financial, brief, and making sense).
+   */
   const fig = (name, word, value, after, opts = {}) => h('span.fc-fig' + (opts.cls ? '.' + opts.cls : ''), { dataset: { hook: 'fc-fig', fig: name }, title: opts.title || null },
     word ? h('span', word + ' ') : null, h('b', value), after ? h('span', ' ' + after) : null);
-  /** What the figures say beyond their line, for "?": the fullest week, the season's trays and stems, the kinds ready. */
+  /** What the figures say beyond their line, for "?": the week's kinds in harvest, its trays and stems, the peak week, the year's edges. */
   let figNotes = [];
+  const GROSS = 'Gross: marketable yield × sold share × each crop’s price, before costs';
+  /**
+   * The season's revenue week by week, drawn small beside projected revenue: one bar a week from the first week with revenue to the
+   * last, in a light ink, the week in hand in orange (DESIGN.md, colour: an amount is ink; orange is "look here now"). Under the pointer
+   * a week darkens and says its revenue; a click goes to that week, as a column's head does. The table under it is the full view.
+   */
+  function spark(weeks, wk, best) {
+    const first = weeks.findIndex(w => w.worth >= 1), last = weeks.length - 1 - [...weeks].reverse().findIndex(w => w.worth >= 1);
+    if (first < 0 || !best || best.worth < 1) return null;
+    const shown = weeks.slice(first, last + 1), W = 7, BAR = 5, H = 28, top = best.worth;
+    const bars = shown.map((w, i) => {
+      const tall = w.worth >= 1 ? Math.max(2, Math.round((w.worth / top) * H)) : 0, x = i * W, y = H - tall, r = Math.min(2, tall / 2);
+      // a bar grows from the baseline, square there and rounded at its top
+      const d = tall ? `M${x} ${H}V${y + r}Q${x} ${y} ${x + r} ${y}H${x + BAR - r}Q${x + BAR} ${y} ${x + BAR} ${y + r}V${H}Z` : '';
+      return svg('g.fc-spark-week' + (w.c.key === wk.key ? '.now' : ''), { dataset: { hook: 'fc-spark-week', week: w.c.key, worth: String(w.worth) }, onclick: () => App.setDate(w.c.start) },
+        svg('title', `Week of ${day(w.c.start)}: ${money(w.worth)}`),
+        svg('rect.fc-spark-hit', { x: x - 1, y: 0, width: W, height: H }), d ? svg('path', { d }) : null);
+    });
+    return svg('svg.fc-spark', { viewBox: `0 0 ${shown.length * W - (W - BAR)} ${H}`, width: shown.length * W - (W - BAR), height: H, role: 'img', dataset: { hook: 'fc-spark' },
+      'aria-label': `Revenue by week, ${day(shown[0].c.start)} to ${day(shown[shown.length - 1].c.start)}; peak week ${day(best.c.start)}, ${money(best.worth)}` }, bars);
+  }
   function figures(m, noYield) {
-    // picking starts with the year's own harvest: stock carried in from the year before is sold in the year, not picked in it
+    // the harvest season starts with the year's own harvest: stock carried in from the year before is sold in the year, not picked in it
     const wk = thisWeek(m), now = F.glance(m, wk.i0, wk.i1), all = F.glance(m, 0, m.days - 1), s = F.season(m, m.rows.map(r => (r.carriedTotal > 1e-9 ? { days: r.days.map((v, i) => v - r.carried[i]) } : r)));
+    const weeks = F.periods(m, 'week').map(c => ({ c, worth: m.rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0) }));
     let best = null;
-    for (const c of F.periods(m, 'week')) { const worth = m.rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0); if (!best || worth > best.worth) best = { c, worth }; }
+    for (const w of weeks) if (!best || w.worth > best.worth) best = w;
     const kinds = [[now.produce, 'vegetable', 'vegetables'], [now.micros, 'microgreen', 'microgreens'], [now.flowers, 'flower', 'flowers']].filter(x => x[0]).map(([n, one, many]) => `${num(n)} ${n === 1 ? one : many}`).join(' · ');
     // once anything is marked for personal use, each figure says which plantings it counts
     const marked = model().personal > 0, which = !marked ? '' : m.use === 'commercial' ? 'commercial only' : m.use === 'personal' ? 'personal use only' : 'personal use included';
-    const worthSays = m.use === 'personal' ? 'personal use is not counted as revenue' : marked ? 'commercial plantings only' : '';
-    figNotes = [['Season', `${money(all.worth)}, at each crop’s own price${worthSays ? ' · ' + worthSays : ''}`],
-      [`Week of ${day(wk.start)}`, `${money(now.worth)} · ${kinds || 'nothing is being picked'}${which ? ' · ' + which : ''}`],
-      ['Microgreen trays', `${num(F.shown(now.trays))} that week · ${num(F.shown(all.trays))} over the season`],
-      ['Flower stems', `${num(F.shown(now.stems))} that week · ${num(F.shown(all.stems))} over the season`],
-      ...(best && best.worth > 0 ? [['Fullest week', `${day(best.c.start)}, ${money(best.worth)}`]] : []),
+    const worthSays = m.use === 'personal' ? 'personal use is not counted as revenue' : marked ? 'commercial only' : '';
+    figNotes = [['Projected revenue', `${money(all.worth)}, gross, at each crop’s price${worthSays ? ' · ' + worthSays : ''}`],
+      [`Week of ${day(wk.start)}`, `${money(now.worth)} · ${kinds ? kinds + ' in harvest' : 'nothing in harvest'}${which ? ' · ' + which : ''}`],
+      ['Microgreen trays', `${num(F.shown(now.trays))} that week · ${num(F.shown(all.trays))} for the season`],
+      ['Flower stems', `${num(F.shown(now.stems))} that week · ${num(F.shown(all.stems))} for the season`],
+      ...(best && best.worth > 0 ? [['Peak week', `${day(best.c.start)}, ${money(best.worth)}`]] : []),
       // the year's two edges (js/forecast.js): a pound is in the one season it is sold in
       ...(m.carried && m.carried.total > 1e-9 ? [[`Carried in from ${(m.carried.years.length ? m.carried.years : [m.year - 1]).join(' and ')}`, `${money(m.carried.worth)} of ${m.carried.crops.join(', ')}, picked before Jan 1 and still to sell. It is in this season's figures, on a line of its own under its crop`]] : []),
-      ...(m.after && m.after.total > 1e-9 ? [['After Dec 31', `${money(m.after.worth)} more of ${m.after.crops.join(', ')}, picked or still in store after the year's end. It counts in ${m.year + 1}, not in this season's worth`]] : [])];
+      ...(m.after && m.after.total > 1e-9 ? [['After Dec 31', `${money(m.after.worth)} more of ${m.after.crops.join(', ')}, picked or still in store after the year's end. It counts in ${m.year + 1}, not in this season's revenue`]] : [])];
+    // revenue by kind, from the same entries as the season's own, so the kinds add up to it
+    const byKind = F.GROUPS.map(([g, short]) => ({ g, short, worth: all.list.filter(x => x.row.group === g).reduce((n, x) => n + x.worth, 0) })).filter(k => k.worth >= 1);
+    const trays = F.shown(all.trays), stems = F.shown(all.stems);
     return h('p.frame-figs.fc-figs', { id: 'hvFigs', dataset: { hook: 'fc-figs', use: marked ? m.use : '' } },
-      fig('season', 'Season', money(all.worth), worthSays, { cls: 'lead' }),
-      fig('week', `Week of ${day(wk.start)}`, money(now.worth), which),
-      fig('ready', '', `${num(now.crops)} crop${now.crops === 1 ? '' : 's'}`, 'ready that week'),
-      fig('trays', '', num(F.shown(now.trays)), 'microgreen trays'),
-      fig('stems', '', num(F.shown(now.stems)), 'flower stems'),
-      fig('picking', 'Picking', s ? UI.span(m.date(s.i0), m.date(s.i1)) : '—'),
+      fig('season', '', money(all.worth), `projected revenue${worthSays ? ' · ' + worthSays : ''}`, { cls: 'lead', title: GROSS }),
+      // the season's revenue week by week, and the week in hand, which the stepper under it moves: its revenue and the crops in harvest
+      spark(weeks, wk, best),
+      fig('week', `Week of ${day(wk.start)}`, money(now.worth), which, { cls: now.worth >= 1 ? 'now.keyed' : 'now', title: `Revenue the week of ${day(wk.start)}, at each crop’s price` }),
+      fig('ready', '', `${num(now.crops)} crop${now.crops === 1 ? '' : 's'}`, 'in harvest'),
+      h('span.fc-break', { 'aria-hidden': 'true' }),
+      byKind.length > 1 ? byKind.map(k => fig('kind', k.short, money(k.worth), '', { title: `${k.short}: projected revenue for the season` })) : null,
+      fig('picking', 'Harvest', s ? UI.span(m.date(s.i0), m.date(s.i1)) : '—'),
+      best && best.worth > 0 ? fig('peak', 'Peak week', `${day(best.c.start)}, ${money(best.worth)}`, '', { title: 'The week of the highest projected revenue' }) : null,
+      trays ? fig('trays-season', '', num(trays), 'microgreen trays') : null,
+      stems ? fig('stems-season', '', num(stems), 'flower stems') : null,
       // a planting the forecast can say nothing for: amber, a dot and a word (DESIGN.md, colour), where it is mended named in its title
       noYield.length ? fig('no-yield', '', `${num(noYield.length)} planting${noYield.length === 1 ? '' : 's'}`, 'with no yield set',
         { cls: 'short', title: `Nothing is forecast for ${noYield.length === 1 ? 'it' : 'them'} until the crop has a yield, under Assumptions, Yield and price: ${[...new Set(noYield.map(u => u.r.c.name))].slice(0, 6).join(', ')}` }) : null);
@@ -263,8 +298,8 @@
         body[body.length - 1].dataset.group = g;
       }
     }
-    // each week's worth, and the season's: in amounts and in dollars alike, the foot is in dollars
-    const foot = plain('', h('td.hv-name', model().personal > 0 ? 'Worth of what is grown to sell' : 'Worth, at each crop’s own price'), h('td.hv-total', { dataset: { hook: 'fc-season-total' } }, money(rows.reduce((n, r) => n + r.worth, 0))), c => rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0));
+    // each week's revenue, and the season's: in amounts and in dollars alike, the foot is in dollars
+    const foot = plain('', h('td.hv-name', { title: GROSS }, model().personal > 0 ? 'Revenue, commercial only' : 'Revenue'), h('td.hv-total', { dataset: { hook: 'fc-season-total' } }, money(rows.reduce((n, r) => n + r.worth, 0))), c => rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0));
     foot.dataset.hook = 'fc-week-totals';
     return h('div.hv-scroll' + (fit ? '.fit' : ''), { id: 'hvScroll', dataset: { hook: 'fc-scroll' } }, h('table.hv' + (fit ? '.fit' : ''), { id: 'hvTable', dataset: { hook: 'fc-table', measure, fit: fit ? 'season' : '' } }, h('thead', head), h('tbody', body), h('tfoot', foot)));
   }
@@ -283,7 +318,7 @@
       h('p', 'Each crop is in the unit it is sold in. A live tray counts whole on the Monday it is due.'),
       h('p', b('Know this.'), ' Days to harvest are the same in every month, so an early or late planting is forecast as if it were midsummer. Read the ends of the season as optimistic.'),
       h('p', 'Change a figure under Assumptions › Yield and price. Click a figure to see its plantings.'),
-      marked ? h('p.hv-note', { id: 'hvOwnNote' }, `${num(marked)} planting${marked === 1 ? ' is' : 's are'} marked for personal use. ${marked === 1 ? 'It is' : 'They are'} picked and counted like any other, ${m.use === 'commercial' ? 'and left out of this page while it shows Commercial' : m.use === 'personal' ? 'and this page shows only those' : 'so the quantities here include them'}; worth, and “A list to send…”, count only what is grown to sell.`) : null);
+      marked ? h('p.hv-note', { id: 'hvOwnNote' }, `${num(marked)} planting${marked === 1 ? ' is' : 's are'} marked for personal use. ${marked === 1 ? 'It is' : 'They are'} picked and counted like any other, ${m.use === 'commercial' ? 'and left out of this page while it shows Commercial' : m.use === 'personal' ? 'and this page shows only those' : 'so the quantities here include them'}; revenue, and “A list to send…”, count only what is grown to sell.`) : null);
   }
   /** What "?" shows: the words kept unseen in the page, as they stand when it is opened. */
   function helpText() {
@@ -321,12 +356,12 @@
           h('b', { id: 'hvWeek' }, `Week of ${day(wk.start)}`), h('button.icon-btn', { type: 'button', 'aria-label': 'Forward one week', id: 'hvNext', onclick: () => App.setDate(E.addDays(App.state.date, 7)) }, '›')),
         h('div.seg', { role: 'group', 'aria-label': 'Show by' }, seg('day', 'Days'), seg('week', 'Weeks'), seg('month', 'Months'),
           // the one press: every week of the season on the screen at once, each week's total under it and the season's beside
-          h('button', { type: 'button', id: 'hvSeason', 'aria-pressed': String(fit), dataset: { hvGrain: 'season', hook: 'fc-season-btn' }, title: 'Every week of the season on one screen, with each week’s worth under it and the season’s total beside each crop', onclick: () => { fit = true; grain = 'week'; render(); } }, 'Whole season')),
+          h('button', { type: 'button', id: 'hvSeason', 'aria-pressed': String(fit), dataset: { hvGrain: 'season', hook: 'fc-season-btn' }, title: 'Every week of the season on one screen, with each week’s revenue under it and the season’s total beside each crop', onclick: () => { fit = true; grain = 'week'; render(); } }, 'Whole season')),
         h('div.seg.fc-measure', { role: 'group', 'aria-label': 'Show as', dataset: { hook: 'fc-measure' } },
-          [['amounts', 'Amounts', 'Each crop in the unit it is sold in'], ['dollars', 'Dollars', 'What each crop is worth, at its own price, with each kind’s total']].map(([value, label, title]) => h('button', { type: 'button', 'aria-pressed': String(measure === value), title, dataset: { measure: value }, onclick: () => { measure = value; render(); } }, label))),
+          [['amounts', 'Amounts', 'Each crop in the unit it is sold in'], ['dollars', 'Dollars', 'Revenue by crop, at its price, with each kind’s total']].map(([value, label, title]) => h('button', { type: 'button', 'aria-pressed': String(measure === value), title, dataset: { measure: value }, onclick: () => { measure = value; render(); } }, label))),
         m.keeps ? h('div.seg.hv-series', { role: 'group', 'aria-label': 'What to count', hidden: dollars(), title: 'Some crops keep after picking. To sell: what is there to sell each week, drawn down over the weeks it keeps. Picked: what comes out of the ground.' },
           ['days', 'picked'].map(value => h('button', { type: 'button', 'aria-pressed': String(series === value), dataset: { hvSeries: value }, onclick: () => { series = value; render(); } }, value === 'days' ? 'To sell' : 'Picked'))) : null,
-        marked ? h('div.seg.hv-use', { id: 'hvUse', role: 'group', 'aria-label': 'Grown for', title: 'Everything that is picked, only what is grown to sell, or only what is marked for personal use. Worth and the list to send count what is grown to sell.' },
+        marked ? h('div.seg.hv-use', { id: 'hvUse', role: 'group', 'aria-label': 'Grown for', title: 'Everything that is picked, only what is grown to sell, or only what is marked for personal use. Revenue and the list to send count what is grown to sell.' },
           USES.map(([value, label]) => h('button', { type: 'button', 'aria-pressed': String(m.use === value), dataset: { hvUse: value }, onclick: () => { use = value; render(); } }, label))) : null,
         h('div.sd-filters', { role: 'group', 'aria-label': 'Which kinds' }, chip('all', 'All', F.cropCount(m.rows.filter(r => r.total > 0))), F.GROUPS.map(([g, short]) => chip(g, short, F.cropCount(m.rows.filter(r => r.total > 0 && r.group === g))))),
         h('span.grow'), search),

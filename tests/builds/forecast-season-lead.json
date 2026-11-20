@@ -1,0 +1,17 @@
+{
+ "build": "The Forecast leads with the season again (his note of Nov 20: the season's headline figures had lost their prominence), as the audit drew it (round 5, section 2): projected revenue for the season at the largest size, 32, with the week in hand's revenue and crops in harvest at the right of the same line; under them one line of the season's own figures: revenue by kind (vegetables, microgreens, flowers), the harvest season, the peak week, and the season's microgreen trays and flower stems. The week's trays and stems, which stood in that line, are under \"?\" as they were. The page's money words are financial and brief (his, Nov 20): projected revenue in place of the season's worth, Revenue in the table's foot, Peak week, Harvest. Look and words only: nothing stored, no figure moves.",
+ "changes": {
+  "did": "The Forecast opens on projected revenue for the season in large type, with revenue by kind, the harvest season and the peak week under it; the week in hand's revenue sits at the right.",
+  "steps": [
+   "Open the Forecast: the season's projected revenue is the large figure under the title, and Vegetables, Microgreens and Flowers under it add up to it.",
+   "Press › beside the week: the week's revenue at the right follows the week; projected revenue stays.",
+   "Switch to Dollars: the table's foot reads Revenue, and its season total is the large figure."
+  ]
+ },
+ "words": [],
+ "code": ["harvestview.js"],
+ "added": [],
+ "removed": [],
+ "page": ["css/app.css"],
+ "screens": ["forecast"]
+}

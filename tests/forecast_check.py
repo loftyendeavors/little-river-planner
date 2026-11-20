@@ -126,12 +126,39 @@ with sync_playwright() as pw:
     shot("help")
     page.keyboard.press("Escape"); wait(200)
 
-    # ══ the line of figures ══
+    # ══ the figures: projected revenue leads (his note of Nov 20), the week in hand beside it, the season's own figures under them ══
     figs = js("""const m = HV.model(), i = m.index(S.date), wk = F.periods(m, 'week', i, i)[0], g = F.glance(m, wk.i0, wk.i1), all = F.glance(m, 0, m.days - 1), line = hook('fc-figs');
-      const fig = n => { const el = line && line.querySelector(`[data-fig="${n}"]`); return el ? txt(el.querySelector('b')) : null; };
-      return { season: fig('season'), week: fig('week'), ready: fig('ready'), trays: fig('trays'), stems: fig('stems'), want: { season: money(all.worth), week: money(g.worth), ready: g.crops, trays: F.shown(g.trays), stems: F.shown(g.stems) }, one: line ? Math.round(line.getBoundingClientRect().height) : 0, tiles: document.querySelectorAll('#hvWrap .tr-stat').length };""")
-    check("one line of figures: the season's worth leads, then the week in hand's, its crops, trays and stems, each the forecast's own", figs["season"] == figs["want"]["season"] and figs["week"] == figs["want"]["week"] and str(figs["ready"]).startswith(str(figs["want"]["ready"]) + " crop"), figs)
-    check("the trays and stems are the forecast's for that week, and there is no row of tiles", str(figs["trays"]).replace(",", "") == str(figs["want"]["trays"]).replace(".0", "") and str(figs["stems"]).replace(",", "") == str(figs["want"]["stems"]).replace(".0", "") and figs["tiles"] == 0 and 0 < figs["one"] <= 40, figs)
+      const el = n => line && line.querySelector(`[data-fig="${n}"]`), fig = n => { const e = el(n); return e ? txt(e.querySelector('b')) : null; }, box = n => { const e = el(n); return e ? e.querySelector('b').getBoundingClientRect() : null; };
+      const lead = box('season'), week = box('week'), kinds = line ? [...line.querySelectorAll('[data-fig="kind"] b')].map(b => parse(b.textContent)) : [];
+      const wantKinds = F.GROUPS.map(([k]) => all.list.filter(x => x.row.group === k).reduce((n, x) => n + x.worth, 0)).filter(v => v >= 1);
+      return { season: fig('season'), week: fig('week'), ready: fig('ready'), trays: fig('trays-season'), stems: fig('stems-season'), kinds, wantKinds: wantKinds.length,
+        want: { season: money(all.worth), worth: all.worth, week: money(g.worth), ready: g.crops, trays: F.shown(all.trays), stems: F.shown(all.stems) },
+        size: el('season') ? getComputedStyle(el('season').querySelector('b')).fontSize : '', sizes: line ? [...new Set([...line.querySelectorAll('.fc-fig:not(.lead) b')].map(b => getComputedStyle(b).fontSize))] : [],
+        beside: !!lead && !!week && Math.abs(lead.bottom - week.bottom) < 12 && week.left > lead.right + 200, under: !!lead && !!el('picking') && box('picking').top > lead.bottom,
+        tall: line ? Math.round(line.getBoundingClientRect().height) : 0, tiles: document.querySelectorAll('#hvWrap .tr-stat').length };""")
+    check("projected revenue leads, at 32 and alone at that size, and is the forecast's own; the week in hand's revenue and crops in harvest stand at the right of the same line", figs["season"] == figs["want"]["season"] and figs["size"] == "32px" and figs["sizes"] == ["13px"] and figs["beside"] and figs["week"] == figs["want"]["week"] and str(figs["ready"]).startswith(str(figs["want"]["ready"]) + " crop"), figs)
+    check("under them the season's own figures: revenue by kind adds up to projected revenue, the season's trays and stems are the forecast's, and there is no row of tiles", figs["under"] and len(figs["kinds"]) == figs["wantKinds"] and len(figs["kinds"]) >= 2 and abs(sum(figs["kinds"]) - figs["want"]["worth"]) <= len(figs["kinds"]) * 0.5 + 1 and str(figs["trays"]).replace(",", "") == str(figs["want"]["trays"]).replace(".0", "") and str(figs["stems"]).replace(",", "") == str(figs["want"]["stems"]).replace(".0", "") and figs["tiles"] == 0 and 0 < figs["tall"] <= 80, figs)
+    words = js("""const line = hook('fc-figs'), foot = document.querySelector('#hvTable tfoot .hv-name'); return { line: txt(line), foot: txt(foot), lead: txt(line && line.querySelector('[data-fig="season"]')) };""")
+    check("the words are a grower's and an accountant's: projected revenue, Harvest, Peak week, and Revenue in the table's foot; never worth", "projected revenue" in str(words["lead"]) and "Harvest " in str(words["line"]) and "Peak week " in str(words["line"]) and words["foot"] == "Revenue" and "worth" not in (str(words["line"]) + str(words["foot"])).lower(), words)
+    # the season's revenue week by week, beside projected revenue: one bar a week with revenue, the week in hand in orange
+    sp = js("""const m = HV.model(), i = m.index(S.date), now = F.periods(m, 'week', i, i)[0], all = F.periods(m, 'week').map(c => ({ key: c.key, worth: m.rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0) }));
+      const lo = all.findIndex(w => w.worth >= 1), hi = all.length - 1 - [...all].reverse().findIndex(w => w.worth >= 1), ws = all.slice(lo, hi + 1), svg = hook('fc-spark'), wks = hooks('fc-spark-week');
+      const tall = wks.map(g => { const p = g.querySelector('path'); return p ? p.getBBox().height : 0; }), peak = ws.reduce((b, w) => (w.worth > b.worth ? w : b), ws[0]);
+      return { n: wks.length, want: ws.length, keys: wks.every((g, k) => g.dataset.week === ws[k].key && Math.abs(+g.dataset.worth - ws[k].worth) < 0.005), now: wks.filter(g => g.classList.contains('now')).map(g => g.dataset.week), wantNow: now.key,
+        nowFill: (() => { const g = wks.find(x => x.dataset.week === now.key); const p = g && g.querySelector('path'); return p ? getComputedStyle(p).fill : null; })(), otherFill: (() => { const g = wks.find(x => x.dataset.week !== now.key && x.querySelector('path')); return g ? getComputedStyle(g.querySelector('path')).fill : null; })(),
+        tallest: wks[tall.indexOf(Math.max(...tall))] ? wks[tall.indexOf(Math.max(...tall))].dataset.week : null, peak: peak.key, height: svg ? Math.round(svg.getBoundingClientRect().height) : 0,
+        prop: wks.every((g, k) => Math.abs(tall[k] - (ws[k].worth >= 1 ? Math.max(2, Math.round(ws[k].worth / peak.worth * 28)) : 0)) < 0.6), label: svg ? svg.getAttribute('aria-label') : '' };""")
+    check("beside projected revenue, the season's revenue week by week: a bar a week from the first week with revenue to the last, each as tall as its week's revenue, the tallest the peak week", sp["n"] == sp["want"] and sp["n"] > 10 and sp["keys"] and sp["prop"] and sp["tallest"] == sp["peak"] and 0 < sp["height"] <= 32 and "peak week" in str(sp["label"]), sp)
+    check("the week in hand is the one orange bar", sp["now"] == [sp["wantNow"]] and sp["nowFill"] != sp["otherFill"] and sp["nowFill"] is not None, sp)
+    go = js("""const wks = hooks('fc-spark-week'), g = wks[Math.floor(wks.length / 3)]; if (!g) return null; const key = g.dataset.week; g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      const m = HV.model(), i = m.index(S.date), wk = F.periods(m, 'week', i, i)[0]; return { key, at: wk.key, now: (hooks('fc-spark-week').find(x => x.classList.contains('now')) || {}).dataset };""")
+    check("a click on a week's bar goes to that week, and its bar turns orange", go["key"] == go["at"] and go["now"] and go["now"]["week"] == go["key"], go)
+    page.evaluate("LRFApp.setDate(new Date(LRFApp.planYear(), 6, 14))"); wait(400)
+    click("#hvNext", 500)
+    step = js("""const m = HV.model(), i = m.index(S.date), wk = F.periods(m, 'week', i, i)[0], g = F.glance(m, wk.i0, wk.i1), e = hook('fc-figs').querySelector('[data-fig="week"]');
+      return { said: txt(e), want: `Week of ${LRFUI.day(wk.start)} ${money(g.worth)}`, season: txt(hook('fc-figs').querySelector('[data-fig="season"] b')) };""")
+    check("› moves the week and its figures with it; projected revenue stays", str(step["said"]).startswith(str(step["want"])) and step["season"] == figs["season"], step)
+    click("#hvPrev", 500)
 
     # ══ amounts, week by week: every crop and every week against the forecast worked out afresh ══
     click('[data-hv-grain="week"]', 600); click('[data-hook="fc-measure"] [data-measure="amounts"]', 600)

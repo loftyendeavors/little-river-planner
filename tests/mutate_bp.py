@@ -66,8 +66,8 @@ PAGE = [
  ("the list to send does not say what it leaves out", HV, "left ? h('p.dlg-hint', { id: 'hvShareOwn' }", "false ? h('p.dlg-hint', { id: 'hvShareOwn' }"),
  ("Harvest offers the choice with nothing marked", HV, "        marked ? h('div.seg.hv-use'", "        true ? h('div.seg.hv-use'"),
  ("Commercial on Harvest shows everything", HV, "const shownModel = () => model(model().personal ? use : 'all');", "const shownModel = () => model('all');"),
- ("the headline does not say which plantings it counts", HV, "fig('week', `Week of ${day(wk.start)}`, money(now.worth), which),", "fig('week', `Week of ${day(wk.start)}`, money(now.worth), ''),"),
- ("the worth figure does not say it is commercial only", HV, ": marked ? 'commercial plantings only' : '';", ": '';"),
+ ("the headline does not say which plantings it counts", HV, "fig('week', `Week of ${day(wk.start)}`, money(now.worth), which, {", "fig('week', `Week of ${day(wk.start)}`, money(now.worth), '', {"),
+ ("the revenue figure does not say it is commercial only", HV, ": marked ? 'commercial only' : '';", ": '';"),
  ("Harvest has no note of what is marked", HV, "      marked ? h('p.hv-note', { id: 'hvOwnNote' }", "      false ? h('p.hv-note', { id: 'hvOwnNote' }"),
  ("the weekly amount does not say personal use is left out", SR, "${ownUse(eng, P.cropId) ? '. Plantings for personal use are not counted as giving any' : ''}", ""),
  ("the label is another build's", "js/built.js", 'label: "' + LABEL + '",', 'label: "' + OTHER + '",'),   # the label is written in js/built.js (tools/shared.cjs)
