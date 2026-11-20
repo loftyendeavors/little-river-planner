@@ -48,7 +48,7 @@ PRE = ("const A = LRFApp, S = A.state, E = LRFEngine, UI = LRFUI, eng = () => S.
        "const contrast = el => { const cs = getComputedStyle(el), g = ground(el), c = parse(cs.color); const f = blend([c[0], c[1], c[2], c[3] * strength(el)], g), a = lum(f), b = lum(g); return Math.round((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) * 100) / 100; };"
        "const look = el => { if (!el) return null; const cs = getComputedStyle(el), r = el.getBoundingClientRect(); return { tag: el.tagName, text: el.textContent.trim().slice(0, 40), under: cs.textDecorationLine.includes('underline'), h: Math.round(r.height), w: Math.round(r.width),"
        "  edge: parseFloat(cs.borderTopWidth) > 0 && cs.borderTopStyle !== 'none' && !clear(cs.borderTopColor), ground: !clear(cs.backgroundColor), size: cs.fontSize, weight: cs.fontWeight, round: parseFloat(cs.borderTopLeftRadius) >= r.height / 2 - 1, strength: Math.round(strength(el) * 100) / 100, type: el.type || '' }; };"
-       "const asLink = l => !!l && l.under && !l.edge && !l.ground && l.size === '13px' && l.weight === '600';"
+       "const asLink = l => !!l && l.under && !l.edge && !l.ground && ['11px', '13px'].includes(l.size) && l.weight === '600';"
        "const asButton = (l, high) => !!l && l.tag === 'BUTTON' && !l.under && l.h === high;"
        "const ink = (() => { const i = document.createElement('i'); i.style.color = 'var(--ink)'; document.body.append(i); const c = getComputedStyle(i).color; i.remove(); return c; })();"
        "const hush = () => { const t = hook('toast'); if (t) t.replaceChildren(); };"
