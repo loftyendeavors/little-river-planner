@@ -32,7 +32,7 @@ const MARKS = [
   '.tl-bar', '.tl-bar .ph-turn', '.tl-bar .ph-nursery', '.tl-bar .ph-grow', '.tl-cell', '.tl-ghost', '.tl-open', '.tl-cursor::before',
   '.season-cursor', '.ah-cells i', '.sr-strip .ah-cells i', '.yc-meter', '.yc-meter i',
   // the swatch of a key is the mark it explains
-  '.tl-key i', '.map-key i', '.legend-chip i', '.bn-legend i, .bn-tip-row i', '.bn-tip-row i', '.as-key i', '.yc-key i', '.hv-crop i', '.drag-ghost i',
+  '.tl-key i', '.map-key i', '.legend-chip i', '.bn-legend i, .bn-tip-row i', '.bn-tip-row i', '.as-key i', '.yc-key i', '.hv-crop i', '.drag-ghost i', '.fc-fig.now.keyed::before',
   '.brand-mark',                          // the planner's own mark: a drawing
 ];
 // Type sized to the thing it is drawn on: a label on the map grows with the map, a letter that stands for a photograph with its tile.
