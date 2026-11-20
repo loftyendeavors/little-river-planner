@@ -135,37 +135,43 @@ def run(pw):
     check("while a crop is carried, Done stands at the foot of the library, on the Map and on the Timeline", lib["armed"]["done"] is True and lib["armed"]["text"] == "Done" and lib["onTl"]["done"] is True and "Esc" not in lib["armed"]["hint"], lib)
     check("Done puts the crop down, and goes", lib["after"]["armed"] is None and lib["after"]["done"] is False and lib["after"]["hint"] == lib["before"]["hint"], lib)
 
-    # ══ 5. a resize says what it did; the tip prints no "null" ══
-    rs = js("""A.setView('map'); await sleep(300); A.setDate(new Date(A.planYear(), 5, 15)); await sleep(300); hush();
-      const m = document.getElementById('map').getBoundingClientRect();
-      for (const p of S.plan.plantings) { const r = eng().calc(p); if (!r || !eng().isSoilBed(r.b) || r.layout || p.done) continue; const f = eng().footprint(p, r);
-        if (!f || f.x0 > 0.001 || f.x1 < 0.999 || Math.min(f.a1, r.cap) - f.a0 < 8 || !(+r.field <= +S.date && +S.date <= +eng().occupancyThrough(p, r))) continue;
-        const el = document.querySelector('#mapBeds [data-planting="' + CSS.escape(p.id) + '"]'); if (!el) continue; const b = el.getBoundingClientRect();
-        if (b.left < m.left + 80 || b.right > m.right - 80 || b.top < m.top + 80 || b.bottom > m.bottom - 120) continue;
-        return { id: p.id, x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2), len: lenOf(p.id), cap: r.cap }; }
-      return null;""")
-    check("the plan has a planting standing in part of a bed on the map, for the check to drag its end", bool(rs), rs)
-    if rs:
+    # ══ 5. a resize says what it did, once: in the planting's panel, or on its card with the card on; the tip prints no "null" ══
+    fmt = lambda n: ("%d" % n) if abs(n - round(n)) < 1e-9 else ("%.1f" % n)
+    def resize(where):
+        rs = js("""A.setView('map'); await sleep(300); A.select(null); A.setDate(new Date(A.planYear(), 5, 15)); await sleep(400); hush();
+          const m = document.getElementById('map').getBoundingClientRect();
+          for (const p of S.plan.plantings) { const r = eng().calc(p); if (!r || !eng().isSoilBed(r.b) || r.layout || p.done) continue; const f = eng().footprint(p, r);
+            if (!f || f.x0 > 0.001 || f.x1 < 0.999 || Math.min(f.a1, r.cap) - f.a0 < 8 || !(+r.field <= +S.date && +S.date <= +eng().occupancyThrough(p, r))) continue;
+            const el = document.querySelector('#mapBeds [data-planting="' + CSS.escape(p.id) + '"]'); if (!el) continue; const b = el.getBoundingClientRect();
+            if (b.left < m.left + 80 || b.right > m.right - 80 || b.top < m.top + 80 || b.bottom > m.bottom - 120) continue;
+            return { id: p.id, x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2), len: lenOf(p.id), cap: r.cap }; }
+          return null;""")
+        check("the plan has a planting standing in part of a bed on the map, for the check to drag its end (%s)" % where, bool(rs), rs)
+        if not rs: return
         page.mouse.move(rs["x"], rs["y"])
         for _ in range(7): page.mouse.wheel(0, -300); wait(70)
         wait(400)
-        grip = js("""A.select({ type: 'planting', id: arg.id }); await sleep(400); const g = hooks('planting-end').find(x => x.getAttribute('data-handle') === 'end') || hooks('planting-end')[0];
-          if (!g) return null; const b = g.getBoundingClientRect(), box = document.querySelector('#mapOver .sel-box').getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2), h: box.height, edge: g.getAttribute('data-handle') };""", rs)
-        check("a planting picked on the map, drawn large enough, has its ends to drag", bool(grip), grip)
-        if grip:
-            js("hush(); return 1;")
-            dy = max(12, round(grip["h"] * 0.3)) * (1 if grip["edge"] == "end" else -1)
-            page.mouse.move(grip["x"], grip["y"]); page.mouse.down(); page.mouse.move(grip["x"], grip["y"] + dy / 2, steps=3); page.mouse.move(grip["x"], grip["y"] + dy, steps=5)
-            tip = js("const t = hook('map-tip'); return t ? { shown: drawn(t), text: t.textContent, parts: t.childNodes.length } : null;")
-            page.mouse.up(); wait(400)
-            after = js("return { len: lenOf(arg.id), said: said(), offers: offers(), saved: (document.querySelector('.insp-saved') || {}).textContent || '' };", rs)
+        grip = js("""A.select({ type: 'planting', id: arg.id }); await sleep(600); const g = hooks('planting-end').find(x => x.getAttribute('data-handle') === 'end') || hooks('planting-end')[0];
+          const fill = document.querySelector('#mapBeds [data-planting="' + CSS.escape(arg.id) + '"]');
+          if (!g || !fill) return null; const b = g.getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2), h: fill.getBoundingClientRect().height, edge: g.getAttribute('data-handle'), card: drawn(hook('card')) };""", rs)
+        check("a planting picked on the map, drawn large enough, has its ends to drag (%s)" % where, bool(grip) and grip["card"] == (where == "card"), grip)
+        if not grip: return
+        js("hush(); return 1;")
+        dy = max(12, round(grip["h"] * 0.3)) * (1 if grip["edge"] == "end" else -1)
+        page.mouse.move(grip["x"], grip["y"]); page.mouse.down(); page.mouse.move(grip["x"], grip["y"] + dy / 2, steps=3); page.mouse.move(grip["x"], grip["y"] + dy, steps=5)
+        tip = js("const t = hook('map-tip'); return t ? { shown: drawn(t), text: t.textContent } : null;")
+        page.mouse.up(); wait(500)
+        after = js("""const line = arg.where === 'card' ? hook('card-said') : hook('panel-saved');
+          return { len: lenOf(arg.id), toast: said(), line: line ? line.textContent : null, undo: !!line && !!line.querySelector(arg.where === 'card' ? '[data-hook="card-undo"]' : '[data-hook="panel-saved-undo"]') };""", {**rs, "where": where})
+        if where == "panel":
             check("while an end is dragged, the tip says the length and the plants, and never “null”", bool(tip) and tip["shown"] and "ft" in tip["text"] and "null" not in tip["text"], tip)
-            fmt = lambda n: ("%d" % n) if abs(n - round(n)) < 1e-9 else ("%.1f" % n)
-            check("the end dragged changes the planting's length", after["len"] is not None and after["len"] != rs["len"], after)
-            check("and the answer says what it did, from the feet it held to the feet it holds, with Undo", after["len"] is not None and after["said"].startswith("Resize ") and ("%s → %s ft" % (fmt(rs["len"]), fmt(after["len"]))) in after["said"] and after["offers"] == ["Undo"], {"after": after, "was": rs["len"]})
-            back = js("press('Undo'); await sleep(300); return lenOf(arg.id);", rs)
-            check("Undo gives the planting its length back", back == rs["len"], {"back": back, "was": rs["len"]})
-    js("A.select(null); LRFMap.fit(); return 1;"); wait(300)
+        want = after["len"] is not None and "Resize " in (after["line"] or "") and ("%s → %s ft" % (fmt(rs["len"]), fmt(after["len"]))) in (after["line"] or "")
+        check("an end dragged on the map changes the planting's length, and the planting's %s says what it did, from the feet it held to the feet it holds, with Undo" % ("card" if where == "card" else "panel"), after["len"] != rs["len"] and want and after["undo"], {"after": after, "was": rs["len"]})
+        check("and that is the one answer: nothing else says it (%s)" % where, after["toast"] == "", after)
+        back = js("""const b = arg.where === 'card' ? document.querySelector('[data-hook="card-said"] [data-hook="card-undo"]') : hook('panel-saved-undo'); if (b) b.click(); await sleep(400); return lenOf(arg.id);""", {**rs, "where": where})
+        check("its Undo gives the planting its length back (%s)" % where, back == rs["len"], {"back": back, "was": rs["len"]})
+        js("A.select(null); LRFMap.fit(); return 1;"); wait(300)
+    resize("panel")
 
     # ══ 6. a planting with days of its own says so plainly ══
     own = js("""for (const p of S.plan.plantings) { if (!eng().pinned(p)) continue; const r = eng().calc(p); if (!r || eng().isPool(r.b) || (r.c.catalogTiming || {}).activeMode === 'catalog') continue;
@@ -200,14 +206,14 @@ def run(pw):
         back = js("press('Undo'); await sleep(250); return { now: +S.date, undo: S.undo.length };")
         check("Undo puts the date back where it was", back["now"] == bare["was"], {"back": back, "was": bare["was"]})
 
-    # ══ 9. his own days typed for a crop: the varieties that keep theirs, set too, and the plantings ══
+    # ══ 9. his own days typed for a crop: the varieties that keep theirs, set too (what moves shown first), and the plantings ══
     days = js("""A.select(null); A.setView('assume'); await sleep(600); hush();
-      const kept = (cropId, env) => { const vs = new Set(); for (const p of S.plan.plantings) { if (p.cropId !== cropId) continue; const b = eng().bedOf(p.bedId); if (!b || eng().envOf(b) !== env || eng().pinned(p)) continue;
-          const x = eng().effective(p), v = eng().variety(p.varietyId); if (x && v && v.cropId === cropId && !(x.assumed && x.assumed.level === 'crop')) vs.add(v.id); } return [...vs]; };
-      const subj = (() => { for (const c of eng().crops()) { if (c.micro) continue; for (const env of eng().ENVS) { const vs = kept(c.id, env); if (vs.length === 2) return { cropId: c.id, name: c.name, env, vs, names: vs.map(id => eng().variety(id).name) }; } } return null; })();
+      const own = (cropId, env) => { const vs = new Map(); for (const p of S.plan.plantings) { if (p.cropId !== cropId) continue; const b = eng().bedOf(p.bedId); if (!b || eng().envOf(b) !== env || eng().pinned(p)) continue;
+          const x = eng().effective(p), v = eng().variety(p.varietyId); if (x && v && v.cropId === cropId && !(x.assumed && x.assumed.level === 'crop')) vs.set(v.id, Math.max(vs.get(v.id) || 0, x.dtm || 0)); } return vs; };
+      const subj = (() => { for (const c of eng().crops()) { if (c.micro) continue; for (const env of eng().ENVS) { const vs = own(c.id, env); if (vs.size === 2) return { cropId: c.id, name: c.name, env, vs: [...vs.keys()], most: Math.max(...vs.values()), names: [...vs.keys()].map(id => eng().variety(id).name) }; } } return null; })();
       if (!subj) return null;
-      const a = S.plan.assumptions, mine = a && a.crops && a.crops[subj.cropId] && a.crops[subj.cropId][subj.env] && a.crops[subj.cropId][subj.env].dtm, n = (mine || eng().crop(subj.cropId).dtm || 50) + 3;
-      const label = subj.name + ', ' + LRFAssume.LABEL[subj.env].toLowerCase() + ': ' + n + ' days', steps = S.undo.length;
+      // more days than either variety has now, so that setting them moves their plantings
+      const n = Math.max(subj.most, eng().crop(subj.cropId).dtm || 0) + 5, label = subj.name + ', ' + LRFAssume.LABEL[subj.env].toLowerCase() + ': ' + n + ' days', steps = S.undo.length;
       const typed = A.setAssumption('crops', subj.cropId, subj.env, n, label); await apply(); await typed; await sleep(250);
       return { ...subj, n, label, said: said(), offers: offers(), steps: S.undo.length - steps };""")
     check("the plan has a crop whose plantings in one place follow two varieties with days of their own, for the check to type over", bool(days), days)
@@ -215,17 +221,22 @@ def run(pw):
         name2 = " and ".join(days["names"])
         check("his days typed for the crop: the answer names the two varieties that keep days of their own", days["steps"] == 1 and days["said"].startswith(days["label"]) and (name2 + " keep days of their own") in days["said"], days)
         check("and offers to set its 2 varieties too and to see the plantings, after Undo", days["offers"] == ["Undo", "Set its 2 varieties too", "See the plantings"], days)
-        too = js("""const steps = S.undo.length; press('Set its 2 varieties too'); await apply(); await sleep(400);
-          const a = S.plan.assumptions || {}, cell = id => ((a.varieties || {})[id] || {})[arg.env];
-          return { steps: S.undo.length - steps, set: arg.vs.map(id => cell(id) && cell(id).dtm), said: said(), label: S.undo.length ? S.undo[S.undo.length - 1].label : '' };""", days)
-        check("“Set its 2 varieties too” gives both varieties the same days, in a step of its own that says what it did", too["steps"] == 1 and too["set"] == [days["n"], days["n"]] and name2 + " too" in too["label"] and too["said"].startswith(too["label"]), too)
-        undo = js("""press('Undo'); await sleep(400); const a = S.plan.assumptions || {}, cell = id => ((a.varieties || {})[id] || {})[arg.env];
-          return arg.vs.map(id => cell(id) ? cell(id).dtm || null : null);""", days)
-        check("Undo takes the varieties' days back, and leaves the crop's", undo == [None, None] and js("const a = S.plan.assumptions || {}; return (((a.crops || {})[arg.cropId] || {})[arg.env] || {}).dtm;", days) == days["n"], undo)
-        see = js("""hush(); A.undo(); await sleep(300); const typed = A.setAssumption('crops', arg.cropId, arg.env, arg.n, arg.label); await apply(); await typed; await sleep(250);
-          press('See the plantings'); await sleep(500); const d = document.getElementById('asDifferDlg'); const out = { open: !!d && d.open, view: S.view };
-          if (d && d.open) { const done = document.getElementById('asDifferDone'); if (done) done.click(); await sleep(200); } A.undo(); await sleep(300); return out;""", days)
+        cell = "const a = S.plan.assumptions || {}, cell = id => (((a.varieties || {})[id] || {})[arg.env] || {}).dtm || null;"
+        ask = js(cell + """const steps = S.undo.length; press('Set its 2 varieties too'); await sleep(400);
+          const d = document.querySelector('dialog[open]'), out = { asked: !!d, title: d && d.querySelector('h2') ? d.querySelector('h2').textContent : '', moves: d ? d.querySelectorAll('#assumeMoves li').length : 0, steps: S.undo.length - steps, set: arg.vs.map(cell) };
+          if (d && d.querySelector('.btn.primary')) { d.querySelector('.btn.primary').click(); await sleep(500); }
+          const b = S.plan.assumptions || {}, now = id => (((b.varieties || {})[id] || {})[arg.env] || {}).dtm || null;
+          return { ...out, after: { steps: S.undo.length - steps, set: arg.vs.map(now), said: said(), offers: offers(), label: S.undo.length ? S.undo[S.undo.length - 1].label : '' } };""", days)
+        check("“Set its 2 varieties too” first shows what it would move, crop by crop, and nothing has changed while it asks (Codex on #93)", ask["asked"] and (name2 + " too") in ask["title"] and ask["moves"] >= 1 and ask["steps"] == 0 and ask["set"] == [None, None], ask)
+        aft = ask["after"]
+        check("applied, both varieties take the same days, in a step of its own that says what it did", aft["steps"] == 1 and aft["set"] == [days["n"], days["n"]] and (name2 + " too") in aft["label"] and aft["said"].startswith(aft["label"]), ask)
+        check("and its answer still offers to see the plantings, after its Undo (Codex on #93)", aft["offers"] == ["Undo", "See the plantings"], ask)
+        see = js("""press('See the plantings'); await sleep(500); const d = document.getElementById('asDifferDlg'); const out = { open: !!d && d.open, view: S.view };
+          if (d && d.open) { const done = document.getElementById('asDifferDone'); if (done) done.click(); await sleep(200); } return out;""")
         check("“See the plantings” opens the plantings that differ from the list", see["open"] is True and see["view"] == "assume", see)
+        undo = js(cell + """A.undo(); await sleep(400); const b = S.plan.assumptions || {}, now = id => (((b.varieties || {})[id] || {})[arg.env] || {}).dtm || null;
+          const out = { set: arg.vs.map(now), crop: (((b.crops || {})[arg.cropId] || {})[arg.env] || {}).dtm || null }; A.undo(); await sleep(400); return out;""", days)
+        check("Undo takes the varieties' days back, and leaves the crop's", undo["set"] == [None, None] and undo["crop"] == days["n"], undo)
 
     # ══ 10. the unheated benches, and a celled tray with no cells set, in plain words ══
     words = js("""A.setView('trays'); LRFTraysView.setTab('setup'); await sleep(600); const heads = [...document.querySelectorAll('#bnCool h4')].map(x => x.textContent);
@@ -290,6 +301,7 @@ def run(pw):
     page.set_viewport_size({"width": 1707, "height": 960}); wait(400)
     page.evaluate("try { localStorage.setItem('lrf.tryCard', '1'); } catch (_) {}")
     open_page()
+    resize("card")
     keys["docked"] = js("""A.setView('map'); await sleep(400); const b = S.plan.beds.find(x => x.active !== false && eng().isSoilBed(x) && LRFCard.bedSeasonOn(x)); A.select({ type: 'bed', id: b.id }); await sleep(800); """ + KEY.replace("A.select(null); ", ""))
     page.evaluate("try { localStorage.removeItem('lrf.tryCard'); } catch (_) {}")
     ok_lines = lambda k: k["lines"] <= 2 and (k["hidden"] == 0 or k["lines"] == 2) and k["more"] == ("+%d" % k["hidden"] if k["hidden"] else "Key")

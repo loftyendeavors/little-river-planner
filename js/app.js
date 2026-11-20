@@ -370,11 +370,13 @@
     }
     if (!kept.size && !own) return {};
     const list = [...kept.values()], n = list.length, offers = [];
+    const see = root.LRFAssume && root.LRFAssume.openDiffer ? { label: 'See the plantings', run: () => root.LRFAssume.openDiffer() } : null;
+    // the varieties' days are a step of their own: what it moves is shown first (`ask`), and its answer still offers the plantings (Codex on #93)
     if (n) offers.push({ label: `Set its ${n === 1 ? 'variety' : `${n} varieties`} too`, run: () => {
       const more = listStep(next => { for (const v of list) setCell(next, 'varieties', v.id, env, 'dtm', days); });
-      if (more) assume(`${label}, for ${names(list.map(v => v.name))} too`, more);
+      if (more) assume(`${label}, for ${names(list.map(v => v.name))} too`, more, { ask: true, offers: see ? [see] : [] });
     } });
-    if (root.LRFAssume && root.LRFAssume.openDiffer) offers.push({ label: 'See the plantings', run: () => root.LRFAssume.openDiffer() });
+    if (see) offers.push(see);
     const said = [n ? `${names(list.map(v => v.name))} keep${n === 1 ? 's' : ''} days of ${n === 1 ? 'its' : 'their'} own` : '', own ? `${UI.num(own)} planting${own === 1 ? ' keeps its' : 's keep their'} own` : ''];
     return { more: said.filter(Boolean).join(' · '), offers };
   }

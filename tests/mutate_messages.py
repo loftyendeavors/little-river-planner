@@ -33,6 +33,7 @@ AP, MP, PN, TL, UI, BN, NU, CSS = "js/app.js", "js/map.js", "js/panels.js", "js/
 # The panel's order put back as it was: the boxes first, the schedule after. Read from the app's own panel, so that the fault is the
 # order and nothing else.
 def panel_order():
+    if not (app / PN).exists(): return "(the app folder is not made)", ""   # "list" needs only the count
     s = (app / PN).read_text(encoding="utf-8")
     a = s.index("      // the schedule and what it is expected to give come first, the boxes after (L3; the card's order)\n")
     b = s.index("      h('section.insp-section.form',\n", a)
@@ -47,7 +48,8 @@ PAGE = [
  ("a planting turned down is said to be judged on the map's date", AP, "own = !!payload.waitingId || (!!source && E.d2s(date) === source.date);", "own = !!payload.waitingId;"),
  ("no Done while a crop is carried", PN, "    $('libDone').hidden = !App.state.armed;\n  }", "    $('libDone').hidden = true;\n  }"),
  ("Done does not put the crop down", PN, "    $('libDone').addEventListener('click', () => App.arm(null));\n", ""),
- ("a resize says nothing", MP, "      else UI.toast(label, { label: 'Undo', run: App.undo });   // a resize says what it did (L3)\n", ""),
+ ("a resize says only that it was a resize", MP, "    return `Resize ${App.cropLabel(cur.p)}: ${ft(was)} → ${ft(res.len)} ft, feet ${ft(res.a0)}–${ft(res.a1)} of ${ft(cap)}`;", "    return `Resize ${App.cropLabel(cur.p)}`;"),
+ ("Codex on #93: a resize is said twice, on the panel and in the page's answer", MP, "      if (!moved) paintHandles();\n      return;", "      if (!moved) paintHandles(); else UI.toast(label, { label: 'Undo', run: App.undo });\n      return;"),
  ("a resize says the length it has now as the one it had", MP, "cap = eng.calc(cur.p).cap, ft = n => num(n, 1), was = held(cur.p);", "cap = eng.calc(cur.p).cap, ft = n => num(n, 1), was = res.len;"),
  ("the tip prints null again", MP, "    UI.add(clear(tip), nodes);", "    clear(tip).append(...nodes);"),
  ("Pinned is back", PN, "'Its own days. Empty the box to follow your list.'", "'Pinned: this planting keeps its own days. Clear the field and it follows the assumptions list.'"),
@@ -56,8 +58,10 @@ PAGE = [
  ("a click on a bare Timeline row moves the date without a word", TL, "        if (+App.state.date !== +was) UI.toast(", "        if (false) UI.toast("),
  ("Undo after a click on a bare row leaves the date where it went", TL, "{ label: 'Undo', run: () => App.setDate(was) });", "{ label: 'Undo', run: () => {} });"),
  ("his own days typed for a crop offer nothing", AP, "kind === 'crops' && days > 0 ? keptOwn(id, env, Math.round(days), label, ops) : {}", "{}"),
+ ("Codex on #93: setting the varieties too moves dates without showing them first", AP, "more, { ask: true, offers: see ? [see] : [] });", "more, { offers: see ? [see] : [] });"),
+ ("Codex on #93: setting the varieties too no longer offers the plantings", AP, "more, { ask: true, offers: see ? [see] : [] });", "more, { ask: true });"),
  ("Set its varieties too sets only one", AP, "for (const v of list) setCell(next, 'varieties', v.id, env, 'dtm', days);", "for (const v of list.slice(0, 1)) setCell(next, 'varieties', v.id, env, 'dtm', days);"),
- ("See the plantings is not offered", AP, "    if (root.LRFAssume && root.LRFAssume.openDiffer) offers.push({ label: 'See the plantings', run: () => root.LRFAssume.openDiffer() });\n", ""),
+ ("See the plantings is not offered", AP, "    if (see) offers.push(see);\n", ""),
  ("an answer with more than Undo shows only the first", UI, "    for (const a of actions) host.append(", "    for (const a of actions.slice(0, 1)) host.append("),
  ("Seeding in trays is cut off in its box again", CSS, ".as-from { height: 28px; max-width: 136px;", ".as-from { height: 28px; max-width: 118px;"),
  ("the map's key keeps to one line again", CSS, ".map-legend { position: relative; flex: 0 1 auto; min-width: 0; display: flex; flex-wrap: wrap;", ".map-legend { position: relative; flex: 0 1 auto; min-width: 0; display: flex; flex-wrap: nowrap;"),

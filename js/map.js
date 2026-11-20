@@ -630,8 +630,8 @@
       hideTip();
       const res = done.result, label = res && !res.same ? stretchSaid(done.cur, res) : '';
       const moved = !!label && (res.ops ? App.commit(label, res.ops) : App.updatePlanting(done.cur.p.id, res.change, label));
+      // what it did is said by the step's own label, in the planting's panel or card, with its Undo: the one answer (Codex on #93)
       if (!moved) paintHandles();
-      else UI.toast(label, { label: 'Undo', run: App.undo });   // a resize says what it did (L3)
       return;
     }
     if (done.kind === 'hold' && root.LRFDrag.active() && !e.altKey) {

@@ -138,12 +138,12 @@
     if (!fresh) { el.dataset.state = 'idle'; if (!el.classList.contains('bed-season-saved')) add(el, 'Changes apply as you make them.'); return el; }
     el.dataset.state = last.kind;
     el.style.setProperty('--since', `${last.at - Date.now()}ms`);
-    if (last.kind === 'saved') add(el, h('b', 'Saved'), h('span', ` · ${last.label} · ${clock(last.at)}`), last.canUndo ? h('button.link', { type: 'button', dataset: { saved: 'undo' }, onclick: () => App.undo() }, 'Undo') : null);
+    if (last.kind === 'saved') add(el, h('b', 'Saved'), h('span', ` · ${last.label} · ${clock(last.at)}`), last.canUndo ? h('button.link', { type: 'button', dataset: { saved: 'undo', hook: 'panel-saved-undo' }, onclick: () => App.undo() }, 'Undo') : null);
     else add(el, h('b', 'Not changed'), h('span', ` · ${last.text}`));
     el.lrfTimer = setTimeout(() => { if (el.isConnected) fillSaved(el); }, SAID_FOR - (Date.now() - last.at) + 30);
     return el;
   }
-  const savedLine = (quiet = false) => fillSaved(h(quiet ? 'p.insp-saved.bed-season-saved' : 'p.insp-saved', { role: 'status' }));
+  const savedLine = (quiet = false) => fillSaved(h(quiet ? 'p.insp-saved.bed-season-saved' : 'p.insp-saved', { role: 'status', dataset: { hook: 'panel-saved' } }));
   // A field is left by clicking somewhere else, and that click can close the panel in the same breath (the map's open ground,
   // another bed). The change was taken and its line was never seen: then, and only then, it is said once in a toast.
   let saidAway = null;
