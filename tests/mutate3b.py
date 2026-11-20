@@ -62,7 +62,7 @@ NODE = [
  ('the preview misses yields that change', 'js/audit.js', "if (Math.abs(a.units - b.units) > 1e-6 || a.unit !== b.unit || Math.abs(a.price - b.price) > 1e-9) yields.push(", "if (false) yields.push("),
  ('double bookings a step settles are not counted', 'js/audit.js', "settled = [...old].filter(k => !after.has(k)).map(k => k.split('|'));", "settled = [];"),
  ('the suggestion lets go a group whose yield would change', 'js/audit.js', "r.varieties = [...new Set(r.varieties.values())].filter(Boolean); r.choice = r.agrees ? 'follow' : r.take ? 'take' : 'keep'; out.push(r); }", "r.varieties = [...new Set(r.varieties.values())].filter(Boolean); r.choice = r.agrees || !r.take ? 'follow' : 'take'; out.push(r); }"),
- ('a yield the list takes wipes the days in its cell', 'js/audit.js', "record[take.env] = { ...(record[take.env] || {}), yield: take.typed };", "record[take.env] = { yield: take.typed };"),
+ ('a yield the list takes wipes the days in its cell', 'js/audit.js', "record[take.env] = { ...cell, yield: take.typed };", "record[take.env] = { yield: take.typed };"),
  ('days the list takes wipe the yield in their cell', 'js/audit.js', "[env]: { ...((assumptions[kind][id] || {})[env] || {}), dtm: Math.round(days) } };", "[env]: { dtm: Math.round(days) } };"),
  ('a planting is counted once for every figure let go', 'js/audit.js', "plantings: after.size + let_go.size };", "plantings: rows.filter(r => pick(r) !== 'keep').reduce((n, r) => n + r.ids.length, 0) };"),
  ('a copy that matters is suggested to be let go', 'js/audit.js', "r.choice = r.agrees ? 'follow' : 'keep'; out.push(r);\n    }\n    const same", "r.choice = 'follow'; out.push(r);\n    }\n    const same"),
