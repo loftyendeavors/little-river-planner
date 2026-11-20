@@ -299,7 +299,7 @@
       }
     }
     // each week's revenue, and the season's: in amounts and in dollars alike, the foot is in dollars
-    const foot = plain('', h('td.hv-name', { title: GROSS }, model().personal > 0 ? 'Revenue, commercial only' : 'Revenue'), h('td.hv-total', { dataset: { hook: 'fc-season-total' } }, money(rows.reduce((n, r) => n + r.worth, 0))), c => rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0));
+    const foot = plain('', h('td.hv-name', { title: GROSS, dataset: { hook: 'fc-revenue-label' } }, model().personal > 0 ? 'Revenue, commercial only' : 'Revenue'), h('td.hv-total', { dataset: { hook: 'fc-season-total' } }, money(rows.reduce((n, r) => n + r.worth, 0))), c => rows.reduce((n, r) => n + F.sum(r.value, c.i0, c.i1), 0));
     foot.dataset.hook = 'fc-week-totals';
     return h('div.hv-scroll' + (fit ? '.fit' : ''), { id: 'hvScroll', dataset: { hook: 'fc-scroll' } }, h('table.hv' + (fit ? '.fit' : ''), { id: 'hvTable', dataset: { hook: 'fc-table', measure, fit: fit ? 'season' : '' } }, h('thead', head), h('tbody', body), h('tfoot', foot)));
   }
