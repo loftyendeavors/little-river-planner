@@ -27,7 +27,8 @@ def check(name, ok, detail=None):
 def finish():
     print(json.dumps({"passed": len(results) - len(failed), "of": len(results), "failed": failed, "details": [r for r in results if not r["ok"]][:12], "errors": errors[:6]}, default=str))
     sys.stdout.flush(); os._exit(1 if failed else 0)
-# What the page shows of the pick, read from what is drawn: the rows edged in orange (the line along a row's top), the bars ringed in
+# What the page shows of the pick, read from what is drawn: the rows edged in orange (a line along a row's top and bottom, drawn on that
+# row and as tall as it, not on the Timeline round it: Codex on #89), the bars ringed in
 # orange, where the row of a bed stands in the Timeline's window, and the Timeline's scroll.
 PRE = ("const A = LRFApp, S = A.state, eng = S.engine, sc = document.getElementById('tlScroll');"
        "const sleep = ms => new Promise(r => setTimeout(r, ms));"
@@ -36,7 +37,7 @@ PRE = ("const A = LRFApp, S = A.state, eng = S.engine, sc = document.getElementB
        "const flag = (() => { const d = document.createElement('i'); d.style.color = 'var(--flag)'; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c; })();"
        "const rowOf = id => document.querySelector('#tlBody [data-hook=\"tl-space\"][data-bed=\"' + CSS.escape(id) + '\"]');"
        "const barOf = id => document.querySelector('#tlBody [data-hook=\"tl-planting\"][data-planting=\"' + CSS.escape(id) + '\"]');"
-       "const edged = () => [...document.querySelectorAll('#tlBody [data-hook=\"tl-space\"]')].filter(r => { const a = getComputedStyle(r, '::after'); return a.borderTopWidth === '2px' && a.borderTopColor === flag && a.borderBottomColor === flag; }).map(r => r.dataset.bed);"
+       "const edged = () => [...document.querySelectorAll('#tlBody [data-hook=\"tl-space\"]')].filter(r => { const a = getComputedStyle(r, '::after'), h = r.getBoundingClientRect().height; return a.borderTopWidth === '2px' && a.borderTopColor === flag && a.borderBottomColor === flag && a.top === '0px' && parseFloat(a.height) >= h - 2 && parseFloat(a.height) <= h; }).map(r => r.dataset.bed);"
        "const ringed = () => [...document.querySelectorAll('#tlBody [data-hook=\"tl-planting\"]')].filter(b => getComputedStyle(b).boxShadow.includes(flag)).map(b => b.dataset.planting);"
        "const seen = id => { const r = rowOf(id); if (!r) return null; const b = r.getBoundingClientRect(), v = sc.getBoundingClientRect(), top = v.top + sc.querySelector('.tl-head').offsetHeight, bottom = v.top + sc.clientHeight; return b.bottom > top && b.top < bottom; };"
        "const at = () => ({ top: Math.round(sc.scrollTop), left: Math.round(sc.scrollLeft) });")
