@@ -471,12 +471,13 @@ tryCase('a sown batch made under a free id after its worked one and taken off it
   const out = [];
   // as joined; and again with the worked id held by a plain planting of that week with nothing recorded on it (also only by a hand edit): the sown one is taken first
   const { liveTray: _link, ...plainBatch } = planting(r.plan, W2), { done: _d, workflow: _w, ...blank } = plainBatch;
-  const olderJoin = { ...r.plan, plantings: r.plan.plantings.map(p => p.id === W2 ? plainBatch : p.id === W ? { ...blank, id: W } : p) };
+  // the sown batch kept as it was recorded (2 trays, where the demand now asks 3), not made again from the demand
+  const olderJoin = { ...r.plan, plantings: r.plan.plantings.map(p => p.id === W2 ? { ...plainBatch, trays: 2 } : p.id === W ? { ...blank, id: W } : p) };
   const cases = [[r.plan, 'as joined'], [olderJoin, 'joined by an older app, with the worked id held by a plain unsown planting']];
   for (const [joined, name] of cases) {
     const again = TR.apply(joined, { ...joined.liveTrayPlans.find(t => t.id === X.id), name: 'Twin demand, again' }, { uid: device('again', 10).uid, now: '2027-03-02T08:00:00.000Z', crop: id => eng(joined).crop(id), keepRecorded: true }).plan;
     const w = X.week(again, '2027-05-10'), ids = again.plantings.map(p => p.id);
-    if (!(w.length === 1 && w[0].id === W2 && (w[0].done || {}).sow === '2027-04-26' && ids.length === new Set(ids).size && !ids.includes(W + '~3'))) out.push([name, w.map(p => [p.id, p.done]), ids.filter(id => String(id).startsWith(W))]);
+    if (!(w.length === 1 && w[0].id === W2 && (w[0].done || {}).sow === '2027-04-26' && (joined === r.plan || w[0].trays === 2) && ids.length === new Set(ids).size && !ids.includes(W + '~3'))) out.push([name, w.map(p => [p.id, p.trays, p.done]), ids.filter(id => String(id).startsWith(W))]);
   }
   return [W2 === W + '~2' && planting(r.plan, W2).liveTray?.planId === X.id && out.length === 0, [W2, out]];
 });
