@@ -323,7 +323,7 @@
       if (!ok) return false;
     } else if (options.ask && hit.changed && !options.shown) {
       // Several lines of the list changed at once: say what moves before it does.
-      if (!await UI.confirm({ title: label, confirmLabel: 'Apply', body: `${moves}. No ground ends up booked twice. One undo takes it all back.`, detail })) return false;
+      if (!await UI.confirm({ title: label, confirmLabel: 'Apply', body: `${moves}. No new double bookings. One undo takes it all back.`, detail })) return false;
     }
     commit(label, ops, { unchecked: true });
     // `options.more` and `options.offers`: what else is so after the step, and what can be done about it from the answer (L3)

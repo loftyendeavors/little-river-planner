@@ -409,7 +409,7 @@
         h('span', st.done ? w[1] : w[0],
           st.kind === 'sow' && r.sowSet && !st.done ? h('button.link.sow-own', { type: 'button', title: `You set this day. The plan works out ${day(r.sowDefault)}. Click to use the plan’s day.`, onclick: () => App.planSowings([p.id], null) }, 'your day') : null,
           late ? h('small.job-late', late) : null,
-          pushed ? h('small.job-late', { title: 'Its seedlings were sown or hardened off late, so the day moved with them. Change the date above to set another.' }, `${num(pushed.days)} d later`) : null,
+          pushed ? h('small.job-late', { title: 'Its seedlings were sown or hardened off late, so the day moved with them. Edit “Transplant date” to choose another day.' }, `${num(pushed.days)} d later`) : null,
           st.passed ? h('small.job-late', 'no day recorded') : null,
           // the job that uses the seed, the bulbs or the plants is recorded below, with what was used
           !st.done && !st.passed && !st.seed && !open ? h('button.link.job-tick', { type: 'button', dataset: { job: 'tick' }, onclick: () => { jobOpen = { id: p.id, kind: st.kind }; render(); } }, 'record') : null,

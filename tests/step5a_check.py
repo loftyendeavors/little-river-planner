@@ -222,8 +222,15 @@ with sync_playwright() as pw:
     check("× leaves it without recording", not left["input"] and left["undo"] == one["undo"], left)
     page.locator('#jobList li[data-job="harden"] [data-job="tick"]').click(); wait(300)
     page.locator('#jobList [data-job="save"]').click(); wait(800)
-    pan = js(f"const p = S.engine.planting({json.dumps(one['id'])}), li = document.querySelector('#jobList li[data-job=harden]'); return {{ done: p.done && p.done.harden, date: p.date, state: li.dataset.state, text: li.textContent, toast: (document.querySelector('.toast') || {{}}).textContent || '', next: document.querySelector('#jobList li[data-job=field]').textContent }};")
-    check("recorded there, late: the job is done, the planting goes out as many days later, and both are said", pan["done"] == first["today"] and pan["date"] == plus(one["date"], one["late"]) and pan["state"] == "done" and "Hardened off" in pan["text"] and f"{one['late']} d late" in pan["text"] and "later" in pan["toast"] and f"{one['late']} d later" in pan["next"], pan)
+    pan = js(f"""const p = S.engine.planting({json.dumps(one['id'])}), li = document.querySelector('#jobList li[data-job=harden]');
+      const field = document.querySelector('#jobList li[data-job=field]');
+      return {{ done: p.done && p.done.harden, date: p.date, state: li.dataset.state, text: li.textContent,
+        toast: (document.querySelector('.toast') || {{}}).textContent || '', next: field.textContent,
+        hint: field.querySelector('.job-late[title]')?.title }};""")
+    check("recorded there, late: the job is done, the planting goes out as many days later, and both are said",
+          pan["done"] == first["today"] and pan["date"] == plus(one["date"], one["late"]) and pan["state"] == "done"
+          and "Hardened off" in pan["text"] and f"{one['late']} d late" in pan["text"] and "later" in pan["toast"]
+          and f"{one['late']} d later" in pan["next"] and 'Edit “Transplant date”' in pan.get("hint", ""), pan)
     page.screenshot(path=str(shots / f"panel-jobs-{WIDTH}.png"))
     clip = js("const p = document.getElementById('inspectorBody'); return { wide: p.scrollWidth > p.clientWidth + 1, spill: [...document.querySelectorAll('#jobList li')].filter(li => li.scrollWidth > li.clientWidth + 1).map(li => li.textContent) };")
     check("the schedule fits the panel", not clip["wide"] and clip["spill"] == [], clip)
