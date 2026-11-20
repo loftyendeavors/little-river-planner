@@ -158,6 +158,8 @@
   // everything whose words depend on the scale, fitted again whenever it changes
   let fitList = [];
   const sums = new Map();   // planting id → the summary bar that holds it
+  // what is picked, as drawn: the bed whose row is edged, the planting whose bar is ringed, the bed to bring into view (pickOf)
+  let pick = { row: null, bar: null, bed: null };
   function refit() { for (const fit of fitList) fit(); }
 
   /**
@@ -191,7 +193,7 @@
   const pictureOf = p => { const T = root.LRFThumbs; return p.varietyId && T.has(p.varietyId) ? { varietyId: p.varietyId } : T.cropHas(p.cropId) ? { cropId: p.cropId } : null; };
   function plantingBar(item, lane, tray) {
     const { p, r } = item, eng = App.state.engine, through = eng.occupancyThrough(p, r);
-    const sel = App.state.sel && App.state.sel.type === 'planting' && App.state.sel.id === p.id;
+    const sel = pick.bar === p.id;
     // what a series would add: drawn where it would go, and not yet a planting (it cannot be picked up or selected)
     if (item.ghost) return barEl({ from: eng.occupancyFrom(p, r), to: through === Infinity ? yearEnd() : through, through, field: r.field, first: r.first, last: r.last, sow: r.sow, lane, color: eng.cropColor(r.c),
       cls: '.tl-ghost-bar', dataset: { ghost: p.id }, tries: namesOf(r.c), pictured: pictureOf(p), alt: r.c.name, title: `Not added yet: ${App.cropLabel(p)} would go in ${day(r.field)} · harvest ${span(r.first, r.last)}` });
@@ -199,14 +201,14 @@
     // a planting marked failed stays on record, greyed, to the day before it failed (at least its first day, when it failed in the nursery)
     const from = eng.occupancyFrom(p, r), held = through === Infinity ? yearEnd() : through, failed = r.failed ? `Failed ${day(E.s2d(r.failed))} · ` : '';
     return barEl({ from, to: held < from ? from : held, through, field: r.field, first: r.first, last: r.last, sow: r.sow, lane, color: eng.cropColor(r.c),
-      cls: (sel ? '.sel' : '') + (r.failed ? '.tl-failed' : ''), dataset: { planting: p.id }, kind: tray ? 'tray' : 'bar', fixed: tray ? num(r.len) : null, tries: tray ? null : namesOf(r.c), pictured: tray ? null : pictureOf(p), alt: r.c.name,
+      cls: (sel ? '.sel' : '') + (r.failed ? '.tl-failed' : ''), dataset: { hook: 'tl-planting', planting: p.id }, kind: tray ? 'tray' : 'bar', fixed: tray ? num(r.len) : null, tries: tray ? null : namesOf(r.c), pictured: tray ? null : pictureOf(p), alt: r.c.name,
       title: failed + (tray ? `${root.LRFTrays.short(r.c.name)} · ${num(r.len)} tray${r.len === 1 ? '' : 's'} · sow ${day(r.field)} · ready ${day(r.first)}` : `${App.cropLabel(p)} · in ${day(r.field)} · ${r.failed && !r.harvestDays ? 'no harvest' : 'harvest ' + span(r.first, r.last)}`) });
   }
   /** Several plantings drawn as one bar: the same crop going in on the same day. It is not dragged; a click opens it to its plantings. */
   function summaryBar(g, lane, words) {
     const eng = App.state.engine, items = g.list, first = items[0], min = f => new Date(Math.min(...items.map(f))), max = f => new Date(Math.max(...items.map(f)));
     const endless = items.some(x => x.to === Infinity), through = endless ? Infinity : max(x => x.to), sows = items.filter(x => x.r.sow).map(x => +x.r.sow);
-    const holdsSel = App.state.sel && App.state.sel.type === 'planting' && items.some(x => x.p.id === App.state.sel.id), ghost = !!first.ghost;
+    const holdsSel = !!pick.bar && items.some(x => x.p.id === pick.bar), ghost = !!first.ghost;
     // plantings marked failed are summed apart from the others (their key says so), so a group is failed whole or not at all
     const failed = !ghost && items.every(x => x.r.failed), said = failed ? `Failed · ${words.title}` : words.title;
     const el = barEl({ from: new Date(g.from), to: endless ? yearEnd() : through, through, field: min(x => +x.r.field), first: min(x => +x.r.first), last: max(x => +x.r.last), sow: sows.length ? new Date(Math.min(...sows)) : null,
@@ -322,8 +324,8 @@
       if (fit) roomIn(lane, eng, o, fit, a, n, lanes);
     }
     for (const item of items) { const el = plantingBar(item, item.lane); if (el) lane.append(el); }
-    const selBed = sel && ((sel.type === 'bed' && sel.id === bed.id) || (sel.type === 'opening' && sel.bedId === bed.id));
-    body.append(rowEl('div.tl-row' + (selBed ? '.sel' : '') + (extra && extra.cls || ''), { dataset: { bed: bed.id, ...(extra && extra.dataset || {}) } }, h('div.tl-label', label, small ? h('small', small) : null), lane, !!extra));
+    const selBed = pick.row === bed.id;
+    body.append(rowEl('div.tl-row' + (selBed ? '.sel' : '') + (extra && extra.cls || ''), { dataset: { hook: 'tl-space', bed: bed.id, ...(extra && extra.dataset || {}) } }, h('div.tl-label', label, small ? h('small', small) : null), lane, !!extra));
   }
   /** What a carried crop would give, in the unit it is sold in: "85 bunches". */
   function roomAmount(eng, t) {
@@ -512,7 +514,7 @@
 
   function render() {
     if (!App.state.ready || App.state.view !== 'timeline') { dirty = true; return; }
-    dirty = false; fitList = []; sums.clear(); hideHint();
+    dirty = false; fitList = []; sums.clear(); hideHint(); pick = pickOf();
     const eng = App.state.engine, plan = App.state.plan, body = clear($('tlBody'));
     // the openings: all of them while Openings is on; while a crop is carried, the ones it fits whether or not
     room = roomFor(eng); roomHere = 0;
@@ -574,18 +576,52 @@
       h('b', name), h('span', { dataset: { hook: 'room-count' } }, says),
       h('button.tl-room-x', { type: 'button', 'aria-label': `Put ${name} down`, title: `Put ${name} down`, onclick: () => App.arm(null) }, '×'));
   }
+  /** What is picked, as the Timeline shows it (#88): the bed whose row is edged (a bed picked, or an opening's bed); the planting
+   *  whose bar is ringed (a planting picked, or the planting row open in the bed's card or panel, which follows the card as it is
+   *  opened and closed); and the bed to bring into view. */
+  function pickOf() {
+    const sel = App.state.sel, C = root.LRFCard;
+    if (!sel) return { row: null, bar: null, bed: null };
+    if (sel.type === 'bed') return { row: sel.id, bar: (C && C.openRow && C.openRow()) || null, bed: sel.id };
+    if (sel.type === 'opening') return { row: sel.bedId, bar: null, bed: sel.bedId };
+    if (sel.type === 'planting') { const p = App.state.engine.planting(sel.id); return { row: null, bar: sel.id, bed: p ? p.bedId : null }; }
+    return { row: null, bar: null, bed: null };
+  }
   /** Show what is selected without drawing the chart again: the bar (or the summary that holds it), the bed's rows, the opening. */
   function markSel() {
     for (const el of document.querySelectorAll('#tlBody .sel')) el.classList.remove('sel');
     const sel = App.state.sel;
+    pick = pickOf();
     if (!sel) return;
     const each = (query, fn) => { for (const el of document.querySelectorAll(query)) fn(el); }, on = el => el.classList.add('sel');
-    if (sel.type === 'planting') { const bar = document.querySelector(`.tl-bar[data-planting="${CSS.escape(sel.id)}"]`) || sums.get(sel.id); if (bar && bar.isConnected) on(bar); return; }
+    if (pick.bar) { const bar = barOf(pick.bar); if (bar) on(bar); }
     if (sel.type === 'waiting') { each(`.tl-bar[data-waiting="${CSS.escape(sel.id)}"]`, on); return; }
-    if (sel.type !== 'bed' && sel.type !== 'opening') return;
-    const bedId = sel.type === 'opening' ? sel.bedId : sel.id;
     if (sel.type === 'opening') each(`.tl-open[data-opening="${CSS.escape(sel.id)}"]`, on);
-    each(`.tl-row[data-bed="${CSS.escape(bedId)}"]:not(.tl-pool)`, on);
+    if (pick.row) each(`.tl-row[data-bed="${CSS.escape(pick.row)}"]:not(.tl-pool)`, on);
+  }
+  /** A planting's bar as drawn, or the summary bar that holds it. */
+  function barOf(id) {
+    const bar = document.querySelector(`#tlBody .tl-bar[data-planting="${CSS.escape(id)}"]`) || sums.get(id);
+    return bar && bar.isConnected ? bar : null;
+  }
+  /** Bring the row of what is picked into view, up or down only, and only when none of it can be seen: the date stays where it
+   *  is, and a row that shows at all is left where it is, so nothing jumps under the pointer (#88). */
+  function showRow() {
+    const scroll = $('tlScroll'), eng = App.state.engine;
+    const find = () => { const bar = pick.bar && barOf(pick.bar); return (bar && bar.closest('.tl-row')) || (pick.bed && document.querySelector(`#tlBody .tl-row[data-bed="${CSS.escape(pick.bed)}"]`)); };
+    let row = find();
+    // hidden by the filter, a closed garden or a bank of towers: opened to, then found again on the page drawn afresh (Codex on #89)
+    if (!row && pick.bed && revealSpace(eng, eng.bedOf(pick.bed))) row = find();
+    if (!row || !scroll.clientHeight) return;
+    const box = row.getBoundingClientRect(), view = scroll.getBoundingClientRect(), head = scroll.querySelector('.tl-head');
+    const top = view.top + (head ? head.offsetHeight : 0), bottom = view.top + scroll.clientHeight;
+    if (box.bottom > top && box.top < bottom) return;
+    scroll.scrollTop += box.top - top - Math.max(0, (bottom - top - box.height) / 3);
+  }
+  /** The bed's card opened or closed one of its plantings: the Timeline rings it, and brings its row into view if it was hidden. */
+  function showPick() {
+    if (!App.state.ready || App.state.view !== 'timeline') return;
+    markSel(); showRow();
   }
   function cursor() {
     if (!App.state.ready) return;
@@ -628,14 +664,20 @@
   }
   /** Open whatever summary holds this planting, so its own bar is on the page. */
   function reveal(plantingId) {
-    const eng = App.state.engine, p = eng.planting(plantingId), bed = p && eng.bedOf(p.bedId), garden = bed && eng.gardenOf(bed);
+    const eng = App.state.engine, p = eng.planting(plantingId);
+    return revealSpace(eng, p && eng.bedOf(p.bedId), p && p.cropId);
+  }
+  /** Open whatever hides a space's row: the filter that leaves its kind out, its garden closed, its bank of towers as one row, and
+   *  (for a planting's crop) a crate's crop drawn as one bar. A bed picked is opened to as a planting picked is (Codex on #89). */
+  function revealSpace(eng, bed, cropId) {
+    const garden = bed && eng.gardenOf(bed);
     if (!bed || !garden) return false;
     const s = sectionOf(eng, bed, garden), key = `${s}:${garden.id}`;
     let changed = false;
     if (prefs.filter !== 'all' && prefs.filter !== s && s !== 'trays') { prefs.filter = s; changed = true; }
     if (s === 'tower' && !prefs.open[key]) { prefs.open[key] = true; changed = true; }
     if (s !== 'tower' && s !== 'trays' && prefs.shut[key]) { delete prefs.shut[key]; changed = true; }
-    if (s === 'crate') { const k = `crop:${bed.id}:${p.cropId}`; if (!prefs.open[k] && eng.plantingsIn(bed.id).length > CROWDED) { prefs.open[k] = true; changed = true; } }
+    if (s === 'crate' && cropId) { const k = `crop:${bed.id}:${cropId}`; if (!prefs.open[k] && eng.plantingsIn(bed.id).length > CROWDED) { prefs.open[k] = true; changed = true; } }
     if (changed) { savePrefs(); render(); }
     return changed;
   }
@@ -817,6 +859,8 @@
       const sel = App.state.sel;
       if (sel && sel.type === 'planting' && !document.querySelector(`.tl-bar[data-planting="${CSS.escape(sel.id)}"]`) && reveal(sel.id)) { requestAnimationFrame(() => bringIntoView(sel.id)); return; }
       markSel();
+      // picked somewhere else (the card, a list): its row is brought into view if it was hidden; a click here is on a row in view (#88)
+      showRow();
     });
     App.on('date', cursor);
     // the typefaces arrive after the first draw: measure again in the real one
@@ -824,14 +868,15 @@
     if (root.ResizeObserver) new ResizeObserver(() => { if (sized) settle(); }).observe(scroll);
     App.on('view', () => {
       if (App.state.view !== 'timeline') return;
-      if (dirty) render();
+      if (dirty) render(); else markSel();   // the card may have opened another of the bed's plantings while the Timeline was away
       requestAnimationFrame(() => {
         const first = settle();
         const x = xOf(App.state.date) - laneRoom() / 2;
         if (first && scroll.scrollLeft === 0 && x > 0) scroll.scrollLeft = x;
+        showRow();   // what the card holds, brought into view if it is hidden (#88)
       });
     });
   }
 
-  root.LRFTimeline = { init, targetAt, showDrop, setScale, setFilter, reveal, showGhosts, scale: () => ppd, fit: fitPpd, prefs: () => prefs, levels: { weeks: WEEKS_AT, days: DAYS_AT, max: MAX_PPD } };
+  root.LRFTimeline = { init, targetAt, showDrop, setScale, setFilter, reveal, showGhosts, showPick, scale: () => ppd, fit: fitPpd, prefs: () => prefs, levels: { weeks: WEEKS_AT, days: DAYS_AT, max: MAX_PPD } };
 })(window);

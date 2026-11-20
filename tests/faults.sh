@@ -53,6 +53,7 @@ swap
 tasks2
 yearedge
 bought
+tlpick
 early
 merge
 join
@@ -106,6 +107,7 @@ script() {
     yearedge) SCRIPT=$T/mutate_yearedge.py; ARGS="$APP $F $T $PLAN" ;;
     bought) SCRIPT=$T/mutate_bought.py; ARGS="$APP $F $T $PLAN" ;;
     early) SCRIPT=$T/mutate_early.py; ARGS="$APP $F $T $PLAN" ;;
+    tlpick) SCRIPT=$T/mutate_tlpick.py; ARGS="$APP $F $T" ;;
     *) return 1 ;;
   esac
 }

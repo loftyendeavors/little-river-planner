@@ -86,7 +86,10 @@
       h('i'), t.crop.name, h('small', `harvest ${day(t.r.first)}`)));
     const around = [o.after ? ['After', o.after, x => `ground clear ${day(E.addDays(eng.occupancyThrough(x.p, x.r), 1))}`] : null, o.before ? ['Before', o.before, x => `goes in ${day(eng.occupancyFrom(x.p, x.r))}`] : null].filter(Boolean);
     UI.add(host,
-      h('header.insp-head', h('p.eyebrow', `Opening · ${App.bedLabel(o.bed)}`), h('h2', { id: 'ahTitle' }, span(o.from, o.to)),
+      // the way back to the bed, at the head where a way back is looked for: from the bed's card it is that card again (his, Nov 19)
+      h('header.insp-head', h('button.link.insp-back', { type: 'button', id: 'ahToBed', title: 'Back to the bed', dataset: { hook: 'opening-back' },
+          onclick: () => (sel.fromBedSeason && root.LRFCard ? root.LRFCard.backToBed(o.bed.id) : App.select({ type: 'bed', id: o.bed.id })) }, h('span', { 'aria-hidden': 'true' }, '‹'), App.bedLabel(o.bed)),
+        h('p.eyebrow', 'Opening'), h('h2', { id: 'ahTitle' }, span(o.from, o.to)),
         h('button.icon-btn.close', { type: 'button', 'aria-label': 'Close', onclick: () => App.select(null) }, '×')),
       h('div.stats', { id: 'ahFigures' }, stat('Days open', num(o.days)), stat(o.whole ? 'Whole bed (ft)' : `Feet of ${num(o.cap, 1)}`, num(o.length, 1))),
       h('section.insp-section', h('h3', 'It comes'), around.length
@@ -97,8 +100,7 @@
           : h('p.note', { id: 'ahNone' }, O.mine ? 'Too short for anything on your crop list.' : 'Too short for any crop in the library.'),
         h('label.ah-check', h('input', { type: 'checkbox', id: 'ahMine', checked: !O.mine, onchange: e => { O.mine = !e.target.checked; O.pick = null; redraw(); } }), h('span', 'Offer crops I do not grow yet')),
         null),
-      O.pick && O.pick.cropId ? review(o, redraw) : null,
-      h('p.insp-aside', h('button.link', { type: 'button', id: 'ahToBed', onclick: () => App.select({ type: 'bed', id: o.bed.id }) }, `Everything in ${App.bedLabel(o.bed)}`)));
+      O.pick && O.pick.cropId ? review(o, redraw) : null);
     return true;
   }
 
