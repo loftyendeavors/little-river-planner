@@ -2717,7 +2717,6 @@ body[data-card="on"] .stage { position: relative; }
 .fc-break { flex: 0 0 100%; height: 0; }
 /* the Season heading sorts the crops under each heading by revenue: highest, lowest, A to Z */
 .hv-sort { display: flex; align-items: flex-end; justify-content: flex-end; width: 100%; min-height: var(--control-in); border: 0; background: none; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; text-align: inherit; cursor: pointer; }   /* the target fills the cell's width, a table control's height (Codex on #99) */
-body.phone .hv-sort { min-height: var(--control-phone); }
 .hv-sort:hover, .hv-sort[data-order="high"], .hv-sort[data-order="low"] { color: var(--ink); }
 .hv-sort-arrow { color: var(--ink); }
 /* the season's revenue week by week: light ink bars on the line's baseline, the week in hand in orange, a week darker under the pointer */
