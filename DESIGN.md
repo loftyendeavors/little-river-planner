@@ -10,8 +10,10 @@ and what it leaves alone.
 ## The five rules
 
 1. **One frame for every page.** A title that says what is on screen ("Today", "Forecast"). One line of figures; one of them
-   may lead, at the largest size, and the lead may carry a small chart of its own course beside it (the Forecast's revenue
-   by week: ink bars on the line's baseline, the period in hand in orange, the work below it the full view). The page's own
+   may lead, at the largest size. A lead may stand on a line of its own above that line, with a small chart of its own
+   course beside it and the period in hand at the right (the Forecast: projected revenue, revenue by week as ink bars on the
+   line's baseline with the week in hand in orange, then the season's figures on the one line under it; the work below is
+   the full view). In a narrow panel the figures stand one to a line, as below. The page's own
    controls. Then the work. The explanation is behind "?". No eyebrow, no paragraph, no row of tiles, no standing notice.
 2. **One card for whatever is picked.** A bed, a planting, an opening, a run or a variety opens the same floating card: head
    (what it is, "⋯", ×), one picture, one line of what it comes to, the one or two boxes changed most, a tick, then rows that
