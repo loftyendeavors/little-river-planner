@@ -27,6 +27,8 @@
  ],
  "screens": [
   "map",
-  "assumptions-days"
+  "assumptions-days",
+  "nursery-supplies",
+  "nursery-set-up"
  ]
 }
