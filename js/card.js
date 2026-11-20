@@ -103,10 +103,10 @@
     if (mine && !change) {
       el.dataset.state = 'said';
       const run = said.action;
-      add(el, h('span', said.text), run ? h('button.link', { type: 'button', dataset: { hook: 'card-undo' }, onclick: () => { said = null; run.run(); } }, run.label) : null);
+      add(el, h('span', said.text), run ? h('button.btn.small', { type: 'button', dataset: { hook: 'card-undo' }, onclick: () => { said = null; run.run(); } }, run.label) : null);
     } else if (change) {
       el.dataset.state = last.kind;
-      if (last.kind === 'saved') add(el, h('b', 'Saved'), h('span', ` · ${last.label}`), last.canUndo ? h('button.link', { type: 'button', dataset: { hook: 'card-undo' }, onclick: () => App.undo() }, 'Undo') : null);
+      if (last.kind === 'saved') add(el, h('b', 'Saved'), h('span', ` · ${last.label}`), last.canUndo ? h('button.btn.small', { type: 'button', dataset: { hook: 'card-undo' }, onclick: () => App.undo() }, 'Undo') : null);
       else add(el, h('b', 'Not changed'), h('span', ` · ${last.text}`));
     } else { el.dataset.state = 'idle'; el.hidden = true; return; }
     el.hidden = false;
@@ -207,7 +207,7 @@
           box('Harvest days', h('input', { type: 'number', min: 0, max: 400, dataset: { hook: 'card-hw' }, value: p.hw != null && p.hw !== '' ? p.hw : '', placeholder: r.harvestMode === 'season' ? 'To season end' : String(c.hw), onchange: ev => set(Ed.hw(ev.target.value)) }))),
         h('p.card-note', p.dtm > 0 ? 'Its own days. Empty the box to follow your list.' : 'From your list. A figure here is this planting’s own.')]),
       fold('nursery', nursery, () => [h('p.card-note', r.sowing && r.sowing.batch ? `${r.sowing.batch.tray ? r.sowing.batch.tray.name : 'Pots'}${r.sowing.shared ? ', in one batch with other plantings of this variety' : ''}.` : r.cells ? 'Sown in trays.' : 'Nothing to sow in trays.'),
-        h('button.btn.quiet.small', { type: 'button', onclick: () => openFull() }, 'Sowing and its record: Planting details')]),
+        h('button.link', { type: 'button', dataset: { hook: 'card-nursery-full' }, onclick: () => openFull() }, 'Sowing and its record: Planting details')]),
       fold('repeat', `More, every ${num(Math.max(7, Math.min(28, c.hw || 14)))} days`, () => {
         const count = h('input', { type: 'number', min: 1, max: 30, value: 3, 'aria-label': 'How many more', dataset: { hook: 'card-repeat-count' } });
         const every = h('input', { type: 'number', min: 1, max: 120, value: Math.max(7, Math.min(28, c.hw || 14)), 'aria-label': 'Days apart', dataset: { hook: 'card-repeat-every' } });
@@ -721,6 +721,6 @@
     draw();
   }
 
-  root.LRFCard = { init, tick, on: () => on, docked: () => !!card && DOCKED.matches, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, openBedFromMap, keepBedFocus, openRow };
+  root.LRFCard = { init, tick, on: () => on, docked: () => !!card && DOCKED.matches, turn, settle() { settling = true; draw(); }, standing, bedSeasonOn, renderBedSeason: bedSeason, backToBed, openBedFromMap, keepBedFocus, openRow, menu: (spec, anchor) => openMenu(spec, anchor) };
   init();
 })(window);

@@ -808,7 +808,7 @@
     const tools = document.querySelector('.map-tools');
     tools.append(UI.help(null, () => tools, () => [
       ['Plant', 'Drag a crop from the library onto a bed. It takes the date under the map.'],
-      ['Plan a succession', ['Use “series” beside a crop in the library, or ', h('button.linkish', { type: 'button', id: 'ovSeries', onclick: () => App.openAhead({ mode: 'series' }) }, 'plan one now'), '.']],
+      ['Plan a succession', ['Use “series” beside a crop in the library. ', h('button.btn.quiet.small', { type: 'button', id: 'ovSeries', dataset: { hook: 'map-help-series' }, onclick: () => App.openAhead({ mode: 'series' }) }, 'Plan a series…')]],
       ['Move', 'Drag a planting to another bed. Its date stays.'],
       ['Copy', 'Hold Alt while dragging.'],
       ['Trade', 'Drop a planting on a bed that is taken. The two swap when both fit.'],

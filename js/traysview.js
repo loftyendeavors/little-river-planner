@@ -211,7 +211,7 @@
     }
     const step = n => () => App.setDate(E.addDays(d(now), n));
     return h('section.tr-weeks', h('div.tr-weeks-head', h('h3', 'Week by week'),
-      h('button.linkish.tr-tosow', { type: 'button', id: 'trToTasks', onclick: () => { if (root.LRFSowView && root.LRFSowView.open) root.LRFSowView.open('nursery'); else App.setView('sow'); } }, 'Record what was sown, in Tasks'), h('span.grow'),
+      h('button.link.tr-tosow', { type: 'button', id: 'trToTasks', dataset: { hook: 'nursery-to-tasks' }, onclick: () => { if (root.LRFSowView && root.LRFSowView.open) root.LRFSowView.open('nursery'); else App.setView('sow'); } }, 'Record what was sown, in Tasks'), h('span.grow'),
       h('span.tr-stepper', h('button.icon-btn', { type: 'button', 'aria-label': 'Back one week', onclick: step(-7) }, '‹'), h('b', `Week of ${day(d(now))}`), h('button.icon-btn', { type: 'button', 'aria-label': 'Forward one week', onclick: step(7) }, '›'))),
       body.children.length ? h('div.tr-scroll', h('table.as.tr-week', h('thead', h('tr', h('th', 'Week of'), h('th', 'Sow'), h('th', { title: 'Sown on the Monday unless a day is shown' }, 'What to sow'), h('th', 'Ready'), h('th', 'Expected'), h('th', { title: 'Most live trays standing on the benches on any day of the week' }, 'On the benches'))), body)) : h('p.tr-note', 'No trays are planned this season.'));
   }
@@ -228,7 +228,7 @@
       stat(`On the benches, week of ${day(d(now))}`, heat && heat.used > 1e-9 ? (heat.cap ? `${num(heat.used, 0)} of ${num(heat.cap)}` : `${num(heat.used, 0)} spaces`) : 'Nothing', [bench.shown.length > 1 && heat && heat.used > 1e-9 ? 'under heat' : '', ...others].filter(Boolean).join(' · ') || (heat && heat.used > 1e-9 ? `fullest on ${dayName(heat.date)}` : 'stands under heat'), heat && heat.cap && heat.over > 0.05 ? 'over' : ''),
       stat('Hardening off, most at once', !days ? 'Not planned' : hd && hd.most > 1e-9 ? `${num(hd.most, 0)} spaces` : 'Nothing', !days ? 'seedlings stay under cover until planted' : hd && hd.most > 1e-9 ? `${day(hd.on)} · ${num(days)} day${days === 1 ? '' : 's'} before planting out` : `${num(days)} day${days === 1 ? '' : 's'} before planting out`),
       h('div.tr-stat.nu-week', { id: 'nuWeek' }, h('span', 'This week in the nursery'), h('strong', todo && todo.nursery ? `${num(todo.nursery)} to do` : 'Nothing'), h('small', parts.join(' · ') || 'to sow, pot up or harden off'),
-        h('button.linkish', { type: 'button', id: 'nuToTasks', title: 'The week’s list, with only the nursery’s tasks', onclick: () => { if (root.LRFSowView && root.LRFSowView.open) root.LRFSowView.open('nursery'); } }, 'Open the nursery’s list, in Tasks'))),
+        h('button.link', { type: 'button', id: 'nuToTasks', dataset: { hook: 'nursery-week-tasks' }, title: 'The week’s list, with only the nursery’s tasks', onclick: () => { if (root.LRFSowView && root.LRFSowView.open) root.LRFSowView.open('nursery'); } }, 'Open the nursery’s list, in Tasks'))),
     Bench.room()];
   }
   /** Live trays: the season's figures, each demand plan, and under them the same batches week by week. */

@@ -57,7 +57,7 @@ PAGE = [
  ("a tick taken off is ignored", SW, "if (e.target.checked) set.add(r.id); else set.delete(r.id);", "if (e.target.checked) set.add(r.id);"),
  ("the answer is said over the page as well", SW, "    said = { fromId, toId, step, text };\n", "    said = { fromId, toId, step, text }; root.LRFUI.toast(text);\n"),
  ("the answer is never shown", SW, "    if (!said || said.fromId !== varietyId", "    if (true || !said || said.fromId !== varietyId"),
- ("the answer has no Undo", SD, "said.canUndo ? h('button.link'", "false ? h('button.link'"),
+ ("the answer has no Undo", SD, "said.canUndo ? h('button.btn.small'", "false ? h('button.btn.small'"),
  ("each row gives the harvest's old day as its new one", SW, "${day(r.first)} → ${day(r.firstNow)}", "${day(r.first)} → ${day(r.first)}"),
  ("the sheet gives the worth before as the worth after", SW, "`${money(view.worth[0])} → ${money(view.worth[1])}`", "`${money(view.worth[0])} → ${money(view.worth[0])}`"),
  ("an already sown planting can be ticked", SW, "tickable = TICKABLE.includes(r.state) && !!to;", "tickable = !!to;"),

@@ -206,7 +206,8 @@
     } else if (c.status === 'waiting') note = h('p.bk-note', { id: 'syncNote2' }, h('b', 'The cloud could not be reached.'), ' The plan is saved in this browser and is sent when there is a connection.');
     else if (c.status === 'error') note = h('p.bk-note.bad', { id: 'syncNote2' }, h('b', 'Cloud sync failed.'), ' ', c.error);
     const label = h('input', { id: 'syncLabel', type: 'text', maxLength: 40, autocomplete: 'off', value: c.label, placeholder: deviceGuess() || 'Work laptop', onchange: e => s.rename(e.target.value) });
-    const way = (id, on, text) => h('button.btn.small' + (c.join === on ? '.primary' : ''), { type: 'button', id, disabled: busy || switching, 'aria-pressed': String(c.join === on), onclick: () => setJoin(on) }, text);
+    // one of two ways, so one switch: bordered, the chosen side in ink (L3). What each does is unchanged.
+    const way = (id, on, text) => h('button', { type: 'button', id, disabled: busy || switching, 'aria-pressed': String(c.join === on), dataset: { hook: 'sync-join-way' }, onclick: () => setJoin(on) }, text);
     const j = App.joined();
     UI.add(UI.clear(body),
       h('div.bk-rows',
@@ -214,7 +215,7 @@
         row('In the cloud', 'syncCloud', c.cloud ? cloudFacts(c.cloud) : c.status === 'checking' ? 'looking…' : 'no plan yet'),
         row('In this browser', 'syncHere', here ? here : h('span.bk-facts', h('span', h('b', UI.num(hereCount())), ' plantings')), stateLine ? h('span.bk-state', { id: 'syncState', dataset: { state: c.status } }, stateLine) : null),
         row('This device', 'syncDevice', label),
-        row('When two devices have both changed the plan', 'syncJoin', h('span.bk-facts', { role: 'group', 'aria-label': 'When two devices have both changed the plan' }, way('syncJoinOn', true, 'Keep both, record by record'), way('syncJoinOff', false, 'Ask me which plan to keep'))),
+        row('When two devices have both changed the plan', 'syncJoin', h('div.seg.bk-join', { role: 'group', 'aria-label': 'When two devices have both changed the plan', dataset: { hook: 'sync-join' } }, way('syncJoinOn', true, 'Keep both, record by record'), way('syncJoinOff', false, 'Ask me which plan to keep'))),
         j ? row('Last taken in', 'syncTaken', h('span.bk-facts', h('span', 'from ', h('b', j.from), ' ', when(new Date(j.at).toISOString())), j.line ? h('span', j.line) : null, j.rows.length ? h('button.btn.small', { type: 'button', id: 'syncDiffered', onclick: openDiffered }, `See what differed (${UI.num(j.rows.length)})`) : null)) : null),
       note,
       act.length ? h('div.bk-choice', act) : null,

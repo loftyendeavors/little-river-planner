@@ -146,6 +146,12 @@ with sync_playwright() as pw:
         A.evaluate("LRFBackupUI.openSync()"); A.wait_for_timeout(300)
         row = A.evaluate("({ there: !!document.getElementById('syncJoin'), on: document.getElementById('syncJoinOn').getAttribute('aria-pressed'), off: document.getElementById('syncJoinOff').getAttribute('aria-pressed'), words: document.getElementById('syncJoin').closest('.bk-row').innerText, info: LRFApp.syncInfo().join })")
         check('Cloud sync has one line, "When two devices have both changed the plan", and it starts on "Ask me which plan to keep"', row['there'] and row['on'] == 'false' and row['off'] == 'true' and row['info'] is False and 'When two devices have both changed the plan' in row['words'] and 'Keep both, record by record' in row['words'], row)
+        # L3: a choice of one of two is one switch, bordered, the chosen side in ink (DESIGN.md, "One switch")
+        seg = A.evaluate("""(() => { const s = document.querySelector('[data-hook="sync-join"]'), ways = s ? [...s.querySelectorAll('[data-hook="sync-join-way"]')] : [], cs = s && getComputedStyle(s);
+          const i = document.createElement('i'); i.style.color = 'var(--ink)'; document.body.append(i); const ink = getComputedStyle(i).color; i.remove();
+          return { ways: ways.map(b => b.id), bordered: !!cs && parseFloat(cs.borderTopWidth) > 0 && cs.borderTopStyle !== 'none', one: ways.length ? Math.abs(ways[0].getBoundingClientRect().top - ways[ways.length - 1].getBoundingClientRect().top) < 1 : false,
+            inked: ways.filter(b => getComputedStyle(b).backgroundColor === ink).map(b => b.getAttribute('aria-pressed')) }; })()""")
+        check('the choice is one switch: its two sides in one bordered box, side by side, the chosen one in ink (L3)', seg['ways'] == ['syncJoinOn', 'syncJoinOff'] and seg['bordered'] and seg['one'] and seg['inked'] == ['true'], seg)
         check('the Cloud sync window fits at 1480 with the line in it', A.evaluate(FIT) == [], A.evaluate(FIT))
         A.screenshot(path=os.path.join(shots, 'switch-off.png'))
         A.click('#syncJoinOn'); said = answer(A, yes=False); A.wait_for_timeout(300)

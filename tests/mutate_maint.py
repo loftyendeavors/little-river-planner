@@ -35,7 +35,7 @@ FAULTS = [
  ('a crop grown nowhere opens the series tool with no garden', 'js/series.js', "P.gardenIds = (planted.length ? planted : gardens.slice(0, 1)).map(g => g.garden.id);", "P.gardenIds = planted.map(g => g.garden.id);"),
  ('a crop grown somewhere starts in the first garden instead of its own', 'js/series.js', "P.gardenIds = (planted.length ? planted : gardens.slice(0, 1)).map(g => g.garden.id);", "P.gardenIds = gardens.slice(0, 1).map(g => g.garden.id);"),
  ('the series tool opens on another crop when asked for one it does not plan', 'js/series.js', "if (asked && !seriesCrops(eng).includes(asked)) {", "if (false) {"),
- ('a cover crop planting offers a series', 'js/panels.js', "canSeries(eng, r.c) ? h('button.linkish', { type: 'button', id: 'fSeriesLink'", "true ? h('button.linkish', { type: 'button', id: 'fSeriesLink'"),
+ ('a cover crop planting offers a series', 'js/panels.js', "canSeries(eng, r.c) ? h('button.btn.quiet.small', { type: 'button', id: 'fSeriesLink'", "true ? h('button.btn.quiet.small', { type: 'button', id: 'fSeriesLink'"),
  ('the line on successions behind the Map\'s "?" breaks into pieces again', 'js/ui.js', "rows.map(([name, what]) => [h('dt', name), h('dd', what)])", "rows.map(([name, what]) => [h('dt', name), [what].flat().map(x => h('dd', x))])"),
  ('a folder with no plan in it stays connected', 'js/app.js', "    const name = f.name, broken = !!(f.conflict && f.conflict.broken);\n    await Folder.forget();", "    const name = f.name, broken = !!(f.conflict && f.conflict.broken);"),
  ('"Open my plan folder" works while a plan is open', 'js/app.js', "if (!isSample() && !state.unreadable) { toast('A plan is already open here. Backup has the folder choices.'); return false; }", ""),
