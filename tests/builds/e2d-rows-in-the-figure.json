@@ -9,7 +9,7 @@
   ]
  },
  "words": [],
- "code": ["app.js", "assume.js", "engine.js", "merge.js", "panels.js", "series.js", "succession.js", "things.js", "yieldcard.js"],
+ "code": ["app.js", "assume.js", "audit.js", "engine.js", "merge.js", "panels.js", "series.js", "succession.js", "things.js", "yieldcard.js"],
  "added": [],
  "removed": [],
  "page": [],

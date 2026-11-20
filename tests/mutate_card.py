@@ -54,7 +54,7 @@ PAGE = [
  ("8 of every 10 is saved as 8 a plant", YC, "bx && bx.bed ? v / bx.st.ft : tenths ? v / 10 : v;", "bx && bx.bed ? v / bx.st.ft : v;"),
  # a week's figure
  ("the label of a weekly box does not say a week", YC, "`Marketable yield ${PER_SAY[hc.basis]}${weekly ? ' per week' : ''}`;", "`Marketable yield ${PER_SAY[hc.basis]}`;"),
- ("the season's total is the list's round figure, not the engine's for the plantings there", YC, "const list = at && at.per.length ? at.per : [cell.total],", "const list = [cell.total],"),
+ ("the season's total is the list's round figure, not the engine's for the plantings there", YC, "const list = (at && at.per.length ? at.per : [cell.total]).map(v => v * kk),", "const list = [cell.total].map(v => v * kk),"),
  # the keyboard
  ("Tab goes to the last empty box, past the next", YC, "to = all.slice(at + 1).find(blank);", "to = all.slice(at + 1).reverse().find(blank);"),
  ("Enter does not take what was typed", YC, "    if (t && t.commit && !await t.commit()) return;\n", ""),

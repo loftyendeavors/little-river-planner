@@ -148,6 +148,24 @@ with sync_playwright() as pw:
     check("a figure cleared takes its rows with it", js("return (((S.plan.assumptions || {}).crops || {})[arg.crop] || {})[arg.env] || null;", {"crop": C, "env": ENV}) is None)
     while js("return S.undo.length;") > 0: js("A.undo(); return 1;"); wait(150)
 
+    # An older device can clear a figure without knowing about its rows or spacing.
+    orphan = {"crop": C, "env": ENV, "figure": sub["figure"], "rows": ST["rows"] + 2, "id": sub["list"][0]["id"]}
+    reset = js("""const before = S.plan.assumptions || null, after = copy().assumptions || { v: 1, crops: {}, varieties: {} };
+      after.crops[arg.crop] = { [arg.env]: { rows: arg.rows, inRow: 6 } };
+      A.commit('A figure cleared on the old build', [{ kind: 'assume', before, after }], { unchecked: true });
+      return rowsOf(S.engine);""", orphan)
+    js("return A.setYield('crops', arg.crop, arg.env, arg.figure, 'Type the default figure on the list');", orphan)
+    rebuilt = js("return { cell: S.plan.assumptions.crops[arg.crop][arg.env], forecast: rowsOf(S.engine) };", orphan)
+    check("typing a new list figure after an older device cleared it gives no meaning to the left-behind rows or spacing",
+          rebuilt["cell"] == {"yield": sub["figure"]} and rebuilt["forecast"] == reset, rebuilt["cell"])
+    js("A.undo(); return 1;"); wait(250)
+    borrowed = js("""const take = { what: 'yield', level: 'crop', id: arg.crop, env: arg.env, typed: arg.figure };
+      const op = LRFAudit.build(S.plan, [{ key: 'example', kind: 'yield', ids: [arg.id], take, choice: 'take' }]).ops.find(o => o.kind === 'assume');
+      return op.after.crops[arg.crop][arg.env];""", orphan)
+    check("taking a figure from a planting into an empty list cell also leaves it with no rows or spacing",
+          borrowed == {"yield": sub["figure"]}, borrowed)
+    js("A.undo(); return 1;"); wait(250)
+
     # ── a crop counted a plant, at one spacing everywhere it stands: taken at once, with its spacing beside it ──
     pl = js("""const eng = S.engine, by = new Map();
       for (const p of S.plan.plantings) { const r = eng.calc(p), y = r ? eng.yieldOf(p, r) : null; if (!y || r.tw || r.ct || r.rack) continue; const k = p.cropId + '|' + eng.envOf(r.b); by.set(k, [...(by.get(k) || []), { y, r }]); }
@@ -156,14 +174,21 @@ with sync_playwright() as pw:
     check("the plan has a crop counted a plant at one spacing, picked over days, to try", bool(pl), pl)
     if pl:
         js("A.setView('assume'); LRFAssume.setMode('harvest', 'card', arg); return 1;", pl["crop"]); wait(700)
+        basis = js("""const box = document.querySelector(`#ycCard [data-yk="y|${arg}"]`);
+          return { label: box.getAttribute('aria-label'), tip: box.title, visible: txt(hook('yield-of', box.closest('td'))) };""", pl["env"])
+        spacing = "%g in apart" % pl["inRow"]
+        check("before typing a per-plant figure that will keep a spacing, the visible box, label and tip say that spacing",
+              all(spacing in basis[key] for key in ("visible", "label", "tip")), basis)
         v = round(pl["figure"] * 1.25, 2)
         js("const box = document.querySelector(`#ycCard [data-yk=\"y|${arg.env}\"]`); return typeIn(box, arg.v);", {"env": pl["env"], "v": v}); wait(900)
         took = js("return { sheet: !!document.querySelector('dialog[open]'), cell: (((S.plan.assumptions || {}).crops || {})[arg.crop] || {})[arg.env] || null, undo: S.undo.length, kept: txt(hook('yield-kept', document.querySelector(`#ycCard td[data-place=\"${arg.env}\"]`))) };", pl)
         check("a figure typed for it is taken at once, no sheet: nothing but the figure moves", not took["sheet"] and took["undo"] == 1, took)
         check("the plan holds it with the spacing in the row it was typed at, and the card says it is held a row-foot", took["cell"] == {"yield": v, "inRow": pl["inRow"]} and "held a row-foot" in took["kept"], took)
         js("A.undo(); return 1;"); wait(400)
-    js("""const p = S.engine.planting(arg);
+    js("""const p = S.engine.planting(arg), r = S.engine.calc(p);
       const ops = Array.from({ length: 13 }, (_, i) => ({ before: null, after: { ...p, id: 'yield-overflow-' + i } }));
+      ops[12].after = { ...ops[12].after, rowsPerBed: r.totalRows, ft: r.physicalLength, inRow: r.inRow, rowSp: r.rowSp,
+        bedLayout: { v: 1, groupId: 'yield-overflow-rows', rowStart: 0, rowCount: 1, startFt: 0 } };
       return A.commit('Make a long list of example changes', ops, { unchecked: true });""",
        next(x["id"] for x in sub["list"] if x["rows"] == ST["rows"]))
     card(); type_it(typed); wait(700)
@@ -176,6 +201,8 @@ with sync_playwright() as pw:
     check("beyond the first twelve changes, every remaining planting can be inspected before saving",
           bool(overflow) and collapsed and more_rows.last.is_visible() and len(overflow["moves"]) == overflow["n"] > 12
           and js("return S.undo.length;") == 1, overflow and overflow["n"])
+    split = next((move["text"] for move in (overflow or {}).get("moves", []) if move["id"] == "yield-overflow-12"), "")
+    check("a planting in part of a bed says the rows it occupies", "1 row of %d" % ST["rows"] in split, split)
     if overflow:
         page.locator("dialog[open]").get_by_role("button", name="Cancel", exact=True).click()
     while js("return S.undo.length;") > 0: js("A.undo(); return 1;"); wait(150)

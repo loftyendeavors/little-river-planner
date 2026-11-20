@@ -371,7 +371,7 @@
       if ((ya.scale != null && ya.scale !== 1) || (yb.scale != null && yb.scale !== 1)) held = true;
       if (Math.abs(ya.units - yb.units) > 1e-9) {
         const variety = eng.variety(p.varietyId);
-        list.push({ id: p.id, bed: App.bedLabel(a.b, eng), field: E.d2s(a.field), variety: variety && variety.name, rows: a.totalRows, inRow: a.inRow, ft: a.physicalLength, was: ya.units, now: yb.units, unit: yb.unit });
+        list.push({ id: p.id, bed: App.bedLabel(a.b, eng), field: E.d2s(a.field), variety: variety && variety.name, rows: a.rows, bedRows: a.totalRows, inRow: a.inRow, ft: a.physicalLength, was: ya.units, now: yb.units, unit: yb.unit });
       }
     }
     return { held, list, worth: [study(eng).worth, F.build(next).rows.reduce((t, r) => t + r.worth, 0)] };
@@ -388,7 +388,7 @@
       const moved = Math.abs(m.worth[1] - m.worth[0]) >= 0.5, worth = moved ? `the season’s worth goes from ${money(m.worth[0])} to ${money(m.worth[1])}` : `the season’s worth stays ${money(m.worth[0])}`;
       const shown = m.list.slice(0, 12), more = m.list.slice(12);
       const line = x => h('li', { dataset: { hook: 'yield-move', planting: x.id, was: String(x.was), now: String(x.now) } },
-        h('b', x.bed), ` · ${x.field}${x.variety ? ` · ${x.variety}` : ''} · ${at.bed ? plural(x.rows, 'row') : `${fig(x.inRow)} in apart`}, ${fig(x.ft)} ft: ${fig(x.was)} → ${fig(x.now)}${unitWord(x.unit)}`);
+        h('b', x.bed), ` · ${x.field}${x.variety ? ` · ${x.variety}` : ''} · ${at.bed ? plural(x.rows, 'row') : `${fig(x.inRow)} in apart`}${at.bed && x.rows !== x.bedRows ? ` of ${fig(x.bedRows)}` : ''}, ${fig(x.ft)} ft: ${fig(x.was)} → ${fig(x.now)}${unitWord(x.unit)}`);
       const detail = h('div.yc-moves', { dataset: { hook: 'yield-moves', n: String(m.list.length) } },
         h('ul.moves', shown.map(line)),
         more.length ? h('details', { dataset: { hook: 'yield-more' } }, h('summary', `See ${plural(more.length, 'more planting')}`), h('ul.moves', more.map(line))) : null,
@@ -480,7 +480,9 @@
       body.append(row('yield', label, hint, cols.list.map(env => {
         const cell = hc.cells[env], at = x.places.get(env), where = `${c.name}, ${PLACE[env].toLowerCase()}`, amber = w.places.includes(env);
         // what the box speaks of (E2d): a bed with its rows, a plant at a spacing, or what it always was
-        const bx = boxFor(eng, c, hc, env, tenths), k = tenths ? 10 : bx ? bx.k : 1, of = bx && bx.bed ? bx.said : env === 'tower' && hc.basis === 'ft' ? 'a plant' : per, stored = v => v == null ? null : bx && bx.bed ? v / bx.st.ft : tenths ? v / 10 : v;
+        const bx = boxFor(eng, c, hc, env, tenths), k = tenths ? 10 : bx ? bx.k : 1;
+        const showsBasis = bx && (bx.bed || bx.how), of = showsBasis ? bx.said : env === 'tower' && hc.basis === 'ft' ? 'a plant' : per;
+        const stored = v => v == null ? null : bx && bx.bed ? v / bx.st.ft : tenths ? v / 10 : v;
         const what = `${weekly ? 'picked each week from' : 'in all from'} ${of}`, kk = tenths ? 1 : k,
           // what the plan uses with no figure of his says no rows and no spacing: for the box's bed it is its length times it, whatever the figure in the box says (Codex on #92)
           kf = bx && bx.bed ? bx.st.ft : 1, back = cell.fallback == null ? 'no yield at all' : fig(cell.fallback * kf);
@@ -516,7 +518,7 @@
         if (kept && !kept.textContent) kept = null;
         // what the figure read before "Picked" turned it: the same amount over the crop's harvest days, said another way
         const old = was && was.weekly !== weekly && was.cells[env] != null && cell.value != null ? h('small.yc-total.yc-turned', { dataset: { was: String(was.cells[env]), now: String(cell.value) } }, `read ${fig(was.cells[env] * kk)}${u} ${was.weekly ? 'a week' : 'in all'} before “Picked” was changed: the same over ${was.nominal} harvest days`) : null;
-        return h('td', { dataset: { place: env } }, h('span.yc-line', input, h('span.yc-unit', { dataset: { hook: 'yield-of', place: env } }, tenths ? 'of 10' : bx && bx.bed && !T.any ? `${unit === 'each' ? '' : unit + ' '}from ${of}` : unit === 'each' ? '' : unit)), beside, kept, old);
+        return h('td', { dataset: { place: env } }, h('span.yc-line', input, h('span.yc-unit', { dataset: { hook: 'yield-of', place: env } }, tenths ? 'of 10' : showsBasis && (!bx.bed || !T.any) ? `${unit === 'each' ? '' : unit + ' '}from ${of}` : unit === 'each' ? '' : unit)), beside, kept, old);
       })));
     }
 
