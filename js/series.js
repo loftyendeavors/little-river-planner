@@ -203,7 +203,7 @@
   /** What the sizes rest on, in a line: the yield, whose figure it is, and how long a planting is picked. */
   function restsLine(result, crop, eng) {
     const z = result.sized, r = z.rests, group = F.groupOf(crop, z.unit, (App.state.plan.lrfNext || {}).groups), w = n => F.unitWord(n, z.unit, group) || 'each';
-    const of = r.basis === 'ft' ? 'a foot of bed' : r.basis === 'container' ? 'a container' : r.basis === 'tray' ? 'a tray' : 'a plant';
+    const of = r.rowsFor ? `a foot of a bed of ${num(r.rowsFor)} row${r.rowsFor === 1 ? '' : 's'}` : eng.perSaid(r.basis);
     const whose = { own: 'the yield of the planting copied', variety: 'this variety’s line on your list', crop: 'the crop’s line on your list', default: 'the crop’s own record: no line of your list says it', thing: 'its own column on the crop’s card, under Yield and price' }[r.by] || 'the crop’s own record';
     const gives = r.pattern === 'weekly' && r.perWeek != null ? `${num(r.perWeek, 2)} ${w(r.perWeek)} a week from ${of}` : `${num(r.each, 2)} ${w(r.each)} ${of}`;
     const comes = r.pattern === 'once' ? (r.keep > 0 ? `all picked the day it is ready, and kept ${num(r.keep, 1)} week${r.keep === 1 ? '' : 's'}` : 'all picked the day it is ready') : `picked over ${num(r.days)} days${r.days < r.meant ? ` (of ${num(r.meant)}: the season cuts it short)` : ''}${r.keep > 0 ? `, kept ${num(r.keep, 1)} week${r.keep === 1 ? '' : 's'}` : ''}`;
