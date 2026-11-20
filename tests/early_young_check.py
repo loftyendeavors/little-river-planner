@@ -77,7 +77,7 @@ with sync_playwright() as pw:
         tags = js("const d = hook('fc-from'); if (!d) return null; const li = hooks('fc-from-row', d).find(x => x.dataset.planting === arg); return li ? hooks('fc-tag', li).map(x => [x.dataset.tag, txt(x)]) : [];", pid)
         if go:
             # "Show on the map" goes to the day it is first picked: a thing's own first picking, days before its crop's
-            js("A.setDate(new Date(A.planYear(), 0, 2)); const d = hook('fc-from'), li = d && hooks('fc-from-row', d).find(x => x.dataset.planting === arg); const b = li && li.querySelector('[data-hook="fc-from-map"]'); if (b) b.click(); return 1;", pid); wait(500)
+            js("A.setDate(new Date(A.planYear(), 0, 2)); const d = hook('fc-from'), li = d && hooks('fc-from-row', d).find(x => x.dataset.planting === arg); const b = li && li.querySelector('[data-hook=fc-from-map]'); if (b) b.click(); return 1;", pid); wait(500)
             return tags, js("const f = document.querySelector(`#mapBeds .bed-fill[data-planting=\"${arg}\"]`); return { date: E.d2s(S.date), view: S.view, sel: S.sel && S.sel.id, picking: !!f && f.classList.contains('pick') };", pid)
         js("const d = document.querySelector('dialog[open]'); if (d) { d.close(); d.remove(); } return 1;"); wait(200)
         return tags
