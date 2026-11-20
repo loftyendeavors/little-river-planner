@@ -13,7 +13,7 @@ and what it leaves alone.
    may lead, at the largest size. A lead may stand on a line of its own above that line, with a small chart of its own
    course beside it and the period in hand at the right (the Forecast: projected revenue, revenue by week as ink bars on the
    line's baseline with the week in hand in orange, then the season's figures on the one line under it; the work below is
-   the full view). No more than those two lines. The page's own
+   the full view). In a narrow panel the figures stand one to a line, as below. The page's own
    controls. Then the work. The explanation is behind "?". No eyebrow, no paragraph, no row of tiles, no standing notice.
 2. **One card for whatever is picked.** A bed, a planting, an opening, a run or a variety opens the same floating card: head
    (what it is, "⋯", ×), one picture, one line of what it comes to, the one or two boxes changed most, a tick, then rows that
