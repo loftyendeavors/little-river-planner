@@ -10,8 +10,9 @@ and what it leaves alone.
 ## The five rules
 
 1. **One frame for every page.** A title that says what is on screen ("Today", "Forecast"). One line of figures; one of them
-   may lead, at the largest size. The page's own controls. Then the work. The explanation is behind "?". No eyebrow, no
-   paragraph, no row of tiles, no standing notice.
+   may lead, at the largest size, and the lead may carry a small chart of its own course beside it (the Forecast's revenue
+   by week: ink bars on the line's baseline, the period in hand in orange, the work below it the full view). The page's own
+   controls. Then the work. The explanation is behind "?". No eyebrow, no paragraph, no row of tiles, no standing notice.
 2. **One card for whatever is picked.** A bed, a planting, an opening, a run or a variety opens the same floating card: head
    (what it is, "⋯", ×), one picture, one line of what it comes to, the one or two boxes changed most, a tick, then rows that
    open in place and show their figures when closed. With nothing picked there is no panel. A hint (what a thing is), a help
@@ -84,7 +85,18 @@ Tasks was built to it. Nursery, Seeds and Assumptions stand in it: no eyebrow, n
 title at 24 with "?" beside it, and one line of figures. On the Nursery the four tabs stand over the figures, not under them:
 the figures differ from tab to tab, and over the tabs they made the tabs jump. On Seeds the figures are in the side panel
 while nothing is picked, one to a line, because that panel still stands there; they move when the panel becomes the card of
-rule 2. The Forecast page (once Harvest) stands in it too: its figures lead with the season's worth.
+rule 2. The Forecast page (once Harvest) stands in it too: projected revenue leads at 32 with revenue by week drawn beside it,
+the week in hand at the right of that line, and the season's own figures on the line under it (0.80; the grower kept the
+chart, Nov 20).
+
+## Words
+
+The grower's word of Nov 20: every word on a screen is technical or financial, brief, and makes sense on its own. Money is
+said as a farm's books say it: **projected revenue** for the season (not "the season's worth"), **revenue** for a week, a kind
+or a crop, **peak week**, and **Harvest** for a span of picking. A term once chosen reads the same on every screen and in every
+message, toast and sheet. A build that names a figure takes its word from the glossary the project keeps, and a new term is
+put to the grower before it is used. The Forecast page speaks this way from 0.80. **Still to change, as a build of its own**:
+"the season's worth" in the messages, sheets and cards of the other pages, and the checks that read those words.
 
 ## Loose ends
 
