@@ -50,6 +50,7 @@ PAGE = [
  ("the panel takes no word from a drop's step", PN, "const fresh = last && !last.page && Date.now()", "const fresh = last && Date.now()"),
  # the card
  ("Planting details on the card is a bounded button", CD, "h('div.card-foot', h('button.link', { type: 'button', dataset: { hook: 'card-full' }", "h('div.card-foot', h('button.btn.small', { type: 'button', dataset: { hook: 'card-full' }"),
+ ("the way from the card's nursery row to Planting details is a quiet button", CD, "h('button.link', { type: 'button', dataset: { hook: 'card-nursery-full' }", "h('button.btn.quiet.small', { type: 'button', dataset: { hook: 'card-nursery-full' }"),
  ("the card's Undo is underlined text again", CD, "last.canUndo ? h('button.btn.small', { type: 'button', dataset: { hook: 'card-undo' }", "last.canUndo ? h('button.link', { type: 'button', dataset: { hook: 'card-undo' }"),
  # Days · Weeks · Months, and the pills
  ("the Timeline reads Months first again", IX, '            <button type="button" data-tl-zoom="days" data-hook="tl-by-choice" aria-pressed="false">Days</button>\n            <button type="button" data-tl-zoom="weeks" data-hook="tl-by-choice" aria-pressed="false">Weeks</button>\n            <button type="button" data-tl-zoom="months" data-hook="tl-by-choice" aria-pressed="true" title="The whole year">Months</button>\n',

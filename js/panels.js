@@ -309,7 +309,7 @@
     const list = h('ul.p-list');
     for (const { p, r } of all) list.append(plantingRow(p, r));
     host.append(h('section.insp-section', h('h3', 'Plantings'), all.length ? list : h('p.note', 'Nothing planned here yet. Drag a crop onto this bed.'),
-      eng.isRack(bed) ? null : h('button.btn.quiet.small', { type: 'button', id: 'bedSeries', dataset: { hook: 'bed-series' }, title: 'One crop every so many days, starting in this space', onclick: () => App.openAhead({ mode: 'series', bedId: bed.id }) }, `Plan a series in this ${{ tower: 'tower', containers: 'space' }[eng.spaceKind(bed)] || 'bed'}…`)));
+      eng.isRack(bed) ? null : h('button.btn.small', { type: 'button', id: 'bedSeries', dataset: { hook: 'bed-series' }, title: 'One crop every so many days, starting in this space', onclick: () => App.openAhead({ mode: 'series', bedId: bed.id }) }, `Plan a series in this ${{ tower: 'tower', containers: 'space' }[eng.spaceKind(bed)] || 'bed'}…`)));
     // room before, after and between what is planned here, and what would go in it
     const Ahead = root.LRFSuccession;
     if (soil && Ahead && all.length) {

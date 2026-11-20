@@ -2648,7 +2648,7 @@ body[data-card="on"] .stage { position: relative; }
 .bed-planting[data-state="failed"] .row-word, .bed-planting[data-state="failed"] .row-name { color: var(--muted); }
 .bed-planting[data-state="failed"] .thumb { filter: grayscale(1); }
 .bed-planting-fields { display: grid; gap: var(--space-8); padding: 0 var(--space-8) var(--space-12); }
-.bed-planting-fields .link { justify-self: start; }
+.bed-planting-fields .link, .card-row-body > .link { justify-self: start; }
 .bed-planting-fields :disabled, .bed-season-use input:disabled { opacity: 0.62; }
 .bed-openings { display: grid; gap: var(--space-8); }
 .bed-openings h3 { margin: 0; font-size: var(--type-13); font-weight: 600; color: var(--muted); }

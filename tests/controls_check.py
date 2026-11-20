@@ -29,7 +29,7 @@ def finish():
     print(json.dumps({"passed": len(results) - len(failed), "of": len(results), "failed": failed, "details": [r for r in results if not r["ok"]][:12], "errors": errors[:6]}, default=str))
     sys.stdout.flush(); os._exit(1 if failed else 0)
 # The things a link names: they go somewhere and change nothing. Any other control drawn underlined is a button drawn as a link.
-LINKS = ["panel-bed", "bed-planting-back", "panel-live-trays", "panel-mate", "card-bed", "card-full", "bed-planting-full", "opening-back", "fc-from-map",
+LINKS = ["panel-bed", "bed-planting-back", "panel-live-trays", "panel-mate", "card-bed", "card-full", "card-nursery-full", "bed-planting-full", "opening-back", "fc-from-map",
          "seeds-open-crop", "series-see", "series-find", "yield-to-list", "yield-to-days", "yield-differs", "yield-typed-crop", "thing-open",
          "nursery-to-tasks", "nursery-week-tasks", "bench-line-go", "loose-link", "settle-bed"]
 # the title of a card of To settle is a link drawn as that card's title: underlined, no edge and no ground, at its title's size
@@ -146,9 +146,11 @@ def run(pw):
     # ══ 3. the card ══
     if sub:
         card = js("""LRFCard.turn(true); A.setView('timeline'); await sleep(400); A.select({ type: 'planting', id: arg.id }); await sleep(500);
+          const row = hooks('card-row').find(r => r.dataset.row === 'nursery'), rh = row && row.querySelector('button'); if (rh && !hook('card-nursery-full')) { rh.click(); await sleep(250); }
+          const way = look(hook('card-nursery-full'));
           const el = hook('card-full'), l = look(el), key = A.contentKey(), n = S.undo.length; if (el) { el.click(); await sleep(400); }
-          return { look: l, full: drawn(hook('panel-schedule', $('inspectorBody'))) && drawn($('inspectorBody')), same: A.contentKey() === key && S.undo.length === n };""", sub)
-        check("on a planting's card, Planting details is a link: underlined, with no edge and no ground; it opens every box in the side panel and changes nothing", asLinkOk(card["look"]) and card["full"] and card["same"], card)
+          return { look: l, way, full: drawn(hook('panel-schedule', $('inspectorBody'))) && drawn($('inspectorBody')), same: A.contentKey() === key && S.undo.length === n };""", sub)
+        check("on a planting's card, Planting details is a link, at its foot and in its nursery row: underlined, with no edge and no ground; it opens every box in the side panel and changes nothing", asLinkOk(card["look"]) and asLinkOk(card["way"]) and card["full"] and card["same"], card)
         cundo = js("""A.select(null); await sleep(200); A.select({ type: 'planting', id: arg.id }); await sleep(400);
           const row = hooks('card-row').find(r => r.dataset.row === 'days'), head = row && row.querySelector('button'); if (head && !hook('card-hw')) { head.click(); await sleep(250); }
           const i = hook('card-hw'); if (!i) return null; const was = eng().planting(arg.id).hw; i.value = '3'; i.dispatchEvent(new Event('change', { bubbles: true })); await sleep(400);
