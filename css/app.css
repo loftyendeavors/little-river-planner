@@ -2715,6 +2715,10 @@ body[data-card="on"] .stage { position: relative; }
 /* projected revenue leads, at the largest size; the week in hand at the right of the same line; the season's figures under them */
 .fc-fig.lead b { font: 800 var(--type-32)/1 var(--display); font-stretch: 78%; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .fc-break { flex: 0 0 100%; height: 0; }
+/* the Season heading sorts the crops under each heading by revenue: highest, lowest, A to Z */
+.hv-sort { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; text-align: inherit; cursor: pointer; }
+.hv-sort:hover, .hv-sort[data-order="high"], .hv-sort[data-order="low"] { color: var(--ink); }
+.hv-sort-arrow { color: var(--ink); }
 /* the season's revenue week by week: light ink bars on the line's baseline, the week in hand in orange, a week darker under the pointer */
 /* in a narrow window it shrinks with its line, keeping its shape, and never pushes the page sideways (Codex on #94) */
 .fc-spark { flex: 0 1 auto; min-width: 0; max-width: 100%; height: auto; margin-left: var(--space-16); overflow: visible; cursor: pointer; }
