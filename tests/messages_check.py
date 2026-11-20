@@ -238,14 +238,29 @@ def run(pw):
           const out = { set: arg.vs.map(now), crop: (((b.crops || {})[arg.cropId] || {})[arg.env] || {}).dtm || null }; A.undo(); await sleep(400); return out;""", days)
         check("Undo takes the varieties' days back, and leaves the crop's", undo["set"] == [None, None] and undo["crop"] == days["n"], undo)
 
-    # ══ 10. the unheated benches, and a celled tray with no cells set, in plain words ══
+    # ══ 10. the unheated benches, and a celled tray with no cells set, in plain words: on the page, in each step's words, and in what is refused ══
     words = js("""A.setView('trays'); LRFTraysView.setTab('setup'); await sleep(600); const heads = [...document.querySelectorAll('#bnCool h4')].map(x => x.textContent);
+      const pick = document.getElementById('bnCoolCrop'), out = { heads, pick: pick ? pick.getAttribute('aria-label') : null, old: /grown on without heat/i.test(document.getElementById('traysView').innerText) };
+      // a crop put on the unheated benches by the page's own controls, and its first day set: each step says it in the new words
+      const opt = pick ? [...pick.options].find(o => o.value) : null;
+      if (opt) {
+        const name = opt.textContent, steps = S.undo.length; pick.value = opt.value; document.getElementById('bnCoolAdd').click(); await sleep(400);
+        out.added = { name, label: S.undo.length > steps ? S.undo[S.undo.length - 1].label : null };
+        const from = document.querySelector('#bnCool tr[data-cool="' + CSS.escape(opt.value) + '"] input[data-f="from"]');
+        if (from) { from.value = A.planYear() + '-05-01'; from.dispatchEvent(new Event('change', { bubbles: true })); await sleep(400); out.from = { label: S.undo[S.undo.length - 1].label, day: UI.day(new Date(A.planYear(), 4, 1)) }; }
+        while (S.undo.length > steps) { A.undo(); await sleep(150); }
+      }
+      try { LRFNursery.setCool(S.plan.nursery || LRFNursery.blank(), '', {}); out.refused = null; } catch (e) { out.refused = e.message; }
+      LRFTraysView.setTab('room'); await sleep(500); const edit = document.getElementById('bnEdit'); out.edit = edit ? edit.title : null;
       const c = eng().crops().find(x => x.micro && S.plan.crops.some(y => y.id === x.id) && eng().liveSow(x).how === 'cells');
-      let row = null;
-      if (c && A.setLiveSow(c.id, { cells: null })) { await sleep(200); const r = LRFNursery.supplies(eng(), A.planYear(), null).rows.find(x => x.id === 'live-unsaid'); row = r ? { name: r.name, text: JSON.stringify(r) } : { none: true }; A.undo(); await sleep(200); }
-      return { heads, row, old: document.body.innerText.includes('without heat') };""")
-    check("on the Nursery's set-up, the crops grown on the unheated benches stand under “On the unheated benches”", words["heads"] == ["On the unheated benches"], words)
-    check("a live tray sown in cells with no cells set is a supply named “Celled tray, cells a tray not set”, said to be set under Live trays, in the Sown column", bool(words["row"]) and words["row"].get("name") == "Celled tray, cells a tray not set" and "under Live trays, in the Sown column" in words["row"].get("text", ""), words)
+      if (c && A.setLiveSow(c.id, { cells: null })) { await sleep(200); const r = LRFNursery.supplies(eng(), A.planYear(), null).rows.find(x => x.id === 'live-unsaid'); out.row = r ? { name: r.name, text: JSON.stringify(r) } : { none: true }; A.undo(); await sleep(200); }
+      return out;""")
+    check("on the Nursery's set-up, the crops grown on the unheated benches stand under “On the unheated benches”, and “grown on without heat” is not on the page", words["heads"] == ["On the unheated benches"] and words["old"] is False, words)
+    check("its box to add a crop is “Crop to put on the unheated benches”, and Edit benches says what stands on the unheated benches is on the Set-up tab", words.get("pick") == "Crop to put on the unheated benches" and "what stands on the unheated benches" in (words.get("edit") or ""), words)
+    ad, fr = words.get("added") or {}, words.get("from") or {}
+    check("a crop added there is said to be on the unheated benches, and its first day set says it is there from that day", ad.get("label") == "%s is on the unheated benches, all year until its days are set" % ad.get("name") and fr.get("label") == "%s is on the unheated benches from %s" % (ad.get("name"), fr.get("day")), words)
+    check("with no crop chosen, it is refused in the same words: “Choose the crop to put on the unheated benches.”", words.get("refused") == "Choose the crop to put on the unheated benches.", words)
+    check("a live tray sown in cells with no cells set is a supply named “Celled tray, cells a tray not set”, said to be set under Live trays, in the Sown column", bool(words.get("row")) and words["row"].get("name") == "Celled tray, cells a tray not set" and "under Live trays, in the Sown column" in words["row"].get("text", ""), words)
 
     # ══ 11. "Seeding in trays" fits its "Days counted from" box: a crop's row set to it shows the words whole ══
     fits = js("""A.setView('assume'); LRFAssume.setMode('days'); await sleep(600); const c = document.createElement('canvas').getContext('2d');
