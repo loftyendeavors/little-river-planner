@@ -79,7 +79,7 @@ PAGE = [
  ("the phone keeps the planner's other views", "css/app.css", "body.phone .views, body.phone .library,", "body.phone .library,"),
  ("on a phone a row's words run off the screen", "css/app.css", ".tk-sub { display: block; font-size: var(--type-13); color: var(--muted); overflow-wrap: anywhere; }", ".tk-sub { display: block; font-size: 13px; color: var(--muted); white-space: nowrap; }"),
  ("the printed sheet leaves the planner on the page", "css/app.css", ".wkp { white-space: normal;", ".wkp { white-space: pre-wrap;"),
- ("the schedule records the sowing without its seed", "js/panels.js", "!st.done && !st.passed && !st.seed && !open ? h('button.link.job-tick'", "!st.done && !st.passed && !open ? h('button.link.job-tick'"),
+ ("the schedule records the sowing without its seed", "js/panels.js", "!st.done && !st.passed && !st.seed && !open ? h('button.btn.small.job-tick'", "!st.done && !st.passed && !open ? h('button.btn.small.job-tick'"),
  ("unticking a done job does nothing", "js/sowview.js", ": App.takeBackWork(l.members.filter(m => m.st.done).map(m => ({ id: m.p.id, kind: l.kind })));", ": null;"),
  ("what is late is left off today's list", "js/sowview.js", "open: all.filter(t => isOpen(t) && (ui.day === now ? t.due <= now : ui.day > now && t.due === ui.day))", "open: all.filter(t => isOpen(t) && t.due === ui.day)"),
  ("a later week's sheet carries what is late", "js/sowview.js", "now === T.monday(App.today()) && earlier.length + earlierJobs.length ? [h('h2'", "earlier.length + earlierJobs.length ? [h('h2'"),
