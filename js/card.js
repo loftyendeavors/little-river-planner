@@ -488,8 +488,9 @@
     add(card, what.kind === 'planting' ? plantingCard(what.p, what.r) : bedCard(what.bed));
     place();
     // docked, the map is narrower by the card's width: a space just picked, a bench or a tower as much as a bed, is moved clear of it
-    // as the card first comes or turns to it (Codex on #85); a bed picked on the map asks the same itself (openBedFromMap)
-    const key = keyOf(App.state.sel);
+    // as the card first comes or turns to it, and as the Map is come back to with the card open (Codex on #85); a bed picked on the
+    // map asks the same itself (openBedFromMap)
+    const key = App.state.view + ' ' + keyOf(App.state.sel);
     if (DOCKED.matches && key !== shown) revealPicked();
     shown = key;
     card.scrollTop = keep;

@@ -192,6 +192,22 @@ def run(pw):
       return {{ asked: a, card: !!c, of: sel ? (sel.type === 'bed' ? sel.id : p && p.bedId) : null, seen: !!r && r.left >= v.left - 1 && r.right <= v.right + 1, clear: c ? Math.round(c.getBoundingClientRect().left - v.right) : null }};""")
     check("a bench, a tower or containers clicked at the map's right edge with no card open: the docked card comes, and the map moves that space clear of it (Codex on #85)",
           bool(sp) and bool(spot) and spot["hit"] and 0 <= spot["gap"] <= 40 and not spot["card"] and bench["card"] and bench["of"] == sp["id"] and bench["asked"] == [sp["id"]] and bench["seen"] and bench["clear"] is not None and bench["clear"] >= 0, [sp, spot, bench])
+    # a planting picked on the Timeline, its bed at the map's right edge as the map was left with no card: back on the Map with the card
+    # docked, the map, the card's width narrower, moves that bed clear (Codex on #85, on 98154ee)
+    js("A.select(null); return null;"); wait(600)
+    bk = js(f"""const v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed="{BED}"] .bed-base').getBoundingClientRect();
+      let g = null; for (let y = v.bottom - 140; y > v.top + 80 && !g; y -= 23) for (let x = v.left + 30; x < v.left + v.width / 2 && !g; x += 23) {{ const e = document.elementFromPoint(x, y); if (e && e.closest('#map') && !e.closest('#mapBeds > g')) g = {{ x, y }}; }}
+      return g && {{ x: Math.round(g.x), y: Math.round(g.y), dx: Math.round(v.right - 8 - b.right), dy: 0 }};""")
+    if bk: pan2(bk)
+    left_at = js(f"const v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed=\"{BED}\"] .bed-base').getBoundingClientRect(); return {{ gap: Math.round(v.right - b.right), card: !!card() }};")
+    js(f"A.setView('timeline'); A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(600)
+    on_tl = js("return { kind: card() && card().dataset.kind, docked: LRFCard.docked() };")
+    js("window.__asked = []; const o = LRFMap.revealBed; window.__putBack = () => { LRFMap.revealBed = o; }; LRFMap.revealBed = function (id) { window.__asked.push(id); return o.apply(this, arguments); }; return null;")
+    js("A.setView('map'); return null;"); wait(900)
+    back_map = js(f"""const a = window.__asked; window.__putBack(); const c = card(), v = $('mapView').getBoundingClientRect(), b = document.querySelector('#map [data-bed="{BED}"] .bed-base').getBoundingClientRect();
+      return {{ asked: a, kind: c && c.dataset.kind, seen: b.left >= v.left - 1 && b.right <= v.right + 1, clear: c ? Math.round(c.getBoundingClientRect().left - v.right) : null }};""")
+    check("a planting picked on the Timeline, its bed at the map's right edge: back on the Map with the card docked, the map moves that bed clear of it (Codex on #85)",
+          bool(bk) and 0 <= left_at["gap"] <= 40 and not left_at["card"] and on_tl["kind"] == "planting" and on_tl["docked"] and back_map["asked"] == [BED] and back_map["kind"] == "planting" and back_map["seen"] and back_map["clear"] is not None and back_map["clear"] >= 0, [bk, left_at, on_tl, back_map])
     js(f"A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(300)
     page.set_viewport_size({"width": WIDTH, "height": 960}); wait(500)
     page.screenshot(path=str(shots / f"map-bed-{WIDTH}.png"))

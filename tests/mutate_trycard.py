@@ -62,6 +62,7 @@ PAGE = [
  ("Codex on #85: a bed is left under the card when the window widens to dock it", CD, "place(); if (DOCKED.matches) revealPicked(); });", "place(); });"),
  ("Codex on #85: a box being typed in loses what is typed when the card docks", CD, "DOCKED.addEventListener('change', () => { place();", "DOCKED.addEventListener('change', () => { draw();"),
  ("Codex on #85: a bench clicked is left past the map's edge when the docked card comes", CD, "    if (DOCKED.matches && key !== shown) revealPicked();\n", ""),
+ ("Codex on #85: back on the Map from the Timeline, the docked card's planting's bed is left past the map's edge", CD, "    const key = App.state.view + ' ' + keyOf(App.state.sel);", "    const key = keyOf(App.state.sel);"),
  ("Codex on #85: a planting's bed is left under the card when the window widens to dock it", CD, "id = sel && sel.type === 'bed' ? sel.id : p && p.bedId;", "id = sel && sel.type === 'bed' ? sel.id : null;"),
  ("the list of what to settle has no side panel to stand in", CD, "    if (!sel) return !settling && !App.state.newer;", "    if (!sel) return true;"),
  ("Codex on #66: a change made with no card open is said on the next card", CD, "tickTimer = setTimeout(() => { planTick = false; }, 0); note(); draw(); });", "tickTimer = setTimeout(() => { planTick = false; }, 0); draw(); });"),
