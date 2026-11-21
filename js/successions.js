@@ -350,10 +350,13 @@
         h('span.su-bed', h('button.link', { type: 'button', dataset: { hook: 'succ-kept-link' }, title: 'Show this planting on the Timeline', onclick: () => { App.setView('timeline'); App.select({ type: 'planting', id: x.p.id }); } }, `${num(x.p.run.n)} · ${r ? App.bedLabel(r.b, eng) : 'Planting'}`), h('small', name)),
         h('span.su-col', r ? day(r.sow || r.field) : '—'), h('span.su-col', r ? day(r.field) : '—'), h('span.su-col', r && r.harvestDays > 0 ? day(r.first) : '—')));
     }
-    if (!list.length) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-none' } }, 'None of its plantings is in the plan now.'));
+    // a planting of the run sent to To place waits with its mark of the run: said here, and taken out with the run when asked (Codex on #103)
+    const held = App.waiting().filter(w => w.run && w.run.id === run.id), all = list.length + held.length;
+    if (held.length) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-waiting' } }, `${plural(held.length, 'planting')} of it ${held.length === 1 ? 'waits' : 'wait'} under To place, with no bed yet.`));
+    if (!all) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-none' } }, 'None of its plantings is in the plan now.'));
     const tick = h('input', { type: 'checkbox', checked: UI_STATE.removeAll, dataset: { hook: 'succ-remove-all' }, onchange: e => { UI_STATE.removeAll = e.target.checked; } });
-    add(out, h('div.su-foot', h('button.btn', { type: 'button', dataset: { hook: 'succ-remove' }, onclick: () => removeIt(run, list.length) }, 'Remove run'),
-      list.length ? h('label.su-tick', tick, h('span', `Take its ${plural(list.length, 'planting')} out too`)) : null,
+    add(out, h('div.su-foot', h('button.btn', { type: 'button', dataset: { hook: 'succ-remove' }, onclick: () => removeIt(run, all) }, 'Remove run'),
+      all ? h('label.su-tick', tick, h('span', `Take its ${plural(all, 'planting')} out too`)) : null,
       h('span.su-foot-note', UI_STATE.removeAll ? 'The run and its plantings go, as one step.' : 'Its plantings stay, as plain plantings. One Undo puts the run back.')));
   }
   function removeIt(run, n) {

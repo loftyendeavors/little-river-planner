@@ -160,6 +160,12 @@ with sync_playwright() as pw:
     press("succ-undo", 1500)
     check("its Undo puts the run back on its plantings", js("return state();").get("runs") == 1 and js("return state();").get("inRuns") == len(want_rows))
     js("const run = A.runs()[0]; document.querySelector('[data-hook=\"succ-run\"][data-run=\"' + run.id + '\"]').click(); return 1;"); wait(1000)
+    # a planting of the run sent to To place is said on the run, and counted by the tick that takes them out (Codex on #103)
+    wt = js("""const run = A.runs()[0], p = S.runPlantings(St.plan, run.id)[0]; A.sendToWait(p.id); await new Promise(r => setTimeout(r, 600));
+      document.querySelector('[data-hook="succ-run"][data-run="' + run.id + '"]').click(); await new Promise(r => setTimeout(r, 900));
+      const out = { said: txt('succ-kept-waiting'), tick: (q('succ-remove-all') && q('succ-remove-all').closest('label') || {}).textContent || '', n: S.runPlantings(St.plan, run.id).length };
+      A.undo(); await new Promise(r => setTimeout(r, 600)); document.querySelector('[data-hook="succ-run"][data-run="' + run.id + '"]').click(); await new Promise(r => setTimeout(r, 900)); return out;""") or {}
+    check("a planting of the run sent to To place is said on the run, and the tick to take its plantings out counts it", "1 planting of it waits under To place" in wt.get("said", "") and ("Take its %d plantings out too" % (wt.get("n", 0) + 1)) in wt.get("tick", ""), wt)
     page.locator('[data-hook="succ-remove-all"]').check(); wait(200)
     press("succ-remove", 1500)
     gone = js("return state();") or {}

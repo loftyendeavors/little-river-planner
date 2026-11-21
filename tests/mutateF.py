@@ -60,6 +60,8 @@ PAGE = [
  ("Cancel keeps the run being planned", SS, "    Object.assign(UI_STATE, { shown: false, answer: null, planning: false });", "    Object.assign(UI_STATE, { shown: false, answer: null });"),
  ("a crop on a yield nobody has checked is planned to an amount", SU, "      if (rests.open) return { unchecked: true, error: openWhy(o.crop) };\n", ""),
  ("a variety's own unit is not read for the amount it starts on (Codex on #103)", SS, "    const unit = unitFor(eng, crop, D.thing, D.varietyId), rows = m.rows.filter(", "    const unit = unitFor(eng, crop, D.thing), rows = m.rows.filter("),
+ ("a kept run's waiting planting is not counted by the tick (Codex on #103)", SS, "all ? h('label.su-tick', tick, h('span', `Take its ${plural(all, 'planting')} out too`)) : null,", "list.length ? h('label.su-tick', tick, h('span', `Take its ${plural(list.length, 'planting')} out too`)) : null,"),
+ ("a kept run's waiting planting is not said", SS, "    if (held.length) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-waiting' } }", "    if (false) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-waiting' } }"),
  ("the page says “series”", SS, "'Nothing is added to the plan until you press Add.'", "'Nothing is added to the plan until you press Add. A series.'"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)
