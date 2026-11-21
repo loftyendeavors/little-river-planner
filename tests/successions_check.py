@@ -77,9 +77,9 @@ with sync_playwright() as pw:
         const want = Math.max(5, Math.round(one.sowings[0].units * 7 / 10 / 5) * 5);
         const then = S.gardensFor(eng, c).filter(x => x.kind === 'bed' && x.garden.type === 'field' && x.garden.id !== g.garden.id).map(x => x.garden.id);
         const r = S.planRun(eng, { cropId: c.id, by: 'amount', want, datesFor: 'picking', from: year + '-08-02', to: year + '-09-30', gardenIds: [g.garden.id], then });
-        if (!r.error && r.sowings.length >= 4 && !r.unplaced.length && r.every >= 2 && r.short[0] === r.weeks[0] && r.sowings.every(x => x.nursery)) return { crop: c.id, name: c.name, garden: g.garden.id, then, want, every: r.every, n: r.sowings.length };
+        if (!r.error && r.sowings.length >= 4 && !r.unplaced.length && r.every >= 2 && r.short[0] === r.weeks[0] && r.sowings.every(x => x.nursery) && r.average.have > 0) return { crop: c.id, name: c.name, garden: g.garden.id, then, want, every: r.every, n: r.sowings.length };
       } return null;""")
-    check("the plan has a crop sown in the nursery and a field garden for a run to an amount a week of four whole beds or more, each with a bed", bool(sub), sub)
+    check("the plan has a crop it already gives, sown in the nursery, and a field garden for a run to an amount a week of four whole beds or more, each with a bed", bool(sub), sub)
     if not sub: finish()
     js("void A.openAhead({ mode: 'succession', cropId: arg.crop }); return 1;", sub); wait(1800)
     page.select_option('[data-hook="succ-garden"]', sub["garden"]); wait(1200)

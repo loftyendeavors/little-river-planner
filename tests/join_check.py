@@ -255,7 +255,9 @@ with sync_playwright() as pw:
         n_before = A.evaluate("LRFApp.state.plan.plantings.length")
         # each device also changes something of its own, so that the two plans differ and are joined record by record
         both = made and A.evaluate("r => LRFApp.addRun(r)", made) and B.evaluate("r => LRFApp.addRun(r)", made) and B.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'the phone, with the run' }, 'A note')", X2)
-        if made: settled(A, 'in-step'); look(B); settled(B, 'in-step'); look(A)
+        if made:
+            try: settled(A, 'in-step'); look(B); settled(B, 'in-step'); look(A)
+            except Exception as e: errors_run = str(e)[:200]   # the two never come to one plan: the line below says so, and the check goes on
         rb, ra = (B.evaluate(RUNS, made['run']['id']), A.evaluate(RUNS, made['run']['id'])) if made else ({}, {})
         check('the same run of successions added on both devices before either saw the other joins to one run, its plantings once each, on both', bool(both) and B.evaluate(P, X2)['note'] == 'the phone, with the run' and A.evaluate(P, X2)['note'] == 'the phone, with the run' and rb == ra == {'runs': 1, 'plantings': len(made['sowings']), 'all': n_before + len(made['sowings'])} and A.evaluate("LRFApp.contentKey()") == B.evaluate("LRFApp.contentKey()"), [made and made['run']['id'], ra, rb])
 
