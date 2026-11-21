@@ -287,7 +287,7 @@
   const toSetup = () => h('button.link', { type: 'button', dataset: { hook: 'start-to-setup' }, title: 'Opens Nursery › Set-up, where it is set for the farm', onclick: () => root.LRFTraysView && root.LRFTraysView.open('setup') }, 'Nursery › Set-up');
 
   /** A switch whose press says what it would move, then "Use it". `sides` [[value, words, disabled title]]. */
-  function choice({ key, sides, on, name, label, ops, cropIds, hook }) {
+  function choice({ key, sides, on, name, label, ops, cropIds, hook, says }) {
     const pend = ui.pending && ui.pending.key === key ? ui.pending : null, said = ui.said && ui.said.key === key ? ui.said : null;
     const seg = h('div.seg.sn-seg', { role: 'group', 'aria-label': `${name}: ${label.toLowerCase()}`, dataset: { hook, on: String(on) } },
       sides.map(([value, words, off]) => h('button', { type: 'button', 'aria-pressed': String(String(pend ? pend.value : on) === String(value)), disabled: !!off, title: off || `${words}: what it would move is shown first`, dataset: { hook: 'start-side', side: String(value) },
@@ -295,7 +295,7 @@
           if (String(value) === String(on)) { ui.pending = null; ui.redraw(); return; }
           const step = ops(value);
           if (!step) return;
-          ui.pending = { key, value, ops: step, label: `${name}: ${label.toLowerCase()} ${String(words).toLowerCase()}`, said: movesSaid(movesOf(App.state.engine, cropIds, step)) };
+          ui.pending = { key, value, ops: step, label: `${name}: ${label.toLowerCase()} ${String(words).toLowerCase()}`, said: says ? says(value) : movesSaid(movesOf(App.state.engine, cropIds, step)) };
           ui.said = null; ui.redraw();
         } }, words)));
     const line = h('p.sn-moves', { dataset: { hook: 'start-moves', key } });
@@ -551,9 +551,11 @@
     const ownSpare = all.filter(c => { const r = ownRec(plan, c.id); return r && r.spare != null; });
     const vGerm = eng.plan.varieties.filter(v => v.active !== false && !v.deleted && +v.germ > 0);
     const pockets = ((plan.lrfNext || {}).supplies || {}).pockets, onP = N.POCKETS.includes(+pockets) ? +pockets : N.POCKETS[0];
-    const carrier = choice({ key: 'pockets', sides: CARRIERS.map(n => [n, String(n), null]), on: onP, name: 'Every crop', label: 'Pots a carrier', ops: n => suppliesOps(plan, n), cropIds: [], hook: 'start-pockets' });
+    // what the farm's figure moves is a count of Supplies, not of a planting: said as Supplies counts it
     const s = (plan.lrfNext || {}).supplies || null, supply = n => { try { return N.supplies(eng, year, n == null ? s : N.setSupply(s, 'pockets', null, n)).rows.find(r => r.id === 'carrier'); } catch (_) { return null; } };
     const now = supply(), alt = supply(onP === 10 ? 15 : 10);
+    const carrier = choice({ key: 'pockets', sides: CARRIERS.map(n => [n, String(n), null]), on: onP, name: 'Every crop', label: 'Pots a carrier', ops: n => suppliesOps(plan, n), cropIds: [], hook: 'start-pockets',
+      says: n => { const a = now ? now.need : 0, b = (supply(n) || { need: 0 }).need; return a === b ? '' : `carrying trays Supplies counts at the most ${num(a)} → ${num(b)}; no bench room, date or seed moves.`; } });
     const card = h('section.yc-card.sn-card', { dataset: { hook: 'start-card', crop: FARM } },
       h('header.yc-head', h('span.thumb.key.sn-farm', { style: { '--thumb': '40px' } }), h('div', h('h3', { dataset: { hook: 'start-name' } }, 'Every crop'), h('p.yc-where', `The farm’s figures · ${plural(all.length - ownGerm.length, 'crop')} use them as they are`)), h('p.yc-state', 'The farm')),
       h('p.sn-comes', { dataset: { hook: 'start-comes' } }, 'Every sowing is counted for ', h('b', `${num(farmGerm(plan), 1)}% germination`), ' and ', h('b', `${num(farmSpare(plan), 1)}% spare`), ', unless its crop or variety says otherwise.'),

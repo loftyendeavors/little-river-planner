@@ -195,6 +195,12 @@ with sync_playwright() as pw:
     click('[data-hook="start-every"]', 500)
     cf = card()
     check("Every crop shows the farm's germination and spare, and the pots a carrier Supplies counts by", cf.get("crop") == "(farm)" and has(box("farmGerm")) and has(box("farmSpare")) and has('[data-hook="start-pockets"]'), cf.get("crop"))
+    sup = js("const own = (S.plan.lrfNext || {}).supplies || null, at = LRFNursery.POCKETS.includes(+(own || {}).pockets) ? +own.pockets : LRFNursery.POCKETS[0], other = at === 10 ? 15 : 10, n = x => (LRFNursery.supplies(S.engine, A.planYear(), x == null ? own : LRFNursery.setSupply(own, 'pockets', null, x)).rows.find(r => r.id === 'carrier') || { need: 0 }).need; return { other, a: n(null), b: n(other), plan: plan() };") or {}
+    click(f'[data-hook="start-pockets"] [data-hook="start-side"][data-side="{sup.get("other")}"]', 600)
+    pk = moves("pockets") or {}
+    check("pressing the farm's other pots a carrier says what Supplies would count, before and after, and moves nothing yet", sup.get("a") != sup.get("b") and pk.get("would") and f"{sup.get('a')} → {sup.get('b')}" in pk.get("text", "") and js("return plan();") == sup.get("plan"), [sup.get("a"), sup.get("b"), pk])
+    click('[data-hook="start-pockets"] ~ * [data-hook="start-use"], [data-hook="start-moves"][data-key="pockets"] [data-hook="start-use"]', 600)
+    check("Use it sets the pots a carrier Supplies counts by, as one step, and one Undo takes it back", js("return +((S.plan.lrfNext || {}).supplies || {}).pockets || 0;") in (sup.get("other"), 0 if sup.get("other") == 15 else -1) and js("A.undo(); return plan();") == sup.get("plan"))
 
     # ── Seeds' Edit crop opens the card ──
     js("A.setView('seeds'); return 1;"); wait(700)

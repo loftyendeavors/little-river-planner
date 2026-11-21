@@ -40,6 +40,7 @@ PAGE = [
  ("a live tray reads counted with one figure said", EN, "set = cells > 0 && perCell > 0;", "set = cells > 0;"),
  ("Edit crop opens the old form", SD, "onclick: () => toStart(g.id) }, 'Edit crop')", "onclick: () => select({ type: 'crop', id: g.id }) }, 'Edit crop')"),
  ("the tick is not kept apart from the others", AP, "const emptyList = a => !['crops', 'varieties', 'starts', 'sell', 'sellV', 'nursery']", "const emptyList = a => !['crops', 'varieties', 'starts', 'sell', 'sellV']"),
+ ("the farm's pots a carrier says nothing of what Supplies would count", SC, "said: says ? says(value) : movesSaid(", "said: movesSaid("),
  ("Looks right moves on without the tick", SC, "if (!looked) App.setStartLooked(c.id, true); if (next)", "if (next)"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)
