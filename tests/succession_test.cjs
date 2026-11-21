@@ -1,6 +1,7 @@
 'use strict';
 // Planning ahead: a series of successions, and openings in the ground with the crops that fit them.
-// The rule under test throughout: nothing these propose may land on ground that is held, or outside the season.
+// The rule under test throughout: nothing these propose may land on ground that is held, or outside the season. A frost date
+// is not the season's edge (#100): what the frost touches is proposed, and carries the engine's own frost note.
 // usage: node succession_test.cjs <app-dir> <plan.json (backup or shipped)>
 process.env.TZ = 'America/New_York';
 const fs = require('node:fs'), path = require('node:path');
@@ -17,10 +18,12 @@ function verdict(base, added) {
   const plan = { ...base.plan, plantings: [...base.plan.plantings, ...added] }, after = E.create(plan, Lib);
   const refused = added.length ? Rails.refusal(base, after, added.map(p => p.id)) : null;
   const clashes = added.filter(p => { const r = after.calc(p); return !r || after.conflicts(p, r).length || after.overflow(p, r); });
-  // the season, asked of the engine directly rather than of the module under test
-  const season = added.map(p => { const r = after.calc(p), w = after.warnings(p, r).find(x => ['field', 'frost', 'closed', 'timing'].includes(x.k)), win = after.fieldPlantingWindow(r.b, r.field.getFullYear());
+  // the season, asked of the engine directly rather than of the module under test: a field day the last spring frost alone sets is the frost's
+  const season = added.map(p => { const r = after.calc(p), early = after.fieldFrostOnly(p, r), w = after.warnings(p, r).find(x => ['field', 'closed', 'timing'].includes(x.k) && !(x.k === 'field' && x.t === early)), win = after.fieldPlantingWindow(r.b, r.field.getFullYear());
     return w ? w.t : win.from && r.field < win.from ? 'before the first field date' : win.to && r.field > win.to ? 'after the last field date' : null; }).filter(Boolean);
-  return { ok: !refused && !clashes.length && !season.length, refused: refused && refused.kind, clashes: clashes.length, season: season.slice(0, 2), after };
+  // what a frost date does to each, by the engine: its frost warning, or that frost-only field day
+  const frost = added.map(p => { const r = after.calc(p), w = after.warnings(p, r).find(x => x.k === 'frost'); return w ? w.t : after.fieldFrostOnly(p, r) || null; });
+  return { ok: !refused && !clashes.length && !season.length, refused: refused && refused.kind, clashes: clashes.length, season: season.slice(0, 2), frost, after };
 }
 const crop = name => eng.crops().find(c => c.name === name) || eng.crops().find(c => new RegExp(name, 'i').test(c.name));
 const gardenIds = c => S.gardensFor(eng, c).map(x => x.garden.id);
@@ -74,7 +77,7 @@ const none = S.series(eng, { cropId: radish.id, gardenIds: [busy.r.b.gardenId], 
 check('asking for more beds than a garden has places what there is and reports the rest', !none.error && none.waves[0].short > 0 && none.waves[0].placed.length < 400 && none.waves[0].why.length >= 1 && verdict(eng, none.plantings).ok, none.waves[0].why);
 
 // many requests at random: whatever is proposed must always be addable
-let tried = 0, proposed = 0, bad = [];
+let tried = 0, proposed = 0, bad = [], frostSeen = 0;
 const pool = S.candidates(eng, true);
 for (let i = 0; i < 160; i++) {
   const c = pick(pool), gs = S.gardensFor(eng, c);
@@ -85,10 +88,19 @@ for (let i = 0; i < 160; i++) {
   tried++;
   if (res.error) { bad.push({ crop: c.name, error: res.error }); continue; }
   proposed += res.plantings.length;
-  const v = verdict(eng, res.plantings);
+  const v = verdict(eng, res.plantings), marked = res.waves.flatMap(w => w.placed.map(x => x.frost || null));
   if (!v.ok) bad.push({ crop: c.name, v: { refused: v.refused, clashes: v.clashes, season: v.season } });
+  // each planting the frost touches carries the engine's note, and the series counts them; no wave is short for a frost
+  else if (JSON.stringify(marked) !== JSON.stringify(v.frost) || res.frost !== v.frost.filter(Boolean).length) bad.push({ crop: c.name, frost: { marked: marked.filter(Boolean).length, engine: v.frost.filter(Boolean).length, said: res.frost } });
+  else if (res.waves.some(w => w.why.some(x => /frost/i.test(x.why)))) bad.push({ crop: c.name, held: res.waves.flatMap(w => w.why.map(x => x.why)).filter(x => /frost/i.test(x)) });
+  frostSeen += v.frost.filter(Boolean).length;
 }
 check('160 series at random: every planting proposed can be added, and none is out of season', tried >= 120 && proposed > 150 && !bad.length, { tried, proposed, bad: bad.slice(0, 4) });
+check('among them, plantings a frost date touches are placed, each marked with the engine’s note and counted by its series', frostSeen >= 5 && !bad.some(x => x.frost || x.held), { frostSeen });
+// a series of a frost-tender crop run into the fall: what the frost cuts is placed, counted, and nothing waits for it
+const tender = crop('Basil'), late = tender && S.series(eng, { cropId: tender.id, gardenIds: S.gardensFor(eng, tender).filter(x => x.kind === 'bed' && x.garden.type === 'field').map(x => x.garden.id), basis: 'planting', from: `${year}-07-01`, count: 8, every: 10, unit: 'whole', amount: 1 });
+const lateV = late && !late.error && verdict(eng, late.plantings);
+check('a frost-tender series into the fall places what the frost touches, even one it leaves nothing to pick, and says how many of them it is', !!lateV && lateV.ok && late.frost >= 2 && late.waves.every(w => w.placed.length === 1) && late.waves.some(w => w.placed.some(x => x.r.frostCut && !(x.r.harvestDays > 0))) && late.frost === lateV.frost.filter(Boolean).length && late.frost <= late.plantings.length && late.waves.every(w => !w.why.some(x => /frost/i.test(x.why))), late && (late.error || { frost: late.frost, n: late.plantings.length, why: late.waves.map(w => w.why.map(x => x.why)) }));
 
 // ── openings ──
 const open = S.openings(eng);
@@ -108,19 +120,48 @@ check('a longer minimum leaves fewer openings', S.openings(eng, { minDays: 60 })
 
 // what fits
 const model = F.build(eng), covered = (id, from, to) => { const rows = model.rows.filter(r => r.cropId === id); if (!rows.length) return 0; let n = 0, d = 0; for (let i = model.index(from); i <= model.index(to); i++) { d++; if (i >= 0 && i < model.days && rows.some(r => r.days[i] > 1e-9)) n++; } return d ? n / d : 0; };
-let fitCount = 0, withFits = 0, badFits = [], lateChecked = 0;
+let fitCount = 0, withFits = 0, badFits = [], lateChecked = 0, frostFits = 0, badOrder = [];
 for (const o of open) {
   const list = S.fits(eng, o, { covered });
   if (list.length) withFits++;
+  // a crop the frost cuts comes after every crop that fits whole
+  if (list.some((t, i) => i && list[i - 1].frost && !t.frost)) badOrder.push({ bed: o.bed.bed, list: list.map(t => [t.crop.name, !!t.frost]) });
   for (const t of list) {
     fitCount++;
     const p = { ...t.p, id: 'fit-' + fitCount }, v = verdict(eng, [p]);
+    if (t.frost) frostFits++;
+    if ((t.frost || null) !== v.frost[0]) { badFits.push({ bed: o.bed.bed, crop: t.crop.name, frost: [t.frost, v.frost[0]] }); continue; }
     const within = t.r.field >= o.from && eng.occupancyThrough(p, t.r) <= o.to && t.spare >= 0 && t.r.harvestDays > 0 && t.latest >= t.r.field;
     if (!v.ok || !within) { badFits.push({ bed: o.bed.bed, crop: t.crop.name, date: t.p.date, v: { refused: v.refused, clashes: v.clashes, season: v.season }, within }); continue; }
-    if (iso(t.latest) !== t.p.date && lateChecked < 150) { lateChecked++; const late = S.tryCrop(eng, o, t.crop, { date: iso(t.latest), id: 'late-' + fitCount }); if (!late.ok || !verdict(eng, [late.p]).ok) badFits.push({ bed: o.bed.bed, crop: t.crop.name, latest: iso(t.latest), why: late.why }); }
+    if (iso(t.latest) !== t.p.date && (lateChecked < 150 || t.crop.frostTender)) { lateChecked++; const late = S.tryCrop(eng, o, t.crop, { date: iso(t.latest), id: 'late-' + fitCount }); if (!late.ok || late.frost || !verdict(eng, [late.p]).ok) badFits.push({ bed: o.bed.bed, crop: t.crop.name, latest: iso(t.latest), why: late.why }); }
   }
 }
 check('every crop offered for an opening can be planted there: in the ground it names, in season, done before the next crop', fitCount > 100 && withFits > 10 && !badFits.length, { fitCount, withFits, lateChecked, bad: badFits.slice(0, 4) });
+check('crops the first frost cuts are offered, with the engine’s frost note, after every crop that fits whole; the last day offered is clear of the frost', frostFits >= 10 && !badOrder.length && !badFits.some(x => x.frost || x.latest), { frostFits, order: badOrder.slice(0, 2) });
+// a series' harvest is that of the plantings with something to pick: one the frost leaves nothing of has no harvest to say
+const zw = late && !late.error && late.waves.find(w => w.placed.some(x => x.r.frostCut && !(x.r.harvestDays > 0))), zx = zw && zw.placed[0];
+const nil = zx && S.series(eng, { cropId: tender.id, place: 'beds', bedIds: [zx.bed.id], basis: 'planting', from: iso(zw.target), count: 1, every: 7, unit: 'whole', amount: 1 });
+const pickedL = late && !late.error ? late.waves.flatMap(w => w.placed).filter(x => x.r.harvestDays > 0) : [];
+check('a series gives its harvest from the plantings with something to pick, and none where the frost leaves nothing', !!nil && !nil.error && nil.plantings.length === 1 && nil.firstHarvest === null && nil.lastHarvest === null && nil.frost === 1
+  && pickedL.length >= 1 && +late.firstHarvest === Math.min(...pickedL.map(x => +x.r.first)) && +late.lastHarvest === Math.max(...pickedL.map(x => +x.r.last)) && late.firstHarvest <= late.lastHarvest, nil && (nil.error || { n: nil.plantings.length, first: nil.firstHarvest, last: nil.lastHarvest }));
+// "where could it go": the openings a crop fits are those of an opening's own test, each with that test's frost note
+const roomOf = crop('Basil') && S.room(eng, crop('Basil').id), roomBad = roomOf ? roomOf.openings.filter(x => { const t = S.tryCrop(eng, x.opening, crop('Basil')); return !t.ok || (t.frost || null) !== x.frost; }) : [null];
+check('where a crop could go lists the openings its own test passes, those the frost cuts with the note', !!roomOf && roomOf.openings.filter(x => x.frost).length >= 2 && !roomBad.length, roomOf && { n: roomOf.openings.length, frost: roomOf.openings.filter(x => x.frost).length, bad: roomBad.length });
+// the frost leaves nothing: not offered on the crop's own first day, allowed on a day asked for, and said outright
+const zeroEnd = o => o.to;   // the ground is free for it: only the frost is short
+const zero = (() => { for (const o of open) for (const c of S.candidates(eng, true)) { if (!S.suits(eng, c, o.bed)) continue; const t = S.tryCrop(eng, o, c); if (!t.ok && t.r && t.r.frostCut && !(t.r.harvestDays > 0)) { const fit = eng.fit(t.p); if (fit.ok && fit.through <= zeroEnd(o)) return { o, c, t }; } } return null; })();
+const zeroAsked = zero && S.tryCrop(eng, zero.o, zero.c, { date: zero.t.p.date, id: 'zero-asked' }), zeroV = zeroAsked && verdict(eng, [zeroAsked.p]);
+check('a crop the frost leaves nothing to pick is not offered, and on a day typed for it is allowed, saying nothing is picked', !!zero && !S.fits(eng, zero.o, { covered }).some(t => t.crop.id === zero.c.id) && zero.t.why === zeroV.frost[0]
+  && zeroAsked.ok && /nothing is picked/.test(zeroAsked.frost) && zeroAsked.frost === zeroV.frost[0] && zeroV.ok, zero ? { crop: zero.c.name, why: zero.t.why, asked: zeroAsked.ok, askedWhy: zeroAsked.why, frost: zeroAsked.frost } : 'no subject');
+// a day typed before the last spring frost: allowed with its note; a day before the crop's own field date still stops
+// (on this farm warm-season planting starts after the last frost, so the same plan is read with a last frost two weeks past that start)
+const fw0 = eng.firstFieldDate(eng.crops().find(c => c.frostTender && eng.fieldSeasonFor(c) === 'warm') || {}, open.find(o => o.garden.type === 'field').bed, year), late2 = fw0 && E.d2s(E.addDays(fw0, 14)).slice(5);
+const engS = late2 ? E.create({ ...core, settings: { ...core.settings, frostLast: late2 } }, Lib) : eng, openS = S.openings(engS, { empty: true });
+const spring = (() => { for (const o of openS) for (const c of S.candidates(engS, false)) { if (!c.frostTender || !S.suits(engS, c, o.bed)) continue; const first = engS.firstFieldDate(c, o.bed, year), bare = engS.firstFieldDate(c, o.bed, year, {}, false); const d = bare && bare > o.from ? bare : o.from; if (first && first > d && d <= o.to) { const t = S.tryCrop(engS, o, c, { date: iso(d), id: 'spring' }); if (t.r && t.spare >= 0 && t.r.harvestDays > 0) return { o, c, t }; } } return null; })();
+const springV = spring && verdict(engS, [spring.t.p]);
+check('a frost-tender crop on a day typed before the last-frost planning date is allowed, with the engine’s frost note', !!spring && spring.t.ok && !!spring.t.frost && spring.t.frost === springV.frost[0] && springV.ok, spring ? { crop: spring.c.name, at: spring.t.p.date, ok: spring.t.ok, why: spring.t.why, frost: spring.t.frost } : { frostLast: late2 });
+const cool = (() => { for (const o of open) for (const c of S.candidates(eng, false)) { if (!S.suits(eng, c, o.bed) || o.garden.type !== 'field') continue; const bare = eng.firstFieldDate(c, o.bed, year, {}, false); if (bare && bare > o.from) { const t = S.tryCrop(eng, o, c, { date: iso(o.from), id: 'cold' }); if (t.r) return { o, c, t }; } } return null; })();
+check('a day typed before the crop’s own field date, the frost aside, still stops it, in the engine’s words', !!cool && !cool.t.ok && /field planting starts/.test(cool.t.why), cool ? { crop: cool.c.name, why: cool.t.why } : 'no subject');
 const some = open.map(o => ({ o, list: S.fits(eng, o, { covered }) })).find(x => x.list.length >= 3);
 check('crops the plan is not already picking then come first, and one that follows its own family comes last', some && some.list.every((t, i, all) => i === 0 || (all[i - 1].rotation ? 1 : 0) <= (t.rotation ? 1 : 0)), some && some.list.map(t => [t.crop.name, t.rotation, t.covered]));
 const cand = S.candidates(eng, true), allCand = S.candidates(eng, false);

@@ -762,6 +762,7 @@
       h('div', h('b', name.charAt(0).toUpperCase() + name.slice(1)), h('small', `${App.bedLabel(o.bed)} · not planted yet`))),
       h('p', goes, ' · Pick ', B(r.first), ' to ', B(r.last), free),
       h('p', `${num(+r.physicalLength || +r.len, 1)} ft${amount ? ' · ' + amount : ''}`),
+      t.frost ? h('p', { dataset: { hook: 'room-hint-frost' } }, UI.plainDays(t.frost)) : null,
       h('p.tl-rh-foot', 'Click to plant it here · Undo follows'));
     hint.hidden = false;
     const at = bar.getBoundingClientRect(), box = hint.getBoundingClientRect(), left = Math.max(8, Math.min(at.left, innerWidth - box.width - 8));

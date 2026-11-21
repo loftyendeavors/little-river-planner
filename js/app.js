@@ -790,7 +790,7 @@
   // The frost dates and the days that bound planting in open ground (js/farmdates.js). A change writes the plan's settings and
   // touches no planting; what it does to the plan as it stands is worked out first, in the window that changes them (js/season.js).
   const FD = root.LRFFarmDates;
-  const farmTools = { trouble: (eng, p, r) => root.LRFSuccession.seasonTrouble(eng, p, r), worth: eng => root.LRFForecast.build(eng).rows.reduce((n, r) => n + r.worth, 0) };
+  const farmTools = { trouble: (eng, p, r) => root.LRFSuccession.seasonTrouble(eng, p, r), frost: (eng, p, r) => root.LRFSuccession.frostNote(eng, p, r), worth: eng => root.LRFForecast.build(eng).rows.reduce((n, r) => n + r.worth, 0) };
   const farmDates = () => FD.read(state.engine);
   /** What these dates would do, with nothing changed: the dates that differ, why they cannot stand if they cannot, and what moves. */
   function farmDatesPreview(dates) {

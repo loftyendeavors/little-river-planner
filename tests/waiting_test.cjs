@@ -17,7 +17,9 @@ const raw = JSON.parse(fs.readFileSync(planFile, 'utf8')), core = raw.format ? I
 const iso = E.d2s, near = (a, b) => Math.abs(a - b) < 1e-6;
 let seed = 20261112; const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return (seed >>> 8) / 16777216; }, pick = list => list[Math.floor(rnd() * list.length)];
 const crop = name => eng.crops().find(c => c.name === name) || eng.crops().find(c => new RegExp(name, 'i').test(c.name));
-const season = (e, p, r) => { const w = e.warnings(p, r).find(x => ['field', 'frost', 'closed', 'timing'].includes(x.k)), win = e.fieldPlantingWindow(r.b, r.field.getFullYear()); return w ? w.t : win.from && r.field < win.from ? 'before the first field date' : win.to && r.field > win.to ? 'after the last field date' : null; };
+// a frost date is not the season's edge (#100): a field day set by the last spring frost alone is the frost's, and the frost is a note
+const frostOf = (e, p, r) => { const w = e.warnings(p, r).find(x => x.k === 'frost'); return w ? w.t : e.fieldFrostOnly(p, r) || null; };
+const season = (e, p, r) => { const early = e.fieldFrostOnly(p, r), w = e.warnings(p, r).find(x => ['field', 'closed', 'timing'].includes(x.k) && !(x.k === 'field' && x.t === early)), win = e.fieldPlantingWindow(r.b, r.field.getFullYear()); return w ? w.t : win.from && r.field < win.from ? 'before the first field date' : win.to && r.field > win.to ? 'after the last field date' : null; };
 /**
  * Apply edits to the plan and ask the guard rails about every planting they touch. A planting that is added must be clear of everything;
  * one that was already in the plan may keep an overlap it had (this plan has some "to settle"), which the rails allow but never let grow.
@@ -133,6 +135,11 @@ const early = { id: 'w-early', cropId: tomato.id, date: `${year}-03-01`, wait: {
 const freeThen = eng.plan.beds.filter(b => eng.isSoilBed(b) && S.suits(eng, tomato, b) && S.landing(eng, early, { bedId: b.id }).state === 'ok');
 const frosty = freeThen.filter(b => { const res = S.landing(eng, early, { bedId: b.id }); return season(eng, res.p, res.r); });
 check('the list of where it could go leaves out ground that is free but out of season then', frosty.length >= 5 && earlyHomes.every(h => !frosty.some(b => b.id === h.bed.id)) && earlyHomes.every(h => !season(eng, h.p, h.r)), [freeThen.length, frosty.length, earlyHomes.length]);
+// a frost date does not keep a bed off the list: a basil waiting on a late summer day is offered every free bed in season, marked where the frost cuts it
+const lateBasil = crop('Basil') && { id: 'w-frost', cropId: crop('Basil').id, date: `${year}-08-10`, wait: {} }, frostHomes = lateBasil ? S.homes(eng, lateBasil) : [];
+const frostFree = lateBasil ? eng.plan.beds.filter(b => S.suits(eng, crop('Basil'), b)).map(b => ({ b, res: S.landing(eng, lateBasil, { bedId: b.id }, { quick: true }) })).filter(x => x.res.state === 'ok' && x.res.r && !season(eng, x.res.p, x.res.r) && (x.res.r.harvestDays > 0 || x.res.r.frostCut)) : [];
+check('a waiting planting the frost touches is offered every bed free for it, each marked with the engine’s frost note', frostFree.length >= 3 && frostHomes.length === frostFree.length && frostHomes.filter(h => h.frost).length >= 3
+  && frostHomes.every(h => (h.frost || null) === frostOf(eng, h.p, h.r)), [frostFree.length, frostHomes.length, frostHomes.filter(h => h.frost).length]);
 const ab = S.about(eng, w0);
 check('before it has a bed its days can still be shown, read off a space like the ones it is headed for', !!ab && iso(ab.r.field) === w0.date && ab.r.first > ab.r.field && !eng.planting(ab.p.id));
 check('a record that is not a waiting planting lands nowhere', S.landing(eng, { ...w0, bedId: free.bed.id }, { bedId: free.bed.id }).state === 'blocked' && S.landing(eng, w0, { bedId: 'no-such-bed' }).state === 'blocked' && S.homes(eng, { id: 'q' }).length === 0 && S.about(eng, { id: 'q' }) === null);

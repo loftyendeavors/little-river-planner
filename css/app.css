@@ -1287,6 +1287,7 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 .ah-fit:hover { border-color: var(--ink-2); }
 .ah-fit[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .ah-fit[aria-pressed="true"] small { color: inherit; opacity: 0.75; }
+.ah-fit:not([aria-pressed="true"]) small.ah-frost, .p-open small.frost, .ah-review .ah-frost, .sr-frost { color: color-mix(in srgb, var(--frost) 70%, var(--ink)); }   /* a frost date, marked quietly (#100) */
 .ah-fit.gap { border-color: color-mix(in srgb, var(--good) 55%, var(--line)); }
 .ah-fit.rot { color: var(--ink-2); font-weight: 500; border-style: dashed; }
 .ah-more { border: 0; background: none; color: var(--muted); font: 600 var(--type-13) var(--body); text-decoration: underline; text-underline-offset: 2px; padding: var(--space-4) var(--space-4); }

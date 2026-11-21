@@ -77,7 +77,7 @@
 
   "store": 31,
 
-  "succession": 31,
+  "succession": 39,
 
   "swap, backup": 32,
 
@@ -97,9 +97,9 @@
 
   "things, compact": 47,
 
-  "waiting, backup": 54,
+  "waiting, backup": 55,
 
-  "waiting, compact": 54,
+  "waiting, compact": 55,
 
   "what the build changed": 9,
 
@@ -117,7 +117,7 @@
  },
  "app1": {
 
-  "ahead": 49,
+  "ahead": 67,
 
   "core": 20,
 
@@ -195,7 +195,7 @@
 
   "room": 35,
 
-  "season": 54,
+  "season": 58,
 
   "step5a": 65,
 
@@ -256,7 +256,7 @@
  },
  "off": {
 
-  "ahead-off": 49,
+  "ahead-off": 67,
 
   "core-off": 20,
 
@@ -440,21 +440,21 @@
 
   "photo-site": 13,
 
-  "season @1480": 54,
+  "season @1480": 58,
 
-  "season @1707": 54,
+  "season @1707": 58,
 
-  "season @3440": 54,
+  "season @3440": 58,
 
-  "season-site": 54,
+  "season-site": 58,
 
-  "season-site @1480": 54,
+  "season-site @1480": 58,
 
-  "season-site @1707": 54,
+  "season-site @1707": 58,
 
-  "season-site @3440": 54,
+  "season-site @3440": 58,
 
-  "season-site dark": 54
+  "season-site dark": 58
 
  },
  "site9": {

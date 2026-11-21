@@ -20,7 +20,7 @@
 (function (root) {
   'use strict';
   const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, S = root.LRFSuccession, F = root.LRFForecast, Lib = root.LRFLibrary, T = root.LRFThumbs;
-  const { h, clear, add, num, day, span, toast } = UI;
+  const { h, clear, add, num, day, span, toast, plainDays: plain } = UI;
   const $ = id => document.getElementById(id);
   const lower = c => String((c && c.name) || 'crop').toLowerCase();
   const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many || one + 's'}`;
@@ -217,12 +217,12 @@
   function roomList(eng, crop) {
     const found = S.room(eng, crop.id, { varietyId: P.varietyId || undefined }), shown = P.roomAll ? found.openings : found.openings.slice(0, 8), out = [];
     const go = o => { const A = root.LRFAhead; if (A) Object.assign(A.state.O, { key: o.id, pick: { cropId: crop.id, varietyId: P.varietyId || '', date: '', ft: '' }, all: false }); App.select({ type: 'opening', id: o.id, bedId: o.bed.id }); };
-    for (const x of shown) out.push(h('button.p-open', { type: 'button', dataset: { roomOpening: x.opening.id }, title: `${lower(crop)} fits here: in from ${day(x.earliest)}, first harvest ${day(x.first)}. Click to see this opening.`, onclick: () => go(x.opening) },
-      h('b', span(x.opening.from, x.opening.to)), h('span', `${spaceName(x.opening.bed, eng)}${x.opening.whole ? '' : ` · ${num(x.opening.length, 1)} ft`}`), h('small', `${num(x.opening.days)} d`)));
+    for (const x of shown) out.push(h('button.p-open', { type: 'button', dataset: { roomOpening: x.opening.id }, title: `${lower(crop)} fits here: in from ${day(x.earliest)}, first harvest ${day(x.first)}.${x.frost ? ` ${plain(x.frost)}` : ''} Click to see this opening.`, onclick: () => go(x.opening) },
+      h('b', span(x.opening.from, x.opening.to)), h('span', `${spaceName(x.opening.bed, eng)}${x.opening.whole ? '' : ` · ${num(x.opening.length, 1)} ft`}`), x.frost ? h('small.frost', { dataset: { hook: 'room-frost' } }, 'frost') : null, h('small', `${num(x.opening.days)} d`)));
     if (found.openings.length > shown.length) out.push(h('button.ah-more', { type: 'button', id: 'srRoomMore', onclick: () => { P.roomAll = true; redrawPanel(); } }, `+${num(found.openings.length - shown.length)} more`));
     if (!found.openings.length) out.push(h('p.note.sr-none', { id: 'srRoomNone' }, `No opening between planned crops is long enough for ${lower(crop)}.`));
     if (found.empty.length) out.push(h('p.help', { id: 'srRoomEmpty' }, `Nothing planned all year: ${found.empty.map(g => `${g.garden.name} (${plural(g.beds.length, 'bed')})`).join(', ')}.`));
-    out.push(h('p.help', 'Ground beds only. An opening is listed when the whole crop fits in it: growing, harvest and turnover, in season.'));
+    out.push(h('p.help', 'Ground beds only. An opening is listed when the whole crop fits in it: growing, harvest and turnover, in season. Marked “frost”: the first frost cuts its harvest.'));
     return out;
   }
 
@@ -317,7 +317,9 @@
       const n = result.plantings.length, m = result.held.length, total = result.waves.length, group = F.groupOf(crop, result.unit, (App.state.plan.lrfNext || {}).groups);
       const z = result.sized || null, amt = q => F.amount(q, result.unit, group);
       const said = [n ? `${plural(n, 'planting')} onto ${P.place === 'beds' ? 'the beds named' : 'beds'}${z && z.feet > 0 ? `, ${num(Math.round(z.feet))} ft of bed in all` : ''}` : '', m ? `${plural(m, 'planting')} to place, with no bed yet${z && z.heldFeet > 0 ? ` (${num(Math.round(z.heldFeet))} ft)` : ''}` : ''].filter(Boolean).join('; ');
-      add(out, h('p.sr-sum', { id: 'srSum' }, n || m ? `${said}.${n ? ` Harvest ${span(result.firstHarvest, result.lastHarvest)}${result.units > 0 ? `, about ${F.amount(result.units, result.unit, group)}` : ''}.` : ''}${result.skipped ? (z ? ` ${num(result.skipped)} left out: the plan already gives enough then.` : ` ${num(result.skipped)} left out: already being picked then.`) : ''}`
+      add(out, h('p.sr-sum', { id: 'srSum' }, n || m ? [`${said}.${n ? (result.firstHarvest ? ` Harvest ${span(result.firstHarvest, result.lastHarvest)}${result.units > 0 ? `, about ${F.amount(result.units, result.unit, group)}` : ''}.` : ' Nothing is picked: the first frost comes first.') : ''}${result.skipped ? (z ? ` ${num(result.skipped)} left out: the plan already gives enough then.` : ` ${num(result.skipped)} left out: already being picked then.`) : ''}`,
+        // a frost date stops none of them: how many it touches, said where the series is summed up (#100)
+        result.frost ? h('span.sr-frost', { dataset: { hook: 'series-frost' } }, ` ${num(result.frost)} of ${num(n)} cross a frost date.`) : null]
         : result.skipped === total ? (z ? `Nothing to add: the plan already gives ${amt(z.want)} a week of ${lower(crop)} in every stretch asked for.` : `Nothing to add: ${lower(crop)} is already being picked on every one of those days.`) : 'None of these can be placed, and nothing is held to place later.'));
       if (z) add(out, restsLine(result, crop, eng));
       const rows = result.waves.map(w => {
@@ -331,7 +333,7 @@
         return h('li' + (w.held.length || w.short > 1e-6 ? '.wait' : ''), { dataset: { wave: w.k + 1 } }, head,
           h('span', placedText || null, placedText && heldText ? h('br') : null, heldText ? h('em', heldText) : null, heldText && why && P.place !== 'hold' ? h('small', why) : null),
           z ? h('small.sr-asked', `wanted ${num(F.shown(w.asked), 1)}${w.have > 1e-9 ? ` · the plan has ${num(F.shown(w.have), 1)}` : ''}${w.placed.length ? ` · ${w.placed.length === 1 ? 'this gives' : 'these give'} ${amt(w.got)}${w.past ? `, some of it after ${day(w.window.to)}` : ''}` : ` ${F.unitWord(F.shown(w.asked), result.unit, group)}`}`) : null,
-          first ? h('small.sr-when', `${first.r.sow ? `sow ${day(first.r.sow)} · ` : ''}pick ${day(first.r.first)}${E.d2s(first.r.field) !== E.d2s(w.target) ? ` · in ${day(first.r.field)}` : ''}`) : w.held[0] && w.held[0].date !== E.d2s(w.target) ? h('small.sr-when', `in ${day(E.s2d(w.held[0].date))}`) : null);
+          first ? h('small.sr-when', `${first.r.sow ? `sow ${day(first.r.sow)} · ` : ''}${first.r.harvestDays > 0 ? `pick ${day(first.r.first)}` : 'nothing picked'}${E.d2s(first.r.field) !== E.d2s(w.target) ? ` · in ${day(first.r.field)}` : ''}`) : w.held[0] && w.held[0].date !== E.d2s(w.target) ? h('small.sr-when', `in ${day(E.s2d(w.held[0].date))}`) : null);
       });
       add(out, h('ol.sr-waves' + (z ? '.sr-sized' : ''), { id: 'srWaves' }, rows));
       if (n || z) {
@@ -402,8 +404,8 @@
           h('li', h('span', 'First harvest'), h('b', day(r.first))), h('li', h('span', 'Last harvest'), h('b', r.harvestDays ? day(r.last) : 'None before the season ends'))),
         h('p.help', `Worked out as if in ${spaceName(a.bed, eng)}. The bed it goes to decides.`)) : null,
       h('section.insp-section', { id: 'wtHomes' }, h('h3', homes.length ? `Free for it on ${day(date)} · ${num(homes.length)}` : `Free for it on ${day(date)}`),
-        homes.length ? [shown.map(x => h('button.p-open', { type: 'button', dataset: { home: x.bed.id }, title: `Place it here: ${App.bedLabel(x.bed)}, harvest ${span(x.r.first, x.r.last)}`, onclick: () => App.placeWaiting(w.id, x.bed.id) },
-          h('b', `${KIND[eng.spaceKind(x.bed)] || ''} ${x.bed.bed}`.trim()), h('span', (x.garden || {}).name || ''), h('small', x.wanted ? 'where it was sent' : ''))),
+        homes.length ? [shown.map(x => h('button.p-open', { type: 'button', dataset: { home: x.bed.id }, title: `Place it here: ${App.bedLabel(x.bed)}, ${x.r.harvestDays > 0 ? `harvest ${span(x.r.first, x.r.last)}` : 'nothing picked'}`, onclick: () => App.placeWaiting(w.id, x.bed.id) },
+          h('b', `${KIND[eng.spaceKind(x.bed)] || ''} ${x.bed.bed}`.trim()), h('span', (x.garden || {}).name || ''), x.frost ? h('small.frost', { dataset: { hook: 'home-frost' }, title: plain(x.frost) }, 'frost') : null, h('small', x.wanted ? 'where it was sent' : ''))),
           homes.length > shown.length ? h('button.ah-more', { type: 'button', id: 'wtMore', onclick: () => { W.all = true; redraw(); } }, `+${num(homes.length - shown.length)} more`) : null,
           h('p.help', 'Click one to place it there, or drag it onto any bed. A bed that holds one other crop then can be shared: drop it there to choose how.')]
           : h('p.note.sr-none', { id: 'wtNoHome' }, 'No space is free for all of its days, in season. Drag it onto a bed to share one, or change its date.'),

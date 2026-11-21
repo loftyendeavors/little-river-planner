@@ -34,6 +34,8 @@
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const day = d => E.validDate(d) ? `${MONTHS[d.getMonth()]} ${d.getDate()}` : '—';
+  /** The engine's words with their days as a grower reads them: 2027-10-18 is Oct 18. */
+  const plainDays = text => String(text || '').replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (all, y, m, d) => `${MONTHS[+m - 1]} ${+d}`);
   const dayLong = d => E.validDate(d) ? `${DAYS[d.getDay()]} ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}` : '—';
   const span = (a, b) => `${day(a)} – ${day(b)}`;
   const num = (n, digits = 0) => n == null || Number.isNaN(+n) ? '—' : Number(n).toLocaleString('en-US', { maximumFractionDigits: digits });
@@ -123,5 +125,5 @@
     return btn;
   }
 
-  root.LRFUI = { h, s, clear, add, day, dayLong, span, num, feet, isoWeek, inkOn, toast, answerHere: fn => { answerTo = fn; }, confirm, help, MONTHS, DAYS };
+  root.LRFUI = { h, s, clear, add, day, dayLong, plainDays, span, num, feet, isoWeek, inkOn, toast, answerHere: fn => { answerTo = fn; }, confirm, help, MONTHS, DAYS };
 })(window);

@@ -30,7 +30,7 @@
    * the frost dates come from the built-in defaults, the field dates are the engine's own.
    */
   const FIELDS = [
-    { key: 'frostLast', group: 'frost', label: 'Last spring frost', short: 'the last spring frost', fallback: null, does: 'A frost-tender crop is not offered ground open to frost before it. Crates and towers under cover move out on it, unless they have a day of their own.' },
+    { key: 'frostLast', group: 'frost', label: 'Last spring frost', short: 'the last spring frost', fallback: null, does: 'A frost-tender crop set out in ground open to frost before it is marked, not stopped. Crates and towers under cover move out on it, unless they have a day of their own.' },
     { key: 'frostFirst', group: 'frost', label: 'First fall frost', short: 'the first fall frost', fallback: null, does: 'Where the harvest of a frost-tender crop ends in ground open to frost: what it would pick after it is lost.' },
     { key: 'firstCoolField', group: 'field', label: 'Cool-season crops, from', short: 'the start of cool-season field planting', fallback: '04-15', does: 'The first day the planner offers a cool-season crop a place in the field.' },
     { key: 'firstWarmField', group: 'field', label: 'Warm-season crops, from', short: 'the start of warm-season field planting', fallback: '05-01', does: 'The first day it offers a warm-season crop a place in the field.' },
@@ -87,7 +87,8 @@
   /**
    * What a change of dates does to the plan as it stands. `before` and `after` are engines made from the same plan with
    * different settings. tools.trouble(engine, planting, calc) says why the season would refuse a planting where it stands
-   * (the planner's own rule for what it offers); tools.worth(engine) is the season's worth. Both are optional.
+   * (the planner's own rule for what it offers); tools.frost(engine, planting, calc) what a frost date does to it (a note, never a
+   * refusal); tools.worth(engine) is the season's worth. All are optional.
    *
    * harvest   plantings whose last harvest day moves: { id, cropId, was, now, days }  (days > 0 is later)
    * dates     plantings whose sowing, planting or first harvest day moves (the farm's dates should move none: listed if any does)
@@ -96,10 +97,11 @@
    * ground    { fresh, settled, standing }: pairs booked into the same ground that are new, gone, and there either way
    * outside   plantings the planner would no longer offer the place they stand in: { id, cropId, why }
    * inside    plantings it would offer their place again
+   * frosted   plantings a frost date would newly touch, with the engine's note: { id, cropId, why }
    * worth     [before, after], or null without tools.worth
    */
   function compare(before, after, tools = {}) {
-    const harvest = [], dates = [], out = [], yields = [], outside = [], inside = [];
+    const harvest = [], dates = [], out = [], yields = [], outside = [], inside = [], frosted = [];
     let counted = 0;
     for (const p of after.plan.plantings) {
       const q = before.planting(p.id), a = q && before.calc(q), b = after.calc(p);
@@ -115,12 +117,13 @@
         const ta = tools.trouble(before, q, a), tb = tools.trouble(after, p, b);
         if (!ta && tb) outside.push({ ...base, why: tb }); else if (ta && !tb) inside.push({ ...base, why: ta });
       }
+      if (tools.frost) { const fa = tools.frost(before, q, a), fb = tools.frost(after, p, b); if (fb && !fa) frosted.push({ ...base, why: fb }); }
     }
     const was = pairsOf(before), now = pairsOf(after);
     const ground = { fresh: [...now].filter(k => !was.has(k)).map(k => k.split('|')), settled: [...was].filter(k => !now.has(k)).map(k => k.split('|')), standing: [...now].filter(k => was.has(k)).length };
     const worth = tools.worth ? [tools.worth(before), tools.worth(after)] : null;
-    const same = !harvest.length && !dates.length && !out.length && !yields.length && !ground.fresh.length && !ground.settled.length && !outside.length && !inside.length && (!worth || Math.abs(worth[1] - worth[0]) < 0.005);
-    return { counted, harvest, dates, out, yields, ground, outside, inside, worth, same };
+    const same = !harvest.length && !dates.length && !out.length && !yields.length && !ground.fresh.length && !ground.settled.length && !outside.length && !inside.length && !frosted.length && (!worth || Math.abs(worth[1] - worth[0]) < 0.005);
+    return { counted, harvest, dates, out, yields, ground, outside, inside, frosted, worth, same };
   }
 
   /** Lines for a list: a result's plantings gathered by crop. Each { cropId, n, ids, lo, hi } with lo and hi the fewest and most days moved. */
