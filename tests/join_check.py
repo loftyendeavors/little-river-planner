@@ -253,10 +253,11 @@ with sync_playwright() as pw:
         made = A.evaluate(RUN)
         RUNS = "(id => ({ runs: LRFApp.runs().filter(r => r.id === id).length, plantings: LRFApp.state.plan.plantings.filter(p => p.run && p.run.id === id).length, all: LRFApp.state.plan.plantings.length }))"
         n_before = A.evaluate("LRFApp.state.plan.plantings.length")
-        both = made and A.evaluate("r => LRFApp.addRun(r)", made) and B.evaluate("r => LRFApp.addRun(r)", made)
+        # each device also changes something of its own, so that the two plans differ and are joined record by record
+        both = made and A.evaluate("r => LRFApp.addRun(r)", made) and B.evaluate("r => LRFApp.addRun(r)", made) and B.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'the phone, with the run' }, 'A note')", X2)
         if made: settled(A, 'in-step'); look(B); settled(B, 'in-step'); look(A)
         rb, ra = (B.evaluate(RUNS, made['run']['id']), A.evaluate(RUNS, made['run']['id'])) if made else ({}, {})
-        check('the same run of successions added on both devices before either saw the other joins to one run, its plantings once each, on both', bool(both) and rb == ra == {'runs': 1, 'plantings': len(made['sowings']), 'all': n_before + len(made['sowings'])} and A.evaluate("LRFApp.contentKey()") == B.evaluate("LRFApp.contentKey()"), [made and made['run']['id'], ra, rb])
+        check('the same run of successions added on both devices before either saw the other joins to one run, its plantings once each, on both', bool(both) and B.evaluate(P, X2)['note'] == 'the phone, with the run' and A.evaluate(P, X2)['note'] == 'the phone, with the run' and rb == ra == {'runs': 1, 'plantings': len(made['sowings']), 'all': n_before + len(made['sowings'])} and A.evaluate("LRFApp.contentKey()") == B.evaluate("LRFApp.contentKey()"), [made and made['run']['id'], ra, rb])
 
         # ── 5b. the plan here cannot be kept first: nothing is taken in ──
         where = 'kept first'
