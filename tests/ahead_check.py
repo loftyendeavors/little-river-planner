@@ -200,6 +200,106 @@ with sync_playwright() as pw:
     page.wait_for_selector('#bedOpenings')
     check('and a link goes back to the whole bed', page.evaluate("LRFApp.state.sel.type") == 'bed')
 
+    # ── the frost rule (#100): a frost date never stops a planting; it is placed, and marked quietly ──
+    def soft(sel):   # a fault fails a named line below, rather than stopping the check here
+        try: page.wait_for_selector(sel, timeout=5000)
+        except Exception: pass
+    # (a) an opening where the first frost cuts a crop's harvest: found by the planner's own test on the plan in hand, Basil first where it is one
+    fsub = page.evaluate("""() => { const S = LRFSuccession, eng = LRFApp.state.engine; let best = null;
+      for (const o of S.openings(eng, { empty: true })) { const f = S.fits(eng, o), t = f.find(t => t.frost && t.r.frostCut); if (!t) continue; if (!best || t.crop.name === 'Basil') best = { id: o.id, bedId: o.bed.id, crop: t.crop.id, name: t.crop.name, note: t.frost, picked: t.r.harvestDays, of: t.r.frostCut.plannedDays, n: f.length, whole: f.filter(x => !x.frost).length }; if (best.name === 'Basil') break; }
+      return best; }""")
+    check('a subject: an opening on this plan where the first frost cuts the harvest of a crop that fits it otherwise', bool(fsub), fsub)
+    fsub = fsub or {}
+    page.evaluate("s => { LRFAhead.state.O.mine = true; LRFApp.select({ type: 'opening', id: s.id, bedId: s.bedId }); }", fsub)
+    soft('#ahFits')
+    if page.query_selector('#ahMore'): page.click('#ahMore'); page.wait_for_timeout(120)
+    chips = page.evaluate("""s => { const all = [...document.querySelectorAll('#ahFits .ah-fit')], el = document.querySelector(`[data-hook="fit-frost"][data-crop="${s.crop}"]`), mark = el && el.querySelector('[data-hook="fit-frost-mark"]');
+      return { n: all.length, frostAt: all.map((e, i) => e.dataset.hook === 'fit-frost' ? i : -1).filter(i => i >= 0), whole: all.filter(e => e.dataset.hook !== 'fit-frost').length, there: !!el, mark: mark ? mark.textContent : '', title: el ? el.title : '', note: LRFUI.plainDays(s.note) }; }""", fsub)
+    check('(a) the crop is a chip in the opening, marked quietly with what the frost leaves, its note in the title', chips['there'] and chips['mark'] == 'frost: %s of %s days' % (fsub.get('picked'), fsub.get('of')) and chips['note'] in chips['title'] and chips['n'] == fsub.get('n'), chips)
+    check('(a) crops the frost cuts come after every crop that fits whole', len(chips['frostAt']) >= 1 and chips['whole'] == fsub.get('whole') and min(chips['frostAt'] or [0]) == chips['whole'], chips)
+    page.evaluate("s => { const c = document.querySelector(`[data-hook=\"fit-frost\"][data-crop=\"${s.crop}\"]`); if (c) c.click(); }", fsub)
+    soft('#ahSched')
+    rev = page.evaluate("""s => { const line = document.querySelector('[data-hook="opening-frost"]'), add = document.getElementById('ahAdd'); return { line: line ? line.textContent : '', after: !!(line && line.previousElementSibling && line.previousElementSibling.id === 'ahSched'), add: !!add && !add.disabled, note: LRFUI.plainDays(s.note) }; }""", fsub)
+    check('(a) picked, it shows its schedule with the frost note as one line under it, and Add planting is on', rev['line'] == rev['note'] and rev['after'] and rev['add'], rev)
+    page.screenshot(path=os.path.join(shots, 'frost-chip.png'))
+    n1 = page.evaluate('LRFApp.state.plan.plantings.length')
+    page.evaluate("(document.getElementById('ahAdd') || { click() {} }).click()"); page.wait_for_timeout(250)
+    put = page.evaluate("""s => { const P = LRFApp.state.plan.plantings, p = P[P.length - 1], eng = LRFApp.state.engine, w = eng.warnings(p).find(x => x.k === 'frost'); return { n: P.length, crop: p.cropId, bed: p.bedId, note: w ? w.t : null, clash: eng.conflicts(p, eng.calc(p)).length }; }""", fsub)
+    check('(a) Add planting adds it, clear of everything, and the planting carries the engine’s own frost note', put['n'] == n1 + 1 and put['crop'] == fsub.get('crop') and put['bed'] == fsub.get('bedId') and put['note'] == fsub.get('note') and put['clash'] == 0, [put, fsub.get('note')])
+    if put['n'] == n1 + 1: page.evaluate('LRFApp.undo()'); page.wait_for_timeout(150)
+    # typed: a day on which the frost leaves nothing to pick is allowed, and said outright
+    zsub = page.evaluate("""() => { const S = LRFSuccession, eng = LRFApp.state.engine, E = LRFEngine;
+      for (const o of S.openings(eng, { empty: true })) for (const t of S.fits(eng, o).filter(t => t.frost)) for (let d = E.addDays(t.r.field, 1); d <= o.to; d = E.addDays(d, 1)) { const u = S.tryCrop(eng, o, t.crop, { date: E.d2s(d) }); if (u.ok && u.r.frostCut && !(u.r.harvestDays > 0)) return { id: o.id, bedId: o.bed.id, crop: t.crop.id, date: E.d2s(d), note: u.frost }; }
+      return null; }""")
+    check('a subject: a crop offered for an opening that, on a later day typed, the frost leaves nothing to pick', bool(zsub), zsub)
+    zsub = zsub or {}
+    page.evaluate("s => { LRFApp.select({ type: 'opening', id: s.id, bedId: s.bedId }); }", zsub); soft('#ahFits')
+    if page.query_selector('#ahMore'): page.click('#ahMore'); page.wait_for_timeout(120)
+    page.evaluate("s => { const c = document.querySelector(`#ahFits .ah-fit[data-crop=\"${s.crop}\"]`); if (c) c.click(); }", zsub); soft('#ahDate')
+    page.evaluate("""s => { const d = document.querySelector('#ahDate'); if (d) { d.value = s.date; d.dispatchEvent(new Event('change')); } }""", zsub); page.wait_for_timeout(150)
+    zr = page.evaluate("""s => { const line = document.querySelector('[data-hook="opening-frost"]'), add = document.getElementById('ahAdd'); return { line: line ? line.textContent : '', add: !!add && !add.disabled, note: LRFUI.plainDays(s.note) }; }""", zsub)
+    check('(a) typed, a day the frost leaves nothing to pick is allowed, and the line says nothing is picked', zr['line'] == zr['note'] and 'nothing is picked' in zr['line'] and zr['add'], zr)
+    # (b) a day typed before the last-frost planning date: on this farm warm-season planting starts after the last frost, so the
+    # last frost is first set two weeks past that start (the Farm dates' own step), then undone
+    set0 = page.evaluate("JSON.stringify(LRFApp.state.plan.settings)")
+    bsub = page.evaluate("""() => { const A = LRFApp, S = LRFSuccession, E = LRFEngine, FD = LRFFarmDates; let eng = A.state.engine;
+      const c0 = eng.crops().find(c => c.frostTender && eng.fieldSeasonFor(c) === 'warm'), bed0 = A.state.plan.beds.find(b => (eng.gardenOf(b) || {}).type === 'field'), year = A.planYear(), start = c0 && bed0 && eng.firstFieldDate(c0, bed0, year, {}, false);
+      if (!start || !A.setFarmDates({ ...FD.read(eng).dates, frostLast: E.d2s(E.addDays(start, 14)).slice(5) })) return null; eng = A.state.engine;
+      for (const o of S.openings(eng, { empty: true })) for (const t of S.fits(eng, o, { mine: false })) { if (!t.crop.frostTender) continue; const bare = eng.firstFieldDate(t.crop, o.bed, year, {}, false), d = bare && bare > o.from ? bare : o.from;
+        if (d >= t.r.field) continue; const u = S.tryCrop(eng, o, t.crop, { date: E.d2s(d) }); if (u.ok && /last-frost planning date/.test(u.frost || '')) return { id: o.id, bedId: o.bed.id, crop: t.crop.id, date: E.d2s(d), note: u.frost, firstDay: E.d2s(t.r.field) }; }
+      return { none: true }; }""")
+    check('(b) a subject: with the last frost after warm-season planting starts, an opening where a frost-tender crop can be typed in before the last frost', bool(bsub) and not bsub.get('none'), bsub)
+    bsub = bsub or {}
+    page.evaluate("s => { LRFAhead.state.O.mine = false; LRFApp.select({ type: 'opening', id: s.id, bedId: s.bedId }); }", bsub); soft('#ahFits')
+    if page.query_selector('#ahMore'): page.click('#ahMore'); page.wait_for_timeout(120)
+    page.evaluate("s => { const c = document.querySelector(`#ahFits .ah-fit[data-crop=\"${s.crop}\"]`); if (c) c.click(); }", bsub); page.wait_for_timeout(120)
+    pre = page.evaluate("() => (document.querySelector('#ahDate') || {}).value || ''")
+    page.evaluate("""s => { const d = document.querySelector('#ahDate'); if (d) { d.value = s.date; d.dispatchEvent(new Event('change')); } }""", bsub); page.wait_for_timeout(150)
+    br = page.evaluate("""s => { const line = document.querySelector('[data-hook="opening-frost"]'), add = document.getElementById('ahAdd'); return { line: line ? line.textContent : '', add: !!add && !add.disabled, note: LRFUI.plainDays(s.note) }; }""", bsub)
+    check('(b) the crop offers its own first day after the last frost; a day typed before it is allowed, with the frost note under the schedule', pre == bsub.get('firstDay') and br['line'] == br['note'] and br['add'], [pre, br, bsub.get('firstDay')])
+    page.screenshot(path=os.path.join(shots, 'frost-typed-spring.png'))
+    nb = page.evaluate('LRFApp.state.plan.plantings.length')
+    page.evaluate("(document.getElementById('ahAdd') || { click() {} }).click()"); page.wait_for_timeout(250)
+    bput = page.evaluate("""s => { const P = LRFApp.state.plan.plantings, p = P[P.length - 1], w = LRFApp.state.engine.warnings(p).find(x => x.k === 'frost'); return { n: P.length, date: p.date, note: w ? w.t : null }; }""", bsub)
+    check('(b) and it adds on the day typed, carrying the engine’s frost note', bput['n'] == nb + 1 and bput['date'] == bsub.get('date') and bput['note'] == bsub.get('note'), bput)
+    if bput['n'] == nb + 1: page.evaluate('LRFApp.undo()'); page.wait_for_timeout(150)
+    if page.evaluate("JSON.stringify(LRFApp.state.plan.settings)") != set0: page.evaluate('LRFApp.undo()'); page.wait_for_timeout(250)
+    page.evaluate("LRFAhead.state.O.mine = true")
+    check('two undos take the planting and the last frost back', page.evaluate('LRFApp.state.plan.plantings.length') == n0 and page.evaluate("JSON.stringify(LRFApp.state.plan.settings)") == set0, page.evaluate("LRFApp.state.plan.settings.frostLast"))
+    # (c) a series a frost date used to hold back: placed, and its summary says how many cross a frost date
+    csub = page.evaluate("""() => { const S = LRFSuccession, eng = LRFApp.state.engine, year = LRFApp.planYear(); for (const c of S.candidates(eng, true).filter(c => c.frostTender)) for (const g of S.gardensFor(eng, c).filter(g => g.kind === 'bed' && g.garden.type === 'field')) {
+        const r = S.series(eng, { cropId: c.id, gardenIds: [g.garden.id], place: 'gardens', basis: 'planting', from: year + '-07-20', every: 10, count: 6, unit: 'whole', amount: 1 }); if (!r.error && r.frost >= 2 && r.plantings.length >= 3) return { crop: c.id, garden: g.garden.id, frost: r.frost, n: r.plantings.length }; } return null; }""")
+    check('(c) a subject: a series of a frost-tender crop into the fall in which the frost touches some plantings', bool(csub), csub)
+    csub = csub or {}
+    page.evaluate("LRFApp.select(null)"); page.evaluate("s => LRFApp.openAhead({ mode: 'series', cropId: s.crop, gardenId: s.garden })", csub); soft('#srForm')
+    def setc(sel, value):
+        page.evaluate("""([sel, value]) => { const el = document.querySelector(sel); if (el) { el.value = value; el.dispatchEvent(new Event('change', { bubbles: true })); } }""", [sel, value]); page.wait_for_timeout(120)
+    for _ in range(40):
+        if not page.evaluate("""g => { const box = [...document.querySelectorAll('#srGardens input')].find(b => b.checked !== (b.value === g)); if (box) box.click(); return !!box; }""", csub.get('garden')): break
+        page.wait_for_timeout(60)
+    year_c = page.evaluate('LRFApp.planYear()')
+    setc('#srFrom', '%d-07-20' % year_c); setc('#srEvery', '10'); setc('#srCount', '6'); setc('#srAmount', '1')
+    soft('#srSum')
+    cr = page.evaluate("""s => { const el = document.querySelector('#srSum [data-hook="series-frost"]'), g = LRFSeries.ghosts(); return { said: el ? el.textContent.trim() : '', placed: g.placed.length, marked: g.placed.filter(x => x.frost).length }; }""", csub)
+    check('(c) the series places the plantings the frost touches and says how many in its summary', cr['said'] == '%s of %s cross a frost date.' % (csub.get('frost'), csub.get('n')) and cr['placed'] == csub.get('n'), [cr, csub])
+    page.screenshot(path=os.path.join(shots, 'frost-series.png'))
+    nc = page.evaluate('LRFApp.state.plan.plantings.length')
+    page.evaluate("(document.getElementById('srAdd') || { click() {} }).click()"); page.wait_for_timeout(400)
+    cput = page.evaluate("""n => { const eng = LRFApp.state.engine, fresh = LRFApp.state.plan.plantings.slice(n); return { n: fresh.length, frost: fresh.filter(p => eng.warnings(p).some(x => x.k === 'frost') || eng.fieldFrostOnly(p)).length }; }""", nc)
+    check('(c) added, they are in the plan, as many carrying a frost note as the summary said', cput['n'] == csub.get('n') and cput['frost'] == csub.get('frost'), [cput, csub])
+    if cput['n'] > 0: page.evaluate('LRFApp.undo()'); page.wait_for_timeout(200)
+    # and a planting of that series waiting for a bed is offered the beds the frost touches, marked
+    setc('#srCount', '6')
+    page.evaluate("(document.querySelector('#srPlace [data-place=\"hold\"]') || { click() {} }).click()"); page.wait_for_timeout(200)
+    page.evaluate("(document.getElementById('srAdd') || { click() {} }).click()"); page.wait_for_timeout(400)
+    wsub = page.evaluate("""() => { const S = LRFSuccession, eng = LRFApp.state.engine, list = LRFApp.waiting().map(w => ({ w, h: S.homes(eng, w) })).filter(x => x.h.slice(0, 8).some(h => h.frost)); const x = list[list.length - 1]; return x ? { id: x.w.id, marked: x.h.slice(0, 8).filter(h => h.frost).length, notes: x.h.slice(0, 8).filter(h => h.frost).map(h => LRFUI.plainDays(h.frost)) } : null; }""")
+    if wsub: page.evaluate("id => LRFApp.select({ type: 'waiting', id })", wsub['id']); page.wait_for_timeout(200)
+    wr = page.evaluate("() => [...document.querySelectorAll('#wtHomes [data-hook=\"home-frost\"]')].map(e => e.title)")
+    check('a waiting planting the frost touches is offered those beds, each marked “frost” with its note', bool(wsub) and len(wr) == wsub['marked'] and wr == wsub['notes'], [wsub, wr])
+    if page.evaluate('LRFApp.waiting().length'): page.evaluate('LRFApp.undo()'); page.wait_for_timeout(200)
+    check('and the plan is back as it was', page.evaluate('LRFApp.state.plan.plantings.length') == n0 and page.evaluate('LRFApp.waiting().length') == 0)
+    page.evaluate("LRFApp.select(null)"); page.wait_for_timeout(100)
+
     # ── a series: the tool in the details panel (step 2b; its ghost bars and what waits to be placed are in step2b_check.py) ──
     page.evaluate("LRFApp.openAhead({ mode: 'series' })")
     page.wait_for_selector('#inspectorBody #srForm')

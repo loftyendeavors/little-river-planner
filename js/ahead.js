@@ -9,7 +9,7 @@
 (function (root) {
   'use strict';
   const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, S = root.LRFSuccession, F = root.LRFForecast, Lib = root.LRFLibrary;
-  const { h, clear, num, day, span } = UI;
+  const { h, clear, num, day, span, plainDays: plain } = UI;
   const $ = id => document.getElementById(id);
   const lower = c => String((c && c.name) || 'crop').toLowerCase();
   const O = { key: '', mine: true, pick: null, all: false };
@@ -34,7 +34,7 @@
   const labelFor = (o, crop) => `Plant ${lower(crop)} ${o.before ? 'before the ' + lower(o.before.r.c) : o.after ? 'after the ' + lower(o.after.r.c) : 'in open ground'}`;
   const find = (eng, sel) => S.openings(eng, { bedId: sel.bedId, empty: true }).find(o => o.id === sel.id) || null;
   /** What makes a crop fit, behind "?" beside "What fits" (DESIGN.md, rule 1). */
-  const fitsHelp = () => UI.help(null, null, [['What fits', 'A crop that goes in whole, in season: its growing days, its harvest window and its turnover. A green edge: the plan has little or none of it then. Dashed: it would follow its own family.']], { label: 'What makes a crop fit', hook: 'fits-help', card: { hook: 'fits-help-card' } });
+  const fitsHelp = () => UI.help(null, null, [['What fits', 'A crop that goes in whole, in season: its growing days, its harvest window and its turnover. A green edge: the plan has little or none of it then. Dashed: it would follow its own family. Marked “frost”: the first frost cuts its harvest; it is listed after the crops that fit whole.']], { label: 'What makes a crop fit', hook: 'fits-help', card: { hook: 'fits-help-card' } });
   function addFit(o, t, crop) {
     const p = { ...t.p, id: App.uid() };
     if (!App.addPlantings([p], labelFor(o, crop))) return;
@@ -56,17 +56,19 @@
     const sched = t.ok ? h('ol.schedule', { id: 'ahSched' },
       r.sow ? line('Sow in the nursery', day(r.sow)) : null,
       line(r.c.method === 'TP' ? 'Transplant' : 'Sow', day(r.field)),
-      line('Harvest', span(r.first, r.last)),
+      line('Harvest', r.harvestDays > 0 ? span(r.first, r.last) : 'none'),
       line('Ground free again', day(E.addDays(t.through, 1))),
       line('Days to spare', t.spare ? `${num(t.spare)} ${next}` : `none ${next}`),
       t.units > 0 ? line('About', F.amount(t.units, t.unit, F.groupOf(crop, t.unit, (App.state.plan.lrfNext || {}).groups))) : null,
       E.d2s(t.latest) !== t.p.date ? line('Could go in as late as', day(t.latest)) : null)
       : h('p.ah-why', { id: 'ahWhy' }, t.why);
+    // a frost date is a note, never a stop: one quiet line under the schedule (#100)
+    const frost = t.ok && t.frost ? h('p.help.ah-frost', { id: 'ahFrost', dataset: { hook: 'opening-frost' } }, plain(t.frost)) : null;
     return h('section.insp-section.form.ah-review', { id: 'ahReview' },
       h('h3', `${crop.name} here`),
       h('label.field', h('span', 'Variety'), variety),
       h('div.field-pair', h('label.field', h('span', r && r.c.method === 'TP' ? 'Transplant date' : 'Sowing date'), dateIn), h('label.field', h('span', 'Length (ft)'), ftIn)),
-      sched,
+      sched, frost,
       t.ok && t.rotation ? h('p.help', `${crop.name} would follow ${lower(o.after.r.c)} here, the same family (${t.family}).`) : null,
       h('div.ah-actions', h('button.btn.primary', { type: 'button', id: 'ahAdd', disabled: !t.ok, onclick: () => addFit(o, t, crop) }, 'Add planting'), h('button.btn', { type: 'button', onclick: () => { O.pick = null; redraw(); } }, 'Cancel')),
       t.ok ? h('button.btn.quiet.small', { type: 'button', id: 'ahSeries', dataset: { hook: 'opening-series' }, title: `${crop.name} every so many days, the first on this day, in ${o.garden.name}`, onclick: () => App.openAhead({ mode: 'series', cropId: crop.id, varietyId: O.pick.varietyId || undefined, from: t.p.date, gardenId: o.garden.id }) }, `Or plan a series of ${lower(crop)} from this day…`) : null);
@@ -80,10 +82,11 @@
     if (!o) return false;
     if (O.key !== o.id) Object.assign(O, { key: o.id, pick: null, all: false });
     const fits = fitsIn(eng, o), shown = O.all ? fits : fits.slice(0, 8);
-    const chips = shown.map(t => h('button.ah-fit' + (t.rotation ? '.rot' : t.covered != null && t.covered < 0.25 ? '.gap' : ''), { type: 'button', 'aria-pressed': String(!!(O.pick && O.pick.cropId === t.crop.id)), style: { '--crop': eng.cropColor(t.crop) }, dataset: { crop: t.crop.id },
-      title: `${t.crop.name}: in ${day(t.r.field)}, harvest ${span(t.r.first, t.r.last)}${t.rotation ? '. Follows its own family here.' : t.covered != null && t.covered < 0.25 ? '. The plan has little or none of it then.' : ''}`,
+    const frostMark = t => t.r.frostCut ? `frost: ${num(t.r.harvestDays)} of ${num(t.r.frostCut.plannedDays)} days` : 'frost';
+    const chips = shown.map(t => h('button.ah-fit' + (t.rotation ? '.rot' : t.covered != null && t.covered < 0.25 ? '.gap' : ''), { type: 'button', 'aria-pressed': String(!!(O.pick && O.pick.cropId === t.crop.id)), style: { '--crop': eng.cropColor(t.crop) }, dataset: { crop: t.crop.id, ...(t.frost ? { hook: 'fit-frost' } : {}) },
+      title: `${t.crop.name}: in ${day(t.r.field)}, harvest ${span(t.r.first, t.r.last)}${t.rotation ? '. Follows its own family here.' : t.covered != null && t.covered < 0.25 ? '. The plan has little or none of it then.' : ''}${t.frost ? ` ${plain(t.frost)}` : ''}`,
       onclick: () => { O.pick = O.pick && O.pick.cropId === t.crop.id ? null : { cropId: t.crop.id, varietyId: '', date: '', ft: '' }; redraw(); } },
-      h('i'), t.crop.name, h('small', `harvest ${day(t.r.first)}`)));
+      h('i'), t.crop.name, h('small', `harvest ${day(t.r.first)}`), t.frost ? h('small.ah-frost', { dataset: { hook: 'fit-frost-mark' } }, frostMark(t)) : null));
     const around = [o.after ? ['After', o.after, x => `ground clear ${day(E.addDays(eng.occupancyThrough(x.p, x.r), 1))}`] : null, o.before ? ['Before', o.before, x => `goes in ${day(eng.occupancyFrom(x.p, x.r))}`] : null].filter(Boolean);
     UI.add(host,
       // the way back to the bed, at the head where a way back is looked for: from the bed's card it is that card again (his, Nov 19)

@@ -47,6 +47,7 @@ f053
 room
 harvest
 frost
+frostrule
 forecast
 trycard
 swap
@@ -103,6 +104,7 @@ script() {
     room) SCRIPT=$T/mutate_room.py; ARGS="$APP $F $T" ;;
     harvest) SCRIPT=$T/mutate_harvest.py; ARGS="$APP $F $T" ;;
     frost) SCRIPT=$T/mutate_frost.py; ARGS="$APP $F $T $PLAN" ;;
+    frostrule) SCRIPT=$T/mutate_frostrule.py; ARGS="$APP $F $T $PLAN" ;;
     forecast) SCRIPT=$T/mutate_forecast.py; ARGS="$APP $F $T" ;;
     trycard) SCRIPT=$T/mutate_trycard.py; ARGS="$APP $F $T" ;;
     swap) SCRIPT=$T/mutate_swap.py; ARGS="$APP $F $T $PLAN" ;;

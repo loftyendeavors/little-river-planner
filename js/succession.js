@@ -17,8 +17,9 @@
  *               goes into one. Radishes before the eggplant; cabbage after the potatoes.
  *
  * Both obey the guard rails (nothing lands on ground that is held) and the season (nothing goes out
- * before its first field date, into a closed house, or across a frost). Neither changes the plan: they
- * return plantings for the app to add as one step.
+ * before its first field date or into a closed house). A frost date never stops a planting: it is placed,
+ * and carries the engine's frost note (frostNote). Neither changes the plan: they return plantings for the
+ * app to add as one step.
  *
  * No DOM and no storage in this file. It runs in the browser and in Node.
  */
@@ -27,21 +28,26 @@
   else root.LRFSuccession = factory(root.LRFEngine, root.LRFRails);
 })(typeof self !== 'undefined' ? self : this, function (E, Rails) {
   'use strict';
-  const EPS = 1e-6, PROBE = { sowing: false }, SEASON_KINDS = ['field', 'frost', 'closed', 'timing'];
+  const EPS = 1e-6, PROBE = { sowing: false }, SEASON_KINDS = ['field', 'closed', 'timing'];
   const day = d => E.validDate(d) ? `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]} ${d.getDate()}` : '—';
   const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true });
   const round = v => Math.round(v * 1e9) / 1e9, clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   let counter = 0;
   const newId = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now().toString(36)}-${(counter++).toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
   const planYear = eng => +(eng.plan.settings && eng.plan.settings.year) || new Date().getFullYear();
-  /** Why the season refuses a planting, in the engine's own words; null when it does not. */
+  /** Why the season refuses a planting, in the engine's own words; null when it does not. A frost date is a note, never a refusal (frostNote). */
   function seasonTrouble(eng, p, r) {
-    const w = eng.warnings(p, r).find(x => SEASON_KINDS.includes(x.k));
+    const early = eng.fieldFrostOnly(p, r), w = eng.warnings(p, r).find(x => SEASON_KINDS.includes(x.k) && !(x.k === 'field' && x.t === early));
     if (w) return w.t;
     // a crop with no season of its own still does not go into open ground before the farm's first field date
     const win = eng.fieldPlantingWindow(r.b, r.field.getFullYear());
     if (win.from && r.field < win.from && !p.established && !(r.out && r.out >= win.from)) return `Outdoor planting starts ${day(win.from)} here; this goes in ${day(r.field)}.`;
     return null;
+  }
+  /** What a frost date does to a planting, in the engine's own words (its frost warning, or a field day set by the frost alone); null when nothing. */
+  function frostNote(eng, p, r) {
+    const w = eng.warnings(p, r).find(x => x.k === 'frost');
+    return w ? w.t : eng.fieldFrostOnly(p, r);
   }
   const kindWord = { bed: 'bed', tower: 'tower', containers: 'container group', bench: 'bench' };
   const unitOfKind = { bed: 'ft', tower: 'sites', containers: 'containers', bench: 'trays' };
@@ -324,10 +330,10 @@
         }
         const trouble = seasonTrouble(probe, p, r);
         if (trouble) { note(trouble, bed); continue; }
-        if (!(r.harvestDays > 0)) { note('Nothing would be ready before the season ends', bed); continue; }
+        if (!(r.harvestDays > 0) && !(r.frostCut && !sized)) { note('Nothing would be ready before the season ends', bed); continue; }   // the frost does not stop one; sized, it gives nothing
         if (o.skipCovered && covered && !wave.placed.length && covered(r.first)) { wave.skipped = 'covered'; wave.firstHarvest = r.first; break; }
         const y = sized ? given(eng, o, p, r) : eng.yieldOf(p, r);
-        wave.placed.push({ p, r, bed, units: y ? y.units : 0, unit: y ? y.unit : '' });
+        wave.placed.push({ p, r, bed, units: y ? y.units : 0, unit: y ? y.unit : '', frost: frostNote(probe, p, r) });
         added.push(p);
         remaining -= sized ? (y ? y.units : 0) / part : o.unit === 'ft' && probe.isSoilBed(bed) ? r.physicalLength : 1;
         work = { ...work, plantings: [...work.plantings, p] };
@@ -353,7 +359,7 @@
       }
     }
     const placed = waves.filter(w => w.placed.length), all = waves.flatMap(w => w.placed);
-    return { options: o, waves, plantings: added, held: waves.flatMap(w => w.held), placed: placed.length, skipped: waves.filter(w => w.skipped).length, short: waves.filter(w => w.short > EPS).length,
+    return { options: o, waves, plantings: added, held: waves.flatMap(w => w.held), placed: placed.length, frost: all.filter(x => x.frost).length, skipped: waves.filter(w => w.skipped).length, short: waves.filter(w => w.short > EPS).length,
       firstHarvest: all.length ? new Date(Math.min(...all.map(x => +x.r.first))) : null, lastHarvest: all.length ? new Date(Math.max(...all.map(x => +x.r.last))) : null,
       units: all.reduce((n, x) => n + x.units, 0), unit: all.length ? all[0].unit : sized ? rests.y.unit : eng.unitOf(o.crop), ground: all.reduce((n, x) => n + (x.r.tw ? 1 : x.r.len), 0), groundUnit: o.spaces.length ? unitOfKind[eng.spaceKind(o.spaces[0])] : 'ft',
       ...(sized ? { sized: { want: o.want, unit: rests.y.unit, every: o.every, until: o.until, net: !!supply, asked: waves.reduce((n, w) => n + w.asked, 0), have: waves.reduce((n, w) => n + w.have, 0), covered: waves.filter(w => w.skipped === 'covered').length,
@@ -489,8 +495,8 @@
     for (const bed of eng.plan.beds || []) {
       if (!suits(eng, crop, bed)) continue;
       const res = landing(eng, w, { bedId: bed.id }, { quick: true });
-      if (res.state !== 'ok' || !res.r || seasonTrouble(eng, res.p, res.r) || !(res.r.harvestDays > 0)) continue;
-      out.push({ bed, garden: eng.gardenOf(bed), p: res.p, r: res.r, wanted: rank(bed) < 1e6 });
+      if (res.state !== 'ok' || !res.r || seasonTrouble(eng, res.p, res.r) || !(res.r.harvestDays > 0 || res.r.frostCut)) continue;
+      out.push({ bed, garden: eng.gardenOf(bed), p: res.p, r: res.r, wanted: rank(bed) < 1e6, frost: frostNote(eng, res.p, res.r) });
     }
     const order = new Map((eng.plan.gardens || []).map((g, i) => [g.id, g.order ?? i]));
     return out.sort((a, b) => rank(a.bed) - rank(b.bed) || (order.get(a.bed.gardenId) ?? 0) - (order.get(b.bed.gardenId) ?? 0) || natural(a.bed.bed, b.bed.bed));
@@ -518,7 +524,7 @@
       const t = tryCrop(eng, o, crop, { varietyId: options.varietyId });
       if (!t.ok) continue;
       if (!o.planted) { const g = emptyBy.get(o.garden.id) || emptyBy.set(o.garden.id, { garden: o.garden, beds: [], from: t.earliest, to: t.latest }).get(o.garden.id); g.beds.push(o.bed); if (t.earliest < g.from) g.from = t.earliest; if (t.latest > g.to) g.to = t.latest; }
-      else out.openings.push({ opening: o, earliest: t.earliest, latest: t.latest, first: t.r.first, spare: t.spare });
+      else out.openings.push({ opening: o, earliest: t.earliest, latest: t.latest, first: t.r.first, spare: t.spare, frost: t.frost || null });
     }
     out.empty = [...emptyBy.values()];
     return out;
@@ -590,7 +596,9 @@
   }
   /**
    * Try one crop in one opening. options: { varietyId?, date? (else the first day it may go in), ft? (else the whole opening) }.
-   * Returns { ok, p, r, earliest, latest, spare, why } — `why` says what stops it when it does not fit.
+   * Returns { ok, p, r, earliest, latest, spare, why, frost } — `why` says what stops it when it does not fit. A frost date stops
+   * nothing: where it is all that is short, it is ok and `frost` is the engine's note. On its own first day a crop the frost
+   * leaves nothing to pick is not offered; on a day asked for, it is.
    */
   function tryCrop(eng, opening, crop, options = {}) {
     const bed = opening.bed, year = opening.from.getFullYear(), first = eng.firstFieldDate(crop, bed, year), last = eng.lastFieldDate(crop, bed, year);
@@ -610,9 +618,12 @@
     base.r = r; base.through = fit.through;
     const trouble = seasonTrouble(eng, p, r);
     if (trouble) return { ...base, ok: false, why: trouble };
-    if (!(r.harvestDays > 0)) return { ...base, ok: false, why: 'Nothing would be ready before the season ends' };
-    const full = r.harvestMode === 'season' ? r.harvestDays >= r.expectedHarvestDays : r.harvestDays >= Math.max(1, Math.min(r.c.hw || 1, r.expectedHarvestDays || r.c.hw || 1));
-    if (!full) return { ...base, ok: false, why: `Only ${r.harvestDays} of its ${r.harvestMode === 'season' ? r.expectedHarvestDays : r.c.hw} harvest days fit` };
+    const frost = frostNote(eng, p, r);
+    if (!(r.harvestDays > 0) && !(r.frostCut && E.validDate(asked))) return { ...base, ok: false, why: r.frostCut ? frost : 'Nothing would be ready before the season ends' };
+    // a harvest is whole when it has the days it needs; the days the frost cuts off are counted, since the frost stops nothing
+    const need = r.harvestMode === 'season' ? r.expectedHarvestDays : Math.max(1, Math.min(r.c.hw || 1, r.expectedHarvestDays || r.c.hw || 1));
+    if (!(r.harvestDays >= need || (r.frostCut && r.frostCut.plannedDays >= need))) return { ...base, ok: false, why: `Only ${r.harvestDays} of its ${r.harvestMode === 'season' ? r.expectedHarvestDays : r.c.hw} harvest days fit` };
+    if (frost) base.frost = frost;
     const spare = fit.through === Infinity ? -1 : E.dayDiff(opening.to, fit.through);
     if (!fit.ok || spare < 0) {
       const next = opening.before ? eng.crop(opening.before.p.cropId) : null;
@@ -622,7 +633,8 @@
     let latest = date;
     if (!options.inner && spare > 0) {
       const lastDay = E.addDays(date, spare), wanted = last && last < lastDay ? last : lastDay;
-      if (wanted > date && tryCrop(eng, opening, crop, { ...options, date: E.d2s(wanted), inner: true }).ok) latest = wanted;
+      const late = wanted > date ? tryCrop(eng, opening, crop, { ...options, date: E.d2s(wanted), inner: true }) : null;
+      if (late && late.ok && !late.frost) latest = wanted;   // as late as it goes in clear of the frost
     }
     const y = eng.yieldOf(p, r), prev = opening.after && opening.after.r.c, rotation = !!(prev && prev.family && prev.family === r.c.family && prev.id !== r.c.id && prev.family !== 'Cover crop');
     return { ...base, ok: true, spare, latest, units: y ? y.units : 0, unit: y ? y.unit : '', rotation, family: r.c.family || '' };
@@ -640,7 +652,7 @@
       t.covered = options.covered ? options.covered(crop.id, t.r.first, t.r.last) : null;
       out.push(t);
     }
-    const band = t => (t.rotation ? 4 : 0) + (t.covered == null ? 1 : t.covered < 0.25 ? 0 : t.covered < 0.75 ? 1 : 2);
+    const band = t => (t.frost ? 8 : 0) + (t.rotation ? 4 : 0) + (t.covered == null ? 1 : t.covered < 0.25 ? 0 : t.covered < 0.75 ? 1 : 2);   // a crop the frost cuts after those that fit whole
     return out.sort((a, b) => band(a) - band(b) || a.r.first - b.r.first || a.crop.name.localeCompare(b.crop.name));
   }
   /** Free room on the heated benches, week by week: what the benches hold less the fullest day of each week. */
@@ -658,6 +670,6 @@
     return { cap, weeks, least };
   }
 
-  return { series, pace, COVERED, NEAR, PIECE, SCRAP, normalize, spaces, gardensFor, models, suits, openings, unheatedStart, candidates, tryCrop, fits, benchRoom, seasonTrouble, kindWord, unitOfKind, LIMIT,
+  return { series, pace, COVERED, NEAR, PIECE, SCRAP, normalize, spaces, gardensFor, models, suits, openings, unheatedStart, candidates, tryCrop, fits, benchRoom, seasonTrouble, frostNote, kindWord, unitOfKind, LIMIT,
     waiting, isWaiting, bare, landing, splits, homes, about, room, refSpace };
 });

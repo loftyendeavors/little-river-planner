@@ -1,0 +1,17 @@
+{
+ "build": "The frost rule (#100): a frost date never stops a planting. In an opening's panel a crop the first frost cuts is offered after the crops that fit whole, marked with the days the frost leaves; picked, its schedule has one line with the frost's note, and Add planting adds it. A day typed before the last frost, or one on which the frost leaves nothing to pick, is allowed and said. A series places what the frost touches and says how many; a planting waiting for a bed is offered the beds the frost touches, marked. Farm dates says what a frost date change would newly touch. The planner's own first day for a crop is still after the last frost. No figure moves.",
+ "changes": {
+  "did": "A frost date no longer stops a planting: crops the frost cuts are offered, marked “frost”, and can be added.",
+  "steps": [
+   "Click an opening in summer: after the crops that fit whole come those the first frost cuts, each marked “frost: N of M days”.",
+   "Pick one: the schedule has one line saying what the frost does, and Add planting adds it.",
+   "Plan a series of a frost-tender crop into the fall: every planting is placed, and the summary says how many cross a frost date."
+  ]
+ },
+ "words": [],
+ "code": ["ahead.js", "app.js", "engine.js", "farmdates.js", "season.js", "series.js", "succession.js", "timeline.js", "ui.js"],
+ "added": [],
+ "removed": [],
+ "page": ["css/app.css"],
+ "screens": []
+}

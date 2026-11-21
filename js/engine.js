@@ -564,7 +564,7 @@
       const raw = o && o.rowCoverAdvance, n = raw == null || raw === '' ? 0 : (Number.isSafeInteger(+raw) && +raw >= 0 && (typeof raw === 'number' || (typeof raw === 'string' && raw.trim())) ? +raw : null);
       return o && o.rowCover === true && b && !isRack(b) && !(c && c.micro) && fieldGardenFor(b).type === 'field' && n != null ? n : 0;
     };
-    function firstFieldDate(c, b, year, options = {}) {
+    function firstFieldDate(c, b, year, options = {}, frost = true) {   // frost false: without the last spring frost's term (fieldFrostOnly)
       if (!c || !b || !Number.isInteger(year)) return null;
       const g = fieldGardenFor(b), starts = [], win = gWindow(g, year), category = fieldSeasonFor(c), advance = rowCoverAdvance(options, b, c);
       const shift = d => { const earlier = addDays(d, -advance); return validDate(earlier) ? earlier : d; };
@@ -572,7 +572,7 @@
       if (!isRack(b) && !c.micro && g.type === 'field' && (validMonthDay(c.firstSafeField) || category !== 'none')) {
         starts.push(shift(monthDayDate(year, validMonthDay(c.firstSafeField) ? c.firstSafeField : settings[category === 'warm' ? 'firstWarmField' : 'firstCoolField']) || monthDayDate(year, category === 'warm' ? '05-01' : '04-15')));
       }
-      if (c.frostTender && g.frost) starts.push(shift(addDays(frostDates(year).last, -finite(g.frostOffset))));
+      if (frost && c.frostTender && g.frost) starts.push(shift(addDays(frostDates(year).last, -finite(g.frostOffset))));
       const requested = s2d(options.earliestField);
       if (validDate(requested)) starts.push(requested);
       return starts.length ? maxDate(starts) : null;
@@ -1077,15 +1077,28 @@
     }
 
     // ── planning flags ──
+    /** The field warning of a planting that goes in before its first field day: its text, or null. frost false: as if the last spring frost set no day. */
+    function fieldStartWarning(p, r, frost = true) {
+      const g = r.g || {}, od = outDate(p, r), covered = !!od, category = fieldSeasonFor(r.c), firstField = firstFieldDate(r.c, r.b, r.field.getFullYear(), p, frost);
+      if (!p.established && g.type === 'field' && (category !== 'none' || validMonthDay(r.c.firstSafeField)) && firstField && r.field < firstField && !(covered && od >= firstField)) {
+        return `${validMonthDay(r.c.firstSafeField) ? 'Crop-specific' : category === 'warm' ? 'Warm-season' : 'Cool-season'} field planting starts ${d2s(firstField)} here; this goes in ${d2s(r.field)}.`;
+      }
+      return null;
+    }
+    /** A planting early for its first field day only because of the last spring frost: that field warning's text; null otherwise (the frost rule, #100). */
+    function fieldFrostOnly(p, r) {
+      r = r || calc(p);
+      if (!r) return null;
+      const t = fieldStartWarning(p, r);
+      return t && !fieldStartWarning(p, r, false) ? t : null;
+    }
     /** @returns {{k:string,t:string}[]} k = field | frost | closed | season | rotation | overlap | timing | outcome */
     function warnings(p, r) {
       r = r || calc(p);
       if (!r) return [];
       const out = [], g = r.g || {}, od = outDate(p, r), covered = !!od, year = r.field.getFullYear();
-      const category = fieldSeasonFor(r.c), firstField = firstFieldDate(r.c, r.b, year, p), coverAdvance = rowCoverAdvance(p, r.b, r.c);
-      if (!p.established && g.type === 'field' && (category !== 'none' || validMonthDay(r.c.firstSafeField)) && firstField && r.field < firstField && !(covered && od >= firstField)) {
-        out.push({ k: 'field', t: `${validMonthDay(r.c.firstSafeField) ? 'Crop-specific' : category === 'warm' ? 'Warm-season' : 'Cool-season'} field planting starts ${d2s(firstField)} here; this goes in ${d2s(r.field)}.` });
-      }
+      const coverAdvance = rowCoverAdvance(p, r.b, r.c), early = fieldStartWarning(p, r);
+      if (early) out.push({ k: 'field', t: early });
       const outdoorField = shelterValid(r.b) && (isTower(r.b) || isCt(r.b)) ? outDate(p, r) || r.field : r.field, lastOutdoor = lastFieldDate(r.c, r.b, outdoorField.getFullYear());
       if (!p.established && lastOutdoor && outdoorField > lastOutdoor) out.push({ k: 'field', t: `Outdoor planting ends ${d2s(lastOutdoor)}; this goes in ${d2s(outdoorField)}.` });
       if (failedOn(p)) out.push({ k: 'outcome', t: `Marked failed ${p.failed.on}: its bed is free from that day.` });
@@ -1651,7 +1664,7 @@
       plantingsIn, planting: id => plantingById.get(id),
       effective, ENVS, envOf, timingFor, pinned, startRule, startFixed, startHint, STARTS, START_LESS, calc, evaluate, warnings, cropsAt, bedStatus, nextPlanting, roomFor, overlap, fit,
       footprint, overflow, unbounded, holders, conflicts,
-      occupancyFrom, occupancyThrough, failedOn, startedFrom, boughtInOf, turnoverFor, frostDates, firstFieldDate, lastFieldDate, standKey, seasonEndOf, openGround
+      occupancyFrom, occupancyThrough, failedOn, startedFrom, boughtInOf, turnoverFor, frostDates, firstFieldDate, fieldFrostOnly, lastFieldDate, standKey, seasonEndOf, openGround
     };
   }
 
