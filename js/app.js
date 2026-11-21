@@ -1578,7 +1578,7 @@
     return res;
   }
   // ─────────────────── plantings with no bed yet ───────────────────
-  // A series can make plantings that wait to be placed. They live in a list of their own beside the plan (lrfNext.waiting), so nothing
+  // A planting sent off its bed waits to be placed (and a series, before 0.84, could leave some). They live in a list of their own beside the plan (lrfNext.waiting), so nothing
   // counts them: not seeds required, sowing lists, bench load nor the forecast. Putting one on a bed makes it a planting like any other,
   // on its own date, through the same guard rails. Every change to the list is one step that can be undone.
   const Ahead = root.LRFSuccession;
@@ -1625,12 +1625,6 @@
     const size = f && f.rows && f.rows.count < f.rows.total ? ` · ${f.rows.count} of ${f.rows.total} rows` : r.partial ? ` · ${UI.num(r.physicalLength, 1)} ${unit}` : '';
     toast(`${what} → ${bedLabel(bed)} · ${day(r.field)}${size}`, { label: 'Undo', run: undo });
     return p;
-  }
-  /** Add a series as one step: what found ground goes onto it, what did not (or was asked to wait) joins the list to place. */
-  function addSeries(result, label) {
-    const ops = (result.plantings || []).map(p => ({ before: null, after: p })), held = result.held || [];
-    if (held.length) ops.push(waitingOp([...waiting(), ...held]));
-    return ops.length ? commit(label || 'Add a series', ops) : false;
   }
   // ─────────────────── a run of successions (E4) ───────────────────
   // A run is kept as a record of its own beside the plan (lrfNext.runs), and each of its plantings carries run: { id, n, gap }.
@@ -1878,44 +1872,18 @@
       : moved ? (before.bedId === bedId ? `${what}, ${where}: ${moved}${size}` : `${what} → ${where} · ${moved}${size}`) : `${what} → ${where} · ${day(r.field)}${size}`, { label: 'Undo', run: undo });
     return p;
   }
-  /**
-   * Repeat a planting: `count` more, `every` days apart. Each one goes in the
-   * same space if it is free then, otherwise the next free space of the same
-   * kind in the garden. Returns how many could not be placed.
-   */
-  function addSuccessions(id, count, every) {
-    const eng0 = state.engine, source = eng0.planting(id);
-    if (!source) return;
-    const home = eng0.bedOf(source.bedId), kind = eng0.spaceKind(home);
-    const candidates = [home, ...state.plan.beds.filter(b => b.id !== home.id && b.gardenId === home.gardenId && b.active !== false && eng0.spaceKind(b) === kind)];
-    const ops = [];
-    let working = state.plan, missed = 0;
-    for (let i = 1; i <= count; i++) {
-      const date = E.addDays(E.s2d(source.date), every * i), eng = E.create(working, Lib, { sowing: false });
-      let placed = null;
-      for (const bed of candidates) {
-        const res = Rails.propose(eng, { plantingId: source.id, copy: true }, { bedId: bed.id, date }, { source, noShrink: true });
-        if (res.state === 'ok') { placed = res.p; break; }
-      }
-      if (placed) { working = { ...working, plantings: [...working.plantings, placed] }; ops.push({ before: null, after: placed }); } else missed++;
-    }
-    if (ops.length) commit(`Add ${ops.length} succession${ops.length === 1 ? '' : 's'} of ${cropLabel(source)}`, ops);
-    toast(ops.length ? `Added ${ops.length} succession${ops.length === 1 ? '' : 's'}${missed ? ` · ${missed} had no free space in ${eng0.gardenOf(home).name}` : ''}` : `No free space in ${eng0.gardenOf(home).name} for those dates`,
-      ops.length ? { label: 'Undo', run: undo } : null);
-  }
-
   /** Add plantings worked out elsewhere (a series of successions, a crop for an opening) as one step. The guard rails still have the last word. */
   function addPlantings(list, label) {
     const ops = (list || []).map(p => ({ before: null, after: p }));
     return ops.length ? commit(label || `Add ${ops.length} planting${ops.length === 1 ? '' : 's'}`, ops) : false;
   }
   /**
-   * Plan ahead with something in mind, in place: { mode: 'series', sourceId?, cropId?, varietyId?, bedId?, gardenId?, from? } opens the
-   * series tool in the details panel; { bedId, openingId } shows that opening there, as a click on it does.
+   * Plan ahead with something in mind: { mode: 'succession', sourceId?, cropId?, varietyId?, thing?, bedId?, gardenId?, from?, by? } opens
+   * the Successions page on a new run filled in from it; { bedId, openingId } shows that opening in the details panel, as a click on it does.
    */
   function openAhead(focus) {
     focus = focus || {};
-    if (focus.mode === 'series') { if (root.LRFSeries) root.LRFSeries.open(focus); return; }
+    if (focus.mode === 'succession') { if (root.LRFSuccessions) root.LRFSuccessions.open(focus); return; }
     if (focus.openingId && focus.bedId) select({ type: 'opening', id: focus.openingId, bedId: focus.bedId });
     else if (focus.bedId) select({ type: 'bed', id: focus.bedId });
   }
@@ -2683,9 +2651,9 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, lastChange, refuse, setUse, setGives, setPlantedIn, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
+    commit, undo, redo, lastChange, refuse, setUse, setGives, setPlantedIn, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
     auditSurvey, auditStudy, auditPreview, auditApply,
-    waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting, runs, addRun, removeRun,
+    waiting, waitingOne, placeWaiting, removeWaiting, updateWaiting, runs, addRun, removeRun,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, failedRange, previewFailed, markFailed, seasonRecords, takeBackSeason, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     yieldOps, engineAfter: ops => E.create(withOps(state.plan, ops, 'do'), Lib),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (elsewhere()) { refuse(elsewhere()); return null; } if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },

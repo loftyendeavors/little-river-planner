@@ -122,8 +122,8 @@
         h('button.btn.primary', { type: 'button', id: 'hvCopy', onclick: () => copy(sheet.textContent, sheet) }, 'Copy')));
     document.body.append(dialog); draw(); dialog.showModal();
   }
-  /** A crop the series tool can size to a weekly amount: one with a harvest to space plantings by. Tray crops follow weekly demand instead. */
-  function plannable(row) { const eng = App.state.engine, c = eng.crop(row.cropId); return row.group !== 'micro' && !!root.LRFSeries && !!c && +c.dtm > 0 && !eng.isCoverCrop(c); }
+  /** A crop the Successions page can plan to a weekly amount. Tray crops follow weekly demand instead. */
+  function plannable(row) { const eng = App.state.engine, c = eng.crop(row.cropId); return row.group !== 'micro' && !!root.LRFSuccessions && root.LRFSuccessions.plans(eng, c); }
   /** How a planting is picked, in the Assumptions list's own words, as a tag. */
   const PATTERN = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' };
   /**
@@ -163,9 +163,9 @@
         h('span.row-word', h('span', { dataset: { hook: 'fc-from-amount' } }, F.amount(x.here, row.unit, row.group)),
           h('button.link', { type: 'button', dataset: { hook: 'fc-from-map' }, onclick: () => go(x) }, 'Show on the map'))))),
       h('div.dialog-actions',
-        // more of it wanted that week: the series tool, asked from the harvest end, opens on this crop from that day
+        // more of it wanted from that week: the Successions page opens on a run of this crop, to an amount a week, picked from that week
         plannable(row)
-          ? h('button.btn', { type: 'button', id: 'hvPlan', title: `Say how much ${row.name.toLowerCase()} is wanted each week from here on, and see the plantings that would give it`, onclick: () => { close(); App.openAhead({ thing: row.thing || '', mode: 'series', by: 'harvest', cropId: row.cropId, from: E.d2s(col.start) }); } }, 'Plan to a weekly amount…') : null,
+          ? h('button.btn', { type: 'button', id: 'hvPlan', dataset: { hook: 'fc-succession' }, title: `A run of ${row.name.toLowerCase()} to an amount a week, picked from this week: opens the Successions page`, onclick: () => { close(); App.openAhead({ thing: row.thing || '', mode: 'succession', by: 'amount', cropId: row.cropId, from: E.d2s(col.start) }); } }, 'Plan a succession from this week…') : null,
         h('span.grow'),
         h('button.btn.primary', { type: 'button', onclick: close }, 'Done')));
     document.body.append(dialog); dialog.showModal();
@@ -281,8 +281,8 @@
         const name = h('td.hv-name', h('button.hv-crop', { type: 'button', disabled: !many, 'aria-expanded': many ? String(isOpen) : null, style: { '--crop': row.color }, title: many ? `${isOpen ? 'Hide' : 'Show'} the varieties` : row.name,
           onclick: () => { if (isOpen) opened.delete(row.key); else opened.add(row.key); render(); } }, h('span.caret', many ? (isOpen ? '▾' : '▸') : ''), h('i'), h('span', row.name), h('small', F.unitWord(2, row.unit, row.group) || 'each')),
           // more or less of it wanted: the series tool, asked from the harvest end, on this crop's own season
-          plannable(row) && row.thing ? h('button.hv-plan', { type: 'button', dataset: { crop: row.cropId, thing: row.thing }, 'aria-label': `Plan ${row.name} to a weekly amount`, title: `Say how much of ${row.name} is wanted each week, and see the plantings that would give it`, onclick: () => App.openAhead({ mode: 'series', by: 'harvest', thing: row.thing, cropId: row.cropId }) }, 'plan…')
-          : plannable(row) ? h('button.hv-plan', { type: 'button', dataset: { crop: row.cropId }, 'aria-label': `Plan ${row.name} to a weekly amount`, title: `Say how much ${row.name.toLowerCase()} is wanted each week, and see the plantings that would give it`, onclick: () => App.openAhead({ mode: 'series', by: 'harvest', cropId: row.cropId }) }, 'plan…') : null);
+          plannable(row) && row.thing ? h('button.hv-plan', { type: 'button', dataset: { crop: row.cropId, thing: row.thing }, 'aria-label': `Plan a succession of ${row.name}`, title: `A run of ${row.name} to an amount a week: opens the Successions page`, onclick: () => App.openAhead({ mode: 'succession', by: 'amount', thing: row.thing, cropId: row.cropId }) }, 'plan…')
+          : plannable(row) ? h('button.hv-plan', { type: 'button', dataset: { crop: row.cropId }, 'aria-label': `Plan a succession of ${row.name}`, title: `A run of ${row.name.toLowerCase()} to an amount a week: opens the Successions page`, onclick: () => App.openAhead({ mode: 'succession', by: 'amount', cropId: row.cropId }) }, 'plan…') : null);
         // with stock carried in from the year before, the crop's line is the year's own and the carried stock is the line under it
         const carry = carries(m, row), cut = carry ? row.carriedTotal : 0, cutWorth = carry ? row.carriedWorth : 0;
         const whole = series === 'picked' && m.keeps ? row.pickedTotal : row.total - cut, worth = row.worth - cutWorth;
@@ -364,7 +364,6 @@
       // the title and "?", and beside them the two things done from the page: plan more of a crop, send what is there
       h('header.as-head.hv-head', h('div.hv-head-text', h('h2', { id: 'hvTitle', dataset: { hook: 'fc-title' } }, 'Forecast'), helpBtn, lead(m, marked)),
         h('div.hv-head-acts',
-          root.LRFSeries ? h('button.btn', { type: 'button', id: 'hvPlanBar', title: 'Say how much of a crop is wanted each week: the planner says how many plantings, when and how large. It opens beside the timeline.', onclick: () => App.openAhead({ mode: 'series', by: 'harvest' }) }, 'Plan to a weekly amount…') : null,
           h('button.btn.primary', { type: 'button', id: 'hvShareBtn', onclick: share }, 'A list to send…'))),
       figures(m, noYield),
       h('div.hv-bar',

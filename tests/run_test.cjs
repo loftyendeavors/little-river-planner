@@ -122,7 +122,7 @@ const A = amountPick && amountPick.r;
 tryCase('to an amount: the spacing found gives at least the amount on average over the weeks asked, and one day wider would not', () => {
   const need = A.weeks.reduce((n, w) => n + w.need, 0), run = A.weeks.reduce((n, w) => n + w.run, 0), wider = S.planRun(eng, { ...amountPick.ask, by: 'beds', every: A.every + 1 });
   const widerRun = wider.weeks.reduce((n, w) => n + w.run, 0);
-  return [A.covered === false && run >= need - EPS && A.average.run >= A.average.wanted - EPS && widerRun < need - EPS && A.run.every === A.every && A.run.by === 'amount' && A.run.want === amountPick.ask.want && A.run.margin === 0,
+  return [run >= need - EPS && A.average.run >= A.average.wanted - EPS && widerRun < need - EPS && A.run.every === A.every && A.run.by === 'amount' && A.run.want === amountPick.ask.want && A.run.margin === 0,
     { every: A.every, run, need, widerRun, average: A.average }];
 });
 tryCase('to an amount: every sowing is one whole bed, the same number of days apart, and the weeks that come up short are named', () => {
@@ -134,12 +134,17 @@ tryCase('to an amount with a margin: more is wanted, so the sowings come closer,
   const m = S.planRun(eng, { ...amountPick.ask, margin: 50 }), size = r => r.sowings.map(x => x.r.physicalLength).sort().join();
   return [!m.error && m.every < A.every && Math.abs(m.average.wanted - amountPick.ask.want * 1.5) < EPS && m.sowings.every(x => x.r.physicalLength >= x.r.cap - EPS) && m.run.margin === 50, m.error || { every: m.every, was: A.every }];
 });
-tryCase('to an amount, less what the plan already gives: a crop the plan already gives enough of plants nothing, and says so', () => {
-  const grown = base.rows.find(r => r.total > 0 && !r.thing && !(eng.harvestFor(r.cropId).open || {}).yield && fieldBeds(eng.crop(r.cropId)).length && eng.crop(r.cropId) && !eng.crop(r.cropId).micro);
-  if (!grown) return [false, 'no crop the plan gives'];
-  const s = F.season(base, [grown]), a = base.date(s.i0), z = base.date(Math.min(s.i1, s.i0 + 20));
-  const r = S.planRun(eng, { cropId: grown.cropId, by: 'amount', want: 1e-3, datesFor: 'picking', from: iso(a), to: iso(z), gardenIds: fieldBeds(eng.crop(grown.cropId)) });
-  return [!r.error && r.covered === true && r.sowings.length === 0 && r.every === null && r.weeks.every(w => w.have >= w.wanted - EPS), r.error || { covered: r.covered, n: r.sowings.length }];
+tryCase('to an amount, what the plan already gives is said beside the run and never taken off: a crop the plan gives plenty of still gets sowings of its own, and the weeks are judged on the run\'s own', () => {
+  // the first crop the plan already gives, that a run of its own finds whole beds for in its field gardens
+  let r = null;
+  for (const grown of base.rows.filter(x => x.total > 0 && !x.thing && eng.crop(x.cropId) && !eng.crop(x.cropId).micro && !(eng.harvestFor(x.cropId).open || {}).yield && fieldBeds(eng.crop(x.cropId)).length && eng.crop(x.cropId).harvestMode !== 'season')) {
+    const s = F.season(base, [grown]), a = base.date(s.i0), z = base.date(Math.min(s.i1, s.i0 + 27));
+    const t = S.planRun(eng, { cropId: grown.cropId, by: 'amount', want: 1, datesFor: 'picking', from: iso(a), to: iso(z), gardenIds: fieldBeds(eng.crop(grown.cropId)) });
+    if (!t.error && t.sowings.length && t.weeks.some(w => w.have > w.wanted)) { r = t; break; }
+  }
+  if (!r) return [false, 'no crop the plan gives that a run finds a bed for'];
+  return [!r.error && r.sowings.length >= 1 && r.weeks.some(w => w.have > w.wanted) && r.weeks.every(w => w.need === w.wanted && w.short === (w.run < w.wanted * (1 - S.NEAR)) && Math.abs(w.total - w.have - w.run) < EPS) && r.average.have > 0,
+    r.error || { n: r.sowings.length, weeks: r.weeks.slice(0, 3).map(w => [w.have, w.run, w.need, w.short]) }];
 });
 tryCase('to an amount, planting dates: the weeks asked run from the first picking of a bed planted on the first day to that of one planted on the last', () => {
   const ask = { ...amountPick.ask, datesFor: 'planting', from: `${year}-06-01`, to: `${year}-07-15` }, r = S.planRun(eng, ask);
@@ -203,12 +208,28 @@ tryCase('the gardens to use if the first run out of room are used only then', ()
 });
 
 // ── a copy of a planting of a run is in no run ──
-tryCase('a copy of a planting of a run is in no run: copied onto a bed, or by a series left to wait or placed', () => {
+tryCase('a copy of a planting of a run is in no run: copied onto a bed, it is a planting of its own', () => {
   const p0 = B.sowings[0].p, e2 = E.create({ ...core, plantings: [...core.plantings, p0] }, Lib);
   const copy = Rails.propose(e2, { plantingId: p0.id, copy: true }, { bedId: p0.bedId, date: E.addDays(E.s2d(p0.date), 120) }, {});
-  const held = S.series(e2, { cropId: p0.cropId, sourceId: p0.id, place: 'hold', basis: 'planting', from: iso(E.addDays(E.s2d(p0.date), 60)), count: 2, every: 14, unit: 'whole', amount: 1 });
-  const placed = S.series(e2, { cropId: p0.cropId, sourceId: p0.id, gardenIds: G, basis: 'planting', from: iso(E.addDays(E.s2d(p0.date), 60)), count: 2, every: 14, unit: 'whole', amount: 1 });
-  return [!!copy.p && copy.p.id !== p0.id && !('run' in copy.p) && !held.error && held.held.length === 2 && held.held.every(w => !('run' in w)) && !placed.error && placed.plantings.length >= 1 && placed.plantings.every(q => !('run' in q)), { copy: copy.p && copy.p.run, held: held.error || held.held.map(w => w.run), placed: placed.error || placed.plantings.map(q => q.run) }];
+  return [!!copy.p && copy.p.id !== p0.id && !('run' in copy.p), { copy: copy.p && copy.p.run }];
+});
+
+// ── many runs at random: whatever is proposed can always be added (moved here from the series checks of succession_test.cjs) ──
+tryCase('60 runs at random, by beds and to an amount, picking and planting dates: every sowing proposed can be added, whole, in season; the frost marks and stops none', () => {
+  let seed = 7;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+  const crops = S.candidates(eng, false).filter(c => fieldBeds(c).length && !(eng.harvestFor(c.id).open || {}).yield);
+  let tried = 0, proposed = 0, frost = 0, refused = 0;
+  const bad = [];
+  for (let k = 0; k < 60; k++) {
+    const c = crops[Math.floor(rnd() * crops.length)], gs = fieldBeds(c), from = E.addDays(new Date(year, 3, 1), Math.floor(rnd() * 170)), to = E.addDays(from, 14 + Math.floor(rnd() * 70)), amount = rnd() < 0.5;
+    const r = S.planRun(eng, { cropId: c.id, by: amount ? 'amount' : 'beds', ...(amount ? { want: 1 + Math.floor(rnd() * 60) } : { every: 5 + Math.floor(rnd() * 20) }), datesFor: rnd() < 0.5 ? 'picking' : 'planting', from: iso(from), to: iso(to), gardenIds: gs.slice(0, 1), then: gs.slice(1, 3) });
+    if (r.error) { refused++; continue; }
+    tried++; proposed += r.sowings.length; frost += r.sowings.filter(x => x.frost).length;
+    const v = verdict(r.sowings.map(x => x.p));
+    if (!v.ok || r.sowings.some((x, i) => v.frost[i] !== (x.frost || null))) bad.push([c.name, v.refused, v.clashes, v.season, v.whole]);
+  }
+  return [tried >= 40 && proposed >= 80 && !bad.length, { tried, proposed, frost, refused, bad: bad.slice(0, 3) }];
 });
 
 // ── nothing changes ──

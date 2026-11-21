@@ -1,5 +1,5 @@
 'use strict';
-// Step 2b: plantings with no bed yet (the series tool's "to place" list), and the series that makes them.
+// Step 2b: plantings with no bed yet ("To place"). The series that made them went with 0.84; they are made here as it made them.
 // The rules under test:
 //   1. a planting with no bed counts toward NOTHING: seeds required, sowing batches, bench load, trays in use, the forecast,
 //      "to settle", what stands in a bed on a date. The same plan with and without a waiting list gives the same figures.
@@ -43,55 +43,17 @@ const radish = crop('Radish'), lettuce = crop('Lettuce'), tomato = crop('Tomato'
 const fieldGardens = S.gardensFor(eng, radish).filter(x => x.kind === 'bed' && x.garden.type === 'field').map(x => x.garden.id);
 const base = { cropId: radish.id, basis: 'planting', from: `${year}-07-20`, count: 5, every: 10, unit: 'whole', amount: 1 };
 
-// ── a series with no beds ──
-const hold = S.series(eng, { ...base, place: 'hold' });
-check('a series asked to wait places nothing and holds one planting for each succession', !hold.error && hold.plantings.length === 0 && hold.held.length === 5 && hold.waves.every(w => w.held.length === 1 && !w.placed.length), hold.error || hold.waves.map(w => [w.placed.length, w.held.length]));
-check('each waits on the day it was asked for, with no bed', hold.held.every((w, k) => w.date === iso(E.addDays(E.s2d(base.from), k * 10)) && !w.bedId && w.cropId === radish.id));
-check('each has an id of its own and says which succession it is', new Set(hold.held.map(w => w.id)).size === 5 && hold.held.every((w, k) => w.wait && w.wait.k === k + 1 && w.wait.of === 5 && w.wait.every === 10 && w.wait.s === hold.held[0].wait.s) && hold.held.every(w => !eng.planting(w.id)));
-check('no garden need be named for plantings that wait', !S.series(eng, { ...base, place: 'hold', gardenIds: [] }).error && /garden/i.test(S.series(eng, { ...base, gardenIds: [] }).error) && /bed/i.test(S.series(eng, { ...base, place: 'beds', bedIds: [] }).error));
-const holdTwo = S.series(eng, { ...base, place: 'hold', amount: 2, count: 3 }), holdFt = S.series(eng, { ...base, place: 'hold', unit: 'ft', amount: 12, count: 3 });
-check('two beds a succession wait as two plantings; twelve feet a succession as one that asks for twelve feet', holdTwo.held.length === 6 && holdTwo.waves.every(w => w.held.length === 2) && holdFt.held.length === 3 && holdFt.held.every(w => w.ft === 12), [holdTwo.held.length, holdFt.held.map(w => w.ft)]);
-check('the plan is untouched by any of it', eng.plan.plantings.length === core.plantings.length && !(core.lrfNext && core.lrfNext.waiting));
-const copyOf = eng.plan.plantings.find(p => p.cropId === lettuce.id && eng.isTower(eng.bedOf(p.bedId)) && eng.calc(p));
-if (copyOf) {
-  const c = S.series(eng, { cropId: lettuce.id, sourceId: copyOf.id, place: 'hold', basis: 'planting', from: `${year}-08-01`, count: 2, every: 7, unit: 'whole', amount: 1 });
-  check('a series copied from a planting carries its settings and none of its place or its records', !c.error && c.held.length === 2 && c.held.every(w => !w.bedId && !w.done && !w.ft && !w.startFt && !w.bedLayout && !w.sowOn && !w.workflow && (copyOf.varietyId ? w.varietyId === copyOf.varietyId : true) && JSON.stringify(w.towerCycle || null) === JSON.stringify(copyOf.towerCycle || null)), c.error || c.held[0]);
-} else check('a series copied from a planting carries its settings and none of its place or its records', false, 'no tower lettuce in this plan');
-
-const part = eng.plan.plantings.find(p => { const r = eng.calc(p); return r && eng.isSoilBed(r.b) && +p.ft > 0 && !p.bedLayout && !p.liveTray && !eng.standKey(p) && !(eng.crop(p.cropId) || {}).micro; });
-if (part) {
-  const c = S.series(eng, { cropId: part.cropId, sourceId: part.id, place: 'hold', basis: 'planting', from: `${year}-06-01`, count: 2, every: 14, unit: 'whole', amount: 1 });
-  check('copied from a planting that takes part of a bed, what waits does not carry that length: it takes a whole bed unless feet are asked for', !c.error && c.held.length === 2 && c.held.every(w => !('ft' in w) && !('startFt' in w)), c.error || [part.ft, c.held[0]]);
-} else check('copied from a planting that takes part of a bed, what waits does not carry that length: it takes a whole bed unless feet are asked for', false, 'no part-bed planting in this plan');
-
-// ── a series sent to gardens: what has no ground waits; dates are never moved ──
-const crowd = S.series(eng, { ...base, gardenIds: fieldGardens, amount: 60, count: 2, every: 14 });
-const placedBy = w => w.placed.length, target = k => iso(E.addDays(E.s2d(base.from), k * 14));
-check('asked for more beds than the gardens have free, the rest wait: placed and waiting add up to what was asked', !crowd.error && crowd.waves.every(w => placedBy(w) + w.held.length === 60 && w.held.length > 0 && placedBy(w) > 0), crowd.error || crowd.waves.map(w => [placedBy(w), w.held.length, w.short]));
-check('what waits keeps the day it was asked for, and says what stood in its way', crowd.waves.every((w, k) => w.held.every(x => x.date === target(k) && x.wait.why && x.wait.gardens.length)) && crowd.waves.every((w, k) => w.placed.every(x => iso(x.r.field) === target(k))), crowd.waves.map(w => w.held[0] && [w.held[0].date, w.held[0].wait.why]));
-const noSpill = S.series(eng, { ...base, gardenIds: fieldGardens, amount: 60, count: 2, every: 14, spill: false });
-check('told not to hold the rest, it holds nothing and places the same', noSpill.held.length === 0 && noSpill.plantings.length === crowd.plantings.length && noSpill.short === 2);
-const ft = S.series(eng, { ...base, gardenIds: fieldGardens.slice(0, 1), unit: 'ft', amount: 1900, count: 1 });
-check('feet that find no ground wait as one planting of the feet still missing', !ft.error && ft.waves[0].held.length === 1 && near(ft.waves[0].held[0].ft + ft.waves[0].placed.reduce((n, x) => n + x.r.physicalLength, 0), 1900), ft.error || [ft.waves[0].held.length, ft.waves[0].short]);
-check('what is placed still lands only on free ground, in season', after(eng, crowd.plantings.map(p => ({ before: null, after: p }))).ok && crowd.plantings.every(p => { const e2 = after(eng, [{ before: null, after: p }]).next, q = e2.planting(p.id); return !season(e2, q, e2.calc(q)); }));
-
-// ── a series sent to named beds ──
-const freeBeds = S.homes(eng, hold.held[0]).filter(h => eng.isSoilBed(h.bed)).map(h => h.bed);
-const named = [freeBeds[freeBeds.length - 1], freeBeds[0], freeBeds[3]].filter(Boolean).map(b => b.id);
-const inBeds = S.series(eng, { ...base, place: 'beds', bedIds: named, count: 4, every: 21 });
-check('sent to named beds, it uses those beds and no others', !inBeds.error && inBeds.plantings.length > 0 && inBeds.plantings.every(p => named.includes(p.bedId)) && inBeds.held.every(w => JSON.stringify(w.wait.beds) === JSON.stringify(named)), inBeds.error || inBeds.plantings.map(p => p.bedId));
-check('it takes them in the order given', inBeds.waves.filter(w => w.placed.length).every(w => { const firstFree = named.find(id => { const t = S.series(eng, { ...base, place: 'beds', bedIds: [id], count: 1, from: iso(w.target) }); return t.plantings.length; }); return !firstFree || w.k > 0 || w.placed[0].bed.id === firstFree; }));
-
-// ── counted back from harvest with no bed ──
-const hv = S.series(eng, { ...base, place: 'hold', basis: 'harvest', from: `${year}-08-20`, count: 3, gardenIds: fieldGardens });
-const like = S.spaces(eng, radish, fieldGardens)[0];
-check('counted back from harvest with no bed, the day is read off a space like the ones it is headed for', !hv.error && hv.held.length === 3 && hv.held.every((w, k) => { const r = eng.evaluate({ ...S.bare(w), bedId: like.id }); return r && iso(r.first) === iso(E.addDays(E.s2d(`${year}-08-20`), k * 10)); }), hv.error || hv.held.map(w => w.date));
-const covered = S.series(eng, { ...base, place: 'hold', skipCovered: true, covered: () => true }), uncovered = S.series(eng, { ...base, place: 'hold', skipCovered: true, covered: () => false });
-check('one left out because the crop is already being picked is not held either', covered.held.length === 0 && covered.skipped === 5 && uncovered.held.length === 5 && uncovered.skipped === 0);
+// ── plantings that wait: as a series asked to wait left them before 0.84 (a plan may still hold them), and as To place keeps them ──
+// The series tool that made them is gone (0.84: successions are planned on their own page, and what has no bed is said, not held).
+// They are made here as that tool wrote them, so that everything said of a waiting planting is still held.
+let made = 0;
+const waitFor = (c, from, n, every, extra = {}) => { const s = `s-${++made}`; return Array.from({ length: n }, (_, k) => ({ id: `${s}-${k + 1}`, cropId: c.id, date: iso(E.addDays(E.s2d(from), k * every)), wait: { s, k: k + 1, of: n, every, gardens: fieldGardens }, ...extra })); };
+const hold = { held: waitFor(radish, base.from, 5, 10) }, holdFt = { held: waitFor(radish, base.from, 3, 10, { ft: 12 }) }, crowd = { waves: [{ held: waitFor(radish, `${year}-07-20`, 6, 0) }] };
+check('the plantings made to wait are read as waiting plantings, each on its own day with no bed', S.waiting({ lrfNext: { waiting: hold.held } }).length === 5 && hold.held.every((w, k) => w.date === iso(E.addDays(E.s2d(base.from), k * 10)) && !w.bedId));
 
 // ── rule 1: a waiting planting counts toward nothing ──
 const mixed = [...hold.held, ...holdFt.held, ...crowd.waves[0].held.slice(0, 6)];
-for (const c of [tomato, lettuce, crop('Basil'), crop('Dahlia'), crop('Kale')].filter(Boolean)) { const s = S.series(eng, { cropId: c.id, place: 'hold', basis: 'planting', from: `${year}-05-10`, count: 3, every: 14, unit: 'whole', amount: 1 }); if (!s.error) mixed.push(...s.held); }
+for (const c of [tomato, lettuce, crop('Basil'), crop('Dahlia'), crop('Kale')].filter(Boolean)) mixed.push(...waitFor(c, `${year}-05-10`, 3, 14));
 const withList = { ...core, lrfNext: { ...(core.lrfNext || {}), waiting: mixed } }, e2 = E.create(withList, Lib);
 check('the list is read back as it was written, and nothing malformed is taken for a waiting planting', S.waiting(withList).length === mixed.length && S.waiting(core).length === 0
   && S.waiting({ lrfNext: { waiting: [null, 3, {}, { id: 'x' }, { id: 'x', cropId: radish.id }, { id: 'x', cropId: radish.id, date: 'soon' }, { id: 'x', cropId: radish.id, date: `${year}-05-01`, bedId: 'b' }, { id: 'y', cropId: radish.id, date: `${year}-05-01` }] } }).length === 1 && S.waiting({ lrfNext: { waiting: 'no' } }).length === 0);
@@ -114,7 +76,7 @@ const fc = e => { const m = F.build(e, { year }); return JSON.stringify([m.count
 check('the harvest forecast is the same', fc(e2) === fc(eng));
 check('"to settle" is the same', Rails.cleanup(e2).count === Rails.cleanup(eng).count);
 check('no waiting planting is among the plan’s plantings, or known to the engine by its id', mixed.every(w => !e2.planting(w.id) && !withList.plantings.some(p => p.id === w.id)) && withList.plantings.length === core.plantings.length);
-check('none is offered as a model for a new series, nor counted as grown in a garden', JSON.stringify(S.models(e2, radish.id).map(m => m.p.id)) === JSON.stringify(S.models(eng, radish.id).map(m => m.p.id)) && JSON.stringify(S.gardensFor(e2, radish).map(g => g.planted)) === JSON.stringify(S.gardensFor(eng, radish).map(g => g.planted)));
+check('none is counted as grown in a garden', JSON.stringify(S.gardensFor(e2, radish).map(g => g.planted)) === JSON.stringify(S.gardensFor(eng, radish).map(g => g.planted)));
 check('openings are the same', JSON.stringify(S.openings(e2).map(o => o.id)) === JSON.stringify(S.openings(eng).map(o => o.id)));
 // the comparison has teeth: the same plantings put on beds do change the figures
 const landed = []; let work = eng;

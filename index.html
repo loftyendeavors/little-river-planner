@@ -23,6 +23,7 @@
   <nav class="views" aria-label="Views">
     <button type="button" data-view-btn="map" data-hook="view-tab" aria-pressed="true" title="The plan on the farm: where each crop goes">Map</button>
     <button type="button" data-view-btn="timeline" data-hook="view-tab" aria-pressed="false" title="The plan through the season: when each crop goes in and comes out">Timeline</button>
+    <button type="button" data-view-btn="succession" data-hook="view-tab" aria-pressed="false" title="Runs of a crop sown again and again: one whole bed every so many days, or to an amount a week">Successions</button>
     <button type="button" data-view-btn="harvest" data-hook="view-tab" aria-pressed="false" title="What the plan gives and earns, week by week, and over the season">Forecast</button>
     <i class="views-sep" aria-hidden="true"></i>
     <button type="button" data-view-btn="sow" data-hook="view-tab" aria-pressed="false" title="The week’s work, nursery and field, ticked as it is done">Tasks</button>
@@ -149,6 +150,7 @@
       </div>
     </div>
 
+    <div class="view view-succession" id="successionView"><div class="as-wrap su-wrap" id="suWrap"></div></div>
     <div class="view view-harvest" id="harvestView"><div class="as-wrap tr-wrap hv-wrap" id="hvWrap"></div></div>
     <div class="view view-sow" id="sowView"><div class="as-wrap tr-wrap sw-wrap" id="swWrap"></div></div>
     <div class="view view-trays" id="traysView"><div class="as-wrap tr-wrap" id="trWrap"></div></div>
@@ -297,6 +299,7 @@
 <script src="js/harvestview.js"></script>
 <script src="js/ahead.js"></script>
 <script src="js/series.js"></script>
+<script src="js/successions.js"></script>
 <script src="js/card.js"></script>
 <script src="js/backupui.js"></script>
 <script src="js/built.js"></script>

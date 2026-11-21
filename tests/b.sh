@@ -27,7 +27,7 @@ for n in "$@"; do
     wide) python3 -I $T/wide_check.py $APP $S/wide 2>&1 | tally wide-and-light ;;
     step5a) python3 -I $T/step5a_check.py $APP $S/step5a 2>&1 | tally step5a ;;
     step5b) python3 -I $T/step5b_check.py $APP $S/step5b 2>&1 | tally step5b ;;
-    stepF) python3 -I $T/stepF_check.py $APP $S/stepF 2>&1 | tally stepF ;;
+    successions) python3 -I $T/successions_check.py $APP $S/successions 2>&1 | tally successions ;;   # E4 part 1 (0.84): the Successions page, where the series tool and stepF_check were
     plain) python3 -I $T/plain_check.py $APP $S/plain 2>&1 | tally plain-words ;;
     importer) python3 -I $T/importer_check.py $APP $S/imp 2>&1 | tally importer ;;
     importer-site) python3 -I $T/importer_check.py $SITE $S/imp-site $ZIP 2>&1 | tally importer-built-site ;;
@@ -113,7 +113,7 @@ except Exception: print('site NO RESULT', t[-300:])" ;;
     wide-site) python3 -I $T/wide_check.py $SITE $S/wide-site $ZIP 2>&1 | tally wide-and-light-built-site ;;
     step5a-site) python3 -I $T/step5a_check.py $SITE $S/step5a-site $ZIP 2>&1 | tally step5a-built-site ;;
     step5b-site) python3 -I $T/step5b_check.py $SITE $S/step5b-site $ZIP 2>&1 | tally step5b-built-site ;;
-    stepF-site) python3 -I $T/stepF_check.py $SITE $S/stepF-site $ZIP 2>&1 | tally stepF-built-site ;;
+    successions-site) python3 -I $T/successions_check.py $SITE $S/successions-site $ZIP 2>&1 | tally successions-built-site ;;
     plain-site) python3 -I $T/plain_check.py $SITE $S/plain-site $ZIP 2>&1 | tally plain-words-built-site ;;
     r1-site) python3 -I $T/r1_check.py $SITE $S/r1-site $ZIP 2>&1 | tally where-things-live-built-site ;;
     map-site) WIDTHS=${WIDTHS:-1280,1480,1707,3440} python3 -I $REPO/tools/map_check.py $SITE $S/map-site $ZIP 2>&1 | tally map-built-site ;;

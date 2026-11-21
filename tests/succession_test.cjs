@@ -1,5 +1,6 @@
 'use strict';
-// Planning ahead: a series of successions, and openings in the ground with the crops that fit them.
+// Planning ahead: openings in the ground with the crops that fit them. (A series of successions went with 0.84: a run of
+// successions, LRFSuccession.planRun, is held by run_test.cjs, the random runs and the frost among it.)
 // The rule under test throughout: nothing these propose may land on ground that is held, or outside the season. A frost date
 // is not the season's edge (#100): what the frost touches is proposed, and carries the engine's own frost note.
 // usage: node succession_test.cjs <app-dir> <plan.json (backup or shipped)>
@@ -27,80 +28,6 @@ function verdict(base, added) {
 }
 const crop = name => eng.crops().find(c => c.name === name) || eng.crops().find(c => new RegExp(name, 'i').test(c.name));
 const gardenIds = c => S.gardensFor(eng, c).map(x => x.garden.id);
-
-// ── a series ──
-const radish = crop('Radish'), lettuce = crop('Lettuce'), fieldGardens = S.gardensFor(eng, radish).filter(x => x.kind === 'bed' && x.garden.type === 'field').map(x => x.garden.id);
-check('a crop is asked for, live trays are sent to their own view, and the dates must make sense',
-  /crop/i.test(S.series(eng, {}).error) && /Live trays in the Nursery view/.test(S.series(eng, { cropId: eng.crops().find(c => c.micro).id, from: `${year}-05-01`, every: 7, count: 2, amount: 1, gardenIds: fieldGardens }).error)
-  && /first date/i.test(S.series(eng, { cropId: radish.id, every: 7, count: 2, amount: 1, gardenIds: fieldGardens }).error)
-  && /last date/i.test(S.series(eng, { cropId: radish.id, from: `${year}-06-01`, to: `${year}-05-01`, every: 7, amount: 1, gardenIds: fieldGardens }).error)
-  && /at a time/.test(S.series(eng, { cropId: radish.id, from: `${year}-05-01`, every: 1, count: 500, amount: 1, gardenIds: fieldGardens }).error)
-  && /garden/i.test(S.series(eng, { cropId: radish.id, from: `${year}-05-01`, every: 7, count: 2, amount: 1, gardenIds: [] }).error));
-
-const a = S.series(eng, { cropId: radish.id, gardenIds: fieldGardens, basis: 'planting', from: `${year}-07-20`, count: 5, every: 10, unit: 'whole', amount: 1 });
-check('five radish successions ten days apart are five waves on the days asked', !a.error && a.waves.length === 5 && a.waves.every((w, k) => iso(w.target) === iso(E.addDays(E.s2d(`${year}-07-20`), k * 10))), a.error || a.waves.map(w => [iso(w.target), w.placed.length, w.short]));
-check('each placed planting goes in on its wave’s day and takes a whole bed', a.placed >= 3 && a.waves.every(w => w.placed.every(x => iso(x.r.field) === iso(w.target) && x.r.physicalLength >= x.r.cap - 1e-6)));
-const va = verdict(eng, a.plantings);
-check('nothing in the series lands on ground that is held, or outside the season', va.ok, va);
-check('a wave that could not be placed says how much is missing and why', a.waves.every(w => w.short > 0 ? w.why.length >= 1 && w.why.every(x => x.why && x.spaces >= 1) : !w.why.length));
-check('the series is new plantings with ids of their own, none recorded as done', new Set(a.plantings.map(p => p.id)).size === a.plantings.length && a.plantings.every(p => !eng.planting(p.id) && !p.done && p.cropId === radish.id));
-check('the plan itself is untouched', eng.plan.plantings.length === core.plantings.length && a.plantings.every(p => !core.plantings.includes(p)));
-
-const h = S.series(eng, { cropId: radish.id, gardenIds: fieldGardens, basis: 'harvest', from: `${year}-08-20`, to: `${year}-09-20`, every: 10, unit: 'whole', amount: 1 });
-check('counted back from harvest, each planting is first ready on its target day', !h.error && h.waves.length === 4 && h.placed >= 2 && h.waves.every(w => w.placed.every(x => iso(x.r.first) === iso(w.target))) && verdict(eng, h.plantings).ok, h.error || h.waves.map(w => [iso(w.target), w.placed.map(x => iso(x.r.first))]));
-
-const f = S.series(eng, { cropId: radish.id, gardenIds: fieldGardens, basis: 'planting', from: `${year}-08-01`, count: 3, every: 14, unit: 'ft', amount: 30 });
-check('thirty feet a succession takes thirty feet, in one bed or several', !f.error && f.waves.every(w => w.short > 0 || near(sum(w.placed, x => x.r.physicalLength), 30)) && f.waves.some(w => !w.short) && verdict(eng, f.plantings).ok, f.error || f.waves.map(w => [w.placed.map(x => x.r.physicalLength), w.short]));
-
-const two = S.series(eng, { cropId: radish.id, gardenIds: fieldGardens, basis: 'planting', from: `${year}-08-01`, count: 2, every: 14, unit: 'whole', amount: 2 });
-check('two beds a succession are two different beds', !two.error && two.waves.every(w => w.placed.length <= 2 && new Set(w.placed.map(x => x.bed.id)).size === w.placed.length) && two.waves.some(w => w.placed.length === 2) && verdict(eng, two.plantings).ok);
-check('the same request gives the same plan', JSON.stringify(S.series(eng, { cropId: radish.id, gardenIds: fieldGardens, basis: 'planting', from: `${year}-08-01`, count: 2, every: 14, unit: 'whole', amount: 2 }).plantings.map(p => [p.bedId, p.date, p.ft || 0])) === JSON.stringify(two.plantings.map(p => [p.bedId, p.date, p.ft || 0])));
-
-// skipping what is already covered
-const allCovered = S.series(eng, { cropId: radish.id, gardenIds: fieldGardens, basis: 'planting', from: `${year}-08-01`, count: 3, every: 14, unit: 'whole', amount: 1, skipCovered: true, covered: () => true });
-const noneCovered = S.series(eng, { cropId: radish.id, gardenIds: fieldGardens, basis: 'planting', from: `${year}-08-01`, count: 3, every: 14, unit: 'whole', amount: 1, skipCovered: true, covered: () => false });
-check('a wave is left out when the crop is already being picked then, and only then', allCovered.plantings.length === 0 && allCovered.skipped === 3 && allCovered.waves.every(w => w.skipped === 'covered' && !w.short) && noneCovered.skipped === 0 && noneCovered.plantings.length >= 2);
-
-// modelled on a planting already in the plan: a tower cycle keeps its settings
-const tower = core.plantings.map(p => ({ p, r: eng.calc(p) })).filter(x => x.r && x.r.tw).sort((x, y) => y.r.field - x.r.field)[0];
-if (tower) {
-  const tg = [tower.r.b.gardenId], start = E.addDays(tower.r.field, 60);
-  const t = S.series(eng, { cropId: tower.p.cropId, sourceId: tower.p.id, gardenIds: tg, basis: 'planting', from: iso(start), count: 3, every: 7, unit: 'whole', amount: 2 });
-  check('a series copied from a tower planting keeps its cycle, and each tower is taken whole', !t.error && t.plantings.length >= 2 && t.plantings.every(p => p.id !== tower.p.id && !p.done && JSON.stringify(p.towerCycle) === JSON.stringify(tower.p.towerCycle) && p.dtm === tower.p.dtm && p.hw === tower.p.hw && eng.isTower(eng.bedOf(p.bedId))) && verdict(eng, t.plantings).ok, t.error || t.waves.map(w => [iso(w.target), w.placed.length, w.why]));
-  const models = S.models(eng, tower.p.cropId);
-  check('the plantings a series can copy are the latest of each kind of space and variety', models.length >= 1 && models.every(m => m.p.cropId === tower.p.cropId) && new Set(models.map(m => m.r.kind + '|' + (m.p.varietyId || ''))).size === models.length);
-} else check('the plan has a tower planting to copy', false);
-
-// where nothing is free, nothing is placed
-const busy = core.plantings.map(p => ({ p, r: eng.calc(p) })).find(x => x.r && x.r.kind === 'bed' && x.r.physicalLength >= x.r.cap - 1e-6 && x.r.c.id !== radish.id && E.dayDiff(x.r.last, x.r.field) > 40);
-const none = S.series(eng, { cropId: radish.id, gardenIds: [busy.r.b.gardenId], basis: 'planting', from: iso(E.addDays(busy.r.field, 5)), count: 1, every: 7, unit: 'whole', amount: 400 });
-check('asking for more beds than a garden has places what there is and reports the rest', !none.error && none.waves[0].short > 0 && none.waves[0].placed.length < 400 && none.waves[0].why.length >= 1 && verdict(eng, none.plantings).ok, none.waves[0].why);
-
-// many requests at random: whatever is proposed must always be addable
-let tried = 0, proposed = 0, bad = [], frostSeen = 0;
-const pool = S.candidates(eng, true);
-for (let i = 0; i < 160; i++) {
-  const c = pick(pool), gs = S.gardensFor(eng, c);
-  if (!gs.length) continue;
-  const chosen = gs.filter(() => rnd() < 0.4).map(x => x.garden.id), ids = chosen.length ? chosen : [pick(gs).garden.id];
-  const from = E.addDays(new Date(year, 2, 1), Math.floor(rnd() * 230)), unit = rnd() < 0.35 ? 'ft' : 'whole';
-  const res = S.series(eng, { cropId: c.id, gardenIds: ids, basis: rnd() < 0.5 ? 'harvest' : 'planting', from: iso(from), count: 1 + Math.floor(rnd() * 6), every: 5 + Math.floor(rnd() * 25), unit, amount: unit === 'ft' ? 10 + Math.floor(rnd() * 80) : 1 + Math.floor(rnd() * 3) });
-  tried++;
-  if (res.error) { bad.push({ crop: c.name, error: res.error }); continue; }
-  proposed += res.plantings.length;
-  const v = verdict(eng, res.plantings), marked = res.waves.flatMap(w => w.placed.map(x => x.frost || null));
-  if (!v.ok) bad.push({ crop: c.name, v: { refused: v.refused, clashes: v.clashes, season: v.season } });
-  // each planting the frost touches carries the engine's note, and the series counts them; no wave is short for a frost
-  else if (JSON.stringify(marked) !== JSON.stringify(v.frost) || res.frost !== v.frost.filter(Boolean).length) bad.push({ crop: c.name, frost: { marked: marked.filter(Boolean).length, engine: v.frost.filter(Boolean).length, said: res.frost } });
-  else if (res.waves.some(w => w.why.some(x => /frost/i.test(x.why)))) bad.push({ crop: c.name, held: res.waves.flatMap(w => w.why.map(x => x.why)).filter(x => /frost/i.test(x)) });
-  frostSeen += v.frost.filter(Boolean).length;
-}
-check('160 series at random: every planting proposed can be added, and none is out of season', tried >= 120 && proposed > 150 && !bad.length, { tried, proposed, bad: bad.slice(0, 4) });
-check('among them, plantings a frost date touches are placed, each marked with the engine’s note and counted by its series', frostSeen >= 5 && !bad.some(x => x.frost || x.held), { frostSeen });
-// a series of a frost-tender crop run into the fall: what the frost cuts is placed, counted, and nothing waits for it
-const tender = crop('Basil'), late = tender && S.series(eng, { cropId: tender.id, gardenIds: S.gardensFor(eng, tender).filter(x => x.kind === 'bed' && x.garden.type === 'field').map(x => x.garden.id), basis: 'planting', from: `${year}-07-01`, count: 8, every: 10, unit: 'whole', amount: 1 });
-const lateV = late && !late.error && verdict(eng, late.plantings);
-check('a frost-tender series into the fall places what the frost touches, even one it leaves nothing to pick, and says how many of them it is', !!lateV && lateV.ok && late.frost >= 2 && late.waves.every(w => w.placed.length === 1) && late.waves.some(w => w.placed.some(x => x.r.frostCut && !(x.r.harvestDays > 0))) && late.frost === lateV.frost.filter(Boolean).length && late.frost <= late.plantings.length && late.waves.every(w => !w.why.some(x => /frost/i.test(x.why))), late && (late.error || { frost: late.frost, n: late.plantings.length, why: late.waves.map(w => w.why.map(x => x.why)) }));
 
 // ── openings ──
 const open = S.openings(eng);
@@ -138,12 +65,6 @@ for (const o of open) {
 }
 check('every crop offered for an opening can be planted there: in the ground it names, in season, done before the next crop', fitCount > 100 && withFits > 10 && !badFits.length, { fitCount, withFits, lateChecked, bad: badFits.slice(0, 4) });
 check('crops the first frost cuts are offered, with the engine’s frost note, after every crop that fits whole; the last day offered is clear of the frost', frostFits >= 10 && !badOrder.length && !badFits.some(x => x.frost || x.latest), { frostFits, order: badOrder.slice(0, 2) });
-// a series' harvest is that of the plantings with something to pick: one the frost leaves nothing of has no harvest to say
-const zw = late && !late.error && late.waves.find(w => w.placed.some(x => x.r.frostCut && !(x.r.harvestDays > 0))), zx = zw && zw.placed[0];
-const nil = zx && S.series(eng, { cropId: tender.id, place: 'beds', bedIds: [zx.bed.id], basis: 'planting', from: iso(zw.target), count: 1, every: 7, unit: 'whole', amount: 1 });
-const pickedL = late && !late.error ? late.waves.flatMap(w => w.placed).filter(x => x.r.harvestDays > 0) : [];
-check('a series gives its harvest from the plantings with something to pick, and none where the frost leaves nothing', !!nil && !nil.error && nil.plantings.length === 1 && nil.firstHarvest === null && nil.lastHarvest === null && nil.frost === 1
-  && pickedL.length >= 1 && +late.firstHarvest === Math.min(...pickedL.map(x => +x.r.first)) && +late.lastHarvest === Math.max(...pickedL.map(x => +x.r.last)) && late.firstHarvest <= late.lastHarvest, nil && (nil.error || { n: nil.plantings.length, first: nil.firstHarvest, last: nil.lastHarvest }));
 // "where could it go": the openings a crop fits are those of an opening's own test, each with that test's frost note
 const roomOf = crop('Basil') && S.room(eng, crop('Basil').id), roomBad = roomOf ? roomOf.openings.filter(x => { const t = S.tryCrop(eng, x.opening, crop('Basil')); return !t.ok || (t.frost || null) !== x.frost; }) : [null];
 check('where a crop could go lists the openings its own test passes, those the frost cuts with the note', !!roomOf && roomOf.openings.filter(x => x.frost).length >= 2 && !roomBad.length, roomOf && { n: roomOf.openings.length, frost: roomOf.openings.filter(x => x.frost).length, bad: roomBad.length });
@@ -182,5 +103,5 @@ const room = S.benchRoom(eng);
 check('bench room is what the benches hold less the fullest day of each week', room.cap === eng.heatedTraySpaces() && room.weeks.length >= 52 && room.weeks.every(w => w.free >= 0 && near(w.free, Math.max(0, room.cap - w.most))) && room.least && room.weeks.every(w => w.free >= room.least.free));
 
 console.log(results.join('\n'));
-console.log(JSON.stringify({ passed: results.length - fail.length, of: results.length, failed: fail, openings: open.length, withFits, fits: fitCount, random: { tried, proposed } }));
+console.log(JSON.stringify({ passed: results.length - fail.length, of: results.length, failed: fail, openings: open.length, withFits, fits: fitCount }));
 process.exit(fail.length ? 1 : 0);
