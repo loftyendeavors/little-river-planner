@@ -69,6 +69,13 @@ WORK = r"""
   out.afterRemoveAll = { runs: A.runs().length, left: S.plan.plantings.filter(p => kept0.split(',').includes(p.id)).length };
   A.undo();
   out.afterRemoveAllUndo = { runs: A.runs().length, ofRun: ofRun().length };
+  // a planting of the run sent to To place waits with its mark of the run, and goes with the run, or loses the mark, as the others do (Codex on #103)
+  const sent = ofRun().find(p => A.sendToWait(p.id)), waits = () => A.waiting().filter(w => w.run && w.run.id === id).length, there = () => sent && A.waiting().some(w => w.id === sent.id);
+  out.waitSent = { sent: !!sent, marked: waits() };
+  if (sent) {
+    A.removeRun(id); out.waitKept = { marked: waits(), still: there() }; A.undo();
+    A.removeRun(id, { plantings: true }); out.waitGone = { still: there(), runs: A.runs().length }; A.undo(); A.undo();
+  }
   A.undo();
   out.end = A.contentKey() === key0;
   return out;
@@ -98,6 +105,7 @@ with sync_playwright() as pw:
         check("a run taken out keeps its plantings as plain plantings: the mark of the run off, nothing else of them changed, and no empty list of runs left", o["readd"] is True and o["removed"] is True and r["runs"] == 0 and r["own"] is False and r["plantings"] == a["n"] and r["marks"] == 0 and r["others"], r)
         check("and one Undo puts the run and its marks back", o["afterRemoveUndo"] == {"runs": 1, "ofRun": True}, o["afterRemoveUndo"])
         check("a run taken out with its plantings takes them too, and one Undo puts all back", o["removedAll"] is True and o["afterRemoveAll"] == {"runs": 0, "left": 0} and o["afterRemoveAllUndo"] == {"runs": 1, "ofRun": a["n"]}, [o["afterRemoveAll"], o["afterRemoveAllUndo"]])
+        check("a planting of the run sent to To place loses its mark when the run is taken out, and goes with it when the plantings are taken too", o.get("waitSent") == {"sent": True, "marked": 1} and o.get("waitKept") == {"marked": 0, "still": True} and o.get("waitGone") == {"still": False, "runs": 0}, [o.get("waitSent"), o.get("waitKept"), o.get("waitGone")])
         check("undone to the start, the plan is the one the page opened with", o["end"] is True)
     check("the page raised no error", not errors, errors[:4])
     browser.close()

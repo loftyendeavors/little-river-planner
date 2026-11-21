@@ -129,7 +129,7 @@
 
   "numbers": 48,
 
-  "runs": 14,
+  "runs": 15,
 
   "shape": 51,
 
@@ -207,7 +207,7 @@
 
   "step5b": 63,
 
-  "successions": 47,
+  "successions": 48,
 
   "swap": 32,
 
@@ -322,7 +322,7 @@
 
   "step5b-site": 63,
 
-  "successions-site": 47,
+  "successions-site": 48,
 
   "swap-site": 32,
 
@@ -372,7 +372,7 @@
 
   "step5b-site @1480": 63,
 
-  "successions-site": 47,
+  "successions-site": 48,
 
   "trycard-site": 57
 
@@ -395,7 +395,7 @@
 
   "step5b-site dark": 63,
 
-  "successions-site @3440": 47,
+  "successions-site @3440": 48,
 
   "swap-site @3440": 32,
 

@@ -193,6 +193,18 @@ with sync_playwright() as pw:
         check("a crop on a yield nobody has checked is refused to an amount, in words, with nothing to add", "nobody has checked" in un.get("said", "") and un.get("unchecked") == "1" and not un.get("add"), un)
     else: check("a crop on a yield nobody has checked is refused to an amount, in words, with nothing to add", False, "no such crop in this plan")
 
+    # ── a variety sold in a unit of its own: the amount starts from, and the crop's line is said in, that unit (Codex on #103) ──
+    vu = js("""const c = eng.crop(arg.crop), v = eng.varietiesOf(c.id)[0]; if (!v) return { none: true };
+      const base = eng.unitOf(c), other = base === 'pint' ? 'quart' : 'pint', u0 = St.undo.length; await A.setSellV(v.id, { unit: other }, 'A unit of its own'); await new Promise(r => setTimeout(r, 400));
+      A.openAhead({ mode: 'succession', cropId: c.id, varietyId: v.id, by: 'amount' }); await new Promise(r => setTimeout(r, 1800));
+      const m = LRFHarvestView.model('commercial'), rowsOf = u => m.rows.filter(r => r.cropId === c.id && r.unit === u && !r.thing && r.total > 0);
+      const avg = rows => { const s = LRFForecast.season(m, rows); return s ? rows.reduce((n, r) => n + LRFForecast.sum(r.days, s.i0, s.i1), 0) / Math.max(1, LRFForecast.periods(m, 'week', s.i0, s.i1).length) : null; };
+      const round = n => (!(n > 0) ? 1 : n >= 20 ? Math.round(n / 5) * 5 : n >= 2 ? Math.round(n) : Math.max(0.1, Math.round(n * 10) / 10));
+      const baseAvg = rowsOf(base).length ? round(avg(rowsOf(base))) : null, opt = (document.querySelector('[data-hook="succ-unit"]') || document.querySelector('[data-hook="succ-thing"] option') || {}), said = opt.value !== undefined && opt.tagName === 'INPUT' ? opt.value : opt.textContent || '';
+      const out = { variety: D.varietyId === v.id, want: +D.want, baseAvg, said, other, word: LRFForecast.unitWord(2, other, LRFForecast.groupOf(c, other)) || other };
+      while (St.undo.length > u0) A.undo(); return out;""", sub) or {}
+    check("a variety sold in a unit of its own: the amount wanted does not start from the crop's own unit, and “Sold by” says the variety's unit", not vu.get("none") and vu.get("variety") and vu.get("baseAvg") is not None and vu.get("want") != vu.get("baseAvg") and vu.get("word", "?") in vu.get("said", ""), vu)
+
     # ── Cancel ──
     js("void A.openAhead({ mode: 'succession', cropId: arg.crop }); return 1;", sub); wait(1500)
     n_before = js("return St.plan.plantings.length;")

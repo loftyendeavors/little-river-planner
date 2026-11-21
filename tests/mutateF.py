@@ -59,6 +59,7 @@ PAGE = [
  ("the library arms the crop as well", "js/panels.js", "      if (series) { App.openAhead({ mode: 'succession', cropId: series.dataset.succession }); return; }", "      if (series) { App.arm({ cropId: series.dataset.succession }); App.openAhead({ mode: 'succession', cropId: series.dataset.succession }); return; }"),
  ("Cancel keeps the run being planned", SS, "    Object.assign(UI_STATE, { shown: false, answer: null, planning: false });", "    Object.assign(UI_STATE, { shown: false, answer: null });"),
  ("a crop on a yield nobody has checked is planned to an amount", SU, "      if (rests.open) return { unchecked: true, error: openWhy(o.crop) };\n", ""),
+ ("a variety's own unit is not read for the amount it starts on (Codex on #103)", SS, "    const unit = unitFor(eng, crop, D.thing, D.varietyId), rows = m.rows.filter(", "    const unit = unitFor(eng, crop, D.thing), rows = m.rows.filter("),
  ("the page says “series”", SS, "'Nothing is added to the plan until you press Add.'", "'Nothing is added to the plan until you press Add. A series.'"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)

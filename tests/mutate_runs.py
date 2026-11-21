@@ -61,6 +61,7 @@ FAULTS = [
  (P, 'the same run can be added twice', AP, "    if (runs().some(r => r.id === result.run.id)) return refuse('That run is already in the plan.');\n    const ps = result.sowings.map(s => s.p);\n    if (ps.some(p => !p || !p.run || p.run.id !== result.run.id || state.engine.planting(p.id))) return", "    const ps = result.sowings.map(s => s.p);\n    if (false) return"),
  (P, 'a run taken out leaves its mark on its plantings', AP, "const after = { ...before }; delete after.run; return { before, after };", "return { before, after: before };"),
  (P, 'a run taken out with its plantings leaves them', AP, "if (options.plantings) return { before, after: null };", "if (false) return { before, after: null };"),
+ (P, 'a run taken out leaves its waiting planting marked (Codex on #103)', AP, "    if (held.length) ops.push(waitingOp(", "    if (false) ops.push(waitingOp("),
  (P, 'a run taken out leaves an empty list behind', AP, "after: after.length ? after : null });\n  /**\n   * Add a run", "after });\n  /**\n   * Add a run"),
 ]
 if mode == 'list': print(json.dumps({k: len([f for f in FAULTS if f[0] == k]) for k in (N, P)})); sys.exit(0)

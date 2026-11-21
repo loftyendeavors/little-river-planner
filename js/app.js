@@ -1653,9 +1653,13 @@
     if (!record) return false;
     const mine = state.plan.plantings.filter(p => p.run && p.run.id === id), crop = state.engine.crop(record.cropId), what = crop ? crop.name.toLowerCase() : 'a crop';
     const ops = mine.map(before => { if (options.plantings) return { before, after: null }; const after = { ...before }; delete after.run; return { before, after }; });
+    // a planting of the run sent to To place waits with its mark of the run: it goes with the run, or loses the mark, as the others do (Codex on #103)
+    const list0 = waiting(), held = list0.filter(w => w.run && w.run.id === id);
+    if (held.length) ops.push(waitingOp(options.plantings ? list0.filter(w => !(w.run && w.run.id === id)) : list0.map(w => { if (!(w.run && w.run.id === id)) return w; const after = { ...w }; delete after.run; return after; })));
     if (options.plantings && state.sel && state.sel.type === 'planting' && mine.some(p => p.id === state.sel.id)) select(null);
     // nothing takes new ground: a planting given up, or the same planting less its mark, never overlaps anything it did not already
-    return commit(label || (options.plantings ? `Remove a succession of ${what} and its ${mine.length} planting${mine.length === 1 ? '' : 's'}` : `Remove a succession of ${what}, keeping its plantings`), [...ops, runsOp(list.filter(r => r.id !== id))], { unchecked: true });
+    const n = mine.length + held.length;
+    return commit(label || (options.plantings ? `Remove a succession of ${what} and its ${n} planting${n === 1 ? '' : 's'}` : `Remove a succession of ${what}, keeping its plantings`), [...ops, runsOp(list.filter(r => r.id !== id))], { unchecked: true });
   }
   function removeWaiting(ids, label) {
     const gone = new Set(ids), list = waiting(), left = list.filter(w => !gone.has(w.id)), n = list.length - left.length;
