@@ -19,6 +19,7 @@ NODE = [
  ("a variety's seeds a cell is not read", EN, "if (v.spc > 0) e.spc = v.spc;", ""),
  ("a variety's germination is read as its seeds a cell", EN, "if (v.spc > 0) e.spc = v.spc;", "if (v.germ > 0) e.spc = v.germ / 10;"),
  ("a crop's spare is not read for plants bought in", EN, "buffer = 1 + nonNegative(spareOf(c) != null ? spareOf(c) : settings.buffer) / 100;", "buffer = 1 + nonNegative(settings.buffer) / 100;"),
+ ("a replacement backup drops the ticks of Starting and nursery", PI, " + Object.values(a.nursery || {}).filter(line => line && line.looked != null).length : 0;", " : 0;"),
  ("the compact plan drops a variety's seeds a cell", PI, "    'spc'];", "    ];"),
 ]
 PAGE = [

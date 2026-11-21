@@ -133,6 +133,21 @@ const only = (e2, mine, fields) => {
     check(`the new figures come back from ${form}: a crop's spare and station, a variety's seeds a cell, the tick`, c.spare === 40 && c.station === true && vv.spc === 6 && ((pl.assumptions || {}).nursery || {})[scallion.id] && pl.assumptions.nursery[scallion.id].looked === year, { c: [c.spare, c.station], v: vv.spc });
   }
 }
+// ── 3b. a replacement backup with no list keeps the ticks and the figures typed here (planio.js carry) ──
+{
+  const id = scallion.id, v = now.varietiesOf(id)[0], prev = clone(plan), bare = clone(plan);
+  delete bare.assumptions; delete prev.assumptions;
+  prev.assumptions = { v: 1, crops: {}, varieties: {}, nursery: { [id]: { looked: year } } };
+  // a crop's spare and a variety's seeds a cell typed here: noted beside the plan as the app notes every such change (IO.note)
+  const cBefore = (prev.crops || []).find(c => c.id === id) || null, cAfter = { ...(cBefore || { id }), spare: 25 }, vAfter = { ...v, spc: 5 };
+  let facts = IO.note(null, 'crops', cBefore, cAfter, !cBefore && Lib.crops.some(c => c.id === id));
+  facts = IO.note(facts, 'varieties', v, vAfter, false);
+  prev.crops = [...(prev.crops || []).filter(c => c.id !== id), cAfter]; prev.varieties = prev.varieties.map(x => x.id === v.id ? vAfter : x);
+  prev.lrfNext = { ...(prev.lrfNext || {}), facts };
+  const out = IO.carry(prev, bare), pl = out.plan, c2 = (pl.crops || []).find(c => c.id === id) || {}, v2 = (pl.varieties || []).find(x => x.id === v.id) || {};
+  check('a backup with no list, loaded over a plan whose list holds only Starting and nursery ticks, keeps the ticks', ((pl.assumptions || {}).nursery || {})[id] && pl.assumptions.nursery[id].looked === year, (pl.assumptions || null));
+  check('it keeps the crop\'s spare and the variety\'s seeds a cell typed here, as every change to a crop or variety is kept', c2.spare === 25 && v2.spc === 5, { spare: c2.spare, spc: v2.spc });
+}
 // ── 4. every field the card writes is named in the plan's shape, with its type ──
 {
   const Shape = require(path.resolve(__dirname, 'plan_shape.cjs'));

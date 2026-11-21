@@ -137,7 +137,8 @@
   // A crop's line that holds only a tick or the mark for personal use holds no figure: it is not counted as one.
   const MARKS = ['looked', 'house'];
   const figures = a => a ? ['crops', 'varieties'].reduce((n, k) => n + Object.values(a[k] || {}).reduce((m, envs) => m + Object.keys(envs || {}).length, 0), 0) + Object.keys(a.starts || {}).length + Object.values(a.sell || {}).filter(line => Object.keys(line || {}).some(k => !MARKS.includes(k))).length + Object.keys(a.sellV || {}).length : 0;
-  const marks = a => a ? Object.values(a.sell || {}).filter(line => MARKS.some(k => line && line[k] != null)).length : 0;
+  // with the ticks of Starting and nursery (N1: assumptions.nursery.<crop>.looked), which hold no figure either
+  const marks = a => a ? Object.values(a.sell || {}).filter(line => MARKS.some(k => line && line[k] != null)).length + Object.values(a.nursery || {}).filter(line => line && line.looked != null).length : 0;
   /**
    * Record the difference one edit makes to a crop, variety, garden or bed. facts: { crops: { id: { name, set, was } }, … }.
    * `was` is what the record held before it was first changed here; a field put back to that is forgotten.
