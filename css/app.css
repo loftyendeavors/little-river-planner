@@ -1325,8 +1325,8 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 /* eight views: below 1400 px the brand keeps its name and the year, and drops the words between */
 @media (max-width: 1400px) { .top { gap: var(--space-12); } .brand-sub { font-size: 0; letter-spacing: 0; } .brand-sub b { font-size: var(--type-13); letter-spacing: 0.08em; } .views button { padding-inline: var(--space-12); } }
 /* the Successions tab (0.84) made the row of views one tab longer: at a laptop's width its tabs keep to a narrower padding, so the header still fits */
-@media (max-width: 1540px) { .views button { padding-inline: var(--space-8); } }
-@media (max-width: 1360px) { .views button { padding-inline: var(--space-4); } }
+@media (max-width: 1720px) { .views button { padding-inline: var(--space-8); } }
+@media (max-width: 1540px) { .views button { padding-inline: var(--space-4); } }
 /* there the header has no room to spare, so the build's number takes none: it stands under the year, as plain figures */
 @media (max-width: 1400px) {
   .brand { display: grid; grid-template-columns: auto auto auto; grid-template-rows: auto auto; gap: 0 var(--space-8); align-items: center; }
