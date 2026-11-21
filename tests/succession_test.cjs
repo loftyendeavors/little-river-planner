@@ -138,6 +138,12 @@ for (const o of open) {
 }
 check('every crop offered for an opening can be planted there: in the ground it names, in season, done before the next crop', fitCount > 100 && withFits > 10 && !badFits.length, { fitCount, withFits, lateChecked, bad: badFits.slice(0, 4) });
 check('crops the first frost cuts are offered, with the engine’s frost note, after every crop that fits whole; the last day offered is clear of the frost', frostFits >= 10 && !badOrder.length && !badFits.some(x => x.frost || x.latest), { frostFits, order: badOrder.slice(0, 2) });
+// a series' harvest is that of the plantings with something to pick: one the frost leaves nothing of has no harvest to say
+const zw = late && !late.error && late.waves.find(w => w.placed.some(x => x.r.frostCut && !(x.r.harvestDays > 0))), zx = zw && zw.placed[0];
+const nil = zx && S.series(eng, { cropId: tender.id, place: 'beds', bedIds: [zx.bed.id], basis: 'planting', from: iso(zw.target), count: 1, every: 7, unit: 'whole', amount: 1 });
+const pickedL = late && !late.error ? late.waves.flatMap(w => w.placed).filter(x => x.r.harvestDays > 0) : [];
+check('a series gives its harvest from the plantings with something to pick, and none where the frost leaves nothing', !!nil && !nil.error && nil.plantings.length === 1 && nil.firstHarvest === null && nil.lastHarvest === null && nil.frost === 1
+  && pickedL.length >= 1 && +late.firstHarvest === Math.min(...pickedL.map(x => +x.r.first)) && +late.lastHarvest === Math.max(...pickedL.map(x => +x.r.last)) && late.firstHarvest <= late.lastHarvest, nil && (nil.error || { n: nil.plantings.length, first: nil.firstHarvest, last: nil.lastHarvest }));
 // "where could it go": the openings a crop fits are those of an opening's own test, each with that test's frost note
 const roomOf = crop('Basil') && S.room(eng, crop('Basil').id), roomBad = roomOf ? roomOf.openings.filter(x => { const t = S.tryCrop(eng, x.opening, crop('Basil')); return !t.ok || (t.frost || null) !== x.frost; }) : [null];
 check('where a crop could go lists the openings its own test passes, those the frost cuts with the note', !!roomOf && roomOf.openings.filter(x => x.frost).length >= 2 && !roomBad.length, roomOf && { n: roomOf.openings.length, frost: roomOf.openings.filter(x => x.frost).length, bad: roomBad.length });

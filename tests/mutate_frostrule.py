@@ -47,7 +47,10 @@ FAULTS = [
  (N, 'a waiting planting’s home carries no frost mark', SU, "wanted: rank(bed) < 1e6, frost: frostNote(eng, res.p, res.r) });", "wanted: rank(bed) < 1e6, frost: null });"),
  (N, 'where a crop could go drops the frost note', SU, "spare: t.spare, frost: t.frost || null });", "spare: t.spare, frost: null });"),
  (N, 'the frost note is the first warning of any kind', SU, "const w = eng.warnings(p, r).find(x => x.k === 'frost');\n    return w ? w.t : eng.fieldFrostOnly(p, r);", "const w = eng.warnings(p, r)[0];\n    return w ? w.t : eng.fieldFrostOnly(p, r);"),
+ (N, 'a series says the harvest of a planting that picks nothing', SU, "picked = all.filter(x => x.r.harvestDays > 0);", "picked = all;"),
  # ── the page (ahead_check.py) ──
+ (P, 'a series of nothing picked still gives a harvest span', SR, "${n ? (result.firstHarvest ? ` Harvest", "${n ? (true ? ` Harvest"),
+ (P, 'a row of a series says pick where nothing is picked', SR, "${first.r.harvestDays > 0 ? `pick ${day(first.r.first)}` : 'nothing picked'}", "pick ${day(first.r.first)}"),
  (P, 'the chip of a crop the frost cuts is not marked', AH, "t.frost ? h('small.ah-frost', { dataset: { hook: 'fit-frost-mark' } }, frostMark(t)) : null", "null"),
  (P, 'the chip says the planned days, not what the frost leaves', AH, "`frost: ${num(t.r.harvestDays)} of ${num(t.r.frostCut.plannedDays)} days`", "`frost: ${num(t.r.frostCut.plannedDays)} of ${num(t.r.frostCut.plannedDays)} days`"),
  (P, 'the chip’s title leaves out the frost note', AH, "${t.frost ? ` ${plain(t.frost)}` : ''}`,", "`,"),

@@ -288,6 +288,23 @@ with sync_playwright() as pw:
     cput = page.evaluate("""n => { const eng = LRFApp.state.engine, fresh = LRFApp.state.plan.plantings.slice(n); return { n: fresh.length, frost: fresh.filter(p => eng.warnings(p).some(x => x.k === 'frost') || eng.fieldFrostOnly(p)).length }; }""", nc)
     check('(c) added, they are in the plan, as many carrying a frost note as the summary said', cput['n'] == csub.get('n') and cput['frost'] == csub.get('frost'), [cput, csub])
     if cput['n'] > 0: page.evaluate('LRFApp.undo()'); page.wait_for_timeout(200)
+    # a series whose only planting the frost leaves nothing to pick: no harvest is said, and that nothing is picked is
+    nsub = page.evaluate("""() => { const S = LRFSuccession, eng = LRFApp.state.engine, E = LRFEngine, year = LRFApp.planYear(); for (const c of S.candidates(eng, true).filter(c => c.frostTender)) for (const g of S.gardensFor(eng, c).filter(g => g.kind === 'bed' && g.garden.type === 'field'))
+        for (let d = new Date(year, 7, 15); d < new Date(year, 9, 1); d = E.addDays(d, 7)) { const r = S.series(eng, { cropId: c.id, gardenIds: [g.garden.id], place: 'gardens', basis: 'planting', from: E.d2s(d), every: 7, count: 1, unit: 'whole', amount: 1 }); if (!r.error && r.plantings.length === 1 && r.frost === 1 && !r.firstHarvest) return { crop: c.id, garden: g.garden.id, from: E.d2s(d) }; } return null; }""")
+    check('a subject: a one-planting series of a frost-tender crop that the frost leaves nothing to pick', bool(nsub), nsub)
+    nsub = nsub or {}
+    page.evaluate("LRFApp.select(null)"); page.evaluate("s => LRFApp.openAhead({ mode: 'series', cropId: s.crop, gardenId: s.garden })", nsub); soft('#srForm')
+    for _ in range(40):
+        if not page.evaluate("""g => { const box = [...document.querySelectorAll('#srGardens input')].find(b => b.checked !== (b.value === g)); if (box) box.click(); return !!box; }""", nsub.get('garden')): break
+        page.wait_for_timeout(60)
+    setc('#srFrom', nsub.get('from', '')); setc('#srEvery', '7'); setc('#srCount', '1'); setc('#srAmount', '1'); soft('#srSum')
+    nr = page.evaluate("() => ({ sum: (document.getElementById('srSum') || {}).textContent || '', when: [...document.querySelectorAll('#srWaves .sr-when')].map(e => e.textContent) })")
+    check('(c) its summary says no harvest span, says that nothing is picked, and its row says nothing picked', 'Harvest' not in nr['sum'] and 'Nothing is picked' in nr['sum'] and '1 of 1 cross a frost date.' in nr['sum'] and len(nr['when']) == 1 and 'nothing picked' in nr['when'][0] and 'pick ' not in nr['when'][0], nr)
+    page.evaluate("LRFApp.select(null)"); page.evaluate("s => LRFApp.openAhead({ mode: 'series', cropId: s.crop, gardenId: s.garden })", csub); soft('#srForm')
+    for _ in range(40):
+        if not page.evaluate("""g => { const box = [...document.querySelectorAll('#srGardens input')].find(b => b.checked !== (b.value === g)); if (box) box.click(); return !!box; }""", csub.get('garden')): break
+        page.wait_for_timeout(60)
+    setc('#srFrom', '%d-07-20' % year_c); setc('#srEvery', '10'); setc('#srAmount', '1')
     # and a planting of that series waiting for a bed is offered the beds the frost touches, marked
     setc('#srCount', '6')
     page.evaluate("(document.querySelector('#srPlace [data-place=\"hold\"]') || { click() {} }).click()"); page.wait_for_timeout(200)

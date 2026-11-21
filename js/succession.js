@@ -358,9 +358,9 @@
         else for (let i = 0; i < Math.round(wave.short); i++) wave.held.push(heldFor(o, heldDate, k, { why }));
       }
     }
-    const placed = waves.filter(w => w.placed.length), all = waves.flatMap(w => w.placed);
+    const placed = waves.filter(w => w.placed.length), all = waves.flatMap(w => w.placed), picked = all.filter(x => x.r.harvestDays > 0);   // the harvest is that of plantings with something to pick
     return { options: o, waves, plantings: added, held: waves.flatMap(w => w.held), placed: placed.length, frost: all.filter(x => x.frost).length, skipped: waves.filter(w => w.skipped).length, short: waves.filter(w => w.short > EPS).length,
-      firstHarvest: all.length ? new Date(Math.min(...all.map(x => +x.r.first))) : null, lastHarvest: all.length ? new Date(Math.max(...all.map(x => +x.r.last))) : null,
+      firstHarvest: picked.length ? new Date(Math.min(...picked.map(x => +x.r.first))) : null, lastHarvest: picked.length ? new Date(Math.max(...picked.map(x => +x.r.last))) : null,
       units: all.reduce((n, x) => n + x.units, 0), unit: all.length ? all[0].unit : sized ? rests.y.unit : eng.unitOf(o.crop), ground: all.reduce((n, x) => n + (x.r.tw ? 1 : x.r.len), 0), groundUnit: o.spaces.length ? unitOfKind[eng.spaceKind(o.spaces[0])] : 'ft',
       ...(sized ? { sized: { want: o.want, unit: rests.y.unit, every: o.every, until: o.until, net: !!supply, asked: waves.reduce((n, w) => n + w.asked, 0), have: waves.reduce((n, w) => n + w.have, 0), covered: waves.filter(w => w.skipped === 'covered').length,
         feet: all.reduce((n, x) => n + (probeSoil(eng, x.bed) ? x.r.physicalLength : 0), 0), heldFeet: waves.flatMap(w => w.held).reduce((n, w) => n + (+w.ft || 0), 0),
