@@ -59,6 +59,7 @@ NODE = [
   ('the plans kept before a taking-in are never thinned', 'js/snapshots.js', "...joins.filter(s => !keep.has(s.id))];", "];", 'the newest 5 stay'),
 ]
 PAGE = [
+  ('page: a run of successions added on both devices is kept twice', 'js/merge.js', "    for (const rec of m) {\n      if (T.has(rec.id)) continue;", "    for (const rec of m) {\n      if (T.has(rec.id) && S.has(rec.id)) continue;", 'the same run of successions added on both devices'),
   ('page: the switch turns on without a snapshot or a backup', 'js/backupui.js', "        const snap = await App.snapshot(`Before joining plans from two devices, ${UI.day(new Date())}`);\n        if (!snap) why = 'The snapshot could not be taken, so nothing was turned on.';\n        else if (!(await App.exportBackup())) why = 'The backup file was not saved, so nothing was turned on.';\n", "", 'a named snapshot is taken and a backup file downloaded first'),
   ('page: the switch turns on though the backup file was not saved', 'js/backupui.js', "        else if (!(await App.exportBackup())) why = 'The backup file was not saved, so nothing was turned on.';\n", "        else await App.exportBackup();\n", 'when the backup file cannot be saved'),
   ('page: the choice of how two plans meet is two buttons again (L3)', 'js/backupui.js', "h('div.seg.bk-join', {", "h('span.bk-facts', {", 'the choice is one switch'),

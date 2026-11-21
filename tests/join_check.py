@@ -244,6 +244,20 @@ with sync_playwright() as pw:
         settled(B, 'in-step'); look(A)
         check('and the other device ends with the same planting', A.evaluate(P, X4) == undone['p'], A.evaluate(P, X4))
 
+        # ── 5a. a run of successions (E4, 0.84): the same run made on both devices before either saw the other joins to one run ──
+        where = 'a run on two devices'
+        RUN = """(() => { const S = LRFSuccession, eng = LRFApp.state.engine, year = LRFApp.planYear();
+          for (const c of S.candidates(eng, true)) for (const g of S.gardensFor(eng, c).filter(g => g.kind === 'bed')) {
+            const r = S.planRun(eng, { cropId: c.id, by: 'beds', every: 14, datesFor: 'planting', from: year + '-06-01', to: year + '-07-13', gardenIds: [g.garden.id] });
+            if (!r.error && r.sowings.length >= 2) return { run: r.run, sowings: r.sowings.map(x => ({ p: x.p })) }; } return null; })()"""
+        made = A.evaluate(RUN)
+        RUNS = "(id => ({ runs: LRFApp.runs().filter(r => r.id === id).length, plantings: LRFApp.state.plan.plantings.filter(p => p.run && p.run.id === id).length, all: LRFApp.state.plan.plantings.length }))"
+        n_before = A.evaluate("LRFApp.state.plan.plantings.length")
+        both = made and A.evaluate("r => LRFApp.addRun(r)", made) and B.evaluate("r => LRFApp.addRun(r)", made)
+        if made: settled(A, 'in-step'); look(B); settled(B, 'in-step'); look(A)
+        rb, ra = (B.evaluate(RUNS, made['run']['id']), A.evaluate(RUNS, made['run']['id'])) if made else ({}, {})
+        check('the same run of successions added on both devices before either saw the other joins to one run, its plantings once each, on both', bool(both) and rb == ra == {'runs': 1, 'plantings': len(made['sowings']), 'all': n_before + len(made['sowings'])} and A.evaluate("LRFApp.contentKey()") == B.evaluate("LRFApp.contentKey()"), [made and made['run']['id'], ra, rb])
+
         # ── 5b. the plan here cannot be kept first: nothing is taken in ──
         where = 'kept first'
         B.evaluate("(() => { window.__add = LRFSnaps.add; LRFSnaps.add = () => Promise.reject(new Error('The database is full.')); })()")
