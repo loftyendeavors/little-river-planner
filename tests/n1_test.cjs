@@ -133,4 +133,17 @@ const only = (e2, mine, fields) => {
     check(`the new figures come back from ${form}: a crop's spare and station, a variety's seeds a cell, the tick`, c.spare === 40 && c.station === true && vv.spc === 6 && ((pl.assumptions || {}).nursery || {})[scallion.id] && pl.assumptions.nursery[scallion.id].looked === year, { c: [c.spare, c.station], v: vv.spc });
   }
 }
+// ── 4. every field the card writes is named in the plan's shape, with its type ──
+{
+  const Shape = require(path.resolve(__dirname, 'plan_shape.cjs'));
+  const id = scallion.id, v = now.varietiesOf(id)[0], typed = clone(plan), own = (typed.crops = typed.crops || []).find(c => c.id === id) || (typed.crops.push({ id }), typed.crops[typed.crops.length - 1]);
+  Object.assign(own, { tray: 128, spc: 3, germ: 80, spare: 15, gh: 6, station: true, prop: 'potup', potUpWk: 3, potSize: 4, perCarrier: 15, rockwoolDays: 20, seedsFt: 4, method: 'TP', plantingMaterial: 'seed' });
+  const tv = typed.varieties.find(x => x.id === v.id);
+  Object.assign(tv, { germ: 70, spc: 2, gh: 5, environmentDefaults: { v: 1, field: { gh: 5 }, greenhouse: { gh: 5 } } });
+  typed.settings = { ...typed.settings, germ: 80, buffer: 12 };
+  typed.assumptions = { v: 1, crops: {}, varieties: {}, nursery: { [id]: { looked: year } } };
+  typed.lrfNext = { ...(typed.lrfNext || {}), supplies: { pockets: 10 } };
+  const r = Shape.check(typed);
+  check('every field the card writes (a crop\'s, a variety\'s, the farm\'s, the tick, the carriers Supplies counts) is named in tests/plan_shape.cjs with its type', !r.unknown.length && !r.wrong.length, { unknown: r.unknown.slice(0, 6), wrong: r.wrong.slice(0, 6) });
+}
 finished = true;
