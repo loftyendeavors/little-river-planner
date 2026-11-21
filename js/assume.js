@@ -667,6 +667,12 @@
     if (ui.mode === 'start' && crop) {
       // a crop's card: whatever was typed in the search box, or "My crops", would hide it
       if (ui.query) { ui.query = ''; $('asSearch').value = ''; }
+      const eng = App.state.engine, c = eng.crop(crop), used = new Map();
+      for (const p of App.state.plan.plantings) used.set(p.cropId, (used.get(p.cropId) || 0) + 1);
+      if (c && ui.scope === 'mine' && !root.LRFPanels.isMine(c, used, c.micro ? [] : eng.varietiesOf(c.id), App.state.plan.settings.cropTypeList || {})) {
+        ui.scope = 'all';
+        for (const b of document.querySelectorAll('[data-as-scope]')) b.setAttribute('aria-pressed', String(b.dataset.asScope === 'all'));
+      }
       root.LRFStartCard.open(crop);
     }
     if (ui.mode === 'harvest') ui.way = way === 'card' ? 'card' : 'list';

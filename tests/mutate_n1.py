@@ -41,6 +41,10 @@ PAGE = [
  ("Edit crop opens the old form", SD, "onclick: () => toStart(g.id) }, 'Edit crop')", "onclick: () => select({ type: 'crop', id: g.id }) }, 'Edit crop')"),
  ("the tick is not kept apart from the others", AP, "const emptyList = a => !['crops', 'varieties', 'starts', 'sell', 'sellV', 'nursery']", "const emptyList = a => !['crops', 'varieties', 'starts', 'sell', 'sellV']"),
  ("the farm's pots a carrier says nothing of what Supplies would count", SC, "said: says ? says(value) : movesSaid(", "said: movesSaid("),
+ ("the farm's bench room is the most of any one crop", SC, "    out.bench = [benchOfMany(eng, [...ids]).most, benchOfMany(next, [...ids]).most];", "    for (const id of ids) { out.bench[0] = Math.max(out.bench[0], benchOf(eng, id).most); out.bench[1] = Math.max(out.bench[1], benchOf(next, id).most); }"),
+ ("a pot size is taken at once", SC, "onchange: e => stage('potSize',", "onchange: e => take('potSize',"),
+ ("counting germination again is taken at once", SC, "onclick: () => stage('station', `${name}: extra cells for germination again`", "onclick: () => take('station', `${name}: extra cells for germination again`"),
+ ("a crop hidden by My crops opens another card", AS, "        ui.scope = 'all';\n", "\n"),
  ("Looks right moves on without the tick", SC, "if (!looked) App.setStartLooked(c.id, true); if (next)", "if (next)"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)

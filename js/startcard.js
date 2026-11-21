@@ -109,8 +109,10 @@
   const NONE = { batches: [], items: [] };
   const of = (eng, id) => study(eng).crops.get(id) || NONE;
   /** The most tray spaces a crop takes on one day, the day, and the days its seedlings are on the bench. */
-  function benchOf(eng, id) {
-    const items = of(eng, id).items;
+  function benchOf(eng, id) { return benchOfMany(eng, [id]); }
+  /** The same for several crops at once: their bench room added up on each day, as the benches hold it (the farm's figures). */
+  function benchOfMany(eng, ids) {
+    const items = ids.flatMap(id => of(eng, id).items);
     if (!items.length) return { most: 0, on: null, from: null, to: null };
     const days = new Set();
     for (const it of items) { days.add(+it.from); const pu = eng.potUpDate(it.r); if (pu) days.add(+pu); }
@@ -161,7 +163,7 @@
     const before = new Map(), after = new Map();
     for (const id of ids) { for (const x of of(eng, id).batches) before.set(x.ids.join(','), x); for (const x of of(next, id).batches) after.set(x.ids.join(','), x); }
     for (const [k, x] of before) { const y = after.get(k); if (y && (y.cells !== x.cells || Math.abs(y.trays - x.trays) > 1e-9 || y.seeds !== x.seeds)) out.batches.push({ was: x, now: y }); }
-    for (const id of ids) { out.bench[0] = Math.max(out.bench[0], benchOf(eng, id).most); out.bench[1] = Math.max(out.bench[1], benchOf(next, id).most); }
+    out.bench = [benchOfMany(eng, [...ids]).most, benchOfMany(next, [...ids]).most];
     out.next = next;
     return out;
   }
@@ -303,8 +305,24 @@
     else if (said) { line.dataset.said = 'true'; line.append(said.text, ' ', undoLink()); }
     return { seg, line };
   }
+  /** Stage a change: what it would move is said under the control, and it is taken only with "Use it". */
+  function stage(key, label, ops, cropIds, value) {
+    if (!ops) { ui.pending = null; ui.redraw(); return; }
+    ui.pending = { key, value, ops, label, said: movesSaid(movesOf(App.state.engine, cropIds, ops)) };
+    ui.said = null; ui.redraw();
+  }
+  /** The line under a staged control: what it would move with "Use it", or what was done with Undo; null when neither. */
+  function stagedLine(key) {
+    const pend = ui.pending && ui.pending.key === key ? ui.pending : null, said = ui.said && ui.said.key === key ? ui.said : null;
+    if (!pend && !said) return null;
+    const line = h('p.sn-moves', { dataset: { hook: 'start-moves', key } });
+    if (pend) { line.dataset.would = 'true'; line.append(pend.said ? `Would move: ${pend.said} ` : 'Moves nothing on this plan. ', h('button.btn.small', { type: 'button', dataset: { hook: 'start-use' }, onclick: () => take(key, pend.label, pend.ops) }, 'Use it'), ' ', h('button.btn.quiet.small', { type: 'button', onclick: () => { ui.pending = null; ui.redraw(); } }, 'Leave it')); }
+    else { line.dataset.said = 'true'; line.append(said.text, ' ', undoLink()); }
+    return line;
+  }
   /** An offer of a new rule: what it would move, before and after, and "Use it". */
   function offer(key, words, ops, cropIds) {
+    if (ui.said && ui.said.key === key) return stagedLine(key);
     if (!ops) return null;
     const m = movesOf(App.state.engine, cropIds, ops), said = movesSaid(m);
     return h('div.sn-offer', { dataset: { hook: 'start-offer', offer: key } },
@@ -370,7 +388,7 @@
           grey: [gh.value != null ? `${num(gh.value, 1)} weeks` : null, keep('gh') ? `${plural(keep('gh'), 'planting')} keep${keep('gh') === 1 ? 's' : ''} its own` : null].filter(Boolean).join(' · '), min: 0, max: 728, whole: true, ops: n => cropOps(eng, c, { gh: n == null ? null : n / 7 }), cropIds: ids }));
       // the offers: a new rule, shown with what it would move, and used only with "Use it"
       if (+c.spc > 1 && c.station !== true) sowing.append(offer('station', [`a cell of ${num(+c.spc, 1)} is one station, so it needs `, h('b', 'no extra cells for germination'), '.'], cropOps(eng, c, { station: true }), ids));
-      if (c.station === true) sowing.append(h('p.sn-also', { dataset: { hook: 'start-station' } }, `A cell of ${num(+c.spc, 1)} is one station: no extra cells for germination. `, h('button.btn.quiet.small', { type: 'button', onclick: () => take('station', `${name}: extra cells for germination again`, cropOps(eng, c, { station: null })) }, 'Count germination again')));
+      if (c.station === true) sowing.append(h('p.sn-also', { dataset: { hook: 'start-station' } }, `A cell of ${num(+c.spc, 1)} is one station: no extra cells for germination. `, h('button.btn.quiet.small', { type: 'button', dataset: { hook: 'start-station-off' }, onclick: () => stage('station', `${name}: extra cells for germination again`, cropOps(eng, c, { station: null }), ids) }, 'Count germination again'), stagedLine('station')));
       if (OFFER_DAYS[c.id] && gh.mine == null && gh.value != null && Math.round(gh.value * 7) !== OFFER_DAYS[c.id]) sowing.append(offer('days-' + c.id, [`${name} is raised `, h('b', `${OFFER_DAYS[c.id] / 7} weeks`), ' from sowing to planting.'], cropOps(eng, c, { gh: OFFER_DAYS[c.id] / 7 }), ids));
       left.append(sowing);
 
@@ -378,15 +396,15 @@
       const potted = c.prop === 'potup' || c.prop === 'pot';
       const carrier = choice({ key: 'carrier', sides: CARRIERS.map(n => [n, String(n), null]), on: Math.round(+c.perCarrier > 0 ? +c.perCarrier : 10), name, label: 'Pots a carrier', ops: n => cropOps(eng, c, { perCarrier: n === 10 && !(ownRec(plan, c.id) || {}).perCarrier ? null : n }), cropIds: ids, hook: 'start-carrier' });
       const size = +c.potSize > 0 ? +c.potSize : 4.5;
-      const sizeSel = h('select.yc-sel' + (cropFig(eng, c, 'potSize').mine != null ? '.mine' : ''), { 'aria-label': `${name}: pot size`, dataset: { hook: 'start-pot-size' }, onchange: e => take('potSize', `${name}: into ${e.target.value} in pots`, cropOps(eng, c, { potSize: +e.target.value })) },
-        [...new Set([...POT_SIZES, size])].map(n => h('option', { value: n, selected: n === size }, `${n} in pots`)));
+      const sizeSel = h('select.yc-sel' + (cropFig(eng, c, 'potSize').mine != null ? '.mine' : ''), { 'aria-label': `${name}: pot size`, dataset: { hook: 'start-pot-size' }, onchange: e => stage('potSize', `${name}: into ${e.target.value} in pots`, cropOps(eng, c, { potSize: +e.target.value }), ids, +e.target.value) },
+        [...new Set([...POT_SIZES, size])].map(n => h('option', { value: n, selected: n === (ui.pending && ui.pending.key === 'potSize' ? ui.pending.value : size) }, `${n} in pots`)));
       const potEach = N.mixEach((plan.lrfNext || {}).supplies || null, 'pot-' + size);
       if (potted) {
         const wk = cropFig(eng, c, 'potUpWk');
         left.append(h('div.sn-part', { dataset: { hook: 'start-potup' } }, h('h4', 'Potting up'),
           c.prop === 'potup' ? tickRow(eng, c, true, name) : fixed('Sown', 'straight into pots'),
           c.prop === 'potup' ? box({ key: 'potUpWk', name, label: 'Pot up after', unit: 'days from sowing', wide: true, fig: { mine: wk.mine != null ? Math.round(wk.mine * 7) : null, fallback: wk.fallback != null ? Math.round(wk.fallback * 7) : 14 }, grey: wk.mine == null ? 'the planner’s' : null, min: 0, max: 364, whole: true, ops: n => cropOps(eng, c, { potUpWk: n == null ? null : n / 7 }), cropIds: ids }) : null,
-          h('div.sn-f', h('span.sn-lab', 'Into'), h('span.sn-ctl', sizeSel, potEach != null ? h('span.sn-grey', `${num(potEach, 3)} cu ft a pot`) : null), ui.said && ui.said.key === 'potSize' ? h('p.sn-moves', ui.said.text, ' ', undoLink()) : null),
+          h('div.sn-f', h('span.sn-lab', 'Into'), h('span.sn-ctl', sizeSel, potEach != null ? h('span.sn-grey', `${num(potEach, 3)} cu ft a pot`) : null), stagedLine('potSize')),
           h('div.sn-f', { dataset: { field: 'carrier' } }, h('span.sn-lab', 'Pots a carrier', UI.help(h('div', term('Pots a carrier', 'how many pots one carrying tray holds on the bench: 10 or 15. Bench room counts carriers by it; Supplies counts carriers by the farm’s figure, on Every crop.')), null, null, { label: 'What pots a carrier means' })),
             h('span.sn-ctl', carrier.seg, h('span.sn-grey', (ownRec(plan, c.id) || {}).perCarrier ? 'yours · reused' : 'the planner’s · reused')), carrier.line)));
       }
@@ -652,5 +670,5 @@
   function open(id) { if (!id) return; if (ui.cur !== id) { ui.pending = null; ui.said = null; } ui.cur = id; }
   function reset() { ui.pending = null; ui.said = null; ui.own.clear(); }
 
-  root.LRFStartCard = { render, open, reset, current: () => ui.cur, groupOf, movesOf, movesSaid, state: ui, FARM };
+  root.LRFStartCard = { render, open, reset, current: () => ui.cur, groupOf, movesOf, movesSaid, benchOfMany, state: ui, FARM };
 })(window);

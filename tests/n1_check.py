@@ -146,6 +146,14 @@ with sync_playwright() as pw:
     st = js(f"const c = S.engine.crop({json.dumps(many['id'])}); return {{ station: c.station, undo: S.undo.length, batches: batches(c.id) }};") or {}
     fewer = [b for b in st.get("batches", []) if b["ids"] in eng_b and b["cells"] < eng_b[b["ids"]]["cells"]]
     check("Use it takes the offer as one step: the crop counts one station a cell, and its sowings take fewer cells", st.get("station") is True and st.get("undo") == (u0 or 0) + 1 and len(fewer) > 0, [st.get("station"), st.get("undo"), u0])
+    ps = js("return { plan: plan(), undo: S.undo.length };") or {}
+    click('[data-hook="start-station-off"]', 600)
+    so = moves("station") or {}
+    check("counting germination again says what it would move first, and moves nothing yet", so.get("would") and "cells" in so.get("text", "") and js("return plan();") == ps.get("plan"), so)
+    click('[data-hook="start-moves"][data-key="station"] [data-hook="start-use"]', 700)
+    back = js(f"return {{ station: S.engine.crop({json.dumps(many['id'])}).station, undo: S.undo.length }};") or {}
+    check("Use it takes it as one step, and the line where it was says so, with Undo", back.get("station") is not True and back.get("undo") == ps.get("undo", 0) + 1 and (moves("station") or {}).get("said") and has('[data-hook="start-undo"]'), [back, moves("station")])
+    js("A.undo(); return 1;"); wait(500)
     js("A.undo(); return 1;"); wait(600)
     check("one Undo takes the offer back", js("return plan();") == k0.get("plan"))
     # ── walking the cards and the tick move no figure ──
@@ -169,6 +177,14 @@ with sync_playwright() as pw:
     check("pressing the other side says what it would move first, and moves nothing yet", pm.get("would") and js("return plan();") == p0.get("plan"), pm)
     click('[data-hook="start-use"]', 700)
     check("Use it takes it as one step", js(f"return S.engine.crop({json.dumps(pot['id'])}).perCarrier;") == int(other) and js("return S.undo.length;") == p0.get("undo", 0) + 1)
+    js("A.undo(); return 1;"); wait(500)
+    size = js("const s = document.querySelector('[data-hook=\"start-pot-size\"]'); return s ? { now: s.value, other: [...s.options].map(o => o.value).find(v => v !== s.value) } : null;") or {}
+    q0 = js("return { plan: plan(), undo: S.undo.length };") or {}
+    if size.get("other"): page.select_option('[data-hook="start-pot-size"]', size["other"]); wait(600)
+    ms = moves("potSize") or {}
+    check("another pot size says what it would move (bench room) first, and moves nothing yet", ms.get("would") and "tray spaces" in ms.get("text", "") and js("return plan();") == q0.get("plan"), ms)
+    click('[data-hook="start-moves"][data-key="potSize"] [data-hook="start-use"]', 700)
+    check("Use it takes the pot size as one step", str(js(f"return S.engine.crop({json.dumps(pot['id'])}).potSize;")) == size.get("other") and js("return S.undo.length;") == q0.get("undo", 0) + 1)
     js("A.undo(); return 1;"); wait(500)
     shot("potted")
 
@@ -195,12 +211,27 @@ with sync_playwright() as pw:
     click('[data-hook="start-every"]', 500)
     cf = card()
     check("Every crop shows the farm's germination and spare, and the pots a carrier Supplies counts by", cf.get("crop") == "(farm)" and has(box("farmGerm")) and has(box("farmSpare")) and has('[data-hook="start-pockets"]'), cf.get("crop"))
+    # the farm's germination: its bench room is every crop's added up on the same day, not the most of any one crop
+    peak = js("const items = S.engine.benchItems().filter(it => it.kind === 'prop'), days = new Set(); for (const it of items) { days.add(+it.from); const pu = S.engine.potUpDate(it.r); if (pu) days.add(+pu); } let most = 0; for (const t of days) { const d = new Date(t); let n = 0; for (const it of items) if (it.from <= d && d < it.to) { const u = S.engine.propOf(it.r, d); if (u) n += u.eq; } most = Math.max(most, n); } return Math.round(most * 10) / 10;")
+    typing("farmGerm", "50")
+    fg = moves("farmGerm") or {}
+    import re
+    said = re.search(r"at the most ([\d.,]+) → ([\d.,]+) tray spaces", fg.get("text", ""))
+    check("typing the farm's germination says the bench room of every crop added up on the same day", bool(said) and abs(float(said.group(1).replace(",", "")) - (peak or -1)) < 0.06, [peak, fg.get("text", "")[-160:]])
+    page.keyboard.press("Escape"); wait(300)
     sup = js("const own = (S.plan.lrfNext || {}).supplies || null, at = LRFNursery.POCKETS.includes(+(own || {}).pockets) ? +own.pockets : LRFNursery.POCKETS[0], other = at === 10 ? 15 : 10, n = x => (LRFNursery.supplies(S.engine, A.planYear(), x == null ? own : LRFNursery.setSupply(own, 'pockets', null, x)).rows.find(r => r.id === 'carrier') || { need: 0 }).need; return { other, a: n(null), b: n(other), plan: plan() };") or {}
     click(f'[data-hook="start-pockets"] [data-hook="start-side"][data-side="{sup.get("other")}"]', 600)
     pk = moves("pockets") or {}
     check("pressing the farm's other pots a carrier says what Supplies would count, before and after, and moves nothing yet", sup.get("a") != sup.get("b") and pk.get("would") and f"{sup.get('a')} → {sup.get('b')}" in pk.get("text", "") and js("return plan();") == sup.get("plan"), [sup.get("a"), sup.get("b"), pk])
     click('[data-hook="start-pockets"] ~ * [data-hook="start-use"], [data-hook="start-moves"][data-key="pockets"] [data-hook="start-use"]', 600)
     check("Use it sets the pots a carrier Supplies counts by, as one step, and one Undo takes it back", js("return +((S.plan.lrfNext || {}).supplies || {}).pockets || 0;") in (sup.get("other"), 0 if sup.get("other") == 15 else -1) and js("A.undo(); return plan();") == sup.get("plan"))
+
+    # ── a crop not among My crops, opened by name: the list shows all crops, so its card is the one that opens ──
+    other = js("const m = new Set(mine().map(c => c.id)); const c = S.engine.crops().find(c => !m.has(c.id) && !S.engine.isCoverCrop(c)); return c ? c.id : null;")
+    click('[data-as-scope="mine"]', 400)
+    js(f"LRFAssume.setMode('start', null, {json.dumps(other)}); return 1;"); wait(500)
+    sc = js("return { crop: (cardEl() || { dataset: {} }).dataset.crop, all: (document.querySelector('[data-as-scope=\"all\"]') || {}).getAttribute('aria-pressed') };") or {}
+    check("a crop not among My crops, opened by name, opens its own card, with All crops shown", bool(other) and sc.get("crop") == other and sc.get("all") == "true", [other, sc])
 
     # ── Seeds' Edit crop opens the card ──
     js("A.setView('seeds'); return 1;"); wait(700)
