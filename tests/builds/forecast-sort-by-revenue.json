@@ -1,0 +1,17 @@
+{
+ "build": "The Forecast's Season heading sorts the crops under each heading by their revenue for the season: one click highest first, a second lowest first, a third back to A to Z. Revenue in Amounts as in Dollars, since pounds, bunches and heads cannot be ranked against each other. The order holds as the week, the view and Dollars or Amounts change; it is not saved. No figure moves.",
+ "changes": {
+  "did": "On the Forecast, click Season to sort the crops under each heading by revenue for the season, highest or lowest first.",
+  "steps": [
+   "Open the Forecast and click Season: the crops under each heading run from highest revenue to lowest, with an arrow beside Season.",
+   "Switch to Dollars, or step a week: the order stays.",
+   "Click Season again for lowest first, and once more for A to Z."
+  ]
+ },
+ "words": [],
+ "code": ["harvestview.js"],
+ "added": [],
+ "removed": [],
+ "page": ["css/app.css"],
+ "screens": []
+}

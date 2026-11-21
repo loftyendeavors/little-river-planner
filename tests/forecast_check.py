@@ -459,6 +459,33 @@ with sync_playwright() as pw:
     follows_change("the first fall frost moved", """const d = A.farmDates(), first = E.s2d(`${d.year}-${d.dates.frostFirst}`), md = E.d2s(E.addDays(first, -21)).slice(5);
       return A.setFarmDates({ ...d.dates, frostFirst: md }) ? md : false;""")
 
+    # the Season heading sorts the crops under each heading by revenue (his word, Nov 20): highest first, lowest first, then A to Z
+    page.set_viewport_size({"width": WIDTH, "height": 900}); page.evaluate("LRFHarvestView.setFit(false); LRFHarvestView.setMeasure('amounts')"); wait(500)
+    ORDER = """const m = HV.model(), worth = tr => { const r = m.rows.find(x => x.cropId === tr.dataset.crop && (x.thing || '') === (tr.dataset.thing || '')); return r ? r.worth : NaN; };
+      const groups = {}; for (const tr of hooks('fc-row', hook('fc-table'))) (groups[tr.dataset.group] = groups[tr.dataset.group] || []).push({ key: tr.dataset.crop + '|' + (tr.dataset.thing || ''), worth: worth(tr) });
+      const b = hook('fc-sort'), c = b && b.closest('th'); return { order: b ? b.dataset.order : null, label: b ? b.getAttribute('aria-label') : '', groups, h: b ? Math.round(b.getBoundingClientRect().height) : 0, w: b && c ? Math.round(c.clientWidth - b.getBoundingClientRect().width) : 99 };"""
+    def sorted_as(o, how):
+        gs = o["groups"] if o else {}
+        if not gs: return False
+        for rows in gs.values():
+            w = [r["worth"] for r in rows]
+            if how == "high" and any(w[k] < w[k + 1] - 1e-9 for k in range(len(w) - 1)): return False
+            if how == "low" and any(w[k] > w[k + 1] + 1e-9 for k in range(len(w) - 1)): return False
+        return True
+    o0 = js(ORDER)
+    click('[data-hook="fc-sort"]', 500); o1 = js(ORDER)
+    check("a click on Season (a target the width of its cell and a table control high) puts the crops under each heading in order of revenue, highest first, in Amounts too", o0["order"] == "name" and o1["order"] == "high" and sorted_as(o1, "high") and not sorted_as(o0, "high") and "Highest revenue first" in str(o1["label"]) and o1["h"] >= 28 and o1["w"] <= 24, {"before": o0["order"], "after": o1["order"], "groups": {k: [r["worth"] for r in v][:5] for k, v in (o1["groups"] or {}).items()}})
+    click('[data-hook="fc-measure"] [data-measure="dollars"]', 500); click("#hvNext", 400); o1b = js(ORDER)
+    check("the order holds in Dollars and as the week moves, and no heading loses or gains a crop", o1b["order"] == "high" and sorted_as(o1b, "high") and {k: sorted(r["key"] for r in v) for k, v in o1b["groups"].items()} == {k: sorted(r["key"] for r in v) for k, v in o0["groups"].items()}, o1b["order"])
+    click('[data-hook="fc-sort"]', 500); o2 = js(ORDER)
+    click('[data-hook="fc-sort"]', 500); o3 = js(ORDER)
+    check("a second click puts the lowest first, a third the crops back by name as they were", o2["order"] == "low" and sorted_as(o2, "low") and o3["order"] == "name" and o3["groups"] == o0["groups"], {"second": o2["order"], "third": o3["order"]})
+    # from the keyboard: Enter on the button sorts, and the button keeps the focus for the next press
+    page.focus('[data-hook="fc-sort"]'); page.keyboard.press("Enter"); wait(400); k1 = js(ORDER); kf = js("return document.activeElement === hook('fc-sort');")
+    page.keyboard.press("Enter"); wait(400); k2 = js(ORDER); page.keyboard.press("Enter"); wait(400)
+    check("from the keyboard, Enter sorts and the button keeps the focus, so a second Enter gives lowest first", k1["order"] == "high" and kf is True and k2["order"] == "low" and sorted_as(k2, "low"), {"first": k1["order"], "focused": kf, "second": k2["order"]})
+    click("#hvPrev", 400); click('[data-hook="fc-measure"] [data-measure="amounts"]', 400)
+
     # a narrow window with the full planner (Codex on #94): the weekly bars shrink with their line and stay inside it. A year of
     # weeks is 362 px of bars, the made-up farm's season about 240, so the window is made narrower than the farm's bars need
     page.set_viewport_size({"width": 260, "height": 800}); wait(400)

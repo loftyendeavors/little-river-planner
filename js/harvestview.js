@@ -22,6 +22,13 @@
   let dirty = true, grain = 'week', group = 'all', query = '', series = 'days';   // series: what there is to sell ('days'), or what is picked ('picked')
   // measure: amounts, or dollars (what there is to sell, at each crop's own price). fit: the whole season's weeks fitted to the screen.
   let measure = 'amounts', fit = false;
+  // the order of the crops under each heading: by revenue for the season, highest first or lowest first, or by name (the forecast's own
+  // order). Revenue in Amounts too: pounds, bunches and heads cannot be ranked against each other, revenue can (his word, Nov 20)
+  let order = 'name';
+  const ORDERS = ['high', 'low', 'name'];
+  const ORDER_SAYS = { high: 'Highest revenue first', low: 'Lowest revenue first', name: 'A to Z' };
+  /** One heading's crops in the order chosen; ties, and the order by name, keep the forecast's own order. */
+  const ordered = part => (order === 'name' ? part : part.map((r, k) => [r, k]).sort((a, b) => (order === 'high' ? b[0].worth - a[0].worth : a[0].worth - b[0].worth) || a[1] - b[1]).map(x => x[0]));
   const dollars = () => measure === 'dollars';
   const seriesOf = (m, x) => (dollars() ? x.value : series === 'picked' && m.keeps ? x.picked : x.days);
   // Stock picked before Jan 1 and still to sell in the year (js/forecast.js, `carried`) stands on a line of its own under its crop, so
@@ -247,7 +254,11 @@
   function table(m, cols, rows) {
     const i = todayIndex(m), isNow = c => c.i0 <= i && c.i1 >= i, cash$ = dollars();
     const say = (text, n) => (fit ? tight(text, n) : text);
-    const head = h('tr', h('th.hv-name', 'Crop'), h('th.hv-total', 'Season'),
+    const next = ORDERS[(ORDERS.indexOf(order) + 1) % ORDERS.length];
+    // the table is drawn afresh at a click: a keyboard keeps its place on the button (Codex on #99)
+    const sortBtn = h('button.hv-sort', { type: 'button', id: 'hvSort', dataset: { hook: 'fc-sort', order }, title: `${ORDER_SAYS[order]}. Click for ${ORDER_SAYS[next].toLowerCase()}`, 'aria-label': `Season: ${ORDER_SAYS[order]}. Click for ${ORDER_SAYS[next].toLowerCase()}`,
+      onclick: e => { e.stopPropagation(); const kept = document.activeElement === e.currentTarget; order = next; render(); if (kept && $('hvSort')) $('hvSort').focus(); } }, 'Season', order === 'name' ? null : h('span.hv-sort-arrow', { 'aria-hidden': 'true' }, order === 'high' ? ' ↓' : ' ↑'));
+    const head = h('tr', h('th.hv-name', 'Crop'), h('th.hv-total', { 'aria-sort': order === 'high' ? 'descending' : order === 'low' ? 'ascending' : 'none' }, sortBtn),
       cols.map(c => h('th' + (isNow(c) ? '.now' : '') + (c.weekend ? '.wkend' : ''), { scope: 'col', title: `Go to ${colTitle(c)}`, onclick: () => App.setDate(c.start), dataset: { col: c.key } }, h('b', c.top || ''), c.label)));
     const body = [];
     // a line of the table: in amounts, a crop's quantity each period; in dollars, what it is worth then. The figure in full is in its title.
@@ -262,7 +273,7 @@
     };
     const plain = (cls, label, total, value) => h('tr' + cls, label, total, cols.map(c => { const n = value(c), v = cash(n); return h('td' + (isNow(c) ? '.now' : ''), { title: v ? `${colTitle(c)}: ${v}` : null }, say(v, n) || ''); }));
     for (const [g, , long] of F.GROUPS) {
-      const part = rows.filter(r => r.group === g);
+      const part = ordered(rows.filter(r => r.group === g));
       if (!part.length) continue;
       body.push(h('tr.hv-group', { dataset: { group: g } }, h('th', { colSpan: 2 }, long, h('small', `${num(F.cropCount(part))} crop${F.cropCount(part) === 1 ? '' : 's'}`)), h('td', { colSpan: cols.length })));
       for (const row of part) {
@@ -280,6 +291,8 @@
         const peak = Math.max(0, ...cols.map(c => F.sum(seriesOf(m, row), c.i0, c.i1)));
         body.push(line('.hv-row', name, season, ownOf(m, row), row, carry ? peak : null, row, carry ? 'own' : undefined));
         body[body.length - 1].dataset.crop = row.cropId;
+        body[body.length - 1].dataset.group = g;
+        body[body.length - 1].dataset.hook = 'fc-row';
         if (row.thing) body[body.length - 1].dataset.thing = row.thing;   // another thing the crop sells: a row of its own, in its own unit
         if (carry) {
           const from = `Carried in from ${(row.carriedFrom.length ? row.carriedFrom : [m.year - 1]).join(' and ')}`;
