@@ -498,7 +498,7 @@
     const list = of(eng, c.id).batches;
     if (!list.length) return h('div.sn-facts', h('h4', 'Its sowings, wanted then sown'), h('p.sn-line', 'None: nothing of it is sown in the nursery.'));
     const row = b => {
-      const v = b.varietyId ? eng.variety(b.varietyId) : null, unit = b.wool ? 'cubes' : 'cells', tray = b.wool ? (b.trays === 0.5 ? '½ sheet' : plural(+traysWord(b.trays), 'sheet')) : `${traysWord(b.trays)} tray${Math.abs(b.trays - 1) < 1e-9 ? '' : 's'}`;
+      const v = b.varietyId ? eng.variety(b.varietyId) : null, unit = b.wool ? 'cubes' : 'cells', tray = b.wool ? (Math.abs(b.trays - 0.5) < 1e-9 ? '½ sheet' : `${traysWord(b.trays)} sheet${Math.abs(b.trays - 1) < 1e-9 ? '' : 's'}`) : `${traysWord(b.trays)} tray${Math.abs(b.trays - 1) < 1e-9 ? '' : 's'}`;
       return h('div.sn-sow', { dataset: { hook: 'start-sowing-row', batch: b.ids.join(','), sow: b.sow ? root.LRFEngine.d2s(b.sow) : '', wanted: String(b.wanted), cells: String(b.cells), trays: String(b.trays), seeds: String(b.seeds), pots: String(b.pots) } },
         h('span.sn-d', b.sow ? UI.day(b.sow) : '—'),
         root.LRFThumbs.el(v ? { varietyId: v.id, color: eng.cropColor(c), label: v.name, size: 24 } : { cropId: c.id, color: eng.cropColor(c), label: c.name, size: 24, cls: 'faint' }),

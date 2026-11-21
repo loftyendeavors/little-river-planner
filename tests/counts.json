@@ -51,6 +51,10 @@
 
   "snapshots kept": 4,
 
+  "starting and nursery, backup": 14,
+
+  "starting and nursery, compact": 14,
+
   "step1, backup": 35,
 
   "step1, compact": 35,
@@ -187,6 +191,8 @@
 
   "mixed": 61,
 
+  "n1": 32,
+
   "photo": 13,
 
   "plain": 47,
@@ -307,6 +313,8 @@
   "loose-site": 37,
 
   "messages-site @1480": 56,
+
+  "n1-site": 32,
 
   "plain-site": 47,
 

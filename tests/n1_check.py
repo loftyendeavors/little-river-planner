@@ -110,7 +110,7 @@ with sync_playwright() as pw:
     check("its one line of what it comes to: weeks before planting, trays, its seed (the engine's), mix and bench room", c.get("seeds") == many["seeds"] and "before planting" in c.get("comes", "") and "trays of" in c.get("comes", "") and "cu ft" in c.get("comes", "") and "tray spaces" in c.get("comes", ""), [c.get("seeds"), many["seeds"], c.get("comes")])
     rows = c.get("sowings", [])
     eng_b = {b["ids"]: b for b in many["batches"]}
-    shown_ok = [r for r in rows if r["batch"] in eng_b and int(r["cells"]) == eng_b[r["batch"]]["cells"] and int(r["wanted"]) == eng_b[r["batch"]]["wanted"] and "wanted →" in r["text"]]
+    shown_ok = [r for r in rows if r["batch"] in eng_b and int(r["cells"]) == eng_b[r["batch"]]["cells"] and int(r["wanted"]) == eng_b[r["batch"]]["wanted"] and f"{int(r['wanted']):,} wanted → {int(r['cells']):,} " in r["text"]]
     check("its sowings read wanted → sown, each as the engine sows it", len(rows) > 1 and len(shown_ok) == len(rows), rows[:2])
     shot("many")
 
