@@ -942,7 +942,7 @@ tryCase('a run\'s record is taken whole: changed on one side, that side\'s; chan
   const one = M.merge(s, set(s, { every: 10 }), s), both = M.merge(s, set(s, { every: 10 }), set(s, { to: '2027-08-01' })), rec = both.ok && runsOf(both.plan)[0];
   return [ok(one) && runsOf(one.plan)[0].every === 10 && ok(both) && rec.to === '2027-08-01' && rec.every === 14 && items(both, 'same-box').length === 1, [one.ok && runsOf(one.plan), rec, both.report]];
 });
-tryCase('a run taken out on one device and changed on the other stays, as changed, and the report says which side took it out (both ways)', () => {
+tryCase('a run removed on one device while the other changed it stays, as changed, and the report says which side removed it (both ways)', () => {
   const s = withRun(FARM, runRecord('run-k'), [1, 2].map(n => runPlanting('run-k', n)));
   const gone = { ...s, plantings: s.plantings.map(p => { if (!p.run) return p; const q = { ...p }; delete q.run; return q; }), lrfNext: { ...s.lrfNext, runs: [] } };
   const changed = { ...s, lrfNext: { ...s.lrfNext, runs: [{ ...s.lrfNext.runs[0], every: 7 }] } };

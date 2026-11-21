@@ -137,7 +137,7 @@
     const grown = gardensFor(eng, crop), pick = grown.find(g => g.planted) || grown[0];
     return pick ? (eng.plan.beds || []).find(b => b.gardenId === pick.garden.id && suits(eng, crop, b)) || null : null;
   }
-  const SPACE_FIELDS = ['bedId', 'ft', 'startFt', 'bedLayout', 'trays', 'shelter', 'out'], RECORD_FIELDS = ['done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'plantedIn', 'sowOn', 'harvestEnd', 'liveTray', 'seedUses', 'tasks', 'failed', 'run', 'startedFrom'];   // a later succession follows its crop, sown or bought in (N2); a copy is in no run
+  const SPACE_FIELDS = ['bedId', 'ft', 'startFt', 'bedLayout', 'trays', 'shelter', 'out'], RECORD_FIELDS = ['run', 'done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'plantedIn', 'sowOn', 'harvestEnd', 'liveTray', 'seedUses', 'tasks', 'failed', 'startedFrom'];   // a later succession follows its crop, sown or bought in (N2); a copy is in no run
   /** A planting of the series that has no bed: the crop, or a copy of the planting the series is modelled on, with its date and why it waits. */
   function heldFor(o, date, k, extra = {}) {
     const base = o.source ? { ...o.source } : { cropId: o.crop.id };
@@ -483,7 +483,7 @@
       }
       const p = { ...got.p, run: { id: o.record.id, n, gap } }, r = got.r, y = given(eng, o, p, r);
       sowings.push({ p, r, bed: got.bed, garden: eng.gardenOf(got.bed), then: got.then, n, target, sow: r.sow || r.field, plant: r.field, nursery: !!r.sow, firstPick: r.first, lastPick: r.last,
-        units: y ? y.units : 0, unit: y ? y.unit : '', frost: frostNote(probe, p, r) });
+        units: y ? y.units : 0, unit: y ? y.unit : '', frost: frostNote(probe, p, r) || null });
       work = { ...work, plantings: [...work.plantings, p] };
       probe = E.create(work, eng.lib, PROBE);
     }
@@ -545,7 +545,7 @@
     let unit = rests ? rests.y.unit : eng.unitOf(o.crop, o.variety);
     if (o.by === 'amount') {
       if (!rests) return { error: (!o.thing && ref.r && soldElse(eng, ref.p, ref.r)) || (o.thing ? 'That is not sold from the beds of this run.' : 'This crop cannot be worked out where it is headed.') };
-      if (rests.open) return { error: openWhy(o.crop), unchecked: true };
+      if (rests.open) return { unchecked: true, error: openWhy(o.crop) };
       if (!rests.y.set || !(rests.y.units > 0)) return { error: `${o.crop.name} has no yield to plan an amount from. Set it under Assumptions, Yield and price.`, unchecked: true };
       unit = rests.y.unit;
     }

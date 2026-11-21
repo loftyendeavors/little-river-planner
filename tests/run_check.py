@@ -62,7 +62,7 @@ WORK = r"""
   const kept0 = ofRun().map(p => p.id).sort().join();
   out.removed = A.removeRun(id);
   const plainNow = S.plan.plantings.filter(p => kept0.split(',').includes(p.id));
-  out.afterRemove = { runs: A.runs().length, plantings: plainNow.length, marks: plainNow.filter(p => p.run).length, others: plainNow.every(p => { const q = result.sowings.find(x => x.p.id === p.id).p, a = { ...q }; delete a.run; return JSON.stringify(Object.keys(a).sort().map(k => [k, a[k]])) === JSON.stringify(Object.keys(p).sort().map(k => [k, p[k]])); }) };
+  out.afterRemove = { runs: A.runs().length, own: 'runs' in (S.plan.lrfNext || {}), plantings: plainNow.length, marks: plainNow.filter(p => p.run).length, others: plainNow.every(p => { const q = result.sowings.find(x => x.p.id === p.id).p, a = { ...q }; delete a.run; return JSON.stringify(Object.keys(a).sort().map(k => [k, a[k]])) === JSON.stringify(Object.keys(p).sort().map(k => [k, p[k]])); }) };
   A.undo();
   out.afterRemoveUndo = { runs: A.runs().length, ofRun: ofRun().map(p => p.id).sort().join() === kept0 };
   out.removedAll = A.removeRun(id, { plantings: true });
@@ -95,7 +95,7 @@ with sync_playwright() as pw:
         check("a run one of whose plantings the guard rails turn down is refused whole: nothing of it is added", o["blocked"] is True and o["refused"] is False and o["afterRefused"] == {"same": True, "steps": 0, "ofRun": 0, "runs": 0}, [o["blocked"], o["refused"], o["afterRefused"]])
         check("a result that is an error adds nothing", o["error"] is False)
         r = o["afterRemove"]
-        check("a run taken out keeps its plantings as plain plantings: the mark of the run off, nothing else of them changed", o["readd"] is True and o["removed"] is True and r["runs"] == 0 and r["plantings"] == a["n"] and r["marks"] == 0 and r["others"], r)
+        check("a run taken out keeps its plantings as plain plantings: the mark of the run off, nothing else of them changed, and no empty list of runs left", o["readd"] is True and o["removed"] is True and r["runs"] == 0 and r["own"] is False and r["plantings"] == a["n"] and r["marks"] == 0 and r["others"], r)
         check("and one Undo puts the run and its marks back", o["afterRemoveUndo"] == {"runs": 1, "ofRun": True}, o["afterRemoveUndo"])
         check("a run taken out with its plantings takes them too, and one Undo puts all back", o["removedAll"] is True and o["afterRemoveAll"] == {"runs": 0, "left": 0} and o["afterRemoveAllUndo"] == {"runs": 1, "ofRun": a["n"]}, [o["afterRemoveAll"], o["afterRemoveAllUndo"]])
         check("undone to the start, the plan is the one the page opened with", o["end"] is True)

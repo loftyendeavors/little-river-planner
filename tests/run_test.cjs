@@ -202,6 +202,15 @@ tryCase('the gardens to use if the first run out of room are used only then', ()
   return [!r.error && thenOnes.length >= 1 && r.sowings.some(x => !x.then) && bad === 0 && r.where.some(w => w.then && w.used >= 1), r.error || { then: thenOnes.length, bad }];
 });
 
+// ── a copy of a planting of a run is in no run ──
+tryCase('a copy of a planting of a run is in no run: copied onto a bed, or by a series left to wait or placed', () => {
+  const p0 = B.sowings[0].p, e2 = E.create({ ...core, plantings: [...core.plantings, p0] }, Lib);
+  const copy = Rails.propose(e2, { plantingId: p0.id, copy: true }, { bedId: p0.bedId, date: E.addDays(E.s2d(p0.date), 120) }, {});
+  const held = S.series(e2, { cropId: p0.cropId, sourceId: p0.id, place: 'hold', basis: 'planting', from: iso(E.addDays(E.s2d(p0.date), 60)), count: 2, every: 14, unit: 'whole', amount: 1 });
+  const placed = S.series(e2, { cropId: p0.cropId, sourceId: p0.id, gardenIds: G, basis: 'planting', from: iso(E.addDays(E.s2d(p0.date), 60)), count: 2, every: 14, unit: 'whole', amount: 1 });
+  return [!!copy.p && copy.p.id !== p0.id && !('run' in copy.p) && !held.error && held.held.length === 2 && held.held.every(w => !('run' in w)) && !placed.error && placed.plantings.length >= 1 && placed.plantings.every(q => !('run' in q)), { copy: copy.p && copy.p.run, held: held.error || held.held.map(w => w.run), placed: placed.error || placed.plantings.map(q => q.run) }];
+});
+
 // ── nothing changes ──
 check('the solver changes nothing in the plan it is given', JSON.stringify(core) === before && JSON.stringify(eng.plan) === before);
 check('a plan with no run has no runs, and a run\'s plantings are read by its id', S.runs(core).length === 0 && S.runs({ lrfNext: { runs: [B.run, { nothing: 1 }] } }).length === 1 && S.runPlantings({ plantings: B.sowings.map(x => x.p).reverse() }, B.run.id).map(p => p.run.n).join() === B.sowings.map(x => x.n).join());

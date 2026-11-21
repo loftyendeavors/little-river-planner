@@ -33,7 +33,7 @@
 
   "map geometry": 81,
 
-  "merge": 138,
+  "merge": 145,
 
   "page reader": 29,
 
@@ -45,9 +45,13 @@
 
   "rows in the figure, compact": 31,
 
+  "runs, backup": 27,
+
+  "runs, compact": 27,
+
   "scale": 8,
 
-  "shape": 29,
+  "shape": 30,
 
   "snapshots kept": 4,
 
@@ -125,7 +129,9 @@
 
   "numbers": 48,
 
-  "shape": 51,
+  "runs": 14,
+
+  "shape": 53,
 
   "sowing": 24,
 
