@@ -37,7 +37,7 @@ PRE = ("const A = LRFApp, S = A.state, E = LRFEngine, SC = LRFStartCard, $ = id 
        "const card = () => { const c = cardEl(); if (!c) return null; const comes = H('start-comes', c)[0];"
        " return { crop: c.dataset.crop, name: (H('start-name', c)[0] || {}).textContent || '', comes: comes ? comes.textContent : '', seeds: comes ? +comes.dataset.seeds : null, state: (H('start-state', c)[0] || {}).textContent || '',"
        "  sowings: H('start-sowing-row', c).map(r => ({ ...r.dataset, text: r.textContent })), parts: ['start-sowing', 'start-potup', 'start-towers', 'start-bench', 'start-live', 'start-direct', 'start-bought'].filter(k => H(k, c).length),"
-       "  offers: H('start-offer', c).map(o => ({ offer: o.dataset.offer, text: o.textContent })), carrier: (H('start-carrier', c)[0] || { dataset: {} }).dataset.on || null, carrierSides: H('start-carrier-side', c).map(b => b.dataset.side),"
+       "  offers: H('start-offer', c).map(o => ({ offer: o.dataset.offer, text: o.textContent })), carrier: (H('start-carrier', c)[0] || { dataset: {} }).dataset.on || null, carrierSides: H('start-side', H('start-carrier', c)[0]).map(b => b.dataset.side),"
        "  live: (H('start-live-seed', c)[0] || { dataset: {} }).dataset.counted || null, moves: H('start-moves', c).filter(x => x.textContent).map(x => ({ key: x.dataset.key, text: x.textContent, would: x.dataset.would === 'true', said: x.dataset.said === 'true' })),"
        "  next: (H('start-next', c)[0] || { dataset: {} }).dataset.next || null, still: (H('start-still', c)[0] || {}).textContent || '' }; };"
        # the crops a crop's own plantings are sown in, as the engine says
@@ -164,7 +164,7 @@ with sync_playwright() as pw:
     check(f"{pot['name']}'s card shows Potting up, with Pots a carrier 10 | 15", "start-potup" in cp.get("parts", []) and cp.get("carrierSides") == ["10", "15"] and cp.get("carrier") in ("10", "15"), cp.get("parts"))
     other = "15" if cp.get("carrier") == "10" else "10"
     p0 = js("return { plan: plan(), undo: S.undo.length };") or {}
-    click(f'[data-hook="start-carrier-side"][data-side="{other}"]', 600)
+    click(f'[data-hook="start-carrier"] [data-hook="start-side"][data-side="{other}"]', 600)
     pm = moves("carrier") or {}
     check("pressing the other side says what it would move first, and moves nothing yet", pm.get("would") and js("return plan();") == p0.get("plan"), pm)
     click('[data-hook="start-use"]', 700)

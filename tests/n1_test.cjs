@@ -89,6 +89,15 @@ const only = (e2, mine, fields) => {
   const e2 = E.create(withCrop({ spare: 40 }), Lib), r = only(e2, (p, a) => p.cropId === scallion.id && !!a.sowing, [5, 7]);
   check(`a crop's own spare (${scallion.name}, 40%) moves its cells and seed, no date, and nothing of any other crop`, r.mineMoved.length > 0 && !r.wrong.length, r.wrong.slice(0, 3));
 }
+// spare on plants bought in: more plants to buy, for that crop only
+{
+  const bought = plantings.find(p => now.calc(p).boughtIn && now.calc(p).buy > 0), id = bought && bought.cropId;
+  const p2 = clone(plan), own = id && (p2.crops || []).find(c => c.id === id);
+  if (own) own.spare = 40; else if (id) (p2.crops = p2.crops || []).push({ id, spare: 40 });
+  const e2 = E.create(p2, Lib), more = id ? plantings.filter(p => p.cropId === id && now.calc(p).boughtIn).every(p => e2.calc(e2.planting(p.id)).buy > now.calc(p).buy) : false;
+  const rest = plantings.filter(p => p.cropId !== id).every(p => sig(e2, e2.planting(p.id)) === sig(now, p));
+  check('a crop bought in with its own spare (40%) buys more plants, and nothing of any other crop moves', !!bought && more && rest, id);
+}
 // station: no cells over for germination; seed is the cells times the seeds a cell
 {
   const e2 = E.create(withCrop({ station: true }), Lib), r = only(e2, (p, a) => p.cropId === scallion.id && !!a.sowing, [5, 7]);

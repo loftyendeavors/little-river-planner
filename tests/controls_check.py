@@ -225,10 +225,12 @@ def run(pw):
         page.mouse.move(2, WIDTH // 4 if WIDTH < 900 else 300); wait(300)
         keyed = js("const h = window.__head, away = look(hook('seeds-edit-crop', h)).strength; hook('seeds-crop-fold', h).focus(); await sleep(300); return [away, look(hook('seeds-edit-crop', h)).strength, look(hook('seeds-add-variety', h)).strength];")
         check("with the keyboard on the heading, it shows them too", keyed == [0, 1, 1], keyed)
-        edit = js("""const h = window.__head, n = eng().crop(h.dataset.crop).name, before = ($('sdPanel') || {}).textContent || ''; hook('seeds-edit-crop', h).click(); await sleep(500);
-          const head = hooks('seeds-crop-head').find(r => r.dataset.crop === h.dataset.crop); const panel = ($('sdPanel') || {}).textContent || '';
-          return { name: n, shows: panel.includes(n) && panel !== before, open: head && hook('seeds-crop-fold', head).getAttribute('aria-expanded'), key: A.contentKey() };""")
-        check("Edit crop opens that crop and leaves its heading as it was", edit["shows"] and edit["open"] == sd["open"], edit)
+        # N1: Edit crop opens the crop's card on Assumptions › Starting and nursery, the one home of how it is started
+        edit = js("""const h = window.__head, id = h.dataset.crop, n = eng().crop(id).name; hook('seeds-edit-crop', h).click(); await sleep(500);
+          const shows = A.state.view === 'assume' && LRFAssume.mode() === 'start' && LRFStartCard.current() === id; A.setView('seeds'); await sleep(600);
+          const head = hooks('seeds-crop-head').find(r => r.dataset.crop === id);
+          return { name: n, shows, open: head && hook('seeds-crop-fold', head).getAttribute('aria-expanded'), key: A.contentKey() };""")
+        check("Edit crop opens that crop's card on Starting and nursery, and leaves its heading as it was", edit["shows"] and edit["open"] == sd["open"], edit)
         add = js("""const head = hooks('seeds-crop-head').find(r => r.dataset.crop === arg); hook('seeds-add-variety', head).click(); await sleep(500);
           const d = document.querySelector('dialog[open]'), out = { open: !!d, words: d ? d.textContent.slice(0, 200) : '', name: eng().crop(arg).name };
           if (d) { d.dispatchEvent(new Event('cancel', { cancelable: true })); const c = d.querySelector('button'); await sleep(200); if (d.open) d.close(); } return out;""", sd["crop"])

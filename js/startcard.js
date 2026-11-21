@@ -290,7 +290,7 @@
   function choice({ key, sides, on, name, label, ops, cropIds, hook }) {
     const pend = ui.pending && ui.pending.key === key ? ui.pending : null, said = ui.said && ui.said.key === key ? ui.said : null;
     const seg = h('div.seg.sn-seg', { role: 'group', 'aria-label': `${name}: ${label.toLowerCase()}`, dataset: { hook, on: String(on) } },
-      sides.map(([value, words, off]) => h('button', { type: 'button', 'aria-pressed': String(String(pend ? pend.value : on) === String(value)), disabled: !!off, title: off || `${words}: what it would move is shown first`, dataset: { hook: hook + '-side', side: String(value) },
+      sides.map(([value, words, off]) => h('button', { type: 'button', 'aria-pressed': String(String(pend ? pend.value : on) === String(value)), disabled: !!off, title: off || `${words}: what it would move is shown first`, dataset: { hook: 'start-side', side: String(value) },
         onclick: () => {
           if (String(value) === String(on)) { ui.pending = null; ui.redraw(); return; }
           const step = ops(value);
