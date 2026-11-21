@@ -54,6 +54,9 @@
     'assumptions.crops.*.*.inRow': 'number together',     // the spacing in the row a plant's figure was typed at (E2d): one value with the figure
     'assumptions.crops.*.*.rows': 'number together',      // the rows of the bed a sown crop's figure was typed for (E2d): one value with the figure
     'assumptions.crops.*.*.yield': 'number together',
+    'assumptions.nursery': 'map',                // N1: a crop looked at on Starting and nursery, apart from Yield and price's tick
+    'assumptions.nursery.*': 'object',
+    'assumptions.nursery.*.looked': 'number',
     'assumptions.sell': 'map',
     'assumptions.sell.*': 'object whole',
     'assumptions.sell.*.days': 'number',
@@ -178,7 +181,9 @@
     'crops[].seedG': 'null|number',
     'crops[].seedLb': 'null|number',
     'crops[].seedsFt': 'number',
+    'crops[].spare': 'number',                  // N1: its own spare, percent over the plants the bed takes; read only where typed
     'crops[].spc': 'number',
+    'crops[].station': 'bool',                  // N1: a cell of several seeds is one station, no cells over for germination; set only by "Use it"
     'crops[].tower': 'bool',
     'crops[].towerDays': 'number',
     'crops[].tray': 'number',
@@ -679,6 +684,7 @@
     'varieties[].seedsPerPacket': 'number',
     'varieties[].sku': 'text',
     'varieties[].source': 'text',
+    'varieties[].spc': 'number',                // N1: its own seeds a cell; read only where typed
     'varieties[].stub': 'bool',
     'varieties[].supplier': 'text',
     'varieties[].supplierPacks': 'lines whole',

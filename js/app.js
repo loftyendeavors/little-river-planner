@@ -333,12 +333,12 @@
     return true;
   }
   const blankList = () => ({ v: 1, crops: {}, varieties: {} });
-  const emptyList = a => !['crops', 'varieties', 'starts', 'sell', 'sellV'].some(k => a[k] && Object.keys(a[k]).length);
+  const emptyList = a => !['crops', 'varieties', 'starts', 'sell', 'sellV', 'nursery'].some(k => a[k] && Object.keys(a[k]).length);
   /** One change to the list, as a step: `edit` is handed a copy to change. Empty groups are dropped, and an empty list is no list. */
   function listStep(edit) {
     const current = state.plan.assumptions || null, next = current ? clone(current) : blankList();
     edit(next);
-    for (const k of ['starts', 'sell', 'sellV']) if (next[k] && !Object.keys(next[k]).length) delete next[k];
+    for (const k of ['starts', 'sell', 'sellV', 'nursery']) if (next[k] && !Object.keys(next[k]).length) delete next[k];
     if (JSON.stringify(next) === JSON.stringify(current || blankList())) return null;
     return [{ kind: 'assume', before: current, after: emptyList(next) ? null : next }];
   }
@@ -501,6 +501,25 @@
     toast(`${label}${note ? ' · ' + note : ''}`, { label: 'Undo', run: undo });
     return true;
   }
+  /**
+   * N1: the tick of Assumptions › Starting and nursery, apart from the tick of Yield and price (assumptions.nursery.<crop>.looked:
+   * the plan's year). One step; nothing else in the plan changes. Answered on the card it was pressed on, so no message is shown.
+   */
+  function setStartLooked(cropId, on) {
+    const c = state.engine.crop(cropId), year = planYear();
+    const ops = c ? listStep(next => {
+      next.nursery = next.nursery || {};
+      const record = { ...(next.nursery[cropId] || {}) };
+      if (on) record.looked = year; else delete record.looked;
+      if (Object.keys(record).length) next.nursery[cropId] = record; else delete next.nursery[cropId];
+    }) : null;
+    return !!ops && commit(`${c.name}: ${on ? 'started as said' : 'starting not looked at'} for ${year}`, ops, { unchecked: true, page: true });
+  }
+  /**
+   * N1: one change to how a crop is started (a crop's, a variety's or the farm's figures), as one step with one Undo. The card that
+   * made it has already said what it moves, under the box, so the step is answered there: no message, no window.
+   */
+  function setStarting(label, ops) { return commit(label, ops, { unchecked: true, page: true }); }
   /**
    * Say whom a crop is grown for. `part` true: for sale and personal use, which marks the crop and changes no figure. `part` false:
    * sold in full, which counts all that is packed as sold; what that does to the season's worth is shown first, and it is done
@@ -2652,7 +2671,7 @@
 
   root.LRFApp = {
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
-    commit, undo, redo, lastChange, refuse, setUse, setGives, setPlantedIn, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
+    commit, undo, redo, lastChange, refuse, setUse, setGives, setPlantedIn, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setStartLooked, setStarting, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
     auditSurvey, auditStudy, auditPreview, auditApply,
     waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, failedRange, previewFailed, markFailed, seasonRecords, takeBackSeason, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),

@@ -36,7 +36,6 @@
   const numIn = (name, value, attrs = {}) => inp(name, value, { type: 'number', step: 'any', min: 0, ...attrs });
   const sel = (name, options, value, attrs = {}) => h('select', { name, ...attrs }, options.map(([v, t]) => h('option', { value: v, selected: v === value }, t)));
   const val = (form, name) => { const el = form.elements[name]; return el ? el.value : undefined; };
-  const round = (n, d = 2) => n == null || n === '' || Number.isNaN(+n) ? '' : String(Math.round(+n * 10 ** d) / 10 ** d);
   function openDialog(title, lead) {
     const body = h('div.dlg-body'), status = h('p.dlg-status', { role: 'status', 'aria-live': 'polite' });
     const el = h('dialog.dialog.wide', { oncancel: e => { e.preventDefault(); api.close(); } }, h('h2', title), lead ? h('p.dlg-lead', lead) : null, body, status);
@@ -297,7 +296,8 @@
       h('h3', 'Growing and seed'),
       h('div.sd-grid',
         fld('In-row spacing (in)', numIn('inRow', v.inRow), 'Empty uses the crop’s'), fld('Row spacing (in)', numIn('rowSp', v.rowSp), 'Empty uses the crop’s'), fld('Rows per bed', numIn('rowsPerBed', v.rowsPerBed, { min: 1, max: 1000, step: 1 }), 'Empty uses the crop’s'),
-        fld('Days in nursery', numIn('nurseryDays', v.gh != null ? round(v.gh * 7, 1) : '', { max: 728 }), 'Empty uses the crop’s'), fld('Germination (%)', numIn('germ', v.germ, { max: 100 }), 'Empty uses the plan’s'),
+        // its days from sowing to planting, its germination and its seeds a cell have one home: Assumptions › Starting and nursery (N1)
+        variety && v.cropId ? h('p.dlg-hint.span2', { dataset: { hook: 'seeds-variety-start' } }, 'Germination, days from sowing to planting and seeds a cell: ', h('button.link', { type: 'button', onclick: () => { d.close(); toStart(v.cropId); } }, 'Starting and nursery'), '.') : null,
         fld('Seeds per packet', numIn('seedsPerPacket', v.seedsPerPacket, { min: 1 })), fld('Seeds per ounce', numIn('seedsPerOz', v.seedsPerOz, { min: 1 })), fld('Seeds per pound', numIn('seedsPerLb', v.seedsPerLb, { min: 1 })),
         h('label.fld.span2', h('span', 'Notes'), h('textarea', { name: 'notes', rows: 2, value: v.notes || '' }))),
       actions(
@@ -318,11 +318,9 @@
 
     const input = () => {
       const o = {};
-      for (const name of ['name', 'cropId', 'supplier', 'sku', 'url', 'dtmMin', 'dtmMax', 'basis', 'stage', 'inRow', 'rowSp', 'rowsPerBed', 'germ', 'seedsPerPacket', 'seedsPerOz', 'seedsPerLb', 'notes']) o[name] = val(form, name) || '';
+      for (const name of ['name', 'cropId', 'supplier', 'sku', 'url', 'dtmMin', 'dtmMax', 'basis', 'stage', 'inRow', 'rowSp', 'rowsPerBed', 'seedsPerPacket', 'seedsPerOz', 'seedsPerLb', 'notes']) o[name] = val(form, name) || '';
       if (!hasSupplierDays) o.dtm = val(form, 'dtm') || '';
-      // days in nursery are only written when changed, so an untouched variety keeps following its crop
-      const nurseryNow = val(form, 'nurseryDays') || '', nurseryWas = v.gh != null ? round(v.gh * 7, 1) : '';
-      if (nurseryNow !== nurseryWas) o.nurseryDays = nurseryNow;
+      // germination and days in nursery are kept as they stand: they are typed on Assumptions › Starting and nursery (N1)
       return o;
     };
     function build() {
@@ -357,8 +355,11 @@
     }
   }
 
+  /** A crop's card on Assumptions › Starting and nursery (N1): the one home of how it is started. */
+  function toStart(cropId) { App.setView('assume'); root.LRFAssume.setMode('start', null, cropId); }
   // ───────────────────────── a crop ─────────────────────────
-  const CROP_NUMBERS = [['inRow', 'In-row spacing (in)', 0.01, 2400], ['rowSp', 'Row spacing (in)', 0.01, 2400], ['rowsPerBed', 'Rows per bed', 1, 1000, true], ['gh', 'Weeks in nursery', 0, 104], ['tray', 'Cells per tray', 1, 1000, true], ['spc', 'Seeds per cell', 0.1, 50], ['germ', 'Germination (%)', 0.1, 100], ['seedsFt', 'Seeds per foot of row (direct sown)', 0, 1000]];
+  // weeks in nursery, cells a tray, seeds a cell and germination have one home: Assumptions › Starting and nursery (N1)
+  const CROP_NUMBERS = [['inRow', 'In-row spacing (in)', 0.01, 2400], ['rowSp', 'Row spacing (in)', 0.01, 2400], ['rowsPerBed', 'Rows per bed', 1, 1000, true], ['seedsFt', 'Seeds per foot of row (direct sown)', 0, 1000]];
   function openCrop(crop, inPanel) {
     const eng = App.state.engine, plan = App.state.plan, c = crop || {}, own = crop ? (plan.crops || []).find(x => x.id === crop.id) || null : null;
     const n = crop ? plan.plantings.filter(p => p.cropId === crop.id).length : 0;
@@ -368,6 +369,7 @@
         fld('How it is planted', sel('method', [['TP', 'Transplanted'], ['DS', 'Direct sown']], c.method || 'TP')),
         fld('Planted from', sel('plantingMaterial', [['seed', 'Seed'], ['plant', 'Bought-in plants'], ['bulb', 'Bulbs'], ['clove', 'Cloves'], ['piece', 'Seed pieces']], c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed'))),
         CROP_NUMBERS.map(([key, label, lo, hi, whole]) => fld(label, numIn(key, c[key] == null ? '' : c[key], { min: lo, max: hi, step: whole ? 1 : 'any' }), key === 'rowsPerBed' ? 'Empty: as many as the bed width takes' : key === 'germ' ? 'Empty uses the plan’s' : null))),
+      crop ? h('p.dlg-hint', { dataset: { hook: 'seeds-crop-start' } }, 'How it is started (tray, seeds a cell, germination, days from sowing to planting): ', h('button.link', { type: 'button', onclick: () => { d.close(); toStart(crop.id); } }, 'Starting and nursery'), '.') : null,
       actions(h('span.grow'), button(inPanel ? 'Revert' : 'Cancel', () => d.close()), h('button.btn.primary', { type: 'submit' }, crop ? 'Save' : 'Add the crop')));
     d.body.append(form);
     if (crop) add(d.body, houseBlock(crop));
@@ -825,7 +827,7 @@
           T.el({ cropId: g.id, color, label: cropName(g.crop), size: 26, cls: 'key' }), h('b', g.crop ? g.crop.name : 'A crop that is no longer in the library'),
           h('small', `${g.list.length} variet${g.list.length === 1 ? 'y' : 'ies'}${g.crop ? ' · ' + howPlanted(g.crop) : ''}${seeds ? ` · ${num(seeds)} seeds to sow` : ''}`),
           h('span.grow'),
-          g.crop ? h('button.btn.small.sd-crop-act', { type: 'button', dataset: { hook: 'seeds-edit-crop' }, onclick: () => select({ type: 'crop', id: g.id }) }, 'Edit crop') : null,
+          g.crop ? h('button.btn.small.sd-crop-act', { type: 'button', dataset: { hook: 'seeds-edit-crop' }, title: 'How it is started: its card on Assumptions › Starting and nursery', onclick: () => toStart(g.id) }, 'Edit crop') : null,
           g.crop ? h('button.btn.small.sd-crop-act', { type: 'button', dataset: { hook: 'seeds-add-variety' }, onclick: () => openVariety(null, g.id) }, 'Add a variety') : null)))]));
         if (closed) continue;
         for (const v of g.list) { wanted.push(...row(v, false)); shown++; }

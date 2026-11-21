@@ -2386,6 +2386,53 @@ table.as tr.as-thing td { background: var(--surface); }
 .sw-figs i { font-style: normal; margin-right: var(--space-4); }
 .sw-overlaps { margin: 0; padding-left: var(--space-16); list-style: disc; font-size: var(--type-13); color: var(--ink-2); display: grid; gap: var(--space-4); }
 
+/* ── Assumptions › Starting and nursery (N1): the list and the card of js/startcard.js, on the yield card's parts ── */
+.view-assume .as-mode { width: 480px; }
+.view-assume[data-way="card"] .as-wrap > .as-mode { flex: 0 0 480px; }
+.sn-card { gap: var(--space-12); }
+.view-assume .sn-figs { margin: var(--space-8) 0 0; }
+.sn-comes { font-size: var(--type-13); color: var(--ink-2); line-height: 1.5; }
+.sn-comes b, .sn-line b { color: var(--ink); font-weight: 600; }
+.sn-start { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-4) var(--space-12); }
+.sn-start .sn-also, .sn-start .sn-moves { grid-column: 2; }
+.sn-seg { width: auto; display: inline-flex; flex-wrap: wrap; }
+.sn-seg button { min-height: var(--control-in); padding: 0 var(--space-12); white-space: nowrap; }
+.sn-cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: var(--space-16); align-items: start; }
+.sn-col { display: grid; gap: var(--space-12); min-width: 0; }
+.sn-part, .sn-facts { border: 1px solid var(--line-soft); border-radius: var(--corner-12); padding: var(--space-8) var(--space-12); display: grid; gap: var(--space-4); min-width: 0; }
+.sn-part h4, .sn-facts h4 { margin: 0 0 var(--space-4); font: 600 var(--type-13) var(--body); }
+.sn-f { display: grid; grid-template-columns: 148px minmax(0, 1fr); align-items: center; column-gap: var(--space-12); min-height: var(--control-in); }
+.sn-f > .sn-moves { grid-column: 1 / -1; }
+.sn-lab { font-size: var(--type-13); color: var(--ink-2); display: inline-flex; align-items: center; gap: var(--space-4); }
+.sn-ctl { display: inline-flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; min-width: 0; }
+.sn-ctl > .yc-box, .sn-ctl > .yc-unit { flex: none; }
+.sn-grey { font-size: var(--type-11); color: var(--muted); }
+.sn-fixed { font-size: var(--type-13); font-weight: 600; }
+.sn-word { font-size: var(--type-13); display: inline-flex; align-items: center; gap: var(--space-4); }
+.sn-dot { display: inline-block; width: 8px; height: 8px; border-radius: var(--corner-pill); margin-right: var(--space-4); }
+.sn-dot.amber { background: var(--warn); }
+.sn-moves { font-size: var(--type-11); line-height: 1.4; color: var(--ink-2); }
+.sn-moves:empty { display: none; }
+.sn-moves[data-would] { color: var(--ink); }
+.sn-keys { display: block; color: var(--muted); }
+.sn-also, .sn-line { font-size: var(--type-13); color: var(--muted); line-height: 1.4; }
+.sn-offer { display: flex; align-items: center; gap: var(--space-12); font-size: var(--type-13); border-top: 1px solid var(--line-soft); padding-top: var(--space-8); }
+.sn-offer p { flex: 1; }
+.sn-tick { display: inline-flex; align-items: center; gap: var(--space-4); font-size: var(--type-13); }
+.sn-sow { display: grid; grid-template-columns: 52px 24px minmax(0, 1fr) auto; align-items: center; gap: var(--space-8); font-size: var(--type-13); min-height: var(--control-in); }
+.sn-sow > .thumb { width: 24px; height: 24px; border-radius: var(--corner-4); }
+.sn-d { font: 500 var(--type-11) var(--mono); color: var(--muted); }
+.sn-v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sn-ws { white-space: nowrap; color: var(--ink-2); }
+.sn-more summary { cursor: pointer; font-size: var(--type-13); color: var(--muted); padding: var(--space-4) 0; }
+.sn-vrow .row { padding: var(--space-4) 0; }
+.sn-own { padding: 0 0 var(--space-8) 52px; display: grid; gap: var(--space-4); }
+.sn-foot { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-12); border-top: 1px solid var(--line-soft); padding-top: var(--space-12); }
+.sn-still { font-size: var(--type-13); color: var(--muted); flex: 1; }
+.sn-key { margin-left: auto; }
+.sn-farm { background: var(--line); }
+@media (max-width: 1400px) { .sn-cols { grid-template-columns: minmax(0, 1fr); } }
+
 /* ───────────────────────────── Parts, made once (DESIGN.md) ─────────────────────────────
    One card, one row, two ticks, one switch, three buttons, one filter pill, one menu, one hint and its "?", one sheet and
    its foot. They were first drawn for Tasks. Each is given here once, and the names a page already uses for the same part

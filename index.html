@@ -163,9 +163,11 @@
           <p class="frame-figs" id="asCount"></p>
         </header>
         <div class="seg as-mode" role="group" aria-label="Which half of the list">
+          <button type="button" data-as-mode="start" aria-pressed="false">Starting and nursery</button>
           <button type="button" data-as-mode="days" aria-pressed="true">Days to harvest</button>
           <button type="button" data-as-mode="harvest" aria-pressed="false">Yield and price</button>
         </div>
+        <p class="frame-figs sn-figs" id="snFigs" data-hook="start-figs" hidden></p>
         <details class="as-places" id="asPlaces"><summary id="asPlacesSum">Where things grow</summary><div class="as-places-body" id="asPlacesBody"></div></details>
         <div class="as-tools">
           <div class="seg as-way" id="ahWay" role="group" aria-label="How yield and price are shown" hidden>
@@ -178,9 +180,10 @@
           </div>
           <input type="search" id="asSearch" placeholder="Search crops and varieties" autocomplete="off">
           <label class="ah-check as-house" id="ahHouseFarm" title="On: part of a crop can be kept for personal use, not counted as sold. Off: everything packed is sold. What either does is shown first." hidden><input type="checkbox" id="ahHouseOn"><span>Part of some crops is for personal use</span></label>
-          <p class="as-key"><i class="k-default"></i>unchecked default <i class="k-guide"></i>checked against a guide <i class="k-own"></i>variety’s own <i class="k-mine"></i>yours</p>
+          <p class="as-key" id="asKey"><i class="k-default"></i>unchecked default <i class="k-guide"></i>checked against a guide <i class="k-own"></i>variety’s own <i class="k-mine"></i>yours</p>
         </div>
         <div class="yc" id="ycHost" hidden></div>
+        <div class="yc sn" id="snHost" hidden></div>
         <table class="as ah" id="ahTable" hidden><thead id="ahHead"></thead><tbody id="ahBody"></tbody></table>
         <table class="as" id="asTable">
           <thead><tr><th>Crop</th><th class="as-th-start" title="What the row’s days count from: Transplanting, Seeding in trays or Direct seeding. “?” says what each means.">Days counted from</th><th>Field</th><th>Unheated tunnel</th><th>Heated greenhouse</th><th>Towers</th><th title="Days in the nursery plus days in the bed: seed to first harvest, where the crop mostly grows.">From seed</th><th>Plantings</th></tr></thead>
@@ -288,6 +291,7 @@
 <script src="js/mapedit.js"></script>
 <script src="js/assume.js"></script>
 <script src="js/yieldcard.js"></script>
+<script src="js/startcard.js"></script>
 <script src="js/things.js"></script>
 <script src="js/seeds.js"></script>
 <script src="js/swap.js"></script>

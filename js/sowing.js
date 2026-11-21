@@ -134,23 +134,26 @@
     if (plants == null) return { error: 'Planting quantity must be a finite, nonnegative number.', warnings: [] };
     const resolved = resolve({ crop, planting, nursery, tower, sheet: options.sheet }), tray = resolved.tray, warnings = resolved.warnings.slice();
     const germValue = positive(crop.germ) || positive(settings.germ) || 85, germination = Math.min(100, Math.max(0.1, germValue)) / 100;
-    const buffer = nonnegative(settings.buffer) ?? 10, seedsPerCell = positive(crop.spc) || 1;
+    // N1: a crop's own spare (crop.spare) beats the farm's; a cell of several seeds said to be one station (crop.station) sows no
+    // cells over for germination. Neither is there unless the grower typed it on Assumptions › Starting and nursery.
+    const ownSpare = nonnegative(crop.spare), buffer = ownSpare != null && ownSpare <= 100 ? ownSpare : nonnegative(settings.buffer) ?? 10, seedsPerCell = positive(crop.spc) || 1;
+    const station = crop.station === true && seedsPerCell > 1;
     const requestedMode = roundingFor({ planting, crop, nursery }), pots = crop.prop === 'pot' && !tower;
     let mode = requestedMode;
     if (pots) mode = 'exact';
     if (mode === 'row' && !integer(tray.columns)) { mode = 'minimum'; warnings.push('Complete-row rounding is unavailable until this tray’s row layout is entered. Using the germination-adjusted cell minimum.'); }
-    const bufferedPlants = Math.ceil(mode === 'exact' ? plants * (1 + buffer / 100) : plants * (100 + buffer) / 100), minimumCells = Math.ceil(bufferedPlants / germination);
+    const bufferedPlants = Math.ceil(mode === 'exact' ? plants * (1 + buffer / 100) : plants * (100 + buffer) / 100), minimumCells = station ? bufferedPlants : Math.ceil(bufferedPlants / germination);
     const legacy = mode === 'exact', cells = legacy ? bufferedPlants : roundCells(minimumCells, tray, mode);
-    const seeds = Math.ceil(cells * seedsPerCell / (legacy ? germination : 1)), trays = cells ? Math.ceil(cells / tray.cells) : 0;
+    const seeds = Math.ceil(cells * seedsPerCell / (legacy && !station ? germination : 1)), trays = cells ? Math.ceil(cells / tray.cells) : 0;
     const fullTrays = Math.floor(cells / tray.cells), partialCells = cells - fullTrays * tray.cells, areaIn2 = tray.widthIn * tray.lengthIn;
-    const expectedPlants = legacy ? bufferedPlants : Math.floor(cells * germination + 1e-9), potUpCells = bufferedPlants;
+    const expectedPlants = legacy || station ? (station ? cells : bufferedPlants) : Math.floor(cells * germination + 1e-9), potUpCells = bufferedPlants;
     if (![cells, seeds, trays, minimumCells, bufferedPlants].every(Number.isSafeInteger) || !Number.isFinite(trays * areaIn2)) return { error: 'The sowing quantity is too large to calculate safely.', warnings };
     if (pots && requestedMode !== 'exact') warnings.push('Sowing directly into pots keeps the existing pot-carrier calculation; plug-tray row rounding does not apply.');
-    return { error: null, plants, targetPlants: plants, bufferedPlants, potUpCells, minimumCells, minimumSeeds: Math.ceil(bufferedPlants * seedsPerCell / germination), cells, seeds, trays,
+    return { error: null, plants, targetPlants: plants, bufferedPlants, potUpCells, minimumCells, minimumSeeds: Math.ceil(bufferedPlants * seedsPerCell / (station ? 1 : germination)), cells, seeds, trays,
       eq: trays * areaIn2 / STANDARD_AREA_IN2, ft2: trays * areaIn2 / 144, tray, mode, requestedMode, legacy, germination, buffer, seedsPerCell, expectedPlants,
       surplusPlants: Math.max(0, expectedPlants - plants), extraCells: Math.max(0, cells - minimumCells), emptyCells: trays * tray.cells - cells, fullTrays, partialCells,
       partialRows: tray.columns ? partialCells / tray.columns : null, rowsSown: tray.columns ? cells / tray.columns : null, medium: pots ? 'pots' : tower ? 'rockwool' : 'plugs',
-      warnings, source: resolved.source, synthetic: resolved.synthetic };
+      warnings, source: resolved.source, synthetic: resolved.synthetic, ...(station ? { station: true } : {}) };
   }
   /** "20 complete rows of 8 · 2 trays · 160 seeds" */
   function description(plan) {
@@ -176,7 +179,7 @@
     const sowDate = text(options.sowDate), fieldDate = text(options.fieldDate);
     if (!sowDate || !fieldDate || plan.legacy) return 'individual:' + text(id || planting.id);
     return JSON.stringify([crop.id || planting.cropId, planting.varietyId || '', sowDate, fieldDate, text(options.potUpDate), text(options.hardenDate), crop.prop || 'tray', options.tower === true,
-      resolved.tray.id, resolved.tray.cells, resolved.tray.rows, resolved.tray.columns, resolved.tray.widthIn, resolved.tray.lengthIn, plan.requestedMode, plan.germination, plan.buffer, plan.seedsPerCell]);
+      resolved.tray.id, resolved.tray.cells, resolved.tray.rows, resolved.tray.columns, resolved.tray.widthIn, resolved.tray.lengthIn, plan.requestedMode, plan.germination, plan.buffer, plan.seedsPerCell, ...(plan.station ? ['station'] : [])]);
   }
   /** One rounded batch shared out among its plantings: whole cells and seeds by largest remainder, tray room in proportion. */
   function allocate(plan, members = []) {

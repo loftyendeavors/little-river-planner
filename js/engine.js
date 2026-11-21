@@ -296,6 +296,8 @@
         if (v.inRow > 0) e.inRow = v.inRow;
         if (v.rowSp > 0) e.rowSp = v.rowSp;
         if (v.germ > 0) e.germ = v.germ;
+        // N1: a variety's own seeds a cell, typed on Assumptions › Starting and nursery. None is written by anything else.
+        if (v.spc > 0) e.spc = v.spc;
         if (v.cost1000 > 0) e.seed1000 = v.cost1000;
         if (v.hw > 0) e.hw = v.hw;
         if (v.seedsPerFt > 0 && e.method === 'DS') e.seedsFt = v.seedsPerFt;
@@ -880,17 +882,23 @@
       const said = c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed'), library = libraryMaterial.get(p.cropId);
       return library !== said || !nurseryTimed(p, c, b);
     }
+    /** N1: a crop's own spare, percent of the plants a bed takes, or null where it has none and the farm's stands. */
+    const spareOf = c => c && c.spare !== null && c.spare !== '' && Number.isFinite(+c.spare) && +c.spare >= 0 && +c.spare <= 100 ? +c.spare : null;
+    /** N1: a cell of several seeds is one station in the bed, so no cells are sown over for germination. Only where he has said so. */
+    const stationOf = c => !!c && c.station === true && positive(c.spc, 1) > 1;
     function calcRaw(p) {
       const b = plantingBed(p), c = effective(p);
       if (!b || !c || !p.date || !validDate(s2d(p.date))) return null;
       const g = gardenOf(b) || {};
       const planned = s2d(p.date), field = s2d(fieldDateOf(p));
       const inRow = positive(p.inRow, positive(c.inRow, 12)), rowSp = positive(p.rowSp, positive(c.rowSp, 12));
-      const germ = clamp(positive(c.germ, positive(settings.germ, 85)), 0.1, 100) / 100, buffer = 1 + nonNegative(settings.buffer) / 100;
+      // N1: a crop's own spare (crops[].spare) beats the farm's, where he has typed one; with none, the farm's as before
+      const germ = clamp(positive(c.germ, positive(settings.germ, 85)), 0.1, 100) / 100, buffer = 1 + nonNegative(spareOf(c) != null ? spareOf(c) : settings.buffer) / 100;
       const tw = isTower(b), rack = isRack(b), ct = isCt(b), physicalLength = lenOf(p, b);
       const split = bedSplitGeometry(p, b), layout = split && !split.issue ? split : null, len = layout ? physicalLength * layout.fraction : physicalLength;
       let rows = 1, plants, seeds, trays = 0, cells = 0, gh = null, seedG = 0, bulbs = 0;
-      const plugNeeds = () => { cells = Math.ceil(plants * buffer); seeds = Math.ceil(cells * positive(c.spc, 1) / germ); trays = Math.ceil(cells / positive(c.tray, 72)); };
+      // N1: a cell of several seeds kept as one station (crops[].station, set only by "Use it") needs no seed over for germination
+      const plugNeeds = () => { cells = Math.ceil(plants * buffer); seeds = Math.ceil(cells * positive(c.spc, 1) / (stationOf(c) ? 1 : germ)); trays = Math.ceil(cells / positive(c.tray, 72)); };
 
       // A live tray is sown in cells (so many seeds a cell: its seed is counted in seeds) or broadcast in an open tray (grams a tray).
       const live = rack && c.micro ? liveSow(c) : null;

@@ -165,6 +165,7 @@ with sync_playwright() as pw:
     js("const d = $('asAuditMore'); if (d) d.open = true; return 1;"); look("Assumptions, days")
     page.click("[data-as-mode=harvest]"); wait(700); look("Assumptions, yield and price")
     if page.locator("[data-ah-way=list]").count() and page.locator("[data-ah-way=list]").first.is_visible(): page.click("[data-ah-way=list]"); wait(600); look("Assumptions, yield and price, all on one page")
+    if page.locator("[data-as-mode=start]").count(): page.click("[data-as-mode=start]"); wait(700); look("Assumptions, starting and nursery")   # N1
     page.click("[data-as-mode=days]"); wait(300)
     opened = js("const b = $('asReview'); if (!b || b.disabled) return false; LRFAssume.auditView({ by: 'kind', all: true }); LRFAssume.openAudit(); return true;")
     if opened:
