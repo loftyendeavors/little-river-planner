@@ -139,6 +139,8 @@
     Object.assign(UI_STATE, { pick: 'draft', answer: null, shown: false, planning: true });
     App.setView('succession');
     render();
+    const view = $('suWrap') && $('suWrap').parentElement;
+    if (view) view.scrollTop = 0;   // a run opened from elsewhere is read from its head
   }
   /** What the run being planned would add, for the Timeline to draw as ghosts: only after "See them on the Timeline". */
   function ghosts() {
@@ -269,7 +271,7 @@
     }
     for (const u of result.unplaced) {
       const why = u.why.map(w => `${w.why}${w.spaces > 1 ? ` (${num(w.spaces)} beds)` : ''}`).join('; '), room = (u.room || []).map(g => `${g.garden.name} (${plural(g.beds, 'bed')})`).join(', ');
-      out.push(h('p.su-said.su-none', { dataset: { hook: 'succ-unplaced', n: String(u.n) } }, h('i.dot.red'), `${D.datesFor === 'picking' ? 'Picking' : 'Planting'} ${day(u.target)} has no bed in the run’s gardens: ${why || 'no bed is free'}.${room ? ` Room then in ${room}.` : ''}`));
+      out.push(h('p.su-said.su-none', { dataset: { hook: 'succ-unplaced', n: String(u.n) } }, h('i.dot.red'), `${D.datesFor === 'picking' ? 'First picking' : 'Planting'} ${day(u.target)} has no bed in the run’s gardens: ${why || 'no bed is free'}.${room ? ` Room then in ${room}.` : ''}`));
     }
     if (D.drop.length && editable) out.push(h('p.su-said', { dataset: { hook: 'succ-dropped' } }, `${plural(D.drop.length, 'sowing')} dropped. `, h('button.link', { type: 'button', dataset: { hook: 'succ-undrop' }, onclick: () => set({ drop: [] }) }, 'Put them back')));
     return h('div.su-table', { dataset: { hook: 'succ-table' } }, out, h('p.su-key', KEY.map(([cls, text]) => h('span', h('i.' + cls), text))));
