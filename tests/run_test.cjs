@@ -207,6 +207,17 @@ tryCase('the gardens to use if the first run out of room are used only then', ()
   return [!r.error && thenOnes.length >= 1 && r.sowings.some(x => !x.then) && bad === 0 && r.where.some(w => w.then && w.used >= 1), r.error || { then: thenOnes.length, bad }];
 });
 
+tryCase('a sowing the frost leaves nothing to pick is still placed, marked, and said to pick nothing', () => {
+  for (const c of S.candidates(eng, false).filter(x => x.frostTender && fieldBeds(x).length)) {
+    const gs = fieldBeds(c), r = S.planRun(eng, { cropId: c.id, by: 'beds', every: 7, datesFor: 'planting', from: `${year}-09-01`, to: `${year}-10-20`, gardenIds: gs.slice(0, 1), then: gs.slice(1) });
+    const none = r.error ? [] : r.sowings.filter(x => !(x.r.harvestDays > 0));
+    if (!none.length) continue;
+    const v = verdict(r.sowings.map(x => x.p));
+    return [v.ok && none.every(x => x.frost && x.units === 0) && !r.unplaced.some(u => u.why.some(w => /ready before the season ends/.test(w.why))), { crop: c.name, none: none.length }];
+  }
+  return [false, 'no frost-tender crop has a sowing in the fall that the frost leaves nothing to pick'];
+});
+
 // ── a copy of a planting of a run is in no run ──
 tryCase('a copy of a planting of a run is in no run: copied onto a bed, it is a planting of its own', () => {
   const p0 = B.sowings[0].p, e2 = E.create({ ...core, plantings: [...core.plantings, p0] }, Lib);
@@ -227,7 +238,7 @@ tryCase('60 runs at random, by beds and to an amount, picking and planting dates
     if (r.error) { refused++; continue; }
     tried++; proposed += r.sowings.length; frost += r.sowings.filter(x => x.frost).length;
     const v = verdict(r.sowings.map(x => x.p));
-    if (!v.ok || r.sowings.some((x, i) => v.frost[i] !== (x.frost || null))) bad.push([c.name, v.refused, v.clashes, v.season, v.whole]);
+    if (!v.ok || r.sowings.some((x, i) => v.frost[i] !== (x.frost || null)) || r.totals.frost !== r.sowings.filter(x => x.frost).length) bad.push([c.name, v.refused, v.clashes, v.season, v.whole]);
   }
   return [tried >= 40 && proposed >= 80 && !bad.length, { tried, proposed, frost, refused, bad: bad.slice(0, 3) }];
 });

@@ -77,9 +77,9 @@ with sync_playwright() as pw:
         const want = Math.max(5, Math.round(one.sowings[0].units * 7 / 10 / 5) * 5);
         const then = S.gardensFor(eng, c).filter(x => x.kind === 'bed' && x.garden.type === 'field' && x.garden.id !== g.garden.id).map(x => x.garden.id);
         const r = S.planRun(eng, { cropId: c.id, by: 'amount', want, datesFor: 'picking', from: year + '-08-02', to: year + '-09-30', gardenIds: [g.garden.id], then });
-        if (!r.error && r.sowings.length >= 4 && !r.unplaced.length && r.every >= 2 && r.short[0] === r.weeks[0]) return { crop: c.id, name: c.name, garden: g.garden.id, then, want, every: r.every, n: r.sowings.length };
+        if (!r.error && r.sowings.length >= 4 && !r.unplaced.length && r.every >= 2 && r.short[0] === r.weeks[0] && r.sowings.every(x => x.nursery)) return { crop: c.id, name: c.name, garden: g.garden.id, then, want, every: r.every, n: r.sowings.length };
       } return null;""")
-    check("the plan has a crop and a field garden for a run to an amount a week of four whole beds or more, each with a bed", bool(sub), sub)
+    check("the plan has a crop sown in the nursery and a field garden for a run to an amount a week of four whole beds or more, each with a bed", bool(sub), sub)
     if not sub: finish()
     js("void A.openAhead({ mode: 'succession', cropId: arg.crop }); return 1;", sub); wait(1800)
     page.select_option('[data-hook="succ-garden"]', sub["garden"]); wait(1200)
@@ -97,7 +97,7 @@ with sync_playwright() as pw:
         unplaced: r.unplaced.length, unplacedSaid: qa('succ-unplaced').length, beds: txt('succ-beds-used'), used: new Set(r.sowings.filter(x => x.bed.gardenId === D.gardenId).map(x => x.bed.id)).size, n0: St.plan.plantings.length };""") or {}
     check("the page asks the solver what it asks: no error, and one whole bed every so many days, said in words", not seen.get("err") and seen.get("every", 0) >= 2 and seen.get("spacing") == "One whole bed every %s days." % seen.get("every"), [seen.get("err"), seen.get("every"), seen.get("spacing")])
     check("the title says it in his words: the crop, the amount a week and its unit", seen.get("title", "").startswith(sub["name"] + ": %s " % sub["want"]) and seen.get("title", "").endswith(" a week"), seen.get("title"))
-    check("one bar a week, each the run's own amount that week as the forecast gives it, short weeks marked", [round(w["run"], 6) for w in seen.get("shownWeeks", [])] == [round(w["run"], 6) for w in seen.get("weeks", [])] and [w["short"] for w in seen.get("shownWeeks", [])] == [w["short"] for w in seen.get("weeks", [])] and len(seen.get("weeks", [])) >= 8, [seen.get("shownWeeks"), seen.get("weeks")])
+    check("one bar a week, each the run's own amount that week as the forecast gives it, short weeks marked", [round(w["run"], 6) for w in seen.get("shownWeeks", [])] == [round(w["run"], 6) for w in seen.get("weeks", [])] and [w["shown"] for w in seen.get("shownWeeks", [])] == [js("return LRFUI.num(arg, 0);", w["run"]) for w in seen.get("weeks", [])] and [w["short"] for w in seen.get("shownWeeks", [])] == [w["short"] for w in seen.get("weeks", [])] and len(seen.get("weeks", [])) >= 8, [seen.get("shownWeeks"), seen.get("weeks")])
     check("the average is said, and it is at least the amount wanted (the widest spacing that gives it)", ("Averages %d." % round(seen.get("average", {}).get("run", -1))) in seen.get("avg", "") and seen.get("average", {}).get("run", 0) >= sub["want"] - 1e-6, [seen.get("avg"), seen.get("average")])
     check("the short first week is said, with what it gives", seen.get("firstShort") and ("The first week gives" in seen.get("avg", "") or seen.get("short", [""])[0] in seen.get("avg", "")), [seen.get("avg"), seen.get("short")])
     check("what the plan already gives is said beside the run, and not taken off", ("already gives" in seen.get("haveSaid", "") and "not taken off" in seen.get("haveSaid", "")) if seen.get("have", 0) > 1e-9 else "gives no" in seen.get("haveSaid", ""), seen.get("haveSaid"))
@@ -201,7 +201,9 @@ with sync_playwright() as pw:
 
     # ── every way in opens the page filled in; the series tool is gone ──
     ways = js("""const out = {}, open = () => St.view === 'succession' && !!q('succ-title');
-      const p = St.plan.plantings.find(p => { const r = eng.calc(p); return r && eng.spaceKind(r.b) === 'bed' && !eng.isRack(r.b) && SU.plans(eng, eng.crop(p.cropId)) && eng.gardenOf(r.b).type === 'field' && p.varietyId; });
+      // a planting in a field bed whose garden is not the one the page would choose for its crop by itself, so that "that garden" is seen
+      const own = c => { const gs = S.gardensFor(eng, c).filter(g => g.kind === 'bed'); return ((gs.find(g => g.planted && g.garden.type === 'field') || gs.find(g => g.planted) || gs[0] || {}).garden || {}).id; };
+      const p = St.plan.plantings.find(p => { const r = eng.calc(p); return r && eng.spaceKind(r.b) === 'bed' && !eng.isRack(r.b) && SU.plans(eng, eng.crop(p.cropId)) && eng.gardenOf(r.b).type === 'field' && p.varietyId && own(eng.crop(p.cropId)) !== r.b.gardenId; });
       // a bed's panel
       A.setView('map'); A.select({ type: 'bed', id: p.bedId }); await new Promise(r => setTimeout(r, 500));
       const bedBtn = q('bed-succession') || q('card-succession'); if (bedBtn) { bedBtn.click(); await new Promise(r => setTimeout(r, 1500)); }
