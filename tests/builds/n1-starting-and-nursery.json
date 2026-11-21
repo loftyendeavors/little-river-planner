@@ -13,6 +13,7 @@
   "app.js",
   "assume.js",
   "engine.js",
+  "merge.js",
   "planio.js",
   "seeds.js",
   "sowing.js"

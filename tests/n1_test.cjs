@@ -51,7 +51,7 @@ function bench(e) {
   return out.sort();
 }
 const orders = (e, sl) => sl.required(e, { year }).rows.map(r => [r.key, r.unit, +(+r.total).toFixed(6), +(+r.toSow).toFixed(6)].join('|')).sort();
-const supplies = (e, n) => { const s = n.supplies(e, year, (plan.lrfNext || {}).supplies || null); return [...s.rows.map(r => [r.id, r.need, r.buy, r.mixCuFt == null ? '' : (+r.mixCuFt).toFixed(6)].join('|')), `mix|${(+s.mix.need).toFixed(6)}|${s.mix.bags}`].sort(); };
+const supplies = (e, n) => { const s = n.supplies(e, year, (e.plan.lrfNext || {}).supplies || null); return [...s.rows.map(r => [r.id, r.need, r.buy, r.mixCuFt == null ? '' : (+r.mixCuFt).toFixed(6)].join('|')), `mix|${(+s.mix.need).toFixed(6)}|${s.mix.bags}`].sort(); };
 const differ = (a, b) => { const out = []; for (let i = 0; i < Math.max(a.length, b.length); i++) if (a[i] !== b[i]) out.push([a[i], b[i]]); return out; };
 
 // ── 1. nothing typed: every figure is the build before's ──
@@ -66,6 +66,37 @@ const o1 = orders(now, SL), o0 = orders(was, SL0);
 check(`nothing typed: Seeds' order rows are the build before's (${o1.length} rows)`, o1.length > 50 && !differ(o0, o1).length, differ(o0, o1).slice(0, 3));
 const s1 = supplies(now, N), s0 = supplies(was, N0);
 check(`nothing typed: Nursery's supplies and mix are the build before's (${s1.length} rows)`, s1.length > 4 && !differ(s0, s1).length, differ(s0, s1).slice(0, 3));
+
+// ── 1b. the same on plans with figures typed in their old homes, and with the farm's own figures absent or zero ──
+// The made-up farm has nothing typed on its crops' nursery figures, so a build that stopped reading one would pass part 1. These
+// plans type them: crops (germination, tray, seeds a cell, nursery weeks, potting up, pot size, pots a carrier, days in rockwool),
+// varieties (germination, nursery days that differ in the field and under cover), the farm's germination and spare, Supplies'
+// pots a carrier; then the farm with no germination or spare set at all; then a spare of 0.
+const D2 = d => (d && !Number.isNaN(+d) ? E.d2s(d) : '');
+function full(e, sl, n) {
+  const rows = [];
+  for (const p of e.plan.plantings) { const r = e.calc(p); rows.push(p.id + '|' + (!r ? 'none' : JSON.stringify([D2(r.plannedSow), D2(r.sow), D2(e.potUpDate(r)), D2(e.hardenStart(r)), D2(r.field), r.cells, r.trays, r.seeds, r.seedG, r.buy, r.bulbs, r.plants, r.sowing ? [r.sowing.cells, r.sowing.seeds, r.sowing.trays, r.sowing.potUpCells, r.sowing.expectedPlants, r.sowing.buffer, r.sowing.germination] : null]))); }
+  const req = sl.required(e, { year }), date = (k, v) => (v instanceof Date ? D2(v) : v);
+  return { rows, bench: bench(e), orders: req.rows.map(r => JSON.stringify(r, date)).sort(), supplies: JSON.stringify(n.supplies(e, year, (e.plan.lrfNext || {}).supplies || null), date) };
+}
+{
+  const used = new Set(plan.plantings.map(p => p.cropId)), libTP = Lib.crops.filter(c => c.method === 'TP' && !c.micro && used.has(c.id) && c.gh > 0).map(c => c.id);
+  const typed = clone(plan), own = (id, o) => { const r = (typed.crops = typed.crops || []).find(c => c.id === id); if (r) Object.assign(r, o); else typed.crops.push({ id, ...o }); };
+  const figs = [{ germ: 70, tray: 128, spc: 4, gh: 5 }, { prop: 'potup', potUpWk: 3, potSize: 4, perCarrier: 15 }, { germ: 92, gh: 3.5, rockwoolDays: 18 }, { gh: 8, spc: 3 }, { tray: 50, spc: 2 }];
+  libTP.slice(0, figs.length).forEach((id, i) => own(id, figs[i]));
+  typed.settings = { ...typed.settings, germ: 80, buffer: 15 };
+  typed.varieties.forEach((v, i) => { if (i % 3) return; v.germ = 75 + (i % 20); v.gh = 4.5; v.environmentDefaults = { v: 1, field: { gh: 4.5 }, greenhouse: { gh: 6 } }; });
+  typed.lrfNext = { ...(typed.lrfNext || {}), supplies: { pockets: 15 } };
+  const bare = clone(plan); delete bare.settings.germ; delete bare.settings.buffer;
+  const zero = clone(plan); zero.settings.buffer = 0;
+  for (const [name, pl] of [['figures typed in their old homes', typed], ['no farm germination or spare set', bare], ['a farm spare of 0', zero]]) {
+    const a = full(E0.create(pl, Lib), SL0, N0), b = full(E.create(pl, Lib), SL, N);
+    const bad = ['rows', 'bench', 'orders'].map(k => [k, differ(a[k], b[k])]).filter(x => x[1].length);
+    if (a.supplies !== b.supplies) bad.push(['supplies', 1]);
+    check(`${name}: every planting's days, cells, trays, seed, plants to buy, its sowing, its bench room day by day, Seeds' orders and Nursery's supplies are the build before's (${a.rows.length} plantings, ${a.bench.length} bench spans)`,
+      libTP.length >= figs.length && a.rows.length > 600 && !bad.length, bad.map(x => [x[0], Array.isArray(x[1]) ? x[1].slice(0, 2) : x[1]]));
+  }
+}
 
 // ── 2. each new figure moves only where it is typed ──
 // (one with no tower plantings: rockwool sheets are shared between crops sown the same day, so a tower crop's cells move others' share of a sheet)
@@ -148,17 +179,13 @@ const only = (e2, mine, fields) => {
   check('a backup with no list, loaded over a plan whose list holds only Starting and nursery ticks, keeps the ticks', ((pl.assumptions || {}).nursery || {})[id] && pl.assumptions.nursery[id].looked === year, (pl.assumptions || null));
   check('it keeps the crop\'s spare and the variety\'s seeds a cell typed here, as every change to a crop or variety is kept', c2.spare === 25 && v2.spc === 5, { spare: c2.spare, spc: v2.spc });
 }
-// ── 4. every field the card writes is named in the plan's shape, with its type ──
+// ── 5. Started as is one choice: two devices that choose differently are joined to one of the two, never half of each ──
 {
-  const Shape = require(path.resolve(__dirname, 'plan_shape.cjs'));
-  const id = scallion.id, v = now.varietiesOf(id)[0], typed = clone(plan), own = (typed.crops = typed.crops || []).find(c => c.id === id) || (typed.crops.push({ id }), typed.crops[typed.crops.length - 1]);
-  Object.assign(own, { tray: 128, spc: 3, germ: 80, spare: 15, gh: 6, station: true, prop: 'potup', potUpWk: 3, potSize: 4, perCarrier: 15, rockwoolDays: 20, seedsFt: 4, method: 'TP', plantingMaterial: 'seed' });
-  const tv = typed.varieties.find(x => x.id === v.id);
-  Object.assign(tv, { germ: 70, spc: 2, gh: 5, environmentDefaults: { v: 1, field: { gh: 5 }, greenhouse: { gh: 5 } } });
-  typed.settings = { ...typed.settings, germ: 80, buffer: 12 };
-  typed.assumptions = { v: 1, crops: {}, varieties: {}, nursery: { [id]: { looked: year } } };
-  typed.lrfNext = { ...(typed.lrfNext || {}), supplies: { pockets: 10 } };
-  const r = Shape.check(typed);
-  check('every field the card writes (a crop\'s, a variety\'s, the farm\'s, the tick, the carriers Supplies counts) is named in tests/plan_shape.cjs with its type', !r.unknown.length && !r.wrong.length, { unknown: r.unknown.slice(0, 6), wrong: r.wrong.slice(0, 6) });
+  const M = req('merge.js'), id = scallion.id, start = clone(plan), mine = clone(plan), theirs = clone(plan);
+  const set = (pl, o) => { const r = (pl.crops = pl.crops || []).find(c => c.id === id); if (r) Object.assign(r, o); else pl.crops.push({ id, ...o }); };
+  set(start, { method: 'TP', plantingMaterial: 'seed' }); set(mine, { method: 'TP', plantingMaterial: 'seed', prop: 'pot' }); set(theirs, { method: 'DS', plantingMaterial: 'seed' });
+  const out = M.merge(start, mine, theirs), c = out.ok ? (out.plan.crops || []).find(x => x.id === id) : null;
+  const way = c && [c.method, c.prop || null, c.plantingMaterial].join('|'), ok = ['TP|pot|seed', 'DS||seed'].includes(way);
+  check('two devices choosing Started as differently (Pot here, Direct there) are joined to one of the two choices whole', ok, way);
 }
 finished = true;

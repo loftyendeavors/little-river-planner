@@ -20,6 +20,10 @@ NODE = [
  ("a variety's germination is read as its seeds a cell", EN, "if (v.spc > 0) e.spc = v.spc;", "if (v.germ > 0) e.spc = v.germ / 10;"),
  ("a crop's spare is not read for plants bought in", EN, "buffer = 1 + nonNegative(spareOf(c) != null ? spareOf(c) : settings.buffer) / 100;", "buffer = 1 + nonNegative(settings.buffer) / 100;"),
  ("a replacement backup drops the ticks of Starting and nursery", PI, " + Object.values(a.nursery || {}).filter(line => line && line.looked != null).length : 0;", " : 0;"),
+ ("the engine counts a spare of 10 where the farm has none set", EN, "buffer = 1 + nonNegative(spareOf(c) != null ? spareOf(c) : settings.buffer) / 100;", "buffer = 1 + nonNegative(spareOf(c) != null ? spareOf(c) : settings.buffer ?? 10) / 100;"),
+ ("a variety's germination is not read", EN, "        if (v.germ > 0) e.germ = v.germ;\n", ""),
+ ("a variety's nursery days for its place are not read", EN, "      if (profile && own(profile, 'gh')) e.gh = profile.gh;\n", ""),
+ ("Started as is joined field by field", "js/merge.js", "'crops[]': [['yield', 'yBasis'], ['method', 'prop', 'plantingMaterial']],", "'crops[]': [['yield', 'yBasis']],"),
  ("the compact plan drops a variety's seeds a cell", PI, "    'spc'];", "    ];"),
 ]
 PAGE = [
@@ -46,6 +50,19 @@ PAGE = [
  ("a pot size is taken at once", SC, "onchange: e => stage('potSize',", "onchange: e => take('potSize',"),
  ("counting germination again is taken at once", SC, "onclick: () => stage('station', `${name}: extra cells for germination again`", "onclick: () => take('station', `${name}: extra cells for germination again`"),
  ("a crop hidden by My crops opens another card", AS, "        ui.scope = 'all';\n", "\n"),
+ ("leaving a box by a click takes it", SC, "input.addEventListener('blur', () => { if (sent", "input.addEventListener('blur', () => { commit(); if (sent"),
+ ("the grey figure typed is stored", SC, "const target = n => n == null || farm || fig.fallback == null || !eq(n, fig.fallback) ? n : null;", "const target = n => n;"),
+ ("an emptied record is left", SC, "if (Object.keys(after).length === 1 && before && libCrop(c.id)) {", "if (false) {"),
+ ("Tab goes on past the next box", SC, "{ e.preventDefault(); ui.focus = { after: key }; commit(); }", "{ ui.focus = { after: key }; commit(); }"),
+ ("Supplies' rows are not said", SC, "for (const x of rows.values()) if (x.was !== x.now) out.supplies.push(x);", ""),
+ ("the potting mix is not said", SC, "if (Math.abs(s0.mix.need - s1.mix.need) > 0.005) out.supplies.push(", "if (false) out.supplies.push("),
+ ("other crops that move are not said", SC, "    if (m.others.n) parts.push(", "    if (false) parts.push("),
+ ("plantings bought in by their own choice are counted as following the crop", SC, "const follow = group === 'bought' ? boughtP.length : beds - boughtP.length", "const follow = beds"),
+ ("the offer's line says an element", SC, "take(key, `Offer used: ${label}`, ops)", "take(key, `Offer used: ${words}`, ops)"),
+ ("the nursery length offer leaves no line", SC, "if (OFFER_DAYS[c.id] && ((ui.said && ui.said.key === 'days-' + c.id) || (", "if (OFFER_DAYS[c.id] && ((false) || ("),
+ ("a library live-tray crop's boxes take typing", SC, "const off = mine ? null : 'This crop comes", "const off = mine ? null : null && 'This crop comes"),
+ ("the farm's spare not set reads 10", SC, "fig: { mine: farmSpareSet(plan) ? +plan.settings.buffer : null, fallback: null }, farm: true,", "fig: { mine: farmSpare(plan), fallback: 10 }, farm: false,"),
+ ("Undo from the card raises a message too", SC, "App.undo({ quiet: true });", "App.undo();"),
  ("Looks right moves on without the tick", SC, "if (!looked) App.setStartLooked(c.id, true); if (next)", "if (next)"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)

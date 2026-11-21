@@ -60,13 +60,16 @@
    */
   function cropFig(eng, c, key, farm) {
     const own = ownRec(eng.plan, c.id), lib = libCrop(c.id), has = o => !!o && o[key] != null && o[key] !== '';
-    // his: a figure on his own record that the library does not say the same (a crop of his own has no library to say it)
-    const mine = has(own) && (!lib || !has(lib) || +own[key] !== +lib[key]) ? own[key] : null;
+    // his: any figure on his own record, the library's or not, so that what is stored is what is drawn in ink
+    const mine = has(own) ? own[key] : null;
     const fallback = farm != null ? farm : has(lib) ? lib[key] : null;
     return { mine: mine != null ? +mine : null, fallback: fallback != null ? +fallback : null, value: mine != null ? +mine : fallback != null ? +fallback : null };
   }
   const farmGerm = plan => +(plan.settings.germ > 0 ? plan.settings.germ : 85);
   const farmSpare = plan => (plan.settings.buffer != null && Number.isFinite(+plan.settings.buffer) ? +plan.settings.buffer : 10);
+  // with no spare set for the farm, sowing counts 10% and plants bought in none (js/sowing.js, js/engine.js): each as it always has
+  const farmSpareSet = plan => plan.settings.buffer != null && plan.settings.buffer !== '' && Number.isFinite(+plan.settings.buffer);
+  const boughtSpare = plan => (farmSpareSet(plan) ? +plan.settings.buffer : 0);
   const sheetOf = () => (Sow && Sow.ROCKWOOL_SHEET) || { cells: 98 };
   /** A crop's plantings, and where they stand. */
   function plantingsOf(eng, c) {
@@ -147,23 +150,43 @@
   // ───────────────────────── what a change would move ─────────────────────────
   const D = d => (d && !Number.isNaN(+d) ? +d : null);
   /** Before and after, for one crop's plantings: dates that move, cells, trays and seed, the bench room at the most. */
+  /**
+   * What a step would move, worked out on the whole plan with the step taken and on the plan as it stands: the crop's own sowings
+   * (cells, trays, seed, plants to buy), the plantings of any other crop that move with it (a rockwool sheet is shared by the crops
+   * sown on one day), every date that moves, the rows of Supplies that change (trays, sheets, pots, carriers, mix), and the room
+   * on each kind of bench at its fullest, from the same call Bench room draws from (js/nursery.js season).
+   */
   function movesOf(eng, cropIds, ops) {
-    const next = App.engineAfter(ops), ids = new Set(cropIds), out = { dates: [], datesN: 0, batches: [], cells: [0, 0], trays: [0, 0], seeds: [0, 0], seedG: [0, 0], buy: [0, 0], bench: [0, 0], kept: 0, carriers: [0, 0] };
+    const next = App.engineAfter(ops), ids = new Set(cropIds), year = +eng.plan.settings.year;
+    const out = { dates: [], datesN: 0, batches: [], cells: [0, 0], trays: [0, 0], seeds: [0, 0], seedG: [0, 0], buy: [0, 0], others: { n: 0, crops: new Set(), cells: [0, 0], trays: [0, 0], seeds: [0, 0], buy: [0, 0] }, supplies: [], bench: [] };
     for (const p of eng.plan.plantings || []) {
-      if (!ids.has(p.cropId)) continue;
       const a = eng.calc(p), q = next.planting(p.id), b = a && q ? next.calc(q) : null;
       if (!a || !b) continue;
-      out.cells[0] += a.cells || 0; out.cells[1] += b.cells || 0; out.trays[0] += a.trays || 0; out.trays[1] += b.trays || 0;
-      out.seeds[0] += a.seeds || 0; out.seeds[1] += b.seeds || 0; out.seedG[0] += a.seedG || 0; out.seedG[1] += b.seedG || 0; out.buy[0] += a.buy || 0; out.buy[1] += b.buy || 0;
       const pairs = [['sowing', a.plannedSow, b.plannedSow], ['pot-up', eng.potUpDate(a), next.potUpDate(b)], ['hardening off', eng.hardenStart(a), next.hardenStart(b)], ['planting', a.field, b.field]];
       let moved = false;
       for (const [what, x, y] of pairs) if (D(x) !== D(y)) { moved = true; if (out.dates.length < 3) out.dates.push({ what, was: x, now: y }); }
       if (moved) out.datesN++;
+      const sum = (to, k, f) => { to[k][0] += a[f] || 0; to[k][1] += b[f] || 0; };
+      if (ids.has(p.cropId)) { for (const k of ['cells', 'trays', 'seeds', 'seedG', 'buy']) sum(out, k, k); continue; }
+      const differ = ['cells', 'trays', 'seeds', 'buy'].some(k => Math.abs((a[k] || 0) - (b[k] || 0)) > 1e-9);
+      if (!differ) continue;
+      out.others.n++; out.others.crops.add(p.cropId);
+      for (const k of ['cells', 'trays', 'seeds', 'buy']) sum(out.others, k, k);
     }
     const before = new Map(), after = new Map();
     for (const id of ids) { for (const x of of(eng, id).batches) before.set(x.ids.join(','), x); for (const x of of(next, id).batches) after.set(x.ids.join(','), x); }
     for (const [k, x] of before) { const y = after.get(k); if (y && (y.cells !== x.cells || Math.abs(y.trays - x.trays) > 1e-9 || y.seeds !== x.seeds)) out.batches.push({ was: x, now: y }); }
-    out.bench = [benchOfMany(eng, [...ids]).most, benchOfMany(next, [...ids]).most];
+    // the benches and Supplies, as the Nursery page counts them
+    try {
+      const f0 = N.season(eng, year), f1 = N.season(next, year), most = (f, k) => f.weeks.reduce((n, w) => Math.max(n, w.pools && w.pools[k] ? w.pools[k].used : 0), 0);
+      for (const k of N.KIND_IDS) { const x = most(f0, k), y = most(f1, k); if (Math.abs(x - y) > 0.05) out.bench.push({ kind: N.kindName(k), was: x, now: y }); }
+      const s0 = N.supplies(eng, year, (eng.plan.lrfNext || {}).supplies || null, f0), s1 = N.supplies(next, year, (next.plan.lrfNext || {}).supplies || null, f1);
+      const rows = new Map();
+      for (const r of s0.rows) rows.set(r.id, { name: r.name, was: r.need, now: 0 });
+      for (const r of s1.rows) { const x = rows.get(r.id) || { name: r.name, was: 0, now: 0 }; x.now = r.need; rows.set(r.id, x); }
+      for (const x of rows.values()) if (x.was !== x.now) out.supplies.push(x);
+      if (Math.abs(s0.mix.need - s1.mix.need) > 0.005) out.supplies.push({ name: 'Potting mix', was: s0.mix.need, now: s1.mix.need, cuft: true });
+    } catch (_) { /* a plan the nursery cannot read: the plantings' own figures above still stand */ }
     out.next = next;
     return out;
   }
@@ -175,11 +198,13 @@
     if (first) parts.push(`${UI.day(first.was.sow)}: ${num(first.was.cells)} → ${num(first.now.cells)} cells, ${traysWord(first.was.trays)} → ${traysWord(first.now.trays)} trays, ${num(first.was.seeds)} → ${num(first.now.seeds)} seeds`);
     if (m.batches.length > 1) parts.push(`in all ${plural(m.batches.length, 'sowing')}: ${num(m.cells[0])} → ${num(m.cells[1])} cells, ${num(m.seeds[0])} → ${num(m.seeds[1])} seeds`);
     else if (!first && m.seeds[0] !== m.seeds[1]) parts.push(`seed ${num(m.seeds[0])} → ${num(m.seeds[1])}`);
-    if (m.seedG[0] !== m.seedG[1]) parts.push(`seed ${num(m.seedG[0], 1)} → ${num(m.seedG[1], 1)} g`);
+    if (Math.abs(m.seedG[0] - m.seedG[1]) > 1e-6) parts.push(`seed ${num(m.seedG[0], 1)} → ${num(m.seedG[1], 1)} g`);
     if (m.buy[0] !== m.buy[1]) parts.push(`plants to buy ${num(m.buy[0])} → ${num(m.buy[1])}`);
+    if (m.others.n) parts.push(`${plural(m.others.n, 'planting')} of ${plural(m.others.crops.size, 'other crop')} move with it: trays ${traysWord(m.others.trays[0])} → ${traysWord(m.others.trays[1])}${m.others.cells[0] !== m.others.cells[1] ? `, cells ${num(m.others.cells[0])} → ${num(m.others.cells[1])}` : ''}${m.others.buy[0] !== m.others.buy[1] ? `, plants to buy ${num(m.others.buy[0])} → ${num(m.others.buy[1])}` : ''}`);
     if (m.datesN) parts.push(`${plural(m.datesN, 'planting')} move${m.datesN === 1 ? 's' : ''}: ${m.dates.map(d => `${d.what} ${UI.day(d.was)} → ${UI.day(d.now)}`).join(', ')}`);
-    else if (parts.length) parts.push('no date moves');
-    if (Math.abs(m.bench[0] - m.bench[1]) > 0.05) parts.push(`at the most ${num(m.bench[0], 1)} → ${num(m.bench[1], 1)} tray spaces`);
+    else if (parts.length || m.supplies.length || m.bench.length) parts.push('no date moves');
+    for (const b of m.bench) parts.push(`${b.kind.toLowerCase()} benches at their fullest ${num(b.was, 1)} → ${num(b.now, 1)} tray spaces`);
+    if (m.supplies.length) parts.push(`Supplies: ${m.supplies.map(x => `${x.name.toLowerCase()} ${x.cuft ? `${num(x.was, 2)} → ${num(x.now, 2)} cu ft` : `${num(x.was)} → ${num(x.now)}`}`).join(', ')}`);
     return parts.length ? parts.join('; ') + '.' : '';
   }
 
@@ -187,8 +212,19 @@
   /** A change to the crop's own record, written over the library's where it has none: { key: value }, null clears. */
   function cropOps(eng, c, change) {
     const before = ownRec(eng.plan, c.id), after = { ...(before || { id: c.id }) };
-    for (const [k, v] of Object.entries(change)) { if (v == null) delete after[k]; else after[k] = v; }
-    return JSON.stringify(after) === JSON.stringify(before || { id: c.id }) ? null : [{ kind: 'crop', before, after }];
+    // null clears a figure; a key left undefined is not touched (an explicit figure of his stays as it is)
+    for (const [k, v] of Object.entries(change)) { if (v === undefined) continue; if (v === null) delete after[k]; else after[k] = v; }
+    if (JSON.stringify(after) === JSON.stringify(before || { id: c.id })) return null;
+    // a record of a library crop left holding nothing but its id is no record: it goes, and so does the note made when it was
+    // made here, so that typing a figure and clearing it leaves the plan as it was
+    if (Object.keys(after).length === 1 && before && libCrop(c.id)) {
+      const facts = (eng.plan.lrfNext || {}).facts || null, made = facts && facts.crops && facts.crops[c.id] && facts.crops[c.id].create;
+      if (!made) return [{ kind: 'crop', before, after }];
+      const crops = { ...facts.crops }; delete crops[c.id];
+      const rest = { ...facts, crops }, any = ['crops', 'varieties', 'gardens', 'beds'].some(k => Object.keys(rest[k] || {}).length);
+      return [{ kind: 'crop', before, after: null }, { kind: 'own', key: 'facts', before: facts, after: any ? rest : null }];
+    }
+    return [{ kind: 'crop', before, after }];
   }
   /** A variety's own figure: germ, spc, or days (its days from sowing to planting, kept as the variety form keeps them). */
   function varietyOps(eng, v, key, n) {
@@ -208,9 +244,14 @@
     return JSON.stringify(after) === JSON.stringify(v) ? null : [{ kind: 'variety', before: v, after }];
   }
   /** A variety's days from sowing to planting, where it has its own. */
+  /**
+   * A variety's days from sowing to planting, as the engine reads them: place by place (environmentDefaults.field and .greenhouse;
+   * its bare gh is not read). { one: days where one figure holds wherever it grows, or null; field, greenhouse: each place's }.
+   */
   function varietyDays(v) {
-    const cfg = v.environmentDefaults, g = cfg && cfg.field && cfg.field.gh != null ? cfg.field.gh : v.gh;
-    return g != null && Number.isFinite(+g) ? Math.round(+g * 7) : null;
+    const cfg = v.environmentDefaults || {}, at = k => cfg[k] && cfg[k].gh != null && Number.isFinite(+cfg[k].gh) ? Math.round(+cfg[k].gh * 7) : null;
+    const field = at('field'), greenhouse = at('greenhouse');
+    return { field, greenhouse, one: field === greenhouse ? field : null, split: field !== greenhouse };
   }
   function settingsOps(plan, change) {
     const before = plan.settings, after = { ...before };
@@ -232,7 +273,9 @@
     ui.redraw();
     return done;
   }
-  const undoLink = () => h('button.link', { type: 'button', dataset: { hook: 'start-undo' }, title: 'Takes the last step back', onclick: () => { ui.said = null; App.undo(); } }, 'Undo');
+  // Undo where the step was taken: the line then says it is undone, and no message is shown (DESIGN.md rule 3, one answer)
+  const undoLink = () => ui.said && ui.said.done ? '' : h('button.link', { type: 'button', dataset: { hook: 'start-undo' }, title: 'Takes the last step back',
+    onclick: () => { ui.said = ui.said ? { key: ui.said.key, text: `Undone: ${ui.said.text.replace(/\.$/, '')}.`, done: true } : null; App.undo({ quiet: true }); } }, 'Undo');
 
   // ───────────────────────── a box ─────────────────────────
   /**
@@ -240,24 +283,31 @@
    * would set it (null clears it), `cropIds` whose plantings the line looks at. Typing says what it would move; Enter or Tab
    * takes it; Esc puts back what was there.
    */
-  function box({ key, label, fig, unit, grey, ops, cropIds, min = 0, max = 1000, whole, help, amber, name, wide }) {
+  function box({ key, label, fig, unit, grey, ops, cropIds, min = 0, max = 1000, whole, help, amber, name, wide, farm, off }) {
     const shown = fig.mine != null ? String(+(+fig.mine).toFixed(2)) : '';
     const line = h('p.sn-moves', { dataset: { hook: 'start-moves', key }, 'aria-live': 'polite' });
     const said = ui.said && ui.said.key === key ? ui.said : null;
     if (said) { line.append(said.text, ' ', undoLink()); line.dataset.said = 'true'; }
+    if (!said && off) line.append(off);
     const input = h('input', { type: 'number', min, max, step: whole ? 1 : 'any', value: shown, placeholder: amber || fig.fallback == null ? '' : String(+(+fig.fallback).toFixed(2)), 'aria-label': `${name}: ${label.toLowerCase()}`,
       title: fig.mine != null ? `Yours. Clear it to go back to ${fig.fallback == null ? 'nothing' : fig.fallback}.` : fig.fallback != null ? `Grey: ${grey || 'the library’s'}, ${fig.fallback}. Type over it to make it yours.` : 'Nothing set. Type a figure.',
-      dataset: { hook: 'start-box', key, sk: key } });
+      dataset: { hook: 'start-box', key, sk: key }, disabled: !!off });
+    if (off) input.title = off;
     const read = () => { const raw = input.value.trim(); if (raw === '') return { n: null }; const n = whole ? Math.round(+raw) : +raw; return (input.validity && input.validity.badInput) || !Number.isFinite(n) || n < min || n > max ? { bad: true } : { n }; };
-    const same = n => (n == null && fig.mine == null) || (n != null && fig.mine != null && Math.abs(n - fig.mine) < 1e-9);
+    // A figure equal to the one it already follows is no figure of his: it is not stored, and typed over one of his it clears his.
+    // The farm's own boxes have nothing under them: what is typed there is his, whatever it is.
+    const eq = (a, b) => Math.abs(a - b) < 1e-9;
+    const target = n => n == null || farm || fig.fallback == null || !eq(n, fig.fallback) ? n : null;
+    const same = n => { const t = target(n); return (t == null && fig.mine == null) || (t != null && fig.mine != null && eq(t, fig.mine)); };
     let sent = false;
     const commit = () => {
       if (sent) return false;
       const x = read();
       if (x.bad) { input.value = shown; clear(line); return false; }
       if (same(x.n)) { clear(line); return false; }
+      x.n = target(x.n);
       sent = true;
-      ui.focus = key;
+      if (!ui.focus) ui.focus = key;
       return take(key, `${name}: ${label.toLowerCase()} ${x.n == null ? `back to ${fig.fallback == null ? 'nothing' : num(fig.fallback, 2)}` : num(x.n, 2)}${unit && x.n != null ? ' ' + unit : ''}`, ops(x.n));
     };
     input.addEventListener('input', () => {
@@ -266,7 +316,7 @@
       clear(line); delete line.dataset.said;
       if (x.bad) { line.append(`Not a figure here: ${min} to ${max}.`); return; }
       if (same(x.n)) return;
-      const step = ops(x.n);
+      const step = ops(target(x.n));
       if (!step) return;
       const said = movesSaid(movesOf(App.state.engine, cropIds, step));
       line.dataset.would = 'true';
@@ -274,10 +324,12 @@
     });
     input.addEventListener('keydown', e => {
       if (e.key === 'Escape') { e.preventDefault(); input.value = shown; clear(line); input.blur(); }
-      else if (e.key === 'Enter') { e.preventDefault(); commit(); }
-      else if (e.key === 'Tab' && !e.shiftKey) { const step = commit(); if (step) ui.focus = { after: key }; }
+      else if (e.key === 'Enter') { e.preventDefault(); ui.focus = key; commit(); }
+      // Tab takes it and the pointer goes to the next box: the browser's own Tab is held, or it would go on past that box
+      else if (e.key === 'Tab' && !e.shiftKey) { const x = read(); if (!x.bad && !same(x.n)) { e.preventDefault(); ui.focus = { after: key }; commit(); } }
     });
-    input.addEventListener('change', () => { commit(); });
+    // only Enter or Tab takes a figure: leaving the box any other way (a click elsewhere) leaves it as Esc does, and the click lands
+    input.addEventListener('blur', () => { if (sent || input.value === shown) return; input.value = shown; clear(line); delete line.dataset.would; });
     return h('div.sn-f', { dataset: { field: key } },
       h('span.sn-lab', label, help ? UI.help(help, null, null, { label: `What ${label.toLowerCase()} means` }) : null),
       h('span.sn-ctl', h('span.yc-box' + (wide ? '.wide' : '') + (fig.mine != null ? '.mine' : amber ? '.amber' : ''), input), unit ? h('span.yc-unit', unit) : null, grey ? h('span.sn-grey', grey) : null),
@@ -321,13 +373,13 @@
     return line;
   }
   /** An offer of a new rule: what it would move, before and after, and "Use it". */
-  function offer(key, words, ops, cropIds) {
+  function offer(key, words, ops, cropIds, label) {
     if (ui.said && ui.said.key === key) return stagedLine(key);
     if (!ops) return null;
     const m = movesOf(App.state.engine, cropIds, ops), said = movesSaid(m);
     return h('div.sn-offer', { dataset: { hook: 'start-offer', offer: key } },
       h('p', 'Offered: ', words, said ? ` ${said}` : ' It moves nothing on this plan.'),
-      h('button.btn.small', { type: 'button', dataset: { hook: 'start-offer-use', offer: key }, onclick: () => take(key, `Offer used: ${words}`, ops) }, 'Use it'));
+      h('button.btn.small', { type: 'button', dataset: { hook: 'start-offer-use', offer: key }, onclick: () => take(key, `Offer used: ${label}`, ops) }, 'Use it'));
   }
 
   // ───────────────────────── the card ─────────────────────────
@@ -358,9 +410,14 @@
         : bulbs && v !== 'bought' ? `Planted from ${MATERIAL[materialOf(c)]}: say otherwise on Seeds, in the crop’s own record` : null]);
     const sw = choice({ key: 'started', sides, on: side, name, label: 'Started as', ops: v => clean(flip(v)), cropIds: ids, hook: 'start-as' });
     const towers = pl.towers.length, beds = pl.beds.length;
+    // each planting as it is started for itself (its own Seed | Bought in on Seeds), counted against the crop's way
+    const boughtP = pl.beds.filter(p => (eng.calc(p) || {}).boughtIn === true), buyN = boughtP.reduce((n, p) => n + (eng.calc(p).buy || 0), 0);
+    const follow = group === 'bought' ? boughtP.length : beds - boughtP.length, odd = beds - follow;
+    const oddSaid = !odd ? '' : group === 'bought' ? ` ${plural(odd, 'planting')} ${odd === 1 ? 'is' : 'are'} sown, by ${odd === 1 ? 'its' : 'their'} own choice on Seeds.`
+      : ` ${plural(odd, 'planting')} ${odd === 1 ? 'is' : 'are'} bought in, by ${odd === 1 ? 'its' : 'their'} own choice on Seeds: ${plural(buyN, 'plant')} to buy.`;
     const also = group === 'live' ? ['How many trays a week, and the days to ready, are on ', h('button.link', { type: 'button', dataset: { hook: 'start-to-live' }, onclick: () => root.LRFTraysView && root.LRFTraysView.open('live') }, 'Nursery › Live trays'), '.']
-      : towers ? [`For its ${plural(beds, 'bed planting')}. Its ${plural(towers, 'tower planting')} start in rockwool, below.`]
-        : [`${pl.all.length ? `All ${plural(beds, 'planting')} follow this. ` : ''}Any one can be switched to `, h('b', 'Bought in'), ' on ', h('button.link', { type: 'button', dataset: { hook: 'start-to-seeds' }, onclick: () => { App.setView('seeds'); } }, 'Seeds'), '.'];
+      : towers ? [`For its ${plural(beds, 'bed planting')}${odd ? ` (${num(follow)} follow it)` : ''}. Its ${plural(towers, 'tower planting')} start in rockwool, below.${oddSaid}`]
+        : [h('span', { dataset: { hook: 'start-follow', follow: String(follow), odd: String(odd), buy: String(buyN) } }, !beds ? '' : odd ? `${num(follow)} of ${plural(beds, 'planting')} follow this.${oddSaid} ` : `All ${plural(beds, 'planting')} follow this. `), 'Any one can be switched to ', h('b', 'Bought in'), ' on ', h('button.link', { type: 'button', dataset: { hook: 'start-to-seeds' }, onclick: () => { App.setView('seeds'); } }, 'Seeds'), '.'];
     card.append(h('div.sn-start', h('span.sn-lab', 'Started as', UI.help(h('div', term('Started as', 'how this crop is started, wherever it is planted in a bed. One planting can still be set to Bought in on Seeds, and the towers always start in rockwool.')), null, null, { label: 'What started as means' })),
       sw.seg, h('p.sn-also', also), sw.line));
 
@@ -368,7 +425,7 @@
     const germ = cropFig(eng, c, 'germ', farmGerm(plan)), spare = cropFig(eng, c, 'spare', farmSpare(plan));
     const germBox = () => box({ key: 'germ', name, label: 'Germination', unit: '%', fig: germ, grey: germ.mine == null ? 'the farm’s' : null, min: 0.1, max: 100, ops: n => cropOps(eng, c, { germ: n }), cropIds: ids,
       help: h('div', term('Germination', 'the share of seeds that come up. Cells and seed are counted for it; a variety may have its own.')) });
-    const spareBox = what => box({ key: 'spare', name, label: 'Spare', unit: '%', fig: spare, grey: spare.mine == null ? 'the farm’s' : null, min: 0, max: 100, ops: n => cropOps(eng, c, { spare: n }), cropIds: ids,
+    const spareBox = (what, bought) => box({ key: 'spare', name, label: 'Spare', unit: '%', fig: bought ? cropFig(eng, c, 'spare', boughtSpare(plan)) : spare, grey: spare.mine == null ? (farmSpareSet(plan) ? 'the farm’s' : bought ? 'none: the farm has none set' : 'the farm has none set: sowing counts 10') : null, min: 0, max: 100, ops: n => cropOps(eng, c, { spare: n }), cropIds: ids,
       help: h('div', term('Spare', what)) });
 
     if (group === 'nursery') {
@@ -387,9 +444,9 @@
         box({ key: 'days', name, label: 'Days from sowing to planting', unit: 'days', fig: { mine: gh.mine != null ? Math.round(gh.mine * 7) : null, fallback: gh.fallback != null ? Math.round(gh.fallback * 7) : null }, wide: true,
           grey: [gh.value != null ? `${num(gh.value, 1)} weeks` : null, keep('gh') ? `${plural(keep('gh'), 'planting')} keep${keep('gh') === 1 ? 's' : ''} its own` : null].filter(Boolean).join(' · '), min: 0, max: 728, whole: true, ops: n => cropOps(eng, c, { gh: n == null ? null : n / 7 }), cropIds: ids }));
       // the offers: a new rule, shown with what it would move, and used only with "Use it"
-      if (+c.spc > 1 && c.station !== true) sowing.append(offer('station', [`a cell of ${num(+c.spc, 1)} is one station, so it needs `, h('b', 'no extra cells for germination'), '.'], cropOps(eng, c, { station: true }), ids));
+      if (+c.spc > 1 && c.station !== true) UI.add(sowing, offer('station', [`a cell of ${num(+c.spc, 1)} is one station, so it needs `, h('b', 'no extra cells for germination'), '.'], cropOps(eng, c, { station: true }), ids, `${name}: a cell of ${num(+c.spc, 1)} is one station, no extra cells for germination`));
       if (c.station === true) sowing.append(h('p.sn-also', { dataset: { hook: 'start-station' } }, `A cell of ${num(+c.spc, 1)} is one station: no extra cells for germination. `, h('button.btn.quiet.small', { type: 'button', dataset: { hook: 'start-station-off' }, onclick: () => stage('station', `${name}: extra cells for germination again`, cropOps(eng, c, { station: null }), ids) }, 'Count germination again'), stagedLine('station')));
-      if (OFFER_DAYS[c.id] && gh.mine == null && gh.value != null && Math.round(gh.value * 7) !== OFFER_DAYS[c.id]) sowing.append(offer('days-' + c.id, [`${name} is raised `, h('b', `${OFFER_DAYS[c.id] / 7} weeks`), ' from sowing to planting.'], cropOps(eng, c, { gh: OFFER_DAYS[c.id] / 7 }), ids));
+      if (OFFER_DAYS[c.id] && ((ui.said && ui.said.key === 'days-' + c.id) || (gh.mine == null && gh.value != null && Math.round(gh.value * 7) !== OFFER_DAYS[c.id]))) UI.add(sowing, offer('days-' + c.id, [`${name} is raised `, h('b', `${OFFER_DAYS[c.id] / 7} weeks`), ' from sowing to planting.'], cropOps(eng, c, { gh: OFFER_DAYS[c.id] / 7 }), ids, `${name}: ${OFFER_DAYS[c.id] / 7} weeks from sowing to planting`));
       left.append(sowing);
 
       // ── potting up, or sown straight into pots ──
@@ -433,7 +490,7 @@
     } else if (group === 'bought') {
       left.append(h('div.sn-part', { dataset: { hook: 'start-bought' } }, h('h4', 'Bought in'),
         fixed('Planted from', MATERIAL[materialOf(c)] || 'plants'),
-        materialOf(c) === 'plant' ? spareBox('plants bought over what the bed takes.') : fixed('Spare', 'none: one a station, as Seeds counts them')));
+        materialOf(c) === 'plant' ? spareBox('plants bought over what the bed takes.', true) : fixed('Spare', 'none: one a station, as Seeds counts them')));
     } else left.append(livePart(eng, plan, c, name, pl));
 
     // ── its sowings, wanted then sown; its varieties ──
@@ -472,14 +529,15 @@
       return JSON.stringify(after) === JSON.stringify(own) ? null : [{ kind: 'crop', before: own, after }];
     };
     const sw = choice({ key: 'liveHow', sides: [['cells', 'Cells', mine ? null : 'This crop comes with the planner: add it to a demand plan to give it your own figures'], ['open', 'An open tray', mine ? null : 'This crop comes with the planner']], on: how.how, name, label: 'Sown in', ops: v => set({ how: v }), cropIds: [c.id], hook: 'start-live-how' });
-    const blank = (v, k) => ({ mine: v != null && v !== '' && +v > 0 ? +v : null, fallback: null });
+    const blank = v => ({ mine: v != null && v !== '' && +v > 0 ? +v : null, fallback: null });
+    const off = mine ? null : 'This crop comes with the planner: give it figures of its own by adding it to a demand plan on Nursery › Live trays.';
     const counted = how.set;
     return h('div.sn-part', { dataset: { hook: 'start-live' } }, h('h4', 'A tray'),
       h('div.sn-f', h('span.sn-lab', 'Sown in'), h('span.sn-ctl', sw.seg), sw.line),
       how.how === 'cells' ? [
-        box({ key: 'liveCells', name, label: 'Cells a tray', fig: blank(live.cells), amber: !(live.cells > 0), grey: live.cells > 0 ? null : 'to say', min: 1, max: 1000, whole: true, ops: n => set({ cells: n }), cropIds: [c.id] }),
-        box({ key: 'livePerCell', name, label: 'Seeds a cell', fig: blank(live.perCell), amber: !(live.perCell > 0), grey: live.perCell > 0 ? null : 'to say', min: 0.1, max: 1000, ops: n => set({ perCell: n }), cropIds: [c.id] })]
-        : box({ key: 'liveGrams', name, label: 'Grams a tray', unit: 'g', fig: blank(c.seedG), amber: !(c.seedG > 0), grey: c.seedG > 0 ? null : 'to say', min: 0, max: 2000, ops: n => set({ grams: n }), cropIds: [c.id] }),
+        box({ key: 'liveCells', name, label: 'Cells a tray', fig: blank(live.cells), amber: !(live.cells > 0), grey: live.cells > 0 ? null : 'to say', min: 1, max: 1000, whole: true, ops: n => set({ cells: n }), cropIds: [c.id], off }),
+        box({ key: 'livePerCell', name, label: 'Seeds a cell', fig: blank(live.perCell), amber: !(live.perCell > 0), grey: live.perCell > 0 ? null : 'to say', min: 0.1, max: 1000, ops: n => set({ perCell: n }), cropIds: [c.id], off })]
+        : box({ key: 'liveGrams', name, label: 'Grams a tray', unit: 'g', fig: blank(c.seedG), amber: !(c.seedG > 0), grey: c.seedG > 0 ? null : 'to say', min: 0, max: 2000, ops: n => set({ grams: n }), cropIds: [c.id], off }),
       h('div.sn-f', h('span.sn-lab', 'Seed a tray'), h('span.sn-ctl', counted
         ? h('span.sn-fixed', { dataset: { hook: 'start-live-seed', counted: 'true' } }, how.how === 'cells' ? `${num(how.seeds, 1)} seeds` : `${num(how.grams, 1)} g`)
         : h('span.sn-word', { dataset: { hook: 'start-live-seed', counted: 'false' } }, h('i.sn-dot.amber'), 'not counted'))));
@@ -489,6 +547,11 @@
     const how = eng.liveSow(c), counted = how.set, trays = pl.racks.reduce((n, p) => n + ((eng.calc(p) || {}).len || 0), 0);
     return h('div.sn-facts', { dataset: { hook: 'start-live-facts' } }, h('h4', counted ? 'What it counts' : 'What it counts once said'),
       h('p.sn-line', counted ? `Seed for the season: ${how.how === 'cells' ? `${num(Math.ceil(how.seeds * trays))} seeds` : `${num(how.grams * trays, 1)} g`}, for ${plural(trays, 'live tray')}, on Seeds.` : `Once said, seed for the season is ${how.how === 'cells' ? 'cells a tray × seeds a cell' : 'grams a tray'} × ${plural(trays, 'tray')}, on Seeds. Pea shoots and anything in an open tray go by grams a tray.`));
+  }
+  /** Plantings of a sown crop bought in by their own choice: how many, and the plants to buy. */
+  function boughtOwn(eng, pl) {
+    const list = pl.beds.filter(p => (eng.calc(p) || {}).boughtIn === true);
+    return list.length ? [' · ', h('b', plural(list.length, 'planting')), ' bought in: ', h('b', plural(list.reduce((n, p) => n + (eng.calc(p).buy || 0), 0), 'plant')), ' to buy'] : null;
   }
   function comesLine(eng, c, pl, t, bench) {
     const g = groupOf(c), year = +eng.plan.settings.year, p = h('p.sn-comes', { dataset: { hook: 'start-comes', seeds: String(t.seeds), cells: String(t.cells), mix: String(Math.round(t.mix * 100) / 100) } });
@@ -503,12 +566,12 @@
       UI.add(p, 'Bought in · ', h('b', buy ? plural(buy, 'plant') : bulbs ? `${num(bulbs)} ${MATERIAL[materialOf(c)] || 'bulbs'}` : 'nothing to buy'), buy ? ' (the beds’ and their spare)' : '', ' · nothing sown, no trays and no bench room');
       return p;
     }
-    if (g === 'direct') { p.append('Sown in place · ', h('b', `${num(pl.all.reduce((n, q) => n + ((eng.calc(q) || {}).seeds || 0), 0))} seeds`), ` for ${plural(pl.all.length, 'planting')} · no trays and no bench room`); return p; }
+    if (g === 'direct') { UI.add(p, 'Sown in place · ', h('b', `${num(pl.all.reduce((n, q) => n + ((eng.calc(q) || {}).seeds || 0), 0))} seeds`), ` for ${plural(pl.all.length, 'planting')} · no trays and no bench room`, boughtOwn(eng, pl)); return p; }
     const gh = +c.gh || 0, rw = Math.round(+c.rockwoolDays || 0);
     UI.add(p, 'Sown ', h('b', gh ? `${num(gh, 1)} weeks` : 'the day'), ' before planting', pl.towers.length ? [', ', h('b', `${rw} days`), ' for the towers'] : null,
       t.trays.length ? [' · ', h('b', traysSaid(t))] : null, t.sheets ? [t.trays.length ? ' and ' : ' · ', h('b', plural(t.sheets, 'rockwool sheet'))] : null,
       t.pots ? [', potted up into ', h('b', `${num(t.pots)} pots of ${t.size} in`), ' · ', h('b', `${plural(t.carriers, 'carrier')} of ${t.per}`)] : null,
-      ' · ', h('b', `${num(t.seeds)} seeds`), t.mix ? [' · ', h('b', cuft(t.mix)), ' of mix'] : null,
+      ' · ', h('b', `${num(t.seeds)} seeds`), t.mix ? [' · ', h('b', cuft(t.mix)), ' of mix'] : null, boughtOwn(eng, pl),
       bench.most ? [' · up to ', h('b', `${num(bench.most, 1)} tray spaces`), `, ${UI.day(bench.from)} – ${UI.day(bench.to)}`] : null);
     return p;
   }
@@ -536,11 +599,12 @@
     const sorted = list.slice().sort((a, b) => (sowings.get(b.id) || 0) - (sowings.get(a.id) || 0) || String(a.name).localeCompare(String(b.name)));
     const crop = { germ: cropFig(eng, c, 'germ', farmGerm(plan)).value, days: Math.round((+c.gh || 0) * 7), spc: +c.spc || 1 };
     const row = v => {
-      const own = { germ: +v.germ > 0 ? +v.germ : null, days: varietyDays(v), spc: +v.spc > 0 ? +v.spc : null }, any = Object.values(own).some(x => x != null), open = any || ui.own.has(v.id), vn = v.name;
+      const vd = varietyDays(v), own = { germ: +v.germ > 0 ? +v.germ : null, days: vd.split ? -1 : vd.one, spc: +v.spc > 0 ? +v.spc : null }, any = Object.values(own).some(x => x != null), open = any || ui.own.has(v.id), vn = v.name;
       const says = Object.entries(own).filter(([, x]) => x != null).map(([k]) => ({ germ: 'germination', days: 'days to planting', spc: 'seeds a cell' })[k]);
       const boxes = !open ? null : h('div.sn-own', { dataset: { hook: 'start-variety-figures', variety: v.id } },
         box({ key: `v|${v.id}|germ`, name: vn, label: 'Germination', unit: '%', fig: { mine: own.germ, fallback: crop.germ }, grey: own.germ == null ? 'the crop’s' : null, min: 0.1, max: 100, ops: n => varietyOps(eng, v, 'germ', n), cropIds: [c.id] }),
-        group === 'nursery' ? box({ key: `v|${v.id}|days`, name: vn, label: 'Days from sowing to planting', unit: 'days', wide: true, fig: { mine: own.days, fallback: crop.days }, grey: own.days == null ? 'the crop’s' : null, min: 0, max: 728, whole: true, ops: n => varietyOps(eng, v, 'days', n), cropIds: [c.id] }) : null,
+        group === 'nursery' && vd.split ? h('div.sn-f', { dataset: { hook: 'start-variety-days-split', variety: v.id } }, h('span.sn-lab', 'Days from sowing to planting'), h('span.sn-ctl', h('span.sn-fixed', `${vd.field == null ? 'the crop’s' : `${vd.field} days`} in the field, ${vd.greenhouse == null ? 'the crop’s' : `${vd.greenhouse} days`} under cover`), h('span.sn-grey', 'differs by place: not set here'))) : null,
+        group === 'nursery' && !vd.split ? box({ key: `v|${v.id}|days`, name: vn, label: 'Days from sowing to planting', unit: 'days', wide: true, fig: { mine: own.days, fallback: crop.days }, grey: own.days == null ? 'the crop’s' : null, min: 0, max: 728, whole: true, ops: n => varietyOps(eng, v, 'days', n), cropIds: [c.id] }) : null,
         group === 'nursery' ? box({ key: `v|${v.id}|spc`, name: vn, label: 'Seeds a cell', fig: { mine: own.spc, fallback: crop.spc }, grey: own.spc == null ? 'the crop’s' : null, min: 0.1, max: 50, ops: n => varietyOps(eng, v, 'spc', n), cropIds: [c.id] }) : null);
       return h('div.sn-vrow', { dataset: { hook: 'start-variety', variety: v.id, own: String(any) } },
         h('div.row', root.LRFThumbs.el({ varietyId: v.id, color: eng.cropColor(c), label: vn, size: 40 }),
@@ -576,11 +640,11 @@
       says: n => { const a = now ? now.need : 0, b = (supply(n) || { need: 0 }).need; return a === b ? '' : `carrying trays Supplies counts at the most ${num(a)} → ${num(b)}; no bench room, date or seed moves.`; } });
     const card = h('section.yc-card.sn-card', { dataset: { hook: 'start-card', crop: FARM } },
       h('header.yc-head', h('span.thumb.key.sn-farm', { style: { '--thumb': '40px' } }), h('div', h('h3', { dataset: { hook: 'start-name' } }, 'Every crop'), h('p.yc-where', `The farm’s figures · ${plural(all.length - ownGerm.length, 'crop')} use them as they are`)), h('p.yc-state', 'The farm')),
-      h('p.sn-comes', { dataset: { hook: 'start-comes' } }, 'Every sowing is counted for ', h('b', `${num(farmGerm(plan), 1)}% germination`), ' and ', h('b', `${num(farmSpare(plan), 1)}% spare`), ', unless its crop or variety says otherwise.'),
+      h('p.sn-comes', { dataset: { hook: 'start-comes' } }, 'Every sowing is counted for ', h('b', `${num(farmGerm(plan), 1)}% germination`), ' and ', h('b', `${num(farmSpare(plan), 1)}% spare`), ', unless its crop or variety says otherwise.', farmSpareSet(plan) ? '' : ' No spare is set for the farm: sowing counts 10%, plants bought in none.'),
       h('div.sn-cols', h('div.sn-col', h('div.sn-part', h('h4', 'For every crop'),
-        box({ key: 'farmGerm', name: 'Every crop', label: 'Germination', unit: '%', fig: { mine: farmGerm(plan), fallback: 85 }, min: 0.1, max: 100, ops: n => settingsOps(plan, { germ: n == null ? 85 : n }), cropIds: ids,
+        box({ key: 'farmGerm', name: 'Every crop', label: 'Germination', unit: '%', fig: { mine: plan.settings.germ > 0 ? +plan.settings.germ : null, fallback: 85 }, farm: true, grey: plan.settings.germ > 0 ? null : 'not set: 85 is counted', min: 0.1, max: 100, ops: n => settingsOps(plan, { germ: n }), cropIds: ids,
           help: h('div', term('Germination', 'the share of seeds that come up, for every crop that does not say its own.')) }),
-        box({ key: 'farmSpare', name: 'Every crop', label: 'Spare', unit: '%', fig: { mine: farmSpare(plan), fallback: 10 }, grey: 'seedlings over the plants the bed takes', min: 0, max: 100, ops: n => settingsOps(plan, { buffer: n == null ? 10 : n }), cropIds: ids,
+        box({ key: 'farmSpare', name: 'Every crop', label: 'Spare', unit: '%', fig: { mine: farmSpareSet(plan) ? +plan.settings.buffer : null, fallback: null }, farm: true, grey: farmSpareSet(plan) ? 'seedlings over the plants the bed takes' : 'not set: sowing counts 10%, plants bought in none', min: 0, max: 100, ops: n => settingsOps(plan, { buffer: n }), cropIds: ids,
           help: h('div', term('Spare', 'seedlings raised over the plants the bed takes, for every crop that does not say its own; plants bought in take the same.')) }),
         h('div.sn-f', { dataset: { field: 'pockets' } }, h('span.sn-lab', 'Pots a carrier', UI.help(h('div', term('Pots a carrier', 'how many pots one carrying tray holds, as Supplies counts the carriers to have. Bench room counts each crop’s own, 10 unless it says.')), null, null, { label: 'What pots a carrier means' })),
           h('span.sn-ctl', carrier.seg, h('span.sn-grey', 'as Supplies counts them')),
@@ -599,11 +663,12 @@
   function shortOf(eng, plan, c) {
     const g = groupOf(c), own = ownRec(plan, c.id), lib = libCrop(c.id), mine = !!own && (!lib || ['tray', 'spc', 'germ', 'gh', 'spare', 'prop', 'potUpWk', 'perCarrier', 'station', 'rockwoolDays', 'seedsFt'].some(k => own[k] != null && own[k] !== lib[k]));
     if (g === 'live') { const how = eng.liveSow(c); return { text: how.set ? `live · ${how.how === 'cells' ? `${num(how.seeds, 1)} seeds a tray` : `${num(how.grams, 1)} g a tray`}` : 'live · not counted', warn: !how.set, mine }; }
-    if (g === 'bought') return { text: materialOf(c) === 'plant' ? `plants · ${num(cropFig(eng, c, 'spare', farmSpare(plan)).value, 1)}% spare` : MATERIAL[materialOf(c)] || 'bought in', mine };
+    if (g === 'bought') return { text: materialOf(c) === 'plant' ? `plants · ${num(cropFig(eng, c, 'spare', boughtSpare(plan)).value, 1)}% spare` : MATERIAL[materialOf(c)] || 'bought in', mine };
     if (g === 'direct') return { text: `direct${+c.seedsFt > 0 ? ` · ${num(+c.seedsFt, 1)} a foot` : ''}`, mine };
     const towers = (eng.plan.plantings || []).some(p => p.cropId === c.id && eng.isTower(eng.bedOf(p.bedId)));
     const offered = (+c.spc > 1 && c.station !== true) || (OFFER_DAYS[c.id] && Math.round((+c.gh || 0) * 7) !== OFFER_DAYS[c.id] && !(own && own.gh != null));
-    return { text: `${c.prop === 'pot' ? 'pot' : 'plug ' + (+c.tray || 72)}${c.prop === 'potup' ? ' → pot' : ''}${+c.spc > 1 ? ` · ${num(+c.spc, 1)} seeds` : ''}${towers ? ` · towers ${Math.round(+c.rockwoolDays || 0)} d` : ` · ${Math.round((+c.gh || 0) * 7)} d`}${offered ? ' · offered' : ''}`, warn: !!offered, mine };
+    // what is offered comes first, so that it is never the part cut short in a narrow list
+    return { text: `${offered ? 'offered · ' : ''}${c.prop === 'pot' ? 'pot' : 'plug ' + (+c.tray || 72)}${c.prop === 'potup' ? ' → pot' : ''}${+c.spc > 1 ? ` · ${num(+c.spc, 1)} seeds` : ''}${towers ? ` · towers ${Math.round(+c.rockwoolDays || 0)} d` : ` · ${Math.round((+c.gh || 0) * 7)} d`}`, warn: !!offered, mine };
   }
   /** The crops of the list, in the order they are walked: by group, then by how much of each is planted. */
   function arrange(eng, plan, scope, list, q) {

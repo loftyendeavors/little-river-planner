@@ -162,7 +162,7 @@
     'crops[].liveSow.how': 'text',
     'crops[].liveSow.perCell': 'number',
     'crops[].material': 'text',
-    'crops[].method': 'text',
+    'crops[].method': 'text together',          // how it is started (N1, Started as): one choice with prop and plantingMaterial
     'crops[].micro': 'bool',
     'crops[].mk': 'number',
     'crops[].n': 'number',
@@ -171,11 +171,11 @@
     'crops[].p': 'number',
     'crops[].perCarrier': 'number',             // pots a carrying tray holds on the bench (10 or 15): set on Starting and nursery (N1)
     'crops[].perennial': 'bool',
-    'crops[].plantingMaterial': 'text',
+    'crops[].plantingMaterial': 'text together',
     'crops[].potSize': 'number',                // the pot it is potted up into, inches: set on Starting and nursery (N1)
     'crops[].potUpWk': 'number',
     'crops[].price': 'number',
-    'crops[].prop': 'text',
+    'crops[].prop': 'text together',
     'crops[].rockwoolDays': 'number',
     'crops[].rowSp': 'number',
     'crops[].rowsPerBed': 'null|number',

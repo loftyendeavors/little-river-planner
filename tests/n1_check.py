@@ -7,7 +7,7 @@ two boxes are filled; "Edit crop" on Seeds opens the card; walking the cards and
 found on the plan it is given, by its hooks.
 usage: python3 -I n1_check.py <app-dir-or-built-site> <shots-dir> [backup.zip]     env: WIDTH=1480, STOP_AT_FAIL=1
 """
-import functools, http.server, json, os, sys, threading
+import functools, http.server, json, os, re, sys, threading
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 target, shots = Path(sys.argv[1]), Path(sys.argv[2]); shots.mkdir(parents=True, exist_ok=True)
@@ -73,11 +73,16 @@ with sync_playwright() as pw:
     def typing(key, text):
         sel = box(key)
         if not has(sel): return False
-        page.locator(sel).first.click(); page.keyboard.press("Control+a"); page.keyboard.type(text); wait(500); return True
+        page.locator(sel).first.click(); page.keyboard.press("Control+a")
+        if text == "": page.keyboard.press("Delete")
+        else: page.keyboard.type(text)
+        wait(500); return True
     def moves(key):
         return next((m for m in card().get("moves", []) if m["key"] == key), None)
 
     before = js("return { sig: sig(), plan: plan(), year: A.planYear() };") or {}
+    # every step taken from here on is kept, so that the fields the card writes can be read from what it wrote
+    js("window.__steps = new Set(); window.__w = []; A.on('plan', () => { for (const st of [...S.undo, ...S.redo]) if (!__steps.has(st)) { __steps.add(st); for (const o of st.ops) __w.push(JSON.parse(JSON.stringify({ kind: o.kind || 'planting', key: o.key || null, before: o.before === undefined ? null : o.before, after: o.after === undefined ? null : o.after }))); } }); return 1;")
     year = before.get("year")
     # ── the part opens ──
     js("A.setView('assume'); return 1;"); wait(400)
@@ -129,13 +134,41 @@ with sync_playwright() as pw:
     changed = [r for r in c2.get("sowings", []) if r["batch"] in eng_b and int(r["cells"]) != eng_b[r["batch"]]["cells"]]
     check("Enter takes it: the variety's own germination, one step", after.get("germ") == 60 and after.get("undo") == k0.get("undo", 0) + 1, after)
     check("its sowing lines change, as the engine now sows them, and the line under the box says what was done, with Undo", len(changed) > 0 and any(r["cells"] == str(next((b["cells"] for b in after.get("batches", []) if b["ids"] == r["batch"]), -1)) for r in changed) and any(x["key"] == key and x["said"] for x in c2.get("moves", [])) and has('[data-hook="start-undo"]'), [len(changed), c2.get("moves")])
+    js("const t = $('toast'); if (t) { t.textContent = ''; t.classList.remove('show'); } window.__undid = (document.body.innerText.match(/Undid/g) || []).length; return 1;")
     click('[data-hook="start-undo"]', 700)
-    k2 = js("return { plan: plan(), sig: sig(), undo: S.undo.length };") or {}
+    k2 = js("return { plan: plan(), sig: sig(), undo: S.undo.length, undid: (document.body.innerText.match(/Undid/g) || []).length - window.__undid, said: (H('start-moves').find(x => x.dataset.said === 'true') || {}).textContent || '' };") or {}
+    check("Undo from the card is answered on the card (Undone), with no message as well", k2.get("undid") == 0 and "Undone" in k2.get("said", ""), [k2.get("undid"), k2.get("said")])
     check("Undo puts all back: the plan and every planting's figures as before", k2.get("plan") == k0.get("plan") and k2.get("sig") == k0.get("sig") and k2.get("undo") == k0.get("undo"), k2.get("undo"))
     click(f'[data-hook="start-variety-own"][data-variety="{var["id"]}"]', 400)
     typing(key, "55"); page.keyboard.press("Escape"); wait(400)
     k3 = js("return { plan: plan(), undo: S.undo.length };") or {}
     check("Esc leaves it: nothing taken, nothing said", k3.get("plan") == k0.get("plan") and not (moves(key) or {}).get("text"), moves(key))
+
+    # ── a box takes a figure only with Enter or Tab; one equal to the grey it follows is not stored ──
+    lib = js("const has = id => S.plan.crops.some(c => c.id === id); const c = mine().find(c => SC.groupOf(c) === 'nursery' && !has(c.id) && S.plan.plantings.some(p => p.cropId === c.id && S.engine.calc(p) && S.engine.calc(p).sowing)); return c ? { id: c.id, name: c.name } : null;") or {"id": "", "name": ""}
+    other_item = js(f"const b = H('start-item').find(b => b.dataset.crop !== {json.dumps(lib['id'])}); return b ? b.dataset.crop : null;")
+    open_crop(lib["id"])
+    w0 = js("return { all: JSON.stringify(S.plan), undo: S.undo.length };") or {}
+    typing("germ", "70")
+    if other_item: click(f'[data-hook="start-item"][data-crop="{other_item}"]', 600)
+    w1 = js("return { all: JSON.stringify(S.plan), undo: S.undo.length, cur: SC.current() };") or {}
+    check(f"a figure typed and left by a click elsewhere is not taken ({lib['name']}'s germination), and the click lands", bool(lib["id"]) and w1.get("all") == w0.get("all") and w1.get("undo") == w0.get("undo") and w1.get("cur") == other_item, [w1.get("undo"), w1.get("cur"), other_item])
+    open_crop(lib["id"])
+    grey = js("const el = document.querySelector('[data-hook=\"start-card\"] input[data-key=\"germ\"]'); return el ? el.placeholder : null;") or ""
+    typing("germ", grey); page.keyboard.press("Enter"); wait(600)
+    w2 = js("return { all: JSON.stringify(S.plan), undo: S.undo.length };") or {}
+    check("the grey figure typed again and taken is not stored: the plan is as it was", bool(grey) and w2.get("all") == w0.get("all") and w2.get("undo") == w0.get("undo"), [grey, w2.get("undo")])
+    typing("germ", "70"); page.keyboard.press("Enter"); wait(600)
+    typed_ok = js(f"return (S.plan.crops.find(c => c.id === {json.dumps(lib['id'])}) || {{}}).germ;") == 70
+    typing("germ", ""); page.keyboard.press("Enter"); wait(600)
+    w3 = js("return { all: JSON.stringify(S.plan), crop: S.plan.crops.some(c => c.id === " + json.dumps(lib["id"]) + ") };") or {}
+    check("a figure typed, taken, then emptied and taken leaves the whole plan as it was: no empty record of the crop is left", typed_ok and w3.get("all") == w0.get("all") and not w3.get("crop"), [typed_ok, w3.get("crop")])
+    # Tab takes it and lands in the next box
+    typing("germ", "71"); page.keyboard.press("Tab"); wait(700)
+    tab = js("const el = document.activeElement; return { key: el && el.dataset ? el.dataset.sk || null : null, germ: (S.plan.crops.find(c => c.id === " + json.dumps(lib["id"]) + ") || {}).germ };") or {}
+    check("Tab takes the figure and the pointer stands in the next box", tab.get("germ") == 71 and tab.get("key") == "spare", tab)
+    while (js("return S.undo.length;") or 0) > (w0.get("undo") or 0): js("A.undo(); return 1;"); wait(300)
+    open_crop(many["id"])
 
     # ── the offer: one station a cell, before and after, Use it, one Undo ──
     c3 = card()
@@ -146,6 +179,8 @@ with sync_playwright() as pw:
     st = js(f"const c = S.engine.crop({json.dumps(many['id'])}); return {{ station: c.station, undo: S.undo.length, batches: batches(c.id) }};") or {}
     fewer = [b for b in st.get("batches", []) if b["ids"] in eng_b and b["cells"] < eng_b[b["ids"]]["cells"]]
     check("Use it takes the offer as one step: the crop counts one station a cell, and its sowings take fewer cells", st.get("station") is True and st.get("undo") == (u0 or 0) + 1 and len(fewer) > 0, [st.get("station"), st.get("undo"), u0])
+    sl = moves("station") or {}
+    check("after Use it the line where the offer stood says what was done in words, with Undo", sl.get("said") and "one station" in sl.get("text", "") and "[object" not in sl.get("text", "") and has('[data-hook="start-undo"]'), sl)
     ps = js("return { plan: plan(), undo: S.undo.length };") or {}
     click('[data-hook="start-station-off"]', 600)
     so = moves("station") or {}
@@ -174,7 +209,9 @@ with sync_playwright() as pw:
     p0 = js("return { plan: plan(), undo: S.undo.length };") or {}
     click(f'[data-hook="start-carrier"] [data-hook="start-side"][data-side="{other}"]', 600)
     pm = moves("carrier") or {}
+    cr = js(f"const e2 = A.engineAfter([{{ kind: 'crop', before: S.plan.crops.find(c => c.id === {json.dumps(pot['id'])}) || null, after: {{ ...(S.plan.crops.find(c => c.id === {json.dumps(pot['id'])}) || {{ id: {json.dumps(pot['id'])} }}), perCarrier: {other} }} }}]), own = (S.plan.lrfNext || {{}}).supplies || null, n = e => (LRFNursery.supplies(e, A.planYear(), own).rows.find(r => r.id === 'carrier') || {{ need: 0 }}).need; return [n(S.engine), n(e2)];") or [0, 0]
     check("pressing the other side says what it would move first, and moves nothing yet", pm.get("would") and js("return plan();") == p0.get("plan"), pm)
+    check("a crop's own pots a carrier says the carrying trays it moves, as Supplies counts them", cr[0] == cr[1] or f"carrying tray for pots {cr[0]} → {cr[1]}" in pm.get("text", ""), [cr, pm.get("text")])
     click('[data-hook="start-use"]', 700)
     check("Use it takes it as one step", js(f"return S.engine.crop({json.dumps(pot['id'])}).perCarrier;") == int(other) and js("return S.undo.length;") == p0.get("undo", 0) + 1)
     js("A.undo(); return 1;"); wait(500)
@@ -182,16 +219,34 @@ with sync_playwright() as pw:
     q0 = js("return { plan: plan(), undo: S.undo.length };") or {}
     if size.get("other"): page.select_option('[data-hook="start-pot-size"]', size["other"]); wait(600)
     ms = moves("potSize") or {}
-    check("another pot size says what it would move (bench room) first, and moves nothing yet", ms.get("would") and "tray spaces" in ms.get("text", "") and js("return plan();") == q0.get("plan"), ms)
+    check("another pot size says what it would move first (the pots of each size and the potting mix, as Supplies counts them), and moves nothing yet", ms.get("would") and "potting mix" in ms.get("text", "") and f"{size.get('other')} in pot" in ms.get("text", "") and js("return plan();") == q0.get("plan"), ms)
     click('[data-hook="start-moves"][data-key="potSize"] [data-hook="start-use"]', 700)
     check("Use it takes the pot size as one step", str(js(f"return S.engine.crop({json.dumps(pot['id'])}).potSize;")) == size.get("other") and js("return S.undo.length;") == q0.get("undo", 0) + 1)
     js("A.undo(); return 1;"); wait(500)
     shot("potted")
 
+    # ── a crop whose plantings are started their own way: counted by their own source ──
+    mixed = js("const c = mine().find(c => SC.groupOf(c) === 'nursery' && S.plan.plantings.some(p => p.cropId === c.id && (S.engine.calc(p) || {}).boughtIn) && S.plan.plantings.some(p => p.cropId === c.id && S.engine.calc(p) && !S.engine.calc(p).boughtIn && !S.engine.isTower(S.engine.bedOf(p.bedId)))); if (!c) return null; const bed = S.plan.plantings.filter(p => p.cropId === c.id && S.engine.calc(p) && !S.engine.isTower(S.engine.bedOf(p.bedId)) && !S.engine.isRack(S.engine.bedOf(p.bedId))), b = bed.filter(p => S.engine.calc(p).boughtIn); return { id: c.id, odd: b.length, follow: bed.length - b.length, buy: b.reduce((n, p) => n + S.engine.calc(p).buy, 0) };")
+    if mixed: open_crop(mixed["id"])
+    fo = js("const c = cardEl(), f = c && H('start-follow', c)[0]; return f ? { ...f.dataset, text: f.textContent, comes: (H('start-comes', c)[0] || {}).textContent || '' } : null;") or {}
+    check("a sown crop with plantings bought in on Seeds counts each by its own source, and says the plants to buy", bool(mixed) and fo.get("odd") == str(mixed["odd"]) and fo.get("follow") == str(mixed["follow"]) and "All" not in fo.get("text", "") and f"{mixed['buy']:,} plant" in fo.get("text", "") and "bought in" in fo.get("comes", ""), [mixed, fo])
+
+    # ── an offer of a nursery length: after Use it, what was done, with Undo ──
+    on = js("for (const id of [...new Set(S.plan.plantings.map(p => p.cropId))]) { LRFAssume.setMode('start', null, id); const o = H('start-offer').find(o => o.dataset.offer.startsWith('days-')); if (o) return id; } return null;")
+    wait(300)
+    o0 = js("return S.undo.length;")
+    click('[data-hook="start-offer-use"][data-offer^="days-"]', 700)
+    od = js("const m = H('start-moves').find(x => (x.dataset.key || '').startsWith('days-')); return m ? { text: m.textContent, said: m.dataset.said === 'true' } : null;") or {}
+    check("a crop's offered nursery length, used, leaves a line saying what was done, with Undo", bool(on) and js("return S.undo.length;") == (o0 or 0) + 1 and od.get("said") and "weeks" in od.get("text", "") and has('[data-hook="start-undo"]'), [on, od])
+    js("A.undo(); return 1;"); wait(400)
+
     # ── a tower crop ──
     tw = js("const c = S.engine.crops().find(c => SC.groupOf(c) === 'nursery' && S.plan.plantings.some(p => p.cropId === c.id && S.engine.isTower(S.engine.bedOf(p.bedId)))); return c ? c.id : null;")
     open_crop(tw or "")
     ct = card()
+    rw = js("const id = SC.current(), own = S.plan.crops.find(c => c.id === id) || null, e2 = A.engineAfter([{ kind: 'crop', before: own, after: { ...(own || { id }), rockwoolDays: 25 } }]); return S.plan.plantings.filter(p => p.cropId !== id && S.engine.calc(p) && e2.calc(e2.planting(p.id)) && Math.abs((S.engine.calc(p).trays || 0) - (e2.calc(e2.planting(p.id)).trays || 0)) > 1e-9).length;")
+    typing("rockwoolDays", "25"); rm = moves("rockwoolDays") or {}; page.keyboard.press("Escape"); wait(300)
+    check("a tower crop's days in rockwool says what it moves for the other crops sharing its sheets, when it moves them", (rw or 0) == 0 or ("other crop" in rm.get("text", "") and f"{rw} planting" in rm.get("text", "")), [rw, rm.get("text", "")[:300]])
     check("a crop with tower plantings shows For the towers, beside its Sowing", bool(tw) and "start-towers" in ct.get("parts", []) and "start-sowing" in ct.get("parts", []) and has(box("rockwoolDays")), ct.get("parts"))
 
     # ── a live-tray crop: not counted until its two boxes are filled ──
@@ -207,17 +262,24 @@ with sync_playwright() as pw:
     check("with seeds a cell said too, a tray's seed is counted", cl2.get("live") == "true" and js(f"return S.engine.liveSow(S.engine.crop({json.dumps(lv)})).seeds;") == 150, cl2.get("live"))
     while (js("return S.undo.length;") or 0) > (l0 or 0): js("A.undo(); return 1;"); wait(300)
 
+    # ── a live-tray crop that comes with the planner: its boxes say why they take nothing ──
+    js("LRFAssume.setMode('start'); return 1;"); click('[data-as-scope="all"]', 500)
+    libmicro = js("const c = S.engine.crops().find(c => c.micro && !S.plan.crops.some(x => x.id === c.id)); return c ? c.id : null;")
+    open_crop(libmicro or "")
+    lm = js("const c = cardEl(); return c ? H('start-box', c).map(i => ({ key: i.dataset.key, off: i.disabled })) : [];") or []
+    check("a live-tray crop that comes with the planner shows its tray boxes switched off, with the reason", bool(libmicro) and len(lm) > 0 and all(x["off"] for x in lm) and "demand plan" in (js("return (cardEl() || {}).textContent || '';") or ""), lm)
+    click('[data-as-scope="mine"]', 400)
+
     # ── the farm's figures ──
     click('[data-hook="start-every"]', 500)
     cf = card()
     check("Every crop shows the farm's germination and spare, and the pots a carrier Supplies counts by", cf.get("crop") == "(farm)" and has(box("farmGerm")) and has(box("farmSpare")) and has('[data-hook="start-pockets"]'), cf.get("crop"))
     # the farm's germination: its bench room is every crop's added up on the same day, not the most of any one crop
-    peak = js("const items = S.engine.benchItems().filter(it => it.kind === 'prop'), days = new Set(); for (const it of items) { days.add(+it.from); const pu = S.engine.potUpDate(it.r); if (pu) days.add(+pu); } let most = 0; for (const t of days) { const d = new Date(t); let n = 0; for (const it of items) if (it.from <= d && d < it.to) { const u = S.engine.propOf(it.r, d); if (u) n += u.eq; } most = Math.max(most, n); } return Math.round(most * 10) / 10;")
+    peak = js("const f = LRFNursery.season(S.engine, A.planYear()); return Math.round(f.weeks.reduce((n, w) => Math.max(n, w.pools && w.pools.heated ? w.pools.heated.used : 0), 0) * 10) / 10;")
     typing("farmGerm", "50")
     fg = moves("farmGerm") or {}
-    import re
-    said = re.search(r"at the most ([\d.,]+) → ([\d.,]+) tray spaces", fg.get("text", ""))
-    check("typing the farm's germination says the bench room of every crop added up on the same day", bool(said) and abs(float(said.group(1).replace(",", "")) - (peak or -1)) < 0.06, [peak, fg.get("text", "")[-160:]])
+    said = re.search(r"heated greenhouse benches at their fullest ([\d.,]+) → ([\d.,]+) tray spaces", fg.get("text", ""))
+    check("typing the farm's germination says the heated benches at their fullest, as Bench room counts them (every crop and live trays added up)", bool(said) and abs(float(said.group(1).replace(",", "")) - (peak or -1)) < 0.06, [peak, fg.get("text", "")[-160:]])
     page.keyboard.press("Escape"); wait(300)
     sup = js("const own = (S.plan.lrfNext || {}).supplies || null, at = LRFNursery.POCKETS.includes(+(own || {}).pockets) ? +own.pockets : LRFNursery.POCKETS[0], other = at === 10 ? 15 : 10, n = x => (LRFNursery.supplies(S.engine, A.planYear(), x == null ? own : LRFNursery.setSupply(own, 'pockets', null, x)).rows.find(r => r.id === 'carrier') || { need: 0 }).need; return { other, a: n(null), b: n(other), plan: plan() };") or {}
     click(f'[data-hook="start-pockets"] [data-hook="start-side"][data-side="{sup.get("other")}"]', 600)
@@ -242,6 +304,43 @@ with sync_playwright() as pw:
         wait(700)
     ce = js("return { view: S.view, mode: LRFAssume.mode(), crop: (cardEl() || { dataset: {} }).dataset.crop };") or {}
     check("Edit crop on Seeds opens that crop's card on Starting and nursery", bool(want_id) and ce.get("view") == "assume" and ce.get("mode") == "start" and ce.get("crop") == want_id, [want_id, ce])
+
+    # ── the farm with no spare set: said so, and a figure typed there is his, 10 too, with what it moves ──
+    js("A.setView('assume'); LRFAssume.setMode('start'); return 1;"); wait(300)
+    nb0 = js("const was = S.plan.settings, after = { ...was }; delete after.buffer; A.setStarting('no spare (check)', [{ kind: 'settings', before: was, after }]); return S.undo.length;")
+    click('[data-hook="start-every"]', 500)
+    nb = js("const c = cardEl(); return { text: c ? c.textContent : '', box: (document.querySelector('[data-hook=\"start-card\"] input[data-key=\"farmSpare\"]') || {}).value };") or {}
+    typing("farmSpare", "10")
+    nm = moves("farmSpare") or {}
+    page.keyboard.press("Enter"); wait(700)
+    nbuf = js("return S.plan.settings.buffer;")
+    check("with no spare set for the farm the card says so (sowing 10%, plants bought in none); 10 typed there is taken as his, its line saying the plants to buy it moves", "not set" in nb.get("text", "") and nb.get("box") == "" and nm.get("would") and "plants to buy" in nm.get("text", "") and nbuf == 10, [nb.get("box"), nm, nbuf])
+    while (js("return S.undo.length;") or 0) > (nb0 or 1) - 1: js("A.undo(); return 1;"); wait(300)
+
+    # ── every control once more, and every field the card wrote: each is named in tests/plan_shape.cjs ──
+    open_crop(many["id"])
+    d0 = js("return S.undo.length;")
+    for k, v in [("spare", "20"), ("days", "49"), ("spc", "3")]: typing(k, v); page.keyboard.press("Enter"); wait(500)
+    vv = js(f"const v = S.engine.varietiesOf({json.dumps(many['id'])})[0]; return v ? v.id : null;")
+    click(f'[data-hook="start-variety-own"][data-variety="{vv}"]', 400)
+    for k, v in [(f"v|{vv}|days", "35"), (f"v|{vv}|spc", "2")]: typing(k, v); page.keyboard.press("Enter"); wait(500)
+    tsel = js("const s = document.querySelector('[data-hook=\"start-tray\"]'); return s ? [...s.options].map(o => o.value).find(v => v !== s.value) : null;")
+    if tsel: page.select_option('[data-hook="start-tray"]', tsel); wait(500); click('[data-hook="start-moves"][data-key="tray"] [data-hook="start-use"]', 600)
+    click('[data-hook="start-as"] [data-hook="start-side"][data-side="direct"]', 500); click('[data-hook="start-moves"][data-key="started"] [data-hook="start-use"]', 600)
+    open_crop(pot["id"]); typing("potUpWk", "21"); page.keyboard.press("Enter"); wait(500)
+    open_crop(tw or ""); typing("rockwoolDays", "25"); page.keyboard.press("Enter"); wait(500)
+    click('[data-hook="start-every"]', 500)
+    for k, v in [("farmGerm", "80"), ("farmSpare", "12")]: typing(k, v); page.keyboard.press("Enter"); wait(500)
+    written = js("""const paths = new Set();
+      const walk = (a, b, at) => { if (b && typeof b === 'object' && !Array.isArray(b)) { const x = a && typeof a === 'object' ? a : {}; for (const k of new Set([...Object.keys(x), ...Object.keys(b)])) { if (JSON.stringify(x[k]) === JSON.stringify(b[k]) || b[k] === undefined) continue; walk(x[k], b[k], at + '.' + k); } } else paths.add(at); };
+      for (const o of __w) { if (o.after == null || (o.kind === 'own' && o.key === 'facts')) continue; const base = { crop: 'crops[]', variety: 'varieties[]', settings: 'settings', assume: 'assumptions', own: 'lrfNext.' + o.key }[o.kind]; if (!base) { paths.add('(a step of kind ' + o.kind + ')'); continue; } if (o.kind === 'own' && (o.after === null || typeof o.after !== 'object')) { paths.add(base); continue; } walk(o.before, o.after, base); }
+      return [...paths].sort();""") or []
+    import subprocess
+    shape = json.loads(subprocess.run(["node", "-e", "console.log(JSON.stringify(Object.keys(require(process.argv[1]).SHAPE)))", str(Path(__file__).resolve().parent / "plan_shape.cjs")], capture_output=True, text=True).stdout or "[]")
+    pats = [re.compile("^" + re.escape(k).replace("\\*", "[^.]+") + "$") for k in shape]
+    unnamed = [w for w in written if not any(pt.match(w) for pt in pats)]
+    check(f"every field the card wrote while each of its controls was used ({len(written)} places) is named in tests/plan_shape.cjs", len(written) >= 15 and not unnamed, {"unnamed": unnamed, "written": written})
+    while (js("return S.undo.length;") or 0) > (d0 or 0): js("A.undo(); return 1;"); wait(300)
 
     end = js("return { sig: sig() };") or {}
     check("after all of it, undone, no figure of any planting differs from before", end.get("sig") == before.get("sig"))

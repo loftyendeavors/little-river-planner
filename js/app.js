@@ -186,7 +186,9 @@
     }
     return { ops, kept };
   }
-  function undo() {
+  /** Take the last step back. `options.quiet`: the page that offered the Undo says so where it was pressed (N1), so no message. */
+  function undo(options) {
+    const quiet = !!options && options.quiet === true;
     if (elsewhere()) { refuse(elsewhere()); return; }
     const step = state.undo.pop();
     if (!step) return;
@@ -200,7 +202,7 @@
     if (state.sel && state.sel.type === 'waiting' && !waitingOne(state.sel.id)) select(null);
     const more = state.joined ? Math.max(0, bookedTwice(state.engine) - twiceWas) : 0;
     if (more) { toast(`Undid: ${step.label}. Another device has planted that ground since: ${UI.num(more)} more to settle.`); return; }
-    toast(way.kept ? `Undid: ${step.label}. ${way.kept} part${way.kept === 1 ? '' : 's'} of it stay${way.kept === 1 ? 's' : ''} as another device changed ${way.kept === 1 ? 'it' : 'them'}.` : `Undid: ${step.label}`);
+    if (!quiet) toast(way.kept ? `Undid: ${step.label}. ${way.kept} part${way.kept === 1 ? '' : 's'} of it stay${way.kept === 1 ? 's' : ''} as another device changed ${way.kept === 1 ? 'it' : 'them'}.` : `Undid: ${step.label}`);
   }
   function redo() {
     if (elsewhere()) { refuse(elsewhere()); return; }
