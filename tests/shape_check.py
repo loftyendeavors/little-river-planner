@@ -103,6 +103,9 @@ TOUR = r"""
   await step('a series left waiting to be placed', () => { if (!sold) return 'no subject'; const r = LRFSuccession.series(eng(), { cropId: sold.id, from: year + '-05-04', every: 14, count: 2, amount: 1, place: 'hold' }); return r && !r.error && r.held && r.held.length ? A.addSeries(r, 'Series to place') : 'no subject'; });
   await step('a variety added to a bed', () => { const p = plain.find(q => S.plan.varieties.some(v => v.cropId === q.cropId && v.id !== q.varietyId)); return p ? A.addVarieties(p.id, [S.plan.varieties.find(v => v.cropId === p.cropId && v.id !== p.varietyId).id]) : 'no subject'; });
   await step('a planting taken away', () => A.removePlantings([plain[60].id]));
+  // a run of successions (E4): added by its own step, and its record taken out with its plantings kept
+  await step('a run of successions added', () => { for (const c of LRFSuccession.candidates(eng(), true)) { const g = LRFSuccession.gardensFor(eng(), c).filter(x => x.kind === 'bed').map(x => x.garden.id); if (!g.length) continue; const r = LRFSuccession.planRun(eng(), { cropId: c.id, by: 'beds', every: 14, datesFor: 'planting', from: year + '-06-01', to: year + '-07-13', gardenIds: g.slice(0, 1), then: g.slice(1) }); if (!r.error && r.sowings.length >= 2) return A.addRun(r); } return 'no subject'; });
+  await step('a run of successions added to an amount a week, and another taken out, its plantings kept', () => { const kept = A.runs()[0]; if (!kept) return 'no subject'; for (const c of LRFSuccession.candidates(eng(), true)) { const g = LRFSuccession.gardensFor(eng(), c).filter(x => x.kind === 'bed').map(x => x.garden.id); if (!g.length) continue; const r = LRFSuccession.planRun(eng(), { cropId: c.id, by: 'amount', want: 5, margin: 10, datesFor: 'picking', from: year + '-08-01', to: year + '-08-29', gardenIds: g.slice(0, 1), then: g.slice(1) }); if (!r.error && r.sowings.length >= 1) { must(A.addRun(r)); return A.removeRun(kept.id); } } return 'no subject'; });
   clearInterval(yes);
   const kinds = [...new Set(S.undo.flatMap(s => s.ops.map(o => o.kind || 'planting')))];
   return { out, kinds };
@@ -122,7 +125,7 @@ HOLD = """
   }
   const short = r => ({ unknown: r.unknown.slice(0, 8), wrong: r.wrong.slice(0, 8) });
   const stored = (() => { try { return JSON.parse(localStorage.getItem('lrf-next:plan')); } catch (_) { return null; } })();
-  const own = Object.fromEntries(['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting', 'supplies'].filter(k => (S.plan.lrfNext || {})[k] != null).map(k => [k, S.plan.lrfNext[k]]));
+  const own = Object.fromEntries(['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting', 'supplies', 'runs'].filter(k => (S.plan.lrfNext || {})[k] != null).map(k => [k, S.plan.lrfNext[k]]));
   const file = { ...LRFPlanIO.join(S.plan, { v: 1, rest: {}, varieties: {} }), lrfNextKeep: { v: 1, savedAt: new Date().toISOString(), device: 'device-1', keep: own } };
   return { steps: S.undo.length, bad: bad.slice(0, 12), held: short(SH.check(S.plan)), stored: stored ? short(SH.check(stored)) : null, file: short(SH.check(file, '', { attic: LRFPlanIO.CORE_KEYS })) };
 })()

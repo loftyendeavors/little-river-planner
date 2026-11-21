@@ -87,7 +87,10 @@
     // a thing written in one act, or whose parts are read together: a job put off (from, to), a planting marked failed (on, at), what the planner noted of an edit (set, was),
     // a photo's file and its type, a crop's selling line (its price, yield and weight are by its unit), a demand plan (its editor checks it whole)
     'plantings[].tasks.delay.*', 'plantings[].failed', 'plantings[].towerCycle', 'lrfNext.facts.*.*', 'lrfNext.waiting[].wait', 'varieties[].photo', 'varieties[].environmentDefaults',
-    'assumptions.sell.*', 'assumptions.sellV.*', 'cropUnits.*', 'crops[].liveSow', 'gardens[].growingEnvironment', 'seedInventory.lots[].germination', 'liveTrayPlans[]']);
+    'assumptions.sell.*', 'assumptions.sellV.*', 'cropUnits.*', 'crops[].liveSow', 'gardens[].growingEnvironment', 'seedInventory.lots[].germination', 'liveTrayPlans[]',
+    // a run of successions (E4): its record is read as one (its dates, its amount and its spacing were worked out together), and a
+    // planting's place in it (which run, its number, the spacing it was made at) is one fact
+    'lrfNext.runs[]', 'plantings[].run']);
   /**
    * Who saved a file and with what, and what a device notes for itself about the plan it holds (when it was loaded, from which
    * file, whether it has the farm photo): the cloud's, and nothing is said. A device that takes a joined plan in keeps its own.

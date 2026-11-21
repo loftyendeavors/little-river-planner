@@ -921,6 +921,51 @@ tryCase('something that is not a plan is not joined', () => {
   return [a.ok === false && b.ok === false && c.ok === false && [a, b, c].every(r => typeof r.why === 'string' && r.why.length > 10), [a.why, b.why, c.why]];
 });
 
+// a run of successions (E4): its record kept beside the plan (lrfNext.runs, taken whole) and its mark on each planting (run, taken whole)
+const RUN_BASE = planting(FARM, X1);
+const runRecord = (id, change = {}) => ({ id, cropId: RUN_BASE.cropId, by: 'beds', datesFor: 'planting', from: '2027-06-01', to: '2027-07-13', reach: 'spacing', every: 14, wholeBeds: true, gardenIds: [FARM.gardens[0].id], bedIds: [], then: [], ...change });
+const runPlanting = (id, n, gap = 14) => { const p = { ...RUN_BASE, id: `${id}-p${n}`, date: E.d2s(E.addDays(E.s2d('2027-06-01'), (n - 1) * gap)), run: { id, n, gap } }; delete p.done; delete p.workflow; return p; };
+const withRun = (plan, record, list) => ({ ...plan, plantings: [...plan.plantings, ...list], lrfNext: { ...(plan.lrfNext || {}), runs: [...((plan.lrfNext || {}).runs || []), record] } });
+const runsOf = plan => (plan.lrfNext || {}).runs || [];
+tryCase('a run made on two devices with the same id joins to one run, its plantings once each, and nothing to report', () => {
+  const add = () => withRun(FARM, runRecord('run-a'), [1, 2, 3].map(n => runPlanting('run-a', n)));
+  const r = M.merge(FARM, add(), add());
+  return [ok(r) && runsOf(r.plan).length === 1 && r.plan.plantings.filter(p => p.run && p.run.id === 'run-a').length === 3 && r.plan.plantings.length === FARM.plantings.length + 3 && !r.report.items.length, r.ok ? r.report : r.why];
+});
+tryCase('two different runs made one on each device both stand, each with its own plantings', () => {
+  const m = withRun(FARM, runRecord('run-m'), [1, 2].map(n => runPlanting('run-m', n))), t = withRun(FARM, runRecord('run-t', { every: 21 }), [1, 2, 3].map(n => runPlanting('run-t', n, 21)));
+  const r = M.merge(FARM, m, t), ids = runsOf(r.plan || {}).map(x => x.id).sort().join();
+  return [ok(r) && ids === 'run-m,run-t' && r.plan.plantings.filter(p => p.run && p.run.id === 'run-m').length === 2 && r.plan.plantings.filter(p => p.run && p.run.id === 'run-t').length === 3 && !r.report.items.length, r.ok ? { ids, report: r.report } : r.why];
+});
+tryCase('a run\'s record is taken whole: changed on one side, that side\'s; changed on both, the cloud\'s whole, never half of each, and said', () => {
+  const s = withRun(FARM, runRecord('run-w'), [1, 2].map(n => runPlanting('run-w', n))), set = (plan, change) => ({ ...plan, lrfNext: { ...plan.lrfNext, runs: plan.lrfNext.runs.map(x => ({ ...x, ...change })) } });
+  const one = M.merge(s, set(s, { every: 10 }), s), both = M.merge(s, set(s, { every: 10 }), set(s, { to: '2027-08-01' })), rec = both.ok && runsOf(both.plan)[0];
+  return [ok(one) && runsOf(one.plan)[0].every === 10 && ok(both) && rec.to === '2027-08-01' && rec.every === 14 && items(both, 'same-box').length === 1, [one.ok && runsOf(one.plan), rec, both.report]];
+});
+tryCase('a run taken out on one device and changed on the other stays, as changed, and the report says which side took it out (both ways)', () => {
+  const s = withRun(FARM, runRecord('run-k'), [1, 2].map(n => runPlanting('run-k', n)));
+  const gone = { ...s, plantings: s.plantings.map(p => { if (!p.run) return p; const q = { ...p }; delete q.run; return q; }), lrfNext: { ...s.lrfNext, runs: [] } };
+  const changed = { ...s, lrfNext: { ...s.lrfNext, runs: [{ ...s.lrfNext.runs[0], every: 7 }] } };
+  const a = M.merge(s, gone, changed), b = M.merge(s, changed, gone), fine = (r, by) => ok(r) && runsOf(r.plan).length === 1 && runsOf(r.plan)[0].every === 7 && items(r, 'kept').some(x => x.id === 'run-k' && x.removedBy === by);
+  return [fine(a, 'mine') && fine(b, 'theirs'), [a.report, b.report]];
+});
+tryCase('a planting of a run taken out on one device leaves the run standing with its other plantings', () => {
+  const s = withRun(FARM, runRecord('run-p'), [1, 2, 3].map(n => runPlanting('run-p', n)));
+  const less = { ...s, plantings: s.plantings.filter(p => p.id !== 'run-p-p2') }, noted = setP(s, 'run-p-p3', { note: 'theirs' });
+  const r = M.merge(s, less, noted), left = r.ok ? r.plan.plantings.filter(p => p.run && p.run.id === 'run-p').map(p => p.run.n).join() : '';
+  return [ok(r) && runsOf(r.plan).length === 1 && left === '1,3' && planting(r.plan, 'run-p-p3').note === 'theirs' && !r.report.items.length, { left, report: r.ok && r.report }];
+});
+tryCase('a planting\'s place in a run is taken whole: its number on one side and its spacing on the other are never joined half of each', () => {
+  const s = withRun(FARM, runRecord('run-n'), [1, 2].map(n => runPlanting('run-n', n)));
+  const r = M.merge(s, setP(s, 'run-n-p2', { run: { id: 'run-n', n: 5, gap: 14 } }), setP(s, 'run-n-p2', { run: { id: 'run-n', n: 2, gap: 9 } })), got = r.ok && planting(r.plan, 'run-n-p2').run;
+  return [ok(r) && same(got, { id: 'run-n', n: 2, gap: 9 }) && items(r, 'same-box').length === 1, [got, r.report]];
+});
+tryCase('a run joined the same way in what a file keeps beside the plan (lrfNextKeep)', () => {
+  const file = (plan, list) => ({ ...plan, lrfNextKeep: { v: 1, savedAt: '2027-03-01T08:00:00.000Z', device: 'd', keep: { runs: list } } });
+  const s = file(FARM, [runRecord('run-f')]), r = M.merge(s, file(FARM, [runRecord('run-f', { every: 10 })]), file(FARM, [runRecord('run-f', { from: '2027-06-08' })])), got = r.ok && r.plan.lrfNextKeep.keep.runs;
+  return [ok(r) && got.length === 1 && got[0].from === '2027-06-08' && got[0].every === 14 && items(r, 'same-box').length === 1, [got, r.report]];
+});
+
 // ───────────────────────────── 2. the five tests ─────────────────────────────
 {
   const m = record(setP(FARM, X1, { note: 'mine' }), A1.id, 'sow', DAY, mine()), t = record(FARM, A2.id, 'sow', DAY, theirs()), good = M.merge(FARM, m, t);

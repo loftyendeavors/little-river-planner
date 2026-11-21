@@ -60,6 +60,7 @@ for n in "$@"; do
     numbers) python3 -I $T/number_boxes_check.py $APP $S/numbers 2>&1 | tally number-boxes ;;
     numbers-site) python3 -I $T/number_boxes_check.py $SITE $S/numbers-site $ZIP 2>&1 | tally number-boxes-built-site ;;
     shape) python3 -I $T/shape_check.py $APP $S/shape $REPO 2>&1 | tally shape ;;   # the plan's shape (plan_shape.cjs) held to what the page writes
+    runs) python3 -I $T/run_check.py $APP $S/runs 2>&1 | tally runs ;;   # E4 stage 1: a run of successions added and taken out by the page's own steps, one Undo each
     loose) python3 -I $T/loose_check.py $APP $S/loose 2>&1 | tally loose-ends ;;
     loose-site) python3 -I $T/loose_check.py $SITE $S/loose-site $ZIP 2>&1 | tally loose-ends-built-site ;;
     room) python3 -I $T/room_check.py $APP $S/room 2>&1 | tally room-for-a-crop ;;   # the Timeline and the library: room for a crop, a shut garden's band, To place

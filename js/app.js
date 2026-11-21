@@ -31,7 +31,7 @@
   }[store && store.readOnly] || '');
   const rebuild = () => { state.engine = E.create(state.plan, Lib); };
   /** What this app keeps beside a plan, apart from the plan's own records. It travels in a plan file's own note (see withOwn). */
-  const OWN_KEYS = ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting', 'supplies'];
+  const OWN_KEYS = ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting', 'supplies', 'runs'];
   /**
    * A fingerprint of what the plan says: the same for the same plan, whenever and wherever it was opened. The app's own
    * bookkeeping (when the plan was loaded, from which file) is left out. Sync and snapshots tell "changed" from "the same" by it.
@@ -1632,6 +1632,37 @@
     if (held.length) ops.push(waitingOp([...waiting(), ...held]));
     return ops.length ? commit(label || 'Add a series', ops) : false;
   }
+  // ─────────────────── a run of successions (E4) ───────────────────
+  // A run is kept as a record of its own beside the plan (lrfNext.runs), and each of its plantings carries run: { id, n, gap }.
+  // Its plantings are plantings like any other: they count everywhere, and go through the same guard rails.
+  const runs = () => Ahead.runs(state.plan);
+  const runsOp = after => ({ kind: 'own', key: 'runs', before: (state.plan.lrfNext || {}).runs || null, after: after.length ? after : null });
+  /**
+   * Add a run as one step, which one Undo takes back: its record and every planting LRFSuccession.planRun found a bed for.
+   * Refused whole, with nothing added, when the result is an error or has no sowing, when the run is already in the plan, or when
+   * the guard rails turn down any one of its plantings (the plan changed after it was worked out). True when it was added.
+   */
+  function addRun(result, label) {
+    if (!result || result.error || !result.run || !Ahead.isRun(result.run) || !Array.isArray(result.sowings) || !result.sowings.length) return refuse((result && result.error) || 'Nothing to add: no sowing of this run has a bed.');
+    if (runs().some(r => r.id === result.run.id)) return refuse('That run is already in the plan.');
+    const ps = result.sowings.map(s => s.p);
+    if (ps.some(p => !p || !p.run || p.run.id !== result.run.id || state.engine.planting(p.id))) return refuse('That run was worked out on another plan. Nothing was added.');
+    const crop = state.engine.crop(result.run.cropId), n = ps.length;
+    return commit(label || `Add a succession of ${crop ? crop.name.toLowerCase() : 'a crop'}: ${n} planting${n === 1 ? '' : 's'}`, [...ps.map(p => ({ before: null, after: p })), runsOp([...runs(), result.run])]);
+  }
+  /**
+   * Take a run's record out, as one step. Its plantings stay, as plain plantings (their mark of the run is taken off, nothing else
+   * of them changes), unless options.plantings: then they go with it. True when it was taken out.
+   */
+  function removeRun(id, options = {}, label) {
+    const list = runs(), record = list.find(r => r.id === id);
+    if (!record) return false;
+    const mine = state.plan.plantings.filter(p => p.run && p.run.id === id), crop = state.engine.crop(record.cropId), what = crop ? crop.name.toLowerCase() : 'a crop';
+    const ops = mine.map(before => { if (options.plantings) return { before, after: null }; const after = { ...before }; delete after.run; return { before, after }; });
+    if (options.plantings && state.sel && state.sel.type === 'planting' && mine.some(p => p.id === state.sel.id)) select(null);
+    // nothing takes new ground: a planting given up, or the same planting less its mark, never overlaps anything it did not already
+    return commit(label || (options.plantings ? `Remove a succession of ${what} and its ${mine.length} planting${mine.length === 1 ? '' : 's'}` : `Remove a succession of ${what}, keeping its plantings`), [...ops, runsOp(list.filter(r => r.id !== id))], { unchecked: true });
+  }
   function removeWaiting(ids, label) {
     const gone = new Set(ids), list = waiting(), left = list.filter(w => !gone.has(w.id)), n = list.length - left.length;
     if (!n) return false;
@@ -1763,7 +1794,7 @@
     if (!p0 || !bed || !eng.isSoilBed(bed)) return { no: 'Only a bed in the ground can be divided this way.' };
     if (!varietyIds.length) return { no: 'Tick the varieties to add.' };
     // each variety is a copy of the planting: its date and its choices, another variety, no record of work, and ground of its own
-    const drafts = varietyIds.map(varietyId => { const d = { ...p0, id: uid(), varietyId }; for (const key of ['variety', 'done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'plantedIn', 'tasks', 'failed', 'sowOn', 'seat', 'ft', 'startFt', 'bedLayout']) delete d[key]; return d; });
+    const drafts = varietyIds.map(varietyId => { const d = { ...p0, id: uid(), varietyId }; for (const key of ['variety', 'done', 'workflow', 'flagReviews', 'planningSource', 'standId', 'plantedIn', 'tasks', 'failed', 'sowOn', 'seat', 'ft', 'startFt', 'bedLayout', 'run']) delete d[key]; return d; });
     const group = Rails.mates(eng, p0), res = Rails.equalize(eng, group.length ? group.map(x => x.p.id) : [p0.id], { extra: drafts, by });
     if (res.no) return { no: res.who ? `${cropLabel(res.who)} cannot give up ground: it ${{ recorded: 'is already recorded as sown or planted', standing: 'stands for years', tray: 'follows weekly demand' }[res.no] || 'is held'}.`
       : res.no === 'rows' ? (by === 'rows' ? 'The rows of this bed do not divide evenly among that many, or the bed is already shared along its length.' : 'This bed is shared by rows: choose By rows.')
@@ -2423,7 +2454,7 @@
     return { ok: false, why: 'The plan here kept changing while the two were being joined. It is tried again at the next look.' };
   }
   const WORDS = { seedInventory: 'seed on hand', assumptions: 'the assumptions', beds: 'the layout', gardens: 'the layout', map: 'the layout', containers: 'the layout', varieties: 'the crop library', crops: 'the crop library', cropUnits: 'the crop library',
-    nursery: 'the nursery', liveTrayPlans: 'tray demand', settings: 'the farm’s settings', customers: 'customers', planningPreferences: 'planning settings', 'own.waiting': 'what waits to be placed', 'own.supplies': 'supplies' };
+    nursery: 'the nursery', liveTrayPlans: 'tray demand', settings: 'the farm’s settings', customers: 'customers', planningPreferences: 'planning settings', 'own.waiting': 'what waits to be placed', 'own.runs': 'successions', 'own.supplies': 'supplies' };
   /** What was taken in, as a line: "1 sowing recorded, 2 plantings changed". */
   function takenLine(t) {
     const parts = [], n = (count, one, many) => `${UI.num(count)} ${count === 1 ? one : many}`;
@@ -2654,7 +2685,7 @@
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, lastChange, refuse, setUse, setGives, setPlantedIn, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addSuccessions, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
     auditSurvey, auditStudy, auditPreview, auditApply,
-    waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting,
+    waiting, waitingOne, placeWaiting, addSeries, removeWaiting, updateWaiting, runs, addRun, removeRun,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, failedRange, previewFailed, markFailed, seasonRecords, takeBackSeason, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     yieldOps, engineAfter: ops => E.create(withOps(state.plan, ops, 'do'), Lib),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (elsewhere()) { refuse(elsewhere()); return null; } if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },

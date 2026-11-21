@@ -24,6 +24,7 @@ for part in ${@:-node build app1 app2 app3 app4 new off site1 site2 site3 site4 
       numbers \
       windows \
       shape \
+      runs \
       ;;
     app2) sh $T/b.sh \
       f018 \

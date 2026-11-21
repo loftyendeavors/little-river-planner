@@ -219,6 +219,19 @@ tryCase('a crop added to the library by the planner\'s own function fits', () =>
   return [!!c && !!c.id && !r.unknown.length && !r.wrong.length, short(r)];
 });
 
+// a run of successions (E4): worked out by the planner's own solver and kept as the step that adds it keeps it (app.js addRun)
+tryCase('a run of successions, worked out by the planner\'s own solver and kept as its step keeps it, fits, as the planner holds it and as a file holds it', () => {
+  const S = require(path.join(APP, 'js/succession.js')), e = eng(FARM), year = +FARM.settings.year;
+  const c = S.candidates(e, false).find(x => S.gardensFor(e, x).some(g => g.kind === 'bed' && g.garden.type === 'field'));
+  if (!c) return [false, 'the farm has no crop to plan a run of'];
+  const gardens = S.gardensFor(e, c).filter(g => g.kind === 'bed').map(g => g.garden.id);
+  const r = S.planRun(e, { id: 'run-shape', cropId: c.id, by: 'beds', every: 14, datesFor: 'planting', from: `${year}-06-01`, to: `${year}-07-15`, gardenIds: gardens.slice(0, 1), then: gardens.slice(1) });
+  if (r.error || !r.sowings.length) return [false, r.error || 'no sowing found a bed'];
+  const plan = { ...FARM, plantings: [...FARM.plantings, ...r.sowings.map(x => x.p)], lrfNext: { ...(FARM.lrfNext || {}), runs: [r.run] } };
+  const a = fitsPlan(plan), b = fitsFile(plan);
+  return [a[0] && b[0] && r.sowings.every(x => x.p.run && x.p.run.id === 'run-shape'), { plan: a[1], file: b[1] }];
+});
+
 // ── the check itself finds what it is there for ──
 const P0 = FARM.plantings[0];
 const withPlanting = change => ({ ...FARM, plantings: [{ ...P0, ...change }, ...FARM.plantings.slice(1)] });
