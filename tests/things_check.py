@@ -417,6 +417,19 @@ with sync_playwright() as pw:
         err: r.error || null, unit: r.error ? null : r.totals.unit, by2: r.error || !r.rests ? null : r.rests.by };""", k1)
     check("“plan…” on a thing's row opens the Successions page on that thing, to an amount a week: “Sold by” lists the crop's own line and each thing with its unit, the thing is the one chosen, and the heading names it", sr["view"] == "succession" and sr["crop"] == K and sr["thing"] == k1 and sr["by"] == "amount" and bool(sr["options"]) and len(sr["options"]) == 2 and nth(sr["options"], 1).get("on") and "bouquet" in sr["title"].lower(), sr)
     check("the run is worked out on what a bed gives of that thing, in its unit, and the weeks are counted in it", not sr["err"] and sr["unit"] == "bouquet" and sr["by2"] == "thing" and "bouquets a week" in sr["weeks"].lower(), sr)
+    # what it starts on is the thing's own ordinary week on the Forecast, in its unit (Codex on #103); and a run of it, kept, says its amount in that unit
+    st = js("""const D = LRFSuccessions.state.D, e = S.engine, m = LRFHarvestView.model('commercial'), t = e.thingsOf(D.cropId).find(x => x.id === D.thing);
+      const rows = m.rows.filter(r => r.cropId === D.cropId && r.thing === D.thing && r.unit === t.unit && r.total > 0), se = rows.length ? F.season(m, rows) : null;
+      const n = se ? rows.reduce((k, r) => k + F.sum(r.days, se.i0, se.i1), 0) / Math.max(1, F.periods(m, 'week', se.i0, se.i1).length) : null;
+      const round = n => (!(n > 0) ? 1 : n >= 20 ? Math.round(n / 5) * 5 : n >= 2 ? Math.round(n) : Math.max(0.1, Math.round(n * 10) / 10));
+      return { want: +D.want, expect: n == null ? null : round(n) };""")
+    # room for it: every garden it can go in, after the one chosen, should the first run out of room
+    js("const D = LRFSuccessions.state.D; D.then = LRFSuccession.gardensFor(S.engine, S.engine.crop(D.cropId)).filter(g => g.kind === 'bed' && g.garden.id !== D.gardenId).map(g => g.garden.id); LRFSuccessions.render(); return 1;"); wait(2500)
+    if has('[data-hook="succ-add"]') and not js("return document.querySelector('[data-hook=\"succ-add\"]').disabled;"): click('[data-hook="succ-add"]', 2000)
+    kept = js("const r = A.runs()[A.runs().length - 1]; const row = r && document.querySelector('[data-hook=\"succ-run\"][data-run=\"' + r.id + '\"]'); return { thing: r ? r.thing : null, text: row ? row.textContent : '', title: txt('suTitle') };")
+    check("opened on a thing, the amount wanted starts from that thing's own ordinary week, in its unit; added, the run is listed and titled in that unit", st.get("expect") is not None and st.get("want") == st.get("expect") and kept.get("thing") == k1 and "bouquets a week" in kept.get("text", "") and "bouquets a week" in kept.get("title", ""), [st, kept])
+    if kept.get("thing"): js("A.undo(); return 1;"); wait(800)
+    js("LRFSuccessions.open({ mode: 'succession', by: 'amount', thing: arg.t, cropId: arg.c }); return 1;", {"t": k1, "c": K}); wait(2500)
     if has('[data-hook="succ-thing"]'): page.select_option('[data-hook="succ-thing"]', ""); wait(1500)
     sr2 = js("const D = LRFSuccessions.state.D; return { thing: D.thing, title: txt('suTitle'), weeks: (document.querySelector('[data-hook=\"succ-weeks\"] h4') || {}).textContent || '' };")
     check("chosen the other way, the amount is of the crop's own line, in the crop's own unit", sr2["thing"] == "" and "bouquet" not in sr2["title"].lower() and "bouquet" not in sr2["weeks"].lower() and bool(sr2["weeks"]), sr2)

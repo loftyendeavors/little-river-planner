@@ -41,6 +41,8 @@
   const thingsFor = (eng, cropId) => (eng.thingsOf ? eng.thingsOf(cropId) : []).filter(t => t.counts);
   const groupOf = (crop, unit) => F.groupOf(crop, unit, (App.state.plan.lrfNext || {}).groups);
   const word = (n, crop, unit) => F.unitWord(n, unit, groupOf(crop, unit)) || unit || 'each';
+  /** The unit an amount of a run is in: the thing it is of, where it is of another thing the crop sells, else the crop's (or the variety's) own. */
+  const unitFor = (eng, crop, thingId, varietyId) => { const t = thingId ? thingsFor(eng, crop.id).find(x => x.id === thingId) : null; return t ? t.unit : eng.unitOf(crop, varietyId ? eng.variety(varietyId) : undefined); };
   /** The gardens with beds in the ground this crop can go in, in the farm's order. */
   const bedGardens = (eng, crop) => S.gardensFor(eng, crop).filter(g => g.kind === 'bed');
   /** The input the solver is given for the run being planned. */
@@ -111,9 +113,10 @@
   /** What to start the amount on: the crop's ordinary week where the plan already gives it, else what one bed gives in a week of its picking. */
   function wantedFor(eng, crop) {
     const m = root.LRFHarvestView ? root.LRFHarvestView.model('commercial') : F.build(eng, { year: App.planYear(), use: 'commercial' });
-    const unit = eng.unitOf(crop), rows = m.rows.filter(r => r.cropId === crop.id && r.unit === unit && (r.thing || '') === D.thing && r.total > 0), s = rows.length ? F.season(m, rows) : null;
+    const unit = unitFor(eng, crop, D.thing), rows = m.rows.filter(r => r.cropId === crop.id && r.unit === unit && (r.thing || '') === D.thing && r.total > 0), s = rows.length ? F.season(m, rows) : null;
     if (s) return rows.reduce((n, r) => n + F.sum(r.days, s.i0, s.i1), 0) / Math.max(1, F.periods(m, 'week', s.i0, s.i1).length);
-    const probe = S.planRun(eng, { cropId: crop.id, varietyId: D.varietyId || undefined, by: 'beds', every: 7, datesFor: 'planting', from: D.from || iso(App.state.date), to: D.from || iso(App.state.date), gardenIds: D.gardenId ? [D.gardenId] : [] });
+    // one bed's sowing, read as the thing asked for where it is another thing the crop sells (a run is only of a thing to an amount)
+    const probe = S.planRun(eng, { cropId: crop.id, varietyId: D.varietyId || undefined, ...(D.thing ? { thing: D.thing, by: 'amount', want: 1 } : { by: 'beds' }), every: 7, datesFor: 'planting', from: D.from || iso(App.state.date), to: D.from || iso(App.state.date), gardenIds: D.gardenId ? [D.gardenId] : [] });
     const first = probe && !probe.error && probe.sowings[0];
     return first ? first.units * 7 / Math.max(7, E.dayDiff(first.lastPick, first.firstPick) + 1) : 10;
   }
@@ -161,7 +164,7 @@
 
   /** 01 What and how much */
   function whatCard(eng, crop, result) {
-    const list = crops(eng), mine = new Set(S.candidates(eng, true).map(c => c.id)), v = eng.variety(D.varietyId), unit = result && !result.error && result.totals ? result.totals.unit : eng.unitOf(crop), sold = thingsFor(eng, crop.id);
+    const list = crops(eng), mine = new Set(S.candidates(eng, true).map(c => c.id)), v = eng.variety(D.varietyId), unit = result && !result.error && result.totals ? result.totals.unit : unitFor(eng, crop, D.thing), sold = thingsFor(eng, crop.id);
     const cropSel = h('select', { id: 'suCrop', dataset: { hook: 'succ-crop' }, onchange: e => { changeCrop(e.target.value); render(); } },
       h('optgroup', { label: 'Crops you grow' }, list.filter(c => mine.has(c.id)).map(c => h('option', { value: c.id, selected: c.id === crop.id }, c.name))),
       h('optgroup', { label: 'Every other crop' }, list.filter(c => !mine.has(c.id)).map(c => h('option', { value: c.id, selected: c.id === crop.id }, c.name))));
@@ -282,7 +285,7 @@
     const crop = eng.crop(D.cropId);
     if (!crop) { add(host, h('p.su-empty', { dataset: { hook: 'succ-empty' } }, 'There is no crop with beds to plan a succession of.')); return; }
     const result = current(), ok = result && !result.error, amount = D.by === 'amount';
-    const unit = ok ? result.totals.unit : eng.unitOf(crop);
+    const unit = ok ? result.totals.unit : unitFor(eng, crop, D.thing);
     const title = amount ? `${crop.name}: ${num(+D.want || 0, 1)} ${word(+D.want || 0, crop, unit)} a week` : `${crop.name}: one bed every ${plural(+D.every || 0, 'day')}`;
     add(host, h('div.su-title', h('h2', { id: 'suTitle', dataset: { hook: 'succ-title' } }, title), h('span.su-nothing', { dataset: { hook: 'succ-nothing-yet' } }, 'Nothing is added to the plan until you press Add.')),
       h('div.su-cards', whatCard(eng, crop, result), whenCard(eng, crop, result), whereCard(eng, crop, result)));
@@ -327,7 +330,7 @@
 
   /** A kept run's line in its own words: "1 bed every 14 days · Jun 1 to Jul 13", or its amount a week. */
   function runLine(eng, run, crop) {
-    const unit = eng.unitOf(crop, eng.variety(run.varietyId)), dates = `${day(E.s2d(run.from))} to ${day(E.s2d(run.to))}`;
+    const unit = unitFor(eng, crop, run.thing, run.varietyId), dates = `${day(E.s2d(run.from))} to ${day(E.s2d(run.to))}`;
     return run.by === 'amount' && run.want > 0 ? `${num(run.want, 1)} ${word(run.want, crop, unit)} a week${run.every ? `, a bed every ${plural(run.every, 'day')}` : ''} · ${dates}` : `1 bed every ${plural(run.every || 0, 'day')} · ${dates}`;
   }
   /** The main part for a run the plan keeps: its plantings, read-only, each a link to the planting; and Remove run. */
@@ -362,7 +365,7 @@
 
   /** The runs at the left: the one being planned, then each the plan keeps. */
   function runsList(eng) {
-    const kept = App.runs(), crop = eng.crop(D.cropId), unitWord = crop ? word(+D.want || 0, crop, eng.unitOf(crop)) : '';
+    const kept = App.runs(), crop = eng.crop(D.cropId), unitWord = crop ? word(+D.want || 0, crop, unitFor(eng, crop, D.thing)) : '';
     const row = (picked, photo, name, detail, wordAt, data, onclick) => h('button.row.su-run' + (picked ? '.on' : ''), { type: 'button', 'aria-pressed': String(picked), dataset: data, onclick }, photo, h('span', h('b.row-name', name), h('span.row-detail', detail), h('span.row-word', { dataset: { hook: 'succ-run-word' } }, wordAt)));
     return h('aside.card.su-runs', { 'aria-label': 'Runs', dataset: { hook: 'succ-runs' } },
       h('div.su-runs-head', h('h3', 'Runs'), h('button.btn.small', { type: 'button', dataset: { hook: 'succ-new' }, title: 'Start planning a new run', onclick: newRun }, 'New run')),
