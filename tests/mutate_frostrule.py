@@ -1,6 +1,6 @@
 """Deliberate faults for the frost rule (#100): a frost date never stops a planting; it is placed and marked quietly. Each is put into a
 copy of the app folder, and a line that passed with no fault in it must fail: of succession_test.cjs or waiting_test.cjs (node: the
-planner's own tests, seconds a fault) or of ahead_check.py (page: an opening's panel, the series and a waiting planting, about half a minute a fault).
+planner's own tests, seconds a fault) or of ahead_check.py (page: an opening's panel and a waiting planting, about half a minute a fault).
 usage: python3 -I mutate_frostrule.py <app-dir> <scratch-dir> <tests-dir> <plan.json> [node | page | list] [words…]     env FROM=, TO= to run a part"""
 import json, os, shutil, signal, subprocess, sys, time
 app, scratch, tests, plan = sys.argv[1:5]
@@ -40,24 +40,17 @@ FAULTS = [
  (N, 'a crop the frost cuts carries no note', SU, "    if (frost) base.frost = frost;\n", ""),
  (N, 'the last day offered runs into the frost', SU, "if (late && late.ok && !late.frost) latest = wanted;", "if (late && late.ok) latest = wanted;"),
  (N, 'a crop the frost cuts is sorted among those that fit whole', SU, "const band = t => (t.frost ? 8 : 0) + ", "const band = t => "),
- (N, 'a series holds back a planting the frost leaves nothing to pick', SU, "if (!(r.harvestDays > 0) && !(r.frostCut && !sized))", "if (!(r.harvestDays > 0))"),
- (N, 'a series does not mark what the frost touches', SU, "unit: y ? y.unit : '', frost: frostNote(probe, p, r) });", "unit: y ? y.unit : '', frost: null });"),
- (N, 'a series counts every planting as crossing a frost date', SU, "frost: all.filter(x => x.frost).length,", "frost: all.length,"),
  (N, 'a waiting planting is not offered a bed the frost touches', SU, "if (res.state !== 'ok' || !res.r || seasonTrouble(eng, res.p, res.r) ||", "if (res.state !== 'ok' || !res.r || seasonTrouble(eng, res.p, res.r) || frostNote(eng, res.p, res.r) ||"),
  (N, 'a waiting planting’s home carries no frost mark', SU, "wanted: rank(bed) < 1e6, frost: frostNote(eng, res.p, res.r) });", "wanted: rank(bed) < 1e6, frost: null });"),
  (N, 'where a crop could go drops the frost note', SU, "spare: t.spare, frost: t.frost || null });", "spare: t.spare, frost: null });"),
  (N, 'the frost note is the first warning of any kind', SU, "const w = eng.warnings(p, r).find(x => x.k === 'frost');\n    return w ? w.t : eng.fieldFrostOnly(p, r);", "const w = eng.warnings(p, r)[0];\n    return w ? w.t : eng.fieldFrostOnly(p, r);"),
- (N, 'a series says the harvest of a planting that picks nothing', SU, "picked = all.filter(x => x.r.harvestDays > 0);", "picked = all;"),
  # ── the page (ahead_check.py) ──
- (P, 'a series of nothing picked still gives a harvest span', SR, "${n ? (result.firstHarvest ? ` Harvest", "${n ? (true ? ` Harvest"),
- (P, 'a row of a series says pick where nothing is picked', SR, "${first.r.harvestDays > 0 ? `pick ${day(first.r.first)}` : 'nothing picked'}", "pick ${day(first.r.first)}"),
  (P, 'the chip of a crop the frost cuts is not marked', AH, "t.frost ? h('small.ah-frost', { dataset: { hook: 'fit-frost-mark' } }, frostMark(t)) : null", "null"),
  (P, 'the chip says the planned days, not what the frost leaves', AH, "`frost: ${num(t.r.harvestDays)} of ${num(t.r.frostCut.plannedDays)} days`", "`frost: ${num(t.r.frostCut.plannedDays)} of ${num(t.r.frostCut.plannedDays)} days`"),
  (P, 'the chip’s title leaves out the frost note', AH, "${t.frost ? ` ${plain(t.frost)}` : ''}`,", "`,"),
  (P, 'the review has no frost line', AH, "const frost = t.ok && t.frost ? h('p.help.ah-frost',", "const frost = false ? h('p.help.ah-frost',"),
  (P, 'the frost line gives its days as 2027-10-18', AH, "dataset: { hook: 'opening-frost' } }, plain(t.frost))", "dataset: { hook: 'opening-frost' } }, t.frost)"),
  (P, 'Add planting is off where the frost touches it', AH, "id: 'ahAdd', disabled: !t.ok,", "id: 'ahAdd', disabled: !t.ok || !!t.frost,"),
- (P, 'the series does not say how many cross a frost date', SR, "result.frost ? h('span.sr-frost',", "false ? h('span.sr-frost',"),
  (P, 'a waiting planting’s homes are not marked', SR, "x.frost ? h('small.frost', { dataset: { hook: 'home-frost' }, title: plain(x.frost) }, 'frost') : null", "null"),
 ]
 if mode == 'list': print(json.dumps({k: len([f for f in FAULTS if f[0] == k]) for k in (N, P)})); sys.exit(0)

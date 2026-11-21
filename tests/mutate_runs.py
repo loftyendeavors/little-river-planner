@@ -33,6 +33,8 @@ FAULTS = [
  # ── the solver (run_test.cjs) ──
  (N, 'a sowing may take part of a bed', SU, "if (!(res.r.tw || res.r.physicalLength >= res.r.cap - EPS)) return", "if (false) return"),
  (N, 'a frost date stops a sowing', SU, "    const trouble = seasonTrouble(probe, res.p, res.r);\n", "    const trouble = seasonTrouble(probe, res.p, res.r) || frostNote(probe, res.p, res.r);\n"),
+ (N, 'a run holds back a sowing the frost leaves nothing to pick', SU, "if (!(res.r.harvestDays > 0) && !res.r.frostCut) return { why: 'Nothing would be ready before the season ends' };", "if (!(res.r.harvestDays > 0)) return { why: 'Nothing would be ready before the season ends' };"),
+ (N, 'a run counts every sowing as crossing a frost date', SU, "frost: list.filter(x => x.frost).length },", "frost: list.length },"),
  (N, 'a sowing the frost touches is not marked', SU, "frost: frostNote(probe, p, r) || null });", "frost: null });"),
  (N, 'field dates and closed houses no longer stop a sowing', SU, "    const trouble = seasonTrouble(probe, res.p, res.r);\n", "    const trouble = null;\n"),
  (N, 'two sowings may take the same ground', SU, "      work = { ...work, plantings: [...work.plantings, p] };\n      probe = E.create(work, eng.lib, PROBE);", "      work = { ...work, plantings: [...work.plantings, p] };"),

@@ -101,6 +101,8 @@
       const a = asked && asked > soonest ? asked : soonest, last = new Date(year, 11, 31);
       D.from = iso(a); D.to = iso(E.addDays(a, 55) > last ? last : E.addDays(a, 55));
     }
+    // a crop on a yield nobody has checked plans no amount: unless asked for one, it opens by beds, which it can be planned by
+    if (D.by === 'amount' && focus.by !== 'amount' && (eng.harvestFor(crop.id).open || {}).yield) D.by = 'beds';
     if (D.by === 'amount') D.want = String(round(wantedFor(eng, crop)));
   }
   /** What to start the amount on: the crop's ordinary week where the plan already gives it, else what one bed gives in a week of its picking. */
@@ -243,7 +245,9 @@
         weeks.map(w => h('div.su-bar' + (w.short ? '.short' : ''), { dataset: { hook: 'succ-week', week: w.key, run: String(w.run), short: String(!!w.short) }, title: `Week of ${day(w.start)}: ${F.amount(w.run, unit, groupOf(crop, unit))} from this run${asked ? `, ${F.amount(w.wanted, unit, groupOf(crop, unit))} wanted` : ''}${w.have > 1e-9 ? `; the plan already gives ${F.amount(w.have, unit, groupOf(crop, unit))}` : ''}` },
           h('i', { style: { height: `${Math.min(100, (w.run / top) * 100).toFixed(2)}%` } }), h('b', num(w.run, 0))))),
       h('div.su-ticks', { style: { '--n': String(weeks.length) } }, weeks.map(w => h('span', day(w.start)))),
-      h('p.su-note', { dataset: hook('succ-have') }, have > 1e-9 ? `The plan already gives about ${F.amount(have, unit, groupOf(crop, unit))} a week of ${lower(crop)} in these weeks, besides this run; it is not taken off the amount.` : `The plan gives no ${lower(crop)} in these weeks today.`));
+      h('p.su-note', { dataset: hook('succ-have') }, have > 1e-9 ? `The plan already gives about ${F.amount(have, unit, groupOf(crop, unit))} a week of ${lower(crop)} in these weeks, besides this run; it is not taken off the amount.` : `The plan gives no ${lower(crop)} in these weeks today.`,
+        // what the plan gives is what is grown to sell (the forecast's commercial count): said where the crop has plantings for personal use
+        F.useOf && eng.plan.plantings.some(p => p.cropId === crop.id && F.useOf(eng, p).personal) ? ' Plantings for personal use are not counted as giving any.' : ''));
   }
   /** One row a bed: the bed and its length, the season's strip, Sow, Plant and First pick in ruled columns, and Drop. */
   function rowsTable(eng, crop, result, sp, editable) {

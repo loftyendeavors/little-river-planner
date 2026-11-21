@@ -59,13 +59,13 @@ with sync_playwright() as pw:
     start = js("return { n: S.plan.plantings.length, undo: S.undo.length, today: A.today(), now };")
     check("the page believes it is May 5 of the plan's year, with a plan in it and nothing to undo", start["today"].endswith("-05-05") and start["now"].endswith("-05-03") and start["n"] > 300 and start["undo"] == 0, start)
 
-    # ── the top bar: seven views in three groups ──
+    # ── the top bar: eight views in three groups (Successions joined the first in 0.84) ──
     bar = js("""const nav = document.querySelector('nav.views'), kids = [...nav.children].map(e => e.matches('[data-hook="view-tab"]') ? e.textContent.trim() : e.className === 'views-sep' ? '|' : '?');
       const top = document.querySelector('header.top'), btns = [...nav.querySelectorAll('[data-hook="view-tab"]')];
       return { kids, ids: btns.map(b => b.dataset.viewBtn), titles: btns.every(b => (b.title || '').length > 10), clipped: btns.filter(b => b.scrollWidth > b.clientWidth + 1).map(b => b.textContent),
         seps: [...nav.querySelectorAll('.views-sep')].map(e => { const r = e.getBoundingClientRect(); return r.width >= 1 && r.height >= 8; }), side: top.scrollWidth > top.clientWidth + 1 || document.documentElement.scrollWidth > innerWidth + 1, high: top.getBoundingClientRect().height };""")
-    check("the top bar reads Map, Timeline, Forecast | Tasks, Nursery, Seeds | Assumptions: three groups with a rule between them", bar["kids"] == ["Map", "Timeline", "Forecast", "|", "Tasks", "Nursery", "Seeds", "|", "Assumptions"] and all(bar["seps"]) and len(bar["seps"]) == 2, bar)
-    check("the views keep their ids (the Nursery is still the view 'trays', Tasks still 'sow'), and each says in a tooltip what it is for", bar["ids"] == ["map", "timeline", "harvest", "sow", "trays", "seeds", "assume"] and bar["titles"], bar)
+    check("the top bar reads Map, Timeline, Successions, Forecast | Tasks, Nursery, Seeds | Assumptions: three groups with a rule between them", bar["kids"] == ["Map", "Timeline", "Successions", "Forecast", "|", "Tasks", "Nursery", "Seeds", "|", "Assumptions"] and all(bar["seps"]) and len(bar["seps"]) == 2, bar)
+    check("the views keep their ids (the Nursery is still the view 'trays', Tasks still 'sow'), and each says in a tooltip what it is for", bar["ids"] == ["map", "timeline", "succession", "harvest", "sow", "trays", "seeds", "assume"] and bar["titles"], bar)
     wait(400)
     crowd = js("""const w = $('waitBadge'), wasHidden = w.hidden, wasHtml = w.innerHTML, s = $('saveState'), wasText = s.textContent;
       w.hidden = false; w.innerHTML = '<b>12</b> to place<span class="wb-more"> · not counted here</span>'; s.textContent = 'Saved · folder + cloud 12:44';
@@ -301,26 +301,20 @@ with sync_playwright() as pw:
     page.click('[data-view-btn="harvest"]'); wait(800)
     hvw = js("""const head = document.querySelector('.hv-head-acts'), bar = document.querySelector('.hv-bar'), tops = [...bar.children].map(c => Math.round(c.getBoundingClientRect().top + c.getBoundingClientRect().height / 2));
       const rows = [...document.querySelectorAll('#hvTable tr.hv-row')], plans = [...document.querySelectorAll('#hvTable .hv-plan')];
-      const can = id => { const c = eng.crop(id); return !!c && !c.micro && +c.dtm > 0 && !eng.isCoverCrop(c); };
+      const can = id => { const c = eng.crop(id); return !!c && LRFSuccessions.plans(eng, c); };
       return { acts: head ? [...head.children].map(b => [b.id, b.textContent]) : null, oneLine: Math.max(...tops) - Math.min(...tops) <= 14, inBar: !!bar.querySelector('#hvShareBtn, #hvPlanBar'), near: head ? Math.round(head.getBoundingClientRect().right - document.querySelector('.hv-bar').getBoundingClientRect().right) : null,
         clipped: head ? [...head.children].filter(b => b.scrollWidth > b.clientWidth + 1 || b.getBoundingClientRect().right > innerWidth).length : -1, rows: rows.length, want: rows.filter(r => can(r.dataset.crop)).map(r => r.dataset.crop), got: plans.map(p => p.dataset.crop),
         micro: rows.filter(r => { const c = eng.crop(r.dataset.crop); return c && c.micro; }).filter(r => r.querySelector('.hv-plan')).length, hidden: plans.length ? getComputedStyle(plans[0]).opacity : null, side: document.documentElement.scrollWidth > innerWidth + 1 };""")
-    check("at the head of Forecast stand the two things done from it: plan to a weekly amount, and a list to send; the bar under the figures keeps to one line", hvw["acts"] == [["hvPlanBar", "Plan to a weekly amount…"], ["hvShareBtn", "A list to send…"]] and hvw["oneLine"] and not hvw["inBar"] and hvw["clipped"] == 0 and not hvw["side"], hvw)
+    check("at the head of Forecast stands the thing done from it, a list to send (a run to an amount a week has its own page since 0.84); the bar under the figures keeps to one line", hvw["acts"] == [["hvShareBtn", "A list to send…"]] and hvw["oneLine"] and not hvw["inBar"] and hvw["clipped"] == 0 and not hvw["side"], hvw)
     check("every crop that can be planned to an amount has “plan…” on its row, tray crops have none, and it shows only when the row is pointed at", hvw["got"] == hvw["want"] and len(hvw["want"]) > 5 and hvw["micro"] == 0 and hvw["hidden"] == "0", hvw)
     if hvw["want"]:
         cid = hvw["want"][min(3, len(hvw["want"]) - 1)]
         page.locator(f'#hvTable tr.hv-row[data-crop={json.dumps(cid)}]').hover(); wait(250)
         seen = js(f"const b = document.querySelector('#hvTable tr.hv-row[data-crop=' + JSON.stringify({json.dumps(cid)}) + '] .hv-plan'), r = b.getBoundingClientRect(), c = b.closest('td').getBoundingClientRect(); return {{ opacity: getComputedStyle(b).opacity, inside: r.left >= c.left - 1 && r.right <= c.right + 1, label: b.getAttribute('aria-label') }};")
         page.locator(f'#hvTable tr.hv-row[data-crop={json.dumps(cid)}] .hv-plan').click(); wait(800)
-        tool = js("const by = document.querySelector('#srBy [data-by=harvest]'); return { view: S.view, sel: S.sel && S.sel.type, by: by ? by.getAttribute('aria-pressed') : null, crop: ($('srCrop') || {}).value, want: !!$('srWant'), undo: S.undo.length, key: A.contentKey() };")
-        check("pointed at, it shows inside the crop's cell; pressed, it opens the series tool on that crop, asked by the weekly amount, and adds nothing", seen["opacity"] == "1" and seen["inside"] and "weekly amount" in seen["label"] and tool["view"] == "timeline" and tool["sel"] == "series" and tool["by"] == "true" and tool["want"] and tool["undo"] == 0 and tool["key"] == key0, [seen, tool, cid])
-        check("and on the crop of that row", js(f"return LRFSeries.state.P.cropId === {json.dumps(cid)} && ($('srCrop') || {{}}).value === {json.dumps(cid)} && LRFSeries.state.P.by === 'harvest';"), cid)
-        js("A.select(null);"); wait(300)
-    page.click('[data-view-btn="harvest"]'); wait(600)
-    click("#hvPlanBar", 800)
-    tool2 = js("const by = document.querySelector('#srBy [data-by=harvest]'); return { view: S.view, sel: S.sel && S.sel.type, by: by ? by.getAttribute('aria-pressed') : null, want: !!$('srWant'), error: txt('srError'), undo: S.undo.length };")
-    check("the button at the head opens the same tool, by the weekly amount, on a crop and not on a blank", tool2["view"] == "timeline" and tool2["sel"] == "series" and tool2["by"] == "true" and tool2["want"] and "Choose a crop" not in tool2["error"] and tool2["undo"] == 0, tool2)
-    js("A.select(null);"); wait(300)
+        tool = js("const D = LRFSuccessions.state.D; return { view: S.view, by: D.by, crop: D.cropId, dates: D.datesFor, want: +D.want > 0, undo: S.undo.length, key: A.contentKey() };")
+        check("pointed at, it shows inside the crop's cell; pressed, it opens the Successions page on that crop, to an amount a week, and adds nothing", seen["opacity"] == "1" and seen["inside"] and "succession" in seen["label"] and tool["view"] == "succession" and tool["by"] == "amount" and tool["want"] and tool["undo"] == 0 and tool["key"] == key0, [seen, tool])
+        check("and on the crop of that row, by picking dates", tool["crop"] == cid and tool["dates"] == "picking", [tool, cid])
     page.click('[data-view-btn="harvest"]'); wait(500)
     page.screenshot(path=str(shots / f"r1-harvest-{WIDTH}.png"))
 

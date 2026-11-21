@@ -139,14 +139,14 @@ with sync_playwright() as pw:
 
     # ══ the Map's "?" ══
     js("A.setView('map'); A.select(null);"); wait(500)
-    side = js("const p = $('inspectorBody'); return { howto: p.querySelectorAll('.howto').length, said: [...p.querySelectorAll('h3')].map(x => x.textContent).filter(t => /on the map/i.test(t)), link: !!p.querySelector('#ovSeries') }")
+    side = js("const p = $('inspectorBody'); return { howto: p.querySelectorAll('.howto').length, said: [...p.querySelectorAll('h3')].map(x => x.textContent).filter(t => /on the map/i.test(t)), link: !!p.querySelector('#ovSuccession') }")
     tools = js("const t = document.querySelector('.map-tools'), b = $('mapHelp'); return { last: !!b && t.lastElementChild === b, text: b ? b.textContent : '', round: b ? getComputedStyle(b).borderTopLeftRadius : '', box: box(b), said: b ? b.getAttribute('aria-label') : '', open: b ? b.getAttribute('aria-expanded') : '', scale: box($('mapScale')), first: box(t.firstElementChild) }")
     check("what can be done on the map is no longer listed in the side panel; a round “?” stands at the end of the map's tools", side["howto"] == 0 and side["said"] == [] and not side["link"] and tools["last"] and tools["text"] == "?" and tools["said"] == "What can be done on the map" and tools["open"] == "false" and bool(tools["box"]) and tools["box"]["w"] == tools["box"]["h"], [side, tools])
     check("with “?” among them the map's tools keep 8 px or more clear of the scale at the map's other corner", bool(tools["scale"]) and bool(tools["first"]) and tools["first"]["left"] >= tools["scale"]["right"] + 8, tools)
     WANT = ["Plant", "Plan a succession", "Move", "Copy", "Trade", "Share a bed", "Zoom and pan", "Colours"]
     card = press("#mapHelp", 400) and js("""const c = $('mapHelpCard'); if (!c) return null; const r = c.getBoundingClientRect(), dts = [...c.querySelectorAll('dt')], dds = [...c.querySelectorAll('dd')], b = $('mapHelp').getBoundingClientRect();
       return { names: dts.map(d => d.textContent), pairs: dts.length === dds.length, beside: dts.every((d, i) => dds[i] && dds[i].getBoundingClientRect().left >= d.getBoundingClientRect().right && Math.abs(dds[i].getBoundingClientRect().top - d.getBoundingClientRect().top) <= 3),
-        oneLine: dts.every(d => { const r = document.createRange(); r.selectNodeContents(d); return r.getClientRects().length === 1; }), full: dds.every(d => d.textContent.trim().length > 10), inside: r.left >= 0 && r.right <= innerWidth && r.top >= b.bottom && r.bottom <= innerHeight, open: $('mapHelp').getAttribute('aria-expanded'), link: !!c.querySelector('dd #ovSeries'), paragraphs: c.querySelectorAll('p').length };""")
+        oneLine: dts.every(d => { const r = document.createRange(); r.selectNodeContents(d); return r.getClientRects().length === 1; }), full: dds.every(d => d.textContent.trim().length > 10), inside: r.left >= 0 && r.right <= innerWidth && r.top >= b.bottom && r.bottom <= innerHeight, open: $('mapHelp').getAttribute('aria-expanded'), link: !!c.querySelector('dd #ovSuccession'), paragraphs: c.querySelectorAll('p').length };""")
     check("it opens a card of two columns under it, inside the window: a name and what it does, for planting, a succession, moving, copying, trading, sharing a bed, the view and the colours, then the tools that carry words of their own",
           bool(card) and card["names"][:8] == WANT and card["pairs"] and card["beside"] and card["oneLine"] and card["full"] and card["inside"] and card["open"] == "true" and card["link"] and card["paragraphs"] == 0, card)
     shot("map-help")
@@ -155,9 +155,9 @@ with sync_playwright() as pw:
     press("#mapHelp", 300); page.mouse.click(100, 26); wait(250)   # the farm's name in the header: a click there does nothing else
     away = js("return { card: !!$('mapHelpCard'), ...saved() }")
     check("Escape closes the card and gives “?” the focus back; a click elsewhere closes it; nothing has changed", not esc2["card"] and esc2["focus"] and esc2["open"] == "false" and not away["card"] and away["key"] == key0 and away["undo"] == 0, [esc2, away])
-    went = press("#mapHelp", 300) and press("#ovSeries", 700) and js("return { sel: S.sel && S.sel.type, form: !!document.querySelector('#inspectorBody #srForm'), card: !!$('mapHelpCard'), view: S.view, ...saved() }")
-    js("A.select(null)"); wait(300)
-    check("“Plan a series…” in it opens the tool for a succession with no crop picked, in the side panel, and the card gives way to it", bool(went) and went["sel"] == "series" and went["form"] and not went["card"] and went["view"] == "map" and went["key"] == key0, went)
+    went = press("#mapHelp", 300) and press("#ovSuccession", 1500) and js("return { sel: S.sel && S.sel.type, form: !!document.querySelector('[data-hook=\"succ-title\"]'), card: !!$('mapHelpCard'), view: S.view, ...saved() }")
+    js("A.select(null); A.setView('map')"); wait(600)
+    check("“Plan a succession…” in it opens the Successions page on a run of a crop the farm grows, and the card gives way to it", bool(went) and went["form"] and not went["card"] and went["view"] == "succession" and went["key"] == key0, went)
 
     # ══ several varieties in a bed: a tick leaves the list where it was ══
     # the subject: a planting that offers "Several varieties…" and whose crop has more varieties than the list shows at once

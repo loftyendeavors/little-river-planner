@@ -99,8 +99,6 @@ TOUR = r"""
   await step('a job skipped and one given a note', () => { const j = jobs.filter(x => !used.includes(x.id)); if (j.length < 12) return 'no subject'; must(A.skipWork([{ id: j[10].id, kind: j[10].kind }], year + '-04-01')); return A.noteWork([{ id: j[11].id, kind: j[11].kind }], 'a note'); });
   // plantings made, sent to wait, placed and taken away
   await step('a planting with figures of its own sent to wait, and changed while it waits', () => { const p = plain.slice(20).find(q => q.yield != null || q.price != null || q.dtm != null); if (!p) return 'no subject'; must(A.sendToWait(p.id)); const w = (A.waiting() || [])[0]; return w ? A.updateWaiting(w.id, { note: 'a note' }, 'A note') : 'no subject'; });
-  await step('a succession added', () => A.addSuccessions(plain[40].id, 1, 14));
-  await step('a series left waiting to be placed', () => { if (!sold) return 'no subject'; const r = LRFSuccession.series(eng(), { cropId: sold.id, from: year + '-05-04', every: 14, count: 2, amount: 1, place: 'hold' }); return r && !r.error && r.held && r.held.length ? A.addSeries(r, 'Series to place') : 'no subject'; });
   await step('a variety added to a bed', () => { const p = plain.find(q => S.plan.varieties.some(v => v.cropId === q.cropId && v.id !== q.varietyId)); return p ? A.addVarieties(p.id, [S.plan.varieties.find(v => v.cropId === p.cropId && v.id !== p.varietyId).id]) : 'no subject'; });
   await step('a planting taken away', () => A.removePlantings([plain[60].id]));
   // a run of successions (E4): added by its own step, and its record taken out with its plantings kept
