@@ -214,6 +214,20 @@ def run_case(page, fixture, kind, check):
               opened_named and ghost == {'variety':'', 'unit':fixture['baseUnit']} and kept['variety'] == ''
               and kept['source'] == fixture['namedSource'] and new_member['variety'] == ''
               and new_member['unit'] == fixture['baseUnit'], [ghost, kept, new_member])
+    if kind == 'bench':
+        crop = value('id => LRFApp.state.engine.planting(id).cropId', fixture['source']['tower'])
+        value('focus => LRFApp.openAhead(focus)',
+              {'mode':'succession', 'cropId':crop, 'gardenId':fixture['reserve'], 'from':start})
+        garden = hook('succ-garden').locator('option:checked').inner_text()
+        value('focus => LRFApp.openAhead(focus)',
+              {'mode':'succession', 'bedId':expected_bed, 'by':'amount', 'from':start, 'to':end})
+        method = hook('succ-plan-by').locator('[aria-pressed="true"]').inner_text()
+        dates_for = hook('succ-dates-are-for').locator('[aria-pressed="true"]').inner_text()
+        dates = [hook('succ-from').input_value(), hook('succ-to').input_value()]
+        check('opening a requested garden selects its growing space and a bench keeps both requested planting dates',
+              fixture['reserveName'] in garden and method == 'Days apart' and dates_for == 'Planting'
+              and dates == [start, end] and value('LRFSuccessions.state.D.kind') == 'bench'
+              and value('LRFApp.contentKey()') == before and undo_depth() == depth, [garden, method, dates_for, dates])
 
 
 def main():
