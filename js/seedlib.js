@@ -107,7 +107,16 @@
     for (const key of result.cleared) delete v[key];
     delete v.stub;
     if (v.active === false) { v.active = true; delete v.deleted; }
-    if (result.nurseryDays != null) { const config = variety.environmentDefaults || {}; v.environmentDefaults = { ...config, v: 1, field: { ...(config.field || {}), gh: result.patch.gh }, greenhouse: { ...(config.greenhouse || {}), gh: result.patch.gh } }; }
+    if (result.nurseryDays != null) {
+      const config = variety.environmentDefaults || {}, interval = { gh: result.patch.gh };
+      if (Number.isInteger(result.nurseryDays) && result.patch.gh * 7 !== result.nurseryDays) interval.startDays = result.nurseryDays;
+      v.environmentDefaults = { ...config, v: 1 };
+      for (const place of ['field', 'greenhouse']) {
+        const profile = { ...(config[place] || {}) };
+        delete profile.startDays;
+        v.environmentDefaults[place] = { ...profile, ...interval };
+      }
+    }
     return v;
   }
   /** The bulky record kept beside the plan: what the page said and what was confirmed. */
@@ -755,5 +764,5 @@
   }
 
   return { norm, startOf, BASES, supplierKey, varietyKey, urlKey, hostOf, inferCrop, matches, elsewhere, fields, apply, record, derived, newCrop, required, seasonOf, yearOfDate, onTasks, staysIn, seedUsed, stock, measures, emptyInventory, stockUnit, lifeOf, lotsFor, addLot, quickLot, updateLot, receiveLot, deleteLot, moveLot, unlisted, setOnHand,
-    sizeOf, packs, cover, toCover, money, perGram, orderSheet, orderText, orderCsv, supplierOf, boughtFrom, lotsOf, materialOf, sowing, lotsToUse, recordSowing, takeBackSowing, doneDate, realDay, yearAway, YEAR_DAYS, DONE_ORDER, DONE_WORD, STOCK_UNITS, UNIT_WORD, BASES, STAGES };
+    sizeOf, packs, cover, toCover, money, perGram, orderSheet, orderText, orderCsv, supplierOf, boughtFrom, lotsOf, materialOf, sowing, lotsToUse, recordSowing, takeBackSowing, doneDate, realDay, yearAway, YEAR_DAYS, DONE_ORDER, DONE_WORD, STOCK_UNITS, UNIT_WORD, STAGES };
 });

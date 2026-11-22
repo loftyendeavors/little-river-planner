@@ -31,6 +31,7 @@ def finish():
 # The things a link names: they go somewhere and change nothing. Any other control drawn underlined is a button drawn as a link.
 LINKS = ["panel-bed", "bed-planting-back", "panel-live-trays", "panel-mate", "card-bed", "card-full", "card-nursery-full", "bed-planting-full", "opening-back", "fc-from-map",
          "seeds-open-crop", "succ-see", "succ-kept-link", "succ-undrop", "yield-to-list", "yield-to-days", "yield-differs", "yield-typed-crop", "thing-open",
+         "supply-carrier-setting", "start-to-setup", "start-to-live", "start-to-seeds",
          "nursery-to-tasks", "nursery-week-tasks", "bench-line-go", "loose-link", "settle-bed"]
 # the title of a card of To settle is a link drawn as that card's title: underlined, no edge and no ground, at its title's size
 TITLES = ["settle-bed"]
@@ -225,10 +226,12 @@ def run(pw):
         page.mouse.move(2, WIDTH // 4 if WIDTH < 900 else 300); wait(300)
         keyed = js("const h = window.__head, away = look(hook('seeds-edit-crop', h)).strength; hook('seeds-crop-fold', h).focus(); await sleep(300); return [away, look(hook('seeds-edit-crop', h)).strength, look(hook('seeds-add-variety', h)).strength];")
         check("with the keyboard on the heading, it shows them too", keyed == [0, 1, 1], keyed)
-        edit = js("""const h = window.__head, n = eng().crop(h.dataset.crop).name, before = ($('sdPanel') || {}).textContent || ''; hook('seeds-edit-crop', h).click(); await sleep(500);
-          const head = hooks('seeds-crop-head').find(r => r.dataset.crop === h.dataset.crop); const panel = ($('sdPanel') || {}).textContent || '';
-          return { name: n, shows: panel.includes(n) && panel !== before, open: head && hook('seeds-crop-fold', head).getAttribute('aria-expanded'), key: A.contentKey() };""")
-        check("Edit crop opens that crop and leaves its heading as it was", edit["shows"] and edit["open"] == sd["open"], edit)
+        # N1: Edit crop opens the crop's card on Assumptions › Starting and nursery, the one home of how it is started
+        edit = js("""const h = window.__head, id = h.dataset.crop, n = eng().crop(id).name; hook('seeds-edit-crop', h).click(); await sleep(500);
+          const shows = A.state.view === 'assume' && LRFAssume.mode() === 'start' && LRFStartCard.current() === id; A.setView('seeds'); await sleep(600);
+          const head = hooks('seeds-crop-head').find(r => r.dataset.crop === id);
+          return { name: n, shows, open: head && hook('seeds-crop-fold', head).getAttribute('aria-expanded'), key: A.contentKey() };""")
+        check("Edit crop opens that crop's card on Starting and nursery, and leaves its heading as it was", edit["shows"] and edit["open"] == sd["open"], edit)
         add = js("""const head = hooks('seeds-crop-head').find(r => r.dataset.crop === arg); hook('seeds-add-variety', head).click(); await sleep(500);
           const d = document.querySelector('dialog[open]'), out = { open: !!d, words: d ? d.textContent.slice(0, 200) : '', name: eng().crop(arg).name };
           if (d) { d.dispatchEvent(new Event('cancel', { cancelable: true })); const c = d.querySelector('button'); await sleep(200); if (d.open) d.close(); } return out;""", sd["crop"])
@@ -286,7 +289,7 @@ def run(pw):
         if (l.under || LINKS.includes(b.dataset.hook)) seen.push({ where, hook: b.dataset.hook || '', text: l.text, ok: LINKS.includes(b.dataset.hook) && (TITLES.includes(b.dataset.hook) ? l.under && !l.edge && !l.ground : asLink(l)) }); } };
       const views = [['map', () => { A.setView('map'); A.select(null); }], ['timeline', () => A.setView('timeline')], ['successions', () => LRFSuccessions.open({})], ['forecast', () => A.setView('harvest')], ['tasks', () => A.setView('sow')],
         ['bench room', () => { A.setView('trays'); LRFTraysView.setTab('room'); }], ['live trays', () => LRFTraysView.setTab('live')], ['supplies', () => LRFTraysView.setTab('supplies')], ['set-up', () => LRFTraysView.setTab('setup')],
-        ['seeds', () => A.setView('seeds')], ['days to harvest', () => { A.setView('assume'); LRFAssume.setMode('days'); }], ['yield and price', () => LRFAssume.setMode('harvest', 'list')]];
+        ['seeds', () => A.setView('seeds')], ['starting and nursery', () => { A.setView('assume'); LRFAssume.setMode('start'); }], ['days to harvest', () => LRFAssume.setMode('days')], ['yield and price', () => LRFAssume.setMode('harvest', 'list')]];
       for (const [where, go] of views) { go(); await sleep(700); take(where); }
       A.setView('timeline'); await sleep(400); A.select({ type: 'planting', id: arg.id }); await sleep(400); take('a planting'); A.select({ type: 'bed', id: arg.bed }); await sleep(400); take('a bed');
       A.select(null); return { links: seen.filter(x => x.ok).length, bad: seen.filter(x => !x.ok).slice(0, 10) };""".replace("LINKS", json.dumps(LINKS)).replace("TITLES", json.dumps(TITLES)), sub or {"id": "", "bed": ""})

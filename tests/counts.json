@@ -1,10 +1,6 @@
 {
  "node": {
 
-  "equipment adapters": 10,
-
-  "water and feed": 25,
-
   "assume": 12,
 
   "bought in kept, backup": 28,
@@ -18,6 +14,8 @@
   "early and young, backup": 56,
 
   "early and young, compact": 56,
+
+  "equipment adapters": 10,
 
   "failed, backup": 36,
 
@@ -58,6 +56,10 @@
   "shape": 30,
 
   "snapshots kept": 4,
+
+  "starting and nursery, backup": 30,
+
+  "starting and nursery, compact": 30,
 
   "step1, backup": 35,
 
@@ -109,6 +111,8 @@
 
   "waiting, compact": 39,
 
+  "water and feed": 25,
+
   "what the build changed": 9,
 
   "year edge, backup": 52,
@@ -125,13 +129,11 @@
  },
  "app1": {
 
-  "equipment": 1,
-
-  "water-feed": 20,
-
   "ahead": 49,
 
   "core": 20,
+
+  "equipment": 1,
 
   "folder": 14,
 
@@ -148,6 +150,8 @@
   "step2a": 50,
 
   "trays": 31,
+
+  "water-feed": 20,
 
   "windows": 17
 
@@ -200,6 +204,8 @@
   "messages": 56,
 
   "mixed": 61,
+
+  "n1": 71,
 
   "photo": 13,
 
@@ -323,6 +329,8 @@
   "loose-site": 37,
 
   "messages-site @1480": 56,
+
+  "n1-site": 71,
 
   "plain-site": 47,
 

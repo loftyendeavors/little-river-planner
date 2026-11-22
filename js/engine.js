@@ -233,6 +233,8 @@
       const fields = snap[kind];
       if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return original;
       const result = { ...original };
+      // An older planting that froze its nursery weeks also froze their original date arithmetic.
+      if (kind === 'crop' && own(fields, 'gh') && !own(fields, 'startDays')) delete result.startDays;
       for (const [key, entry] of Object.entries(fields)) {
         if (!entry || typeof entry !== 'object') continue;
         if (entry.present === false) delete result[key]; else if (entry.present === true) result[key] = deepCopy(entry.value);
@@ -288,7 +290,7 @@
       const vv = growingVariety(p), v = vv && vv.cropId === p.cropId ? vv : null, profile = varietyEnvironmentProfile(v, b);
       const e = { ...c, vname: '' }, published = guideFor(c);
       if (published) e.dtm = published.dtm;
-      if (profile && own(profile, 'gh')) e.gh = profile.gh;
+      if (profile && own(profile, 'gh')) { e.gh = profile.gh; e.startDays = profile.startDays; }
       if (v) {
         if (v.rowsPerBed != null) e.rowsPerBed = v.rowsPerBed;
         if (v.towerSitePreferenceEnabled === true && v.towerUsedSites != null) e.towerUsedSites = v.towerUsedSites;
@@ -296,6 +298,8 @@
         if (v.inRow > 0) e.inRow = v.inRow;
         if (v.rowSp > 0) e.rowSp = v.rowSp;
         if (v.germ > 0) e.germ = v.germ;
+        // N1: a variety's own seeds a cell, typed on Assumptions › Starting and nursery. None is written by anything else.
+        if (v.spc > 0) e.spc = v.spc;
         if (v.cost1000 > 0) e.seed1000 = v.cost1000;
         if (v.hw > 0) e.hw = v.hw;
         if (v.seedsPerFt > 0 && e.method === 'DS') e.seedsFt = v.seedsPerFt;
@@ -880,17 +884,25 @@
       const said = c.plantingMaterial || (c.material === 'bulb' ? 'bulb' : 'seed'), library = libraryMaterial.get(p.cropId);
       return library !== said || !nurseryTimed(p, c, b);
     }
+    /** N1: a crop's own spare, percent of the plants a bed takes, or null where it has none and the farm's stands. */
+    const spareOf = c => c && c.spare !== null && c.spare !== '' && Number.isFinite(+c.spare) && +c.spare >= 0 && +c.spare <= 100 ? +c.spare : null;
+    /** N1: a cell of several seeds is one station in the bed, so no cells are sown over for germination. Only where he has said so. */
+    const stationOf = c => !!c && c.station === true && positive(c.spc, 1) > 1;
     function calcRaw(p) {
       const b = plantingBed(p), c = effective(p);
       if (!b || !c || !p.date || !validDate(s2d(p.date))) return null;
       const g = gardenOf(b) || {};
       const planned = s2d(p.date), field = s2d(fieldDateOf(p));
       const inRow = positive(p.inRow, positive(c.inRow, 12)), rowSp = positive(p.rowSp, positive(c.rowSp, 12));
-      const germ = clamp(positive(c.germ, positive(settings.germ, 85)), 0.1, 100) / 100, buffer = 1 + nonNegative(settings.buffer) / 100;
+      // N1: a crop's own spare (crops[].spare) beats the farm's, where he has typed one; with none, the farm's as before
+      const germ = clamp(positive(c.germ, positive(settings.germ, 85)), 0.1, 100) / 100, buffer = 1 + nonNegative(spareOf(c) != null ? spareOf(c) : settings.buffer) / 100;
       const tw = isTower(b), rack = isRack(b), ct = isCt(b), physicalLength = lenOf(p, b);
       const split = bedSplitGeometry(p, b), layout = split && !split.issue ? split : null, len = layout ? physicalLength * layout.fraction : physicalLength;
       let rows = 1, plants, seeds, trays = 0, cells = 0, gh = null, seedG = 0, bulbs = 0;
-      const plugNeeds = () => { cells = Math.ceil(plants * buffer); seeds = Math.ceil(cells * positive(c.spc, 1) / germ); trays = Math.ceil(cells / positive(c.tray, 72)); };
+      // New day entries carry an exact interval. Legacy weeks retain their date, including fractional weeks.
+      const nurseryDays = Number.isInteger(c.startDays) && c.startDays >= 0 && c.startDays / 7 === +c.gh ? c.startDays : 7 * c.gh;
+      // A cell kept as one station needs no seed over for germination.
+      const plugNeeds = () => { cells = Math.ceil(plants * buffer); seeds = Math.ceil(cells * positive(c.spc, 1) / (stationOf(c) ? 1 : germ)); trays = Math.ceil(cells / positive(c.tray, 72)); };
 
       // A live tray is sown in cells (so many seeds a cell: its seed is counted in seeds) or broadcast in an open tray (grams a tray).
       const live = rack && c.micro ? liveSow(c) : null;
@@ -898,7 +910,7 @@
       else if (rack) { plants = len; seedG = len * (c.seedG || 0); seeds = 0; }
       else if (ct) {
         plants = len * positive(p.perC, positive(ctOf(b).plants, 1));
-        if (c.method === 'TP') { plugNeeds(); gh = c.gh > 0 ? addDays(planned, -7 * c.gh) : null; } else seeds = Math.ceil(plants / germ);
+        if (c.method === 'TP') { plugNeeds(); gh = c.gh > 0 ? addDays(planned, -nurseryDays) : null; } else seeds = Math.ceil(plants / germ);
       } else if (tw) {
         plants = usedSites(p, b, c); plugNeeds(); gh = c.ghDays > 0 ? addDays(planned, -c.ghDays) : null;
       } else {
@@ -906,7 +918,7 @@
         rows = layout ? layout.rowCount : Number.isFinite(chosen) ? chosen : Math.max(1, Math.floor(b.w * 12 / rowSp));
         const fixedCount = layout && own(layout, 'plantCount');
         plants = fixedCount ? layout.plantCount : rows * Math.floor(physicalLength * 12 / inRow);
-        if (c.method === 'TP') { plugNeeds(); gh = c.gh > 0 ? addDays(planned, -7 * c.gh) : null; }
+        if (c.method === 'TP') { plugNeeds(); gh = c.gh > 0 ? addDays(planned, -nurseryDays) : null; }
         else seeds = fixedCount ? Math.ceil(plants / germ) : c.seedsFt ? Math.ceil(rows * physicalLength * c.seedsFt) : Math.ceil(plants / germ);
       }
       if (c.material === 'bulb' && !tw && !rack) { bulbs = Math.ceil(plants); seeds = 0; seedG = 0; cells = 0; trays = 0; gh = null; }
@@ -1237,6 +1249,13 @@
       if (!r || !r.sow || r.c.prop !== 'potup' || r.tw || r.established) return null;
       return addDays(r.sow, Math.round(Math.max(0, finite(r.c.potUpWk, 2)) * 7));
     }
+    // A capacity chosen on the nursery card applies to both the bench and the stock of carriers.
+    // Plans from before that choice retain the bench's crop value and Supplies' historical default.
+    function carrierSize(c, supplies = (S.lrfNext || {}).supplies) {
+      if (c && [10, 15].includes(c.carrierSize)) return c.carrierSize;
+      return supplies && [10, 15].includes(supplies.carrierSize) ? supplies.carrierSize : null;
+    }
+    const potsPerCarrier = c => carrierSize(c) || Math.max(1, Math.round(positive(c.perCarrier, 10)));
     /**
      * What one planting's seedlings take up on a date: trays, or carriers of pots once potted up.
      * A planting in a shared batch takes its share of the batch's whole trays or whole carriers.
@@ -1245,7 +1264,7 @@
       if (!r || !r.sow || !r.cells) return null;
       const c = r.c, pd = potUpDate(r), plan = r.sowing, pot = !r.tw && (c.prop === 'pot' || (c.prop === 'potup' && (!date || (pd && date >= pd))));
       if (pot) {
-        const per = Math.max(1, Math.round(positive(c.perCarrier, 10))), size = positive(c.potSize, 4.5), cells = plan && plan.potUpCells != null ? plan.potUpCells : r.cells;
+        const per = potsPerCarrier(c), size = positive(c.potSize, 4.5), cells = plan && plan.potUpCells != null ? plan.potUpCells : r.cells;
         const batchCells = plan && plan.batch && plan.batch.potUpCells != null ? plan.batch.potUpCells : cells;
         const n = plan && plan.shared && batchCells ? Math.ceil(batchCells / per) * cells / batchCells : Math.ceil(cells / per), ft2 = n * size * size * per / 144;
         return { kind: 'pot', n, eq: ft2 / TRAY_FT2, ft2 };
@@ -1657,7 +1676,7 @@
       crops: () => cropList, crop, variety, cropColor, colorGroup, isCoverCrop, isPerennial,
       varietiesOf: cropId => (S.varieties || []).filter(v => v.cropId === cropId && v.active !== false && !v.deleted).sort((a, b) => String(a.name).localeCompare(String(b.name))),
       bedOf, gardenOf, isTower, isRack, isCt, isSoilBed, isPool, spaceKind, capOf, capUnit, ctOf, ctDims, sites,
-      heatedTraySpaces, benchRoom, coolRules, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
+      heatedTraySpaces, benchRoom, coolRules, benchList, benchItems, benchDay, traysOn, liveSow, hardenDays: nsHarden, cratesOnBenches, carrierSize, potsPerCarrier, propOf, potUpDate, hardenStart, potUpPlanned, hardenPlanned, outPlanned: plannedOutDate,
       yieldOf, statedFor, perSaid, unitOf, priceOf, pickedOn, sellRule, sellVRule, harvestFor, thingsOf, soldOf, grownFor, givenOf, WEIGHED, COUNTED, PATTERNS, nominalDays, fieldPlantingWindow, gWindow, fieldSeasonFor, isStandingCrop,
       aheadOf, standAge, standYear, youngFor, pickedFrom, pickingOn, pickWindows,
       sowingBatches, sowingOn, shareTrays, base: baseOf,

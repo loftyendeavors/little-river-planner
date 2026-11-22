@@ -73,7 +73,9 @@
     // shown in the seed library and used for seeds required
     'source', 'supplier', 'sku', 'url', 'catalogDtmText', 'catalogHarvestStage', 'seedsPerPacket', 'seedsPerOz', 'seedsPerG', 'seedsPerLb',
     // who its plants or bulbs are bought from, and the lot they are sold in: the order sheet rounds to it (N2)
-    'buyFrom', 'buyLot'];
+    'buyFrom', 'buyLot',
+    // its own seeds a cell, typed on Assumptions › Starting and nursery (N1)
+    'spc'];
   const PLANTING_DROPPED_FIELDS = ['planningSource', 'flagReviews'];
   const isDeterminate = notes => /\bdeterminate\b/i.test(String(notes || '')) && !/\bindeterminate\b/i.test(String(notes || ''));
   /** Group records that differ only in a few fields: one shared template, one short row each. */
@@ -135,7 +137,8 @@
   // A crop's line that holds only a tick or the mark for personal use holds no figure: it is not counted as one.
   const MARKS = ['looked', 'house'];
   const figures = a => a ? ['crops', 'varieties'].reduce((n, k) => n + Object.values(a[k] || {}).reduce((m, envs) => m + Object.keys(envs || {}).length, 0), 0) + Object.keys(a.starts || {}).length + Object.values(a.sell || {}).filter(line => Object.keys(line || {}).some(k => !MARKS.includes(k))).length + Object.keys(a.sellV || {}).length : 0;
-  const marks = a => a ? Object.values(a.sell || {}).filter(line => MARKS.some(k => line && line[k] != null)).length : 0;
+  // with the ticks of Starting and nursery (N1: assumptions.nursery.<crop>.looked), which hold no figure either
+  const marks = a => a ? Object.values(a.sell || {}).filter(line => MARKS.some(k => line && line[k] != null)).length + Object.values(a.nursery || {}).filter(line => line && line.looked != null).length : 0;
   /**
    * Record the difference one edit makes to a crop, variety, garden or bed. facts: { crops: { id: { name, set, was } }, … }.
    * `was` is what the record held before it was first changed here; a field put back to that is forgotten.
@@ -153,6 +156,17 @@
         if (field === 'id' || field.startsWith('_') || same(before[field], after[field])) continue;
         if (!(field in entry.was)) entry.was[field] = before[field] === undefined ? null : before[field];
         if (same(entry.was[field], after[field])) { delete entry.set[field]; delete entry.was[field]; } else entry.set[field] = after[field] === undefined ? null : after[field];
+      }
+      // Weeks and the optional exact interval are one edit, including when just the precision marker changed.
+      if (list === 'crops' && (!same(before.gh, after.gh) || !same(before.startDays, after.startDays)) &&
+          (before.startDays != null || after.startDays != null || 'startDays' in ((group[id] || {}).set || {}))) {
+        const original = (group[id] || {}).was || {};
+        const was = key => key in original ? original[key] : before[key] ?? null;
+        const changed = !same(was('gh'), after.gh) || !same(was('startDays'), after.startDays);
+        for (const key of ['gh', 'startDays']) {
+          if (changed) { entry.was[key] = was(key); entry.set[key] = after[key] ?? null; }
+          else { delete entry.was[key]; delete entry.set[key]; }
+        }
       }
       if (Object.keys(entry.set).length) group[id] = entry; else delete group[id];
     }
@@ -191,7 +205,23 @@
         if (!index.has(id)) { (facts[list] = facts[list] || {})[id] = fact; continue; }   // not in this backup; perhaps in a later one
         const record = { ...records[index.get(id)] }, set = {}, was = {};
         let applied = false;
-        for (const [field, value] of Object.entries(fact.set || {})) {
+        const edits = fact.set || {}, previous = fact.was || {};
+        const interval = list === 'crops' && ('startDays' in edits || ('gh' in edits && record.startDays != null));
+        if (interval) {
+          // Old notes sometimes held just the day marker; the unchanged weeks are implicit in that marker.
+          const implicit = (edits.startDays ?? previous.startDays) / 7;
+          const oldWeeks = 'gh' in previous ? previous.gh : implicit, newWeeks = 'gh' in edits ? edits.gh : implicit;
+          if (same(record.gh, oldWeeks) && same(record.startDays, previous.startDays) &&
+              (!same(record.gh, newWeeks) || !same(record.startDays, edits.startDays))) {
+            for (const [key, value] of [['gh', newWeeks], ['startDays', edits.startDays]]) {
+              if (value == null) delete record[key]; else record[key] = value;
+              set[key] = value ?? null;
+            }
+            was.gh = oldWeeks ?? null; was.startDays = previous.startDays ?? null; applied = true;
+          }
+        }
+        for (const [field, value] of Object.entries(edits)) {
+          if (interval && (field === 'gh' || field === 'startDays')) continue;
           if (same(record[field], value)) continue;                                // the backup already says so
           if (!same(record[field], (fact.was || {})[field])) continue;             // the backup has changed it since: the backup's value stands
           if (value === null) delete record[field]; else record[field] = value;
