@@ -39,7 +39,7 @@ PAGE = [
  ("seed no row can count is listed with what can wait, and not counted", SE, "{ key: 'lots', kind: 'needs',", "{ key: 'lots', kind: 'minute',"),
  ("seed no row can count stands in the Seeds panel with nothing picked", SE, "onOrder ? h('span', h('b', num(onOrder)), ' on order') : null),\n", "onOrder ? h('span', h('b', num(onOrder)), ' on order') : null), m.unlisted.length ? unlistedBox(m) : null,\n"),
  ("seed on order is no filter of the Seeds list", SE, "['short', 'Short of seed'], ['ordered', 'On order'], ", "['short', 'Short of seed'], "),
- ("the filter for seed on order lists what is short of seed", SE, "(id === 'ordered' && !!r && r.onOrder > 0)", "(id === 'ordered' && !!r && r.short > 0)"),
+ ("the filter for seed on order lists what is short of seed", SE, "(id === 'ordered' && rs.some(r => r.onOrder > 0))", "(id === 'ordered' && rs.some(r => r.short > 0))"),
  ("the row for supplier days opens Seeds with no filter pressed", SE, "App.setView('seeds'); ui.filter = 'open'; ui.tab = 'list'; select(null);", "App.setView('seeds'); ui.tab = 'list'; select(null);"),
  ("“See what differs…” leaves the sheet open under the review window", AS, "onclick: () => { closeDiffer(); openAudit(); } }, 'See what differs…')", "onclick: () => { openAudit(); } }, 'See what differs…')"),
  ("the sheet of what differs has two dark buttons", AS, "h('button.btn.small', { type: 'button', id: 'asTidy',", "h('button.btn.small.primary', { type: 'button', id: 'asTidy',"),
