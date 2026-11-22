@@ -179,6 +179,20 @@ with sync_playwright() as pw:
     n_all = every.get("n", 0)
     check("every planting of a run under To place: the run is still listed with its sowings counted, the page counts them in runs, says they wait, and the tick counts them", n_all >= 2 and every.get("placed") == 0 and ("%d sowings" % n_all) in every.get("word", "") and ("%d plantings in runs" % n_all) in every.get("figs", "") and ("%d plantings of it wait under To place" % n_all) in every.get("said", "") and ("Take its %d plantings out too" % n_all) in every.get("tick", ""), every)
     check("and Remove run with the tick takes the run and all of them as one step; one Undo puts them back, and the rest of the undoing places them again", every.get("removed") == {"runs": 0, "waiting": 0, "steps": n_all + 1} and every.get("back") == {"runs": 1, "waiting": n_all} and every.get("placedAgain") == n_all, every)
+    # the page's own steps on a planting of a run: placed again from To place it is still in the run; a copy of it, and the plantings
+    # of another variety put beside it, are in no run (the run's plantings are counted by their mark, so these must not carry it)
+    ops = js("""const run = A.runs()[0], list = S.runPlantings(St.plan, run.id), u0 = St.undo.length, out = {};
+      const p1 = list[1]; A.sendToWait(p1.id); await new Promise(r => setTimeout(r, 400)); const w = A.waiting().find(x => x.id === p1.id);
+      const back = w ? await A.placeWaiting(w.id, w.wait.from) : null; out.placed = back ? !!(back.run && back.run.id === run.id && back.run.n === p1.run.n) : null;
+      const p0 = S.runPlantings(St.plan, run.id)[0], n0 = St.plan.plantings.length;
+      for (let k = 60; k < 200 && St.plan.plantings.length === n0; k += 7) for (const b of St.plan.beds.filter(b => eng.isSoilBed(b))) { const d = E.addDays(E.s2d(p0.date), k); if (A.preview({ plantingId: p0.id, copy: true }, { bedId: b.id, date: d }).state === 'ok') { A.place({ plantingId: p0.id, copy: true }, b.id, d); break; } }
+      const copy = St.plan.plantings.length > n0 ? St.plan.plantings[St.plan.plantings.length - 1] : null; out.copy = copy ? !('run' in copy) && copy.id !== p0.id : null;
+      const v2 = eng.varietiesOf(p0.cropId).find(v => v.id !== p0.varietyId), before = new Set(St.plan.plantings.map(p => p.id)), res = v2 ? A.addVarieties(p0.id, [v2.id]) : null;
+      const fresh = St.plan.plantings.filter(p => !before.has(p.id)); out.varieties = fresh.length ? fresh.every(p => !('run' in p)) && !!(St.engine.planting(p0.id) || {}).run : (res && res.no) || null;
+      out.counted = S.runPlantings(St.plan, run.id).length === list.length;
+      while (St.undo.length > u0) A.undo(); await new Promise(r => setTimeout(r, 600)); out.end = S.runPlantings(St.plan, run.id).length === list.length && St.plan.plantings.length === n0;
+      document.querySelector('[data-hook="succ-run"][data-run="' + run.id + '"]').click(); await new Promise(r => setTimeout(r, 900)); return out;""") or {}
+    check("a planting of a run placed again from To place is still in the run; a copy of one, and another variety put beside one, are in no run; the run counts the same", ops.get("placed") is True and ops.get("copy") is True and ops.get("varieties") is True and ops.get("counted") and ops.get("end"), ops)
     page.locator('[data-hook="succ-remove-all"]').check(); wait(200)
     press("succ-remove", 1500)
     gone = js("return state();") or {}

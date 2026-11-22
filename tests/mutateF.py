@@ -64,6 +64,9 @@ PAGE = [
  ("a kept run's waiting planting is not said", SS, "    if (held.length) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-waiting' } }", "    if (false) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-waiting' } }"),
  ("the runs list leaves out a run's plantings under To place", SS, "n = S.runPlantings(App.state.plan, run.id).length + App.waiting().filter(w => w.run && w.run.id === run.id).length;", "n = S.runPlantings(App.state.plan, run.id).length;"),
  ("the page's figures leave out the plantings of runs under To place", SS, "inRuns = [...App.state.plan.plantings, ...App.waiting()].filter(p => p.run && ids.has(p.run.id)).length;", "inRuns = App.state.plan.plantings.filter(p => p.run && ids.has(p.run.id)).length;"),
+ ("a planting of a run sent to To place loses its mark, and is placed again outside the run", AP, "const w = { ...p }, asked =", "const w = (({ run, ...q }) => q)(p), asked ="),
+ ("another variety put beside a planting of a run is in the run", AP, "'startFt', 'bedLayout', 'run']) delete d[key];", "'startFt', 'bedLayout']) delete d[key];"),
+ ("a copy of a planting of a run, dropped on the page, is in the run", "js/rails.js", "delete next.run; delete next.startedFrom; }", "delete next.startedFrom; }"),
  ("the page says “series”", SS, "'Nothing is added to the plan until you press Add.'", "'Nothing is added to the plan until you press Add. A series.'"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)
