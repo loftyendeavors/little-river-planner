@@ -64,6 +64,15 @@ try:
               page.get_by_text('Test tank', exact=True).first.is_visible())
         press('Request refill')
         press('Add reminder')
+        garden_id = gardens.input_value()
+        gardens.select_option('')
+        check('Fertility opens with the requested job, its reason, and a separate group for unconfigured gardens',
+              page.get_by_role('heading', name='Needs attention', exact=True).is_visible()
+              and page.get_by_text('Confirmed empty tank', exact=True).is_visible()
+              and page.get_by_role('heading', name='Your gardens', exact=True).is_visible())
+        page.get_by_role('button',name='Refill Test tank',exact=False).click()
+        check('Opening a refill focuses the named card', page.evaluate(
+            "document.activeElement.contains(document.querySelector('[data-hook=wf-complete]'))"))
         page.set_viewport_size({'width': 390, 'height': 844})
         page.get_by_role('button', name='Refilled as shown', exact=True).wait_for()
         check('The phone names tank, prepared recipe and batch size before completion',
@@ -74,9 +83,46 @@ try:
               and page.evaluate("LRFWaterFeed.groups(LRFApp.state.plan.lrfNext.waterFeed,'refill').length") == 1)
         page.set_viewport_size({'width': 1480, 'height': 900})
         press('Water')
+        gardens.select_option(garden_id)
         check('Applied nutrients and mixed nutrients occupy separate rows',
               '0.4 lb' in page.get_by_role('row', name='Mixed into tanks', exact=False).inner_text()
               and '0.5 lb' in page.get_by_role('row', name='Field applied', exact=False).inner_text())
+        press('Garden details')
+        page.get_by_text('Season plan · '+str(year), exact=True).click()
+        press('View full season')
+        dialog=page.get_by_role('dialog')
+        check('Full season gives the chart and budget room on desktop', dialog.bounding_box()['width'] >= 800
+              and dialog.get_by_text('Field nitrogen applied by week · '+str(year),exact=True).is_visible()
+              and dialog.get_by_role('row',name='Field applied',exact=False).is_visible())
+        press('Back to garden')
+        check('Garden card brings the grower back to its four sections', all(word in dialog.inner_text()
+              for word in ('This week', 'Season plan', 'Soil and tissue tests', 'Setup')))
+        press('Done')
+        press('Products and recipes')
+        check('Assumptions shows product analysis and the recipe per gallon',
+              dialog.get_by_role('row',name='Test feed',exact=False).is_visible() and '0.8 lb Test feed per gallon' in dialog.inner_text())
+        press('Done')
+        press('Soil tests')
+        press('Review lab result')
+        fill('Lab and report ID','Sample report')
+        fill('Extraction method or tissue stage','Reported extract')
+        page.get_by_text('Paste readings from a spreadsheet',exact=True).click()
+        fill('Readings from spreadsheet','Calcium\t12\tppm\nPotassium\t8\tppm')
+        press('Review reading')
+        def count_labs():
+            return page.evaluate("Object.keys(LRFApp.state.plan.lrfNext.waterFeed.labs || {}).length")
+        check('Review shows the original values and leaves the plan untouched',
+              count_labs()==0 and dialog.get_by_role('row',name='Calcium',exact=False).get_by_text('12 ppm').is_visible())
+        page.get_by_label('Include Potassium',exact=True).uncheck()
+        press('Add reading')
+        press('Back to report')
+        check('Returning to the report keeps the full draft and its selections',
+              page.get_by_label('Include Calcium',exact=True).is_checked() and not page.get_by_label('Include Potassium',exact=True).is_checked())
+        press('Import selected readings')
+        check('Only selected readings appear in the garden history', count_labs()==1
+              and page.get_by_role('row',name='Calcium',exact=False).get_by_text('12 ppm').is_visible()
+              and page.get_by_role('row',name='Potassium',exact=False).count()==0)
+        press('Now')
         press('Irrigation')
         check_current_words('Irrigation')
         press('Add zone')
@@ -97,6 +143,11 @@ try:
         dashboard = page.locator('#wfWrap').inner_text()
         check('A skipped run can be recorded without typing zero, and adds no start or minutes',
               '1 started · 1 interrupted · 1 skipped · 8 min' in dashboard)
+        page.get_by_text('Run list · 2',exact=True).click()
+        page.get_by_role('button',name='Skipped · 0 min',exact=False).last.click()
+        check('The run list offers the same evidence as the short skipped timeline mark',
+              page.get_by_role('dialog').get_by_text('Test zone',exact=True).is_visible())
+        press('Done')
         press('Season')
         check('The dashboard renders no null placeholders when the chart is hidden',
               'null' not in page.locator('#wfWrap').inner_text().lower())
@@ -116,6 +167,11 @@ try:
         check('A phone run preserves unknown volume when the configured rate did not apply',
               page.evaluate("""() => { const r = LRFWaterFeed.groups(LRFApp.state.plan.lrfNext.waterFeed,'run')
                 .find(g => g.chosen.label === 'Second line'); return r.chosen.elapsed === 3 && LRFWaterFeed.water(r).gallons === null; }"""))
+        press('Irrigation and soil readings')
+        check('Phone irrigation preserves its viewport and returns to field Tasks',
+              page.get_by_role('button',name='Back to Tasks').is_visible()
+              and page.evaluate('document.documentElement.scrollWidth===document.documentElement.clientWidth'))
+        press('Back to Tasks')
         page.set_viewport_size({'width': 1480, 'height': 900})
         press('Water')
         press('Fertility')
