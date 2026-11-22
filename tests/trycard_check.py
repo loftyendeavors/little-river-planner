@@ -401,6 +401,22 @@ def run(pw):
     check("“Grown for sale” unticked on a bed's card gives the bed what Edit layout's “Grown for” box gives it; said on the card with an Undo that gives the plan back",
           a == b and '"use":"personal"' in (b or "") and aback and bback and "personal use" in bsaid["said"] and bsaid["undo"] and not bsaid["toast"], [a[:200] if a else a, b[:200] if b else b, aback, bback, bsaid])
 
+    # a bench, a tower or containers keeps the card it had before a bed's season (L2), with its own "Grown for sale": it sets the
+    # space, never its garden (Codex on #66)
+    OTHER = js("const b = S.plan.beds.find(b => b.active !== false && !eng.isSoilBed(b) && !eng.isPool(b) && !LRFForecast.useOfBed(eng, b).personal); return b ? b.id : null;")
+    osale = None
+    if OTHER:
+        js(f"LRFCard.turn(true); A.setView('map'); A.select({{ type: 'bed', id: '{OTHER}' }}); return null;"); wait(400)
+        rec_space = f"const b = S.plan.beds.find(b => b.id === '{OTHER}'); return {{ bed: JSON.stringify(b), garden: JSON.stringify(S.plan.gardens.find(g => g.id === b.gardenId) || null), plan: all() + JSON.stringify(S.plan.beds) + JSON.stringify(S.plan.gardens) }};"
+        before = js(rec_space); quiet()
+        tick = js(f"const t = hook('card-sale'); return {{ there: drawn(t), checked: !!t && t.checked, season: !!LRFCard.bedSeasonOn(eng.bedOf('{OTHER}')) }};")
+        if tick["there"]: page.locator("[data-hook='card-sale']").uncheck(); wait(500)
+        after = js(rec_space)
+        js("A.undo(); return null;"); wait(400)
+        osale = {"tick": tick, "personal": '"use":"personal"' in (after["bed"] or ""), "garden": after["garden"] == before["garden"], "back": js(rec_space)["plan"] == before["plan"]}
+    check("“Grown for sale” unticked on the card of a bench, a tower or containers marks that space for personal use and leaves its garden as it was; Undo gives the plan back (Codex on #66)",
+          bool(osale) and osale["tick"]["there"] and osale["tick"]["checked"] and not osale["tick"]["season"] and osale["personal"] and osale["garden"] and osale["back"], [OTHER, osale])
+
     # a word from elsewhere (a newer version ready) stays a toast while a card is open
     js(f"A.select({{ type: 'bed', id: '{BED}' }}); return null;"); wait(300); quiet()
     js("LRFUI.toast('A newer version of the planner is ready.', { label: 'Reload', run: () => {} }); return null;"); wait(200)
@@ -456,6 +472,15 @@ def run(pw):
     press(page, "#leDone", 500)
     lay2 = js("return { on: document.body.dataset.layout === 'on', panel: panel(), attr: document.body.dataset.card || null };")
     check("Done in Edit layout closes it, and with nothing picked there is no side panel again", not lay2["on"] and not lay2["panel"] and lay2["attr"] == "on", lay2)
+    # opened from the Map's own button with nothing picked, nothing is picked when it closes: the card stands again only because it
+    # watches Edit layout open and close
+    js("A.select(null); return null;"); wait(400)
+    press(page, "#mapEditToggle", 500)
+    lay3a = js("return { on: document.body.dataset.layout === 'on', attr: document.body.dataset.card || null, panel: panel() };")
+    press(page, "#leDone", 500)
+    lay3 = js("return { on: document.body.dataset.layout === 'on', panel: panel(), attr: document.body.dataset.card || null, sel: S.sel };")
+    check("Edit layout opened from the Map's own button and closed with Done, nothing picked: the side panel gives way to the card again",
+          lay3a["on"] and not lay3a["attr"] and lay3a["panel"] and not lay3["on"] and lay3["sel"] is None and not lay3["panel"] and lay3["attr"] == "on", [lay3a, lay3])
 
     js(f"A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(400)
     press(page, "[data-hook='card-full']", 400)
