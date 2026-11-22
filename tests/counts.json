@@ -17,6 +17,8 @@
 
   "early and young, compact": 56,
 
+  "equipment adapters": 10,
+
   "failed, backup": 36,
 
   "failed, compact": 36,
@@ -111,6 +113,8 @@
 
   "waiting, compact": 39,
 
+  "water and feed": 25,
+
   "what the build changed": 9,
 
   "year edge, backup": 52,
@@ -131,6 +135,8 @@
 
   "core": 20,
 
+  "equipment": 1,
+
   "folder": 14,
 
   "numbers": 48,
@@ -146,6 +152,8 @@
   "step2a": 50,
 
   "trays": 31,
+
+  "water-feed": 20,
 
   "windows": 17
 
@@ -533,7 +541,7 @@
  },
  "screens": {
 
-  "screens": 26
+  "screens": 28
 
  }
 }

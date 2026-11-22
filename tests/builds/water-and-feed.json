@@ -1,0 +1,45 @@
+{
+ "build": "Water and feed records, fertilizer stock and manual irrigation. New records require a grower action. Existing plans open without setup.",
+ "changes": {
+  "did": "Water shows fertility and irrigation by garden. Tasks records tank refills and Supplies tracks shelf counts, deliveries and fertilizer orders.",
+  "steps": [
+   "On Water, choose a garden to record a field application, set targets or set up a tank. Requested refills appear on Tasks.",
+   "In Fertilizer supplies, count the shelf or record a delivery. Plan a fertilizer order from remaining batches and field pounds.",
+   "On Irrigation, link zones to Hunter stations, attach measured run volumes and review Ecowitt soil readings by garden."
+  ]
+ },
+ "words": [],
+ "code": [
+  "app.js",
+  "main.js",
+  "merge.js",
+  "panels.js",
+  "sowview.js",
+  "traysview.js"
+ ],
+ "added": [
+  "equipment.js",
+  "waterfeed.js",
+  "waterview.js"
+ ],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html"
+ ],
+ "screens": [
+  "assumptions-days",
+  "assumptions-yield",
+  "forecast",
+  "map",
+  "nursery-bench-room",
+  "nursery-live-trays",
+  "nursery-set-up",
+  "nursery-supplies",
+  "seeds",
+  "successions",
+  "tasks",
+  "water",
+  "timeline"
+ ]
+}

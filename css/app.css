@@ -2318,6 +2318,10 @@ table.yc-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .yc-add { flex: none; padding: var(--space-4) var(--space-12); font-size: var(--type-13); }
 .yc-grid th.yc-thing, .yc-grid td.yc-thing { border-left: 1px solid var(--line-soft); padding-left: var(--space-12); }
 .yc-grid.things thead th:first-child { width: 216px; }
+/* Keep the final yield row above the sticky action bar on short laptop screens. */
+@media (max-height: 900px) {
+  .yc-grid.things tbody th, .yc-grid.things tbody td { padding-bottom: 0; }
+}
 .yc-grid td.yc-thing { line-height: 1.3; }
 .yc-grid td.yc-thing .yc-na { display: block; padding: var(--space-4) 0 var(--space-4); font-size: var(--type-13); }
 .yc-grid td.yc-thing .yc-sel { min-width: 104px; }
@@ -2923,6 +2927,43 @@ table.hv.fit { width: 100%; table-layout: fixed; }
 .dialog ul.hv-from li.row .row-detail, .dialog ul.hv-from li.row .row-detail span { font: 400 var(--type-11) var(--body); color: var(--muted); white-space: normal; }
 .dialog ul.hv-from .fc-tags { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-4); }
 .dialog ul.hv-from .fc-tag { padding: 1px var(--space-4); border: 1px solid var(--line); border-radius: var(--corner-4); font: 600 var(--type-11) var(--body); color: var(--ink-2); white-space: nowrap; }
+
+/* Fertility and irrigation share the garden list and the physical history. */
+body[data-view="water"] .view-water { display: block; background: var(--surface); overflow: auto; }
+body[data-view="water"] .library, body[data-view="water"] .inspector, body[data-view="water"] .season { display: none; }
+body[data-view="water"] .work { grid-template-columns: minmax(0, 1fr); }
+body[data-view="water"] .stage { grid-template-rows: minmax(0, 1fr); }
+#wfWrap { max-width: 960px; }
+.wf-line, .wf-choice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8) var(--space-16); }
+.wf-line { margin: var(--space-8) 0; }
+.wf-line > .wf-field { flex: 1 1 120px; min-width: 0; }
+.wf-field { display: grid; gap: var(--space-4); font-size: var(--type-13); color: var(--muted); }
+.wf-field .field { min-width: 0; width: 100%; color: var(--ink); }
+.wf-form, .wf-task { display: grid; gap: var(--space-12); }
+.wf-form h2, .wf-form h3, .wf-line h3, .wf-task h4, .wf-note { margin: 0; }
+.wf-block, .wf-garden { padding: var(--space-16) 0; border-top: 1px solid var(--line-soft); }
+.wf-task, .wf-section, .wf-history { padding: var(--space-12) 0; border-bottom: 1px solid var(--line-soft); }
+.wf-section summary, .wf-history summary { cursor: pointer; padding: var(--space-8) 0; }
+.wf-note { color: var(--muted); font-size: var(--type-13); }
+.wf-error { color: var(--flag-deep); }
+.wf-sheet { max-height: 85vh; overflow: auto; }
+body.phone .wf-task button, body.phone .wf-block button, body.phone .wf-sheet button { min-height: var(--control-phone); }
+@media (min-width: 701px) and (max-width: 1540px) {
+  .top .views { min-width: 0; overflow-x: auto; }
+  .top .brand, .top .top-actions { flex-shrink: 0; }
+}
+
+.wf-chart { margin: var(--space-16) 0; }
+.wf-chart figcaption, .wf-bars small { color: var(--muted); font-size: var(--type-13); }
+.wf-bars { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: var(--space-8); max-width: 520px; }
+.wf-bars b, .wf-bars small { display: block; }
+.wf-bars b { font: 600 var(--type-13) var(--mono); }
+.wf-track { height: 32px; display: flex; align-items: flex-end; border-bottom: 1px solid var(--line); }
+.wf-track i { width: 100%; background: var(--ink-2); }
+.wf-nutrients { border-collapse: collapse; margin: var(--space-12) 0; width: 100%; max-width: 520px; font-size: var(--type-13); }
+.wf-nutrients caption { text-align: left; font-weight: 600; padding-bottom: var(--space-4); }
+.wf-nutrients th, .wf-nutrients td { padding: var(--space-4) var(--space-8); text-align: right; border-bottom: 1px solid var(--line-soft); font-variant-numeric: tabular-nums; }
+.wf-nutrients th:first-child { text-align: left; padding-left: 0; }
 
 dialog.run-edit { width: min(760px, 96vw); max-height: 88vh; overflow: auto; }
 .run-edit-table { width: 100%; margin-block: var(--space-16); border-collapse: collapse; font-variant-numeric: tabular-nums; }

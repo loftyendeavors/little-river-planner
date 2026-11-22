@@ -1,0 +1,78 @@
+Little River Farm Planner | Hunter and Ecowitt equipment pilot
+
+TRY IT WITHOUT HARDWARE
+Extract the whole ZIP into one folder. Open Planner.html in Chrome or Edge.
+Use Water > Irrigation, select one garden, then choose Read soil probes.
+Import Sample-WH52.json, choose the channel and examine each reading and time.
+The sample is historical and fictional. Use the included sample plan for practice.
+The hosted planner, an HTML file and the local reader each have their own browser
+storage. To work with an existing plan, export its Backup and open a copy in
+the pilot. Keep your original backup. Use one working copy for field records.
+
+HUNTER HPC | CONTROL AND MEASURED WATER
+In Irrigation, choose the garden, Add zone, then Hunter controller and station.
+Copy the controller's display name and numbered station from Hydrawise. Use
+distinct names for different clocks. Station 1 on two clocks is two assignments.
+Open Hydrawise takes you to Hunter. Select the mapped controller and station
+there to run or stop it. No schedule or valve is changed by this pilot.
+After a run, record its actual start, elapsed minutes and status in the garden.
+When a flow meter is installed, open Irrigation history, expand the matching
+run and select Attach Hunter meter reading. In Hunter, match the zone, start
+time and duration. Enter the measured volume in US gallons or litres. Preserve
+unknown gallons if the report gives only a daily total, an overlapping meter
+total, a flow rate, or scheduled time. Competing measurements go to Review.
+Taking back a run removes that entire job from totals. Use Review reports to
+choose between measurements. Planner Undo reverses the most recent change.
+
+Hunter documents its public REST interface for personal/noncommercial users.
+Its published interface lists station status and manual control. It does not
+document a measured-gallons history feed. Hunter currently says new commercial
+API connections are closed. Farm control therefore opens Hunter's own app.
+https://www.hunterirrigation.com/support/hydrawise-api-information
+https://www.hunterirrigation.com/support/hydrawise-api-terms-use
+https://www.hydrawise.com/printpdf/api/printsupport/en-us/article/115003699574
+
+ECOWITT WH52 | LIVE READINGS ON THIS COMPUTER
+1. Pair the WH52 with a supported gateway such as a GW1200 or GW2000, update
+   firmware, enable Ecowitt.net upload, and verify moisture, temperature and
+   conductivity in Ecowitt. Label each channel and record its physical location.
+2. Install Node.js 22 or newer on this computer. The reader requires no packages.
+3. Copy equipment.env.example to equipment.env. Open it in a text editor.
+   Enter the application key and account API key from the Ecowitt.net private
+   center, the gateway MAC, and a short permanent name for this gateway. Keep
+   this file on your computer, outside any shared folder.
+4. On Windows, double-click Start-reader.cmd. On macOS or Linux, from the
+   extracted folder run: node --env-file=equipment.env equipment-reader.mjs
+   Open http://127.0.0.1:8741/ and keep the terminal open.
+5. In Water > Irrigation choose a garden, Read soil probes, then Read gateway
+   now. Choose the installed channel, review timestamps, then Save channel to
+   garden. To move readings to another device running this pilot, use Download
+   soil snapshot and import that JSON there. Pick the same gateway name each time.
+6. For unattended capture, set ECOWITT_ARCHIVE_MINUTES=15 and restart. While
+   the computer is awake, the reader saves soil-only snapshots into one file
+   per gateway and UTC sensor date in soil-archive. Open the dated JSON through Read
+   soil probes to review per-channel low, high, latest and sample counts. After
+   the UTC day closes, save one compact summary per channel. Full samples stay
+   in the archive. Re-importing the day does not duplicate it. A late packet
+   can revise yesterday's file. If it differs, review the existing summary,
+   remove it if superseded, then accept the revised file.
+   Offline periods and sleep leave gaps. There is no cloud history backfill.
+
+Each measurement retains its sensor timestamp. The screen flags observations
+older than 15 minutes. Missing values stay unknown, including unavailable EC
+on moisture-only channels. EC is shown in mS/cm. A reading of 1,450 µS/cm is
+1.45 mS/cm. Soil EC is an observation at the probe. The pilot does not convert
+it to a fertilizer dose, infer irrigation volume or trigger watering.
+https://oss.ecowitt.net/uploads/20260130/WH52UserManual.pdf
+https://doctest.ecowitt.net/device-data-api/getting-device-real-time-data
+https://doctest.ecowitt.net/getting-started/api-permissions
+
+FIRST FIELD CHECK
+For each HPC record the physical water feed, stations and any shared main.
+Measure the smallest drip zone's actual GPM and the largest zone's GPM before
+sizing a meter. Compare both with the model's supported range. At commissioning,
+check one isolated run against the meter and the Hydrawise per-zone report.
+For WH52 begin with two contrasting areas. Note probe locations and insertion
+depths, and compare each channel in Ecowitt and the planner before and after an
+ordinary irrigation. Judge changes against that location's own history.
+https://www.hunterirrigation.com/support/hydrawise-flow-meter-specifications
