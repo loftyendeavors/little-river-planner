@@ -209,9 +209,11 @@ const only = (e2, mine, fields) => {
   typed.varieties.find(x => x.id === v.id).spc = 6;
   typed.assumptions = { ...(typed.assumptions || { v: 1, crops: {}, varieties: {} }), nursery: { [scallion.id]: { looked: year } } };
   let e0;
-  try { e0 = E0.create(typed, Lib); } catch (error) { e0 = null; }
-  const same = !!e0 && plantings.every(p => sig(e0, e0.planting(p.id)) === sig(was, p));
-  check('the build before reads a plan holding the new figures, and works it out as it would without them', same, null);
+  const legacy = require(path.resolve(process.argv[5] || OLD, 'engine.js'));
+  const legacyPlain = legacy.create(plan, Lib);
+  try { e0 = legacy.create(typed, Lib); } catch (error) { e0 = null; }
+  const same = !!e0 && plantings.every(p => sig(e0, e0.planting(p.id)) === sig(legacyPlain, p));
+  check('the pre-nursery build reads a plan holding the new figures, and works it out as it would without them', same, null);
   const back = IO.split(JSON.parse(JSON.stringify(IO.join ? IO.join(typed, {}) : typed))).core, packed = IO.unpack(JSON.parse(JSON.stringify(IO.pack(typed))));
   for (const [form, pl] of [['a backup', back], ['the compact plan', packed]]) {
     const c = (pl.crops || []).find(x => x.id === scallion.id) || {}, vv = (pl.varieties || []).find(x => x.id === v.id) || {};

@@ -1,0 +1,14 @@
+{
+  "build": "Edit unrecorded members of a saved succession, plan shortfalls from weekly buyer orders, record harvests in Tasks, and inspect each week's bench occupancy.",
+  "changes": {
+    "did": "Change a saved succession, plan for buyers, record a picking, and see which sowings occupy a bench.",
+    "steps": [
+      "Open a kept run in Successions and choose Edit remaining sowings. Preview sowing dates, conflicts and the weekly forecast before applying.",
+      "In Forecast, open Buyer demand for a week. In Tasks, record a harvest and compare the marketable quantity with that planting's forecast under Recorded harvest.",
+      "In Nursery, open a week on the Bench room chart to see the peak day, whole batches and the dates seedlings leave."
+    ]
+  },
+  "code": ["app.js", "bench.js", "engine.js", "harvestview.js", "merge.js", "sowview.js", "successions.js", "trays.js"],
+  "page": ["css/app.css"],
+  "screens": ["forecast", "tasks"]
+}
