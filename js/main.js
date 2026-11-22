@@ -4,6 +4,8 @@
   const App = root.LRFApp, E = root.LRFEngine;
   const $ = id => document.getElementById(id);
 
+  root.LRFWaterView.init();
+  $('wfAssumptions').addEventListener('click', root.LRFWaterView.library);
   root.LRFMap.init();
   root.LRFSeason.init();
   root.LRFTimeline.init();

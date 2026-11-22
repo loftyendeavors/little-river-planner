@@ -739,7 +739,8 @@
     });
     const dated = k ? d(k) : null, near = k && Math.abs(diff(k, now)) < 2;
     const title = k ? (k === now ? 'Today' : k === plus(now, 1) ? 'Tomorrow' : k === plus(now, -1) ? 'Yesterday' : FULL[dated.getDay()]) : a === cur ? 'This week' : a === plus(cur, 7) ? 'Next week' : a === plus(cur, -7) ? 'Last week' : `Week of ${day(d(a))}`;
-    const count = isNow ? (todo ? `${num(todo)} to do` : did ? 'all done' : 'nothing to do') : soon ? (todo ? `${num(todo)} planned` : 'nothing planned') : `${num(did)} done`;
+    const feedDue = isNow ? root.LRFWaterFeed.values(App.state.plan.lrfNext?.waterFeed?.tanks).filter(t => root.LRFWaterFeed.reminder(App.state.plan.lrfNext.waterFeed, t.id)).length : 0;
+    const count = feedDue ? num(todo + feedDue) + ' to do' : isNow ? (todo ? `${num(todo)} to do` : did ? 'all done' : 'nothing to do') : soon ? (todo ? `${num(todo)} planned` : 'nothing planned') : `${num(did)} done`;
     const lists = GROUPS.map(([id, name]) => {
       const s = onScreen(id), left = s.open.length, n = s.done.length, ring = isNow && left + n ? RING(10, 26) : null;
       if (ring) fillRing(ring, id, n / (left + n), 62.83);
@@ -770,6 +771,7 @@
         const s = onScreen(id), left = s.open.length, lateHere = isNow && s.open.some(t => t.due < now);
         return h('button', { type: 'button', role: 'tab', 'aria-selected': String(ui.tab === id), dataset: { act: 'tab', half: id } }, name, h('small' + (lateHere ? '.late' : ''), !isNow && !soon ? `${num(s.done.length)} done` : left ? `${num(left)}${isNow ? ' left' : ''}` : isNow ? 'done' : '0'));
       })),
+      isNow ? root.LRFWaterView.tasks() : null,
       h('div.tk-lists', { id: 'tkLists' }, lists),
       upcoming(now),
       phone ? null : Bench.line());

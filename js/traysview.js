@@ -260,7 +260,7 @@
         UI.help(lead, () => host, () => [...host.querySelectorAll('.nu-stats .tr-stat')].map(t => [(t.querySelector('span') || {}).textContent || '', [(t.querySelector('strong') || {}).textContent, (t.querySelector('small') || {}).textContent].filter(Boolean).join(', ')]))),
       h('div.seg.nu-tabs', { id: 'nuTabs', role: 'group', 'aria-label': 'Which part of the nursery' }, TABS.map(([id, label]) => h('button', { type: 'button', dataset: { tab: id }, 'aria-pressed': String(id === tab), onclick: () => setTab(id) }, label))),
       h('p.nu-lead', { id: 'nuLead' }, lead),
-      tab === 'room' ? roomTab() : tab === 'live' ? liveTab() : tab === 'supplies' ? suppliesTab() : Bench.setup());
+      tab === 'room' ? roomTab() : tab === 'live' ? liveTab() : tab === 'supplies' ? [suppliesTab(), root.LRFWaterView.supplies()] : Bench.setup());
     drawn = tab;
     scroller.scrollTop = keep;
     if (focus && focus[0]) { const again = [...host.querySelectorAll('input, select, button')].find(el => el.getAttribute('aria-label') === focus[0] && (!focus[1] || (el.closest('[data-plan]') && el.closest('[data-plan]').dataset.plan === focus[1]))); if (again) again.focus({ preventScroll: true }); }

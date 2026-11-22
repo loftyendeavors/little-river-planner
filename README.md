@@ -14,15 +14,17 @@ This repository holds the app and its checks. It contains no plan, no farm photo
 
 ## Where things are
 
-The top bar has seven views in three groups.
+The top bar has nine views in three groups.
 
 | Group | View | What it is for |
 |---|---|---|
 | The plan, and what it gives | **Map** | Where each crop goes: drag crops onto beds, move and share them |
 | | **Timeline** | When each crop goes in and comes out, with the openings between |
+| | **Successions** | Repeated sowings and the growing space they occupy |
 | | **Forecast** | What the plan gives and earns week by week and over the season, a list to send, and planning a crop to a weekly amount |
 | Running the season | **Tasks** | The week's work, nursery and field, ticked as it is done |
 | | **Nursery** | Bench room, live trays, supplies, and the benches themselves |
+| | **Water** | Fertility and irrigation by garden, tank refills, and irrigation run history |
 | | **Seeds** | Varieties, seed stock and orders |
 | The figures underneath | **Assumptions** | Days to harvest, yield and price, crop by crop |
 
@@ -32,6 +34,16 @@ The top bar has seven views in three groups.
 - **To place**, beside it, counts plantings that have no bed yet; a click goes to the list.
 - **Loose ends** is the one list for what needs you. Its orange count is only that: places where ground is booked twice or a planting is longer than its bed, and seed that no row of the Seeds list can count. Under those it lists what can wait, uncounted: plantings that differ from your Assumptions list, published guidance not yet used, yields nobody has checked and crops with no price, and supplier days that do not say where they are counted from. Each row opens where the thing is mended. It is in the header only while something needs you: with nothing counted the button is not there, and what can wait is listed again the next time something does.
 - There is no settings page. A fact is changed where its effect shows: a bed on the map, a bench under Nursery, Set-up, a crop's figures on the Assumptions list, the frost dates and the field-season dates under **Season…** on the season bar.
+
+## Fertility and irrigation
+
+Enter label analyses and stock recipes in **Assumptions → Products and recipes**, or start with **Add tank** on Water. Select the garden, tank name and batch size. On **Tasks**, a confirmed empty tank or an approved formula change can have a refill reminder. Use **Refilled as shown** after the tank returns to service. Use **Actual amounts** for a partial or different mix. Record an unscheduled refill with the quiet **Refill** action. Unknown amounts stay unknown.
+
+**Water → Fertility → Garden details** shows the garden’s equipment, refill and field-application history, manual seasonal targets and lab results. Enter rates in lb/acre, then check the pounds for the measured floor or individual bed tops. **Nursery → Supplies** shows fresh product used, product received and the bags needed for open refill reminders. A tank refill records product mixed. The garden's applied total counts recorded field applications.
+
+**Water → Irrigation** shows the last seven days or the plan year. Enter actual elapsed minutes, the status and any metered gallons. Rated flow gives an estimate. Additional evidence for the same zone and start time stays with the original run. Review conflicting observations in garden history. Refills and runs survive plan backup, restore and offline sync.
+
+Map each Hunter zone to its controller and station in Irrigation. Use **Open Hydrawise** to operate the clock. After the run, attach a measured volume from Hunter to the matching entry. **Read soil probes** imports Ecowitt snapshots and compact daily summaries. A local reader can collect WH52 data while the computer is awake. [Equipment setup and commissioning](tools/equipment/START-HERE.txt)
 
 ## Reading a variety from a supplier's page
 

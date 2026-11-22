@@ -67,6 +67,9 @@ node $T/rails_test.cjs $APP $PLAN | named "rails"
 node $T/assume_test.cjs $APP $PLAN | named "assume"
 node $T/merge_test.cjs $APP $PLAN $FARM/inventory.json | named "merge"   # two copies of one plan joined, record by record: the rules, the five tests, 500 pairs of runs of edits
 node $T/shape_test.cjs $APP $PLAN $FARM/inventory.json $SCRATCH | named "shape"   # the plan's shape written down (plan_shape.cjs), held to itself, to the merge's own rules and to the farm and the planner's own edits
+node --test --test-reporter=tap "$T/equipment_test.mjs" > "$W/equipment.tap" 2>&1
+awk '/^not ok /{print} /^# pass /{pass=$3} /^# tests /{total=$3} END{if(total) print pass " of " total " passed"; else print "equipment tests returned no TAP summary"}' "$W/equipment.tap" | named "equipment adapters"
+node $T/water_feed_test.cjs | named "water and feed"
 node $T/store_test.cjs $APP | named "store"   # saving with two windows of one browser open: the count beside the plan, the one window that holds it
 node $T/snaps_test.cjs $APP | named "snapshots kept"   # which snapshots stay: the plans kept before a taking-in from another device have a rule of their own
 node $REPO/tools/mapgeo_test.cjs | named "map geometry"

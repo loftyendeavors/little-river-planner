@@ -1,0 +1,11 @@
+{
+  "code": 0,
+  "gateway": "Demo gateway",
+  "data": {
+    "soil_moisture_ec_ch1": {
+      "soilmoisture": {"time": 1778846400, "value": "27", "unit": "%"},
+      "temperature": {"time": 1778846400, "value": "62.4", "unit": "°F"},
+      "ec": {"time": 1778846310, "value": "1450", "unit": "μS/cm"}
+    }
+  }
+}
