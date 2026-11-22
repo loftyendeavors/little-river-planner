@@ -52,7 +52,7 @@ try:
         btn('Save equipment').click()
         btn('Record run').first.click()
         page.get_by_label('Actual minutes').fill('8')
-        dialog.get_by_role('button',name='Record run',exact=True).click()
+        dialog.get_by_role('button',name='Save watering',exact=True).click()
         page.get_by_text('Irrigation history · 1',exact=True).click()
         page.locator('details.wf-history > summary').filter(has_text='Test station').click()
         btn('Attach Hunter meter reading').click()
