@@ -35,7 +35,7 @@ FAULTS = [
  ('the widest view is wider than the page', 'js/timeline.js', "  const fitPpd = () => laneRoom() / yearDays();", "  const fitPpd = () => 1.15 * laneRoom() / yearDays();"),
  ('the tray strip adds the week up', 'js/timeline.js', "for (let k = i; k <= j; k++) most = Math.max(most, load[k]);", "for (let k = i; k <= j; k++) most += load[k];"),
  ('a long bar loses its name off the left', 'css/app.css', ".tl-name { position: sticky; left: 148px; display: inline-block; max-width: 100%; vertical-align: top; }", ".tl-name { display: inline-block; max-width: 100%; vertical-align: top; }"),
- ('selecting draws the whole chart again', 'js/timeline.js', "      markSel();\n    });", "      render();\n    });"),
+ ('selecting draws the whole chart again', 'js/timeline.js', "      markSel();\n      // picked somewhere else (the card, a list)", "      render();\n      // picked somewhere else (the card, a list)"),
  ('an opening always says its days in full', 'js/timeline.js', "label = fit ? '' : measure('open', full) + OPEN_PAD <= w ? full : measure('open', short) + OPEN_PAD <= w ? short : '';", "label = fit ? '' : full;"),
  ('live trays show under a filter', 'js/timeline.js', "    for (const s of all ? SECTIONS : [prefs.filter]) {", "    for (const s of all ? SECTIONS : [prefs.filter, 'trays']) {"),
  ('a crate month is split by variety', 'js/timeline.js', "for (const item of list) { const k = String(item.from) + (item.ghost ? '|ghost' : '') + (item.r.failed ? '|failed' : ''); if (!merged.has(k))", "for (const item of list) { const k = String(item.from) + (item.p.varietyId || '') + (item.ghost ? '|ghost' : '') + (item.r.failed ? '|failed' : ''); if (!merged.has(k))"),

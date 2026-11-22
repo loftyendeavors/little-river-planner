@@ -80,7 +80,7 @@ PAGE = [
  # words that read
  ("“your day” reads faint again", CSS, "letter-spacing: 0.04em; color: color-mix(in srgb, var(--flag-deep) 85%, var(--ink)); }   /* reads at 4.5:1 at its size (L3) */", "letter-spacing: 0.04em; color: var(--flag); }"),
  ("the counts on the pills read faint again", CSS, ".chip small { font: 500 var(--type-11) var(--mono); opacity: 0.85;", ".chip small { font: 500 var(--type-11) var(--mono); opacity: 0.7;"),
- ("the frost words read faint again", CSS, "color: color-mix(in srgb, var(--frost) 70%, var(--ink));", "color: var(--frost);"),
+ ("the frost words read faint again", CSS, "font: 500 var(--type-11) var(--mono); color: color-mix(in srgb, var(--frost) 70%, var(--ink)); white-space: nowrap;", "font: 500 var(--type-11) var(--mono); color: var(--frost); white-space: nowrap;"),
  ("the Forecast's week reads faint again", CSS, ".hv thead th.now { color: color-mix(in srgb, var(--flag-deep) 85%, var(--ink));", ".hv thead th.now { color: var(--flag);"),
  ("the planning week's tag reads faint again", CSS, "letter-spacing: 0.05em; color: color-mix(in srgb, var(--flag-deep) 85%, var(--ink)); }   /* reads at 4.5:1 at its size (L3) */", "letter-spacing: 0.05em; color: var(--flag); }"),
  ("the hint's green reads faint again", CSS, "color: color-mix(in srgb, var(--good) 85%, var(--ink)); border-radius: var(--corner-pill);", "color: var(--good); border-radius: var(--corner-pill);"),
