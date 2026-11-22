@@ -166,6 +166,19 @@ with sync_playwright() as pw:
       const out = { said: txt('succ-kept-waiting'), tick: (q('succ-remove-all') && q('succ-remove-all').closest('label') || {}).textContent || '', n: S.runPlantings(St.plan, run.id).length };
       A.undo(); await new Promise(r => setTimeout(r, 600)); document.querySelector('[data-hook="succ-run"][data-run="' + run.id + '"]').click(); await new Promise(r => setTimeout(r, 900)); return out;""") or {}
     check("a planting of the run sent to To place is said on the run, and the tick to take its plantings out counts it", "1 planting of it waits under To place" in wt.get("said", "") and ("Take its %d plantings out too" % (wt.get("n", 0) + 1)) in wt.get("tick", ""), wt)
+    # EVERY planting of the run under To place: the run is still listed and counted, opens, says them, and Remove run with the tick
+    # takes them all; one Undo puts them back
+    every = js("""const run = A.runs()[0], ids = S.runPlantings(St.plan, run.id).map(p => p.id), u0 = St.undo.length; for (const id of ids) A.sendToWait(id);
+      await new Promise(r => setTimeout(r, 600)); A.setView('succession'); document.querySelector('[data-hook="succ-run"][data-run="' + run.id + '"]').click(); await new Promise(r => setTimeout(r, 900));
+      const row = document.querySelector('[data-hook="succ-run"][data-run="' + run.id + '"]'), out = { n: ids.length, placed: S.runPlantings(St.plan, run.id).length, word: row ? row.textContent : '', figs: txt('succ-figs'), said: txt('succ-kept-waiting'), tick: (q('succ-remove-all') && q('succ-remove-all').closest('label') || {}).textContent || '' };
+      q('succ-remove-all').click(); q('succ-remove').click(); await new Promise(r => setTimeout(r, 900));
+      out.removed = { runs: A.runs().length, waiting: A.waiting().filter(w => ids.includes(w.id)).length, steps: St.undo.length - u0 };
+      A.undo(); await new Promise(r => setTimeout(r, 600)); out.back = { runs: A.runs().length, waiting: A.waiting().filter(w => ids.includes(w.id) && w.run && w.run.id === run.id).length };
+      while (St.undo.length > u0) A.undo(); await new Promise(r => setTimeout(r, 600)); out.placedAgain = S.runPlantings(St.plan, run.id).length;
+      document.querySelector('[data-hook="succ-run"][data-run="' + run.id + '"]').click(); await new Promise(r => setTimeout(r, 900)); return out;""") or {}
+    n_all = every.get("n", 0)
+    check("every planting of a run under To place: the run is still listed with its sowings counted, the page counts them in runs, says they wait, and the tick counts them", n_all >= 2 and every.get("placed") == 0 and ("%d sowings" % n_all) in every.get("word", "") and ("%d plantings in runs" % n_all) in every.get("figs", "") and ("%d plantings of it wait under To place" % n_all) in every.get("said", "") and ("Take its %d plantings out too" % n_all) in every.get("tick", ""), every)
+    check("and Remove run with the tick takes the run and all of them as one step; one Undo puts them back, and the rest of the undoing places them again", every.get("removed") == {"runs": 0, "waiting": 0, "steps": n_all + 1} and every.get("back") == {"runs": 1, "waiting": n_all} and every.get("placedAgain") == n_all, every)
     page.locator('[data-hook="succ-remove-all"]').check(); wait(200)
     press("succ-remove", 1500)
     gone = js("return state();") or {}
@@ -208,8 +221,11 @@ with sync_playwright() as pw:
       const round = n => (!(n > 0) ? 1 : n >= 20 ? Math.round(n / 5) * 5 : n >= 2 ? Math.round(n) : Math.max(0.1, Math.round(n * 10) / 10));
       const baseAvg = rowsOf(base).length ? round(avg(rowsOf(base))) : null, opt = (document.querySelector('[data-hook="succ-unit"]') || document.querySelector('[data-hook="succ-thing"] option') || {}), said = opt.value !== undefined && opt.tagName === 'INPUT' ? opt.value : opt.textContent || '';
       const out = { variety: D.varietyId === v.id, want: +D.want, baseAvg, said, other, word: LRFForecast.unitWord(2, other, LRFForecast.groupOf(c, other)) || other };
+      // a kept run of that variety, to an amount, is listed in the variety's unit
+      const others = S.gardensFor(eng, c).filter(g => g.kind === 'bed').map(g => g.garden.id), r = S.planRun(A.state.engine, { cropId: c.id, varietyId: v.id, by: 'amount', want: 20, datesFor: 'picking', from: year + '-08-02', to: year + '-09-30', gardenIds: others.slice(0, 1), then: others.slice(1) });
+      if (!r.error && r.sowings.length && A.addRun(r)) { SU.render(); await new Promise(res => setTimeout(res, 900)); const row = document.querySelector('[data-hook="succ-run"][data-run="' + r.run.id + '"]'); out.kept = row ? row.textContent : ''; }
       while (St.undo.length > u0) A.undo(); return out;""", sub) or {}
-    check("a variety sold in a unit of its own: the amount wanted does not start from the crop's own unit, and “Sold by” says the variety's unit", not vu.get("none") and vu.get("variety") and vu.get("baseAvg") is not None and vu.get("want") != vu.get("baseAvg") and vu.get("word", "?") in vu.get("said", ""), vu)
+    check("a variety sold in a unit of its own: the amount wanted does not start from the crop's own unit, “Sold by” says the variety's unit, and a kept run of it is listed in that unit", not vu.get("none") and vu.get("variety") and vu.get("baseAvg") is not None and vu.get("want") != vu.get("baseAvg") and vu.get("word", "?") in vu.get("said", "") and (vu.get("word", "?") + " a week") in vu.get("kept", ""), vu)
 
     # ── Cancel ──
     js("void A.openAhead({ mode: 'succession', cropId: arg.crop }); return 1;", sub); wait(1500)

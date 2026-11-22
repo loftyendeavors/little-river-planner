@@ -148,7 +148,7 @@
 
   "f018": 30,
 
-  "join": 52,
+  "join": 54,
 
   "maint": 55,
 
@@ -207,7 +207,7 @@
 
   "step5b": 63,
 
-  "successions": 49,
+  "successions": 51,
 
   "swap": 32,
 
@@ -308,7 +308,7 @@
 
   "harvest-site": 44,
 
-  "join-site": 52,
+  "join-site": 54,
 
   "loose-site": 37,
 
@@ -322,7 +322,7 @@
 
   "step5b-site": 63,
 
-  "successions-site": 49,
+  "successions-site": 51,
 
   "swap-site": 32,
 
@@ -372,7 +372,7 @@
 
   "step5b-site @1480": 63,
 
-  "successions-site": 49,
+  "successions-site": 51,
 
   "trycard-site": 57
 
@@ -395,7 +395,7 @@
 
   "step5b-site dark": 63,
 
-  "successions-site @3440": 49,
+  "successions-site @3440": 51,
 
   "swap-site @3440": 32,
 

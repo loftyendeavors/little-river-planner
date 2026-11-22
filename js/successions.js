@@ -375,7 +375,7 @@
       crop && UI_STATE.planning ? row(UI_STATE.pick === 'draft', T.el({ varietyId: D.varietyId || undefined, cropId: crop.id, color: eng.cropColor(crop), label: crop.name, size: 40 }), crop.name,
         D.by === 'amount' ? `${num(+D.want || 0, 1)} ${unitWord} a week · ${day(E.s2d(D.from))} to ${day(E.s2d(D.to))}` : `1 bed every ${plural(+D.every || 0, 'day')} · ${day(E.s2d(D.from))} to ${day(E.s2d(D.to))}`,
         'Being planned', { hook: 'succ-run', run: 'draft' }, () => { UI_STATE.pick = 'draft'; render(); }) : null,
-      kept.map(run => { const c = eng.crop(run.cropId) || { name: 'Crop', id: run.cropId }, n = S.runPlantings(App.state.plan, run.id).length;
+      kept.map(run => { const c = eng.crop(run.cropId) || { name: 'Crop', id: run.cropId }, n = S.runPlantings(App.state.plan, run.id).length + App.waiting().filter(w => w.run && w.run.id === run.id).length;   // placed and under To place
         return row(UI_STATE.pick === run.id, T.el({ varietyId: run.varietyId, cropId: c.id, color: eng.cropColor(c), label: c.name, size: 40 }), c.name, runLine(eng, run, c), plural(n, 'sowing'), { hook: 'succ-run', run: run.id }, () => { UI_STATE.pick = run.id; render(); }); }),
       kept.length ? null : h('p.su-note', { dataset: { hook: 'succ-runs-none' } }, 'No run is kept in the plan yet.'));
   }
@@ -395,7 +395,7 @@
     if (UI_STATE.pick !== 'draft' && !App.runs().some(r => r.id === UI_STATE.pick)) UI_STATE.pick = 'draft';
     if (!helpBtn) helpBtn = UI.help(() => h('p', h('b', 'A succession'), ' is a crop sown again and again through the season so that it is picked without a gap. ', h('b', 'A run'), ' is one set of those sowings, kept as one: one whole bed a sowing, every so many days, or as many as give an amount a week. Nothing is added until Add is pressed, and one Undo takes a run back.'),
       () => $('suWrap'), null, { id: 'suHelp', label: 'What a succession is', hook: 'succ-help' });
-    const kept = App.runs(), inRuns = App.state.plan.plantings.filter(p => p.run).length;
+    const kept = App.runs(), ids = new Set(kept.map(r => r.id)), inRuns = [...App.state.plan.plantings, ...App.waiting()].filter(p => p.run && ids.has(p.run.id)).length;   // placed and under To place, of the runs kept
     const main = h('div.su-main');
     const run = UI_STATE.pick !== 'draft' ? kept.find(r => r.id === UI_STATE.pick) : null;
     add(clear(host),

@@ -62,6 +62,8 @@ PAGE = [
  ("a variety's own unit is not read for the amount it starts on (Codex on #103)", SS, "    const unit = unitFor(eng, crop, D.thing, D.varietyId), rows = m.rows.filter(", "    const unit = unitFor(eng, crop, D.thing), rows = m.rows.filter("),
  ("a kept run's waiting planting is not counted by the tick (Codex on #103)", SS, "all ? h('label.su-tick', tick, h('span', `Take its ${plural(all, 'planting')} out too`)) : null,", "list.length ? h('label.su-tick', tick, h('span', `Take its ${plural(list.length, 'planting')} out too`)) : null,"),
  ("a kept run's waiting planting is not said", SS, "    if (held.length) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-waiting' } }", "    if (false) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-waiting' } }"),
+ ("the runs list leaves out a run's plantings under To place", SS, "n = S.runPlantings(App.state.plan, run.id).length + App.waiting().filter(w => w.run && w.run.id === run.id).length;", "n = S.runPlantings(App.state.plan, run.id).length;"),
+ ("the page's figures leave out the plantings of runs under To place", SS, "inRuns = [...App.state.plan.plantings, ...App.waiting()].filter(p => p.run && ids.has(p.run.id)).length;", "inRuns = App.state.plan.plantings.filter(p => p.run && ids.has(p.run.id)).length;"),
  ("the page says “series”", SS, "'Nothing is added to the plan until you press Add.'", "'Nothing is added to the plan until you press Add. A series.'"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)
