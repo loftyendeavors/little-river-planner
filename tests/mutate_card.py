@@ -66,7 +66,7 @@ PAGE = [
  ("what is still empty is not said beside the button", YC, "still.length ? h('p.yc-still', { id: 'ycStill' }", "false ? h('p.yc-still', { id: 'ycStill' }"),
  ("the tick's message does not say what is still empty", YC, "const next = nextAfter(eng, q, id), left = said ? empties(eng, c) : [];", "const next = nextAfter(eng, q, id), left = [];"),
  # 6. the tick's own message
- ("the tick is taken without a word: the message on show is still the figure's", AP, "    toast(`${label}${note ? ' · ' + note : ''}`, { label: 'Undo', run: undo });\n    return true;\n  }\n  /**\n   * Say whom a crop is grown for.", "    return true;\n  }\n  /**\n   * Say whom a crop is grown for."),
+ ("the tick is taken without a word: the message on show is still the figure's", AP, "    toast(`${label}${note ? ' · ' + note : ''}`, { label: 'Undo', run: undo });", "    void note;"),
  # 4. amber place by place
  ("a yield typed for one place answers for every place", YC, "planted.length ? planted.filter(env => hc.cells[env].mine == null)", "planted.length ? (planted.every(env => hc.cells[env].mine == null) ? planted : [])"),
  ("a crop opened from the checklist has the pointer for typing nowhere", YC, "ui.cur = id; ui.focus = focus ? { blank: true } : null;", "ui.cur = id; ui.focus = null;"),

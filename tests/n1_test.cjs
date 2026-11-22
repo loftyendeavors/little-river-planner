@@ -158,6 +158,42 @@ const only = (e2, mine, fields) => {
   const cellsSame = plantings.filter(p => p.varietyId === v.id).every(p => now.calc(p).cells === e2.calc(e2.planting(p.id)).cells);
   check(`a variety's own seeds a cell (${v.name}, 6) moves its own seed only: no cell, no date, nothing of another variety`, r.mineMoved.length > 0 && !r.wrong.length && cellsSame, r.wrong.slice(0, 3));
 }
+// Whole nursery days have their own exact date. Older week-only records retain the earlier calculation.
+{
+  const sample = plantings.find(p => { const r = now.calc(p); return r && r.kind === 'bed' && r.sow && r.c.method === 'TP'; });
+  const raw = clone(plan), id = sample.cropId, v = { id: 'interval-check', cropId: id, name: 'Interval check' };
+  const planting = { ...sample, date: year + '-05-30', varietyId: v.id };
+  delete planting.growingDefaults; delete planting.done; delete planting.sowOn;
+  raw.varieties = [...raw.varieties, v]; raw.plantings = [planting];
+  const crop = { ...(raw.crops.find(c => c.id === id) || { id }), gh: 29 / 7 };
+  raw.crops = [...raw.crops.filter(c => c.id !== id), crop];
+  const sow = (engine, p = planting) => D(engine.create(raw, Lib).calc(p).sowDefault);
+  const old = sow(E0);
+  crop.startDays = 29;
+  check('29 days typed for a crop gives May 1 for a May 30 planting', sow(E) === year + '-05-01' && old !== sow(E), { old, sow: sow(E) });
+  const frozen = { ...planting, growingDefaults: { v: 1, cropId: id, crop: { gh: { present: true, value: 29 / 7 } } } };
+  check('a planting that kept its earlier weeks keeps its historical sowing date', sow(E, frozen) === old, sow(E, frozen));
+  v.environmentDefaults = { v: 1, field: { gh: 61 / 7, startDays: 61 }, greenhouse: { gh: 61 / 7, startDays: 61 } };
+  planting.date = year + '-05-01';
+  check("the variety's 61 days takes precedence and puts sowing on March 1", sow(E) === year + '-03-01', sow(E));
+  for (const k of ['field','greenhouse']) v.environmentDefaults[k] = { gh: 4.25 };
+  check('legacy fractional weeks on a variety retain its original date over an exact crop interval', sow(E) === sow(E0), { before: sow(E0), after: sow(E) });
+}
+// Physical stocks of 10- and 15-pot carriers are counted separately at the peak of each size's use.
+{
+  const lots = []; N.supplies(now, year, null, null, lots);
+  const p = clone(plan), chosen = lots[0].cropId, sample = now.plan.plantings.find(x => x.cropId === chosen && now.calc(x).sowing);
+  const second = { ...now.crop(chosen), id: 'second-potted-crop', name: 'Second potted crop' };
+  const extra = { ...sample, id: 'another-potted-planting', cropId: second.id }; delete extra.varietyId; delete extra.growingDefaults;
+  p.crops.push(second); p.plantings.push(extra);
+  p.crops = [...p.crops.filter(c => c.id !== chosen), { ...(p.crops.find(c => c.id === chosen) || { id: chosen }), carrierSize: 10 }];
+  const own = { carrierSize: 15, have: { carrier: 100 }, pockets: 15 };
+  p.lrfNext = { ...p.lrfNext, supplies: own };
+  const eng = E.create(p, Lib), s = N.supplies(eng, year, own), ten = s.rows.find(r => r.pockets === 10), fifteen = s.rows.find(r => r.pockets === 15);
+  check('a crop gets 10-pot carriers on the bench and in Supplies; another crop keeps the farm’s 15-pot carriers', eng.potsPerCarrier(eng.crop(chosen)) === 10 && eng.potsPerCarrier(eng.crop(second.id)) === 15 && ten && fifteen && ten.need > 0 && fifteen.need > 0, [chosen, second.id, ten && ten.need, fifteen && fifteen.need]);
+  check('100 existing 15-pot carriers never cover stock needed in 10-pot carriers', ten && fifteen && ten.have === 0 && ten.buy === ten.need && fifteen.have === 100 && fifteen.buy === Math.max(0, fifteen.need - 100), s.rows.filter(r => r.pockets));
+}
+
 // ── 3. the build before reads such a plan, and it comes back the same from a file ──
 {
   const typed = withCrop({ spare: 40, station: true }), v = now.varietiesOf(scallion.id)[0];
@@ -196,5 +232,9 @@ const only = (e2, mine, fields) => {
   const out = M.merge(start, mine, theirs), c = out.ok ? (out.plan.crops || []).find(x => x.id === id) : null;
   const way = c && [c.method, c.prop || null, c.plantingMaterial].join('|'), ok = ['TP|pot|seed', 'DS||seed'].includes(way);
   check('two devices choosing Started as differently (Pot here, Direct there) are joined to one of the two choices whole', ok, way);
+  set(start, { gh: 4 }); set(mine, { gh: 29 / 7, startDays: 29 }); set(theirs, { gh: 4.25 });
+  const joined = M.merge(start, mine, theirs), interval = joined.ok && joined.plan.crops.find(x => x.id === id);
+  check('two devices choosing 29 days and legacy fractional weeks keep one complete interval', interval &&
+    ((interval.gh === 29 / 7 && interval.startDays === 29) || (interval.gh === 4.25 && interval.startDays == null)), interval && [interval.gh, interval.startDays]);
 }
 finished = true;

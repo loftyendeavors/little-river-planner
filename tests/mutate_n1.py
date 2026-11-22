@@ -11,6 +11,8 @@ mode = sys.argv[5] if len(sys.argv) > 5 else "node"; words = [w.lower() for w in
 EN, SW, PI, SC, AS, SD, AP = "js/engine.js", "js/sowing.js", "js/planio.js", "js/startcard.js", "js/assume.js", "js/seeds.js", "js/app.js"
 OLD = app.parent / "old" / "js"
 NODE = [
+ ("whole nursery days are converted back through weeks", EN, "&& c.startDays / 7 === +c.gh ? c.startDays", "&& false ? c.startDays"),
+ ("carrier inventory is shared between sizes", "js/nursery.js", "const id = per === legacyPockets ? 'carrier' : 'carrier-' + per;", "const id = 'carrier';"),
  ("a crop's spare is not read in the sowing", SW, "buffer = ownSpare != null && ownSpare <= 100 ? ownSpare : nonnegative(settings.buffer) ?? 10", "buffer = nonnegative(settings.buffer) ?? 10"),
  ("a crop's spare is read where none is typed", SW, "const ownSpare = nonnegative(crop.spare),", "const ownSpare = nonnegative(crop.spare) ?? 12,"),
  ("one station is read where a cell holds one seed", SW, "const station = crop.station === true && seedsPerCell > 1;", "const station = crop.station === true;"),
@@ -22,8 +24,9 @@ NODE = [
  ("a replacement backup drops the ticks of Starting and nursery", PI, " + Object.values(a.nursery || {}).filter(line => line && line.looked != null).length : 0;", " : 0;"),
  ("the engine counts a spare of 10 where the farm has none set", EN, "buffer = 1 + nonNegative(spareOf(c) != null ? spareOf(c) : settings.buffer) / 100;", "buffer = 1 + nonNegative(spareOf(c) != null ? spareOf(c) : settings.buffer ?? 10) / 100;"),
  ("a variety's germination is not read", EN, "        if (v.germ > 0) e.germ = v.germ;\n", ""),
- ("a variety's nursery days for its place are not read", EN, "      if (profile && own(profile, 'gh')) e.gh = profile.gh;\n", ""),
- ("Started as is joined field by field", "js/merge.js", "'crops[]': [['yield', 'yBasis'], ['method', 'prop', 'plantingMaterial']],", "'crops[]': [['yield', 'yBasis']],"),
+ ("a variety's nursery days for its place are not read", EN, "      if (profile && own(profile, 'gh')) { e.gh = profile.gh; e.startDays = profile.startDays; }\n", ""),
+ ("nursery days and their legacy weeks are joined field by field", "js/merge.js", ", ['gh', 'startDays']], 'plantings[]'", "], 'plantings[]'"),
+ ("Started as is joined field by field", "js/merge.js", "'crops[]': [['yield', 'yBasis'], ['method', 'prop', 'plantingMaterial'], ['gh', 'startDays']],", "'crops[]': [['yield', 'yBasis'], ['gh', 'startDays']],"),
  ("a farm spare stored as text is read as unset in the sowing", SW, "buffer = ownSpare != null && ownSpare <= 100 ? ownSpare : nonnegative(settings.buffer) ?? 10,", "buffer = ownSpare != null && ownSpare <= 100 ? ownSpare : (typeof settings.buffer === 'number' ? nonnegative(settings.buffer) : null) ?? 10,"),
  ("the compact plan drops a variety's seeds a cell", PI, "    'spc'];", "    ];"),
 ]
@@ -46,7 +49,7 @@ PAGE = [
  ("a live tray reads counted with one figure said", EN, "set = cells > 0 && perCell > 0;", "set = cells > 0;"),
  ("Edit crop opens the old form", SD, "onclick: () => toStart(g.id) }, 'Edit crop')", "onclick: () => select({ type: 'crop', id: g.id }) }, 'Edit crop')"),
  ("the tick is not kept apart from the others", AP, "const emptyList = a => !['crops', 'varieties', 'starts', 'sell', 'sellV', 'nursery']", "const emptyList = a => !['crops', 'varieties', 'starts', 'sell', 'sellV']"),
- ("the farm's pots a carrier says nothing of what Supplies would count", SC, "said: says ? says(value) : movesSaid(", "said: movesSaid("),
+ ("the farm's pots a carrier says nothing of what Supplies would count", SC, "said: movesSaid(movesOf(App.state.engine, cropIds, step)) };", "said: key === 'pockets' ? '' : movesSaid(movesOf(App.state.engine, cropIds, step)) };"),
  ("the bench room said is the crops' own trays, live trays left out", SC, "for (const k of N.KIND_IDS) { const x = most(f0, k), y = most(f1, k); if (Math.abs(x - y) > 0.05) out.bench.push({ kind: N.kindName(k), was: x, now: y }); }", "{ const x = benchOfMany(eng, [...ids]).most, y = benchOfMany(next, [...ids]).most; if (Math.abs(x - y) > 0.05) out.bench.push({ kind: N.kindName('heated'), was: x, now: y }); }"),
  ("a pot size is taken at once", SC, "onchange: e => stage('potSize',", "onchange: e => take('potSize',"),
  ("counting germination again is taken at once", SC, "onclick: () => stage('station', `${name}: extra cells for germination again`", "onclick: () => take('station', `${name}: extra cells for germination again`"),
@@ -67,7 +70,7 @@ PAGE = [
  ("the figure every planting counts is stored", SC, "const follows = n => n != null && fig.mine == null && !farm && uses != null && eq(n, uses);", "const follows = n => false;"),
  ("the figure every planting counts stays in the box", SC, "if (follows(x.n)) { input.value = shown; edited = false; }", "if (follows(x.n)) { edited = false; }"),
  ("a crop's spare is held to the farm's figure, not to what its plantings count", SC, "uses: usesOf(eng, eng.plan.plantings.filter(p => p.cropId === c.id), 'spare')", "uses: farmSpare(plan)"),
- ("clearing a variety's days clears every place's figures", SC, "for (const k of ['field', 'greenhouse']) if (cfg[k] && 'gh' in cfg[k]) { delete cfg[k].gh; if (!Object.keys(cfg[k]).length) delete cfg[k]; }", "for (const k of ['field', 'greenhouse']) delete cfg[k];"),
+ ("clearing a variety's days clears every place's figures", SC, "for (const k of ['field', 'greenhouse']) if (cfg[k] && 'gh' in cfg[k]) { delete cfg[k].gh; delete cfg[k].startDays; if (!Object.keys(cfg[k]).length) delete cfg[k]; }", "for (const k of ['field', 'greenhouse']) delete cfg[k];"),
  ("the card's own figures are not said", SC, "if (m.card && m.card.length) parts.push(", "if (false) parts.push("),
  ("the card's line outlives its step", SC, "    sayingStill();\n", "\n"),
  ("leaving a box shifts the card under the pointer", SC, "line.style.visibility = 'hidden';", "clear(line);"),

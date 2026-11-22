@@ -313,9 +313,7 @@
     const how = r => {
       const lines = r.how.map(x => h(x.aside ? 'small' : 'span', `${num(x.n)} ${x.text}${x.on ? ` (${day(x.on)})` : ''}`));
       if (r.pockets) {
-        const pick = h('select.bn-pockets', { 'aria-label': 'Pots one carrying tray holds', dataset: { f: 'pockets' } }, N.POCKETS.map(n => h('option', { value: n, selected: n === r.pockets }, `${n} pots`)));
-        pick.addEventListener('change', () => { refocus = null; const done = App.setSupply('pockets', r.id, pick.value); if (!done) pick.value = String(r.pockets); else if (done.changed) UI.toast(`A carrying tray holds ${pick.value} pots`, { label: 'Undo', run: App.undo }); });
-        lines.push(h('small.bn-pick', 'One holds ', pick, '; whole trays for each potting lot'));
+        lines.push(h('small.bn-pick', `${r.pockets} pots per tray · `, h('button.link', { type: 'button', dataset: { hook: 'supply-carrier-setting' }, onclick: () => { App.setView('assume'); root.LRFAssume.setMode('start', null, '(farm)'); } }, 'Set carrier size…')));
       }
       return lines;
     };

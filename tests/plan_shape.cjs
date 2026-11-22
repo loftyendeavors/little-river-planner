@@ -150,7 +150,8 @@
     'crops[].firstSafeField': 'text',
     'crops[].frostTender': 'bool',
     'crops[].germ': 'null|number',
-    'crops[].gh': 'number',
+    'crops[].gh': 'number together',
+    'crops[].startDays': 'number together',
     'crops[].harvestMode': 'text',
     'crops[].harvestUntil': 'text',
     'crops[].hw': 'number',
@@ -169,7 +170,8 @@
     'crops[].name': 'text',
     'crops[].note': 'text',
     'crops[].p': 'number',
-    'crops[].perCarrier': 'number',             // pots a carrying tray holds on the bench (10 or 15): set on Starting and nursery (N1)
+    'crops[].carrierSize': 'number',             // explicit pot carrier size used on benches and in Supplies
+    'crops[].perCarrier': 'number',             // legacy crop-specific bench capacity
     'crops[].perennial': 'bool',
     'crops[].plantingMaterial': 'text together',
     'crops[].potSize': 'number',                // the pot it is potted up into, inches: set on Starting and nursery (N1)
@@ -311,6 +313,7 @@
     'lrfNext.supplies.have.*': 'number',
     'lrfNext.supplies.mix': 'map',
     'lrfNext.supplies.mix.*': 'number',
+    'lrfNext.supplies.carrierSize': 'number',   // default for both benches and Supplies; old pockets still identifies old stock
     'lrfNext.supplies.pockets': 'number',
     'lrfNext.trays': 'text',
     'lrfNext.trayStart': 'text',
@@ -657,8 +660,10 @@
     'varieties[].environmentDefaults': 'object whole',
     'varieties[].environmentDefaults.field': 'object',
     'varieties[].environmentDefaults.field.gh': 'number',
+    'varieties[].environmentDefaults.field.startDays': 'number',
     'varieties[].environmentDefaults.greenhouse': 'object',
     'varieties[].environmentDefaults.greenhouse.gh': 'number',
+    'varieties[].environmentDefaults.greenhouse.startDays': 'number',
     'varieties[].environmentDefaults.v': 'number',
     'varieties[].gh': 'number',
     'varieties[].germ': 'number',

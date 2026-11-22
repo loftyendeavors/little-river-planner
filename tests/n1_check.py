@@ -280,12 +280,12 @@ with sync_playwright() as pw:
     click(f'[data-hook="start-carrier"] [data-hook="start-side"][data-side="{other}"]', 600)
     pm = moves("carrier") or {}
     # the crop's own carriers, as its card counts them: its pots (the plants and their spare) in carriers of so many
-    cr = js(f"const pots = S.plan.plantings.filter(p => p.cropId === {json.dumps(pot['id'])}).reduce((n, p) => {{ const r = S.engine.calc(p); return n + (r && r.sowing && r.sowing.potUpCells != null ? r.sowing.potUpCells : 0); }}, 0), was = Math.round(+S.engine.crop({json.dumps(pot['id'])}).perCarrier > 0 ? +S.engine.crop({json.dumps(pot['id'])}).perCarrier : 10); return [Math.ceil(pots / was - 1e-9), was, Math.ceil(pots / {other} - 1e-9)];") or [0, 0, 0]
+    cr = js(f"const id = {json.dumps(pot['id'])}, stockLots = []; LRFNursery.supplies(S.engine, A.planYear(), (S.plan.lrfNext || {{}}).supplies, null, stockLots); const lots = stockLots.filter(lot => lot.cropId === id), was = S.engine.potsPerCarrier(S.engine.crop(id)), peak = per => Math.max(0, ...lots.map(d => lots.filter(l => l.from <= d.from && d.from < l.to).reduce((n,l) => n + Math.ceil(l.n / per - 1e-9), 0))); return [peak(was), was, peak({other})];") or [0, 0, 0]
     say = lambda n, per: f"{n} carrier{'' if n == 1 else 's'} of {per}"
     check("pressing the other side says what it would move first, and moves nothing yet", pm.get("would") and js("return plan();") == p0.get("plan"), pm)
     check("a crop's own pots a carrier says its own carriers before and after (so many carriers of 10 → so many of 15)", cr[0] != cr[2] and f"{say(cr[0], cr[1])} → {say(cr[2], int(other))}" in pm.get("text", ""), [cr, pm.get("text")])
     click('[data-hook="start-use"]', 700)
-    check("Use it takes it as one step", js(f"return S.engine.crop({json.dumps(pot['id'])}).perCarrier;") == int(other) and js("return S.undo.length;") == p0.get("undo", 0) + 1)
+    check("Use it takes it as one step", js(f"return S.engine.crop({json.dumps(pot['id'])}).carrierSize;") == int(other) and js("return S.undo.length;") == p0.get("undo", 0) + 1)
     js("A.undo(); return 1;"); wait(500)
     size = js("const s = document.querySelector('[data-hook=\"start-pot-size\"]'); return s ? { now: s.value, other: [...s.options].map(o => o.value).find(v => v !== s.value) } : null;") or {}
     q0 = js("return { plan: plan(), undo: S.undo.length };") or {}
@@ -362,12 +362,12 @@ with sync_playwright() as pw:
     said = re.search(r"heated greenhouse benches at their fullest ([\d.,]+) → ([\d.,]+) tray spaces", fg.get("text", ""))
     check("typing the farm's germination says the heated benches at their fullest, as Bench room counts them (every crop and live trays added up)", bool(said) and abs(float(said.group(1).replace(",", "")) - (peak or -1)) < 0.06, [peak, fg.get("text", "")[-160:]])
     page.keyboard.press("Escape"); wait(300)
-    sup = js("const own = (S.plan.lrfNext || {}).supplies || null, at = LRFNursery.POCKETS.includes(+(own || {}).pockets) ? +own.pockets : LRFNursery.POCKETS[0], other = at === 10 ? 15 : 10, n = x => (LRFNursery.supplies(S.engine, A.planYear(), x == null ? own : LRFNursery.setSupply(own, 'pockets', null, x)).rows.find(r => r.id === 'carrier') || { need: 0 }).need; return { other, a: n(null), b: n(other), plan: plan() };") or {}
-    click(f'[data-hook="start-pockets"] [data-hook="start-side"][data-side="{sup.get("other")}"]', 600)
+    sup = js("const own = (S.plan.lrfNext || {}).supplies || null, r = LRFNursery.supplies(S.engine, A.planYear(), own).rows.find(r => r.pockets); return { other: 10, before: r && r.need, plan: plan() };") or {}
+    click('[data-hook="start-pockets"] [data-hook="start-side"][data-side="10"]', 600)
     pk = moves("pockets") or {}
-    check("pressing the farm's other pots a carrier says what Supplies would count, before and after, and moves nothing yet", sup.get("a") != sup.get("b") and pk.get("would") and f"carrying trays Supplies counts at the most {sup.get('a')} → {sup.get('b')}; no bench room, date or seed moves" in pk.get("text", "") and js("return plan();") == sup.get("plan"), [sup.get("a"), sup.get("b"), pk])
-    click('[data-hook="start-pockets"] ~ * [data-hook="start-use"], [data-hook="start-moves"][data-key="pockets"] [data-hook="start-use"]', 600)
-    check("Use it sets the pots a carrier Supplies counts by, as one step, and one Undo takes it back", js("return plan();") != sup.get("plan") and js("return +((S.plan.lrfNext || {}).supplies || {}).pockets || 15;") == sup.get("other") and js("A.undo(); return plan();") == sup.get("plan"))
+    check("choosing the farm's carrier size previews both sizes of stock before Use it", sup.get("before", 0) > 0 and pk.get("would") and "10-pot carrying tray" in pk.get("text", "").lower() and "15-pot carrying tray" in pk.get("text", "").lower() and js("return plan();") == sup.get("plan"), pk)
+    click('[data-hook="start-moves"][data-key="pockets"] [data-hook="start-use"]', 600)
+    check("Use it makes that capacity the farm default in Bench room and Supplies; one Undo restores the plan", js("const own = S.plan.lrfNext.supplies; return own.carrierSize === 10 && S.engine.potsPerCarrier({}) === 10 && LRFNursery.supplies(S.engine,A.planYear(),own).rows.some(r => r.pockets === 10 && r.need > 0);") and js("A.undo(); return plan();") == sup.get("plan"))
 
     # ── a crop not among My crops, opened by name: the list shows all crops, so its card is the one that opens ──
     other = js("const m = new Set(mine().map(c => c.id)); const c = S.engine.crops().find(c => !m.has(c.id) && !S.engine.isCoverCrop(c)); return c ? c.id : null;")
@@ -412,10 +412,14 @@ with sync_playwright() as pw:
     # ── every control once more, and every field the card wrote: each is named in tests/plan_shape.cjs ──
     open_crop(many["id"])
     d0 = js("return S.undo.length;")
-    for k, v in [("spare", "20"), ("days", "49"), ("spc", "3")]: typing(k, v); page.keyboard.press("Enter"); wait(500)
+    for k, v in [("spare", "20"), ("days", "29"), ("spc", "3")]: typing(k, v); page.keyboard.press("Enter"); wait(500)
+    stored = js(f"return S.engine.crop({json.dumps(many['id'])}).startDays;")
+    check("typing 29 whole days on a crop keeps the exact interval", stored == 29, stored)
     vv = js(f"const v = S.engine.varietiesOf({json.dumps(many['id'])})[0]; return v ? v.id : null;")
     click(f'[data-hook="start-variety-own"][data-variety="{vv}"]', 400)
-    for k, v in [(f"v|{vv}|days", "35"), (f"v|{vv}|spc", "2")]: typing(k, v); page.keyboard.press("Enter"); wait(500)
+    for k, v in [(f"v|{vv}|days", "61"), (f"v|{vv}|spc", "2")]: typing(k, v); page.keyboard.press("Enter"); wait(500)
+    stored = js(f"const cfg = S.engine.variety({json.dumps(vv)}).environmentDefaults || {{}}; return ['field','greenhouse'].map(place => (cfg[place] || {{}}).startDays);")
+    check("typing 61 whole days on a variety keeps the exact interval in both places", stored == [61, 61], stored)
     tsel = js("const s = document.querySelector('[data-hook=\"start-tray\"]'); return s ? [...s.options].map(o => o.value).find(v => v !== s.value) : null;")
     if tsel: page.select_option('[data-hook="start-tray"]', tsel); wait(500); click('[data-hook="start-moves"][data-key="tray"] [data-hook="start-use"]', 600)
     click('[data-hook="start-as"] [data-hook="start-side"][data-side="direct"]', 500); click('[data-hook="start-moves"][data-key="started"] [data-hook="start-use"]', 600)

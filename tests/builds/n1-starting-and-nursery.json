@@ -1,5 +1,5 @@
 {
- "build": "N1, Starting and nursery. Assumptions gains a first part, Starting and nursery: every crop grouped by how it is started (sown in the nursery, live trays, direct, bought in), with an Every crop row for the farm's germination, spare and pots a carrier, and a card for one crop: what its sowings come to (weeks before planting, trays, seed, mix, bench room), Started as, then only the parts that apply (Sowing, Potting up, For the towers, On the bench, A tray, Sown in place, Bought in), its sowings as wanted then sown, its varieties with their own germination, days from sowing to planting and seeds a cell, and Looks right. Next. Each figure is read where it is stored; three are new and read only where typed (a crop's spare, a variety's seeds a cell, one station a cell, offered with its before and after). A box being typed says under it what it would move; Enter or Tab takes it, Esc leaves it, Undo takes it back. Edit crop on Seeds opens the card; the nursery figures leave the Seeds crop and variety forms.",
+ "build": "N1, Starting and nursery. Assumptions gains a first part, Starting and nursery: every crop grouped by how it is started (sown in the nursery, live trays, direct, bought in), with an Every crop row for the farm's germination, spare and pots a carrier, and a card for one crop: what its sowings come to (weeks before planting, trays, seed, mix, bench room), Started as, then only the parts that apply (Sowing, Potting up, For the towers, On the bench, A tray, Sown in place, Bought in), its sowings as wanted then sown, its varieties with their own germination, days from sowing to planting and seeds a cell, and Looks right. Next. Each figure is read where it is stored; three are new and read only where typed (a crop's spare, a variety's seeds a cell, one station a cell, offered with its before and after). A box being typed says under it what it would move; Enter or Tab takes it, Esc leaves it, Undo takes it back. Edit crop on Seeds opens the card; the nursery figures leave the Seeds crop and variety forms. Whole nursery days entered on the card are kept exactly. A chosen carrier capacity matches Bench room and Supplies, with 10-pot and 15-pot stock tracked separately.",
  "changes": {
   "did": "Assumptions has a first part, Starting and nursery: one card a crop for its tray, seeds a cell, germination, spare and days in the nursery, what they come to, and what a change would move before it is taken.",
   "steps": [
@@ -12,17 +12,26 @@
  "code": [
   "app.js",
   "assume.js",
+  "bench.js",
   "engine.js",
   "merge.js",
+  "nursery.js",
   "planio.js",
+  "seedlib.js",
   "seeds.js",
   "sowing.js"
  ],
- "added": ["startcard.js"],
+ "added": [
+  "startcard.js"
+ ],
  "removed": [],
  "page": [
   "index.html",
   "css/app.css"
  ],
- "screens": ["assumptions-days", "assumptions-yield"]
+ "screens": [
+  "assumptions-days",
+  "assumptions-yield",
+  "nursery-supplies"
+ ]
 }
