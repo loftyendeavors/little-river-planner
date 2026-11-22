@@ -59,6 +59,7 @@ messages
 controls
 early
 e2d
+runs
 merge
 join
 shape
@@ -113,6 +114,7 @@ script() {
     bought) SCRIPT=$T/mutate_bought.py; ARGS="$APP $F $T $PLAN" ;;
     early) SCRIPT=$T/mutate_early.py; ARGS="$APP $F $T $PLAN" ;;
     e2d) SCRIPT=$T/mutate_e2d.py; ARGS="$APP $F $T $PLAN" ;;
+    runs) SCRIPT=$T/mutate_runs.py; ARGS="$APP $F $T $PLAN" ;;   # E4 stage 1: the solver of a run (node) and its two steps (page)
     tlpick) SCRIPT=$T/mutate_tlpick.py; ARGS="$APP $F $T" ;;
     messages) SCRIPT=$T/mutate_messages.py; ARGS="$APP $F $T" ;;
     controls) SCRIPT=$T/mutate_controls.py; ARGS="$APP $F $T" ;;

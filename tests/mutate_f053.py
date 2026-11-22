@@ -53,7 +53,7 @@ PAGE = [
  ("the Map's “?” is the first of the tools, not the last", MP, "    tools.append(UI.help(null, () => tools, () => [", "    tools.prepend(UI.help(null, () => tools, () => ["),
  ("the Map's card is one column", CSS, ".hint.cols dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-8) var(--space-16); }", ".hint.cols dl { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-8) var(--space-16); }"),
  ("the Map's card does not say how to copy", MP, "      ['Copy', 'Hold Alt while dragging.'],\n", ""),
- ("the Map's card has no way to a succession with no crop picked", MP, "h('button.btn.quiet.small', { type: 'button', id: 'ovSeries', dataset: { hook: 'map-help-series' }, onclick: () => App.openAhead({ mode: 'series' }) }, 'Plan a series…')", "'Plan one from the library.'"),
+ ("the Map's card has no way to a succession with no crop picked", MP, "h('button.btn.quiet.small', { type: 'button', id: 'ovSuccession', dataset: { hook: 'map-help-succession' }, onclick: () => App.openAhead({ mode: 'succession' }) }, 'Plan a succession…')", "'Plan one from the library.'"),
  ("“plan one now” leaves the card open over the tool", UI, "      box.addEventListener('click', e => { if (e.target.closest('button')) close(); });\n", ""),
  ("Escape leaves the Map's card open", UI, "const key = e => { if (e.key === 'Escape' && box) { close(); btn.focus(); } };", "const key = e => { if (e.key === 'Escape' && box) { btn.focus(); } };"),
  ("with “?” among them the map's tools run into the scale", CSS, "  .map-tools .tool-btn { padding-inline: var(--space-8); }\n", ""),

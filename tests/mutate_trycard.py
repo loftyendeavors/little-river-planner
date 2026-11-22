@@ -77,7 +77,6 @@ PAGE = [
  ("a drop is answered in a toast", CD, "    App.on('sel', () => { if (planTick) mark(); });\n", ""),
  ("the card writes days to harvest its own way", CD, "onchange: ev => set(Ed.dtm(p, ev.target.value)) }", "onchange: ev => set([{ dtm: +ev.target.value + 1, timingMode: 'manual' }, 'Change days to harvest']) }"),
  ("the card writes harvest days its own way", CD, "onchange: ev => set(Ed.hw(ev.target.value)) }", "onchange: ev => set([{ hw: +ev.target.value + 1, harvestMode: 'window' }, 'Change harvest days']) }"),
- ("“Add” on the card adds one fewer", CD, "onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+count.value) || 1))", "onclick: () => App.addSuccessions(p.id, Math.max(1, Math.min(30, Math.round(+count.value - 1) || 1))"),
  ("“Send to To place” in the menu removes the planting", CD, "        ['wait', 'Send to To place', () => toWait(p)],", "        ['wait', 'Send to To place', () => App.removePlantings([p.id])],"),
  ("Codex on #66: Send to To place from the card is answered in a toast, the card gone", CD, "    if (r && !e.isPool(r.b) && !root.LRFRails.fixed(e, { p })) App.select({ type: 'bed', id: r.b.id });\n    App.sendToWait(p.id);", "    App.sendToWait(p.id);"),
  ("“Remove planting” in the menu does nothing", CD, "        ['remove', 'Remove planting', () => App.removePlantings([p.id]), null, 'bad']]", "        ['remove', 'Remove planting', () => {}, null, 'bad']]"),

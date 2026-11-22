@@ -7,9 +7,9 @@
 
   "bought in kept, compact": 28,
 
-  "bought in, backup": 43,
+  "bought in, backup": 42,
 
-  "bought in, compact": 43,
+  "bought in, compact": 42,
 
   "early and young, backup": 56,
 
@@ -33,7 +33,7 @@
 
   "map geometry": 81,
 
-  "merge": 138,
+  "merge": 145,
 
   "page reader": 29,
 
@@ -45,9 +45,13 @@
 
   "rows in the figure, compact": 31,
 
+  "runs, backup": 37,
+
+  "runs, compact": 37,
+
   "scale": 8,
 
-  "shape": 29,
+  "shape": 30,
 
   "snapshots kept": 4,
 
@@ -71,13 +75,13 @@
 
   "step5b, compact": 70,
 
-  "stepF, backup": 74,
+  "stepF, backup": 4,
 
-  "stepF, compact": 74,
+  "stepF, compact": 4,
 
   "store": 31,
 
-  "succession": 39,
+  "succession": 20,
 
   "swap, backup": 32,
 
@@ -97,9 +101,9 @@
 
   "things, compact": 47,
 
-  "waiting, backup": 55,
+  "waiting, backup": 39,
 
-  "waiting, compact": 55,
+  "waiting, compact": 39,
 
   "what the build changed": 9,
 
@@ -117,13 +121,15 @@
  },
  "app1": {
 
-  "ahead": 67,
+  "ahead": 49,
 
   "core": 20,
 
   "folder": 14,
 
   "numbers": 48,
+
+  "runs": 15,
 
   "shape": 51,
 
@@ -142,11 +148,11 @@
 
   "f018": 30,
 
-  "join": 51,
+  "join": 54,
 
   "maint": 55,
 
-  "step2b": 105,
+  "step2b": 61,
 
   "step3a": 64,
 
@@ -167,7 +173,7 @@
 
   "card": 110,
 
-  "cleanup": 37,
+  "cleanup": 38,
 
   "e2d": 32,
 
@@ -191,7 +197,7 @@
 
   "plain": 47,
 
-  "r1": 67,
+  "r1": 66,
 
   "room": 35,
 
@@ -201,7 +207,9 @@
 
   "step5b": 63,
 
-  "stepF": 47,
+  "succession-spaces": 33,
+
+  "successions": 52,
 
   "swap": 32,
 
@@ -209,7 +217,7 @@
 
   "tlpick": 19,
 
-  "trycard": 60,
+  "trycard": 59,
 
   "wide": 28,
 
@@ -226,7 +234,7 @@
 
   "mapgeo": 81,
 
-  "r1 @1480": 67,
+  "r1 @1480": 66,
 
   "things": 96
 
@@ -256,7 +264,7 @@
  },
  "off": {
 
-  "ahead-off": 67,
+  "ahead-off": 49,
 
   "core-off": 20,
 
@@ -268,7 +276,7 @@
 
   "step2a-off": 50,
 
-  "step2b-off": 105,
+  "step2b-off": 61,
 
   "trays-off": 31
 
@@ -302,7 +310,7 @@
 
   "harvest-site": 44,
 
-  "join-site": 51,
+  "join-site": 54,
 
   "loose-site": 37,
 
@@ -310,13 +318,15 @@
 
   "plain-site": 47,
 
-  "r1-site": 67,
+  "r1-site": 66,
 
   "room-site": 35,
 
   "step5b-site": 63,
 
-  "stepF-site": 47,
+  "succession-spaces-site": 33,
+
+  "successions-site": 52,
 
   "swap-site": 32,
 
@@ -328,7 +338,7 @@
 
   "tour": 4,
 
-  "trycard-site": 60,
+  "trycard-site": 59,
 
   "year-edge-site": 23
 
@@ -350,7 +360,7 @@
 
   "loose-site @1480": 37,
 
-  "r1-site @1480": 67,
+  "r1-site @1480": 66,
 
   "room-site @1480": 35,
 
@@ -366,18 +376,18 @@
 
   "step5b-site @1480": 63,
 
-  "stepF-site @1480": 47,
+  "successions-site": 52,
 
-  "trycard-site": 60
+  "trycard-site": 59
 
  },
  "site5": {
 
   "loose-site @3440": 37,
 
-  "r1-site @3440": 67,
+  "r1-site @3440": 66,
 
-  "r1-site dark": 67,
+  "r1-site dark": 66,
 
   "room-site @3440": 35,
 
@@ -389,15 +399,13 @@
 
   "step5b-site dark": 63,
 
-  "stepF-site @3440": 47,
-
-  "stepF-site dark": 47,
+  "successions-site @3440": 52,
 
   "swap-site @3440": 32,
 
   "tasks2-site @3440": 88,
 
-  "trycard-site @3440": 60
+  "trycard-site @3440": 59
 
  },
  "site6": {
@@ -488,19 +496,19 @@
 
   "card-site @3440": 110,
 
-  "cleanup @1480": 37,
+  "cleanup @1480": 38,
 
-  "cleanup @1707": 37,
+  "cleanup @1707": 38,
 
-  "cleanup @3440": 37,
+  "cleanup @3440": 38,
 
-  "cleanup-site": 37,
+  "cleanup-site": 38,
 
-  "cleanup-site @1480": 37,
+  "cleanup-site @1480": 38,
 
-  "cleanup-site @1707": 37,
+  "cleanup-site @1707": 38,
 
-  "cleanup-site @3440": 37,
+  "cleanup-site @3440": 38,
 
   "forecast-site @1707": 61,
 
@@ -513,7 +521,7 @@
  },
  "screens": {
 
-  "screens": 24
+  "screens": 26
 
  }
 }

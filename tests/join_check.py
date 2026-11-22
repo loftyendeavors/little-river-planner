@@ -244,6 +244,23 @@ with sync_playwright() as pw:
         settled(B, 'in-step'); look(A)
         check('and the other device ends with the same planting', A.evaluate(P, X4) == undone['p'], A.evaluate(P, X4))
 
+        # ── 5a. a run of successions (E4, 0.84): the same run made on both devices before either saw the other joins to one run ──
+        where = 'a run on two devices'
+        RUN = """(() => { const S = LRFSuccession, eng = LRFApp.state.engine, year = LRFApp.planYear();
+          for (const c of S.candidates(eng, true)) for (const g of S.gardensFor(eng, c).filter(g => g.kind === 'bed')) {
+            const r = S.planRun(eng, { cropId: c.id, by: 'beds', every: 14, datesFor: 'planting', from: year + '-06-01', to: year + '-07-13', gardenIds: [g.garden.id] });
+            if (!r.error && r.sowings.length >= 2) return { run: r.run, sowings: r.sowings.map(x => ({ p: x.p })) }; } return null; })()"""
+        made = A.evaluate(RUN)
+        RUNS = "(id => ({ runs: LRFApp.runs().filter(r => r.id === id).length, plantings: LRFApp.state.plan.plantings.filter(p => p.run && p.run.id === id).length, all: LRFApp.state.plan.plantings.length }))"
+        n_before = A.evaluate("LRFApp.state.plan.plantings.length")
+        # each device also changes something of its own, so that the two plans differ and are joined record by record
+        both = made and A.evaluate("r => LRFApp.addRun(r)", made) and B.evaluate("r => LRFApp.addRun(r)", made) and B.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'the phone, with the run' }, 'A note')", X2)
+        if made:
+            try: settled(A, 'in-step'); look(B); settled(B, 'in-step'); look(A)
+            except Exception as e: errors_run = str(e)[:200]   # the two never come to one plan: the line below says so, and the check goes on
+        rb, ra = (B.evaluate(RUNS, made['run']['id']), A.evaluate(RUNS, made['run']['id'])) if made else ({}, {})
+        check('the same run of successions added on both devices before either saw the other joins to one run, its plantings once each, on both', bool(both) and B.evaluate(P, X2)['note'] == 'the phone, with the run' and A.evaluate(P, X2)['note'] == 'the phone, with the run' and rb == ra == {'runs': 1, 'plantings': len(made['sowings']), 'all': n_before + len(made['sowings'])} and A.evaluate("LRFApp.contentKey()") == B.evaluate("LRFApp.contentKey()"), [made and made['run']['id'], ra, rb])
+
         # ── 5b. the plan here cannot be kept first: nothing is taken in ──
         where = 'kept first'
         B.evaluate("(() => { window.__add = LRFSnaps.add; LRFSnaps.add = () => Promise.reject(new Error('The database is full.')); })()")
@@ -390,9 +407,20 @@ with sync_playwright() as pw:
         # ── 6. turned off: the question it always was ──
         where = 'off'
         B.evaluate("void LRFApp.sync().setJoin(false)"); B.wait_for_timeout(300)
-        A.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'laptop, with the phone off' }, 'A note')", X1); settled(A, 'in-step')
+        A.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'laptop, with the phone off' }, 'A note')", X1)
+        # the same run of successions planned on each device on its own (two runs, two ids), the phone set to "Ask me" (E4): the
+        # laptop's goes to the cloud; the phone asks, sends nothing, and keeps its own run whole; turned on, both runs stand whole
+        ra, rb = A.evaluate(RUN), B.evaluate(RUN)
+        added = bool(ra and rb) and A.evaluate("r => LRFApp.addRun(r)", ra) and B.evaluate("r => LRFApp.addRun(r)", rb)
+        settled(A, 'in-step')
         B.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'phone, off' }, 'A note')", X2)
         off = settled(B, 'conflict')
+        # and at its next look at the cloud (its own timer), it asks again: nothing is taken in by a device that does not join
+        B.evaluate("void LRFApp.sync().run('poll')"); B.wait_for_timeout(2500); off = settled(B)
+        if ra and rb:
+            asked = { 'B': [B.evaluate(RUNS, ra['run']['id']), B.evaluate(RUNS, rb['run']['id'])], 'A': A.evaluate(RUNS, ra['run']['id']) }
+            check('a run planned on each device, the phone set to "Ask me": the laptop\'s run goes to the cloud; the phone asks, sends nothing, and keeps its own run whole, with none of the other\'s', bool(added) and ra['run']['id'] != rb['run']['id'] and off['status'] == 'conflict' and asked['A']['runs'] == 1 and asked['A']['plantings'] == len(ra['sowings']) and asked['B'][0]['runs'] == 0 and asked['B'][0]['plantings'] == 0 and asked['B'][1]['runs'] == 1 and asked['B'][1]['plantings'] == len(rb['sowings']), asked)
+        else: check('a run planned on each device, the phone set to "Ask me": the laptop\'s run goes to the cloud; the phone asks, sends nothing, and keeps its own run whole, with none of the other\'s', False, 'no run to plan')
         text = B.evaluate("document.getElementById('syncStrip').innerText")
         check('on a device set back to "Ask me", both changed is the question it always was, and nothing is sent', off['status'] == 'conflict' and 'different plans' in text and B.evaluate(P, X1)['note'] != 'laptop, with the phone off', [off['status'], text])
         B.evaluate("LRFBackupUI.openSync()"); B.wait_for_timeout(300)
@@ -404,6 +432,8 @@ with sync_playwright() as pw:
         B.evaluate("document.getElementById('syncDone') && document.getElementById('syncDone').click()")
         settled(B, 'in-step', 60000)
         check('turned on from there, the two plans are joined at once', B.evaluate(P, X1)['note'] == 'laptop, with the phone off' and B.evaluate(P, X2)['note'] == 'phone, off')
+        joined_runs = [B.evaluate(RUNS, ra['run']['id']), B.evaluate(RUNS, rb['run']['id'])] if ra and rb else None
+        check('and both runs stand whole, each with its own plantings once: none lost, none half of each', bool(joined_runs) and joined_runs[0]['runs'] == 1 and joined_runs[0]['plantings'] == len(ra['sowings']) and joined_runs[1]['runs'] == 1 and joined_runs[1]['plantings'] == len(rb['sowings']), joined_runs)
         check('no error on either page', A.errors == [] and B.errors == [], [A.errors[:3], B.errors[:3]])
     except Exception as e:
         check('the check ran to its end', False, [repr(e)[:300], where])

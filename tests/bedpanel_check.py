@@ -267,11 +267,11 @@ with sync_playwright() as pw:
     check("“A list to send…” is made from what is grown to sell, whatever the page is showing, and says how many plantings it leaves out", sent["same"] and sent["differs"] and f"{sent['marked']} planting" in sent["note"] and "left out of this list" in sent["note"], sent)
     shot("list-to-send")
     page.keyboard.press("Escape"); wait(200)
-    # the weekly amount takes off what the plan gives to sell
-    page.evaluate("id => LRFApp.openAhead({ mode: 'series', by: 'harvest', cropId: id })", sub["cropId"]); wait(700)
-    net = js("return { text: txt('srNetText'), there: !!$('srNet') }")
-    check("the weekly amount says that plantings for personal use are not counted as giving any of what is wanted", net["there"] and "personal use are not counted" in net["text"], net)
-    page.evaluate("LRFApp.select(null)"); wait(200)
+    # a run to an amount a week (the Successions page, 0.84) counts what the plan gives to sell, and says so
+    page.evaluate("id => LRFApp.openAhead({ mode: 'succession', by: 'amount', cropId: id })", sub["cropId"]); wait(1800)
+    net = js("const el = document.querySelector('[data-hook=\"succ-have\"]'); return { text: el ? el.textContent : '', there: !!el, view: S.view }")
+    check("a run to an amount a week says that plantings for personal use are not counted as giving any of what the plan gives", net["there"] and net["view"] == "succession" and "personal use are not counted" in net["text"], net)
+    page.evaluate("LRFApp.select(null); LRFApp.setView('map')"); wait(400)
 
     # ── all of it taken back ──
     steps = js("return S.undo.length")

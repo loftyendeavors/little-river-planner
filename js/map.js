@@ -290,8 +290,8 @@
     if (!App.state.ready) return;
     if (wholeSeason) { paintSeason(); return; }
     const eng = App.state.engine, date = App.state.date, counts = new Map(), sel = App.state.sel, selPlanting = sel && sel.type === 'planting' ? sel.id : null;
-    // while the series tool is open: the spaces it would plant, and the beds named for it
-    const Series = root.LRFSeries, ghosts = Series ? Series.ghosts() : null, willPlant = new Set(((ghosts && ghosts.placed) || []).map(x => x.bed.id)), named = new Set((ghosts && ghosts.named) || []);
+    // a run being planned on the Successions page, after "See them on the Timeline": the spaces it would plant
+    const Runs = root.LRFSuccessions, ghosts = Runs ? Runs.ghosts() : null, willPlant = new Set(((ghosts && ghosts.placed) || []).map(x => x.bed.id)), named = new Set((ghosts && ghosts.named) || []);
     for (const item of beds.values()) {
       const { bed, geo, g, fills } = item, status = eng.bedStatus(bed, date), cap = status.cap || 1;
       clear(fills); item.parts = []; item.status = status;
@@ -652,13 +652,11 @@
     const fill = at.closest('#mapBeds [data-planting]'), bedEl = at.closest('[data-bed]');
     const bedId = bedEl ? bedEl.dataset.bed : nearest(e.clientX, e.clientY, 10);
     if (App.state.armed) { if (bedId) App.place(App.state.armed, bedId, App.state.date, aimAt(bedId, e.clientX, e.clientY)); return; }
-    // while the series tool is asking for beds, a click on a bed names it
-    if (bedId && root.LRFSeries && root.LRFSeries.picking() && root.LRFSeries.toggleBed(bedId)) return;
     if (bedId && root.LRFCard.bedSeasonOn(beds.get(bedId)?.bed)) {
       root.LRFCard.openBedFromMap(bedId, fill?.dataset.planting);
     } else if (fill) App.select({ type: 'planting', id: fill.dataset.planting });
     else if (bedId) App.select({ type: 'bed', id: bedId });
-    else if (App.state.sel && App.state.sel.type !== 'series') App.select(null);   // a stray click on the photo does not throw a half-filled series away
+    else if (App.state.sel) App.select(null);
   }
   // The wheel zooms at once, about the pointer: a notch of a mouse wheel, a trackpad and a pinch alike. (Easing it was tried and
   // taken out: a wheel that lags the hand reads as slow.) A glide still on its way, from a button or a double click, gives way to it.
@@ -808,7 +806,7 @@
     const tools = document.querySelector('.map-tools');
     tools.append(UI.help(null, () => tools, () => [
       ['Plant', 'Drag a crop from the library onto a bed. It takes the date under the map.'],
-      ['Plan a succession', ['Use “series” beside a crop in the library. ', h('button.btn.quiet.small', { type: 'button', id: 'ovSeries', dataset: { hook: 'map-help-series' }, onclick: () => App.openAhead({ mode: 'series' }) }, 'Plan a series…')]],
+      ['Plan a succession', ['Use “succession” beside a crop in the library. ', h('button.btn.quiet.small', { type: 'button', id: 'ovSuccession', dataset: { hook: 'map-help-succession' }, onclick: () => App.openAhead({ mode: 'succession' }) }, 'Plan a succession…')]],
       ['Move', 'Drag a planting to another bed. Its date stays.'],
       ['Copy', 'Hold Alt while dragging.'],
       ['Trade', 'Drop a planting on a bed that is taken. The two swap when both fit.'],

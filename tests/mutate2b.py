@@ -1,4 +1,4 @@
-"""Deliberate faults in step 2b (the series tool, ghost bars, plantings to place), one at a time. Each must be caught by a line of
+"""Deliberate faults in step 2b (plantings to place; the series tool and its ghost bars went with 0.84, and their faults with them), one at a time. Each must be caught by a line of
 waiting_test.cjs (the faults in the pure logic: quick) or of step2b_check.py (the faults in the page: about a minute each, stopped at the first line that fails)
 that passes with no fault in it: any such line counts, and a check that stops with no line failed catches nothing.
 usage: python3 -I mutate2b.py <app-dir> <scratch-dir> <waiting_test.cjs> <step2b_check.py> <plan.json> [node | page | list] [words…]     env FROM=, TO= to run a part
@@ -28,11 +28,6 @@ def alone(cmd, timeout, env=None, cwd=None):
 N, P = 'node', 'page'
 FAULTS = [
  # ── the pure logic ──
- (N, 'a planting that waits has its date moved by a day', 'js/succession.js', "const w = { ...base, id: newId(), date: E.d2s(date), wait:", "const w = { ...base, id: newId(), date: E.d2s(E.addDays(date, 1)), wait:"),
- (N, 'what finds no ground in the gardens named is dropped, not held', 'js/succession.js', "if (wave.short > EPS && (o.place === 'hold' || o.spill)) {", "if (wave.short > EPS && o.place === 'hold') {"),
- (N, 'a series asked to wait is placed in the gardens anyway', 'js/succession.js', "const place = o.place === 'hold' || o.place === 'beds' ? o.place : 'gardens';", "const place = o.place === 'beds' ? o.place : 'gardens';"),
- (N, 'a planting that waits keeps the length of the planting it copies', 'js/succession.js', "const SPACE_FIELDS = ['bedId', 'ft', 'startFt',", "const SPACE_FIELDS = ['bedId', 'startFt',"),
- (N, 'named beds are taken in the plan\'s order, not the order given', 'js/succession.js', ".sort((a, b) => order.get(a.id) - order.get(b.id));\n      if (!list.length) return { error: order.size", ";\n      if (!list.length) return { error: order.size"),
  (N, 'the feet a waiting planting asks for are ignored on a free bed', 'js/succession.js', "const soil = eng.isSoilBed(bed), own = soil && +w.ft > 0 ? +w.ft : null;", "const soil = eng.isSoilBed(bed), own = null;"),
  (N, 'a waiting planting lands a week after its own date', 'js/succession.js', "const bed = eng.bedOf(target.bedId), date = E.s2d(w.date), source = bare(w);\n    if (!bed || !isWaiting(w)) return { state: 'blocked', why: 'space' };", "const bed = eng.bedOf(target.bedId), date = E.addDays(E.s2d(w.date), 7), source = bare(w);\n    if (!bed || !isWaiting(w)) return { state: 'blocked', why: 'space' };"),
  (N, 'sharing by length gives up one foot more than was asked', 'js/succession.js', "const st = Rails.stretch(eng, holder.p, 'end', end - n);", "const st = Rails.stretch(eng, holder.p, 'end', end - n - 1);"),
@@ -43,13 +38,7 @@ FAULTS = [
  (N, 'a record with a bed is taken for a waiting planting', 'js/succession.js', "&& E.validDate(E.s2d(w.date)) && !w.bedId;", "&& E.validDate(E.s2d(w.date));"),
  (N, 'a newer backup loaded over the plan loses what was waiting', 'js/planio.js', "if (Array.isArray(mine.waiting) && mine.waiting.length) { keep.waiting = mine.waiting;", "if (Array.isArray(mine.waiting) && mine.waiting.length) {"),
  (N, '"where could it go" lists openings the crop does not fit', 'js/succession.js', "      const t = tryCrop(eng, o, crop, { varietyId: options.varietyId });\n      if (!t.ok) continue;", "      const t = tryCrop(eng, o, crop, { varietyId: options.varietyId });\n      if (!t.r) continue;"),
- (N, 'one left out as covered is not said to be left out', 'js/succession.js', "{ wave.skipped = 'covered'; wave.firstHarvest = then.r.first; remaining = 0; }", "{ wave.firstHarvest = then.r.first; remaining = 0; }"),
  # ── the page ──
- (P, 'a ghost bar is a planting that can be picked up', 'js/timeline.js', "cls: '.tl-ghost-bar', dataset: { ghost: p.id }, tries: namesOf(r.c), pictured: pictureOf(p), alt: r.c.name, title: `Not added yet:", "cls: '.tl-ghost-bar', dataset: { ghost: p.id, planting: p.id }, tries: namesOf(r.c), pictured: pictureOf(p), alt: r.c.name, title: `Not added yet:"),
- (P, 'ghost bars stay after the tool is closed', 'js/series.js', "if (now !== was) { was = now; App.emit('ghost'); }", "if (now !== was) { was = now; }"),
- (P, 'ghost bars are not drawn again when the form changes', 'js/series.js', "const refresh = () => { if (redrawPanel) redrawPanel(); App.emit('ghost'); };", "const refresh = () => { if (redrawPanel) redrawPanel(); };"),
- (P, 'the map does not mark the beds a series would plant', 'js/map.js', "willPlant.has(bed.id) ? 'will-plant' : '', named.has(bed.id)", "'', named.has(bed.id)"),
- (P, 'plantings asked to wait are put among the plan\'s plantings', 'js/app.js', "    if (held.length) ops.push(waitingOp([...waiting(), ...held]));", "    for (const w of held) ops.push({ before: null, after: w });"),
  (P, 'the header never says how many are waiting', 'js/series.js', "    badge.hidden = !n;", "    badge.hidden = true;"),
  (P, 'the count does not say "not counted here" on the views with totals', 'css/app.css', "body[data-view=\"sow\"] .wait-badge .wb-more, body[data-view=\"harvest\"] .wait-badge .wb-more, body[data-view=\"seeds\"] .wait-badge .wb-more, body[data-view=\"trays\"] .wait-badge .wb-more { display: inline; }", ""),
  (P, 'the timeline has no row for what waits', 'js/timeline.js', "    drawHead();\n    waitRows(body, eng, ghosts);", "    drawHead();"),
@@ -65,16 +54,6 @@ FAULTS = [
  (P, 'Cancel in the question places it by the first way', 'js/series.js', "h('button.btn', { type: 'button', id: 'shareCancel', onclick: () => done(null) }, 'Cancel')", "h('button.btn', { type: 'button', id: 'shareCancel', onclick: () => done(ways[0] ? ways[0].make(ways[0].def) : null) }, 'Cancel')"),
  (P, 'the x of the question places it by the first way', 'js/series.js', "id: 'shareClose', 'aria-label': 'Close', title: 'Close. Nothing is placed.', onclick: () => done(null) }", "id: 'shareClose', 'aria-label': 'Close', title: 'Close. Nothing is placed.', onclick: () => done(ways[0] ? ways[0].make(ways[0].def) : null) }"),
  (P, 'Place stays on for a number that cannot be given up', 'js/series.js', "          go.disabled = !made;", ""),
- (P, 'a click on a row selects the bed while the tool asks for beds', 'js/timeline.js', "      if (root.LRFSeries && root.LRFSeries.picking() && root.LRFSeries.toggleBed(row.dataset.bed)) return;", ""),
- (P, 'a click on a bed on the map selects it while the tool asks for beds', 'js/map.js', "    if (bedId && root.LRFSeries && root.LRFSeries.picking() && root.LRFSeries.toggleBed(bedId)) return;", ""),
- (P, 'a stray click on the photo closes the tool', 'js/map.js', "    else if (App.state.sel && App.state.sel.type !== 'series') App.select(null);", "    else if (App.state.sel) App.select(null);"),
- (P, 'opened from a bed, the tool does not name the bed', 'js/series.js', "if (S.suits(eng, crop, bed)) { P.place = 'beds'; P.bedIds = [bed.id]; } }", "}"),
- (P, 'a crop the space cannot take is named all the same', 'js/series.js', "    if (!S.suits(eng, crop, bed)) { toast(`${crop.name} cannot go in ${App.bedLabel(bed)}.`); return true; }", ""),
- (P, 'closing the tool forgets the planting it was opened from', 'js/series.js', "    P.back = sel && (sel.type === 'planting' || sel.type === 'bed') ? sel : null;", "    P.back = null;"),
- (P, 'the quick repeat is gone from a planting\'s panel', 'js/panels.js', "h('input', { type: 'number', id: 'fRepeatCount', min: 1, max: 30, value: 3, 'aria-label': 'How many more' }), h('span', 'more, every'),", "h('span', 'more, every'),"),
- (P, 'from an opening the series starts today, not on the opening\'s day', 'js/ahead.js', "varietyId: O.pick.varietyId || undefined, from: t.p.date, gardenId: o.garden.id })", "varietyId: O.pick.varietyId || undefined, gardenId: o.garden.id })"),
- (P, 'Escape does not leave the tool from inside a field', 'js/main.js', "else if (App.state.sel && (!typing || (App.state.sel.type === 'series' && e.target.closest && e.target.closest('#srForm')))) App.select(null); return; }", "else if (App.state.sel && !typing) App.select(null); return; }"),
- (P, 'a ghost bar shows the hand that picks a bar up', 'css/app.css', ".tl-bar.tl-ghost-bar { cursor: default; outline:", ".tl-bar.tl-ghost-bar { outline:"),
  (P, 'undo leaves a placed planting selected after it has gone back to wait', 'js/app.js', "    if (state.sel && state.sel.type === 'planting' && !state.engine.planting(state.sel.id)) select(null);\n    if (state.sel && state.sel.type === 'waiting' && !waitingOne(state.sel.id)) select(null);\n    const more", "    const more"),
 ]
 if mode == 'list': print(json.dumps({k: len([f for f in FAULTS if f[0] == k]) for k in (N, P)})); sys.exit(0)

@@ -218,7 +218,7 @@ def run(pw):
     pl = js(f"""const c = card(), p = S.plan.plantings.find(x => x.id === '{PID}'); if (!c) return null;
       return {{ kind: c.dataset.kind, title: hook('card-title').textContent, bed: hook('card-bed') ? hook('card-bed').textContent : '', date: hook('card-date') ? hook('card-date').textContent : '', want: LRFUI.day(E.s2d(p.date)), variety: hook('card-variety') ? hook('card-variety').value : null, bar: drawn(hook('card-bar')), sums: hook('card-sums') ? hook('card-sums').textContent : '', rows: hooks('card-row').map(x => x.dataset.row), panel: panel() }};""")
     check("a planting selected directly opens the planting's card: its name, the bed's name, its life as a bar, what it comes to, its date and variety, its rows",
-          bool(pl) and pl["kind"] == "planting" and pl["title"] == pick["title"] and pl["bed"] == pick["label"] and pl["date"] == pl["want"] and pl["variety"] and pl["bar"] and len(pl["sums"]) > 4 and pl["rows"] == ["share", "days", "nursery", "repeat"] and not pl["panel"], pl)
+          bool(pl) and pl["kind"] == "planting" and pl["title"] == pick["title"] and pl["bed"] == pick["label"] and pl["date"] == pl["want"] and pl["variety"] and pl["bar"] and len(pl["sums"]) > 4 and pl["rows"] == ["share", "days", "nursery"] + (["succession"] if js(f"const p = S.plan.plantings.find(x => x.id === '{PID}'); return LRFSuccessions.plans(eng, eng.crop(p.cropId)) && eng.spaceKind(eng.bedOf(p.bedId)) === 'bed';") else []) and not pl["panel"], pl)
     page.screenshot(path=str(shots / f"map-planting-{WIDTH}.png"))
     press(page, "[data-hook='card-bed']", 400)
     back = js("return { kind: card() && card().dataset.kind, sel: S.sel && S.sel.type + ':' + S.sel.id };")
@@ -337,21 +337,14 @@ def run(pw):
     b, bback, bsaid, _ = through_card(lambda: (card_row("days"), set_value("[data-hook='card-hw']", days["hw"])))
     check("harvest days typed in the card's row give the planting what the panel's box gives it, said on the card with an Undo that gives the plan back", a == b and f'"hw":{days["hw"]}' in (b or "") and aback and bback and bsaid["undo"] and not bsaid["toast"], [a, b, aback, bback, bsaid])
 
-    # more of it, so many days apart: the plantings added, set side by side without their new ids
-    added = lambda before: js("const was = new Set(JSON.parse(arg).map(p => p.id)); return JSON.stringify(S.plan.plantings.filter(p => !was.has(p.id)).map(p => { const q = { ...p }; delete q.id; return q; }).sort((x, y) => (x.date + x.bedId).localeCompare(y.date + y.bedId)));", before)
-    def panel_repeat():
-        set_value("#fRepeatCount", "2"); set_value("#fRepeatEvery", "21"); page.locator("#inspectorBody .repeat .btn").click(); wait(300)
-    def card_repeat():
-        card_row("repeat"); set_value("[data-hook='card-repeat-count']", "2"); set_value("[data-hook='card-repeat-every']", "21"); press(page, "[data-hook='card-repeat-add']", 300)
-    # its subject: a planting of which two more, three weeks apart, find room in its garden (the made-up farm's fields are full)
-    RP = js("""const Rl = LRFRails; for (const p of S.plan.plantings) { const r = eng.calc(p); if (!r || eng.isPool(r.b) || !eng.isSoilBed(r.b)) continue;
-        const beds = [r.b, ...S.plan.beds.filter(b => b.id !== r.b.id && b.gardenId === r.b.gardenId && b.active !== false && eng.spaceKind(b) === eng.spaceKind(r.b))];
-        const ok = k => beds.some(b => Rl.propose(eng, { plantingId: p.id, copy: true }, { bedId: b.id, date: E.addDays(E.s2d(p.date), 21 * k) }, { source: p, noShrink: true }).state === 'ok');
-        if (ok(1) && ok(2)) return p.id; } return null;""")
-    check("the plan has a planting with room for two more three weeks apart, for the check to work on", bool(RP), RP)
-    a, aback, _ = through_panel(panel_repeat, added, RP)
-    b, bback, bsaid, _ = through_card(card_repeat, added, pid=RP)
-    check("“Add” in the card's row Repeat as a series adds the plantings the panel's own adds, said on the card with an Undo that gives the plan back", a == b and a != "[]" and aback and bback and bsaid["undo"] and not bsaid["toast"], [a, b, aback, bback, bsaid])
+    # a succession of it: the card's row and the panel's button open the Successions page on the same run (0.84: where "Repeat as a series" added plantings)
+    opened = lambda: js("const D = LRFSuccessions.state.D; return JSON.stringify({ view: S.view, crop: D.cropId, variety: D.varietyId, garden: D.gardenId, by: D.by, dates: D.datesFor, from: D.from, to: D.to, every: D.every, n: S.plan.plantings.length });")
+    js("LRFCard.turn(false); return null;"); js(f"A.setView('map'); A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(500)
+    press(page, "[data-hook='panel-succession']", 1500); a = opened()
+    js("LRFCard.turn(true); return null;"); js(f"A.setView('map'); A.select({{ type: 'planting', id: '{PID}' }}); return null;"); wait(500)
+    card_row("succession"); press(page, "[data-hook='card-succession']", 1500); b = opened()
+    js("A.setView('map'); return null;"); wait(400)
+    check("“Plan a succession of this…” in the card's row opens the Successions page on the run the panel's own button opens it on, and adds nothing", a == b and '"view":"succession"' in (a or "") and json.loads(a or "{}").get("n") == js("return S.plan.plantings.length;"), [a, b])
 
     # the menu's Send to To place and Remove planting, against the panel's buttons
     whole = lambda before: js("return JSON.stringify([S.plan.plantings, A.waiting()]);")

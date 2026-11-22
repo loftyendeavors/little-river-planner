@@ -56,7 +56,7 @@ NODE = [
  ("a mark is written without its moment", WK, "    return { ...p, failed: { on: day, at: String(at || '') } };", "    return { ...p, failed: { on: day } };"),
  ("a day that is no day is marked", WK, "    if (!isDay(day)) throw new Error('Choose a real calendar date.');\n    return { ...p, failed", "    return { ...p, failed"),
  ("the mark is joined key by key when two devices meet", MG, "'plantings[].tasks.delay.*', 'plantings[].failed', 'plantings[].towerCycle',", "'plantings[].tasks.delay.*', 'plantings[].towerCycle',"),
- ("a copy of a planting carries its mark", RL, "delete next.tasks; delete next.failed; delete next.startedFrom; }", "delete next.tasks; delete next.startedFrom; }"),
+ ("a copy of a planting carries its mark", RL, "delete next.tasks; delete next.failed; delete next.run; delete next.startedFrom; }", "delete next.tasks; delete next.run; delete next.startedFrom; }"),
  ("a failed crate stays on the bench", EN, "const lost = failedOn(p), out = lost && lost < r.out ? lost : r.out, to =", "const out = r.out, to ="),
  ("a failed planting still starts its stand", EN, "const models = standMates(p).filter(q => q === p || !failedOn(q)), actual", "const models = standMates(p), actual"),
  ("a sowing a year before its plan is taken", SLB, "    const far = yearAway(date, s.planned);\n    if (far) throw new Error(far);\n", ""),

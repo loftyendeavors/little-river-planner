@@ -7,7 +7,7 @@ The rules under test:
     ways to bring a plan in: a backup file, or the folder the plan is kept in;
   - "Open my plan folder" opens the plan a folder holds, photos and all, and carries on saving there; a folder with no plan
     in it is let go again and nothing is written to it; with a plan already open it does nothing;
-  - the series tool opens on a series to look at for every crop it plans, also one grown nowhere yet, and never opens on
+  - the Successions page (0.84) opens on a run to look at for every crop it plans, also one grown nowhere yet, and never opens on
     some other crop than the one asked for;
   - a plan stored in the browser that will not open (cut short, or not a plan at all) is kept exactly as it is: nothing done
     on the page is saved over it until he brings a plan in or says to carry on, and it can be downloaded as it stands;
@@ -40,20 +40,19 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 url = 'http://127.0.0.1:%d/index.html' % server.server_address[1]
 
 VIEWS = ['map', 'timeline', 'sow', 'trays', 'harvest', 'assume', 'seeds']
-# every crop the series tool plans, opened in turn: what the form says first
-SERIES = """() => { const A = LRFApp, eng = A.state.engine, S = LRFSuccession, P = LRFSeries.state.P, out = { crops: 0, complaints: [], wrong: [], fresh: [], grown: [] };
-  A.setView('timeline');
+# every crop the Successions page plans, opened in turn: what the page says first (0.84: where the series tool's form was)
+SERIES = """async () => { const A = LRFApp, eng = A.state.engine, S = LRFSuccession, SU = LRFSuccessions, D = SU.state.D, out = { crops: 0, complaints: [], wrong: [], fresh: [], grown: [] };
   for (const c of eng.crops()) {
-    const plans = !c.micro && !eng.isCoverCrop(c) && +c.dtm > 0;
-    if (!plans) continue;
-    A.openAhead({ mode: 'series', cropId: c.id }); out.crops++;
-    if (P.cropId !== c.id) { out.wrong.push(c.name); continue; }
-    const err = document.getElementById('srError'), gardens = S.gardensFor(eng, c), planted = gardens.filter(g => g.planted).map(g => g.garden.id);
+    if (!SU.plans(eng, c)) continue;
+    A.openAhead({ mode: 'succession', cropId: c.id }); out.crops++;
+    if (D.cropId !== c.id || A.state.view !== 'succession') { out.wrong.push(c.name); continue; }
+    const err = document.querySelector('[data-hook="succ-error"]'), gardens = S.runGardens(eng, c).filter(g => c.material !== 'bulb' || g.kind === 'containers'), planted = gardens.filter(g => g.planted);
+    const selected = g => D.gardenId === g.garden.id && D.kind === g.kind;
     if (err) out.complaints.push([c.name, err.textContent]);
-    if (!planted.length && gardens.length) out.fresh.push([c.name, P.gardenIds.join() === gardens[0].garden.id, !!document.getElementById('srSum') || !!err]);
-    if (planted.length) out.grown.push([c.name, P.gardenIds.join() === planted.join()]);
+    if (!planted.length && gardens.length) out.fresh.push([c.name, selected(gardens[0]), !!document.querySelector('[data-hook="succ-totals"]') || !!err]);
+    if (planted.length) out.grown.push([c.name, planted.some(selected)]);
   }
-  A.select(null); return out; }"""
+  A.setView('map'); A.select(null); return out; }"""
 LAYOUT = "(() => { const w = document.querySelector('main.work').getBoundingClientRect(), f = document.getElementById('firstRun'), fr = f.getBoundingClientRect(), top = document.querySelector('header.top').getBoundingClientRect(); return { shown: !f.hidden && fr.height > 0, under: Math.abs(fr.top - top.bottom) < 1.5, above: Math.abs(w.top - (f.hidden ? top.bottom : fr.bottom)) < 1.5, fills: Math.abs(w.bottom - innerHeight) < 1.5, sideways: document.documentElement.scrollWidth > innerWidth + 1, tall: document.documentElement.scrollHeight > innerHeight + 1, across: fr.width >= innerWidth - 1 }; })()"
 
 with sync_playwright() as pw:
@@ -79,18 +78,18 @@ with sync_playwright() as pw:
         refused = ev("LRFApp.openMyFolder()"); page.wait_for_timeout(200)
         check('"Open my plan folder" does nothing while a plan is open, and says why', refused is False and 'already open' in toast() and not ev("LRFFolder.info().connected"), toast())
         series_full = ev(SERIES)
-        check('the series tool opens on the crop asked for, for every crop it plans (%d)' % series_full['crops'], series_full['crops'] > 40 and not series_full['wrong'], series_full['wrong'])
+        check('the Successions page opens on the crop asked for, for every crop it plans (%d)' % series_full['crops'], series_full['crops'] > 40 and not series_full['wrong'], series_full['wrong'])
         check('and never opens on a complaint', not series_full['complaints'], series_full['complaints'][:4])
         check('a crop grown nowhere yet starts with the first garden it can go in (%d crops)' % len(series_full['fresh']), len(series_full['fresh']) > 10 and all(f[1] and f[2] for f in series_full['fresh']), [f for f in series_full['fresh'] if not (f[1] and f[2])][:4])
-        check('a crop already grown still starts with the gardens it is grown in (%d crops)' % len(series_full['grown']), len(series_full['grown']) > 10 and all(g[1] for g in series_full['grown']), [g for g in series_full['grown'] if not g[1]][:4])
-        # a crop the tool does not plan: said, not swapped
-        swap = ev("""() => { const A = LRFApp, eng = A.state.engine, P = LRFSeries.state.P, out = [];
-          for (const c of eng.crops().filter(c => c.micro || eng.isCoverCrop(c)).slice(0, 60)) { A.select(null); const before = P.cropId; A.openAhead({ mode: 'series', cropId: c.id }); out.push([c.name, !A.state.sel, P.cropId === before, document.getElementById('toast').textContent]); }
+        check('a crop already grown starts in a garden it is grown in (%d crops)' % len(series_full['grown']), len(series_full['grown']) > 10 and all(g[1] for g in series_full['grown']), [g for g in series_full['grown'] if not g[1]][:4])
+        # a crop the page does not plan: said, not swapped
+        swap = ev("""() => { const A = LRFApp, eng = A.state.engine, D = LRFSuccessions.state.D, out = [];
+          for (const c of eng.crops().filter(c => c.micro || eng.isCoverCrop(c)).slice(0, 60)) { A.select(null); A.setView('map'); const before = D.cropId; A.openAhead({ mode: 'succession', cropId: c.id }); out.push([c.name, A.state.view === 'map', D.cropId === before, document.getElementById('toast').textContent]); }
           return out; }""")
-        check('asked for a crop it does not plan (live trays, cover crops), the series tool says so and opens nothing (%d crops)' % len(swap), len(swap) >= 3 and all(s[1] and s[2] and ('Live trays in the Nursery view' in s[3] or 'no harvest' in s[3]) for s in swap), [s for s in swap if not (s[1] and s[2])][:3])
+        check('asked for a crop it does not plan (live trays, cover crops), the Successions page says so and does not open (%d crops)' % len(swap), len(swap) >= 3 and all(s[1] and s[2] and ('Live trays in the Nursery view' in s[3] or 'no harvest' in s[3]) for s in swap), [s for s in swap if not (s[1] and s[2])][:4])
         link = ev("""() => { const A = LRFApp, eng = A.state.engine, out = {};
-          const first = test => A.state.plan.plantings.find(p => { const c = eng.crop(p.cropId); return c && !p.liveTray && eng.calc(p) && test(c); });
-          let cover = first(c => eng.isCoverCrop(c)); const plain = first(c => !c.micro && !eng.isCoverCrop(c) && +c.dtm > 0);
+          const first = test => A.state.plan.plantings.find(p => { const c = eng.crop(p.cropId), r = eng.calc(p); return c && !p.liveTray && r && test(c, r); });
+          let cover = first(c => eng.isCoverCrop(c)); const plain = first((c, r) => LRFSuccessions.plans(eng, c) && eng.spaceKind(r.b) === 'bed');
           if (!cover) {   // the plan has none: one is planted for the look, and taken out again
             const crop = eng.crops().find(c => eng.isCoverCrop(c)), date = new Date(A.planYear(), 8, 1);
             for (const bed of A.state.plan.beds) { if (!crop || !eng.isSoilBed(bed) || A.preview({ cropId: crop.id }, { bedId: bed.id, date }).state !== 'ok') continue; const p = A.place({ cropId: crop.id }, bed.id, date); if (p) { cover = A.state.plan.plantings.find(q => q.cropId === crop.id); out.made = true; } break; }
@@ -99,12 +98,12 @@ with sync_playwright() as pw:
           if (out.made) A.undo();
           A.select({ type: 'planting', id: plain.id }); out.plain = { link: !!document.getElementById('fSeriesLink'), quick: !!document.getElementById('fRepeatCount') };
           A.select(null); return out; }""")
-        check('a planting still offers the longer series, beside the quick "more, every so many days"', link['plain']['link'] and link['plain']['quick'], link)
-        check('a cover crop planting keeps the quick repeat and does not offer a series it cannot have', 'cover' in link and link['cover']['quick'] and not link['cover']['link'], link)
+        check('a planting in a bed offers a succession of it, and the quick “more, every so many days” is gone (0.84: one place for successions)', link['plain']['link'] and not link['plain']['quick'], link)
+        check('a cover crop planting offers no succession it cannot have', 'cover' in link and not link['cover']['link'] and not link['cover']['quick'], link)
         check('(the cover crop planted for that look is out of the plan again)', ev("LRFApp.state.plan.plantings.length") == full['n'], ev("LRFApp.state.plan.plantings.length"))
         ev("(() => { LRFApp.select(null); LRFApp.setView('map'); })()"); page.wait_for_timeout(500)
         page.click('#mapHelp'); page.wait_for_timeout(300)
-        how = ev("(() => { const a = document.getElementById('ovSeries'), dd = a && a.closest('dd'), dl = dd && dd.parentElement; if (!dd) return null; const dt = dd.previousElementSibling; return { inCell: a.parentElement === dd, whole: dd.childNodes.length === 2 && a.classList.length > 0, name: dt.textContent, pairs: dl.querySelectorAll('dt').length === dl.querySelectorAll('dd').length, oneBlock: a.getBoundingClientRect().left > dt.getBoundingClientRect().right, side: !!document.querySelector('#inspectorBody .howto') }; })()")
+        how = ev("(() => { const a = document.getElementById('ovSuccession'), dd = a && a.closest('dd'), dl = dd && dd.parentElement; if (!dd) return null; const dt = dd.previousElementSibling; return { inCell: a.parentElement === dd, whole: dd.childNodes.length === 2 && a.classList.length > 0, name: dt.textContent, pairs: dl.querySelectorAll('dt').length === dl.querySelectorAll('dd').length, oneBlock: a.getBoundingClientRect().left > dt.getBoundingClientRect().right, side: !!document.querySelector('#inspectorBody .howto') }; })()")
         page.keyboard.press('Escape'); page.wait_for_timeout(200)
         check('behind the Map\'s "?", the line on successions reads as one sentence beside its name, with its button after it (L3); the side panel no longer lists what the map does', bool(how) and how['inCell'] and how['whole'] and how['pairs'] and how['oneBlock'] and how['name'] == 'Plan a succession' and not how['side'], how)
         # the plan goes into a folder, the way he keeps it; then this browser forgets everything but the folder's files
@@ -142,12 +141,12 @@ with sync_playwright() as pw:
         page.set_viewport_size({'width': 1480, 'height': 900}); page.wait_for_timeout(300)
         # a change to the sample is kept, and still not called a saved plan
         changed = ev("""async () => { const A = LRFApp, eng = A.state.engine, S = LRFSuccession, c = eng.crops().find(c => !c.micro && !eng.isCoverCrop(c) && +c.dtm > 0);
-          const r = S.series(eng, { cropId: c.id, place: 'hold', basis: 'planting', from: A.planYear() + '-06-01', every: 14, count: 1, unit: 'whole', amount: 1 }); A.addSeries({ plantings: [], held: r.held }, 'a try');
+          A.commit('a try', [{ kind: 'own', key: 'waiting', before: (A.state.plan.lrfNext || {}).waiting || null, after: [{ id: 'a-try', cropId: c.id, date: A.planYear() + '-06-01', wait: { s: 'a-try', k: 1, of: 1, every: 14 } }] }]);
           await new Promise(res => setTimeout(res, 1500)); return { w: A.waiting().length, sample: A.isSample(), status: document.getElementById('saveState').textContent, state: document.getElementById('saveState').dataset.state, strip: !document.getElementById('firstRun').hidden }; }""")
         check('after a change to the sample the indicator still reads "Sample plan", not "Saved"', changed['w'] == 1 and changed['sample'] and changed['status'] == 'Sample plan' and changed['state'] == 'sample' and changed['strip'], changed)
         ev("LRFApp.undo()")
         series_sample = ev(SERIES)
-        check('on the sample too the series tool never opens on a complaint (%d crops)' % series_sample['crops'], series_sample['crops'] > 30 and not series_sample['complaints'] and not series_sample['wrong'], [series_sample['complaints'][:3], series_sample['wrong'][:3]])
+        check('on the sample too the Successions page never opens on a complaint (%d crops)' % series_sample['crops'], series_sample['crops'] > 30 and not series_sample['complaints'] and not series_sample['wrong'], [series_sample['complaints'][:3], series_sample['wrong'][:3]])
 
         # ── 3. "Open my plan folder" ──
         # a folder with no plan in it
@@ -182,7 +181,7 @@ with sync_playwright() as pw:
         lay = ev(LAYOUT)
         check('and the page is laid out as with any open plan', lay['above'] and lay['fills'] and not lay['shown'] and not lay['sideways'], lay)
         wrote = ev("""async () => { const A = LRFApp, eng = A.state.engine, S = LRFSuccession, c = eng.crops().find(c => !c.micro && !eng.isCoverCrop(c) && +c.dtm > 0);
-          const r = S.series(eng, { cropId: c.id, place: 'hold', basis: 'planting', from: A.planYear() + '-06-01', every: 14, count: 1, unit: 'whole', amount: 1 }); A.addSeries({ plantings: [], held: r.held }, 'a try');
+          A.commit('a try', [{ kind: 'own', key: 'waiting', before: (A.state.plan.lrfNext || {}).waiting || null, after: [{ id: 'a-try', cropId: c.id, date: A.planYear() + '-06-01', wait: { s: 'a-try', k: 1, of: 1, every: 14 } }] }]);
           const done = await A.saveToFolder(); const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('Kept plan'), text = await (await (await dir.getFileHandle(LRFFolder.PLAN)).getFile()).text(), plan = JSON.parse(text);
           const out = { saved: !!done.saved, skipped: done.skipped || null, waitingInFile: (((plan.lrfNextKeep || {}).keep || {}).waiting || []).length, status: document.getElementById('saveState').textContent }; A.undo(); await A.saveToFolder(); return out; }""")
         check('a change made after that is written to the folder', wrote['saved'] and wrote['waitingInFile'] == 1, wrote)
@@ -199,7 +198,7 @@ with sync_playwright() as pw:
         # ── 4. a stored plan that will not open ──
         STORED = "localStorage.getItem('lrf-next:plan')"
         CHANGE = """async () => { const A = LRFApp, eng = A.state.engine, S = LRFSuccession, c = eng.crops().find(c => !c.micro && !eng.isCoverCrop(c) && +c.dtm > 0);
-          const r = S.series(eng, { cropId: c.id, place: 'hold', basis: 'planting', from: A.planYear() + '-06-01', every: 14, count: 1, unit: 'whole', amount: 1 }); A.addSeries({ plantings: [], held: r.held }, 'a try');
+          A.commit('a try', [{ kind: 'own', key: 'waiting', before: (A.state.plan.lrfNext || {}).waiting || null, after: [{ id: 'a-try', cropId: c.id, date: A.planYear() + '-06-01', wait: { s: 'a-try', k: 1, of: 1, every: 14 } }] }]);
           await new Promise(res => setTimeout(res, 2200)); return A.waiting().length; }"""
         LOOK = "({ ready: LRFApp.state.ready, sample: LRFApp.isSample(), bad: !!LRFApp.state.unreadable, strip: !document.getElementById('firstRun').hidden, text: document.getElementById('firstRun').innerText.replace(/\\s+/g, ' '), status: document.getElementById('saveState').textContent, state: document.getElementById('saveState').dataset.state, stored: !document.getElementById('firstStored').hidden, use: !document.getElementById('firstUse').hidden, welcome: !!document.querySelector('.welcome') })"
         whole = ev(STORED)

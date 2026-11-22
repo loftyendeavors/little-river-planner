@@ -111,7 +111,7 @@ with sync_playwright() as pw:
 
     # ══ the tab and the frame ══
     tabs = js("return hooks('view-tab').map(b => [b.dataset.viewBtn, b.textContent.trim()]);")
-    check("the tab once called Harvest reads Forecast, between Timeline and Tasks; no tab reads Harvest", [t[1] for t in tabs][:4] == ["Map", "Timeline", "Forecast", "Tasks"] and ["harvest", "Forecast"] in tabs and not any(t[1] == "Harvest" for t in tabs), tabs)
+    check("the tab once called Harvest reads Forecast, between Successions and Tasks; no tab reads Harvest", [t[1] for t in tabs][:5] == ["Map", "Timeline", "Successions", "Forecast", "Tasks"] and ["harvest", "Forecast"] in tabs and not any(t[1] == "Harvest" for t in tabs), tabs)
     page.click('[data-hook="view-tab"][data-view-btn="harvest"]'); wait(900)
     page.evaluate("LRFApp.setDate(new Date(LRFApp.planYear(), 6, 14))"); wait(400)
     frame = js("""const wrap = $('hvWrap'), title = hook('fc-title'), q = hook('fc-help'), lead = hook('fc-lead');
