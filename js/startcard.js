@@ -301,7 +301,7 @@
     return done;
   }
   // Undo where the step was taken: the line then says it is undone, and no message is shown (DESIGN.md rule 3, one answer)
-  const undoLink = () => ui.said && ui.said.done ? '' : h('button.link', { type: 'button', dataset: { hook: 'start-undo' }, title: 'Takes this step back',
+  const undoButton = () => ui.said && ui.said.done ? '' : h('button.btn.small', { type: 'button', dataset: { hook: 'start-undo' }, title: 'Takes this step back',
     onclick: () => {
       const said = ui.said, top = App.state.undo[App.state.undo.length - 1];
       // only ever the step the line names: if another has been taken since, the line goes and nothing is undone
@@ -344,7 +344,7 @@
     const shown = fig.mine != null ? String(+(+fig.mine).toFixed(2)) : '';
     const line = h('p.sn-moves', { dataset: { hook: 'start-moves', key }, 'aria-live': 'polite' });
     const said = ui.said && ui.said.key === key ? ui.said : null;
-    if (said) { line.append(said.text, ' ', undoLink()); line.dataset.said = 'true'; }
+    if (said) { line.append(said.text, ' ', undoButton()); line.dataset.said = 'true'; }
     if (!said && off) line.append(off);
     const input = h('input', { type: 'number', min, max, step: whole ? 1 : 'any', value: shown, placeholder: amber || fig.fallback == null ? '' : String(+(+fig.fallback).toFixed(2)), 'aria-label': `${name}: ${label.toLowerCase()}`,
       title: fig.mine != null ? `Yours. Clear it to go back to ${fig.fallback == null ? 'nothing' : fig.fallback}.` : fig.fallback != null ? `Grey: ${grey || 'the library’s'}, ${fig.fallback}. Type over it to make it yours.` : 'Nothing set. Type a figure.',
@@ -424,7 +424,7 @@
         } }, words)));
     const line = h('p.sn-moves', { dataset: { hook: 'start-moves', key } });
     if (pend) { line.dataset.would = 'true'; line.append(pend.said ? `Would move: ${pend.said} ` : 'Moves nothing on this plan. ', h('button.btn.small', { type: 'button', dataset: { hook: 'start-use' }, onclick: () => takePending(pend) }, 'Use it'), ' ', h('button.btn.quiet.small', { type: 'button', onclick: () => { ui.pending = null; ui.redraw(); } }, 'Leave it')); }
-    else if (said) { line.dataset.said = 'true'; line.append(said.text, ' ', undoLink()); }
+    else if (said) { line.dataset.said = 'true'; line.append(said.text, ' ', undoButton()); }
     return { seg, line };
   }
   /** Stage a change: what it would move is said under the control, and it is taken only with "Use it". */
@@ -439,7 +439,7 @@
     if (!pend && !said) return null;
     const line = h('p.sn-moves', { dataset: { hook: 'start-moves', key } });
     if (pend) { line.dataset.would = 'true'; line.append(pend.said ? `Would move: ${pend.said} ` : 'Moves nothing on this plan. ', h('button.btn.small', { type: 'button', dataset: { hook: 'start-use' }, onclick: () => takePending(pend) }, 'Use it'), ' ', h('button.btn.quiet.small', { type: 'button', onclick: () => { ui.pending = null; ui.redraw(); } }, 'Leave it')); }
-    else { line.dataset.said = 'true'; line.append(said.text, ' ', undoLink()); }
+    else { line.dataset.said = 'true'; line.append(said.text, ' ', undoButton()); }
     return line;
   }
   /** An offer of a new rule: what it would move, before and after, and "Use it". */
@@ -506,7 +506,7 @@
         [...new Set([...trays.map(x => x.cells), cells])].sort((a, b) => a - b).map(n => h('option', { value: n, selected: n === cells }, `${n} cells`)));
       const trayPend = ui.pending && ui.pending.key === 'tray' ? ui.pending : null, trayLine = h('p.sn-moves', { dataset: { hook: 'start-moves', key: 'tray' } });
       if (trayPend) { traySel.value = String(trayPend.value); trayLine.dataset.would = 'true'; trayLine.append(trayPend.said ? `Would move: ${trayPend.said} ` : 'Moves nothing on this plan. ', h('button.btn.small', { type: 'button', dataset: { hook: 'start-use' }, onclick: () => takePending(trayPend) }, 'Use it'), ' ', h('button.btn.quiet.small', { type: 'button', onclick: () => { ui.pending = null; ui.redraw(); } }, 'Leave it')); }
-      else if (ui.said && ui.said.key === 'tray') trayLine.append(ui.said.text, ' ', undoLink());
+      else if (ui.said && ui.said.key === 'tray') trayLine.append(ui.said.text, ' ', undoButton());
       const sowing = h('div.sn-part', { dataset: { hook: 'start-sowing' } }, h('h4', 'Sowing'),
         h('div.sn-f', h('span.sn-lab', 'Tray'), h('span.sn-ctl', traySel, h('span.sn-grey', 'thrown out after use')), trayLine),
         box({ key: 'spc', name, label: 'Seeds a cell', fig: spc, grey: spc.mine == null && lib ? 'the library’s' : null, min: 0.1, max: 50, ops: n => cropOps(eng, c, { spc: n }), uses: usesOf(eng, eng.plan.plantings.filter(p => p.cropId === c.id), 'spc'), cropIds: ids }),
@@ -585,7 +585,7 @@
     const step = cropOps(eng, c, { prop: on ? null : 'potup' });
     const line = h('p.sn-moves', { dataset: { hook: 'start-moves', key: 'potup' } });
     if (pend) { line.dataset.would = 'true'; line.append(pend.said ? `Would move: ${pend.said} ` : 'Moves nothing on this plan. ', h('button.btn.small', { type: 'button', dataset: { hook: 'start-use' }, onclick: () => takePending(pend) }, 'Use it'), ' ', h('button.btn.quiet.small', { type: 'button', onclick: () => { ui.pending = null; ui.redraw(); } }, 'Leave it')); }
-    else if (said) line.append(said.text, ' ', undoLink());
+    else if (said) line.append(said.text, ' ', undoButton());
     const tick = h('input', { type: 'checkbox', checked: pend ? !on : on, dataset: { hook: 'start-potted' },
       onchange: () => { if (pend) { ui.pending = null; ui.redraw(); return; } ui.pending = { engine: eng, key: 'potup', ops: step, label: `${name}: ${on ? 'not potted up' : 'potted up'}`, said: movesSaid(movesOf(eng, [c.id], step)) }; ui.said = null; ui.redraw(); } });
     return h('div.sn-f', h('span.sn-lab', on ? 'Potted up' : 'Potting up'), h('span.sn-ctl', h('label.sn-tick', tick, on ? ' Yes' : ' Potted up'), h('span.sn-grey', on ? 'into pots before planting' : 'not potted up')), line);

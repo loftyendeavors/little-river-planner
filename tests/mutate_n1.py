@@ -86,6 +86,7 @@ PAGE = [
  ("a variety's days are read from the field alone", SC, "return { field, greenhouse, one: field === greenhouse ? field : null, split: field !== greenhouse };", "return { field, greenhouse, one: field, split: false };"),
  ("Started as clears what it leaves undefined", SC, "if (v === undefined) continue;", "if (v === undefined) { delete after[k]; continue; }"),
  ("Looks right moves on without the tick", SC, "if (!looked) App.setStartLooked(c.id, true); if (next)", "if (next)"),
+ ("the nursery Undo is drawn as a link", SC, "h('button.btn.small', { type: 'button', dataset: { hook: 'start-undo' }", "h('button.link', { type: 'button', dataset: { hook: 'start-undo' }"),
 ]
 if mode == "list": print(json.dumps({"node": len(NODE), "page": len(PAGE)})); sys.exit(0)
 faults = NODE if mode == "node" else PAGE

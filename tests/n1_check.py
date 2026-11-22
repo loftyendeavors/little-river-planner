@@ -133,7 +133,8 @@ with sync_playwright() as pw:
     c2 = card()
     changed = [r for r in c2.get("sowings", []) if r["batch"] in eng_b and int(r["cells"]) != eng_b[r["batch"]]["cells"]]
     check("Enter takes it: the variety's own germination, one step", after.get("germ") == 60 and after.get("undo") == k0.get("undo", 0) + 1, after)
-    check("its sowing lines change, as the engine now sows them, and the line under the box says what was done, with Undo", len(changed) > 0 and any(r["cells"] == str(next((b["cells"] for b in after.get("batches", []) if b["ids"] == r["batch"]), -1)) for r in changed) and any(x["key"] == key and x["said"] for x in c2.get("moves", [])) and has('[data-hook="start-undo"]'), [len(changed), c2.get("moves")])
+    undo_is_button = js("const b = H('start-undo')[0]; if (!b) return false; const s = getComputedStyle(b); return b.tagName === 'BUTTON' && parseFloat(s.borderTopWidth) > 0 && !s.textDecorationLine.includes('underline');")
+    check("its sowing lines change, as the engine now sows them, and the line under the box says what was done, with an Undo button", len(changed) > 0 and any(r["cells"] == str(next((b["cells"] for b in after.get("batches", []) if b["ids"] == r["batch"]), -1)) for r in changed) and any(x["key"] == key and x["said"] for x in c2.get("moves", [])) and undo_is_button, [len(changed), c2.get("moves"), undo_is_button])
     js("const t = $('toast'); if (t) { t.textContent = ''; t.classList.remove('show'); } window.__undid = (document.body.innerText.match(/Undid/g) || []).length; return 1;")
     click('[data-hook="start-undo"]', 700)
     k2 = js("return { plan: plan(), sig: sig(), undo: S.undo.length, undid: (document.body.innerText.match(/Undid/g) || []).length - window.__undid, said: (H('start-moves').find(x => x.dataset.said === 'true') || {}).textContent || '' };") or {}

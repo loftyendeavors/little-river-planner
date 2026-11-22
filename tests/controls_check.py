@@ -31,6 +31,7 @@ def finish():
 # The things a link names: they go somewhere and change nothing. Any other control drawn underlined is a button drawn as a link.
 LINKS = ["panel-bed", "bed-planting-back", "panel-live-trays", "panel-mate", "card-bed", "card-full", "card-nursery-full", "bed-planting-full", "opening-back", "fc-from-map",
          "seeds-open-crop", "succ-see", "succ-kept-link", "succ-undrop", "yield-to-list", "yield-to-days", "yield-differs", "yield-typed-crop", "thing-open",
+         "supply-carrier-setting", "start-to-setup", "start-to-live", "start-to-seeds",
          "nursery-to-tasks", "nursery-week-tasks", "bench-line-go", "loose-link", "settle-bed"]
 # the title of a card of To settle is a link drawn as that card's title: underlined, no edge and no ground, at its title's size
 TITLES = ["settle-bed"]
@@ -288,7 +289,7 @@ def run(pw):
         if (l.under || LINKS.includes(b.dataset.hook)) seen.push({ where, hook: b.dataset.hook || '', text: l.text, ok: LINKS.includes(b.dataset.hook) && (TITLES.includes(b.dataset.hook) ? l.under && !l.edge && !l.ground : asLink(l)) }); } };
       const views = [['map', () => { A.setView('map'); A.select(null); }], ['timeline', () => A.setView('timeline')], ['successions', () => LRFSuccessions.open({})], ['forecast', () => A.setView('harvest')], ['tasks', () => A.setView('sow')],
         ['bench room', () => { A.setView('trays'); LRFTraysView.setTab('room'); }], ['live trays', () => LRFTraysView.setTab('live')], ['supplies', () => LRFTraysView.setTab('supplies')], ['set-up', () => LRFTraysView.setTab('setup')],
-        ['seeds', () => A.setView('seeds')], ['days to harvest', () => { A.setView('assume'); LRFAssume.setMode('days'); }], ['yield and price', () => LRFAssume.setMode('harvest', 'list')]];
+        ['seeds', () => A.setView('seeds')], ['starting and nursery', () => { A.setView('assume'); LRFAssume.setMode('start'); }], ['days to harvest', () => LRFAssume.setMode('days')], ['yield and price', () => LRFAssume.setMode('harvest', 'list')]];
       for (const [where, go] of views) { go(); await sleep(700); take(where); }
       A.setView('timeline'); await sleep(400); A.select({ type: 'planting', id: arg.id }); await sleep(400); take('a planting'); A.select({ type: 'bed', id: arg.bed }); await sleep(400); take('a bed');
       A.select(null); return { links: seen.filter(x => x.ok).length, bad: seen.filter(x => !x.ok).slice(0, 10) };""".replace("LINKS", json.dumps(LINKS)).replace("TITLES", json.dumps(TITLES)), sub or {"id": "", "bed": ""})
