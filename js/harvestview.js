@@ -127,7 +127,8 @@
   /** A forecast cell has a supply and dates. Only the grower can say the sales target for that period. */
   function recordedHarvest() {
     const m = model(), weeks = F.periods(m,'week'), entries = App.harvestEntries(), last = entries.filter(x => x.date >= E.d2s(m.start) && x.date <= E.d2s(m.date(m.days-1))).map(x => x.date).sort().at(-1);
-    const week = h('select', {'aria-label':'Harvest comparison week'}, weeks.map(w => h('option',{value:w.key},'Week of ' + day(w.start))));
+    const week = h('select', {'aria-label':'Harvest comparison week'}, weeks.map(w => h('option',{value:w.key},
+      w.i1 - w.i0 === 6 ? 'Week of ' + day(w.start) : UI.span(w.start, w.end) + ' (' + m.year + ')')));
     week.value = last ? E.d2s(F.monday(E.s2d(last))) : thisWeek(m).key;
     const body = h('div'), dialog = h('dialog.dialog.wide', {'aria-label':'Recorded harvest'}, h('h2','Recorded harvest'), h('label.fld','Week',week),body,
       h('div.dialog-actions',h('button.btn',{type:'button',onclick:()=>dialog.close()},'Done')));
@@ -153,13 +154,40 @@
   function buyerDemand(row, week) {
     return (App.state.plan.lrfNext?.buyerDemand || []).filter(x => x.product === row.key && x.week === week);
   }
+  // Orders have one Monday key even across New Year. Add the two calendar slices before rounding a selling unit.
+  function weeklySupply(commercial, row, week) {
+    let available = 0, picking = 0;
+    for (let year = week.start.getFullYear(); year <= week.end.getFullYear(); year++) {
+      const m = year === commercial.year ? commercial : F.kept(App.state.engine, { year, use:'commercial' });
+      const stock = m.rows.find(r => r.key === row.key);
+      if (!stock) continue;
+      const from = m.index(week.start), to = m.index(week.end);
+      available += F.sum(stock.days, from, to);
+      picking += F.sum(stock.picked, from, to);
+    }
+    return { available:F.sendShown(available, row.unit), picking };
+  }
+  function pickingBalance(picked, target, unit, against) {
+    const difference = picked - target;
+    return Math.abs(difference) < 1e-9 ? 'matches ' + against :
+      num(Math.abs(difference),3) + ' ' + unit + (difference < 0 ? ' below ' : ' above ') + against;
+  }
   function openBuyerDemand(initial, initialWeek) {
-    const engine = App.state.engine, commercial = model('commercial'), weeks = F.periods(commercial, 'week');
+    const engine = App.state.engine, commercial = model('commercial');
+    const weeks = F.periods(commercial, 'week').map(({key}) => {
+      const start = E.s2d(key), end = E.addDays(start, 6);
+      return { key, start, end, i0:commercial.index(start), i1:commercial.index(end) };
+    });
     const products = new Map(commercial.rows.map(r => [r.key, r]));
+    const productKey = (cropId, unit, thing) => cropId + '|' + unit + (thing ? '|' + thing : '');
+    const commercialHarvest = App.harvestEntries().filter(entry => {
+      const planting = engine.planting(entry.plantingId);
+      return planting && !F.useOf(engine, planting).personal;
+    });
     for (const crop of engine.crops()) {
       const unit = engine.unitOf(crop);
       const add = (unit, thing, name) => {
-        const key = crop.id + '|' + unit + (thing ? '|' + thing : '');
+        const key = productKey(crop.id, unit, thing);
         if (!products.has(key)) products.set(key, {cropId:crop.id, name, key, unit, thing, group:F.groupOf(crop,unit)});
       };
       add(unit, '', crop.name);
@@ -168,12 +196,20 @@
     }
     // A saved commitment stays reachable when the crop changes unit or its last planting is removed.
     for (const x of App.state.plan.lrfNext?.buyerDemand || []) if (!products.has(x.product)) products.set(x.product, {key:x.product, name:x.name, unit:x.unit, cropId:x.cropId, thing:x.thing});
+    // A picking retains the selling unit it was recorded in even if the crop is sold differently now.
+    for (const entry of commercialHarvest) {
+      const { cropId, thing, unit } = entry, key = productKey(cropId, unit, thing);
+      const cropName = engine.crop(cropId)?.name, name = thing && cropName ? cropName + ' · ' + entry.name : entry.name;
+      if (!products.has(key)) products.set(key, { key, cropId, thing, unit, name });
+    }
     if (initial) products.set(initial.key,initial);
     const options = [...products.values()].sort((a,b) => a.name.localeCompare(b.name));
     if (!options.length) return;
     const select = h('select', { 'aria-label': 'Demand product' }, options.map(r => h('option', { value: r.key }, r.name + ' · ' + r.unit)));
     select.value = initial?.key || options[0].key;
-    const week = h('select', { 'aria-label': 'Demand week' }, weeks.map(w => h('option', { value: w.key }, 'Week of ' + day(w.start))));
+    const week = h('select', { 'aria-label': 'Demand week' }, weeks.map(w => h('option', { value: w.key },
+      w.start.getFullYear() === w.end.getFullYear() ? 'Week of ' + day(w.start) :
+        day(w.start) + ', ' + w.start.getFullYear() + ' – ' + day(w.end) + ', ' + w.end.getFullYear())));
     week.value = initialWeek || thisWeek(commercial).key;
     const body = h('div'), dialog = h('dialog.dialog.wide', { 'aria-label': 'Weekly buyer demand' }, h('h2', 'Weekly buyer demand'),
       h('div.su-pair', h('label.fld','Crop and selling unit',select), h('label.fld','Week',week)), body);
@@ -182,17 +218,31 @@
     function show() {
       displayedProduct = select.value; displayedWeek = week.value; dirtyDemand = false;
       const row = products.get(select.value), col = weeks.find(w => w.key === week.value), rows = buyerDemand(row,col.key);
+      const { available, picking } = weeklySupply(commercial, row, col);
       const customers = App.state.plan.customers || [], fields = [];
-      const lines = h('div',{oninput:() => { dirtyDemand = true; }}), summary = h('p', {role:'status'}), action = planFromPeriod(row, col, close);
+      const lines = h('div',{oninput:() => { dirtyDemand = true; }}), summary = h('p', {role:'status'}), action = planFromPeriod(row, col, close, available);
       const save = h('button.btn.primary', { type:'button' }, 'Save demand');
       const total = () => fields.reduce((v, f) => v + (Number(f.amount.value) || 0), 0);
-      const available = F.sendShown(F.sum(commercial.rows.find(r => r.key === row.key)?.days || [], col.i0, col.i1),row.unit);
+      const start = E.d2s(col.start), end = E.d2s(col.end);
+      const entries = commercialHarvest.filter(x => x.cropId === row.cropId && x.unit === row.unit &&
+        (x.thing || '') === (row.thing || '') && x.date >= start && x.date <= end);
+      const marketable = entries.reduce((n, x) => n + x.marketable, 0), culls = entries.reduce((n, x) => n + x.culls, 0);
+      const harvestBalance = h('span');
+      const comparison = h('section', { 'aria-label':'Commercial week comparison', dataset:{hook:'fc-week-comparison'} },
+        h('h3', 'Commercial week · ' + row.unit), summary,
+        h('p', 'Forecast picking ' + num(picking, 3) + ' ' + row.unit, h('br'),
+          entries.length ? num(marketable,3) + ' marketable picked · ' + num(culls,3) + ' culls' : 'No commercial harvest recorded for this product and week.',
+          entries.length ? [h('br'), 'Marketable picking ' + pickingBalance(marketable, picking, row.unit, 'forecast')] : null,
+          harvestBalance));
       function update() {
         const sum = total(), gap = Math.max(0,sum - available);
-        summary.textContent = num(sum,3) + ' ordered · ' + num(available,3) + ' available · ' + num(gap,3) + ' more needed (' + row.unit + ')';
+        const surplus = available - sum;
+        const forecastBalance = gap > 1e-9 ? num(gap,3) + ' more needed' : surplus > 1e-9 ? num(surplus,3) + ' above orders' : 'matches orders';
+        summary.textContent = num(sum,3) + ' ordered · ' + num(available,3) + ' forecast available · ' + forecastBalance;
+        harvestBalance.textContent = entries.length && sum > 0 ? ' · ' + pickingBalance(marketable, sum, row.unit, 'orders') : '';
         if (action) {
           action.target.value = String(sum); action.update();
-          action.button.disabled ||= !gap;
+          action.button.disabled ||= gap <= 1e-9;
         }
       }
       function line(entry) {
@@ -227,7 +277,7 @@
         action.button.addEventListener('click', e => { if (!storeDemand()) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
       }
       const commitChoice = h('button.btn', {type:'button', onclick:() => line()}, 'Add buyer');
-      UI.add(clear(body), lines, commitChoice, summary, action?.variety,
+      UI.add(clear(body), lines, commitChoice, comparison, action?.variety,
         h('div.dialog-actions', h('button.btn',{type:'button',onclick:close},'Cancel'), action?.button,save));
       update();
     }
@@ -242,11 +292,11 @@
     dialog.addEventListener('close',()=>dialog.remove(),{once:true});
     show(); document.body.append(dialog); dialog.showModal();
   }
-  function planFromPeriod(row, col, close) {
+  function planFromPeriod(row, col, close, weeklyAvailable) {
     if (!plannable(row)) return null;
     const eng = App.state.engine, crop = eng.crop(row.cropId);
     const stock = model('commercial').rows.find(r => r.key === row.key);
-    const available = F.sendShown(stock ? F.sum(stock.days, col.i0, col.i1) : 0, row.unit);
+    const available = weeklyAvailable ?? F.sendShown(stock ? F.sum(stock.days, col.i0, col.i1) : 0, row.unit);
     const units = F.unitWord(2, row.unit, row.group) || 'each';
     const target = h('input', { type: 'number', min: 0, step: 'any', inputmode: 'decimal', dataset: { hook: 'fc-target' } });
     const note = h('small', { dataset: { hook: 'fc-shortfall' }, 'aria-live': 'polite' });
@@ -274,7 +324,7 @@
         : `${have} available to sell. The forecast covers this target.`;
     }
     const demand = F.periods(model('commercial'), 'week').find(w => w.i0 === col.i0 && w.i1 === col.i1);
-    const commitments = demand ? buyerDemand(row, demand.key) : [];
+    const commitments = demand && demand.i1 - demand.i0 === 6 ? buyerDemand(row, demand.key) : [];
     if (commitments.length) target.value = String(commitments.reduce((n,x) => n + x.amount, 0));
     target.addEventListener('input', update);
     update();
