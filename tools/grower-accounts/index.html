@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self' PROJECT_ORIGIN; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Grower account · Little River Farm Planner</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header><strong>Little River</strong><span>Farm planner</span><button id="signout" hidden>Sign out</button></header>
+<main>
+<section id="entry" hidden>
+  <h1>Grower account</h1>
+  <nav aria-label="Account options"><button id="to-signup" type="button">Create account</button><button id="to-login" type="button">Sign in</button></nav>
+  <form id="signup" hidden>
+    <label>Email <input name="email" type="email" autocomplete="email" required maxlength="254"></label>
+    <label>Password <input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label>
+    <p>Use at least 12 characters. After you verify your email, you’ll choose a username and name your farm.</p>
+    <button class="primary">Create account</button>
+  </form>
+  <form id="login" hidden>
+    <label>Username or email <input name="identifier" autocomplete="username" required maxlength="254" autocapitalize="none" spellcheck="false"></label>
+    <label>Password <input name="password" type="password" autocomplete="current-password" required maxlength="4096"></label>
+    <button class="primary">Sign in</button><button id="forgot" type="button" class="link">Forgot password?</button>
+  </form>
+</section>
+<section id="recovery" hidden><h1>Reset your password</h1><form id="request-code">
+  <label>Account email <input name="email" type="email" autocomplete="email" maxlength="254" required></label>
+  <button class="primary">Send recovery email</button><button type="button" class="back">Back to sign in</button>
+</form></section>
+<section id="verify" hidden><h1>Check your email</h1><p id="sent"></p><form id="check-code">
+  <details><summary>Enter an email code</summary><label>Email code <input name="code" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6,10}" maxlength="10" required></label>
+  <button class="primary">Verify code</button></details><button id="resend" type="button">Resend email</button><button type="button" class="back">Back to sign in</button>
+</form></section>
+<section id="reset" hidden><h1>Choose a new password</h1><form id="set-password">
+  <label>New password <input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label>
+  <button class="primary">Save new password</button>
+</form></section>
+<section id="setup" hidden><h1>Create your farm</h1><form id="start">
+  <label>Username <input name="username" autocomplete="username" pattern="[A-Za-z][A-Za-z0-9_]{2,29}" maxlength="30" autocapitalize="none" spellcheck="false" required></label>
+  <p>3–30 letters, numbers, or underscores. Start with a letter.</p>
+  <label>Farm name <input name="farm" maxlength="100" required></label>
+  <fieldset><legend>What would you like to start with?</legend>
+  <label class="choice"><input name="kind" type="radio" value="sample" checked> A copy of the sample farm</label>
+  <label class="choice"><input name="kind" type="radio" value="empty"> An empty farm</label></fieldset>
+  <button class="primary">Create my farm</button>
+</form></section>
+<section id="workspace" hidden><h1 id="farm-title"></h1><p id="summary"></p>
+  <ul id="gardens"></ul>
+  <details id="field-details"><summary>Add a field and beds</summary><form id="add-field">
+    <label>Field name <input name="field" maxlength="80" required></label>
+    <div class="dimensions">
+    <label>Beds <input name="count" type="number" value="4" min="1" max="100" required></label>
+    <label>Length (ft) <input name="length" type="number" value="20" min="1" max="10000" step="any" required></label>
+    <label>Width (ft) <input name="width" type="number" value="3.5" min="0.25" max="100" step="any" required></label></div>
+    <button class="primary">Save field</button>
+  </form></details>
+  <button id="download">Download planner backup</button>
+</section>
+<p id="message" role="status" aria-live="polite">Opening your account…</p>
+<button id="reload" hidden>Reopen latest farm</button>
+<noscript>Enable JavaScript to open your grower account.</noscript>
+</main><script type="module" src="./app.js"></script>
+</body></html>

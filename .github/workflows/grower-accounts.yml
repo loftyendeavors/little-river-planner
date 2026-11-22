@@ -1,0 +1,33 @@
+name: Grower accounts beta
+on:
+  push:
+    paths:
+      - 'tools/grower-accounts/**'
+      - 'js/library.js'
+      - 'js/planio.js'
+      - '.github/workflows/grower-accounts.yml'
+  pull_request:
+    paths:
+      - 'tools/grower-accounts/**'
+      - 'js/library.js'
+      - 'js/planio.js'
+      - '.github/workflows/grower-accounts.yml'
+permissions:
+  contents: read
+jobs:
+  accounts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/grower-accounts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          SUPABASE_URL: http://127.0.0.1:54321
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_build_test
