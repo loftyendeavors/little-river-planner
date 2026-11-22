@@ -27,6 +27,8 @@ for n in "$@"; do
     wide) python3 -I $T/wide_check.py $APP $S/wide 2>&1 | tally wide-and-light ;;
     step5a) python3 -I $T/step5a_check.py $APP $S/step5a 2>&1 | tally step5a ;;
     step5b) python3 -I $T/step5b_check.py $APP $S/step5b 2>&1 | tally step5b ;;
+    succession-spaces) python3 -I $T/succession_spaces_check.py $APP $S/succession-spaces 2>&1 | tally succession-spaces ;;
+    succession-spaces-site) python3 -I $T/succession_spaces_check.py $SITE $S/succession-spaces-site $ZIP 2>&1 | tally succession-spaces-site ;;
     successions) python3 -I $T/successions_check.py $APP $S/successions 2>&1 | tally successions ;;   # E4 part 1 (0.84): the Successions page, where the series tool and stepF_check were
     plain) python3 -I $T/plain_check.py $APP $S/plain 2>&1 | tally plain-words ;;
     importer) python3 -I $T/importer_check.py $APP $S/imp 2>&1 | tally importer ;;

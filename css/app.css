@@ -1251,7 +1251,8 @@ table.hv { border-collapse: separate; border-spacing: 0; font-variant-numeric: t
 .hv tr.hv-var td { height: 26px; }
 .hv td.hv-c { min-width: 42px; text-align: right; font: 500 var(--type-13) var(--mono); color: var(--ink); background: color-mix(in srgb, var(--hv-seq) var(--p, 0%), transparent); cursor: pointer; }
 .hv td.hv-c.zero { cursor: default; }
-.hv td.hv-c:not(.zero):hover { outline: 2px solid var(--ink); outline-offset: -2px; }
+.hv td.hv-c.zero[title] { cursor: pointer; }
+.hv td.hv-c:not(.zero):hover, .hv td.hv-c.zero[title]:hover { outline: 2px solid var(--ink); outline-offset: -2px; }
 .hv td.hv-c.now, .hv tfoot td.now { box-shadow: inset 1px 0 0 var(--flag), inset -1px 0 0 var(--flag); }
 .hv tr.hv-group th { position: sticky; left: 0; z-index: 2; text-align: left; height: 34px; padding-top: 8px; background: var(--surface); font: 800 var(--type-15)/1 var(--display); font-stretch: 80%; color: var(--ink); }
 .hv tr.hv-group th small { margin-left: 8px; font: 500 var(--type-11) var(--mono); color: var(--muted); }

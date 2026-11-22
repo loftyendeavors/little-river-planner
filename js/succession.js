@@ -81,13 +81,51 @@
     return pick ? (eng.plan.beds || []).find(b => b.gardenId === pick.garden.id && suits(eng, crop, b)) || null : null;
   }
   const SPACE_FIELDS = ['bedId', 'ft', 'startFt', 'bedLayout', 'trays', 'shelter', 'out'];
-  /** The planting a run puts into a space: the crop from the library (a run is never a copy of another planting). */
+  /** Gardens can hold several kinds of space. Offer each kind separately. */
+  function runGardens(eng, crop) {
+    const out = [];
+    for (const garden of eng.plan.gardens || []) {
+      const groups = new Map();
+      for (const bed of spaces(eng, crop, [garden.id])) {
+        const kind = eng.spaceKind(bed);
+        if (!groups.has(kind)) groups.set(kind, { garden, kind, spaces: 0, planted: false });
+        const row = groups.get(kind);
+        row.spaces++;
+        if (!row.planted) row.planted = eng.plantingsIn(bed.id).some(p => p.cropId === crop.id);
+      }
+      out.push(...groups.values());
+    }
+    return out;
+  }
+  /** The latest planting of this crop and variety in this kind of space. Automatic live-tray batches follow demand. */
+  function runSource(eng, cropId, varietyId, kind) {
+    if (kind !== 'tower' && kind !== 'containers') return null;
+    let latest = null;
+    for (const p of eng.plan.plantings) {
+      if (p.cropId !== cropId || (varietyId && p.varietyId !== varietyId) || p.liveTray || p.established || p.failed) continue;
+      const bed = eng.bedOf(p.bedId);
+      if (bed && eng.spaceKind(bed) === kind && (!latest || p.date > latest.date)) latest = p;
+    }
+    return latest;
+  }
+  /** Make a new planting. Crops on beds use their defaults. Other spaces can follow a planting's cycle and block size. */
   function draftFor(eng, o, bed, date) {
-    const payload = o.source ? { plantingId: o.source.id, copy: true } : { cropId: o.crop.id, varietyId: o.variety ? o.variety.id : undefined };
-    // a copy keeps its own settings only where they still describe the space: its length means nothing in a bed of another size
     let source = o.source;
-    if (source) { source = { ...source }; if (o.variety) source.varietyId = o.variety.id; if (o.unit === 'ft' || source.bedId !== bed.id) { delete source.ft; delete source.startFt; delete source.bedLayout; delete source.trays; } delete source.sowOn; delete source.startedFrom; delete source.harvestEnd; }
-    return Rails.propose(eng, payload, { bedId: bed.id, date }, { source, noShrink: false });
+    if (source) {
+      source = { ...source };
+      delete source.sowOn;
+      delete source.harvestEnd;
+      delete source.out;       // an absolute date from the earlier sowing
+      if (o.kind === 'bench') source.trays = o.size;
+      if (o.kind === 'containers') source.ft = o.size;
+    }
+    const payload = source ? { plantingId: source.id, copy: true } : { cropId: o.crop.id, varietyId: o.variety ? o.variety.id : undefined };
+    const res = Rails.propose(eng, payload, { bedId: bed.id, date }, { source, noShrink: false });
+    if (o.kind === 'tower' && res.r && res.r.plants !== eng.capOf(bed)) {
+      res.p = { ...res.p, towerUsedSites: eng.capOf(bed) };
+      res.r = eng.evaluate(res.p);
+    }
+    return res;
   }
   // ── sized by harvest ──
   /**
@@ -151,10 +189,17 @@
   function runOptions(eng, input) {
     const o0 = input || {}, crop = eng.crop(o0.cropId);
     if (!crop) return { error: 'Choose a crop.' };
-    if (crop.micro) return { error: 'Live trays are planned from weekly demand, under Live trays in the Nursery view.' };
-    if (eng.isCoverCrop(crop) || !(+crop.dtm > 0)) return { error: `${crop.name} has no harvest to plan a succession by.` };
-    const variety = o0.varietyId ? eng.variety(o0.varietyId) : null;
+    const kind = o0.kind || 'bed';
+    if (!Object.hasOwn(kindWord, kind)) return { error: 'Choose a kind of growing space.' };
+    if (crop.micro && (kind !== 'bench' || !o0.sourceId || o0.by === 'amount')) return { error: 'Live trays are planned from weekly demand, under Live trays in the Nursery view. Open a manual bench planting to repeat its trays by spacing.' };
+    if (eng.isCoverCrop(crop) || (!crop.micro && !(+crop.dtm > 0))) return { error: `${crop.name} has no harvest to plan a succession by.` };
+    let variety = o0.varietyId ? eng.variety(o0.varietyId) : null;
     if (o0.varietyId && (!variety || variety.cropId !== crop.id)) return { error: 'That variety belongs to another crop.' };
+    const source = kind === 'bed' ? null : o0.sourceId ? eng.planting(o0.sourceId) : runSource(eng, crop.id, o0.varietyId, kind);
+    if (o0.sourceId && kind !== 'bed' && (!source || source.cropId !== crop.id || (o0.varietyId && source.varietyId !== o0.varietyId) || source.liveTray || source.established || eng.isPool(eng.bedOf(source.bedId)) || eng.spaceKind(eng.bedOf(source.bedId)) !== kind)) return { error: 'Choose a planting of this crop and variety in this kind of space.' };
+    if (kind === 'bench' && (!source || !crop.micro)) return { error: 'Open a live-tray planting on a bench to repeat its trays.' };
+    if (!variety && source?.varietyId) variety = eng.variety(source.varietyId);
+    const size = source && (kind === 'bench' || kind === 'containers') ? eng.calc(source).physicalLength : null;
     const by = o0.by || 'beds', datesFor = o0.datesFor || 'picking', reach = o0.reach || 'spacing';
     if (!RUN_BY.includes(by)) return { error: 'Plan by beds each sowing, or by an amount a week.' };
     if (!RUN_DATES.includes(datesFor)) return { error: 'The dates are for picking, or for planting.' };
@@ -176,19 +221,19 @@
     }
     // where the sowings go: the beds named, in that order; else the gardens named; then the gardens to use if those run out of room
     const bedIds = ids(o0.bedIds), gardenIds = ids(o0.gardenIds), then = ids(o0.then), seen = new Set(), list = [];
-    const take = b => { if (b && !seen.has(b.id) && suits(eng, crop, b)) { seen.add(b.id); list.push({ bed: b, then: false }); } };
+    const take = b => { if (b && !seen.has(b.id) && eng.spaceKind(b) === kind && suits(eng, crop, b)) { seen.add(b.id); list.push({ bed: b, then: false }); } };
     if (bedIds.length) bedIds.map(id => eng.bedOf(id)).forEach(take);
     else spaces(eng, crop, gardenIds).forEach(take);
     const first = list.length;
-    for (const b of spaces(eng, crop, then)) if (!seen.has(b.id)) { seen.add(b.id); list.push({ bed: b, then: true }); }
+    for (const b of spaces(eng, crop, then)) if (eng.spaceKind(b) === kind && !seen.has(b.id)) { seen.add(b.id); list.push({ bed: b, then: true }); }
     if (!list.length) return { error: bedIds.length ? 'This crop cannot go in the beds chosen.' : 'Choose a garden with ground this crop can go in.' };
     const thing = by === 'amount' && o0.thing ? String(o0.thing) : '';
-    const record = { id: typeof o0.id === 'string' && o0.id ? o0.id : 'run-' + newId(), cropId: crop.id, ...(variety ? { varietyId: variety.id } : {}), ...(thing ? { thing } : {}), by,
+    const record = { ...(kind !== 'bed' ? { kind } : {}), ...(source ? { sourceId: source.id } : {}), id: typeof o0.id === 'string' && o0.id ? o0.id : 'run-' + newId(), cropId: crop.id, ...(variety ? { varietyId: variety.id } : {}), ...(thing ? { thing } : {}), by,
       ...(by === 'amount' ? { want, margin } : {}), datesFor, from: E.d2s(from), to: E.d2s(to), reach: 'spacing', ...(every ? { every } : {}), wholeBeds: true, gardenIds, bedIds, then };
     // a run's sowing is the crop from the library, never a copy of another planting: draftFor's own fields for that
     // the sowings the grower dropped from the proposal, by their number: left out of what is laid, never of the spacing found
     const drop = new Set((Array.isArray(o0.drop) ? o0.drop : []).map(Number).filter(n => Number.isInteger(n) && n >= 1));
-    return { record, drop, crop, variety, thing, by, datesFor, from, to, every, want, margin, wanted: want == null ? null : want * (1 + margin / 100), spaces: list, named: first, source: null, unit: 'whole' };
+    return { record, drop, crop, variety, thing, by, datesFor, from, to, every, want, margin, wanted: want == null ? null : want * (1 + margin / 100), spaces: list, named: first, source, kind, size };
   }
   /** One sowing tried in one whole bed, on the date of the run it is numbered for: { p, r } or { why }. A date is never moved. */
   function sowIn(probe, o, bed, target) {
@@ -201,7 +246,7 @@
     const res = draftFor(probe, o, bed, date);
     if (res.state === 'blocked' || !res.r) return { why: res.why === 'held' ? heldWhy(probe, res) : res.why === 'too-long' ? 'Does not fit the space' : 'This crop cannot go here' };
     if (res.p.bedLayout) return { why: 'Only some of the rows are free' };
-    if (!(res.r.tw || res.r.physicalLength >= res.r.cap - EPS)) return { why: `Only part of it is free (${Math.floor(res.r.physicalLength)} ${probe.capUnit(bed)})` };
+    if (!(res.r.tw || res.r.physicalLength >= (o.size ?? res.r.cap) - EPS)) return { why: `Only part of it is free (${Math.floor(res.r.physicalLength)} ${probe.capUnit(bed)})` };
     const trouble = seasonTrouble(probe, res.p, res.r);
     if (trouble) return { why: trouble };
     if (!(res.r.harvestDays > 0) && !res.r.frostCut) return { why: 'Nothing would be ready before the season ends' };   // the frost stops none
@@ -252,7 +297,7 @@
     const mine = new Set(o.spaces.map(s => s.bed.id)), out = [];
     for (const g of gardensFor(probe, o.crop)) {
       let beds = 0;
-      for (const b of probe.plan.beds || []) if (b.gardenId === g.garden.id && !mine.has(b.id) && suits(probe, o.crop, b) && sowIn(probe, o, b, target).p) beds++;
+      for (const b of probe.plan.beds || []) if (b.gardenId === g.garden.id && !mine.has(b.id) && probe.spaceKind(b) === o.kind && suits(probe, o.crop, b) && sowIn(probe, o, b, target).p) beds++;
       if (beds) out.push({ garden: g.garden, beds });
     }
     return out;
@@ -386,6 +431,18 @@
   function landing(eng, w, target, options = {}) {
     const bed = eng.bedOf(target.bedId), date = E.s2d(w.date), source = bare(w);
     if (!bed || !isWaiting(w)) return { state: 'blocked', why: 'space' };
+    const run = w.run && runs(eng.plan).find(x => x.id === w.run.id), originalBed = eng.bedOf(w.wait?.from);
+    const kind = run?.kind || (originalBed && eng.spaceKind(originalBed) === eng.spaceKind(bed) && eng.spaceKind(bed));
+    if (kind && kind !== 'bed') {
+      if (eng.spaceKind(bed) !== kind || !suits(eng, eng.crop(w.cropId), bed)) return { state: 'blocked', why: 'space' };
+      // A kept sowing owns this many containers or trays, including when its original space was full.
+      const key = kind === 'bench' ? 'trays' : 'ft', size = +w[key];
+      if (kind !== 'tower' && size > eng.capOf(bed)) return { state: 'blocked', why: 'too-long' };
+      source.bedId = bed.id;
+      if (kind === 'tower' && run?.kind) source.towerUsedSites = eng.capOf(bed);
+      else if (size > 0) source[key] = size;
+      return Rails.propose(eng, { plantingId: w.id }, { bedId: bed.id, date }, { source, noShrink: true });
+    }
     let res = Rails.propose(eng, { plantingId: w.id }, { bedId: bed.id, date, along: target.along, across: target.across }, { source });
     const soil = eng.isSoilBed(bed), own = soil && +w.ft > 0 ? +w.ft : null;
     if (own && res.state !== 'blocked' && res.r && !res.p.bedLayout) {
@@ -488,9 +545,10 @@
     const crop = eng.crop(w.cropId);
     if (!crop || !isWaiting(w)) return null;
     const wait = w.wait || {}, named = (wait.beds || []).map(id => eng.bedOf(id)).filter(b => b && suits(eng, crop, b))[0];
-    const bed = named || spaces(eng, crop, wait.gardens || [])[0] || refSpace(eng, crop, null);
+    const origin = wait.from && eng.bedOf(wait.from);
+    const bed = origin || named || spaces(eng, crop, wait.gardens || [])[0] || refSpace(eng, crop, null);
     if (!bed) return null;
-    const p = { ...bare(w), bedId: bed.id }, r = eng.evaluate(p);
+    const p = { ...bare(w), bedId: bed.id, ...(origin && w.ft ? { ft: w.ft } : {}), ...(origin && w.trays ? { trays: w.trays } : {}) }, r = eng.evaluate(p);
     return r ? { p, r, bed, from: eng.occupancyFrom(p, r), through: eng.occupancyThrough(p, r) } : null;
   }
   /**
@@ -652,6 +710,6 @@
     return { cap, weeks, least };
   }
 
-  return { planRun, runs, runPlantings, isRun, NEAR, spaces, gardensFor, suits, openings, unheatedStart, candidates, tryCrop, fits, benchRoom, seasonTrouble, frostNote, kindWord, unitOfKind, LIMIT,
+  return { planRun, runs, runPlantings, isRun, runGardens, runSource, NEAR, spaces, gardensFor, suits, openings, unheatedStart, candidates, tryCrop, fits, benchRoom, seasonTrouble, frostNote, kindWord, unitOfKind, LIMIT,
     waiting, isWaiting, bare, landing, splits, homes, about, room, refSpace };
 });

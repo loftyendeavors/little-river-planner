@@ -306,6 +306,8 @@
     'lrfNext.runs[].gardenIds': 'list',
     'lrfNext.runs[].gardenIds[]': 'text',
     'lrfNext.runs[].id': 'text',
+    'lrfNext.runs[].kind': 'text',
+    'lrfNext.runs[].sourceId': 'text',
     'lrfNext.runs[].margin': 'number',
     'lrfNext.runs[].reach': 'text',
     'lrfNext.runs[].then': 'list',

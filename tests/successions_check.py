@@ -194,9 +194,10 @@ with sync_playwright() as pw:
       document.querySelector('[data-hook="succ-run"][data-run="' + run.id + '"]').click(); await new Promise(r => setTimeout(r, 900)); return out;""") or {}
     check("a planting of a run placed again from To place is still in the run; a copy of one, and another variety put beside one, are in no run; the run counts the same", ops.get("placed") is True and ops.get("copy") is True and ops.get("varieties") is True and ops.get("counted") and ops.get("end"), ops)
     page.locator('[data-hook="succ-remove-all"]').check(); wait(200)
+    remove_says = page.locator('[data-hook="succ-remove-effect"]').inner_text()
     press("succ-remove", 1500)
     gone = js("return state();") or {}
-    check("asked to, Remove run takes its plantings out too, as one step", gone.get("runs") == 0 and gone.get("n") == plan0.get("n") and gone.get("undo") == u0 + 1, gone)
+    check("asked to, Remove run takes its plantings out too, as one step", "run and its plantings go" in remove_says and gone.get("runs") == 0 and gone.get("n") == plan0.get("n") and gone.get("undo") == u0 + 1, [remove_says, gone])
     js("A.undo(); return 1;"); wait(900); js("A.undo(); return 1;"); wait(900); js("A.undo(); return 1;"); wait(1200)
     check("undoing every step leaves the plan as it was", js("return A.contentKey();") == plan0.get("key"), js("return state();"))
 
@@ -280,16 +281,39 @@ with sync_playwright() as pw:
       const day0 = (LRFAhead.state && LRFAhead.state.O && LRFAhead.state.O.pick) ? null : null; btn.click(); await new Promise(r => setTimeout(r, 1500));
       return { btn: true, open: St.view === 'succession', garden: D.gardenId === o.garden.id, dates: D.datesFor };""")
     check("from an opening: it opens on that crop in that garden, planting dates from the opening's day", op and op.get("btn") and op.get("open") and op.get("garden") and op.get("dates") == "planting", op)
-    fc = js("""A.setView('harvest'); await new Promise(r => setTimeout(r, 1500));
-      const cell = [...document.querySelectorAll('#hvTable tr.hv-row td.hv-c')].find(td => td.textContent.trim() && td.closest('tr').dataset.crop && SU.plans(eng, eng.crop(td.closest('tr').dataset.crop)));
-      if (!cell) return { cell: false }; const crop = cell.closest('tr').dataset.crop; cell.click(); await new Promise(r => setTimeout(r, 700));
-      const btn = q('fc-succession'); if (!btn) return { cell: true, btn: false, crop }; btn.click(); await new Promise(r => setTimeout(r, 2000));
-      return { cell: true, btn: true, open: St.view === 'succession', crop: D.cropId === crop, by: D.by, dates: D.datesFor, want: +D.want > 0 };""") or {}
-    check("from a week of a crop on the Forecast: it opens on that crop, to an amount a week, picking from that week", fc.get("btn") and fc.get("open") and fc.get("crop") and fc.get("by") == "amount" and fc.get("dates") == "picking" and fc.get("want"), fc)
+    fc = js("""A.setView('harvest'); await new Promise(r => setTimeout(r, 800));
+      const rows = qa('fc-row'), market = LRFHarvestView.model('commercial');
+      const period = (row, cell) => {
+        const from = cell.dataset.from, to = cell.dataset.to, i0 = market.index(E.s2d(from)), i1 = market.index(E.s2d(to));
+        const stock = market.rows.find(r => r.cropId === row.dataset.crop && !r.thing && r.unit === eng.unitOf(eng.crop(r.cropId)));
+        return {from, to, have: stock ? LRFForecast.sendShown(LRFForecast.sum(stock.days, i0, i1), stock.unit) : 0, days: i1-i0+1};
+      };
+      const row = rows.find(row => !row.dataset.thing && SU.plans(eng, eng.crop(row.dataset.crop)) &&
+        [...row.querySelectorAll('[data-hook="fc-period"]')].some(c => period(row,c).have > 0) &&
+        [...row.querySelectorAll('[data-hook="fc-period"]')].some(c => !c.textContent.trim() && !period(row,c).have));
+      if (!row) return null;
+      const crop = row.dataset.crop, cells = [...row.querySelectorAll('[data-hook="fc-period"]')], filled = cells.find(c => period(row,c).have > 0);
+      const demand = period(row,filled); filled.click();
+      const btn = q('fc-succession'), target = q('fc-target'); if (!btn || !target) return null;
+      const typeTarget = n => { target.value=String(n); target.dispatchEvent(new Event('input')); };
+      typeTarget(demand.have); const covered = btn.disabled;
+      typeTarget(demand.have + 37); const enabled = !btn.disabled;
+      btn.click(); await new Promise(r => setTimeout(r, 650));
+      const exact = St.view === 'succession' && D.cropId === crop && !D.thing && D.by === 'amount' && D.datesFor === 'picking' &&
+        D.from === demand.from && D.to === demand.to && Math.abs(+D.want - 37 * 7 / demand.days) < 1e-6;
+      A.setView('harvest'); await new Promise(r => setTimeout(r, 700));
+      const empty = qa('fc-row').find(r => r.dataset.crop === crop && !r.dataset.thing)?.querySelector('[data-hook="fc-period"].zero');
+      if (!empty) return null;
+      const blankFrom = empty.dataset.from, blankTo = empty.dataset.to; empty.click();
+      const blank = q('fc-target')?.value === ''; q('fc-succession')?.click(); await new Promise(r => setTimeout(r, 650));
+      return {exact, covered, enabled, blank: blank && D.from === blankFrom && D.to === blankTo && D.want === '' && D.by === 'amount'};""") or {}
+    check("a Forecast cell carries its sales shortfall and exact picking dates; an empty cell opens without an invented target", all(fc.get(k) for k in ["exact", "covered", "enabled", "blank"]), fc)
     check("the series tool is gone: no panel opens for it, and its functions are no more", ways.get("gone") == {"form": False, "series": True}, ways.get("gone"))
     words = js("""const bad = []; A.setView('succession'); await new Promise(r => setTimeout(r, 900));
       for (const el of [document.body]) { const t = el.innerText; for (const w of ['Plan a series', 'A series', 'Repeat as successions', 'Add successions', 'Plan to a weekly amount', 'Plan a longer series']) if (t.includes(w)) bad.push(w); }
-      return bad;""")
+      A.setView('timeline'); await new Promise(r => setTimeout(r, 300));
+      const labels = [...document.querySelectorAll('#timeline [title], .tl-wait [title], .tl-waithead')].map(el => (el.title || '') + ' ' + el.textContent);
+      return bad.concat(labels.filter(t => /the series|a series/i.test(t)));""")
     check("no screen visited says “series” for a succession, nor “Plan to a weekly amount”", words == [], words)
     check("the plan is as it was: nothing was added by looking", js("return A.contentKey();") == plan0.get("key"))
     check("no error on the page", not [e for e in errors if "Failed to load resource" not in e], errors[:4])

@@ -43,7 +43,7 @@
           root.LRFThumbs.el({ cropId: c.id, color, label: c.name, size: 24, cls: 'key' }),
           h('b.lib-name', c.name),
           n ? h('span.lib-count', { title: `${n} planting${n === 1 ? '' : 's'} in this plan` }, n) : null,
-          canSeries(eng, c) ? h('button.lib-series', { type: 'button', title: `Plan a succession of ${String(c.name).toLowerCase()}: one whole bed every so many days, or to an amount a week`, 'aria-label': `Plan a succession of ${c.name}`, dataset: { succession: c.id, hook: 'lib-succession' } }, 'succession') : null,
+          canSeries(eng, c) ? h('button.lib-series', { type: 'button', title: `Plan a succession of ${String(c.name).toLowerCase()}: every so many days, or to an amount a week`, 'aria-label': `Plan a succession of ${c.name}`, dataset: { succession: c.id, hook: 'lib-succession' } }, 'succession') : null,
           varieties.length ? h('button.lib-more', { type: 'button', 'aria-expanded': String(!!open), title: `${varieties.length} variet${varieties.length === 1 ? 'y' : 'ies'}`, 'aria-label': `${open ? 'Hide' : 'Show'} ${varieties.length} varieties of ${c.name}`, dataset: { toggle: c.id } }, open ? '▾' : '▸') : h('span.lib-more')));
       if (open) {
         const box = h('div.lib-vars', h('p.lib-meta', cropMeta(c)));
@@ -311,7 +311,7 @@
     const list = h('ul.p-list');
     for (const { p, r } of all) list.append(plantingRow(p, r));
     host.append(h('section.insp-section', h('h3', 'Plantings'), all.length ? list : h('p.note', 'Nothing planned here yet. Drag a crop onto this bed.'),
-      eng.spaceKind(bed) !== 'bed' || eng.isRack(bed) ? null : h('button.btn.small', { type: 'button', id: 'bedSeries', dataset: { hook: 'bed-succession' }, title: 'A run of one crop, one whole bed every so many days, from this garden and this day: opens the Successions page', onclick: () => App.openAhead({ mode: 'succession', bedId: bed.id, from: E.d2s(App.state.date) }) }, 'Plan a succession here…')));
+      !root.LRFSuccessions?.canStartHere(eng, bed) ? null : h('button.btn.small', { type: 'button', id: 'bedSeries', dataset: { hook: 'bed-succession' }, title: 'Plan a run in this garden from this day', onclick: () => App.openAhead({ mode: 'succession', bedId: bed.id, from: E.d2s(App.state.date) }) }, 'Plan a succession here…')));
     // room before, after and between what is planned here, and what would go in it
     const Ahead = root.LRFSuccession;
     if (soil && Ahead && all.length) {
@@ -757,15 +757,17 @@
           r.tw || r.rack || r.ct ? null : stat('In-row spacing', `${num(r.inRow, 1)} in`),
           r.cells ? stat(r.sowing && r.sowing.medium === 'pots' ? 'Pots to sow' : 'Cells to sow', num(r.cells)) : r.seeds ? stat('Seeds', num(r.seeds)) : null),
         sowingNote(r)),
-      canSeries(eng, eng.crop(p.cropId)) && eng.spaceKind(bed) === 'bed' ? h('section.insp-section',
+      root.LRFSuccessions?.plans(eng, eng.crop(p.cropId), p) ? h('section.insp-section',
         h('h3', 'Successions'),
-        h('button.btn.quiet.small', { type: 'button', id: 'fSeriesLink', dataset: { hook: 'panel-succession' }, title: 'A run of this crop and variety after this planting, one whole bed every so many days: opens the Successions page', onclick: () => App.openAhead({ mode: 'succession', sourceId: p.id }) }, 'Plan a succession of this…')) : null);
+        h('button.btn.quiet.small', { type: 'button', id: 'fSeriesLink', dataset: { hook: 'panel-succession' }, title: 'Plan a run of this crop and variety after this planting', onclick: () => App.openAhead({ mode: 'succession', sourceId: p.id }) }, 'Plan a succession of this…')) : null);
   }
   /** "⋯" at the head of a planting's panel: what takes it out of its bed, as its card's menu has it (L3). */
   function plantingMore(p, bed, r) {
+    const eng = App.state.engine;
     return {
       title: App.cropLabel(p), sub: `${App.bedLabel(bed)} · in ${day(r.field)}`,
       items: [
+        ...(eng.spaceKind(bed) !== 'bed' && root.LRFSuccessions?.plans(eng, eng.crop(p.cropId), p) ? [['succession', 'Plan a succession of this…', () => App.openAhead({ mode: 'succession', sourceId: p.id })]] : []),
         ['wait', 'Send to To place', () => App.sendToWait(p.id)],
         ['remove', 'Remove planting', () => App.removePlantings([p.id]), null, 'bad']]
     };

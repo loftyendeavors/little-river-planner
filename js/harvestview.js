@@ -124,6 +124,43 @@
   }
   /** A crop the Successions page can plan to a weekly amount. Tray crops follow weekly demand instead. */
   function plannable(row) { const eng = App.state.engine, c = eng.crop(row.cropId); return row.group !== 'micro' && !!root.LRFSuccessions && root.LRFSuccessions.plans(eng, c); }
+  /** A forecast cell has a supply and dates. Only the grower can say the sales target for that period. */
+  function planFromPeriod(row, col, close) {
+    if (!plannable(row)) return null;
+    const eng = App.state.engine, crop = eng.crop(row.cropId);
+    const stock = model('commercial').rows.find(r => r.key === row.key);
+    const available = F.sendShown(stock ? F.sum(stock.days, col.i0, col.i1) : 0, row.unit);
+    const units = F.unitWord(2, row.unit, row.group) || 'each';
+    const target = h('input', { type: 'number', min: 0, step: 'any', inputmode: 'decimal', dataset: { hook: 'fc-target' } });
+    const note = h('small', { dataset: { hook: 'fc-shortfall' }, 'aria-live': 'polite' });
+    const defaultUnit = eng.unitOf(crop);
+    const choices = !row.thing && row.unit !== defaultUnit
+      ? eng.varietiesOf(crop.id).filter(v => eng.unitOf(crop, v) === row.unit) : [];
+    if (!row.thing && row.unit !== defaultUnit && !choices.length) return null;
+    const variety = choices.length > 1 ? h('select', { 'aria-label': 'Variety for the succession' },
+      choices.map(v => h('option', { value: v.id }, v.name))) : null;
+    const weekly = () => Math.max(0, target.valueAsNumber - available) * 7 / (col.i1 - col.i0 + 1);
+    const button = h('button.btn', { type: 'button', id: 'hvPlan', dataset: { hook: 'fc-succession' }, onclick: () => {
+      const want = target.value === '' ? null : Number(weekly().toFixed(6));
+      close();
+      App.openAhead({ mode: 'succession', by: 'amount', cropId: row.cropId, thing: row.thing || '',
+        varietyId: variety ? variety.value : choices[0]?.id, from: E.d2s(col.start), to: E.d2s(col.end), want });
+    } }, 'Plan a succession for these dates…');
+    function update() {
+      const empty = target.value === '' && !target.validity.badInput, gap = weekly();
+      const tooLarge = gap > 1e6;
+      button.disabled = !empty && (!target.validity.valid || !(gap > 0) || tooLarge);
+      const have = F.sendAmount(available, row.unit, row.group);
+      note.textContent = empty ? `${have} available to sell. Enter a target here or an additional amount in Successions.`
+        : !target.validity.valid ? 'Enter a sales target of zero or more.' : tooLarge ? 'The run can plan up to 1,000,000 a week.'
+        : gap > 0 ? `${have} available to sell. Plan the remaining ${num(target.valueAsNumber - available, 3)} ${units}.`
+        : `${have} available to sell. The forecast covers this target.`;
+    }
+    target.addEventListener('input', update);
+    update();
+    return { fields: h('div', h('label.fld', h('span', `Sales target for this period (${units})`), target, note),
+      variety ? h('label.fld', h('span', 'Variety for the succession'), variety) : null), button };
+  }
   /** How a planting is picked, in the Assumptions list's own words, as a tag. */
   const PATTERN = { weekly: 'Gradually', once: 'Clear', spread: 'On demand' };
   /**
@@ -153,6 +190,7 @@
         x.ahead ? tag('early', `${num(x.ahead)} d early`, `First picked ${num(x.ahead)} days before its days to harvest: “Days before” on its crop’s card`) : null,
         x.age ? tag('stand', `${x.age.season === 1 ? '1st' : '2nd'} season · ${num(x.age.share, 1)}%`, `Planted in ${x.age.year}: a young stand gives this share of a mature stand’s yield, from its crop’s card`) : null];
     };
+    const planning = planFromPeriod(row, col, close);
     const lead = `${F.amount(total, row.unit, row.group)} ${picked ? 'picked' : 'to sell'} · ${num(list.length)} planting${list.length === 1 ? '' : 's'}`;
     const dialog = h('dialog.dialog.wide', { id: 'hvFrom', dataset: { hook: 'fc-from' }, oncancel: e => { e.preventDefault(); close(); } },
       h('h2', `${row.name}${part === 'carried' ? `, carried in from ${(row.carriedFrom && row.carriedFrom.length ? row.carriedFrom : [App.planYear() - 1]).join(' and ')}` : ''}, ${colTitle(col)}`), h('p', { dataset: { hook: 'fc-from-lead' } }, lead, !picked && worth >= 1 ? ` · ${money(worth)}` : ''),
@@ -162,10 +200,9 @@
           h('span.row-detail', h('span', { dataset: { hook: 'fc-from-bed' } }, App.bedLabel(x.r.b, eng)), ` · ${when(x)}`), h('span.fc-tags', tags(x))),
         h('span.row-word', h('span', { dataset: { hook: 'fc-from-amount' } }, F.amount(x.here, row.unit, row.group)),
           h('button.link', { type: 'button', dataset: { hook: 'fc-from-map' }, onclick: () => go(x) }, 'Show on the map'))))),
+      planning?.fields,
       h('div.dialog-actions',
-        // more of it wanted from that week: the Successions page opens on a run of this crop, to an amount a week, picked from that week
-        plannable(row)
-          ? h('button.btn', { type: 'button', id: 'hvPlan', dataset: { hook: 'fc-succession' }, title: `A run of ${row.name.toLowerCase()} to an amount a week, picked from this week: opens the Successions page`, onclick: () => { close(); App.openAhead({ thing: row.thing || '', mode: 'succession', by: 'amount', cropId: row.cropId, from: E.d2s(col.start) }); } }, 'Plan a succession from this week…') : null,
+        planning?.button,
         h('span.grow'),
         h('button.btn.primary', { type: 'button', onclick: close }, 'Done')));
     document.body.append(dialog); dialog.showModal();
@@ -266,9 +303,9 @@
       const peak = maxOf != null ? maxOf : Math.max(0, ...cols.map(c => F.sum(series, c.i0, c.i1)));
       return h('tr' + cls, label, total, cols.map(c => {
         const v = F.sum(series, c.i0, c.i1), text = cash$ ? cash(v) : qty(v), full = cash$ ? money(v) : unit ? F.amount(v, unit.unit, unit.group) : text;
-        if (!text) return h('td.hv-c.zero' + (isNow(c) ? '.now' : ''));
+        if (!text && !row) return h('td.hv-c.zero' + (isNow(c) ? '.now' : ''));
         const p = peak > 0 ? Math.round(10 + 52 * Math.min(1, v / peak)) : 10;
-        return h('td.hv-c' + (isNow(c) ? '.now' : ''), { style: { '--p': p + '%' }, title: row ? `${row.name}, ${colTitle(c)}: ${full}` : `${colTitle(c)}: ${full}`, onclick: row ? () => sources(row, c, part) : null }, say(text, cash$ ? v : F.shown(v)));
+        return h('td.hv-c' + (!text ? '.zero' : '') + (isNow(c) ? '.now' : ''), { style: text ? { '--p': p + '%' } : null, dataset: row ? { hook: 'fc-period', from: E.d2s(c.start), to: E.d2s(c.end) } : null, title: row ? `${row.name}, ${colTitle(c)}: ${full}` : `${colTitle(c)}: ${full}`, onclick: row ? () => sources(row, c, part) : null }, say(text, cash$ ? v : F.shown(v)));
       }));
     };
     const plain = (cls, label, total, value) => h('tr' + cls, label, total, cols.map(c => { const n = value(c), v = cash(n); return h('td' + (isNow(c) ? '.now' : ''), { title: v ? `${colTitle(c)}: ${v}` : null }, say(v, n) || ''); }));

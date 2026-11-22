@@ -45,9 +45,9 @@
 
   "rows in the figure, compact": 31,
 
-  "runs, backup": 30,
+  "runs, backup": 36,
 
-  "runs, compact": 30,
+  "runs, compact": 36,
 
   "scale": 8,
 
@@ -207,6 +207,8 @@
 
   "step5b": 63,
 
+  "succession-spaces": 31,
+
   "successions": 52,
 
   "swap": 32,
@@ -321,6 +323,8 @@
   "room-site": 35,
 
   "step5b-site": 63,
+
+  "succession-spaces-site": 31,
 
   "successions-site": 52,
 

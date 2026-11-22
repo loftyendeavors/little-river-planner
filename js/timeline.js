@@ -508,8 +508,8 @@
     }
     const n = list.length;
     body.append(h('div.tl-section.tl-waithead', { dataset: { section: 'waiting' }, title: 'Not in a bed yet, so not in the forecast, seed or sowing lists.' },
-      h('span', 'To place', h('small', n ? `${plural(n, 'planting')} with no bed yet · counted nowhere until placed` : 'what the series would leave to place'))));
-    body.append(rowEl('div.tl-row.tl-wait', { dataset: { wait: '' } }, h('div.tl-label', { title: 'Plantings a series made that have no bed yet. Drag one onto a row to place it.' }, h('b', 'No bed yet'), h('small', 'drag onto a row')), lane, true));
+      h('span', 'To place', h('small', n ? `${plural(n, 'planting')} with no bed yet · counted nowhere until placed` : 'what the succession would leave to place'))));
+    body.append(rowEl('div.tl-row.tl-wait', { dataset: { wait: '' } }, h('div.tl-label', { title: 'Plantings waiting for a space. Drag one onto a row to place it.' }, h('b', 'No bed yet'), h('small', 'drag onto a row')), lane, true));
   }
 
   function render() {

@@ -25,11 +25,20 @@
 
   // ───────────────────────────── a planting with no bed yet, in the details panel ─────────────────────────────
   const W = { key: '', all: false };
+  function waitingSize(eng, w) {
+    const origin = eng.bedOf(w.wait?.from), run = w.run && S.runs(eng.plan).find(x => x.id === w.run.id);
+    const kind = run?.kind || (origin && eng.spaceKind(origin)) || 'bed';
+    if (kind === 'tower') return 'One tower';
+    if (kind === 'bench') return w.trays ? plural(w.trays, 'tray') : 'Whole bench';
+    if (kind === 'containers') return w.ft ? plural(w.ft, 'container') : 'Whole group';
+    return '';
+  }
   function waitingPanel(host, sel, redraw) {
     const eng = App.state.engine, w = App.waitingOne(sel.id);
     if (!w) return false;
     if (W.key !== w.id) Object.assign(W, { key: w.id, all: false });
     const crop = eng.crop(w.cropId) || { name: 'Crop' }, v = eng.variety(w.varietyId), color = eng.cropColor(crop), a = S.about(eng, w), wait = w.wait || {}, date = E.s2d(w.date);
+    const size = waitingSize(eng, w);
     const mates = wait.s ? App.waiting().filter(q => q.wait && q.wait.s === wait.s) : [w];
     const set = (change, label) => { if (!App.updateWaiting(w.id, change, label)) redraw(); };
     const variety = h('select', { id: 'wtVariety', onchange: e => set({ varietyId: e.target.value || null }, 'Change variety') }, h('option', { value: '' }, 'No variety chosen'), eng.varietiesOf(w.cropId).map(q => h('option', { value: q.id, selected: q.id === w.varietyId }, q.name)));
@@ -42,7 +51,7 @@
       h('p.wt-note', { id: 'wtNote' }, 'It counts toward nothing until it is on a bed: not seeds required, the sowing lists, the benches or the forecast.'),
       h('section.insp-section.form',
         h('div.field-pair', field(r && r.c.method !== 'TP' ? 'Sowing date' : 'Goes in', h('input', { type: 'date', id: 'wtDate', value: w.date, onchange: e => { if (E.validDate(E.s2d(e.target.value))) set({ date: e.target.value }, 'Change date'); else redraw(); } })),
-          field('Length (ft)', h('input', { type: 'number', id: 'wtFt', min: 1, max: 2000, step: 0.5, value: w.ft > 0 ? w.ft : '', placeholder: 'Whole bed', onchange: e => set({ ft: +e.target.value > 0 ? +e.target.value : null }, 'Change length') }))),
+          size ? field('Space', h('span', size)) : field('Length (ft)', h('input', { type: 'number', id: 'wtFt', min: 1, max: 2000, step: 0.5, value: w.ft > 0 ? w.ft : '', placeholder: 'Whole bed', onchange: e => set({ ft: +e.target.value > 0 ? +e.target.value : null }, 'Change length') }))),
         field('Variety', variety)),
       r ? h('section.insp-section', h('h3', 'Its days'),
         h('ol.schedule', { id: 'wtSched' }, r.sow ? h('li', h('span', 'Sow in nursery'), h('b', day(r.sow))) : null, h('li', h('span', r.c.method === 'TP' ? 'Transplant' : 'Direct sow'), h('b', day(r.field))),
@@ -85,7 +94,7 @@
       const c = eng.crop(w.cropId) || { name: 'Crop' }, v = eng.variety(w.varietyId), wait = w.wait || {}, name = v && v.name ? `${c.name} · ${v.name}` : c.name;
       if (q && !name.toLowerCase().includes(q)) continue;
       shown++;
-      const from = wait.from && eng.bedOf(wait.from), size = w.ft > 0 ? `${num(w.ft, 1)} ft` : '', nth = wait.of > 1 ? `${num(wait.k)} of ${num(wait.of)} of a succession` : from ? `taken out of ${App.bedLabel(from)}` : '';
+      const from = wait.from && eng.bedOf(wait.from), size = waitingSize(eng, w) || (w.ft > 0 ? `${num(w.ft, 1)} ft` : ''), nth = wait.of > 1 ? `${num(wait.k)} of ${num(wait.of)} of a succession` : from ? `taken out of ${App.bedLabel(from)}` : '';
       add(host, h('div.lib-row.wait-row' + (sel && sel.type === 'waiting' && sel.id === w.id ? '.armed' : ''), { dataset: { waiting: w.id, hook: 'waiting-row' }, role: 'button', tabindex: 0, title: `${App.cropLabel(w)} · goes in ${day(E.s2d(w.date))}${wait.of > 1 ? ` · ${num(wait.k)} of ${num(wait.of)}` : ''}\nDrag onto a bed. It keeps its date.` },
         T.el({ varietyId: w.varietyId, cropId: w.cropId, color: eng.cropColor(c), label: c.name, size: 40, cls: 'key' }),
         h('div.wait-what', h('b.lib-name', name), h('small', [size, nth].filter(Boolean).join(' · '))),

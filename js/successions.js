@@ -22,7 +22,7 @@
   const App = root.LRFApp, UI = root.LRFUI, E = root.LRFEngine, S = root.LRFSuccession, F = root.LRFForecast, T = root.LRFThumbs;
   const { h, clear, add, num, day } = UI;
   const $ = id => document.getElementById(id);
-  const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many || one + 's'}`;
+  const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many || (one === 'bench' ? 'benches' : one + 's')}`;
   const lower = c => String((c && c.name) || 'crop').toLowerCase();
   const iso = d => (E.validDate(d) ? E.d2s(d) : '');
 
@@ -30,25 +30,45 @@
   // D: the run being planned, as the solver is asked it. pick: what the main part shows, 'draft' or a kept run's id.
   // answer: the one answer to the last action taken here (Add, Remove), with its Undo. shown: the run being planned is drawn on
   // the Timeline as ghosts, after "See them on the Timeline", until it is added, cancelled or opened here again.
-  const D = { cropId: '', varietyId: '', thing: '', by: 'amount', want: '', margin: 0, every: 14, datesFor: 'picking', from: '', to: '', gardenId: '', then: [], drop: [], fresh: true };
+  const D = { cropId: '', varietyId: '', thing: '', by: 'amount', want: '', margin: 0, every: 14, datesFor: 'picking', from: '', to: '', gardenId: '', kind: 'bed', sourceId: '', then: [], drop: [], fresh: true };
   // planning: a run is being planned (the page opened on one, or New run); after Add or Cancel none is, until New run
   const UI_STATE = { pick: 'draft', answer: null, shown: false, removeAll: false, planning: true };
   let dirty = true;
 
-  /** May this crop be planned as a run: one with a harvest to plan by (not a live tray, a stand, a cover crop or bulbs), that some bed in the ground takes. */
-  const plans = (eng, c) => !!c && !c.micro && !eng.isPerennial(c) && !eng.isCoverCrop(c) && c.material !== 'bulb' && +c.dtm > 0 && S.gardensFor(eng, c).some(g => g.kind === 'bed');
-  const crops = eng => S.candidates(eng, false).filter(c => plans(eng, c));
+  /** Bench sowings are repeated from a manual planting. Nursery demand owns its automatic batches. */
+  function plans(eng, crop, planting) {
+    if (!crop || eng.isCoverCrop(crop) || eng.isPerennial(crop) || planting?.established || planting?.liveTray) return false;
+    if (crop.micro) return !!planting && S.suits(eng, crop, eng.bedOf(planting.bedId));
+    if (!(+crop.dtm > 0)) return false;
+    return planting ? S.suits(eng, crop, eng.bedOf(planting.bedId)) : eng.plan.beds.some(b => S.suits(eng, crop, b) && (crop.material !== 'bulb' || eng.isCt(b)));
+  }
+  const crops = (eng, source) => eng.crops().filter(c => plans(eng, c, source && source.cropId === c.id ? source : null));
+  const spaceName = kind => S.kindWord[kind] || 'bed';
+  const sowingName = kind => ({ bed: 'whole bed', tower: 'whole tower', containers: 'whole group', bench: 'bench place' })[kind] || 'whole bed';
+  const blockName = () => D.kind === 'containers' && D.sourceId ? 'block of containers' : sowingName(D.kind);
+  const sourceOf = eng => D.sourceId ? eng.planting(D.sourceId) : null;
+  const canStartHere = (eng, bed) => !!bed && !eng.isPool(bed) && (!eng.isRack(bed) || eng.plantingsIn(bed.id).some(p => plans(eng, eng.crop(p.cropId), p)));
   const thingsFor = (eng, cropId) => (eng.thingsOf ? eng.thingsOf(cropId) : []).filter(t => t.counts);
   const groupOf = (crop, unit) => F.groupOf(crop, unit, (App.state.plan.lrfNext || {}).groups);
   const word = (n, crop, unit) => F.unitWord(n, unit, groupOf(crop, unit)) || unit || 'each';
   /** The unit an amount of a run is in: the thing it is of, where it is of another thing the crop sells, else the crop's (or the variety's) own. */
   const unitFor = (eng, crop, thingId, varietyId) => { const t = thingId ? thingsFor(eng, crop.id).find(x => x.id === thingId) : null; return t ? t.unit : eng.unitOf(crop, varietyId ? eng.variety(varietyId) : undefined); };
   /** The gardens with beds in the ground this crop can go in, in the farm's order. */
-  const bedGardens = (eng, crop) => S.gardensFor(eng, crop).filter(g => g.kind === 'bed');
+  const bedGardens = (eng, crop) => S.runGardens(eng, crop).filter(g => crop.material !== 'bulb' || g.kind === 'containers');
+  function selectGarden(eng, crop, selected, planting) {
+    D.gardenId = selected?.garden.id || '';
+    D.kind = selected?.kind || 'bed';
+    const source = planting && D.kind !== 'bed' && eng.spaceKind(eng.bedOf(planting.bedId)) === D.kind ? planting : S.runSource(eng, crop.id, D.varietyId, D.kind);
+    D.sourceId = source?.id || '';
+    if (source && !D.varietyId && source.varietyId) D.varietyId = source.varietyId;
+    const allowed = new Set(bedGardens(eng, crop).filter(g => g.kind === D.kind).map(g => g.garden.id));
+    D.then = D.then.filter(id => id !== D.gardenId && allowed.has(id));
+    if (D.kind === 'bench') D.by = 'beds';
+  }
   /** The input the solver is given for the run being planned. */
   function ask() {
     const by = D.by === 'beds' ? 'beds' : 'amount';
-    return { cropId: D.cropId, varietyId: D.varietyId || undefined, thing: by === 'amount' && D.thing ? D.thing : undefined, by, ...(by === 'amount' ? { want: +D.want, margin: +D.margin || 0 } : { every: +D.every }),
+    return { cropId: D.cropId, kind: D.kind, sourceId: D.sourceId || undefined, varietyId: D.varietyId || undefined, thing: by === 'amount' && D.thing ? D.thing : undefined, by, ...(by === 'amount' ? { want: +D.want, margin: +D.margin || 0 } : { every: +D.every }),
       datesFor: D.datesFor, from: D.from, to: D.to, reach: 'spacing', wholeBeds: true, gardenIds: D.gardenId ? [D.gardenId] : [], bedIds: [], then: D.then.slice(), drop: D.drop.slice() };
   }
   // the run worked out for the page as it stands, kept until the page or the plan changes
@@ -64,7 +84,7 @@
   // ── starting a run from what it was opened on ──
   /** The first day a crop could go into the garden's ground: the planning date, or the first field date there, whichever is later. */
   function firstDay(eng, crop, gardenId) {
-    const bed = S.spaces(eng, crop, [gardenId])[0], year = App.planYear();
+    const bed = S.spaces(eng, crop, [gardenId]).find(b => eng.spaceKind(b) === D.kind), year = App.planYear();
     const floors = bed ? [eng.firstFieldDate(crop, bed, year), eng.fieldPlantingWindow(bed, year).from].filter(E.validDate) : [];
     const d = new Date(Math.max(+App.state.date, +new Date(year, 0, 1), ...floors.map(x => +x)));
     return d.getFullYear() > year ? new Date(year, 11, 31) : d;
@@ -77,27 +97,40 @@
    * its crop, by amount, from that week. Whatever is not given is the farm's own: a crop it grows, the first garden it can go in.
    */
   function seed(focus) {
-    const eng = App.state.engine, list = crops(eng), ok = c => !!c && list.includes(c), year = App.planYear();
-    const source = focus.sourceId ? eng.planting(focus.sourceId) : null, bed = focus.bedId ? eng.bedOf(focus.bedId) : source ? eng.bedOf(source.bedId) : null, used = new Set(App.state.plan.plantings.map(p => p.cropId));
+    const eng = App.state.engine, year = App.planYear();
+    let source = focus.sourceId ? eng.planting(focus.sourceId) : null;
+    const bed = focus.bedId ? eng.bedOf(focus.bedId) : source ? eng.bedOf(source.bedId) : null;
+    if (!source && bed && eng.isRack(bed)) source = eng.plantingsIn(bed.id).filter(p => plans(eng, eng.crop(p.cropId), p)).sort((a, b) => b.date.localeCompare(a.date))[0];
+    const list = crops(eng, source), ok = c => !!c && list.includes(c) && (!bed || S.suits(eng, c, bed)) && (!bed || c.material !== 'bulb' || eng.isCt(bed));
+    const used = new Set(App.state.plan.plantings.map(p => p.cropId));
     let crop = eng.crop(source ? source.cropId : focus.cropId);
-    if (!ok(crop) && bed) crop = eng.plantingsIn(bed.id).map(p => ({ p, r: eng.calc(p) })).filter(x => x.r && ok(eng.crop(x.p.cropId))).sort((a, b) => b.r.field - a.r.field).map(x => eng.crop(x.p.cropId))[0];
-    if (!ok(crop)) crop = [eng.crop(D.cropId), list.find(c => used.has(c.id)), list[0]].find(ok);
+    if (!ok(crop) && bed) crop = eng.plantingsIn(bed.id).filter(p => ok(eng.crop(p.cropId))).sort((a, b) => b.date.localeCompare(a.date)).map(p => eng.crop(p.cropId))[0];
+    if (!ok(crop)) crop = [eng.crop(D.cropId), list.find(c => used.has(c.id) && ok(c)), list.find(ok)].find(ok);
     Object.assign(D, { cropId: crop ? crop.id : '', varietyId: '', thing: '', by: focus.by === 'beds' ? 'beds' : 'amount', margin: 0, drop: [], then: [], fresh: false });
     if (!crop) return;
     if (source && source.varietyId) D.varietyId = source.varietyId;
     else if (focus.varietyId && eng.varietiesOf(crop.id).some(v => v.id === focus.varietyId)) D.varietyId = focus.varietyId;
     if (focus.thing && thingsFor(eng, crop.id).some(t => t.id === focus.thing)) D.thing = focus.thing;
-    const gardens = bedGardens(eng, crop), garden = bed && gardens.some(g => g.garden.id === bed.gardenId) ? bed.gardenId : focus.gardenId && gardens.some(g => g.garden.id === focus.gardenId) ? focus.gardenId : ((gardens.find(g => g.planted && g.garden.type === 'field') || gardens.find(g => g.planted) || gardens[0] || {}).garden || {}).id || '';
-    D.gardenId = garden;
-    const r = source ? eng.calc(source) : null, hw = Math.max(7, Math.min(28, +crop.hw || 14));
+    const gardens = bedGardens(eng, crop);
+    const selected = (bed && gardens.find(g => g.garden.id === bed.gardenId && g.kind === eng.spaceKind(bed))) ||
+      gardens.find(g => g.garden.id === focus.gardenId && g.kind === 'bed') ||
+      gardens.find(g => g.planted && g.garden.type === 'field' && g.kind === 'bed') ||
+      gardens.find(g => g.planted) || gardens[0];
+    selectGarden(eng, crop, selected, source);
+    const garden = D.gardenId, r = source ? eng.calc(source) : null;
+    const hw = D.kind === 'tower' ? 7 : Math.max(7, Math.min(28, +crop.hw || 14));
     D.every = hw;
     // a planting or a bed: the run's days are planting days, from the day asked (or after the planting); a week on the Forecast:
     // picking days from that week; else picking days, from the first a bed could give
-    if (source && r) { D.by = 'beds'; D.datesFor = 'planting'; D.from = iso(E.addDays(r.field, hw)); D.to = iso(E.addDays(r.field, hw * 4)); }
+    if (source && r && !focus.bedId) { D.by = 'beds'; D.datesFor = 'planting'; D.from = iso(E.addDays(r.field, hw)); D.to = iso(E.addDays(r.field, hw * 4)); }
+    else if (focus.from && focus.to && E.validDate(E.s2d(focus.from)) && E.validDate(E.s2d(focus.to))) {
+      // A Forecast period is the grower's selection, even when every candidate space is too late for it.
+      D.datesFor = 'picking'; D.from = focus.from; D.to = focus.to;
+    }
     else if (focus.bedId || focus.gardenId) { D.datesFor = 'planting'; D.by = focus.by === 'amount' ? 'amount' : 'beds'; const f = E.validDate(E.s2d(focus.from)) ? E.s2d(focus.from) : firstDay(eng, crop, garden); D.from = iso(f); D.to = iso(E.addDays(f, hw * 3)); }
     else {
       D.datesFor = 'picking';
-      const start = firstDay(eng, crop, garden), probe = S.planRun(eng, { cropId: crop.id, varietyId: D.varietyId || undefined, by: 'beds', every: 7, datesFor: 'planting', from: iso(start), to: iso(start), gardenIds: garden ? [garden] : [] });
+      const start = firstDay(eng, crop, garden), probe = S.planRun(eng, { cropId: crop.id, kind: D.kind, sourceId: D.sourceId || undefined, varietyId: D.varietyId || undefined, by: 'beds', every: 7, datesFor: 'planting', from: iso(start), to: iso(start), gardenIds: garden ? [garden] : [] });
       const soonest = probe && !probe.error && probe.sowings[0] ? probe.sowings[0].firstPick : E.addDays(start, +crop.dtm || 60);
       const asked = E.validDate(E.s2d(focus.from)) && E.s2d(focus.from).getFullYear() === year ? E.s2d(focus.from) : null;
       const a = asked && asked > soonest ? asked : soonest, last = new Date(year, 11, 31);
@@ -108,7 +141,7 @@
     }
     // a crop on a yield nobody has checked plans no amount: unless asked for one, it opens by beds, which it can be planned by
     if (D.by === 'amount' && focus.by !== 'amount' && (eng.harvestFor(crop.id).open || {}).yield) D.by = 'beds';
-    if (D.by === 'amount') D.want = String(round(wantedFor(eng, crop)));
+    if (D.by === 'amount') D.want = focus.to ? (focus.want > 0 ? String(focus.want) : '') : String(round(wantedFor(eng, crop)));
   }
   /** What to start the amount on: the crop's ordinary week where the plan already gives it, else what one bed gives in a week of its picking. */
   function wantedFor(eng, crop) {
@@ -116,7 +149,7 @@
     const unit = unitFor(eng, crop, D.thing, D.varietyId), rows = m.rows.filter(r => r.cropId === crop.id && r.unit === unit && (r.thing || '') === D.thing && r.total > 0), s = rows.length ? F.season(m, rows) : null;
     if (s) return rows.reduce((n, r) => n + F.sum(r.days, s.i0, s.i1), 0) / Math.max(1, F.periods(m, 'week', s.i0, s.i1).length);
     // one bed's sowing, read as the thing asked for where it is another thing the crop sells (a run is only of a thing to an amount)
-    const probe = S.planRun(eng, { cropId: crop.id, varietyId: D.varietyId || undefined, ...(D.thing ? { thing: D.thing, by: 'amount', want: 1 } : { by: 'beds' }), every: 7, datesFor: 'planting', from: D.from || iso(App.state.date), to: D.from || iso(App.state.date), gardenIds: D.gardenId ? [D.gardenId] : [] });
+    const probe = S.planRun(eng, { cropId: crop.id, kind: D.kind, sourceId: D.sourceId || undefined, varietyId: D.varietyId || undefined, ...(D.thing ? { thing: D.thing, by: 'amount', want: 1 } : { by: 'beds' }), every: 7, datesFor: 'planting', from: D.from || iso(App.state.date), to: D.from || iso(App.state.date), gardenIds: D.gardenId ? [D.gardenId] : [] });
     const first = probe && !probe.error && probe.sowings[0];
     return first ? first.units * 7 / Math.max(7, E.dayDiff(first.lastPick, first.firstPick) + 1) : 10;
   }
@@ -126,9 +159,8 @@
     if (!crop) return;
     const keep = { by: D.by, datesFor: D.datesFor, from: D.from, to: D.to, every: D.every, gardenId: D.gardenId, then: D.then };
     Object.assign(D, { cropId: id, varietyId: '', thing: '', drop: [] });
-    const gardens = bedGardens(eng, crop), here = new Set(gardens.map(g => g.garden.id));
-    D.gardenId = here.has(keep.gardenId) ? keep.gardenId : ((gardens.find(g => g.planted) || gardens[0] || {}).garden || {}).id || '';
-    D.then = keep.then.filter(g => here.has(g) && g !== D.gardenId);
+    const gardens = bedGardens(eng, crop);
+    selectGarden(eng, crop, gardens.find(g => g.garden.id === keep.gardenId && g.kind === D.kind) || gardens.find(g => g.planted) || gardens[0]);
     if (D.by === 'amount') D.want = String(round(wantedFor(eng, crop)));
   }
 
@@ -137,9 +169,9 @@
   function open(focus) {
     if (!App.state.ready) return;
     const f = focus || {}, eng = App.state.engine, from = f.sourceId ? eng.planting(f.sourceId) : null, asked = eng.crop(from ? from.cropId : f.cropId);
-    if (asked && !crops(eng).includes(asked)) { UI.toast(asked.micro ? `${asked.name} is planned from weekly demand, under Live trays in the Nursery view.` : `${asked.name} has no harvest to plan a succession by.`); return; }
+    if (asked && !plans(eng, asked, from)) { UI.toast(asked.micro ? `${asked.name} is planned from weekly demand, under Live trays in the Nursery view.` : `${asked.name} has no harvest to plan a succession by.`); return; }
     seed(f);
-    Object.assign(UI_STATE, { pick: 'draft', answer: null, shown: false, planning: true });
+    Object.assign(UI_STATE, { pick: 'draft', answer: null, shown: false, removeAll: false, planning: true });
     App.setView('succession');
     render();
     const view = $('suWrap') && $('suWrap').parentElement;
@@ -164,18 +196,23 @@
 
   /** 01 What and how much */
   function whatCard(eng, crop, result) {
-    const list = crops(eng), mine = new Set(S.candidates(eng, true).map(c => c.id)), v = eng.variety(D.varietyId), unit = result && !result.error && result.totals ? result.totals.unit : unitFor(eng, crop, D.thing, D.varietyId), sold = thingsFor(eng, crop.id);
+    const list = crops(eng, sourceOf(eng)), mine = new Set(S.candidates(eng, true).map(c => c.id)), v = eng.variety(D.varietyId), unit = result && !result.error && result.totals ? result.totals.unit : unitFor(eng, crop, D.thing, D.varietyId), sold = thingsFor(eng, crop.id);
     const cropSel = h('select', { id: 'suCrop', dataset: { hook: 'succ-crop' }, onchange: e => { changeCrop(e.target.value); render(); } },
       h('optgroup', { label: 'Crops you grow' }, list.filter(c => mine.has(c.id)).map(c => h('option', { value: c.id, selected: c.id === crop.id }, c.name))),
       h('optgroup', { label: 'Every other crop' }, list.filter(c => !mine.has(c.id)).map(c => h('option', { value: c.id, selected: c.id === crop.id }, c.name))));
-    const varSel = h('select', { id: 'suVariety', dataset: { hook: 'succ-variety' }, onchange: e => set({ varietyId: e.target.value }) }, h('option', { value: '' }, 'No variety chosen'), eng.varietiesOf(crop.id).map(x => h('option', { value: x.id, selected: x.id === D.varietyId }, x.name)));
+    const varSel = h('select', { id: 'suVariety', dataset: { hook: 'succ-variety' }, onchange: e => {
+      D.varietyId = e.target.value;
+      const source = S.runSource(eng, crop.id, D.varietyId, D.kind);
+      D.sourceId = D.kind === 'bench' ? D.sourceId : source?.id || '';
+      set({ drop: [] });
+    }, disabled: D.kind === 'bench' }, h('option', { value: '' }, 'No variety chosen'), eng.varietiesOf(crop.id).map(x => h('option', { value: x.id, selected: x.id === D.varietyId }, x.name)));
     const photo = T.el({ varietyId: D.varietyId || undefined, cropId: crop.id, color: eng.cropColor(crop), label: (v && v.name) || crop.name, size: 40, cls: 'su-photo' });
     photo.dataset.hook = 'succ-photo';
     const amount = D.by === 'amount';
     return cardOf('01', 'What and how much',
       h('div.su-pair', fld('Crop', cropSel), h('div.su-variety', photo, fld('Variety', varSel))),
-      h('div.fld', h('span', 'Plan by', term('Plan by', 'Beds each sowing: one whole bed is sown every so many days, the days you type. A weekly amount: you say how much is wanted each week, and the spacing between sowings is found to give it. A sowing is always one whole bed; only the spacing changes.')),
-        seg('Plan by', { hook: 'succ-plan-by' }, D.by, [['beds', 'Beds each sowing', 'One whole bed every so many days'], ['amount', 'A weekly amount', 'So much a week: the spacing is found']], by => { if (by === 'amount' && !(+D.want > 0)) D.want = String(round(wantedFor(eng, crop))); set({ by, drop: [] }); })),
+      h('div.fld', h('span', 'Plan by', term('Plan by', D.kind === 'bench' ? 'Repeat this planting’s trays every so many days. Weekly live-tray demand is set in Nursery.' : 'Choose the days between sowings, or give a weekly amount and let the planner find the spacing.')),
+        seg('Plan by', { hook: 'succ-plan-by' }, D.by, [['beds', D.kind === 'bed' ? 'Beds each sowing' : 'Days apart', `One ${blockName()} every so many days`], ...(D.kind === 'bench' ? [] : [['amount', 'A weekly amount', 'So much a week: the spacing is found']])], by => { if (by === 'amount' && !(+D.want > 0)) D.want = String(round(wantedFor(eng, crop))); set({ by, drop: [] }); })),
       amount ? h('div.su-three',
         fld('Wanted a week', h('input', { type: 'number', id: 'suWant', min: 0, step: 'any', value: D.want, dataset: { hook: 'succ-want' }, onchange: e => set({ want: e.target.value, drop: [] }) })),
         sold.length ? fld('Sold by', h('select', { id: 'suThing', dataset: { hook: 'succ-thing' }, onchange: e => set({ thing: e.target.value, drop: [] }) },
@@ -183,12 +220,12 @@
           : fld('Sold by', h('input', { type: 'text', id: 'suUnit', disabled: true, value: word(2, crop, unit), dataset: { hook: 'succ-unit' } })),
         fld('Margin %', h('input', { type: 'number', id: 'suMargin', min: 0, max: 1000, step: 1, value: D.margin, dataset: { hook: 'succ-margin' }, onchange: e => set({ margin: e.target.value, drop: [] }) }),
           term('Margin', 'is planted on top of the amount wanted a week, as a share of it: 10 % on 100 a week plans for 110.')))
-        : h('p.su-line', { dataset: { hook: 'succ-each' } }, 'Each sowing is one whole bed.'));
+        : h('p.su-line', { dataset: { hook: 'succ-each' } }, `Each sowing is one ${blockName()}.`));
   }
   /** 02 When */
   function whenCard(eng, crop, result) {
     const picking = D.datesFor === 'picking', amount = D.by === 'amount', ok = result && !result.error;
-    const spacing = ok && result.every ? `One whole bed every ${plural(result.every, 'day')}.` : '';
+    const spacing = ok && result.every ? `One ${blockName()} every ${plural(result.every, 'day')}.` : '';
     return cardOf('02', 'When',
       h('div.fld', h('span', 'Dates are for'), seg('Dates are for', { hook: 'succ-dates-are-for' }, D.datesFor, [['picking', 'Picking', 'The first and the last day of picking'], ['planting', 'Planting', 'The first and the last day a bed is planted']], v => set({ datesFor: v, drop: [] }))),
       h('div.su-pair', fld(picking ? 'First picking' : 'First planting', dateBox('suFrom', { hook: 'succ-from' }, D.from, v => set({ from: v, drop: [] }))), fld(picking ? 'Picked through' : 'Last planting', dateBox('suTo', { hook: 'succ-to' }, D.to, v => set({ to: v, drop: [] })))),
@@ -198,20 +235,24 @@
   }
   /** 03 Where */
   function whereCard(eng, crop, result) {
-    const gardens = bedGardens(eng, crop), first = gardens.find(g => g.garden.id === D.gardenId), ok = result && !result.error;
-    const beds = first ? S.spaces(eng, crop, [first.garden.id]) : [], used = new Set(ok ? result.sowings.filter(x => x.bed.gardenId === D.gardenId).map(x => x.bed.id) : []);
-    const gardenSel = h('select', { id: 'suGarden', dataset: { hook: 'succ-garden' }, onchange: e => set({ gardenId: e.target.value, then: D.then.filter(g => g !== e.target.value), drop: [] }) },
-      gardens.map(g => h('option', { value: g.garden.id, selected: g.garden.id === D.gardenId }, `${g.garden.name} (${plural(g.spaces, 'bed')})`)));
-    const others = gardens.filter(g => g.garden.id !== D.gardenId);
+    const gardens = bedGardens(eng, crop), first = gardens.find(g => g.garden.id === D.gardenId && g.kind === D.kind), ok = result && !result.error;
+    const beds = first ? S.spaces(eng, crop, [first.garden.id]).filter(b => eng.spaceKind(b) === D.kind) : [];
+    const used = new Set(ok ? result.sowings.filter(x => x.bed.gardenId === D.gardenId).map(x => x.bed.id) : []), noun = spaceName(D.kind);
+    const gardenSel = h('select', { id: 'suGarden', dataset: { hook: 'succ-garden' }, onchange: e => {
+      selectGarden(eng, crop, gardens[e.target.selectedIndex], sourceOf(eng));
+      set({ drop: [] });
+    } }, gardens.map((g, i) => h('option', { value: gardens.findIndex(other => other.garden.id === g.garden.id) === i ? g.garden.id : g.garden.id + '/' + g.kind,
+      selected: g === first }, `${g.garden.name} (${plural(g.spaces, spaceName(g.kind))})`)));
+    const others = gardens.filter(g => g.kind === D.kind && g.garden.id !== D.gardenId);
     return cardOf('03', 'Where',
       fld('Garden', gardenSel),
       first ? h('div.su-beds', { dataset: { hook: 'succ-beds' } },
-        h('div.su-beds-head', h('span', first.garden.name), h('span', { dataset: { hook: 'succ-beds-used' } }, `${num(used.size)} of ${plural(beds.length, 'bed')} used`)),
-        h('div.su-strip', { role: 'img', 'aria-label': `${first.garden.name}: ${num(used.size)} of its ${num(beds.length)} beds take a sowing of this run`, style: { '--n': String(Math.max(1, beds.length)), '--crop': eng.cropColor(crop) } },
+        h('div.su-beds-head', h('span', first.garden.name), h('span', { dataset: { hook: 'succ-beds-used' } }, `${num(used.size)} of ${plural(beds.length, noun)} used`)),
+        h('div.su-strip', { role: 'img', 'aria-label': `${first.garden.name}: ${num(used.size)} of its ${plural(beds.length, noun)} take a sowing of this run`, style: { '--n': String(Math.max(1, beds.length)), '--crop': eng.cropColor(crop) } },
           beds.map(b => h('i' + (used.has(b.id) ? '.on' : ''), { title: `${App.bedLabel(b)}${used.has(b.id) ? ': a sowing of this run' : ''}` })))) : null,
       others.length ? h('div.fld', h('span', 'Then, if it runs out of room'),
         h('div.su-then', { dataset: { hook: 'succ-then' } }, others.map(g => { const k = D.then.indexOf(g.garden.id);
-          return h('button.chip', { type: 'button', 'aria-pressed': String(k >= 0), dataset: { hook: 'succ-then-garden', garden: g.garden.id }, title: k >= 0 ? 'Used, in this order, when the gardens before it have no bed free' : 'Use it when the gardens before it have no bed free',
+          return h('button.chip', { type: 'button', 'aria-pressed': String(k >= 0), dataset: { hook: 'succ-then-garden', garden: g.garden.id }, title: k >= 0 ? 'Used, in this order, when the gardens before it run out of room' : 'Use it when the gardens before it run out of room',
             onclick: () => set({ then: k >= 0 ? D.then.filter(x => x !== g.garden.id) : [...D.then, g.garden.id], drop: [] }) }, k >= 0 ? `${num(k + 2)} · ${g.garden.name}` : g.garden.name); }))) : null);
   }
 
@@ -259,12 +300,12 @@
   /** One row a bed: the bed and its length, the season's strip, Sow, Plant and First pick in ruled columns, and Drop. */
   function rowsTable(eng, crop, result, sp, editable) {
     const color = eng.cropColor(crop), out = [];
-    out.push(h('div.su-row.su-row-head', h('span', 'Bed'), months(sp), h('span.su-col', 'Sow'), h('span.su-col', 'Plant'), h('span.su-col', 'First pick'), h('span')));
+    out.push(h('div.su-row.su-row-head', h('span', spaceName(D.kind).replace(/^./, c => c.toUpperCase())), months(sp), h('span.su-col', 'Sow'), h('span.su-col', 'Plant'), h('span.su-col', 'First pick'), h('span')));
     const last = result.sowings[result.sowings.length - 1];
     for (const x of result.sowings) {
       const over = result.overshoot && x === last;
       out.push(h('div.su-row', { dataset: { hook: 'succ-row', n: String(x.n), bed: x.bed.id, frost: String(!!x.frost) } },
-        h('span.su-bed', h('b', App.bedLabel(x.bed, eng)), h('small', eng.isSoilBed(x.bed) ? `${num(x.r.physicalLength, 1)} ft` : `${num(eng.capOf(x.bed))} ${eng.capUnit(x.bed)}`),
+        h('span.su-bed', h('b', App.bedLabel(x.bed, eng)), h('small', eng.isSoilBed(x.bed) ? `${num(x.r.physicalLength, 1)} ft` : `${num(x.r.tw ? x.r.plants : x.r.physicalLength)} ${eng.capUnit(x.bed)}`),
           x.frost ? h('small.frost', { dataset: { hook: 'succ-frost' }, title: UI.plainDays(x.frost) }, 'frost') : null),
         strip(eng, sp, result, x, color),
         h('span.su-col', { dataset: { hook: 'succ-sow' } }, day(x.sow)), h('span.su-col', { dataset: { hook: 'succ-plant' } }, day(x.plant)), h('span.su-col', { dataset: { hook: 'succ-first' } }, day(x.firstPick)),
@@ -273,8 +314,8 @@
       if (over) out.push(h('p.su-said', { dataset: { hook: 'succ-overshoot' } }, h('i.dot.amber'), `Picked to ${day(result.overshoot.lastPick)}, ${plural(result.overshoot.days, 'day')} past the last day asked for. It is planted; drop it to end the run sooner.`));
     }
     for (const u of result.unplaced) {
-      const why = u.why.map(w => `${w.why}${w.spaces > 1 ? ` (${num(w.spaces)} beds)` : ''}`).join('; '), room = (u.room || []).map(g => `${g.garden.name} (${plural(g.beds, 'bed')})`).join(', ');
-      out.push(h('p.su-said.su-none', { dataset: { hook: 'succ-unplaced', n: String(u.n) } }, h('i.dot.red'), `${D.datesFor === 'picking' ? 'First picking' : 'Planting'} ${day(u.target)} has no bed in the run’s gardens: ${why || 'no bed is free'}.${room ? ` Room then in ${room}.` : ''}`));
+      const why = u.why.map(w => `${w.why}${w.spaces > 1 ? ` (${plural(w.spaces, spaceName(D.kind))})` : ''}`).join('; '), room = (u.room || []).map(g => `${g.garden.name} (${plural(g.beds, spaceName(D.kind))})`).join(', ');
+      out.push(h('p.su-said.su-none', { dataset: { hook: 'succ-unplaced', n: String(u.n) } }, h('i.dot.red'), `${D.datesFor === 'picking' ? 'First picking' : 'Planting'} ${day(u.target)} has no ${spaceName(D.kind)} in the run’s gardens: ${why || 'no room is free'}.${room ? ` Room then in ${room}.` : ''}`));
     }
     if (D.drop.length && editable) out.push(h('p.su-said', { dataset: { hook: 'succ-dropped' } }, `${plural(D.drop.length, 'sowing')} dropped. `, h('button.link', { type: 'button', dataset: { hook: 'succ-undrop' }, onclick: () => set({ drop: [] }) }, 'Put them back')));
     return h('div.su-table', { dataset: { hook: 'succ-table' } }, out, h('p.su-key', KEY.map(([cls, text]) => h('span', h('i.' + cls), text))));
@@ -286,7 +327,7 @@
     if (!crop) { add(host, h('p.su-empty', { dataset: { hook: 'succ-empty' } }, 'There is no crop with beds to plan a succession of.')); return; }
     const result = current(), ok = result && !result.error, amount = D.by === 'amount';
     const unit = ok ? result.totals.unit : unitFor(eng, crop, D.thing, D.varietyId);
-    const title = amount ? `${crop.name}: ${num(+D.want || 0, 1)} ${word(+D.want || 0, crop, unit)} a week` : `${crop.name}: one bed every ${plural(+D.every || 0, 'day')}`;
+    const title = amount ? `${crop.name}: ${num(+D.want || 0, 1)} ${word(+D.want || 0, crop, unit)} a week` : `${crop.name}: one ${D.kind === 'bed' ? 'bed' : blockName()} every ${plural(+D.every || 0, 'day')}`;
     add(host, h('div.su-title', h('h2', { id: 'suTitle', dataset: { hook: 'succ-title' } }, title), h('span.su-nothing', { dataset: { hook: 'succ-nothing-yet' } }, 'Nothing is added to the plan until you press Add.')),
       h('div.su-cards', whatCard(eng, crop, result), whenCard(eng, crop, result), whereCard(eng, crop, result)));
     const out = h('section.card.su-out', { dataset: { hook: 'succ-plant-out' }, 'aria-label': 'What it would plant' });
@@ -298,7 +339,7 @@
     }
     const t = result.totals, n = result.sowings.length;
     add(out, h('div.su-out-head', h('h3', 'What it would plant'),
-      h('p.frame-figs', { dataset: { hook: 'succ-totals' } }, h('span', h('b', num(n)), n === 1 ? ' sowing' : ' sowings'), h('span', h('b', num(t.beds)), t.beds === 1 ? ' whole bed' : ' whole beds'),
+      h('p.frame-figs', { dataset: { hook: 'succ-totals' } }, h('span', h('b', num(n)), n === 1 ? ' sowing' : ' sowings'), h('span', h('b', num(t.beds)), D.kind === 'bed' ? (t.beds === 1 ? ' whole bed' : ' whole beds') : ` ${spaceName(D.kind)}${t.beds === 1 ? '' : (D.kind === 'bench' ? 'es' : 's')}`),
         t.feet > 0 ? h('span', h('b', num(Math.round(t.feet))), ' ft') : null, h('span', 'about ', h('b', F.amount(t.units, t.unit, groupOf(crop, t.unit)))), t.frost ? h('span', { dataset: { hook: 'succ-frost-count' } }, h('b', num(t.frost)), ` cross${t.frost === 1 ? 'es' : ''} a frost date`) : null)));
     if (amount || result.weeks.length) add(out, weeksChart(eng, crop, result));
     if (n || result.unplaced.length) add(out, rowsTable(eng, crop, result, spanOf(result), true));
@@ -313,7 +354,7 @@
     if (!result || result.error || !result.sowings.length) return;
     const n = result.sowings.length;
     if (!App.addRun(result, `Add a succession of ${lower(crop)}: ${plural(n, 'planting')}`)) { render(); return; }
-    Object.assign(UI_STATE, { pick: result.run.id, shown: false, planning: false, answer: { kind: 'added', id: result.run.id, text: `Added ${plural(n, 'planting')} of ${lower(crop)}, as one run.`, step: App.state.undo[App.state.undo.length - 1] } });
+    Object.assign(UI_STATE, { pick: result.run.id, shown: false, removeAll: false, planning: false, answer: { kind: 'added', id: result.run.id, text: `Added ${plural(n, 'planting')} of ${lower(crop)}, as one run.`, step: App.state.undo[App.state.undo.length - 1] } });
     render();
   }
   function cancel() {
@@ -324,14 +365,14 @@
   }
   function newRun() {
     seed({});
-    Object.assign(UI_STATE, { pick: 'draft', answer: null, shown: false, planning: true });
+    Object.assign(UI_STATE, { pick: 'draft', answer: null, shown: false, removeAll: false, planning: true });
     render();
   }
 
   /** A kept run's line in its own words: "1 bed every 14 days · Jun 1 to Jul 13", or its amount a week. */
   function runLine(eng, run, crop) {
-    const unit = unitFor(eng, crop, run.thing, run.varietyId), dates = `${day(E.s2d(run.from))} to ${day(E.s2d(run.to))}`;
-    return run.by === 'amount' && run.want > 0 ? `${num(run.want, 1)} ${word(run.want, crop, unit)} a week${run.every ? `, a bed every ${plural(run.every, 'day')}` : ''} · ${dates}` : `1 bed every ${plural(run.every || 0, 'day')} · ${dates}`;
+    const noun = run.kind === 'containers' && run.sourceId ? 'block' : run.kind === 'bench' ? 'bench place' : spaceName(run.kind), unit = unitFor(eng, crop, run.thing, run.varietyId), dates = `${day(E.s2d(run.from))} to ${day(E.s2d(run.to))}`;
+    return run.by === 'amount' && run.want > 0 ? `${num(run.want, 1)} ${word(run.want, crop, unit)} a week${run.every ? `, a ${noun} every ${plural(run.every, 'day')}` : ''} · ${dates}` : `1 ${noun} every ${plural(run.every || 0, 'day')} · ${dates}`;
   }
   /** The main part for a run the plan keeps: its plantings, read-only, each a link to the planting; and Remove run. */
   function keptView(host, eng, run) {
@@ -354,10 +395,15 @@
     const held = App.waiting().filter(w => w.run && w.run.id === run.id), all = list.length + held.length;
     if (held.length) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-waiting' } }, `${plural(held.length, 'planting')} of it ${held.length === 1 ? 'waits' : 'wait'} under To place, with no bed yet.`));
     if (!all) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-none' } }, 'None of its plantings is in the plan now.'));
-    const tick = h('input', { type: 'checkbox', checked: UI_STATE.removeAll, dataset: { hook: 'succ-remove-all' }, onchange: e => { UI_STATE.removeAll = e.target.checked; } });
+    const removalText = () => UI_STATE.removeAll && all ? 'The run and its plantings go, as one step.' : 'Its plantings stay, as plain plantings. One Undo puts the run back.';
+    const removalNote = h('span.su-foot-note', { dataset: { hook: 'succ-remove-effect' }, 'aria-live': 'polite' }, removalText());
+    const tick = h('input', { type: 'checkbox', checked: UI_STATE.removeAll, dataset: { hook: 'succ-remove-all' }, onchange: e => {
+      UI_STATE.removeAll = e.target.checked;
+      removalNote.textContent = removalText();
+    } });
     add(out, h('div.su-foot', h('button.btn', { type: 'button', dataset: { hook: 'succ-remove' }, onclick: () => removeIt(run, all) }, 'Remove run'),
       all ? h('label.su-tick', tick, h('span', `Take its ${plural(all, 'planting')} out too`)) : null,
-      h('span.su-foot-note', UI_STATE.removeAll ? 'The run and its plantings go, as one step.' : 'Its plantings stay, as plain plantings. One Undo puts the run back.')));
+      removalNote));
   }
   function removeIt(run, n) {
     const eng = App.state.engine, crop = eng.crop(run.cropId), all = UI_STATE.removeAll && n > 0;
@@ -373,10 +419,10 @@
     return h('aside.card.su-runs', { 'aria-label': 'Runs', dataset: { hook: 'succ-runs' } },
       h('div.su-runs-head', h('h3', 'Runs'), h('button.btn.small', { type: 'button', dataset: { hook: 'succ-new' }, title: 'Start planning a new run', onclick: newRun }, 'New run')),
       crop && UI_STATE.planning ? row(UI_STATE.pick === 'draft', T.el({ varietyId: D.varietyId || undefined, cropId: crop.id, color: eng.cropColor(crop), label: crop.name, size: 40 }), crop.name,
-        D.by === 'amount' ? `${num(+D.want || 0, 1)} ${unitWord} a week · ${day(E.s2d(D.from))} to ${day(E.s2d(D.to))}` : `1 bed every ${plural(+D.every || 0, 'day')} · ${day(E.s2d(D.from))} to ${day(E.s2d(D.to))}`,
+        D.by === 'amount' ? `${num(+D.want || 0, 1)} ${unitWord} a week · ${day(E.s2d(D.from))} to ${day(E.s2d(D.to))}` : `1 ${D.kind === 'bed' ? 'bed' : blockName()} every ${plural(+D.every || 0, 'day')} · ${day(E.s2d(D.from))} to ${day(E.s2d(D.to))}`,
         'Being planned', { hook: 'succ-run', run: 'draft' }, () => { UI_STATE.pick = 'draft'; render(); }) : null,
       kept.map(run => { const c = eng.crop(run.cropId) || { name: 'Crop', id: run.cropId }, n = S.runPlantings(App.state.plan, run.id).length + App.waiting().filter(w => w.run && w.run.id === run.id).length;   // placed and under To place
-        return row(UI_STATE.pick === run.id, T.el({ varietyId: run.varietyId, cropId: c.id, color: eng.cropColor(c), label: c.name, size: 40 }), c.name, runLine(eng, run, c), plural(n, 'sowing'), { hook: 'succ-run', run: run.id }, () => { UI_STATE.pick = run.id; render(); }); }),
+        return row(UI_STATE.pick === run.id, T.el({ varietyId: run.varietyId, cropId: c.id, color: eng.cropColor(c), label: c.name, size: 40 }), c.name, runLine(eng, run, c), plural(n, 'sowing'), { hook: 'succ-run', run: run.id }, () => { if (UI_STATE.pick !== run.id) UI_STATE.removeAll = false; UI_STATE.pick = run.id; render(); }); }),
       kept.length ? null : h('p.su-note', { dataset: { hook: 'succ-runs-none' } }, 'No run is kept in the plan yet.'));
   }
   /** The one answer to the last action taken here, with its Undo while it is still the last step. */
@@ -393,7 +439,7 @@
     const host = $('suWrap'), eng = App.state.engine, keep = host.parentElement.scrollTop;
     if (UI_STATE.planning && (D.fresh || !eng.crop(D.cropId))) seed({ cropId: eng.crop(D.cropId) ? D.cropId : undefined });
     if (UI_STATE.pick !== 'draft' && !App.runs().some(r => r.id === UI_STATE.pick)) UI_STATE.pick = 'draft';
-    if (!helpBtn) helpBtn = UI.help(() => h('p', h('b', 'A succession'), ' is a crop sown again and again through the season so that it is picked without a gap. ', h('b', 'A run'), ' is one set of those sowings, kept as one: one whole bed a sowing, every so many days, or as many as give an amount a week. Nothing is added until Add is pressed, and one Undo takes a run back.'),
+    if (!helpBtn) helpBtn = UI.help(() => h('p', h('b', 'A succession'), ' is a crop sown again and again through the season so that it is picked without a gap. ', h('b', 'A run'), ' is one set of those sowings, kept as one: one whole bed or tower, a block of containers, or a planting’s trays on a bench. Nothing is added until Add is pressed, and one Undo takes a run back.'),
       () => $('suWrap'), null, { id: 'suHelp', label: 'What a succession is', hook: 'succ-help' });
     const kept = App.runs(), ids = new Set(kept.map(r => r.id)), inRuns = [...App.state.plan.plantings, ...App.waiting()].filter(p => p.run && ids.has(p.run.id)).length;   // placed and under To place, of the runs kept
     const main = h('div.su-main');
@@ -405,7 +451,7 @@
       h('div.su-body', runsList(eng), main));
     if (run) keptView(main, eng, run);
     else if (UI_STATE.planning) draftView(main, eng);
-    else add(main, h('div.card.su-out', { dataset: { hook: 'succ-idle' } }, h('p.su-note', 'No run is being planned. A run is one crop, one whole bed every so many days, or as many as give an amount a week.'), h('div.su-foot', h('button.btn.primary', { type: 'button', dataset: { hook: 'succ-new-main' }, onclick: newRun }, 'New run'))));
+    else add(main, h('div.card.su-out', { dataset: { hook: 'succ-idle' } }, h('p.su-note', 'No run is being planned. A run is one crop sown at regular intervals.'), h('div.su-foot', h('button.btn.primary', { type: 'button', dataset: { hook: 'succ-new-main' }, onclick: newRun }, 'New run'))));
     host.parentElement.scrollTop = keep;
   }
   function init() {
@@ -413,5 +459,5 @@
     App.on('view', () => { if (App.state.view === 'succession') { if (UI_STATE.shown) { UI_STATE.shown = false; App.emit('ghost'); } render(); } else if (dirty) { /* drawn when it is opened */ } });
     App.on('date', () => { if (App.state.view === 'succession') render(); });
   }
-  root.LRFSuccessions = { init, open, ghosts, plans, render, state: { D, UI: UI_STATE } };
+  root.LRFSuccessions = { init, open, ghosts, plans, canStartHere, render, state: { D, UI: UI_STATE } };
 })(window);

@@ -46,10 +46,11 @@ SERIES = """async () => { const A = LRFApp, eng = A.state.engine, S = LRFSuccess
     if (!SU.plans(eng, c)) continue;
     A.openAhead({ mode: 'succession', cropId: c.id }); out.crops++;
     if (D.cropId !== c.id || A.state.view !== 'succession') { out.wrong.push(c.name); continue; }
-    const err = document.querySelector('[data-hook="succ-error"]'), gardens = S.gardensFor(eng, c).filter(g => g.kind === 'bed'), planted = gardens.filter(g => g.planted).map(g => g.garden.id);
+    const err = document.querySelector('[data-hook="succ-error"]'), gardens = S.runGardens(eng, c).filter(g => c.material !== 'bulb' || g.kind === 'containers'), planted = gardens.filter(g => g.planted);
+    const selected = g => D.gardenId === g.garden.id && D.kind === g.kind;
     if (err) out.complaints.push([c.name, err.textContent]);
-    if (!planted.length && gardens.length) out.fresh.push([c.name, D.gardenId === gardens[0].garden.id, !!document.querySelector('[data-hook="succ-totals"]') || !!err]);
-    if (planted.length) out.grown.push([c.name, planted.includes(D.gardenId)]);
+    if (!planted.length && gardens.length) out.fresh.push([c.name, selected(gardens[0]), !!document.querySelector('[data-hook="succ-totals"]') || !!err]);
+    if (planted.length) out.grown.push([c.name, planted.some(selected)]);
   }
   A.setView('map'); A.select(null); return out; }"""
 LAYOUT = "(() => { const w = document.querySelector('main.work').getBoundingClientRect(), f = document.getElementById('firstRun'), fr = f.getBoundingClientRect(), top = document.querySelector('header.top').getBoundingClientRect(); return { shown: !f.hidden && fr.height > 0, under: Math.abs(fr.top - top.bottom) < 1.5, above: Math.abs(w.top - (f.hidden ? top.bottom : fr.bottom)) < 1.5, fills: Math.abs(w.bottom - innerHeight) < 1.5, sideways: document.documentElement.scrollWidth > innerWidth + 1, tall: document.documentElement.scrollHeight > innerHeight + 1, across: fr.width >= innerWidth - 1 }; })()"

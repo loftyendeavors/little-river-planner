@@ -188,7 +188,7 @@
     const split = f && f.rows && f.rows.count < f.rows.total;
     const shareFigs = `${whole ? `Whole ${r.ct ? 'group' : r.rack ? 'bench' : 'bed'} · ${num(r.cap, 1)} ${unit}` : `${num(r.physicalLength, 1)} of ${num(r.cap, 1)} ${unit}`}${split ? ` · ${f.rows.count} of ${f.rows.total} rows` : r.rows > 1 && !r.tw && !r.ct && !r.rack ? ` · ${num(r.rows)} rows` : ''}`;
     const nursery = r.cells ? `${num(r.seeds || 0)} seeds · ${r.trays ? plural(Math.ceil(r.trays), r.sowing && r.sowing.medium === 'rockwool' ? 'sheet' : 'tray') : plural(r.cells, 'cell')}` : r.seeds ? `Sown in the bed · ${num(r.seeds)} seeds` : 'Planted out as it is';
-    const canSeries = !!root.LRFSuccessions && root.LRFSuccessions.plans(e, e.crop(p.cropId)) && e.spaceKind(r.b) === 'bed';
+    const canSeries = !!root.LRFSuccessions && root.LRFSuccessions.plans(e, e.crop(p.cropId), p);
     return [
       head(c.vname || c.name, [c.vname ? `${c.name} · ` : '', bedLink(bed)], root.LRFThumbs.el({ varietyId: p.varietyId, cropId: p.cropId, color, label: c.vname || c.name, size: 40 }), () => plantingMenu(p)),
       h('p.card-said', { role: 'status', dataset: { hook: 'card-said' }, hidden: true }),
@@ -208,7 +208,7 @@
         h('p.card-note', p.dtm > 0 ? 'Its own days. Empty the box to follow your list.' : 'From your list. A figure here is this planting’s own.')]),
       fold('nursery', nursery, () => [h('p.card-note', r.sowing && r.sowing.batch ? `${r.sowing.batch.tray ? r.sowing.batch.tray.name : 'Pots'}${r.sowing.shared ? ', in one batch with other plantings of this variety' : ''}.` : r.cells ? 'Sown in trays.' : 'Nothing to sow in trays.'),
         h('button.link', { type: 'button', dataset: { hook: 'card-nursery-full' }, onclick: () => openFull() }, 'Sowing and its record: Planting details')]),
-      canSeries ? fold('succession', 'A run, on its own page', () => [h('p.card-note', 'A run of this crop and variety after this planting, one whole bed every so many days, is planned on the Successions page.'),
+      canSeries ? fold('succession', 'A run, on its own page', () => [h('p.card-note', 'Plan the next sowings of this crop and variety from this planting.'),
         h('button.btn.quiet.small', { type: 'button', dataset: { hook: 'card-succession' }, onclick: () => App.openAhead({ mode: 'succession', sourceId: p.id }) }, 'Plan a succession of this…')]) : null,
       h('div.card-foot', h('button.link', { type: 'button', dataset: { hook: 'card-full' }, title: 'Every box of this planting, in the side panel', onclick: () => openFull() }, 'Planting details'))];
   }
@@ -219,7 +219,7 @@
       items: [
         ['open', 'Open', () => App.select({ type: 'planting', id: p.id })],
         ['date', 'Change the date…', () => { App.select({ type: 'planting', id: p.id }); requestAnimationFrame(() => { const b = card && card.querySelector('.card-date'); if (b) b.click(); }); }],
-        r && root.LRFSuccessions && root.LRFSuccessions.plans(e, e.crop(p.cropId)) && e.spaceKind(r.b) === 'bed' ? ['succession', 'Plan a succession of this…', () => App.openAhead({ mode: 'succession', sourceId: p.id })] : null,
+        r && root.LRFSuccessions && root.LRFSuccessions.plans(e, e.crop(p.cropId), p) ? ['succession', 'Plan a succession of this…', () => App.openAhead({ mode: 'succession', sourceId: p.id })] : null,
         ['full', 'Planting details…', () => { App.select({ type: 'planting', id: p.id }); openFull(); }],
         null,
         ['wait', 'Send to To place', () => toWait(p)],
@@ -359,7 +359,7 @@
     const acts = h('div.card-foot.bed-season-foot',
         readOnly ? null : h('button.btn.small', { type: 'button', id: 'bedLayoutEdit', dataset: { hook: 'card-layout' },
           onclick: () => root.LRFMapEdit.open({ bedId: bed.id, returnToBed: true }) }, 'Edit layout'),
-        readOnly ? null : (e.spaceKind(bed) === 'bed' ? h('button.btn.small', { type: 'button', id: 'bedSeries', dataset: { hook: 'card-succession' }, onclick: () => App.openAhead({ mode: 'succession', bedId: bed.id, from: E.d2s(App.state.date) }) }, 'Plan a succession here') : null));
+        readOnly ? null : (root.LRFSuccessions?.canStartHere(e, bed) ? h('button.btn.small', { type: 'button', id: 'bedSeries', dataset: { hook: 'card-succession' }, onclick: () => App.openAhead({ mode: 'succession', bedId: bed.id, from: E.d2s(App.state.date) }) }, 'Plan a succession here') : null));
     body = h('div.bed-season', { dataset: { hook: 'bed-season' } },
       bedYear(bed, all, items.map(item => item.opening)),
       sums ? h('p.card-sums', { dataset: { hook: 'card-sums' } }, sums) : null,
@@ -444,7 +444,7 @@
       h('p.card-said', { role: 'status', dataset: { hook: 'card-said' }, hidden: true }),
       editable || !e.isRack(bed) ? h('div.card-acts',
         editable ? h('button.btn.small', { type: 'button', dataset: { hook: 'card-layout' }, onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit layout') : null,
-        e.isRack(bed) || e.spaceKind(bed) !== 'bed' ? null : h('button.btn.small', { type: 'button', dataset: { hook: 'card-succession' }, onclick: () => App.openAhead({ mode: 'succession', bedId: bed.id, from: E.d2s(App.state.date) }) }, 'Plan a succession here')) : null,
+        !root.LRFSuccessions?.canStartHere(e, bed) ? null : h('button.btn.small', { type: 'button', dataset: { hook: 'card-succession' }, onclick: () => App.openAhead({ mode: 'succession', bedId: bed.id, from: E.d2s(App.state.date) }) }, 'Plan a succession here')) : null,
       soil ? bedYear(bed, all, openings) : null,
       h('p.card-sums', { dataset: { hook: 'card-sums' } }, `${plural(all.length, 'planting')} this season · ${now}`),
       editable ? h('label.card-tick', sale, h('span', 'Grown for sale'), use.by === 'garden' ? h('small', `As all of ${g.name || 'its garden'}`) : null) : null,
@@ -458,7 +458,7 @@
       items: [
         ['open', 'Open', () => App.select({ type: 'bed', id: bed.id })],
         editable ? ['layout', 'Edit layout…', () => root.LRFMapEdit.open({ bedId: bed.id, returnToBed: bedSeasonOn(bed) })] : null,
-        e.isRack(bed) || e.spaceKind(bed) !== 'bed' ? null : ['succession', 'Plan a succession here…', () => App.openAhead({ mode: 'succession', bedId: bed.id, from: E.d2s(App.state.date) })],
+        !root.LRFSuccessions?.canStartHere(e, bed) ? null : ['succession', 'Plan a succession here…', () => App.openAhead({ mode: 'succession', bedId: bed.id, from: E.d2s(App.state.date) })],
         bedSeasonOn(bed) ? null : ['full', 'Bed details…', () => { App.select({ type: 'bed', id: bed.id }); openFull(); }]]
     };
   }

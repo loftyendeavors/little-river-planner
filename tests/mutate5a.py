@@ -66,7 +66,7 @@ NODE = [
  ("a put-off with half its days is read as one", "js/week.js", "return x && isDay(x.from) && isDay(x.to) ? x : null; };", "return x && isDay(x.from) ? x : null; };"),
  ("a note cleared is kept as an empty one", "js/week.js", "if (value == null || value === '') delete group[kind]; else group[kind] = value;", "if (value == null) delete group[kind]; else group[kind] = value;"),
  ("a skip with no real day is kept", "js/week.js", "    if (day != null && !isDay(day)) throw new Error('Choose a real calendar date.');\n    return withTask(p, 'skip', kind, day);", "    return withTask(p, 'skip', kind, day);"),
- ("a copy of a planting carries what was put off, skipped and noted", "js/rails.js", " delete next.standId; delete next.tasks; delete next.failed; delete next.startedFrom; }", " delete next.standId; delete next.failed; delete next.startedFrom; }"),
+ ("a copy of a planting carries what was put off, skipped and noted", "js/rails.js", " delete next.standId; delete next.tasks; delete next.failed; delete next.run; delete next.startedFrom; }", " delete next.standId; delete next.failed; delete next.run; delete next.startedFrom; }"),
  ("a skipped job is still listed as open", "js/week.js", "const open = line.members.filter(m => !m.st.done && !m.st.passed && !m.st.skipped), dated", "const open = line.members.filter(m => !m.st.done && !m.st.passed), dated"),
 ]
 PAGE = [

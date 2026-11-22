@@ -1818,6 +1818,9 @@
     const w = { ...p }, asked = !p.bedLayout && +p.ft > 0 && r.physicalLength < r.cap - 1e-6 ? +p.ft : null;
     for (const key of ['bedId', 'ft', 'startFt', 'bedLayout', 'trays', 'shelter', 'out', 'seat']) delete w[key];
     if (asked) w.ft = asked;
+    const run = p.run && runs().find(x => x.id === p.run.id);
+    if (run?.kind === 'containers') w.ft = r.physicalLength;
+    if (run?.kind === 'bench') w.trays = r.physicalLength;
     w.wait = { why: options.why || 'It was taken out of its bed', from: bed.id };
     const ops = [{ before: p, after: null }];
     // the ones it stood with take up its ground: two or more in equal shares; one alone, the whole bed again where it held the full width

@@ -31,7 +31,10 @@ N, P = 'node', 'page'
 SU, AP = 'js/succession.js', 'js/app.js'
 FAULTS = [
  # ── the solver (run_test.cjs) ──
- (N, 'a sowing may take part of a bed', SU, "if (!(res.r.tw || res.r.physicalLength >= res.r.cap - EPS)) return", "if (false) return"),
+ (N, 'a sowing may take part of a bed', SU, "if (!(res.r.tw || res.r.physicalLength >= (o.size ?? res.r.cap) - EPS)) return", "if (false) return"),
+ (N, 'a tower sowing keeps a partial site count', SU, "if (o.kind === 'tower' && res.r && res.r.plants !== eng.capOf(bed))", "if (false)"),
+ (N, 'a container sowing does not follow its block', SU, "const size = source && (kind === 'bench' || kind === 'containers')", "const size = source && kind === 'bench'"),
+ (N, 'a bench accepts a weekly amount', SU, "kind !== 'bench' || !o0.sourceId || o0.by === 'amount'", "kind !== 'bench' || !o0.sourceId"),
  (N, 'a frost date stops a sowing', SU, "    const trouble = seasonTrouble(probe, res.p, res.r);\n", "    const trouble = seasonTrouble(probe, res.p, res.r) || frostNote(probe, res.p, res.r);\n"),
  (N, 'a run holds back a sowing the frost leaves nothing to pick', SU, "if (!(res.r.harvestDays > 0) && !res.r.frostCut) return { why: 'Nothing would be ready before the season ends' };", "if (!(res.r.harvestDays > 0)) return { why: 'Nothing would be ready before the season ends' };"),
  (N, 'a run counts every sowing as crossing a frost date', SU, "frost: list.filter(x => x.frost).length },", "frost: list.length },"),

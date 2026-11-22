@@ -243,6 +243,57 @@ tryCase('60 runs at random, by beds and to an amount, picking and planting dates
   return [tried >= 40 && proposed >= 80 && !bad.length, { tried, proposed, frost, refused, bad: bad.slice(0, 3) }];
 });
 
+// One garden can contain more than one kind of space. Two differently sized groups and a manual bench
+// make a partial opening observable without changing any of the farm's own plantings.
+{
+  const example = core.plantings.find(p => eng.isTower(eng.bedOf(p.bedId)) && p.towerCycle && +p.towerCycle.days > 0 && eng.crop(p.cropId).tower);
+  const micro = eng.crops().find(c => c.micro);
+  const crop = eng.crop(example.cropId), garden = { id: 'run-space-test', name: 'Test house', type: 'greenhouse' };
+  const next = { ...garden, id: 'run-space-next', name: 'Second house' };
+  const space = (id, type, spec, g = garden) => ({ id, bed: id, gardenId: g.id, active: true, type, ...spec });
+  const tower = space('first-tower', '42 Site', { l: 2, w: 2 }), second = space('second-tower', '42 Site', { l: 2, w: 2 }, next);
+  const group = space('group', 'CT', { count: 5 }), bench = space('rack', 'Bench', { trays: 5 }), bed = space('ground', 'Bed', { l: 20, w: 3 });
+  const old = String(year - 1) + '-03-01', first = String(year) + '-06-01';
+  const model = { ...example, id: 'tower-model', bedId: tower.id, date: old, towerUsedSites: 12 };
+  const block = { id: 'container-model', date: old, bedId: group.id, cropId: crop.id, ft: 3, perC: 2 };
+  const trays = { id: 'bench-model', date: old, bedId: bench.id, cropId: micro.id, trays: 3 };
+  const plan = { ...core, gardens: [garden, next], beds: [tower, second, group, bench, bed],
+    plantings: [model, block, trays], lrfNext: { ...core.lrfNext, waiting: [], runs: [] } };
+  const env = E.create(plan, Lib);
+  const input = { cropId: crop.id, by: 'beds', every: 1, datesFor: 'planting', from: first, to: String(year) + '-06-02', gardenIds: [garden.id] };
+  const towerInput = { ...input, kind: 'tower', varietyId: model.varietyId, then: [next.id] };
+  const towers = S.planRun(env, towerInput), blocks = S.planRun(env, { ...input, kind: 'containers' });
+  const manual = { ...input, kind: 'bench', cropId: micro.id, sourceId: trays.id }, benches = S.planRun(env, manual);
+  tryCase('a mixed garden offers its beds, towers and groups separately; each run uses only its own kind', () => {
+    const choices = S.runGardens(env, crop).filter(r => r.garden.id === garden.id);
+    const soils = S.planRun(env, input);
+    return choices.length === 3 && choices.every(r => r.spaces === 1) && new Set(choices.map(r => r.kind)).size === 3 &&
+      soils.sowings.length === 1 && soils.sowings[0].bed.id === bed.id && !('kind' in soils.run);
+  });
+  tryCase('a tower run follows its model cycle, uses every site of each tower, and falls back only to another tower', () =>
+    towers.sowings.length === 2 && towers.run.kind === 'tower' && towers.run.sourceId === model.id &&
+    towers.sowings.every(s => s.r.plants === 42 && JSON.stringify(s.p.towerCycle) === JSON.stringify(model.towerCycle)) &&
+    towers.sowings[0].bed.id === tower.id && towers.sowings[1].bed.id === second.id && towers.sowings[1].then);
+  tryCase('a container run keeps the whole model block and its plants per container, reports the short opening and never splits it', () =>
+    blocks.sowings.length === 1 && blocks.run.sourceId === block.id && blocks.sowings[0].r.physicalLength === 3 &&
+    blocks.sowings[0].r.plants === 6 && blocks.unplaced.length === 1 && !blocks.unplaced[0].room.length);
+  tryCase('a container crop with no model asks for the whole group', () => {
+    const empty = E.create({ ...plan, plantings: [] }, Lib);
+    const proposed = S.planRun(empty, { ...input, kind: 'containers' });
+    return proposed.sowings.length === 1 && !proposed.run.sourceId && proposed.sowings[0].r.physicalLength === group.count;
+  });
+  tryCase('a bench run copies exactly its manual trays and cannot bypass weekly live-tray demand', () =>
+    benches.sowings.length === 1 && benches.sowings[0].p.trays === 3 && benches.run.sourceId === trays.id &&
+    benches.unplaced.length === 1 && !!S.planRun(env, { ...manual, sourceId: undefined }).error &&
+    /weekly demand/i.test(S.planRun(env, { ...manual, by: 'amount', want: 9 }).error));
+  tryCase('a container amount is sized from the model block in the forecast', () => {
+    const ask = { ...input, kind: 'containers', by: 'amount', want: 2, datesFor: 'planting', to: String(year) + '-06-15' };
+    const result = S.planRun(env, ask);
+    return !result.error && result.run.sourceId === block.id && result.sowings.length > 0 &&
+      result.sowings.every(q => q.r.physicalLength === 3 && q.units === env.yieldOf(q.p, q.r).units);
+  });
+}
+
 // ── nothing changes ──
 check('the solver changes nothing in the plan it is given', JSON.stringify(core) === before && JSON.stringify(eng.plan) === before);
 check('a plan with no run has no runs, and a run\'s plantings are read by its id', S.runs(core).length === 0 && S.runs({ lrfNext: { runs: [B.run, { nothing: 1 }] } }).length === 1 && S.runPlantings({ plantings: B.sowings.map(x => x.p).reverse() }, B.run.id).map(p => p.run.n).join() === B.sowings.map(x => x.n).join());
