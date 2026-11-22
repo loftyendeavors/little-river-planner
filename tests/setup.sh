@@ -39,7 +39,7 @@ fi
 
 # The last build before Starting and nursery (0.84) is the compatibility reader for those fields.
 mkdir -p "$W/pre-nursery"
-git -C "$REPO" archive ade8ff903f4f2b7ea5135db5e5e35aea5cbf2b0a js/engine.js js/sowing.js | tar -x -C "$W/pre-nursery"
+git -C "$REPO" archive ade8ff903f4f2b7ea5135db5e5e35aea5cbf2b0a js/engine.js js/sowing.js js/nursery.js js/seedlib.js | tar -x -C "$W/pre-nursery"
 
 # 4. typefaces for the built site, and the parser that compares two scripts
 if [ ! -d "$FONTS/bricolage-grotesque" ] || [ ! -d "$SCRATCH/node_modules/acorn" ]; then
