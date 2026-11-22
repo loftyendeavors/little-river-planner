@@ -515,19 +515,21 @@
     clear($('asCount')).append(...(said.length ? said.flatMap((part, i) => [i ? ' · ' : '', h('span', part.length === 2 ? [h('b', part[0]), part[1]] : [part[1], h('b', part[2]), part[3]])]) : ['Nothing set yet: every number is a default']));
   }
   const HEAD = {
+    start: ['Starting and nursery', 'One crop at a time: how it is started, and what that comes to in trays, seed, mix and bench room. Grey is the farm’s or the library’s figure: type over it to make it yours. Nothing moves until you change a box, and what a box would move is shown under it first: Enter or Tab takes it, Esc leaves it, Undo takes it back.'],
     days: ['Days to first harvest', 'Days to harvest for each crop in each place it grows. Each row says what its days are counted from. Each number is used as it stands, whatever the month or the house. Grey is the default: type over it to make it yours. A variety with its own figure keeps it; a planting with no variety uses the crop’s row.'],
     harvest: ['Yield and price', 'Each crop’s unit, price, harvest pattern and marketable yield (a plant, or a foot of bed) in each place it grows. Grey is the default: type over it to make it yours. A planting with its own figure keeps it until “See what differs…” lets it go.'],
     card: ['Yield and price', 'One crop at a time: its unit, price, marketable yield in each place it grows, and harvest pattern. Each box says what it means. “All on one page” shows the same figures as a list.']
   };
   function chrome() {
-    const harvest = ui.mode === 'harvest', card = harvest && ui.way === 'card', view = document.getElementById('assumeView');
-    $('asTitle').textContent = HEAD[ui.mode][0]; $('asLead').textContent = HEAD[card ? 'card' : ui.mode][1];
-    $('asTable').hidden = harvest; $('ahTable').hidden = !harvest || card;
+    const harvest = ui.mode === 'harvest', start = ui.mode === 'start', card = (harvest && ui.way === 'card') || start, view = document.getElementById('assumeView');
+    $('asTitle').textContent = HEAD[ui.mode][0]; $('asLead').textContent = HEAD[harvest && card ? 'card' : ui.mode][1];
+    $('asTable').hidden = harvest || start; $('ahTable').hidden = !harvest || card; $('snHost').hidden = !start; $('snFigs').hidden = !start;
+    $('asPlaces').hidden = start; $('asKey').hidden = start;
     for (const b of document.querySelectorAll('[data-as-mode]')) b.setAttribute('aria-pressed', String(b.dataset.asMode === ui.mode));
     view.dataset.mode = ui.mode;
     // the second half's two ways, and the farm's own switch for what is kept for personal use
     if (card) view.dataset.way = 'card'; else delete view.dataset.way;
-    $('ahWay').hidden = !harvest; $('ycHost').hidden = !card; $('ahHouseFarm').hidden = !harvest;
+    $('ahWay').hidden = !harvest; $('ycHost').hidden = !card || start; $('ahHouseFarm').hidden = !harvest;
     for (const b of document.querySelectorAll('[data-ah-way]')) b.setAttribute('aria-pressed', String(b.dataset.ahWay === ui.way));
     $('ahHouseOn').checked = App.state.plan.settings.houseKeeps !== false;
   }
@@ -548,6 +550,14 @@
       if (env) { const m = where.get(p.cropId) || new Map(); bump(m, env); where.set(p.cropId, m); if (p.varietyId) { const mv = whereV.get(p.varietyId) || new Map(); bump(mv, env); whereV.set(p.varietyId, mv); } }
     }
     places(); auditNote(); chrome(); countLine(plan);
+    if (ui.mode === 'start') {
+      // Starting and nursery (N1): one crop at a time, drawn by js/startcard.js; its line of figures is its own
+      $('asHints').hidden = true;
+      const made = root.LRFStartCard.render({ eng, plan, q, list, scope: ui.scope, redraw: render });
+      for (const [scope, count] of [['mine', made.mine], ['all', made.all]]) { const el = document.querySelector(`[data-as-scope="${scope}"] small`); if (el) el.textContent = count; }
+      clear($('snFigs')).append(...made.figs.flatMap((f, i) => [i ? ' · ' : '', h('span', f.flatMap((x, j) => j % 2 ? [' ', h('b', x), ' '] : [x]))]));
+      return;
+    }
     if (ui.mode === 'harvest' && ui.way === 'card') {
       $('asHints').hidden = true;
       const made = root.LRFYieldCard.render({ eng, plan, q, list, scope: ui.scope, redraw: render });
@@ -620,6 +630,8 @@
   function init() {
     // "?" says the page's lead, then the glossary's words for the half on show (his notes of Nov 16, section 3), then the controls
     const WORDS = {
+      start: [['Germination', 'The share of seeds that come up. Cells and seed are counted for it.'], ['Spare', 'Seedlings raised over the plants the bed takes.'], ['Seeds a cell', 'Seeds sown in one cell of a plug tray.'],
+        ['Days from sowing to planting', 'How long a crop is in the nursery before it goes in the bed.'], ['Days in rockwool', 'How long a tower crop is in its rockwool sheet before it goes in a tower.'], ['Pots a carrier', 'How many pots one carrying tray holds: 10 or 15.']],
       days: [['Transplanting', 'Days count from the day the crop goes in the bed.'], ['Seeding in trays', 'Days count from sowing in the nursery, so the nursery time comes off.'],
         ['Direct seeding', 'A figure for seed sown in place. As a transplant the crop is in the bed about two weeks less.'], ['Seed to harvest', 'Days in the nursery plus days in the bed, where the crop mostly grows.']],
       harvest: [['Marketable yield', 'What is packed and fit to sell: from a plant, from a tray, or, for a crop sown in rows, from a whole bed whose length and rows the box says.'], ['Row-foot', 'One foot of one row. A sown crop’s yield typed for a bed is kept a row-foot, so a bed gives it by its rows and its length. A figure that does not say its rows is a bed-foot: every bed gives it by its length alone.'], ['Gradually', 'The yield is a week’s picking, every week of the harvest window.'],
@@ -641,7 +653,7 @@
     for (const button of document.querySelectorAll('[data-ah-way]')) button.addEventListener('click', () => { const was = ui.way; ui.way = button.dataset.ahWay; wayKept(ui.way); render(); if (ui.way === 'list' && was === 'card') showRow(root.LRFYieldCard.current()); });
     $('ahHouseOn').addEventListener('change', async e => { if (!await App.setHouseFarm(e.target.checked)) schedule(); });
     App.on('plan', () => { if (audit) audit.close(); if (App.state.view === 'assume') schedule(); else ui.dirty = true; });
-    App.on('view', () => { if (App.state.view !== 'assume') root.LRFYieldCard.reset(); else if (ui.dirty) render(); });
+    App.on('view', () => { if (App.state.view !== 'assume') { root.LRFYieldCard.reset(); root.LRFStartCard.reset(); } else if (ui.dirty) render(); });
   }
 
   /**
@@ -651,7 +663,18 @@
    * opens the list at that crop's row (`options.varieties`: with its varieties shown).
    */
   function setMode(mode, way, crop, options = {}) {
-    ui.mode = mode === 'harvest' ? 'harvest' : 'days';
+    ui.mode = mode === 'harvest' ? 'harvest' : mode === 'start' ? 'start' : 'days';
+    if (ui.mode === 'start' && crop) {
+      // a crop's card: whatever was typed in the search box, or "My crops", would hide it
+      if (ui.query) { ui.query = ''; $('asSearch').value = ''; }
+      const eng = App.state.engine, c = eng.crop(crop), used = new Map();
+      for (const p of App.state.plan.plantings) used.set(p.cropId, (used.get(p.cropId) || 0) + 1);
+      if (c && ui.scope === 'mine' && !root.LRFPanels.isMine(c, used, c.micro ? [] : eng.varietiesOf(c.id), App.state.plan.settings.cropTypeList || {})) {
+        ui.scope = 'all';
+        for (const b of document.querySelectorAll('[data-as-scope]')) b.setAttribute('aria-pressed', String(b.dataset.asScope === 'all'));
+      }
+      root.LRFStartCard.open(crop);
+    }
     if (ui.mode === 'harvest') ui.way = way === 'card' ? 'card' : 'list';
     if (ui.mode === 'harvest' && ui.way === 'card' && crop) root.LRFYieldCard.open(crop);
     if (ui.mode === 'harvest' && ui.way === 'list' && crop) {

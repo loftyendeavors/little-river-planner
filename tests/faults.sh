@@ -54,6 +54,7 @@ swap
 tasks2
 yearedge
 bought
+n1
 tlpick
 messages
 controls
@@ -112,6 +113,7 @@ script() {
     tasks2) SCRIPT=$T/mutate_tasks2.py; ARGS="$APP $F $T $PLAN" ;;
     yearedge) SCRIPT=$T/mutate_yearedge.py; ARGS="$APP $F $T $PLAN" ;;
     bought) SCRIPT=$T/mutate_bought.py; ARGS="$APP $F $T $PLAN" ;;
+    n1) SCRIPT=$T/mutate_n1.py; ARGS="$APP $F $T $PLAN" ;;
     early) SCRIPT=$T/mutate_early.py; ARGS="$APP $F $T $PLAN" ;;
     e2d) SCRIPT=$T/mutate_e2d.py; ARGS="$APP $F $T $PLAN" ;;
     runs) SCRIPT=$T/mutate_runs.py; ARGS="$APP $F $T $PLAN" ;;   # E4 stage 1: the solver of a run (node) and its two steps (page)

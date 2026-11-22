@@ -30,7 +30,4 @@ export default [
       'no-self-compare': 'error',
     },
   },
-  // One fault known when the linter came in: BASES is named twice in the list seedlib.js gives out (harmless: the same value).
-  // The build that next changes seedlib.js takes the second one out, and this block with it.
-  { files: ['js/seedlib.js'], rules: { 'no-dupe-keys': 'off' } },
 ];

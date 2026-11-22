@@ -54,6 +54,9 @@
     'assumptions.crops.*.*.inRow': 'number together',     // the spacing in the row a plant's figure was typed at (E2d): one value with the figure
     'assumptions.crops.*.*.rows': 'number together',      // the rows of the bed a sown crop's figure was typed for (E2d): one value with the figure
     'assumptions.crops.*.*.yield': 'number together',
+    'assumptions.nursery': 'map',                // N1: a crop looked at on Starting and nursery, apart from Yield and price's tick
+    'assumptions.nursery.*': 'object',
+    'assumptions.nursery.*.looked': 'number',
     'assumptions.sell': 'map',
     'assumptions.sell.*': 'object whole',
     'assumptions.sell.*.days': 'number',
@@ -147,7 +150,8 @@
     'crops[].firstSafeField': 'text',
     'crops[].frostTender': 'bool',
     'crops[].germ': 'null|number',
-    'crops[].gh': 'number',
+    'crops[].gh': 'number together',
+    'crops[].startDays': 'number together',
     'crops[].harvestMode': 'text',
     'crops[].harvestUntil': 'text',
     'crops[].hw': 'number',
@@ -159,18 +163,21 @@
     'crops[].liveSow.how': 'text',
     'crops[].liveSow.perCell': 'number',
     'crops[].material': 'text',
-    'crops[].method': 'text',
+    'crops[].method': 'text together',          // how it is started (N1, Started as): one choice with prop and plantingMaterial
     'crops[].micro': 'bool',
     'crops[].mk': 'number',
     'crops[].n': 'number',
     'crops[].name': 'text',
     'crops[].note': 'text',
     'crops[].p': 'number',
+    'crops[].carrierSize': 'number',             // explicit pot carrier size used on benches and in Supplies
+    'crops[].perCarrier': 'number',             // legacy crop-specific bench capacity
     'crops[].perennial': 'bool',
-    'crops[].plantingMaterial': 'text',
+    'crops[].plantingMaterial': 'text together',
+    'crops[].potSize': 'number',                // the pot it is potted up into, inches: set on Starting and nursery (N1)
     'crops[].potUpWk': 'number',
     'crops[].price': 'number',
-    'crops[].prop': 'text',
+    'crops[].prop': 'text together',
     'crops[].rockwoolDays': 'number',
     'crops[].rowSp': 'number',
     'crops[].rowsPerBed': 'null|number',
@@ -178,7 +185,9 @@
     'crops[].seedG': 'null|number',
     'crops[].seedLb': 'null|number',
     'crops[].seedsFt': 'number',
+    'crops[].spare': 'number',                  // N1: its own spare, percent over the plants the bed takes; read only where typed
     'crops[].spc': 'number',
+    'crops[].station': 'bool',                  // N1: a cell of several seeds is one station, no cells over for germination; set only by "Use it"
     'crops[].tower': 'bool',
     'crops[].towerDays': 'number',
     'crops[].tray': 'number',
@@ -327,6 +336,8 @@
     'lrfNext.supplies.have.*': 'number',
     'lrfNext.supplies.mix': 'map',
     'lrfNext.supplies.mix.*': 'number',
+    'lrfNext.supplies.carrierSize': 'number',   // default for both benches and Supplies
+    'lrfNext.supplies.legacyCarrierSize': 'number', // physical size of the original on-hand stock
     'lrfNext.supplies.pockets': 'number',
     'lrfNext.trays': 'text',
     'lrfNext.trayStart': 'text',
@@ -677,8 +688,10 @@
     'varieties[].environmentDefaults': 'object whole',
     'varieties[].environmentDefaults.field': 'object',
     'varieties[].environmentDefaults.field.gh': 'number',
+    'varieties[].environmentDefaults.field.startDays': 'number',
     'varieties[].environmentDefaults.greenhouse': 'object',
     'varieties[].environmentDefaults.greenhouse.gh': 'number',
+    'varieties[].environmentDefaults.greenhouse.startDays': 'number',
     'varieties[].environmentDefaults.v': 'number',
     'varieties[].gh': 'number',
     'varieties[].germ': 'number',
@@ -706,6 +719,7 @@
     'varieties[].seedsPerPacket': 'number',
     'varieties[].sku': 'text',
     'varieties[].source': 'text',
+    'varieties[].spc': 'number',                // N1: its own seeds a cell; read only where typed
     'varieties[].stub': 'bool',
     'varieties[].supplier': 'text',
     'varieties[].supplierPacks': 'lines whole',

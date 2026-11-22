@@ -102,7 +102,7 @@
    * both to different values, the cloud's, and this device's are reported once. (A planting's place and its day are two more
    * such groups, with rules of their own below.)
    */
-  const TOGETHER = { 'nursery.spaces[]': [['from', 'to']], 'crops[]': [['yield', 'yBasis']], 'plantings[]': [['yield', 'yieldBasis']],
+  const TOGETHER = { 'nursery.spaces[]': [['from', 'to']], 'crops[]': [['yield', 'yBasis'], ['method', 'prop', 'plantingMaterial'], ['gh', 'startDays']], 'plantings[]': [['yield', 'yieldBasis']],
     // a crop's figure on the list and the rows, or the spacing, it was typed for (E2d): one value, in a cell under keys the data chose
     'assumptions.crops.*.*': [['yield', 'rows', 'inRow']] };
   const STAMPS = new Set(['updatedAt', 'savedAt']);
