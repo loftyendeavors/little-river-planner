@@ -11,8 +11,10 @@ mode = sys.argv[5] if len(sys.argv) > 5 else "node"; words = [w.lower() for w in
 EN, SW, PI, SC, AS, SD, AP = "js/engine.js", "js/sowing.js", "js/planio.js", "js/startcard.js", "js/assume.js", "js/seeds.js", "js/app.js"
 OLD = app.parent / "old" / "js"
 NODE = [
+ ("older clients can relabel stock already counted by size", "js/nursery.js", "(own && own.legacyCarrierSize || legacyPockets)", "legacyPockets"),
+ ("replacement backup carries half of a nursery interval", PI, "const interval = list === 'crops' && ('startDays' in edits", "const interval = false && ('startDays' in edits"),
  ("whole nursery days are converted back through weeks", EN, "&& c.startDays / 7 === +c.gh ? c.startDays", "&& false ? c.startDays"),
- ("carrier inventory is shared between sizes", "js/nursery.js", "const id = per === legacyPockets ? 'carrier' : 'carrier-' + per;", "const id = 'carrier';"),
+ ("carrier inventory is shared between sizes", "js/nursery.js", "const id = sizedCarriers ? 'carrier-' + per : 'carrier';", "const id = 'carrier';"),
  ("a crop's spare is not read in the sowing", SW, "buffer = ownSpare != null && ownSpare <= 100 ? ownSpare : nonnegative(settings.buffer) ?? 10", "buffer = nonnegative(settings.buffer) ?? 10"),
  ("a crop's spare is read where none is typed", SW, "const ownSpare = nonnegative(crop.spare),", "const ownSpare = nonnegative(crop.spare) ?? 12,"),
  ("one station is read where a cell holds one seed", SW, "const station = crop.station === true && seedsPerCell > 1;", "const station = crop.station === true;"),
@@ -31,6 +33,8 @@ NODE = [
  ("the compact plan drops a variety's seeds a cell", PI, "    'spc'];", "    ];"),
 ]
 PAGE = [
+ ("the old carrier preview survives a replacement of the plan", SC, "if (ui.pending && ui.pending.engine !== eng) ui.pending = null;", ""),
+ ("the crop card drops next season's carriers", SC, "const carrierLots = N.carrierLots(eng, eng.benchItems());", "const carrierLots = N.carrierLots(eng, eng.benchItems().filter(it => it.r.planned.getFullYear() === +eng.plan.settings.year));"),
  ("the part is not in the switch", "index.html", '<button type="button" data-as-mode="start" aria-pressed="false">Starting and nursery</button>', ""),
  ("a crop stands in the wrong group", SC, "return c.method === 'DS' ? 'direct' : 'nursery';", "return 'nursery';"),
  ("the list drops the last crop of a group", SC, "crops: shown.filter(c => groupOf(c) === id && hit(c)).sort(", "crops: shown.filter((c, i, all) => groupOf(c) === id && hit(c) && all.filter(x => groupOf(x) === id).pop() !== c).sort("),

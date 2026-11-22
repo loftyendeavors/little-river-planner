@@ -280,13 +280,20 @@ with sync_playwright() as pw:
     click(f'[data-hook="start-carrier"] [data-hook="start-side"][data-side="{other}"]', 600)
     pm = moves("carrier") or {}
     # the crop's own carriers, as its card counts them: its pots (the plants and their spare) in carriers of so many
-    cr = js(f"const id = {json.dumps(pot['id'])}, stockLots = []; LRFNursery.supplies(S.engine, A.planYear(), (S.plan.lrfNext || {{}}).supplies, null, stockLots); const lots = stockLots.filter(lot => lot.cropId === id), was = S.engine.potsPerCarrier(S.engine.crop(id)), peak = per => Math.max(0, ...lots.map(d => lots.filter(l => l.from <= d.from && d.from < l.to).reduce((n,l) => n + Math.ceil(l.n / per - 1e-9), 0))); return [peak(was), was, peak({other})];") or [0, 0, 0]
+    cr = js(f"const id = {json.dumps(pot['id'])}, stockLots = LRFNursery.carrierLots(S.engine, S.engine.benchItems()); const lots = stockLots.filter(lot => lot.cropId === id), was = S.engine.potsPerCarrier(S.engine.crop(id)), peak = per => Math.max(0, ...lots.map(d => lots.filter(l => l.from <= d.from && d.from < l.to).reduce((n,l) => n + Math.ceil(l.n / per - 1e-9), 0))); return [peak(was), was, peak({other})];") or [0, 0, 0]
     say = lambda n, per: f"{n} carrier{'' if n == 1 else 's'} of {per}"
     check("pressing the other side says what it would move first, and moves nothing yet", pm.get("would") and js("return plan();") == p0.get("plan"), pm)
     check("a crop's own pots a carrier says its own carriers before and after (so many carriers of 10 → so many of 15)", cr[0] != cr[2] and f"{say(cr[0], cr[1])} → {say(cr[2], int(other))}" in pm.get("text", ""), [cr, pm.get("text")])
     click('[data-hook="start-use"]', 700)
     check("Use it takes it as one step", js(f"return S.engine.crop({json.dumps(pot['id'])}).carrierSize;") == int(other) and js("return S.undo.length;") == p0.get("undo", 0) + 1)
     js("A.undo(); return 1;"); wait(500)
+    # The card summarizes every sowing; changing which season Supplies is buying for cannot erase its carrier peak.
+    js("const before = S.plan.settings, after = { ...before, year: +before.year - 5 }; return !!A.setStarting('earlier buying season (check)', [{ kind: 'settings', before, after }]);")
+    wait(450); open_crop(pot["id"])
+    future = card()
+    check("a crop card keeps its future sowings’ carrier peak when the selected buying season has no carrying trays",
+          cr[0] > 0 and say(cr[0], cr[1]) in future.get("comes", "") and js("return !LRFNursery.supplies(S.engine,A.planYear(),(S.plan.lrfNext || {}).supplies).rows.some(r => r.pockets && r.need);"), [future.get("comes"), cr[:2]])
+    js("A.undo(); return 1;"); wait(400)
     size = js("const s = document.querySelector('[data-hook=\"start-pot-size\"]'); return s ? { now: s.value, other: [...s.options].map(o => o.value).find(v => v !== s.value) } : null;") or {}
     q0 = js("return { plan: plan(), undo: S.undo.length };") or {}
     if size.get("other"): page.select_option('[data-hook="start-pot-size"]', size["other"]); wait(600)
@@ -368,6 +375,14 @@ with sync_playwright() as pw:
     check("choosing the farm's carrier size previews both sizes of stock before Use it", sup.get("before", 0) > 0 and pk.get("would") and "10-pot carrying tray" in pk.get("text", "").lower() and "15-pot carrying tray" in pk.get("text", "").lower() and js("return plan();") == sup.get("plan"), pk)
     click('[data-hook="start-moves"][data-key="pockets"] [data-hook="start-use"]', 600)
     check("Use it makes that capacity the farm default in Bench room and Supplies; one Undo restores the plan", js("const own = S.plan.lrfNext.supplies; return own.carrierSize === 10 && S.engine.potsPerCarrier({}) === 10 && LRFNursery.supplies(S.engine,A.planYear(),own).rows.some(r => r.pockets === 10 && r.need > 0);") and js("A.undo(); return plan();") == sup.get("plan"))
+
+    js("A.setSupply('have', 'carrier', 12); return 1;"); wait(300)
+    click('[data-hook="start-pockets"] [data-hook="start-side"][data-side="10"]', 500)
+    stale = js("""const button = H('start-use').find(b=>b.closest('[data-key=pockets]')); if (!button) return false;
+      A.undo(); button.click(); return true;"""); wait(300)
+    check("undoing stock while a farm capacity is being previewed retires the preview and its old button cannot restore that stock",
+          stale and js("return plan();") == sup.get("plan") and not has('[data-key=pockets] [data-hook=start-use]'))
+
 
     # ── a crop not among My crops, opened by name: the list shows all crops, so its card is the one that opens ──
     other = js("const m = new Set(mine().map(c => c.id)); const c = S.engine.crops().find(c => !m.has(c.id) && !S.engine.isCoverCrop(c)); return c ? c.id : null;")

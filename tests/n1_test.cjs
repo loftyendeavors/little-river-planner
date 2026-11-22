@@ -181,7 +181,7 @@ const only = (e2, mine, fields) => {
 }
 // Physical stocks of 10- and 15-pot carriers are counted separately at the peak of each size's use.
 {
-  const lots = []; N.supplies(now, year, null, null, lots);
+  const lots = N.carrierLots(now, now.benchItems());
   const p = clone(plan), chosen = lots[0].cropId, sample = now.plan.plantings.find(x => x.cropId === chosen && now.calc(x).sowing);
   const second = { ...now.crop(chosen), id: 'second-potted-crop', name: 'Second potted crop' };
   const extra = { ...sample, id: 'another-potted-planting', cropId: second.id }; delete extra.varietyId; delete extra.growingDefaults;
@@ -192,6 +192,15 @@ const only = (e2, mine, fields) => {
   const eng = E.create(p, Lib), s = N.supplies(eng, year, own), ten = s.rows.find(r => r.pockets === 10), fifteen = s.rows.find(r => r.pockets === 15);
   check('a crop gets 10-pot carriers on the bench and in Supplies; another crop keeps the farm’s 15-pot carriers', eng.potsPerCarrier(eng.crop(chosen)) === 10 && eng.potsPerCarrier(eng.crop(second.id)) === 15 && ten && fifteen && ten.need > 0 && fifteen.need > 0, [chosen, second.id, ten && ten.need, fifteen && fifteen.need]);
   check('100 existing 15-pot carriers never cover stock needed in 10-pot carriers', ten && fifteen && ten.have === 0 && ten.buy === ten.need && fifteen.have === 100 && fifteen.buy === Math.max(0, fifteen.need - 100), s.rows.filter(r => r.pockets));
+  const base = clone(p), mine = clone(p), remote = clone(p);
+  base.lrfNext.supplies = { have: { carrier: 12 } };
+  mine.lrfNext.supplies = N.setSupply(N.setSupply(base.lrfNext.supplies, 'pockets', null, 10), 'have', 'carrier-10', 7);
+  remote.lrfNext.supplies = N0.setSupply(base.lrfNext.supplies, 'pockets', null, 10);
+  const merged = req('merge.js').merge(base, mine, remote);
+  const joined = merged.ok && N.supplies(E.create(merged.plan, Lib), year, merged.plan.lrfNext.supplies);
+  const have = size => joined && joined.rows.find(r => r.pockets === size)?.have;
+  check('an older client changing pockets cannot relabel twelve 15-pot carriers or hide seven 10-pot carriers', have(15) === 12 && have(10) === 7, [have(15), have(10)]);
+
 }
 
 // ── 3. the build before reads such a plan, and it comes back the same from a file ──
@@ -236,5 +245,11 @@ const only = (e2, mine, fields) => {
   const joined = M.merge(start, mine, theirs), interval = joined.ok && joined.plan.crops.find(x => x.id === id);
   check('two devices choosing 29 days and legacy fractional weeks keep one complete interval', interval &&
     ((interval.gh === 29 / 7 && interval.startDays === 29) || (interval.gh === 4.25 && interval.startDays == null)), interval && [interval.gh, interval.startDays]);
+  const baseRecord = { id, gh: 4 }, localRecord = { ...baseRecord, gh: 29 / 7, startDays: 29 };
+  const prev = { crops: [localRecord], lrfNext: { facts: IO.note(null, 'crops', baseRecord, localRecord, false) } };
+  const backupRecord = { id, gh: 61 / 7 }, replacement = IO.carry(prev, { crops: [backupRecord] }).plan.crops[0];
+  const matching = IO.carry(prev, { crops: [baseRecord] }).plan.crops[0];
+  check('a replacement backup keeps its own nursery interval whole; an unchanged backup takes the full local edit', replacement.gh === backupRecord.gh && replacement.startDays == null && matching.gh === localRecord.gh && matching.startDays === 29, [replacement, matching]);
+
 }
 finished = true;

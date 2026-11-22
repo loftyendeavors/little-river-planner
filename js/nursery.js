@@ -210,6 +210,26 @@
     for (const s of spans) { const n = spans.reduce((sum, x) => sum + (x.from <= s.from && s.from < x.to ? count(x) : 0), 0); if (n > most) { most = n; on = new Date(s.from); } }
     return { most, on };
   }
+  const oldCapacity = own => own && POCKETS.includes(+own.pockets) ? +own.pockets : POCKETS[0];
+  // The old stock row has no size in its key. Remember its size at the first explicit carrier choice.
+  const identifyCarriers = own => ({ ...own, legacyCarrierSize: own && POCKETS.includes(own.legacyCarrierSize) ? own.legacyCarrierSize : oldCapacity(own) });
+  /** Physical carrying trays occupied by each potting lot in the supplied set of bench spans. */
+  function carrierLots(eng, items, capacity = eng.potsPerCarrier) {
+    const lots = new Map();
+    for (const it of items) {
+      const r = it.r, c = r.c;
+      if (it.kind !== 'prop' || r.tw || (c.prop !== 'pot' && c.prop !== 'potup')) continue;
+      const from = c.prop === 'pot' ? it.from : eng.potUpDate(r);
+      if (!from || from >= it.to) continue;
+      const plan = r.sowing, per = capacity(c), key = JSON.stringify([plan && plan.batchId || it.p.id, per]);
+      const lot = lots.get(key) || { from, to: it.to, n: 0, per, cropId: c.id };
+      lot.n += plan && plan.potUpCells != null ? plan.potUpCells : r.cells;
+      if (from < lot.from) lot.from = from;
+      if (it.to > lot.to) lot.to = it.to;
+      lots.set(key, lot);
+    }
+    return [...lots.values()];
+  }
   /**
    * Trays, rockwool, pots, carrying trays, crates and potting mix for the plantings of a plan year, less what is on the shelf.
    * own: the grower's figures (`plan.lrfNext.supplies`): { have: { id: count, bags }, cuft: { id: cubic feet of mix one takes }, pockets: 10 }.
@@ -218,13 +238,12 @@
    * carrying trays, the open trays under rockwool and crates come back, and are counted at the most in use on one day.
    * Mix is in cubic feet and bags. A figure of his beats the round one; one typed in quarts in an earlier build is read as the quarts it was.
    * `figures` is the season() of the same engine and year, when the caller already has it.
-   * When requested, carrierLots receives the potting spans used for the crop card’s peak by carrier capacity.
    */
-  function supplies(eng, year, own, figures, carrierLots) {
-    const fig = figures || season(eng, year), have = (own && own.have) || {}, text = String(year);
-    const legacyPockets = own && POCKETS.includes(+own.pockets) ? +own.pockets : POCKETS[0];
+  function supplies(eng, year, own, figures) {
+    const fig = figures || season(eng, year), have = { ...(own && own.have) }, text = String(year);
+    const legacyPockets = oldCapacity(own);
     const pockets = eng.carrierSize(null, own) || legacyPockets;
-    const lots = new Map(), pots = new Map(), potLots = new Map(), plug = new Map(), liveCells = new Map(), crates = new Map();
+    const lots = new Map(), pots = new Map(), pottedItems = [], plug = new Map(), liveCells = new Map(), crates = new Map();
     let liveOpen = 0, liveUnsaid = 0, sheets = 0, woolCells = 0;
     const trayRow = (cells, name) => { const id = 'tray-' + cells; if (!plug.has(id)) plug.set(id, { id, cells, name: name || `${cells}-cell plug tray`, filled: 0, sold: 0 }); return plug.get(id); };
     // what a job used stays used: a planting marked failed on the day its sowing was recorded has no bench time left, but its
@@ -253,10 +272,7 @@
       if (potted) {
         const size = +c.potSize > 0 ? +c.potSize : 4.5, n = plan && plan.potUpCells != null ? plan.potUpCells : r.cells;
         pots.set(size, (pots.get(size) || 0) + n);
-        // a potting lot stands in whole carrying trays, from the day it is in pots until it leaves the nursery
-        const from = c.prop === 'pot' ? it.from : eng.potUpDate(r), per = eng.carrierSize(c, own) || legacyPockets;
-        const key = JSON.stringify([plan && plan.batchId || it.p.id, per]);
-        if (from && from < it.to) { const lot = potLots.get(key) || { from, to: it.to, n: 0, per, cropId: c.id }; lot.n += n; if (from < lot.from) lot.from = from; if (it.to > lot.to) lot.to = it.to; potLots.set(key, lot); }
+        pottedItems.push(it);
       }
       if (!r.tw && c.prop === 'pot') continue;   // sown straight into pots: no tray
       const u = eng.propOf(r, r.sow);
@@ -301,12 +317,13 @@
     if (liveUnsaid) row('live-unsaid', 'Celled tray, cells a tray not set', liveUnsaid, [{ n: liveUnsaid, text: 'go out as live trays; set the cells a tray under Live trays, in the Sown column' }], liveUnsaid);
     if (sheets) row('rockwool', `Rockwool sheet${woolCells ? `, ${woolCells} cells` : ''}`, sheets, [{ n: sheets, text: 'sown over the season' }], 0, { pack: CASES.rockwool });
     for (const [size, n] of [...pots].sort((a, b) => a[0] - b[0])) row('pot-' + size, `${size} in pot`, whole(n), [{ n: whole(n), text: 'filled over the season' }], whole(n));
-    // Legacy on-hand stock belongs to the size it was counted as. Each size always keeps its own inventory key.
-    const sizedCarriers = !!eng.carrierSize(null, own) || eng.crops().some(c => [10, 15].includes(c.carrierSize));
-    if (carrierLots) carrierLots.push(...potLots.values());
+    const sizedCarriers = !!(own && own.legacyCarrierSize) || !!eng.carrierSize(null, own) || eng.crops().some(c => POCKETS.includes(c.carrierSize));
+    const legacyStockKey = 'carrier-' + (own && own.legacyCarrierSize || legacyPockets);
+    if (sizedCarriers && have[legacyStockKey] == null) have[legacyStockKey] = have.carrier;
+    const potLots = carrierLots(eng, pottedItems, c => eng.carrierSize(c, own) || legacyPockets);
     for (const per of POCKETS) {
-      const id = per === legacyPockets ? 'carrier' : 'carrier-' + per;
-      const lotsOfSize = [...potLots.values()].filter(lot => lot.per === per);
+      const id = sizedCarriers ? 'carrier-' + per : 'carrier';
+      const lotsOfSize = potLots.filter(lot => lot.per === per);
       const at = mostAtOnce(lotsOfSize, lot => Math.ceil(lot.n / per - 1e-9));
       if (at.most || (sizedCarriers && +have[id] > 0)) row(id, sizedCarriers ? `${per}-pot carrying tray` : 'Carrying tray for pots', at.most, [{ n: at.most, text: 'in use at once, at the most', on: at.on }], 0, { pockets: per });
     }
@@ -335,7 +352,7 @@
     const put = (group, key, v) => { next[group] = { ...(next[group] || {}), [key]: v }; };
     if (kind === 'pockets') {
       if (text !== '' && !POCKETS.includes(n)) throw Error(`A carrying tray holds ${POCKETS.slice().sort((a, b) => a - b).join(' or ')} pots.`);
-      if (text === '') delete next.carrierSize; else next.carrierSize = n;
+      if (text === '') delete next.carrierSize; else Object.assign(next, identifyCarriers(next), { carrierSize: n });
     } else if (kind === 'mix') {
       if (text !== '' && (!Number.isFinite(n) || n < 0 || n > 1000)) throw Error('Mix one takes: cubic feet, 0 or more.');
       drop('mix', id);
@@ -344,11 +361,13 @@
       const bags = id === 'mix';
       if (text !== '' && (!Number.isFinite(n) || n < 0 || n > 1e6 || (!bags && !Number.isInteger(n)))) throw Error(bags ? 'On hand: bags, 0 or more.' : 'On hand: a whole number, 0 or more.');
       if (bags) drop('have', 'mix');
+      // After a sized row is edited its canonical count replaces the legacy count for that physical size.
+      if (next.legacyCarrierSize && id === 'carrier-' + next.legacyCarrierSize) drop('have', 'carrier');
       const key = bags ? 'bags' : id;
       if (text === '' || n === 0) drop('have', key); else put('have', key, Math.round(n * 100) / 100);
     }
     return Object.keys(next).length ? next : null;
   }
 
-  return { KINDS, KIND_IDS, STANDS, kindName, DRY_QT_PER_CUFT, BAG_CUFT, BAG_NAME, CASES, POCKETS, MIX_EACH, mixEach, mostAtOnce, blank, addBench, setBench, removeBench, moveBench, addArea, setOptions, setCool, removeCool, sharedNames, roomOf, season, supplies, setSupply };
+  return { KINDS, KIND_IDS, STANDS, kindName, DRY_QT_PER_CUFT, BAG_CUFT, BAG_NAME, CASES, POCKETS, MIX_EACH, mixEach, mostAtOnce, identifyCarriers, carrierLots, blank, addBench, setBench, removeBench, moveBench, addArea, setOptions, setCool, removeCool, sharedNames, roomOf, season, supplies, setSupply };
 });

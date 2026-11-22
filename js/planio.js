@@ -157,6 +157,17 @@
         if (!(field in entry.was)) entry.was[field] = before[field] === undefined ? null : before[field];
         if (same(entry.was[field], after[field])) { delete entry.set[field]; delete entry.was[field]; } else entry.set[field] = after[field] === undefined ? null : after[field];
       }
+      // Weeks and the optional exact interval are one edit, including when just the precision marker changed.
+      if (list === 'crops' && (!same(before.gh, after.gh) || !same(before.startDays, after.startDays)) &&
+          (before.startDays != null || after.startDays != null || 'startDays' in ((group[id] || {}).set || {}))) {
+        const original = (group[id] || {}).was || {};
+        const was = key => key in original ? original[key] : before[key] ?? null;
+        const changed = !same(was('gh'), after.gh) || !same(was('startDays'), after.startDays);
+        for (const key of ['gh', 'startDays']) {
+          if (changed) { entry.was[key] = was(key); entry.set[key] = after[key] ?? null; }
+          else { delete entry.was[key]; delete entry.set[key]; }
+        }
+      }
       if (Object.keys(entry.set).length) group[id] = entry; else delete group[id];
     }
     out[list] = group;
@@ -194,7 +205,23 @@
         if (!index.has(id)) { (facts[list] = facts[list] || {})[id] = fact; continue; }   // not in this backup; perhaps in a later one
         const record = { ...records[index.get(id)] }, set = {}, was = {};
         let applied = false;
-        for (const [field, value] of Object.entries(fact.set || {})) {
+        const edits = fact.set || {}, previous = fact.was || {};
+        const interval = list === 'crops' && ('startDays' in edits || ('gh' in edits && record.startDays != null));
+        if (interval) {
+          // Old notes sometimes held just the day marker; the unchanged weeks are implicit in that marker.
+          const implicit = (edits.startDays ?? previous.startDays) / 7;
+          const oldWeeks = 'gh' in previous ? previous.gh : implicit, newWeeks = 'gh' in edits ? edits.gh : implicit;
+          if (same(record.gh, oldWeeks) && same(record.startDays, previous.startDays) &&
+              (!same(record.gh, newWeeks) || !same(record.startDays, edits.startDays))) {
+            for (const [key, value] of [['gh', newWeeks], ['startDays', edits.startDays]]) {
+              if (value == null) delete record[key]; else record[key] = value;
+              set[key] = value ?? null;
+            }
+            was.gh = oldWeeks ?? null; was.startDays = previous.startDays ?? null; applied = true;
+          }
+        }
+        for (const [field, value] of Object.entries(edits)) {
+          if (interval && (field === 'gh' || field === 'startDays')) continue;
           if (same(record[field], value)) continue;                                // the backup already says so
           if (!same(record[field], (fact.was || {})[field])) continue;             // the backup has changed it since: the backup's value stands
           if (value === null) delete record[field]; else record[field] = value;

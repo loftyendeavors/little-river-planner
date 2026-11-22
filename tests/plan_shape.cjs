@@ -313,7 +313,8 @@
     'lrfNext.supplies.have.*': 'number',
     'lrfNext.supplies.mix': 'map',
     'lrfNext.supplies.mix.*': 'number',
-    'lrfNext.supplies.carrierSize': 'number',   // default for both benches and Supplies; old pockets still identifies old stock
+    'lrfNext.supplies.carrierSize': 'number',   // default for both benches and Supplies
+    'lrfNext.supplies.legacyCarrierSize': 'number', // physical size of the original on-hand stock
     'lrfNext.supplies.pockets': 'number',
     'lrfNext.trays': 'text',
     'lrfNext.trayStart': 'text',
