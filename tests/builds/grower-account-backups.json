@@ -1,0 +1,15 @@
+{
+  "build": "Open the account planner on a grower’s own farm and restore the same account backup from a file picker or a dropped file.",
+  "changes": {
+    "did": "Grower account backups can be downloaded and reopened from the planner, including saved photos and sowing records.",
+    "steps": [
+      "In the grower beta, save the first field to see its beds on Map, or sign in again to reopen the farm.",
+      "Use Backup to download the plan. Open the file or drop it into the grower planner to restore it after confirmation."
+    ]
+  },
+  "code": [
+    "app.js"
+  ],
+  "page": [],
+  "screens": []
+}

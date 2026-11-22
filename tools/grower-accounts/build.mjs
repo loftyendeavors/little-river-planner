@@ -1,3 +1,4 @@
+import { buildPlanner } from './build-planner.mjs';
 import { build } from 'esbuild';
 import { mkdir, copyFile, readFile, writeFile } from 'node:fs/promises';
 
@@ -15,3 +16,5 @@ await copyFile('style.css', 'dist/style.css');
 await copyFile('../../fonts/instrument-sans-latin-standard-normal.woff2', 'dist/instrument.woff2');
 await copyFile('../../fonts/LICENSES.txt', 'dist/FONT-LICENSES.txt');
 await writeFile('dist/index.html', (await readFile('index.html', 'utf8')).replace('PROJECT_ORIGIN', url.origin));
+
+await buildPlanner();

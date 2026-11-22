@@ -3,17 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self' PROJECT_ORIGIN; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; frame-src 'self'; connect-src 'self' PROJECT_ORIGIN; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <title>Grower account · Little River Farm Planner</title>
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<header><strong>Little River</strong><span>Farm planner</span><button id="signout" hidden>Sign out</button></header>
+<header><strong>Little River</strong><span class="product">Farm planner</span><span id="identity" hidden></span><button id="farm-menu" hidden>Farm settings</button><button id="signout" hidden>Sign out</button></header>
+<section id="editor" aria-label="Grower planner" hidden>
+  <p id="editor-loading" role="status">Opening your planner…</p>
+  <div id="editor-issue" hidden><span id="editor-note" role="alert"></span>
+    <button id="retry-save">Retry save</button><button id="draft">Download unsaved plan</button><button id="reopen-editor">Reopen latest farm</button>
+  </div>
+</section>
 <main>
 <section id="entry" hidden>
-  <h1>Grower account</h1>
-  <nav aria-label="Account options"><button id="to-signup" type="button">Create account</button><button id="to-login" type="button">Sign in</button></nav>
+  <h1 id="entry-title">Sign in to your farm</h1>
+  <nav aria-label="Account options"><button id="to-login" type="button">Sign in</button><button id="to-signup" type="button">Create account</button></nav>
   <form id="signup" hidden>
     <label>Email <input name="email" type="email" autocomplete="email" required maxlength="254"></label>
     <label>Password <input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label>
@@ -47,17 +53,18 @@
   <label class="choice"><input name="kind" type="radio" value="empty"> An empty farm</label></fieldset>
   <button class="primary">Create my farm</button>
 </form></section>
-<section id="workspace" hidden><h1 id="farm-title"></h1><p id="summary"></p>
+<section id="workspace" hidden><h1 id="farm-title"></h1><button class="primary" id="open-planner">Open planner</button><p id="summary"></p>
   <ul id="gardens"></ul>
   <details id="field-details"><summary>Add a field and beds</summary><form id="add-field">
-    <label>Field name <input name="field" maxlength="80" required></label>
+    <label>Field name <input id="field-name" name="field" maxlength="80" required></label>
     <div class="dimensions">
     <label>Beds <input name="count" type="number" value="4" min="1" max="100" required></label>
     <label>Length (ft) <input name="length" type="number" value="20" min="1" max="10000" step="any" required></label>
     <label>Width (ft) <input name="width" type="number" value="3.5" min="0.25" max="100" step="any" required></label></div>
-    <button class="primary">Save field</button>
+    <button id="save-field" class="primary">Save field</button>
   </form></details>
   <button id="download">Download planner backup</button>
+  <details><summary>Restore a farm backup</summary><label>Backup from Farm settings<input id="restore-file" type="file" accept=".json,application/json"></label></details>
 </section>
 <p id="message" role="status" aria-live="polite">Opening your account…</p>
 <button id="reload" hidden>Reopen latest farm</button>

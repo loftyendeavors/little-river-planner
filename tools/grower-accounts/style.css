@@ -198,3 +198,20 @@ details form {
   outline:3px solid #97562a;
   outline-offset:3px
 }
+
+header #identity { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+header #farm-menu { margin-left:auto }
+header #farm-menu:not([hidden]) + #signout { margin-left:0 }
+body.editing { height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden }
+body.editing > header { padding:4px 12px; flex:0 0 auto }
+body.editing > header strong, body.editing > header .product { display:none }
+body.editing > main { display:none }
+#editor { display:flex; flex-direction:column; flex:1; min-height:0; position:relative }
+#editor iframe { width:100%; flex:1; min-height:0; border:0; background:white }
+#editor-loading, #editor-issue { margin:0; padding:8px 16px; background:white }
+#editor-issue { border-bottom:1px solid #798a7e }
+#editor-issue button { margin:4px }
+@media (max-width:600px) {
+  body.editing header { gap:4px }
+  body.editing header button { padding:4px 8px; white-space:nowrap }
+}

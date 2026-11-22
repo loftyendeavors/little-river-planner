@@ -28,6 +28,23 @@ export function addField(plan, name, count, length, width) {
   return { ...plan, gardens: [...plan.gardens, garden], beds: [...plan.beds, ...beds] };
 }
 
-export function backup(plan) {
-  return JSON.stringify(planIO.join(plan, null), null, 2);
+export function backup(stored) {
+  const { __growerFiles: files = {}, ...core } = stored;
+  const attic = JSON.parse(files.attic || '{}');
+  const extra = JSON.parse(files['attic-new'] || '{}');
+  const plan = planIO.join(core, { ...attic, varieties: { ...attic.varieties, ...extra.varieties } });
+  // The ordinary planner reads keep and ignores the account copy. Farm settings can also restore photos.
+  plan.lrfNextKeep = { v: 1, savedAt: new Date().toISOString(), keep: core.lrfNext || {},
+    grower: { version: 1, plan: stored } };
+  return JSON.stringify(plan);
+}
+
+export function readGrowerBackup(text) {
+  return growerBackupPlan(JSON.parse(text)?.lrfNextKeep?.grower);
+}
+
+export function growerBackupPlan(record) {
+  if (record?.version !== 1) throw Error('Choose a backup downloaded from your grower account.');
+  planIO.assertPlan(record.plan);
+  return record.plan;
 }

@@ -1,8 +1,8 @@
 # Grower accounts beta
 
-The account site lets a grower verify an email, choose a username, name a farm, and start with an empty farm or their own copy of the planner’s fictional sample. A grower can add fields and beds, return from another device, recover a password, or download a JSON backup for the existing planner. Edits made after importing that file in the full planner are a separate copy.
+After a grower signs in or creates a farm, the same tab opens the planner with their saved gardens, beds and plantings. Farm settings opens the field form and the account backup controls. Returning to the planner or signing out finishes pending saves first.
 
-The static beta uses Supabase Auth and one database row per grower. The browser retains its account session in tab storage. The server selects the farm using the authenticated user ID. A revision check prevents a stale device from replacing a newer save. Only the username-login Edge Function can resolve a username to an email address. The beta imports the shared sample and backup format without opening the existing planner’s storage, sync service, or photo database.
+The beta builds the planner from the repository’s regular entry point. Account edits and attached files are saved to the authenticated owner’s Supabase row with revision checks. A rejected save stays in the editor with retry or recovery actions. The downloaded account backup can be restored in Farm settings and also contains the portable plan for the standalone planner. Other growers’ device storage, folder sync, and snapshots are outside this account workspace.
 
 ## Set up a beta
 
@@ -14,4 +14,6 @@ The static beta uses Supabase Auth and one database row per grower. The browser 
 
 Database tests run the actual migration with PostgreSQL in PGlite under the anonymous, authenticated and service roles. The account tests exercise starter farms, backup format and username sign-in behavior.
 
-The optional browser check uses a local Supabase stack and a test SMTP server that writes the most recent RFC822 message to a file. Build the site with that stack’s URL and publishable key, serve it locally, and deploy the function and migration to the test stack first. With Python Playwright and Chromium installed, set `GROWER_TEST_URL` and `GROWER_TEST_MAIL_FILE` and run `python test/browser_flow.py`. The check creates a synthetic local account, adds four beds on a phone viewport, opens the saved farm in a separate desktop browser, downloads its backup and follows a recovery email. Both the app and email verification links must use loopback addresses.
+The first-farm browser check runs the built planner in independent desktop and phone profiles against a loopback account fixture. It creates four 20-foot beds and three weekly lettuce sowings, checks the first task, and verifies the account backup. After a loopback build, run `python test/first_farm_check.py` with Playwright installed and `CHROMIUM_BIN` pointing to Chromium.
+
+The optional email browser check uses a local Supabase stack and a test SMTP server that writes the most recent RFC822 message to a file. Build the site with that stack’s URL and publishable key, serve it locally, and deploy the function and migration to the test stack first. With Python Playwright and Chromium installed, set `GROWER_TEST_URL` and `GROWER_TEST_MAIL_FILE` and run `python test/browser_flow.py`. The check creates a synthetic local account, adds four beds on a phone viewport, opens Map and Timeline in a separate desktop browser, renames a garden on the map, signs out and back in, downloads its backup and follows a recovery email. Both the app and email verification links must use loopback addresses.

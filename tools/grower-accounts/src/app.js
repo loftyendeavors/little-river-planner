@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { starter, addField, backup } from './farm.js';
+import { createPlannerStore } from './planner-store.js';
+import { starter, addField, backup, readGrowerBackup, growerBackupPlan } from './farm.js';
 
 const returnUrl = location.origin + location.pathname;
 const recoveryLink = new URLSearchParams(location.hash.slice(1)).get('type') === 'recovery';
@@ -15,13 +16,26 @@ let generation = 0;
 let challenge = null;
 let screen = null;
 let busy = false;
+let editor = null;
+let frame = null;
+let bootTimer;
+const interrupted = new Map();
 
 function say(text = '', error = false) {
   byId('message').textContent = text;
   byId('message').dataset.error = String(error);
 }
+function updateFarmMenu() {
+  byId('farm-menu').textContent = farm && !farm.plan.beds.length ? 'Add your first field' : 'Farm settings';
+}
 function show(id) {
   screen = id;
+  document.body.classList.toggle('editing', id === 'planner');
+  byId('editor').hidden = id !== 'planner';
+  byId('farm-menu').hidden = id !== 'planner';
+  updateFarmMenu();
+  byId('identity').hidden = !owner || !farm;
+  byId('identity').textContent = farm?.name || '';
   for (const section of sections) byId(section).hidden = section !== id;
   byId('reload').hidden = true;
   byId('signout').hidden = !owner;
@@ -31,12 +45,15 @@ function entry(mode) {
   challenge = null;
   sessionStorage.removeItem(pendingKey);
   show('entry');
+  byId('entry-title').textContent = mode === 'login' ? 'Sign in to your farm' : 'Create a grower account';
   for (const item of ['signup', 'login']) {
     byId(item).hidden = item !== mode;
     byId('to-' + item).setAttribute('aria-pressed', String(item === mode));
   }
 }
 function clearPrivate() {
+  if (owner && editor?.pending) interrupted.set(owner, editor.recover());
+  closeEditor();
   owner = null;
   farm = null;
   generation++;
@@ -51,12 +68,20 @@ function clearPrivate() {
 function useIdentity(id) {
   if (owner !== id) { clearPrivate(); owner = id; }
 }
-function renderFarm(row) {
+function renderFarm(row, view = 'planner') {
   if (!row || row.owner_id !== owner) throw Error('Reopen your farm to continue.');
+  if (!['gardens', 'beds', 'plantings'].every(key => Array.isArray(row.plan?.[key]))) {
+    throw Error('Your saved farm could not be read. Reopen it to try again.');
+  }
   farm = row;
+  if (view !== 'settings') { launchEditor(view); return; }
   show('workspace');
   byId('farm-title').textContent = row.name;
   const { gardens, beds, plantings } = row.plan;
+  const firstField = beds.length === 0;
+  byId('field-details').open = firstField;
+  byId('save-field').textContent = firstField ? 'Save field and open planner' : 'Save field';
+  if (firstField) byId('field-name').focus();
   byId('summary').textContent = gardens.length + ' gardens · ' + beds.length + ' beds and growing spaces · ' + plantings.length + ' plantings';
   byId('gardens').replaceChildren(...gardens.map(g => {
     const li = document.createElement('li');
@@ -84,7 +109,7 @@ async function openFarm() {
   else show('setup');
 }
 async function enter(session) {
-  if (!session?.user?.id) { clearPrivate(); entry('signup'); return; }
+  if (!session?.user?.id) { clearPrivate(); entry('login'); return; }
   useIdentity(session.user.id);
   sessionStorage.removeItem(pendingKey);
   if (sessionStorage.getItem('grower-password-reset') === owner) show('reset');
@@ -92,6 +117,7 @@ async function enter(session) {
 }
 function lock(value) {
   busy = value;
+  if (frame) frame.inert = value;
   for (const button of document.querySelectorAll('button')) button.disabled = value;
 }
 function run(action) {
@@ -185,6 +211,7 @@ submit('start', async data => {
   say('Farm saved to your account.');
 });
 submit('add-field', async data => {
+  const firstField = farm.plan.beds.length === 0;
   const next = addField(farm.plan, data.get('field'), Number(data.get('count')), Number(data.get('length')), Number(data.get('width')));
   const active = generation;
   const result = await db.rpc('save_grower_farm', { expected_owner: owner, expected_revision: farm.revision, next_plan: next }).single();
@@ -193,18 +220,144 @@ submit('add-field', async data => {
     byId('reload').hidden = false;
     throw Error('Another device saved a newer farm. Reopen it, then add this field again.');
   }
-  renderFarm(check(result));
+  renderFarm(check(result), firstField ? 'field' : 'settings');
   byId('add-field').reset(); byId('field-details').open = false;
   say('Field saved to your account.');
 });
+function closeEditor() {
+  clearTimeout(bootTimer);
+  editor?.dispose();
+  editor = null;
+  frame?.remove();
+  frame = null;
+  byId('editor-issue').hidden = true;
+  byId('editor-note').textContent = '';
+}
+function launchEditor(view) {
+  closeEditor();
+  show('planner');
+  byId('editor-loading').hidden = false;
+  const child = document.createElement('iframe');
+  child.title = 'Farm planner';
+  if (view === 'field') child.dataset.startView = 'map';
+  child.src = './planner/index.html';
+  frame = child;
+  byId('editor').append(child);
+  bootTimer = setTimeout(() => {
+    if (frame === child) editorIssue('The planner is taking longer to open. You can reopen your farm.');
+  }, 25000);
+}
+function editorIssue(message) {
+  byId('editor-note').textContent = message;
+  byId('editor-issue').hidden = false;
+  byId('retry-save').hidden = !editor?.pending || editor.conflicted;
+  byId('draft').hidden = !editor?.pending;
+}
+window.openGrowerEditor = child => {
+  if (!owner || !farm || !frame || child !== frame.contentWindow || editor) return;
+  const id = owner;
+  const tab = frame;
+  const active = () => frame === tab && owner === id;
+  return {
+    startView: tab.dataset.startView,
+    ready() {
+      if (!active()) return;
+      clearTimeout(bootTimer);
+      byId('editor-loading').hidden = true;
+      if (!editor?.pending) byId('editor-issue').hidden = true;
+    },
+    failed() { if (active()) editorIssue('The planner could not open. Reopen your farm to try again.'); },
+    download() {
+      if (active() && editor) downloadPlan(editor.draft());
+    },
+    focusRecovery() {
+      if (active() && editor?.conflicted) byId('draft').focus();
+    },
+    async restore(record) {
+      if (!active() || busy) return;
+      lock(true);
+      try {
+        await editor.flush();
+        if (active()) await replaceFarm(growerBackupPlan(record), id, farm.revision);
+      } catch (error) {
+        if (active()) editorIssue(error.message || 'The backup could not be restored.');
+      } finally { lock(false); }
+    },
+    createStore(onStatus) {
+      if (!active() || editor) throw Error('Reopen your farm.');
+      const draft = interrupted.get(id);
+      editor = createPlannerStore(draft || farm, async (next, revision) => {
+        if (!active()) throw Error('Reopen your farm.');
+        const result = check(await db.rpc('save_grower_farm', {
+          expected_owner: id, expected_revision: revision, next_plan: next
+        }).select('owner_id,revision').single());
+        if (!active() || result.owner_id !== id) throw Error('Reopen your farm.');
+        farm = { ...farm, revision: result.revision, plan: next };
+        updateFarmMenu();
+        return result;
+      }, info => {
+        if (!active()) return;
+        onStatus(info);
+        if (info.state === 'error') editorIssue(info.detail);
+        if (info.state === 'saved') byId('editor-issue').hidden = true;
+      });
+      if (draft) {
+        interrupted.delete(id);
+        // Compare against the last confirmed revision, including after reauthentication.
+        editor.resume();
+      }
+      return editor;
+    }
+  };
+};
+byId('farm-menu').onclick = run(async () => {
+  await editor?.flush();
+  closeEditor();
+  renderFarm(farm, 'settings');
+});
+byId('open-planner').onclick = launchEditor;
+byId('retry-save').onclick = () => editor?.retry();
+byId('reopen-editor').onclick = run(async () => {
+  if (editor?.pending && !window.confirm('Reopen the saved farm and discard unsaved edits in this tab? Download your edits first to keep a copy.')) return;
+  closeEditor(); await openFarm();
+});
+window.addEventListener('beforeunload', event => {
+  if (editor?.pending) { event.preventDefault(); event.returnValue = ''; }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && editor?.pending) editor.flush().catch(() => {});
+});
 byId('reload').onclick = run(openFarm);
-byId('download').onclick = () => {
-  const url = URL.createObjectURL(new Blob([backup(farm.plan)], { type: 'application/json' }));
+function downloadPlan(plan) {
+  const url = URL.createObjectURL(new Blob([backup(plan)], { type: 'application/json' }));
   const link = document.createElement('a');
   link.href = url; link.download = 'farm-plan.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
+}
+byId('download').onclick = () => downloadPlan(farm.plan);
+async function replaceFarm(plan, id, revision) {
+  if (id !== owner || !window.confirm('Replace this farm with the edits in this backup?')) return;
+  const result = await db.rpc('save_grower_farm', { expected_owner: id, expected_revision: revision, next_plan: plan }).single();
+  if (owner !== id) return;
+  if (result.error?.code === '40001') {
+    byId('reload').hidden = false;
+    throw Error('Another device saved a newer farm. Reopen it before restoring.');
+  }
+  renderFarm(check(result));
+}
+byId('restore-file').onchange = run(async event => {
+  const input = event.target;
+  const file = input.files[0];
+  input.value = '';
+  if (!file) return;
+  const id = owner;
+  const revision = farm.revision;
+  const plan = readGrowerBackup(await file.text());
+  await replaceFarm(plan, id, revision);
+});
+byId('draft').onclick = () => downloadPlan(editor.draft());
 byId('signout').onclick = run(async () => {
+  await editor?.flush();
   check(await db.auth.signOut({ scope: 'local' }));
   sessionStorage.removeItem('grower-password-reset');
   if (owner) { clearPrivate(); entry('login'); }

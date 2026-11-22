@@ -2218,7 +2218,7 @@
       if (pictureType(head) || /^\s*\{\s*"format"\s*:\s*"lrf-photos-1"/.test(text) || /^\s*\{\s*"[^"]+"\s*:\s*"data:image\//.test(text)) photos.push(file); else plans.push(file);
     }
     if (photos.length) await addPhotos(photos);
-    if (plans.length) await importBackup(plans[0]);
+    if (plans.length) await root.LRFApp.importBackup(plans[0]);
   }
 
   // ───────────────────────────── the plan folder ─────────────────────────────
