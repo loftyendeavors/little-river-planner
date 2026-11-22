@@ -659,6 +659,64 @@
   function showOnMap(m) { if (isPhone()) return; App.setView('map'); App.setDate(m.r.field); App.select({ type: 'planting', id: m.p.id }); }
   const span = (a, names) => { const x = d(a), y = d(plus(a, 6)); return `${names[x.getMonth()]} ${x.getDate()} – ${y.getMonth() === x.getMonth() ? '' : names[y.getMonth()] + ' '}${y.getDate()}`; };
 
+  function harvestSheet() {
+    const eng = App.state.engine, today = App.today(), chosen = ui.day && ui.day <= today ? ui.day : today;
+    const date = h('input', {type:'date',value:chosen,max:today,'aria-label':'Harvest date'});
+    const search = h('input', {type:'search', placeholder:'Crop, variety, or bed', 'aria-label':'Find planting'});
+    const place = h('select', {'aria-label':'Harvest planting'}), product = h('select', {'aria-label':'Harvest product'});
+    const amount = label => h('input', {type:'number',min:0,inputmode:'decimal','aria-label':label});
+    const marketable = amount('Marketable quantity'), culls = amount('Cull quantity');
+    const history = h('div'), status = h('p', {role:'status'}), save = h('button.btn.primary', {type:'button',dataset:{hook:'pick-save'}},'Record harvest');
+    const id = App.uid(), close = () => dialog.close();
+    const dialog = h('dialog.dialog.pick-sheet', {'aria-label':'Record a harvest'}, h('h2','Record a harvest'),
+      h('label.fld','Date',date), h('label.fld','Find planting',search), h('label.fld','Planting',place),
+      h('label.fld','Product and unit',product), h('div.su-pair', h('label.fld','Marketable',marketable),h('label.fld','Culls',culls)), status, history,
+      h('div.dialog-actions',h('button.btn',{type:'button',onclick:close},'Close'),save));
+    const plantings = eng.plan.plantings.map(p => {
+      const r = eng.calc(p);
+      if (!r || eng.isCoverCrop(r.c)) return null;
+      const label = [eng.crop(p.cropId)?.name, eng.variety(p.varietyId)?.name, App.bedLabel(r.b), day(r.field)].filter(Boolean).join(' · ');
+      return {p,r,label};
+    }).filter(Boolean);
+    let products = [];
+    function quantities() {
+      const item = products[product.selectedIndex], counted = item && root.LRFForecast.counted(item.unit);
+      for (const box of [marketable,culls]) box.step = counted ? '1' : 'any';
+      status.textContent = !marketable.validity.valid || !culls.validity.valid ? (counted ? 'Enter whole, nonnegative quantities.' : 'Enter nonnegative quantities.') : !date.validity.valid ? 'Choose a date on or before today.' : '';
+      save.disabled = !item || !date.value || !date.validity.valid || !marketable.validity.valid || !culls.validity.valid || !((marketable.valueAsNumber || 0) + (culls.valueAsNumber || 0) > 0);
+    }
+    function units() {
+      products = App.harvestProducts(eng.planting(place.value));
+      clear(product);
+      for (const item of products) product.append(h('option', item.name + ' · ' + item.unit));
+      quantities();
+    }
+    function list() {
+      const old = place.value, q = search.value.trim().toLowerCase(), at = d(date.value);
+      const ready = r => r.first <= at && r.last >= at;
+      const choices = plantings.filter(x=>x.label.toLowerCase().includes(q)).sort((a,b)=>Number(ready(b.r))-Number(ready(a.r)) || a.label.localeCompare(b.label));
+      clear(place);
+      for (const x of choices) place.append(h('option',{value:x.p.id}, (ready(x.r) ? 'Ready · ' : '') + x.label));
+      if (choices.some(x => x.p.id === old)) place.value = old;
+      units();
+    }
+    function dayEntries() {
+      const entries = App.harvestEntries().filter(x => x.date === date.value);
+      clear(history);
+      if (entries.length) add(history, h('h3','Recorded on this day'), entries.map(x => h('p',
+        x.name + ' · ' + x.space + ' · ' + num(x.marketable,3) + ' marketable, ' + num(x.culls,3) + ' culls (' + x.unit + ') ',
+        h('button.btn.small', {type:'button',onclick:() => { if (App.takeBackHarvest(x.id)) {dayEntries(); status.textContent='Harvest entry taken back.';} }}, 'Take back'))));
+    }
+    search.oninput = list; date.onchange = () => { list(); dayEntries(); }; place.onchange = units;
+    marketable.oninput = culls.oninput = product.onchange = quantities;
+    save.onclick = () => {
+      const item = products[product.selectedIndex];
+      if (!item || !App.recordHarvest({id, plantingId:place.value, date:date.value, thing:item.thing, unit:item.unit, marketable:marketable.valueAsNumber || 0, culls:culls.valueAsNumber || 0})) return;
+      close(); UI.toast('Harvest recorded · ' + item.name, {label:'Undo',run:App.undo});
+    };
+    dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+    document.body.append(dialog); list(); dayEntries(); dialog.showModal();
+  }
   function render() {
     if (!App.state.ready || App.state.view !== 'sow') { dirty = true; return; }
     dirty = false;
@@ -695,6 +753,7 @@
       h('div.tk-top',
         h('h2', { id: 'wkTitle' }, title),
         h('span.tk-range', { id: 'tkRange' }, k ? [h('button.tk-date', { type: 'button', id: 'tkDate', 'aria-haspopup': 'dialog', title: 'Go to another day', dataset: { act: 'cal' } }, `${near ? FULL[dated.getDay()] + ', ' : ''}${MONTH[dated.getMonth()]} ${dated.getDate()}${dated.getFullYear() === d(now).getFullYear() ? '' : ', ' + dated.getFullYear()}`, CARET()), ' · '] : null, count),
+        h('button.btn', {type:'button',dataset:{hook:'task-pick'},onclick:harvestSheet}, 'Record harvest…'),
         framed || phone ? null : h('button.tk-quiet', { type: 'button', id: 'wkPrint', title: 'The week as a sheet to carry: a box for each task and a place for the day it was done', dataset: { act: 'print' } }, 'Print the week'),
         h('button.tk-dots', { type: 'button', id: 'tkMore', 'aria-label': 'More', 'aria-haspopup': 'dialog', title: 'This season’s records', dataset: { act: 'more', hook: 'tasks-more' } }, '⋯')),
       h('section.tk-week', { id: 'tkBar', 'aria-label': 'The week' },

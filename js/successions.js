@@ -382,12 +382,12 @@
   /** The main part for a run the plan keeps: its plantings, read-only, each a link to the planting; and Remove run. */
   function keptView(host, eng, run) {
     const crop = eng.crop(run.cropId) || { name: 'Crop', id: run.cropId }, list = S.runPlantings(App.state.plan, run.id).map(p => ({ p, r: eng.calc(p) })), v = eng.variety(run.varietyId);
-    add(host, h('div.su-title', h('h2', { id: 'suTitle', dataset: { hook: 'succ-title' } }, `${crop.name}: ${runLine(eng, run, crop).split(' · ')[0]}`)),
+    add(host, h('div.su-title', h('h2', { id: 'suTitle', dataset: { hook: 'succ-title' } }, `${crop.name}: original request · ${runLine(eng, run, crop).split(' · ')[0]}`)),
       h('p.frame-figs', { dataset: { hook: 'succ-kept-figs' } }, h('span', h('b', num(list.length)), list.length === 1 ? ' planting in the plan' : ' plantings in the plan'),
-        h('span', 'from ', h('b', day(E.s2d(run.from))), ' to ', h('b', day(E.s2d(run.to)))), run.datesFor === 'picking' ? h('span', 'dates for picking') : h('span', 'dates for planting')));
+        h('span', 'original request from ', h('b', day(E.s2d(run.from))), ' to ', h('b', day(E.s2d(run.to)))), run.datesFor === 'picking' ? h('span', 'dates for picking') : h('span', 'dates for planting')));
     const out = h('section.card.su-out', { dataset: { hook: 'succ-kept' }, 'aria-label': 'Its plantings' });
     add(host, out);
-    add(out, h('div.su-out-head', h('h3', 'Its plantings'), h('p.su-note', 'A run stays a run once added. Changing it as a run (moving it, changing its spacing) comes in a later build; each planting can be changed on its own.')));
+    add(out, h('div.su-out-head', h('h3', 'Its plantings'), h('button.btn', { type: 'button', dataset: { hook: 'succ-edit' }, onclick: () => editRun(run) }, 'Edit remaining sowings…')));
     add(out, h('div.su-row.su-row-head.su-kept-head', h('span'), h('span', 'Planting'), h('span.su-col', 'Sow'), h('span.su-col', 'Plant'), h('span.su-col', 'First pick')));
     for (const x of list) {
       const r = x.r, name = (r && r.c.vname) || (v && v.name) || crop.name;
@@ -416,6 +416,55 @@
       all ? h('label.su-tick', tick, h('span', `Take its ${plural(all, 'planting')} out too`)) : null,
       removalNote));
   }
+  async function editRun(run) {
+    let records;
+    try { records = await App.runEditRecords(); } catch (_) { UI.toast('The work recorded for this run could not be read. Reopen its backup to edit it.'); return; }
+    const plan = App.state.plan, drop = new Set();
+    const number = (label, value, min, max) => h('input', { type: 'number', value, min, max, step: 1, 'aria-label': label });
+    const shift = number('Shift planting dates by days', '0', -366, 366), every = number('Days between planting slots', '', 1, 366);
+    every.placeholder = 'Keep spacing';
+    const previewArea = h('div'), apply = h('button.btn.primary', { type: 'button', disabled: true, dataset: { hook: 'succ-edit-apply' } }, 'Apply changes');
+    const sheet = h('dialog.dialog.run-edit', { 'aria-label': 'Edit remaining sowings' });
+    let result;
+    const refresh = () => {
+      result = App.previewRunEdit(run.id, { shift: shift.value, every: every.value, drop: [...drop] }, records);
+      const eng = App.state.engine, fmt = (a, b) => a === b ? a : a + ' → ' + b;
+      const dated = date => date.getFullYear() === App.planYear() ? day(date) : day(date) + ', ' + date.getFullYear();
+      const schedule = (engine, p) => {
+        if (!p) return ['Skip', '—', '—'];
+        const r = p.bedId ? engine.calc(p) : S.about(engine, p)?.r;
+        return r ? [dated(r.sow || r.field), dated(r.field), r.harvestDays ? dated(r.first) : '—'] : ['—', dated(E.s2d(p.date)), '—'];
+      };
+      const row = (...cells) => h('tr', cells.map(c => h('td', c)));
+      clear(previewArea);
+      if (result.rows) {
+        const body = h('tbody');
+        for (const m of result.rows) {
+          const a = schedule(eng, m.before), b = schedule(result.next, m.after), p = m.before;
+          const tick = h('input', { type: 'checkbox', 'aria-label': 'Skip sowing ' + p.run.n, checked: drop.has(p.id), onchange: e => { if (e.target.checked) drop.add(p.id); else drop.delete(p.id); refresh(); } });
+          body.append(row(p.run.n + ' · ' + (p.bedId ? App.bedLabel(eng.bedOf(p.bedId), eng) : 'To place'), ...a.map((v,i) => fmt(v,b[i])), m.locked ? 'Recorded' : tick));
+        }
+        add(previewArea, h('table.run-edit-table', h('thead', h('tr', ['Space', 'Sow', 'Plant', 'First pick', 'Skip'].map(t => h('th', t)))), body));
+        if (result.ops.length) add(previewArea, h('details', { open: true }, h('summary', 'Weekly forecast to sell'),
+          result.weeks.length ? h('ul', result.weeks.map(w => h('li', dated(w.start) + ' · ' + w.name + ' · ' + num(w.was, 1) + ' → ' + num(w.total, 1) + ' ' + w.unit))) : 'Weekly totals stay the same.'));
+      }
+      const stale = plan !== App.state.plan;
+      if (result.error || stale) add(previewArea, h('p', { role: 'alert' }, stale ? 'The plan changed. Close and reopen this edit.' : result.error));
+      apply.disabled = !!result.error || stale || !result.ops?.length;
+    };
+    apply.onclick = () => {
+      if (!App.applyRunEdit(result)) return;
+      sheet.close();
+      UI_STATE.answer = { kind: 'edited', id: run.id, text: 'Saved the changes to this run.', step: App.state.undo.at(-1) };
+      render();
+    };
+    shift.oninput = every.oninput = refresh;
+    add(sheet, h('h2', 'Edit remaining sowings'), h('p', 'Recorded work stays in place. Skipping a sowing leaves its slot open.'),
+      h('div.su-pair', h('label.fld', 'Shift planting dates by days', shift), h('label.fld', 'Days between planting slots', every)), previewArea,
+      h('div.dialog-actions', h('button.btn', { type: 'button', onclick: () => sheet.close() }, 'Cancel'), apply));
+    sheet.addEventListener('close', () => sheet.remove(), { once: true });
+    document.body.append(sheet); refresh(); sheet.showModal();
+  }
   function removeIt(run, n) {
     const eng = App.state.engine, crop = eng.crop(run.cropId), all = UI_STATE.removeAll && n > 0;
     if (!App.removeRun(run.id, { plantings: all })) { render(); return; }
@@ -433,7 +482,7 @@
         D.by === 'amount' ? `${num(+D.want || 0, 1)} ${unitWord} a week · ${day(E.s2d(D.from))} to ${day(E.s2d(D.to))}` : `1 ${D.kind === 'bed' ? 'bed' : blockName()} every ${plural(+D.every || 0, 'day')} · ${day(E.s2d(D.from))} to ${day(E.s2d(D.to))}`,
         'Being planned', { hook: 'succ-run', run: 'draft' }, () => { UI_STATE.pick = 'draft'; render(); }) : null,
       kept.map(run => { const c = eng.crop(run.cropId) || { name: 'Crop', id: run.cropId }, n = S.runPlantings(App.state.plan, run.id).length + App.waiting().filter(w => w.run && w.run.id === run.id).length;   // placed and under To place
-        return row(UI_STATE.pick === run.id, T.el({ varietyId: run.varietyId, cropId: c.id, color: eng.cropColor(c), label: c.name, size: 40 }), c.name, runLine(eng, run, c), plural(n, 'sowing'), { hook: 'succ-run', run: run.id }, () => { if (UI_STATE.pick !== run.id) UI_STATE.removeAll = false; UI_STATE.pick = run.id; render(); }); }),
+        return row(UI_STATE.pick === run.id, T.el({ varietyId: run.varietyId, cropId: c.id, color: eng.cropColor(c), label: c.name, size: 40 }), c.name, 'Requested: ' + runLine(eng, run, c), plural(n, 'sowing'), { hook: 'succ-run', run: run.id }, () => { if (UI_STATE.pick !== run.id) UI_STATE.removeAll = false; UI_STATE.pick = run.id; render(); }); }),
       kept.length ? null : h('p.su-note', { dataset: { hook: 'succ-runs-none' } }, 'No run is kept in the plan yet.'));
   }
   /** The one answer to the last action taken here, with its Undo while it is still the last step. */
@@ -441,7 +490,7 @@
     const a = UI_STATE.answer;
     if (!a) return null;
     const last = App.state.undo[App.state.undo.length - 1], can = last && last === a.step;
-    return h('p.su-answer', { role: 'status', dataset: { hook: 'succ-answer' } }, h('i.dot.green'), a.text, can ? h('button.btn.small', { type: 'button', dataset: { hook: 'succ-undo' }, onclick: () => { App.undo(); UI_STATE.answer = null; UI_STATE.pick = a.kind === 'removed' ? a.id : 'draft'; if (a.kind === 'added') UI_STATE.planning = true; render(); } }, 'Undo') : null);
+    return h('p.su-answer', { role: 'status', dataset: { hook: 'succ-answer' } }, h('i.dot.green'), a.text, can ? h('button.btn.small', { type: 'button', dataset: { hook: 'succ-undo' }, onclick: () => { App.undo(); UI_STATE.answer = null; UI_STATE.pick = a.kind === 'added' ? 'draft' : a.id; if (a.kind === 'added') UI_STATE.planning = true; render(); } }, 'Undo') : null);
   }
   let helpBtn = null;
   function render() {

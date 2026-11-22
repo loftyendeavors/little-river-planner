@@ -1291,7 +1291,7 @@
       return (benchItemsCache = items);
     }
     /** Heated bench room on one day, in tray spaces: what is there by kind, the total, and what the benches hold. */
-    function benchDay(date) {
+    function benchDay(date, withLocations = false) {
       const row = { date: new Date(date), cap: heatedTraySpaces(), live: 0, crate: 0, tray: 0, pot: 0, rockwool: 0, total: 0, harden: 0, cool: 0, floorCrates: 0, items: [] };
       const hard = { live: 0, crate: 0, tray: 0, pot: 0, rockwool: 0 }, cool = { live: 0, crate: 0, tray: 0, pot: 0, rockwool: 0 };
       for (const it of benchItems()) {
@@ -1303,7 +1303,7 @@
         const hs = it.kind === 'prop' ? hardenStart(it.r) : null, hardening = !!hs && date >= hs;
         // a crop grown on without heat stands on the unheated benches by rule, hardening or not
         const byRule = !hardening && it.kind === 'prop' && coolOn(it.r, date);
-        row[u.kind] += u.eq; row.total += u.eq; row.items.push({ p: it.p, r: it.r, kind: u.kind, n: u.n, eq: u.eq, harden: hardening, cool: byRule });
+        row[u.kind] += u.eq; row.total += u.eq; row.items.push({ p: it.p, r: it.r, kind: u.kind, n: u.n, eq: u.eq, harden: hardening, cool: byRule, ...(withLocations ? {release:it.to} : {}) });
         if (hardening) { hard[u.kind] += u.eq; row.harden += u.eq; } else if (byRule) { cool[u.kind] += u.eq; row.cool += u.eq; }
       }
       // Where it all stands. What is grown on without heat is on the unheated benches. What hardens off goes onto the
@@ -1316,6 +1316,13 @@
         heated: pool(room.heated, row.total - row.cool - un - out, k => row[k] - cool[k] - hard[k] * part(un + out)),
         unheated: pool(room.unheated, row.cool + un, k => cool[k] + hard[k] * part(un)),
         outside: pool(room.outside, out, k => hard[k] * part(out)) };
+      if (withLocations) {
+        for (const item of row.items) {
+          const unheated = item.cool ? item.eq : item.harden ? item.eq * part(un) : 0;
+          const outside = item.harden ? item.eq * part(out) : 0;
+          item.space = {unheated, outside, heated:Math.max(0, item.eq - unheated - outside)};
+        }
+      }
       row.over = row.pools.heated.over;
       return row;
     }

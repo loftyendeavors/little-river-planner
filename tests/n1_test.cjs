@@ -12,7 +12,7 @@
  * usage: node n1_test.cjs <app-dir> <plan.json> <dir of the build before's js>
  */
 const path = require('path'), fs = require('fs');
-const [app, planFile, OLD] = process.argv.slice(2);
+const [app, planFile, OLD, preNursery = OLD] = process.argv.slice(2);
 const results = []; let finished = false;
 const check = (name, ok, detail) => { results.push({ name, ok: !!ok, ...(ok ? {} : { detail }) }); };
 process.on('exit', () => {
@@ -195,7 +195,8 @@ const only = (e2, mine, fields) => {
   const base = clone(p), mine = clone(p), remote = clone(p);
   base.lrfNext.supplies = { have: { carrier: 12 } };
   mine.lrfNext.supplies = N.setSupply(N.setSupply(base.lrfNext.supplies, 'pockets', null, 10), 'have', 'carrier-10', 7);
-  remote.lrfNext.supplies = N0.setSupply(base.lrfNext.supplies, 'pockets', null, 10);
+  const legacyNursery = require(path.resolve(preNursery, 'nursery.js'));
+  remote.lrfNext.supplies = legacyNursery.setSupply(base.lrfNext.supplies, 'pockets', null, 10);
   const merged = req('merge.js').merge(base, mine, remote);
   const joined = merged.ok && N.supplies(E.create(merged.plan, Lib), year, merged.plan.lrfNext.supplies);
   const have = size => joined && joined.rows.find(r => r.pockets === size)?.have;
@@ -209,9 +210,11 @@ const only = (e2, mine, fields) => {
   typed.varieties.find(x => x.id === v.id).spc = 6;
   typed.assumptions = { ...(typed.assumptions || { v: 1, crops: {}, varieties: {} }), nursery: { [scallion.id]: { looked: year } } };
   let e0;
-  try { e0 = E0.create(typed, Lib); } catch (error) { e0 = null; }
-  const same = !!e0 && plantings.every(p => sig(e0, e0.planting(p.id)) === sig(was, p));
-  check('the build before reads a plan holding the new figures, and works it out as it would without them', same, null);
+  const legacy = require(path.resolve(preNursery, 'engine.js'));
+  const legacyPlain = legacy.create(plan, Lib);
+  try { e0 = legacy.create(typed, Lib); } catch (error) { e0 = null; }
+  const same = !!e0 && plantings.every(p => sig(e0, e0.planting(p.id)) === sig(legacyPlain, p));
+  check('the pre-nursery build reads a plan holding the new figures, and works it out as it would without them', same, null);
   const back = IO.split(JSON.parse(JSON.stringify(IO.join ? IO.join(typed, {}) : typed))).core, packed = IO.unpack(JSON.parse(JSON.stringify(IO.pack(typed))));
   for (const [form, pl] of [['a backup', back], ['the compact plan', packed]]) {
     const c = (pl.crops || []).find(x => x.id === scallion.id) || {}, vv = (pl.varieties || []).find(x => x.id === v.id) || {};
