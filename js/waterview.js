@@ -3,7 +3,7 @@
   'use strict';
   const App = root.LRFApp, UI = root.LRFUI, W = root.LRFWaterFeed;
   const { h, num } = UI;
-  let lens = 'Fertility', period = 'Last 7 days', gardenId = '', activeDialog;
+  let lens = 'Fertility', period = 'Last 7 days', gardenId = '', activeDialog, refreshSheet;
   const book = () => App.state.plan?.lrfNext?.waterFeed || {};
   const gardens = () => App.state.plan.gardens || [];
   const rows = (table, id) => W.values(book()[table]).filter(r => !id || r.gardenId === id);
@@ -34,7 +34,7 @@
     if (!W.groups(book(),row.kind).some(g=>g.id===row.job)) undo.cancelled={...next.cancelled,[row.job]:true};
     return save(next, label, undo);
   }
-  function close() { if (activeDialog) { activeDialog.close(); activeDialog.remove(); activeDialog = null; } }
+  function close() { refreshSheet=null; if (activeDialog) { activeDialog.close(); activeDialog.remove(); activeDialog = null; } }
   function sheet(title, fields, action, submit) {
     close();
     const error = h('p.wf-error', { role: 'alert', hidden: true });
@@ -98,18 +98,132 @@
       button('Add product',()=>productForm(),'wf-add-product'),h('h3','Stock recipes'),rows('recipes').map(r => line(h('strong',r.name), num(r.gallons,2)+' gal', button('Edit recipe',()=>recipeForm(r),'wf-edit-recipe'))),
       rows('products').length ? button('Add recipe',()=>recipeForm(),'wf-add-recipe') : note('Add the products from your labels to make a recipe.')], 'Done');
   }
-  function stockInput(product) {
-    const lb = field('Product received or opening stock (lb)', '', 'number');
-    sheet('Add stock · ' + product.name,[lb.el], 'Add to stock', () => storeRow('receipts', { id: App.uid(), productId:product.id, lb:W.number(lb.get(),'pounds on the shelf'), at:now() },'Stock recorded'));
+  function stockForm(p,kind) {
+    const delivery=kind==='delivery', bags=field('Full bags','','number'), loose=field('Loose pounds','','number');
+    const opened=new Date(), shownTime=local(opened);
+    const time=field('Received at',shownTime,'datetime-local'), ref=field('Delivery or invoice line reference (optional)','');
+    const result=note('');
+    function input() {
+      return {bags:bags.get(),loose:loose.get(),at:delivery?(time.get()===shownTime?opened.toISOString():whenRecorded(time.get())):now(),entered:now(),reference:delivery?ref.get():''};
+    }
+    function refresh() {
+      try {const row=W.stockEntry(p,kind,input());result.textContent=(delivery?'Receiving ':'Shelf count ')+num(row.items[p.id].lb,3)+' lb';}
+      catch {result.textContent='';}
+    }
+    for(const f of [bags,loose,time]) f.control.addEventListener('input',refresh);
+    sheet((delivery?'Receive delivery':'Count shelf')+' · '+p.name,[
+      note('Full bags weigh '+num(p.bag,3)+' lb each.'),line(bags.el,loose.el),result,
+      delivery?[time.el,ref.el,note('Use a unique invoice and line reference. Two reports with the same reference can be reviewed together.')]:
+        note('Count what is on the shelf now. This becomes the starting balance for later work.')],delivery?'Record delivery':'Save shelf count',()=>{
+      const current=book();
+      if(current.products?.[p.id]?.bag!==p.bag) throw Error('The bag weight changed. Reopen this form for the current weight.');
+      const row=W.stockEntry(p,kind,{...input(),id:App.uid()});
+      row.job=W.nextJob(current,row.job);
+      const existing=W.groups(current,kind).find(g=>g.id===row.job);
+      if(existing?.reports.some(r=>r.items[p.id].lb===row.items[p.id].lb && (!delivery || r.at.slice(0,16)===row.at.slice(0,16)))) throw Error('This entry is already in stock history.');
+      if (!report(row,delivery?'Delivery recorded':'Shelf count saved')) return false;
+      stockHistory(p);
+    });
+  }
+  function balanceText(s) {
+    if (s.balance==null) return 'Shelf count needed';
+    if (s.balance<0) return num(s.balance,2)+' lb calculated · recount needed';
+    return num(s.balance,2)+' lb '+(s.uncertain||s.review?'provisional':'on hand');
+  }
+  const movementName={count:'Shelf count',delivery:'Delivery',legacy:'Stock added',refill:'Tank refill',spread:'Field application'};
+  function stockHistory(p) {
+    const inventory=W.stock(book(),p.id);
+    sheet('Stock history · '+p.name,[h('strong',balanceText(inventory)),
+      inventory.timing?note('A movement overlaps the shelf count. Review its recorded time or count the shelf again.'):
+        inventory.review?note('Reports disagree. Open the movement to review the figures.'):null,
+      inventory.uncertain?note('A fresh quantity is unknown. A new shelf count can establish the current balance.'):null,
+      line(button('Receive delivery',()=>stockForm(p,'delivery'),'wf-delivery'),button('Count shelf',()=>stockForm(p,'count'),'wf-count')),
+      inventory.rows.length ? inventory.rows.slice().reverse().map(r=>{
+        const debit=r.kind==='spread'||r.kind==='refill', chosen=r.group?.chosen;
+        const change=r.lb==null?'Fresh weight unknown':(r.kind==='count'?'Counted ':debit?'−':'+')+num(r.lb,3)+' lb';
+        return h('details.wf-history',h('summary',h('b',movementName[r.kind]),' · '+when(r.at)+' · '+change),
+          chosen?.gardenId?note(gardenName(chosen.gardenId)+' · '+chosen.label):null,
+          chosen?.bagLb!=null?note(num(chosen.bags)+' × '+num(chosen.bagLb,3)+' lb bags + '+num(chosen.loose,3)+' lb loose'+(chosen.reference?' · '+chosen.reference:'')):null,
+          note('Balance after entry · '+balanceText({balance:r.balance,review:r.provisional})),
+          r.group?line(r.group.reports.length>1?button('Review reports',()=>reconcile(r.group,r.kind),'wf-review'):null,
+            button('Take back entry',()=>sheet('Take back '+movementName[r.kind].toLowerCase()+'?',[note('Its effect on stock will be reversed.')],'Take back',()=>takeBack(r.group)),'wf-take-back')):null);
+      }) : note('No stock movements yet.')], 'Done');
+  }
+  function orderSheet() {
+    const products=rows('products'), b=book(), tanks=rows('tanks');
+    const batches=tanks.map(t=>({tank:t, count:field(gardenName(t.gardenId)+' · '+t.name+' (remaining full batches)',W.reminder(b,t.id)?1:0,'number')}));
+    const fieldPounds=products.map(p=>field(p.name+' (field lb)',0,'number'));
+    const spare=field('Spare product (%)',10,'number'), output=h('div',{role:'status'});
+    const capturedInputs=()=>JSON.stringify([book().products,book().recipes,book().tanks]);
+    const snapshot=capturedInputs();
+    function figures() {
+      if(snapshot!==capturedInputs()) throw Error('Equipment, products or recipes changed. Reopen the worksheet.');
+      const need=Object.fromEntries(products.map((p,i)=>[p.id,W.number(fieldPounds[i].get()||0,'planned field pounds')]));
+      for(const {tank,count} of batches) {
+        const n=W.number(count.get()||0,'remaining full batches');
+        if(!Number.isSafeInteger(n)) throw Error('Enter whole batches.');
+        if(!n) continue;
+        const mix=W.snapshot(b,tank.recipeId,tank.gallons);
+        for(const [id,item] of Object.entries(mix)) need[id]+=n*item.lb;
+      }
+      const accepted=W.stockGroups(book());
+      return products.map(p=>{
+        const shelf=W.stock(book(),p.id,accepted);
+        return {product:p,shelf,need:need[p.id],...W.purchase(p,shelf,need[p.id],spare.get())};
+      }).filter(row=>row.need>0);
+    }
+    function resultText(row) {
+      return row.bags==null?'Check shelf balance':row.bags===0?'Covered by stock':row.bags+(row.bags===1?' bag':' bags')+' × '+num(row.product.bag,3)+' lb';
+    }
+    function refresh() {
+      try {
+        const orders=figures();
+        output.replaceChildren(...(orders.length?orders.map(row=>h('section.wf-task',h('strong',row.product.name+' · '+resultText(row)),
+          note(num(row.need,3)+' lb planned · '+num(row.gross,3)+' lb including spare · '+balanceText(row.shelf)))):
+          [note('Enter remaining batches or field pounds to calculate an order.')]));
+      } catch(ex){output.textContent=ex.message;}
+    }
+    function download() {
+      try {
+        const orders=figures();
+        if(!orders.length) throw Error('Enter remaining work before downloading.');
+        const title='Fertilizer order worksheet · '+App.planYear(), prepared=new Date().toLocaleDateString();
+        const batchesPlanned=batches.filter(row=>Number(row.count.get())>0).map(({tank,count})=>
+          gardenName(tank.gardenId)+' · '+tank.name+' · '+count.get()+' batch(es) × '+num(tank.gallons,3)+' gal · '+b.recipes[tank.recipeId].name);
+        const fieldPlanned=products.flatMap((p,i)=>Number(fieldPounds[i].get())>0?[p.name+' · '+num(Number(fieldPounds[i].get()),3)+' lb']:[]);
+        const lines=[title,'Prepared '+prepared+' · '+spare.get()+'% spare','', 'Remaining tank batches',...(batchesPlanned.length?batchesPlanned:['None']),
+          '', 'Remaining field applications',...(fieldPlanned.length?fieldPlanned:['None']),'','Shopping list',...orders.map(row=>row.product.name+' · '+resultText(row)+' · '+num(row.need,3)+' lb planned · '+num(row.gross,3)+' lb with spare · '+balanceText(row.shelf))];
+        const url=URL.createObjectURL(new Blob([lines.join('\n')+'\n'],{type:'text/plain;charset=utf-8'}));
+        const link=h('a',{href:url,download:'fertilizer-order-'+App.planYear()+'.txt'});document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      } catch(ex){output.textContent=ex.message;}
+    }
+    for(const f of [spare,...fieldPounds,...batches.map(row=>row.count)]) f.control.addEventListener('input',refresh);
+    refresh();
+    sheet('Plan fertilizer order · '+App.planYear(),[note('Estimate the work still ahead. One batch is filled in for each refill currently due. Download the list to keep these figures.'),
+      batches.length?h('details',{open:true},h('summary','Remaining tank batches'),batches.map(row=>row.count.el)):null,
+      h('details',{open:!batches.length},h('summary','Remaining field applications'),fieldPounds.map(f=>f.el)),spare.el,output,
+      button('Download order list',download,'wf-download-order')], 'Done');
+    refreshSheet=refresh;
   }
   function supplies() {
-    const products = rows('products');
-    return h('section.wf-block',h('h3','Fertilizer supplies'), products.map(p => {
-      const s = W.stock(book(),p.id), due = rows('tanks').filter(t=>W.reminder(book(),t.id) && book().recipes?.[t.recipeId]).reduce((sum,t)=>sum+(W.snapshot(book(),t.recipeId,t.gallons)[p.id]?.lb||0),0);
-      const buy = s.balance == null ? null : Math.ceil(Math.max(0,due-s.balance)/p.bag);
-      return line(h('strong',p.name), s.balance == null ? 'Opening stock unknown' : num(s.balance,2)+' lb on hand', num(s.used,2)+' lb recorded use',
-        s.review || s.uncertain ? 'Provisional' : null, buy == null ? null : num(buy)+' bags to buy for due refills',button('Add stock',()=>stockInput(p),'wf-add-stock'));
-    }),button('Products and recipes',library,'wf-products'));
+    const products=rows('products'), b=book(), accepted=W.stockGroups(b);
+    const due={};
+    for(const t of rows('tanks')) {
+      if(!W.reminder(b,t.id) || !b.recipes?.[t.recipeId]) continue;
+      for(const [id,item] of Object.entries(W.snapshot(b,t.recipeId,t.gallons))) due[id]=(due[id] || 0)+item.lb;
+    }
+    return h('section.wf-block',h('h3',{id:'wfSuppliesHeading',tabIndex:-1},'Fertilizer supplies'),products.map(p=>{
+      const s=W.stock(b,p.id,accepted), dueBags=due[p.id]?W.purchase(p,s,due[p.id],0).bags:null;
+      return line(h('strong',p.name),balanceText(s),num(s.used,2)+' lb recorded use',due[p.id]?num(due[p.id],3)+' lb for due refills'+(dueBags==null?'':dueBags?' · buy '+dueBags+(dueBags===1?' bag':' bags'):' · covered'):null,button('Stock history',()=>stockHistory(p),'wf-stock-history'));
+    }),line(products.length?button('Plan fertilizer order',orderSheet,'wf-order'):null,button('Products and recipes',library,'wf-products')));
+  }
+  function openSupplies() {
+    App.setView('trays');
+    root.LRFTraysView.setTab('supplies');
+    requestAnimationFrame(()=>{
+      const heading=document.getElementById('wfSuppliesHeading');
+      if (heading) {heading.focus({preventScroll:true});heading.scrollIntoView({block:'start'});}
+    });
   }
   const amounts = items => Object.values(items).map(p => (p.lb == null ? 'Unknown lb' : num(p.lb,3) + ' lb')+' '+p.name).join(' + ');
   function approved(tank) {
@@ -174,8 +288,8 @@
     });
   }
   function reconcile(group, kind) {
-    const isRun=kind==='run';
-    const describe=r=>isRun ? [r.status, quantity(r.elapsed,'min')+' elapsed', (r.planned==null?'Planned time unknown':quantity(r.planned,'min')+' planned'),
+    const isRun=kind==='run', supply=kind==='count'||kind==='delivery';
+    const describe=r=>supply ? amounts(r.items)+' · '+num(r.bags)+' bags × '+num(r.bagLb,3)+' lb + '+num(r.loose,3)+' lb loose'+(r.reference?' · '+r.reference:'') : isRun ? [r.status, quantity(r.elapsed,'min')+' elapsed', (r.planned==null?'Planned time unknown':quantity(r.planned,'min')+' planned'),
       (r.meter==null?'Meter reading unknown':quantity(r.meter,'gal')+' metered'),
       r.rate==null?'No rated flow':num(r.rate,3)+' gal/min rated',r.beds?.length?'Beds '+bedNames(r.beds):'Served beds unknown',r.source].join(' · ') :
       kind==='spread' ? amounts(r.items)+' · '+(r.beds.length?r.beds.length+' treated beds':'whole garden') : amounts(r.items)+' · '+num(r.gallons,2)+' gal final · '+(r.remainder==null?'remainder unknown':num(r.remainder,2)+' gal carried');
@@ -188,8 +302,8 @@
       else { accepted[group.id]=r.id; for(const seen of group.reports) if(review[seen.id]!=='separate') review[seen.id]='same'; }
       if(save({...b,review,accepted},'History decision saved')) close();
     }
-    sheet('Review '+(isRun?'run evidence':'application reports'),group.reports.map(r=>h('section.wf-task', h('strong',when(r.at)),note('Entered '+when(r.entered)),note(describe(r)),
-      line(button('Use these figures for the same job',()=>decide(r,'same'),'wf-use-report'),kind==='refill' && r.id!==group.chosen.id ? button('Count as a separate refill',()=>decide(r,'separate'),'wf-separate') : null))),'Done');
+    sheet('Review '+(isRun?'run evidence':supply?'stock reports':'application reports'),group.reports.map(r=>h('section.wf-task', h('strong',when(r.at)),note('Entered '+when(r.entered)),note(describe(r)),
+      line(button('Use these figures for the same job',()=>decide(r,'same'),'wf-use-report'),(kind==='refill'||kind==='delivery') && r.id!==group.chosen.id ? button(kind==='refill'?'Count as a separate refill':'Count as a separate delivery',()=>decide(r,'separate'),'wf-separate') : null))),'Done');
   }
   function takeBack(group) {
     const current=book(), voids={...current.voids};
@@ -380,7 +494,7 @@
     const content=[h('header.as-head.nu-head',h('h2',lens),UI.help(isWater?'Run time counts completed and interrupted work. Metered and estimated gallons are shown separately. Disputed time stays out of confirmed minutes.':'Record field applications and check season targets here. Tasks records a refill when the tank returns to service.',()=>host)),
       h('p.frame-figs',isWater ? [h('b',volumeLine(total)),records.length?' · '+runLine(total):''] :
         [h('b',dueByTank.size+' refills due'),' · '+tanks.length+(tanks.length===1?' tank':' tanks')]),
-      line(toggle('Water dashboard',['Fertility','Irrigation'],lens,x=>{lens=x;}),filter.el,isWater?toggle('Period',['Last 7 days','Season'],period,x=>{period=x;}):button('Products and recipes',library,'wf-products')),
+      line(toggle('Water dashboard',['Fertility','Irrigation'],lens,x=>{lens=x;}),filter.el,isWater?toggle('Period',['Last 7 days','Season'],period,x=>{period=x;}):[button('Products and recipes',library,'wf-products'),button('Fertilizer supplies',openSupplies,'wf-open-supplies')]),
       total?.reviews.length?button('Review run evidence ('+total.reviews.length+')',()=>evidenceList(total.reviews),'wf-review'):null,
       isWater && period==='Last 7 days' && records.length?weekChart(records):null,
       selected.length?null:note(all.length ? isWater?'Choose a garden to add its first irrigation zone.':'Choose a garden to record a field application, set targets or add a feed tank.' : 'Add a garden on the Map to get started.'),
@@ -391,6 +505,6 @@
       })];
     host.replaceChildren(...content.filter(Boolean));
   }
-  function init() { App.on('view',()=>{close();render();}); App.on('plan',render); }
+  function init() { App.on('view',()=>{close();render();}); App.on('plan',()=>{render();if(activeDialog?.open && refreshSheet) refreshSheet();}); }
   root.LRFWaterView={init,render,tasks,supplies,library,gardenCard};
 })(window);

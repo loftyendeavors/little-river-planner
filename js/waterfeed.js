@@ -47,8 +47,7 @@
   }
   function groups(book, kind) {
     const byJob = new Map();
-    for (const r of values(book.reports).sort((a,b) => a.entered.localeCompare(b.entered) || a.id.localeCompare(b.id))) {
-      if (r.kind !== kind || book.voids?.[r.id]) continue;
+    for (const r of values(book.reports).filter(r=>r.kind===kind && !book.voids?.[r.id]).sort((a,b) => a.entered.localeCompare(b.entered) || a.id.localeCompare(b.id))) {
       const groupId = book.review?.[r.id] === 'separate' ? r.id : r.job;
       if (book.cancelled?.[groupId]) continue;
       if (!byJob.has(groupId)) byJob.set(groupId, []);
@@ -68,7 +67,9 @@
       const unsettled = pending.filter(r => r.id !== chosen.id && (
         kind === 'refill' && (!r.reminder || !chosen.reminder || r.at.slice(0,16) !== chosen.at.slice(0,16) || JSON.stringify(r.items) !== JSON.stringify(chosen.items) || r.remainder !== chosen.remainder || r.gallons !== chosen.gallons) ||
         kind === 'run' && (r.elapsed !== chosen.elapsed || r.status !== chosen.status || differing('planned') || meterConflict || rateConflict || scopeConflict) ||
-        kind === 'spread' && JSON.stringify(r.items) !== JSON.stringify(chosen.items)));
+        kind === 'spread' && JSON.stringify(r.items) !== JSON.stringify(chosen.items) ||
+        (kind === 'delivery' || kind === 'count') && (r.items[r.productId].lb !== chosen.items[chosen.productId].lb ||
+          kind === 'delivery' && r.at.slice(0,16) !== chosen.at.slice(0,16))));
       return { id, chosen, reports, unsettled, meterConflict, workConflict, rateConflict, planned, pending };
     }).sort((a, b) => sortTime(a.chosen, b.chosen));
   }
@@ -197,23 +198,77 @@
     if (!served.length || served.some(bed=>!bed || !(bed.l>0))) return null;
     return tapeFlow(served,zone.lines,zone.tapeRate);
   }
-  function stock(book, productId) {
-    const receipts = values(book.receipts).filter(r => r.productId === productId);
-    let used = 0, uncertain = false, review = false;
-    for (const group of groups(book, 'refill')) {
-      const item = group.chosen.items[productId];
-      if (group.unsettled.length && group.reports.some(r => r.items[productId])) review = true;
-      if (!item) continue;
-      if (item.lb == null) uncertain = true; else used += item.lb;
-      if (group.unsettled.length) review = true;
-    }
-    for (const group of groups(book,'spread')) {
-      used += group.chosen.items[productId]?.lb || 0;
-      if(group.unsettled.length && group.reports.some(r=>r.items[productId])) review=true;
-    }
-    const received = receipts.reduce((sum, r) => sum + r.lb, 0);
-    return { received, used, balance: receipts.length ? received - used : null, uncertain, review };
+  function stockEntry(product, kind, input) {
+    if (!['count','delivery'].includes(kind)) throw Error('Choose a shelf count or a delivery.');
+    if ([input.bags,input.loose].every(x=>x==null || x==='')) throw Error('Enter a bag count or loose pounds. Enter 0 for an empty shelf.');
+    const bags=number(input.bags || 0,'the number of full bags'), loose=number(input.loose || 0,'the loose pounds');
+    if (!Number.isSafeInteger(bags)) throw Error('Enter whole bags and put the rest under loose pounds.');
+    const lb=bags*product.bag+loose;
+    if (!Number.isFinite(lb) || (kind==='delivery' && lb===0)) throw Error('Enter a positive delivery weight.');
+    const reference=String(input.reference || '').trim();
+    const key=kind==='delivery' && reference ? ['ref',reference.toLowerCase()] : ['time',input.at.slice(0,16)];
+    return {id:input.id,job:JSON.stringify([kind,product.id,...key]),kind,productId:product.id,at:input.at,entered:input.entered,
+      label:product.name,reference,bags,bagLb:product.bag,loose,items:{[product.id]:{name:product.name,lb}}};
   }
-  const api = { values, put, number, name, product, recipe, snapshot, groups, lastMix, cycle, reminder, refill, run, water, runSummary, sameRunEvidence, stock, occurrence, nextJob, targetPounds, nutrientTotals, recipeConcentration, tapeFlow, zoneRate };
+  function difference(a,b) {
+    const diff=a-b;
+    return Math.abs(diff)<=Number.EPSILON*Math.max(Math.abs(a),Math.abs(b))*4?0:diff;
+  }
+  function stockGroups(book) {
+    return ['refill','spread','delivery','count'].flatMap(kind=>groups(book,kind));
+  }
+  function stock(book, productId, accepted=stockGroups(book)) {
+    const rows=values(book.receipts).filter(r=>r.productId===productId).map(r=>({
+      id:r.id,kind:'legacy',at:r.at,label:'Stock added',lb:r.lb,review:false
+    }));
+    for(const group of accepted) {
+      const chosen=group.chosen, item=chosen.items?.[productId], review=group.unsettled.length>0;
+      if (!item && !(review && group.reports.some(r=>r.items?.[productId]))) continue;
+      rows.push({id:group.id,kind:chosen.kind,at:chosen.at,label:chosen.label,lb:item?item.lb:0,review,group});
+    }
+    rows.sort(sortTime);
+    let used=0, received=0, available=0, drawn=0, anchored=false, uncertain=false, review=false, timing=false;
+    function orderUnclear(count) {
+      const times=r=>(r.group?.pending || [r]).map(x=>x.at);
+      const countTimes=times(count);
+      return rows.some(r=>{
+        if(r.kind==='count') return false;
+        let before=false, after=false;
+        for(const t of times(r)) for(const c of countTimes) {
+          if(t===c || ((t.endsWith(':00.000Z') || c.endsWith(':00.000Z')) && t.slice(0,16)===c.slice(0,16))) return true;
+          if(t<c) before=true; else after=true;
+        }
+        return before && after;
+      });
+    }
+    for(const r of rows) {
+      const debit=r.kind==='refill' || r.kind==='spread';
+      if (r.kind==='count') {
+        anchored=true; available=r.lb; drawn=0; uncertain=false; timing=orderUnclear(r); review=r.review || timing;
+      } else {
+        if (debit) used+=r.lb || 0; else received+=r.lb;
+        if (r.kind==='legacy') anchored=true;
+        if (debit) drawn+=r.lb || 0; else available+=r.lb;
+        uncertain ||= r.lb==null;
+        review ||= r.review;
+      }
+      r.balance=anchored?difference(available,drawn):null;
+      r.provisional=uncertain || review;
+    }
+    return {received,used,balance:anchored?difference(available,drawn):null,uncertain,review,timing,rows};
+  }
+  function purchase(product, inventory, demand, spare) {
+    const needed=number(demand,'planned product pounds'), reserve=number(spare,'the spare percentage',0,100);
+    const gross=needed*(1+reserve/100);
+    if (inventory.balance==null || inventory.uncertain || inventory.review || inventory.balance<0) {
+      return {gross,short:null,bags:null};
+    }
+    const short=Math.max(0,difference(gross,inventory.balance));
+    // Make decimal pack boundaries insensitive to IEEE-754 arithmetic.
+    const packs=short/product.bag;
+    const nearest=Math.round(packs);
+    return {gross,short,bags:nearest>0 && Math.abs(packs-nearest)<=Number.EPSILON*packs*4 ? nearest : Math.ceil(packs)};
+  }
+  const api = { values, put, number, name, product, recipe, snapshot, groups, lastMix, cycle, reminder, refill, run, water, runSummary, sameRunEvidence, stock, occurrence, nextJob, targetPounds, nutrientTotals, recipeConcentration, tapeFlow, zoneRate, stockEntry, stockGroups, purchase };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.LRFWaterFeed = api;
 })(typeof self !== 'undefined' ? self : this);

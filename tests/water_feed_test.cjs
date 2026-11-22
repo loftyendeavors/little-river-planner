@@ -101,4 +101,65 @@ check('Two rated flows with no meter hold the water volume for review, without l
   }
   const metered=runs(original,{...other,meter:18})[0];assert.equal(W.water(metered).gallons,18);
 });
+const poundsEqual=(a,b)=>assert.ok(Math.abs(a-b)<1e-9, a+' vs '+b);
+const supply=(kind,id,time,bags,loose,reference='')=>W.stockEntry(product,kind,{id,at:time,entered:time,bags,loose,reference});
+const count=supply('count','count',clock('07:00'),3,21.3);
+const received=supply('delivery','receipt',clock('09:10'),1,3,'Demo line 1');
+check('Receiving bags and loose pounds preserves the physical pounds and cannot imply an opening count',()=>{
+  const empty=add({},received), s=W.stock(empty,'p');
+  assert.equal(s.received,28);assert.equal(s.balance,null);
+  assert.equal(W.stock(W.put(empty,'products',{...product,bag:50}),'p').received,28);
+  assert.equal(received.bagLb,25);assert.throws(()=>supply('count','empty',clock('09:00'),'',''));
+  assert.throws(()=>supply('delivery','fraction',clock('09:00'),1.5,2));
+  assert.equal(W.stock(add(empty,supply('count','zero',clock('10:01'),0,'')),'p').balance,0);
+});
+check('An absolute count resets the stock baseline and a backdated use only changes history before it',()=>{
+  const b=add(add(base,count),a), before=W.stock(b,'p');
+  poundsEqual(before.balance,93.9);assert.equal(before.rows.at(-1).kind,'refill');
+  const old=mix(base,'past',clock('06:20'),'historical',{actual:{p:null}});
+  const backfilled=add(b,{...old,entered:clock('12:30')});
+  poundsEqual(W.stock(backfilled,'p').balance,93.9);assert.equal(W.stock(backfilled,'p').uncertain,false);
+  assert.equal(W.stock({...backfilled,voids:{count:true}},'p').uncertain,true);
+  poundsEqual(W.stock(add(b,received),'p').balance,121.9);
+});
+check('Delivery replay joins once; a disputed receipt prevents ordering until reviewed',()=>{
+  const start=add(base,count), next={...received,id:'other',items:{p:{name:product.name,lb:31}}};
+  for(const merged of [joined(start,add(start,next),add(start,received)),joined(start,add(start,received),add(start,next))]) {
+    const inv=W.stock(merged,'p');assert.equal(inv.rows.filter(r=>r.kind==='delivery').length,1);
+    assert.equal(inv.review,true);assert.equal(W.purchase(product,inv,200,10).bags,null);
+    const resolved={...merged,accepted:{[received.job]:'other'},review:{receipt:'same',other:'same'}};
+    poundsEqual(W.stock(resolved,'p').balance,127.3);assert.equal(W.stock(resolved,'p').review,false);
+  }
+  const fractional=add(add(add({},supply('count','fractional',clock('06:00'),0,0.3)),
+    mix(base,'one',clock('08:00'),'one',{actual:{p:0.1}})),mix(base,'two',clock('10:00'),'two',{actual:{p:0.2}}));
+  assert.equal(W.stock(fractional,'p').balance,0);
+  const midnight=supply('delivery','cross','2027-03-11T00:01:00.000Z',1,3,'Demo line 1');
+  assert.equal(midnight.job,received.job);assert.equal(W.groups(add(add({},received),midnight),'delivery').length,1);
+});
+check('Same-minute count conflicts and ambiguous movement order require reconciliation',()=>{
+  const b=add(base,count), disagree=supply('count','different',clock('07:00'),3,8);
+  assert.equal(W.stock(add(b,disagree),'p').review,true);
+  const sameMinute={...received,at:'2027-03-10T07:00:45.000Z'};
+  assert.equal(W.stock(add(b,sameMinute),'p').review,true);
+  assert.equal(W.stock(add(add(b,sameMinute),supply('count','later',clock('12:30'),2,0)),'p').review,false);
+  const c1=supply('count','first','2027-03-10T11:00:12.000Z',2,0);
+  const c2=supply('count','last','2027-03-10T11:00:48.000Z',2,0);
+  const middle=supply('delivery','middle','2027-03-10T11:00:33.000Z',0,5,'line');
+  const around=add(add(add({},c1),c2),middle);
+  assert.equal(W.stock(around,'p').review,true);
+  assert.equal(W.stock({...around,accepted:{[c1.job]:'last'},review:{first:'same',last:'same'}},'p').review,false);
+  const amendment={...received,id:'amend',at:clock('11:00')};
+  const atEdge=add(add(add({},received),amendment),c1);
+  assert.equal(W.stock(atEdge,'p').review,true);
+});
+check('Whole-bag purchases use reserve before subtracting usable stock, with exact boundaries',()=>{
+  assert.equal(W.purchase(product,{balance:5},50,10).bags,2);
+  assert.equal(W.purchase(product,{balance:55},50,10).bags,0);
+  assert.equal(W.purchase(product,{balance:54.999999},50,10).bags,1);
+  assert.equal(W.purchase(product,{balance:null},50,10).bags,null);
+  assert.equal(W.purchase(product,{balance:-2},50,10).bags,null);
+  assert.equal(W.purchase(product,{balance:50},30,10).bags,0);
+  assert.equal(W.purchase(product,{balance:0},0.0001,0).bags,1);
+  for(const input of [count,received]) assert.deepEqual(SH.check(JSON.parse(file(add({},input)))),{unknown:[],wrong:[]});
+});
 console.log(JSON.stringify({passed,of:passed,failed:[]}));

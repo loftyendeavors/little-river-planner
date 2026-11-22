@@ -116,6 +116,47 @@ try:
         check('A phone run preserves unknown volume when the configured rate did not apply',
               page.evaluate("""() => { const r = LRFWaterFeed.groups(LRFApp.state.plan.lrfNext.waterFeed,'run')
                 .find(g => g.chosen.label === 'Second line'); return r.chosen.elapsed === 3 && LRFWaterFeed.water(r).gallons === null; }"""))
+        page.set_viewport_size({'width': 1480, 'height': 900})
+        press('Water')
+        press('Fertility')
+        press('Fertilizer supplies')
+        press('Stock history')
+        check('Prior work has a linked movement without inventing opening stock',
+              'Shelf count needed' in page.get_by_role('dialog').inner_text()
+              and 'Tank refill' in page.get_by_role('dialog').inner_text())
+        page.clock.set_fixed_time(f'{year}-06-12T15:00:23Z')
+        press('Count shelf')
+        fill('Full bags','1')
+        fill('Loose pounds','3')
+        press('Save shelf count')
+        check('A count establishes the physical shelf after previous work',
+              '23 lb on hand' in page.get_by_role('dialog').inner_text())
+        page.clock.set_fixed_time(f'{year}-06-13T09:10:31Z')
+        press('Receive delivery')
+        fill('Full bags','1')
+        fill('Loose pounds','4')
+        fill('Delivery or invoice line reference (optional)','Example line 2')
+        press('Record delivery')
+        check('A delivery adds the bag and loose pounds to the counted shelf',
+              '47 lb on hand' in page.get_by_role('dialog').inner_text())
+        press('Done')
+        before_order=page.evaluate('LRFApp.contentKey()')
+        press('Plan fertilizer order')
+        page.get_by_label('remaining full batches',exact=False).fill('9')
+        page.get_by_text('Remaining field applications',exact=True).click()
+        fill('Test feed (field lb)','24')
+        check('Remaining batches and field demand share one 10-percent reserve and bag rounding',
+              'Test feed · 1 bag × 20 lb' in page.get_by_role('dialog').inner_text()
+              and '60 lb planned · 66 lb including spare' in page.get_by_role('dialog').inner_text())
+        with page.expect_download() as dl:
+            press('Download order list')
+        with open(dl.value.path(), encoding='utf-8') as f:
+            exported = f.read()
+            check('The order list preserves its input quantities, pack size and shelf credit',
+                  all(text in exported for text in ('Test tank · 9 batch(es) × 5 gal','Test feed · 24 lb',
+                      '1 bag × 20 lb · 60 lb planned · 66 lb with spare · 47 lb on hand')))
+        press('Done')
+        check('Preparing the order leaves the plan untouched',before_order==page.evaluate('LRFApp.contentKey()'))
         check('The workflow raised no page errors', not errors)
         browser.close()
 except Exception as exc:

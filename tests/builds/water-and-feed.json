@@ -1,10 +1,10 @@
 {
  "build": "Water and feed records, fertilizer stock and manual irrigation. New records require a grower action. Existing plans open without setup.",
  "changes": {
-  "did": "Water shows fertility and irrigation by garden. Tasks records tank refills and Supplies tracks the fresh fertilizer used.",
+  "did": "Water shows fertility and irrigation by garden. Tasks records tank refills and Supplies tracks shelf counts, deliveries and fertilizer orders.",
   "steps": [
-   "On Water, choose a garden to log a field application, set nutrient targets or add a feed tank.",
-   "Request a refill and open Tasks. Check the recipe and batch size, then record the actual refill.",
+   "On Water, choose a garden to record a field application, set targets or set up a tank. Requested refills appear on Tasks.",
+   "In Fertilizer supplies, count the shelf or record a delivery. Plan a fertilizer order from remaining batches and field pounds.",
    "Set up a zone on Irrigation. Record a run here or from Tasks on a phone. Review disputed evidence for the selected period."
   ]
  },
