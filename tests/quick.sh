@@ -7,6 +7,7 @@
 node $T/what_changed.cjs $REPO $W/old $SCRATCH | named "what the build changed"
 node $T/shared_test.cjs $REPO $FONTS | named "the files the merge writes"   # tools/shared.cjs and tools/take_main.cjs, on a copy with a main of its own
 node $T/take_main_job_test.cjs $REPO | named "the job that takes main in"   # no code of a branch runs where a key can write
+node $T/season_records_test.cjs | named "harvest and buyer records"
 node $T/hooks_test.cjs $REPO | named "hooks"   # every hook a check reads is written by the planner, and nothing styles one
 # the farm kept in the repository is what its generator writes
 rm -rf $W/farm-again && mkdir -p $W/farm-again && cp $FARM/farm-map.jpg $W/farm-again/ && node $T/farm/make_farm.cjs $REPO/js $W/farm-again > /dev/null 2>&1
@@ -60,8 +61,8 @@ node $T/bought_test.cjs $APP $PLAN | named "bought in, backup"   # N2: a plantin
 node $T/bought_test.cjs $APP $SHIP | named "bought in, compact"
 node $T/bought_kept.cjs $APP $PLAN $OLD | named "bought in kept, backup"   # N2: a crop bought in only by the library's word, with nursery weeks or a sowing day set, sown as the build before sowed it; each case read again as a backup and as the compact plan
 node $T/bought_kept.cjs $APP $SHIP $OLD | named "bought in kept, compact"
-node $T/n1_test.cjs $APP $PLAN $OLD | named "starting and nursery, backup"   # N1: nothing typed, no figure differs from the build before's (sowing, pot-up, hardening and planting days, cells, trays, seed, bench room day by day, Seeds' orders, supplies); spare, station and a variety's seeds a cell move only where typed
-node $T/n1_test.cjs $APP $SHIP $OLD | named "starting and nursery, compact"
+node $T/n1_test.cjs $APP $PLAN $OLD "$W/pre-nursery/js" | named "starting and nursery, backup"   # N1: nothing typed, no figure differs from the build before's (sowing, pot-up, hardening and planting days, cells, trays, seed, bench room day by day, Seeds' orders, supplies); spare, station and a variety's seeds a cell move only where typed
+node $T/n1_test.cjs $APP $SHIP $OLD "$W/pre-nursery/js" | named "starting and nursery, compact"
 node $T/rails_test.cjs $APP $PLAN | named "rails"
 node $T/assume_test.cjs $APP $PLAN | named "assume"
 node $T/merge_test.cjs $APP $PLAN $FARM/inventory.json | named "merge"   # two copies of one plan joined, record by record: the rules, the five tests, 500 pairs of runs of edits

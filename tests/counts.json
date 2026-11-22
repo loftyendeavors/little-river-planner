@@ -1,6 +1,8 @@
 {
  "node": {
 
+  "harvest and buyer records": 14,
+
   "assume": 12,
 
   "bought in kept, backup": 28,
@@ -208,6 +210,8 @@
   "room": 35,
 
   "season": 58,
+
+  "season-work": 6,
 
   "step5a": 65,
 

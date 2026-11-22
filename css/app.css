@@ -2923,3 +2923,13 @@ table.hv.fit { width: 100%; table-layout: fixed; }
 .dialog ul.hv-from li.row .row-detail, .dialog ul.hv-from li.row .row-detail span { font: 400 var(--type-11) var(--body); color: var(--muted); white-space: normal; }
 .dialog ul.hv-from .fc-tags { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-4); }
 .dialog ul.hv-from .fc-tag { padding: 1px var(--space-4); border: 1px solid var(--line); border-radius: var(--corner-4); font: 600 var(--type-11) var(--body); color: var(--ink-2); white-space: nowrap; }
+
+dialog.run-edit { width: min(760px, 96vw); max-height: 88vh; overflow: auto; }
+.run-edit-table { width: 100%; margin-block: var(--space-16); border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.run-edit-table :is(th, td) { padding: var(--space-4) var(--space-8); text-align: start; }
+.pick-sheet .fld { display: grid; gap: var(--space-4); margin-block: var(--space-8); min-width: 0; }
+.pick-sheet :is(input,select) { min-width: 0; width: 100%; }
+@media (max-width: 680px) {
+  .pick-sheet { max-width: calc(100vw - 16px); max-height: 90dvh; overflow: auto; }
+  .pick-sheet :is(input,select,button), [data-view="sow"] .tk-top > .btn { min-height: var(--control-phone); }
+}

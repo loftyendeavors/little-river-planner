@@ -89,7 +89,7 @@
     'plantings[].tasks.delay.*', 'plantings[].failed', 'plantings[].towerCycle', 'lrfNext.facts.*.*', 'lrfNext.waiting[].wait', 'varieties[].photo', 'varieties[].environmentDefaults',
     // a run of successions (E4): its record is read as one (its dates, its amount and its spacing were worked out together), and a
     // planting's place in it (which run, its number, the spacing it was made at) is one fact
-    'lrfNext.runs[]', 'plantings[].run',
+    'lrfNext.runs[]', 'lrfNext.buyerDemand[]', 'lrfNext.harvestEntries[]', 'plantings[].run',
     'assumptions.sell.*', 'assumptions.sellV.*', 'cropUnits.*', 'crops[].liveSow', 'gardens[].growingEnvironment', 'seedInventory.lots[].germination', 'liveTrayPlans[]']);
   /**
    * Who saved a file and with what, and what a device notes for itself about the plan it holds (when it was loaded, from which
@@ -526,6 +526,48 @@
    * waited would be both on a bed and waiting: placed wins. One put on a bed on one side and taken off the waiting list on
    * the other is on its bed: both are reported.
    */
+  /** A new picking on one device anchors the planting when another device edited its place or dates offline. */
+  function settleHarvests(ctx, start, mine, theirs, plan) {
+    const entries = p => listOf(p?.lrfNextKeep?.keep || p?.lrfNext, 'harvestEntries');
+    const baseIds = new Set(entries(start).map(x => x.id)), savedIds = new Set(entries(plan).map(x => x.id));
+    const newPicks = p => new Set(entries(p).filter(x => !baseIds.has(x.id) && savedIds.has(x.id)).map(x => x.plantingId));
+    const m = newPicks(mine), t = newPicks(theirs);
+    if (!m.size && !t.size) return plan;
+    const plantings = listOf(plan,'plantings').slice();
+    for (const id of new Set([...m,...t])) {
+      const who = t.has(id) ? 'theirs' : 'mine', recorded = who === 'mine' ? mine : theirs;
+      const p = listOf(recorded,'plantings').find(x => x.id === id);
+      if (!p) continue;
+      const index = plantings.findIndex(x => x.id === id), at = plantings[index], path = ['plantings','#' + id];
+      if (!at) {
+        const restored = {...p};
+        if (restored.liveTray && !listOf(plan,'liveTrayPlans').some(r => r.id === restored.liveTray.planId)) delete restored.liveTray;
+        plantings.push(restored);
+        said(ctx,{kind:'kept', path, id, removedBy:who === 'mine' ? 'theirs' : 'mine'});
+        continue;
+      }
+      let next = at;
+      for (const [keys, what] of [[PLACE,'place'],[TIME,'day']]) {
+        if (keys.every(k => same(at[k],p[k]))) continue;
+        if (next === at) next = {...at};
+        for (const k of keys) { if (p[k] === undefined) delete next[k]; else next[k] = p[k]; }
+        const pick = x => Object.fromEntries(keys.filter(k => x[k] !== undefined).map(k => [k,x[k]]));
+        said(ctx,{kind:'move-not-applied',path,id,what,whose:who === 'mine' ? 'theirs':'mine',mine:pick(who === 'mine' ? p:at),theirs:pick(who === 'mine' ? at:p)});
+      }
+      if (p.liveTray) {
+        const stillPlanned = listOf(plan,'liveTrayPlans').some(r => r.id === p.liveTray.planId);
+        const batch = {...p, liveTray:stillPlanned ? p.liveTray : undefined};
+        const fields = [...TRAY_DEMAND,'liveTray'];
+        if (fields.some(k => !same(next[k],batch[k]))) {
+          next = {...next};
+          for (const k of fields) { if (batch[k] === undefined) delete next[k]; else next[k] = batch[k]; }
+          said(ctx,{kind:'move-not-applied',path,id,what:'tray-demand',whose:who === 'mine' ? 'theirs':'mine'});
+        }
+      }
+      plantings[index] = next;
+    }
+    return {...plan,plantings};
+  }
   function settleWaiting(ctx, start, mine, theirs, plan) {
     const placed = new Set(listOf(plan, 'plantings').map(p => p.id)), ownOf = p => (isObj(p) ? [p.lrfNext, isObj(p.lrfNextKeep) ? p.lrfNextKeep.keep : null] : [null, null]);
     const clean = (own, theirOwn, path) => {
@@ -784,7 +826,8 @@
       const ctx = { report, rules: RULES, order, sowings: new Map() };
       let plan = join(ctx, '', [], start, mine, theirs);
       if (plan === mine || plan === theirs) return { ok: true, plan, report };   // one side changed nothing: the other's plan, as it is
-      plan = settleWaiting(ctx, start, mine, theirs, settleStock(ctx, start, mine, theirs, settleTwins(ctx, start, mine, theirs, settleTrays(ctx, start, mine, theirs, plan))));
+      plan = settleStock(ctx, start, mine, theirs, settleTwins(ctx, start, mine, theirs, settleTrays(ctx, start, mine, theirs, plan)));
+      plan = settleWaiting(ctx, start, mine, theirs, settleHarvests(ctx, start, mine, theirs, plan));
       const why = verify(start, mine, theirs, plan, report);
       return why ? { ok: false, why, report } : { ok: true, plan, report };
     } catch (error) {

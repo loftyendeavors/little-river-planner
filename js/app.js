@@ -31,7 +31,7 @@
   }[store && store.readOnly] || '');
   const rebuild = () => { state.engine = E.create(state.plan, Lib); };
   /** What this app keeps beside a plan, apart from the plan's own records. It travels in a plan file's own note (see withOwn). */
-  const OWN_KEYS = ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting', 'supplies', 'runs'];
+  const OWN_KEYS = ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting', 'supplies', 'runs', 'buyerDemand', 'harvestEntries'];
   /**
    * A fingerprint of what the plan says: the same for the same plan, whenever and wherever it was opened. The app's own
    * bookkeeping (when the plan was loaded, from which file) is left out. Sync and snapshots tell "changed" from "the same" by it.
@@ -119,6 +119,7 @@
   }
   function commit(label, ops, options = {}) {
     if (!ops.length) return false;
+    if (movesHarvestedPlanting(ops)) return refuse('This planting has a recorded harvest. Take back its harvest entries before changing its planting date or space, or removing it.');
     if (elsewhere()) return refuse(elsewhere());
     // A sowing day set by hand belongs to the date it was set against: when the planting moves, the plan's own day applies again.
     ops = ops.map(op => { if (op.kind || !op.before || !op.after || !op.after.sowOn || op.after.liveTray || op.before.date === op.after.date || op.before.sowOn !== op.after.sowOn) return op; const after = { ...op.after }; delete after.sowOn; return { ...op, after }; });
@@ -192,6 +193,11 @@
     if (elsewhere()) { refuse(elsewhere()); return; }
     const step = state.undo.pop();
     if (!step) return;
+    const harvests = harvestEntries();
+    if (harvests.length && step.ops.some(op => !op.kind && op.after && (!op.before || op.before.date !== op.after.date || op.before.bedId !== op.after.bedId) && harvests.some(x => x.plantingId === op.after.id))) {
+      state.undo.push(step);
+      return refuse('A harvest is recorded on this planting. Take back the harvest before undoing its dates or place.');
+    }
     const way = undoWay(step);
     if (!way) { state.undo.push(step); refuse(`“${step.label}” cannot be undone by itself: it recorded work or seed, and another device has changed the same records since. Take the work back where it was recorded.`); return; }
     state.last = null;
@@ -209,6 +215,10 @@
     const step = state.redo.pop();
     if (!step) return;
     state.last = null;
+    if (movesHarvestedPlanting(step.ops)) {
+      state.redo.push(step);
+      return refuse('A harvest is recorded on this planting. Its date and space cannot be redone.');
+    }
     state.undo.push(step); adopt(withOps(state.plan, step.ops, 'do'));
     if (state.sel && state.sel.type === 'waiting' && !waitingOne(state.sel.id)) select(null);
     toast(`Redid: ${step.label}`);
@@ -1682,6 +1692,116 @@
     const n = mine.length + held.length;
     return commit(label || (options.plantings ? `Remove a succession of ${what} and its ${n} planting${n === 1 ? '' : 's'}` : `Remove a succession of ${what}, keeping its plantings`), [...ops, runsOp(list.filter(r => r.id !== id))], { unchecked: true });
   }
+  /** Preserve planting identity, bed geometry and recorded work throughout a bulk edit. */
+  const harvestEntries = () => state.plan.lrfNext?.harvestEntries || [];
+  function harvestProducts(p) {
+    const eng = state.engine, r = p && eng.calc(p), y = r && eng.yieldOf(p,r);
+    return y ? (eng.soldOf(p,r,y) || [y]).map(item => ({
+      thing: item.thing || '', name: item.thing ? item.name : eng.crop(p.cropId).name, unit: item.unit
+    })) : [];
+  }
+  function movesHarvestedPlanting(ops) {
+    const ids = new Set(harvestEntries().map(x => x.plantingId));
+    return ids.size > 0 && ops.some(op => !op.kind && op.before && ids.has(op.before.id) &&
+      (!op.after || op.after.date !== op.before.date || op.after.bedId !== op.before.bedId));
+  }
+  function recordHarvest(input) {
+    const p = state.engine.planting(input.plantingId), product = harvestProducts(p).find(x => x.thing === input.thing && x.unit === input.unit);
+    const when = E.s2d(input.date);
+    if (!product || !E.validDate(when) || E.d2s(when) !== input.date || input.date > todayText()) return refuse('Choose a planting, its selling unit and a harvest date on or before today.');
+    const values = [input.marketable, input.culls];
+    if (!input.id || values.some(v => !Number.isFinite(v) || v < 0 || (root.LRFForecast.counted(product.unit) && !Number.isSafeInteger(v))) || !values.some(v => v > 0)) return refuse('Enter a positive harvest quantity. Use whole numbers for items sold by count.');
+    const before = harvestEntries();
+    if (before.some(x => x.id === input.id)) return false;
+    const entry = {id:input.id, plantingId:p.id, cropId:p.cropId, date:input.date, name:product.name, unit:product.unit, thing:product.thing,
+      space:bedLabel(state.engine.bedOf(p.bedId)), marketable:input.marketable, culls:input.culls};
+    return commit('Record harvest', [{kind:'own',key:'harvestEntries',before:state.plan.lrfNext?.harvestEntries || null,after:[...before,entry]}], {page:true});
+  }
+  function takeBackHarvest(id) {
+    const before = harvestEntries(), after = before.filter(x => x.id !== id);
+    return before.length !== after.length && commit('Take back harvest entry', [{kind:'own',key:'harvestEntries',before,after:after.length ? after : null}], {page:true});
+  }
+  async function runEditRecords() {
+    const attic = await loadAttic();
+    return attic.rest || {};
+  }
+  function editMembers(id, records) {
+    const mine = [...Ahead.runPlantings(state.plan, id), ...waiting().filter(p => p.run?.id === id)];
+    return mine.sort((a, b) => a.run.n - b.run.n).map(p => ({
+      p, locked: !!p.liveTray || Trays.locked(state.plan, p, records)
+    }));
+  }
+  function previewRunEdit(id, input, records) {
+    const plan = state.plan, eng = state.engine, run = runs().find(x => x.id === id);
+    if (!run) return { error: 'This run is no longer in the plan.' };
+    const shift = Number(input.shift), every = input.every === '' ? null : Number(input.every);
+    if (!Number.isInteger(shift) || Math.abs(shift) > 366 || (every !== null && (!Number.isInteger(every) || every < 1 || every > 366))) return { error: 'Enter whole days. Shift up to 366 days or space plantings 1–366 days apart.' };
+    const members = editMembers(id, records), first = members.find(x => !x.locked && !input.drop.includes(x.p.id));
+    const rows = [], ops = [], held = new Map();
+    for (const { p, locked } of members) {
+      let after = p;
+      if (!locked && input.drop.includes(p.id)) after = null;
+      else if (!locked && first) {
+        const delta = every === null ? shift : E.dayDiff(E.s2d(first.p.date), E.s2d(p.date)) + shift + (p.run.n - first.p.run.n) * every;
+        if (delta) {
+          after = { ...p, date: E.d2s(E.addDays(E.s2d(p.date), delta)) };
+          if (p.sowOn && E.validDate(E.s2d(p.sowOn))) after.sowOn = E.d2s(E.addDays(E.s2d(p.sowOn), delta));
+        }
+        if (every !== null && every !== p.run.gap) after = { ...after, run: { ...p.run, gap: every } };
+      }
+      rows.push({ before: p, after, locked });
+      if (after === p) continue;
+      if (p.bedId) ops.push({ before: p, after });
+      else held.set(p.id, after);
+    }
+    if (held.size) ops.push(waitingOp(waiting().map(p => held.has(p.id) ? held.get(p.id) : p).filter(Boolean)));
+    const next = ops.length ? E.create(withOps(plan, ops, 'do'), Lib) : eng;
+    let error = '';
+    for (const { before, after } of rows) {
+      if (!after || !after.bedId || after.date === before.date) continue;
+      const r = next.calc(after);
+      if (!r) { error = 'This planting has no valid growing space.'; break; }
+      const trouble = Ahead.seasonTrouble(next, after, r);
+      if (trouble) { error = bedLabel(r.b, next) + ' · ' + trouble; break; }
+    }
+    const conflict = Rails.refusal(eng, next, touched(ops, next));
+    if (conflict) error = refusalText(conflict, next);
+    const weeks = [];
+    if (ops.length) {
+      const F = root.LRFForecast, years = new Set(), crops = new Set();
+      for (const {before, after} of rows.filter(m => m.before !== m.after)) {
+        for (const [engine, p] of [[eng,before],[next,after]]) {
+          const r = p?.bedId && engine.calc(p);
+          if (!r) continue;
+          crops.add(p.cropId);
+          const y = engine.yieldOf(p,r);
+          if (!y) continue;
+          for (const part of engine.soldOf(p,r,y) || [y]) {
+            const from = part.first || r.first, last = E.addDays(part.last || r.last, Math.max(0, Math.ceil((part.keep || 0) * 7) - 1));
+            for (let year = from.getFullYear(); year <= last.getFullYear(); year++) years.add(year);
+          }
+        }
+      }
+      for (const year of [...years].sort()) {
+        const options = {year, use:'commercial'}, base = F.kept(eng,options), trial = F.kept(next,options);
+        const relevant = m => new Map(m.rows.filter(r => crops.has(r.cropId)).map(r => [r.key, r]));
+        const a = relevant(base), b = relevant(trial), keys = new Set([...a.keys(), ...b.keys()]);
+        for (const week of F.periods(base, 'week')) {
+          for (const key of keys) {
+            const old = a.get(key), now = b.get(key), crop = now || old;
+            const was = old ? F.sum(old.days, week.i0, week.i1) : 0, total = now ? F.sum(now.days, week.i0, week.i1) : 0;
+            if (Math.abs(was - total) > 0.00001) weeks.push({start:week.start, name:crop.name, unit:crop.unit, was, total});
+          }
+        }
+      }
+    }
+    return { plan, ops, rows, next, weeks, error };
+  }
+  function applyRunEdit(preview) {
+    if (!preview || preview.plan !== state.plan) return refuse('The plan changed. Preview the run again.');
+    if (preview.error || !preview.ops.length) return false;
+    return commit('Edit remaining succession plantings', preview.ops, { page: true });
+  }
   function removeWaiting(ids, label) {
     const gone = new Set(ids), list = waiting(), left = list.filter(w => !gone.has(w.id)), n = list.length - left.length;
     if (!n) return false;
@@ -2681,7 +2801,7 @@
     state, on, emit, start, planYear, setDate, select, setView, arm, bedLabel, cropLabel,
     commit, undo, redo, lastChange, refuse, setUse, setGives, setPlantedIn, farmDates, farmDatesPreview, setFarmDates, shareDrop, applyShare, askShare, asksToShare, equalShares, planVarieties, addVarieties, sendToWait, mixing: () => state.mixing, endMixing: () => setMixing(null), updatePlanting, updateBeds, removePlantings, preview, place, addPlantings, openAhead, setAssumption, setGardenType, setStart, setStarts, setYield, setSell, setSellV, setLooked, setStartLooked, setStarting, setHouse, setHouseFarm, addThing, setThing, removeThing, thingWaits, thingWhy, THING_UNITS, sellOps, thingsAfter,
     auditSurvey, auditStudy, auditPreview, auditApply,
-    waiting, waitingOne, placeWaiting, removeWaiting, updateWaiting, runs, addRun, removeRun,
+    waiting, waitingOne, placeWaiting, removeWaiting, updateWaiting, runs, addRun, removeRun, runEditRecords, editMembers, previewRunEdit, applyRunEdit, harvestEntries, harvestProducts, recordHarvest, takeBackHarvest,
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, failedRange, previewFailed, markFailed, seasonRecords, takeBackSeason, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     yieldOps, engineAfter: ops => E.create(withOps(state.plan, ops, 'do'), Lib),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (elsewhere()) { refuse(elsewhere()); return null; } if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },

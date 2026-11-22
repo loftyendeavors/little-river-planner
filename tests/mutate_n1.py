@@ -101,7 +101,7 @@ for name, rel, was, new in ([(None, None, None, None)] if faults else []) + faul
         f = copy / rel; s = f.read_text(encoding="utf-8")
         if s.count(was) != 1 or was == new: broken.append(name); print(f"BROKEN {name} :: the text to change is there {s.count(was)} times", flush=True); continue
         f.write_text(s.replace(was, new), encoding="utf-8")
-    cmd = ["node", str(tests / "n1_test.cjs"), str(copy), str(plan), str(OLD)] if mode == "node" else ["python3", "-I", str(tests / "n1_check.py"), str(copy), str(scratch / "shots-n1")]
+    cmd = ["node", str(tests / "n1_test.cjs"), str(copy), str(plan), str(OLD), str(OLD.parent.parent / "pre-nursery" / "js")] if mode == "node" else ["python3", "-I", str(tests / "n1_check.py"), str(copy), str(scratch / "shots-n1")]
     try: out = subprocess.run(cmd, capture_output=True, text=True, timeout=300).stdout
     except subprocess.TimeoutExpired: out = "timed out"
     try: d = json.loads(out[out.rfind('{"passed"'):]); names = [str(x.get("name") if isinstance(x, dict) else x) for x in d["failed"]]; ran = True
