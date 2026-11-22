@@ -31,7 +31,7 @@
   }[store && store.readOnly] || '');
   const rebuild = () => { state.engine = E.create(state.plan, Lib); };
   /** What this app keeps beside a plan, apart from the plan's own records. It travels in a plan file's own note (see withOwn). */
-  const OWN_KEYS = ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting', 'supplies', 'runs'];
+  const OWN_KEYS = ['crates', 'trayStart', 'trays', 'groups', 'facts', 'waiting', 'supplies', 'runs', 'waterFeed'];
   /**
    * A fingerprint of what the plan says: the same for the same plan, whenever and wherever it was opened. The app's own
    * bookkeeping (when the plan was loaded, from which file) is left out. Sync and snapshots tell "changed" from "the same" by it.
@@ -1450,6 +1450,11 @@
     if ((before == null ? null : before) === (value == null ? null : value)) return false;
     return commit(label, [{ kind: 'own', key, before: before == null ? null : before, after: value == null ? null : value }], { unchecked: true });
   }
+  function saveWaterFeed(after, label, undoBook) {
+    const before = state.plan.lrfNext?.waterFeed || null;
+    // Undo of a physical observation keeps its identity as void. A delayed upload cannot restore the debit.
+    return commit(label, [{ kind: 'own', key: 'waterFeed', before: undoBook || before, after }], { unchecked: true });
+  }
   // ───────────────────────── the nursery ─────────────────────────
   // The benches are a statement about the farm, like the list of assumptions: a change is never refused, it moves no
   // planting, and what it does to the room is said when it is made.
@@ -2429,7 +2434,7 @@
     return { ok: false, why: 'The plan here kept changing while the two were being joined. It is tried again at the next look.' };
   }
   const WORDS = { seedInventory: 'seed on hand', assumptions: 'the assumptions', beds: 'the layout', gardens: 'the layout', map: 'the layout', containers: 'the layout', varieties: 'the crop library', crops: 'the crop library', cropUnits: 'the crop library',
-    nursery: 'the nursery', liveTrayPlans: 'tray demand', settings: 'the farm’s settings', customers: 'customers', planningPreferences: 'planning settings', 'own.waiting': 'what waits to be placed', 'own.runs': 'successions', 'own.supplies': 'supplies' };
+    nursery: 'the nursery', liveTrayPlans: 'tray demand', settings: 'the farm’s settings', customers: 'customers', planningPreferences: 'planning settings', 'own.waiting': 'what waits to be placed', 'own.runs': 'successions', 'own.supplies': 'supplies', 'own.waterFeed': 'water and feed' };
   /** What was taken in, as a line: "1 sowing recorded, 2 plantings changed". */
   function takenLine(t) {
     const parts = [], n = (count, one, many) => `${UI.num(count)} ${count === 1 ? one : many}`;
@@ -2664,7 +2669,7 @@
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, failedRange, previewFailed, markFailed, seasonRecords, takeBackSeason, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     yieldOps, engineAfter: ops => E.create(withOps(state.plan, ops, 'do'), Lib),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (elsewhere()) { refuse(elsewhere()); return null; } if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
-    saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, editNursery, setSupply, setLiveSow, traysToMonday: () => applyTrayStart(),
+    saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, saveWaterFeed, editNursery, setSupply, setLiveSow, traysToMonday: () => applyTrayStart(),
     snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, joined: () => state.joined || null, useMine, doneJoined: () => { state.joined = null; emit('joined'); }, windowState: () => (store ? store.readOnly : ''), useThisWindow, sync: () => sync, syncInfo, linkService: () => (sync && sync.linkService ? sync.linkService() : null), snapshotsKept: () => !!Snaps
   };
 })(window);

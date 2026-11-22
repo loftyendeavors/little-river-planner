@@ -28,6 +28,7 @@
     <i class="views-sep" aria-hidden="true"></i>
     <button type="button" data-view-btn="sow" data-hook="view-tab" aria-pressed="false" title="The week’s work, nursery and field, ticked as it is done">Tasks</button>
     <button type="button" data-view-btn="trays" data-hook="view-tab" aria-pressed="false" title="Bench room, live trays, supplies and the benches themselves">Nursery</button>
+    <button type="button" data-view-btn="water" data-hook="view-tab" aria-pressed="false" title="Fertility and irrigation records by garden">Water</button>
     <button type="button" data-view-btn="seeds" data-hook="view-tab" aria-pressed="false" title="Varieties, seed stock and orders">Seeds</button>
     <i class="views-sep" aria-hidden="true"></i>
     <button type="button" data-view-btn="assume" data-hook="view-tab" aria-pressed="false" title="The figures the plan rests on, crop by crop">Assumptions</button>
@@ -155,6 +156,7 @@
     <div class="view view-sow" id="sowView"><div class="as-wrap tr-wrap sw-wrap" id="swWrap"></div></div>
     <div class="view view-trays" id="traysView"><div class="as-wrap tr-wrap" id="trWrap"></div></div>
 
+    <div class="view view-water" id="waterView"><div class="as-wrap" id="wfWrap"></div></div>
     <div class="view view-assume" id="assumeView">
       <div class="as-wrap">
         <header class="as-head">
@@ -166,6 +168,7 @@
         </header>
         <div class="seg as-mode" role="group" aria-label="Which half of the list">
           <button type="button" data-as-mode="days" aria-pressed="true">Days to harvest</button>
+          <button type="button" id="wfAssumptions" data-hook="wf-assumptions">Products and recipes</button>
           <button type="button" data-as-mode="harvest" aria-pressed="false">Yield and price</button>
         </div>
         <details class="as-places" id="asPlaces"><summary id="asPlacesSum">Where things grow</summary><div class="as-places-body" id="asPlacesBody"></div></details>
@@ -304,6 +307,8 @@
 <script src="js/backupui.js"></script>
 <script src="js/built.js"></script>
 <script src="js/changes.js"></script>
+<script src="js/waterfeed.js"></script>
+<script src="js/waterview.js"></script>
 <script src="js/main.js"></script>
 <script src="js/pwa.js"></script>
 </body>
