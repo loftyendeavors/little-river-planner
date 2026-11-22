@@ -84,7 +84,7 @@
   /** Taken whole from one side, never half from each. */
   const WHOLE = new Set(['beds[].px', 'beds[].potLayout', 'gardens[].bedOrder', 'gardens[].measuredSize', 'gardens[].liquidFeedProfile',
     'lrfNext.waterFeed.targets.*', 'lrfNext.waterFeed.products.*', 'lrfNext.waterFeed.recipes.*', 'lrfNext.waterFeed.tanks.*', 'lrfNext.waterFeed.zones.*',
-    'lrfNext.waterFeed.requests.*', 'lrfNext.waterFeed.reports.*', 'lrfNext.waterFeed.receipts.*', 'lrfNext.waterFeed.labs.*', 'gardens[].mapLayout', 'map.imageFile', 'nursery.spaces[].benchLayout',
+    'lrfNext.waterFeed.soilDays.*', 'lrfNext.waterFeed.soil.*', 'lrfNext.waterFeed.requests.*', 'lrfNext.waterFeed.reports.*', 'lrfNext.waterFeed.receipts.*', 'lrfNext.waterFeed.labs.*', 'gardens[].mapLayout', 'map.imageFile', 'nursery.spaces[].benchLayout',
     'plantings[].bedLayout', 'plantings[].growingDefaults', 'plantings[].liveTray', 'varieties[].supplierPacks', 'varieties[].prices', 'varieties[].webImport',
     // a thing written in one act, or whose parts are read together: a job put off (from, to), a planting marked failed (on, at), what the planner noted of an edit (set, was),
     // a photo's file and its type, a crop's selling line (its price, yield and weight are by its unit), a demand plan (its editor checks it whole)

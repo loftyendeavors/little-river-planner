@@ -6,8 +6,9 @@
   const put = (book, table, row) => ({ ...book, [table]: { ...book[table], [row.id]: row } });
   const sortTime = (a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id);
   const scopeKey = report => JSON.stringify([...(report.beds || [])].sort());
+  const stationKey = r => r.controller && r.station ? JSON.stringify([r.controller.trim().toLowerCase(),r.station]) : '';
   function sameRunEvidence(a, b) {
-    return ['elapsed','planned','meter','status','source','rate'].every(key=>(a[key] ?? null)===(b[key] ?? null)) && scopeKey(a)===scopeKey(b);
+    return ['elapsed','planned','meter','status','source','rate'].every(key=>(a[key] ?? null)===(b[key] ?? null)) && scopeKey(a)===scopeKey(b) && stationKey(a)===stationKey(b);
   }
   function number(raw, label, min = 0, max = Infinity) {
     if (raw == null || String(raw).trim() === '' || !Number.isFinite(Number(raw)) || Number(raw) < min || Number(raw) > max)
@@ -53,11 +54,12 @@
       if (!byJob.has(groupId)) byJob.set(groupId, []);
       byJob.get(groupId).push(r);
     }
-    return Array.from(byJob, ([id, reports]) => {
+    const result = Array.from(byJob, ([id, reports]) => {
       const chosen = reports.find(r => r.id === book.accepted?.[id]) || reports[0];
       const pending = reports.filter(r => r.id === chosen.id || !book.review?.[r.id]);
       const differing = key => new Set(pending.map(r=>r[key]).filter(v=>v!=null)).size > 1;
-      const meterConflict = kind === 'run' && differing('meter');
+      const meterStations = new Set(pending.map(stationKey).filter(Boolean));
+      const meterConflict = kind === 'run' && (differing('meter') || meterStations.size>1);
       const workConflict = kind === 'run' && (differing('status') || differing('elapsed'));
       // A missing rate can be an explicit choice to omit today's setting on a past run.
       const rateConflict = kind === 'run' && chosen.status!=='Skipped' && pending.every(r=>r.meter==null)
@@ -72,6 +74,26 @@
           kind === 'delivery' && r.at.slice(0,16) !== chosen.at.slice(0,16))));
       return { id, chosen, reports, unsettled, meterConflict, workConflict, rateConflict, planned, pending };
     }).sort((a, b) => sortTime(a.chosen, b.chosen));
+    if (kind === 'run') {
+      const byStationTime = new Map();
+      for (const group of result) {
+        for (const r of group.pending) {
+          const station = stationKey(r);
+          if (!station) continue;
+          const key = JSON.stringify([station,r.at.slice(0,16)]);
+          if (!byStationTime.has(key)) byStationTime.set(key,new Set());
+          byStationTime.get(key).add(group);
+        }
+      }
+      for (const matches of byStationTime.values()) {
+        if (matches.size<2) continue;
+        for (const g of matches) {
+          g.workConflict=true;
+          g.overlap=[...new Set([...(g.overlap || []),...[...matches].map(m=>m.id)])];
+        }
+      }
+    }
+    return result;
   }
   const lastMix = (book, tankId) => groups(book, 'refill').filter(g => g.chosen.tankId === tankId).at(-1);
   // Two phones can both know the last accepted refill. A later upload does not start a new cycle.
@@ -142,7 +164,7 @@
       metered: null, estimated: null, unknown: 0, reviews: [] };
     for (const group of groups) {
       const r = group.chosen;
-      if (group.unsettled.length) total.reviews.push(group);
+      if (group.unsettled.length || group.overlap) total.reviews.push(group);
       if (group.workConflict) {
         total.disputed++;
       } else if (r.status === 'Skipped') {

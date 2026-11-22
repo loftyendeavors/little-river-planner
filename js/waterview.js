@@ -80,9 +80,11 @@
     const dilution = field('Injector dilution 1 to (optional)',old.ratio,'number');
     const flowPerHundred = field('Tape rating (gal/min per 100 ft)',old.tapeRate,'number'), lines=field('Tape lines per served bed',old.lines,'number');
     const rate = field('Rated flow (gal/min, optional)', old.tapeRate ? '' : old.rate, 'number');
+    const controller=field('Hydrawise controller name',old.controller), station=field('Hunter station number',old.station,'number');
     const beds = App.state.plan.beds.filter(b => b.gardenId === id && b.active !== false);
     const scope = beds.map(b => [b.id, h('input', { type: 'checkbox', checked: (old.beds || []).includes(b.id) })]);
     sheet((tank ? 'Feed tank' : 'Irrigation zone') + ' · ' + gardenName(id), [title.el, tank ? [recipe.el,size.el,dilution.el] : [rate.el,h('details',{open:old.tapeRate!=null},h('summary','Calculate flow from bed tape'),line(flowPerHundred.el,lines.el))],
+      tank ? null : h('details',{open:!!old.controller},h('summary','Hunter controller and station'),line(controller.el,station.el)),
       h('details', h('summary','Served beds'), note('Leave clear if the served beds are unknown.'), scope.map(([bid,c],i) => h('label.wf-choice', c, String(beds[i].bed || bid))))], 'Save equipment', () => {
       const common = { id: old.id || App.uid(), gardenId: id, name: W.name(title.get(), 'an equipment name'), beds: scope.filter(([,c])=>c.checked).map(([bid])=>bid) };
       if (tank) return storeRow('tanks', { ...common, recipeId: recipe.get(), gallons: W.number(size.get(),'tank batch size',0.000001), ratio: dilution.get()===''?null:W.number(dilution.get(),'injector dilution denominator',1) }, 'Tank saved');
@@ -90,7 +92,9 @@
       if (fromTape && rate.get() !== '') throw Error('Choose one source for the zone flow: the total or the tape rating.');
       if (fromTape) W.tapeFlow(beds.filter(b=>common.beds.includes(b.id)),lines.get(),flowPerHundred.get());
       const flow = rate.get()==='' ? null : W.number(rate.get(),'rated flow',0.000001);
-      return storeRow('zones',{...common,rate:flow,tapeRate:fromTape?Number(flowPerHundred.get()):null,lines:fromTape?Number(lines.get()):null},'Zone saved');
+      const mapping=E.station(controller.get(),station.get());
+      if(mapping.controller && rows('zones').some(z=>z.id!==common.id && z.controller?.toLowerCase()===mapping.controller.toLowerCase() && z.station===mapping.station)) throw Error('This controller and station already belong to another planner zone.');
+      return storeRow('zones',{...common,...mapping,rate:flow,tapeRate:fromTape?Number(flowPerHundred.get()):null,lines:fromTape?Number(lines.get()):null},'Zone saved');
     });
   }
   function library() {
@@ -252,8 +256,8 @@
       recordMix(tank,task,{job,itemsShown:shown,at:whenRecorded(time.get()),gallons:gallons.get(),remainder:carry.get(),actual:Object.fromEntries(items.filter(([,f,used])=>used||f.get()!=='').map(([id,f])=>[id,f.get()]))}));
   }
   function tasks() {
-    const tanks=rows('tanks'), phoneZones=document.body.classList.contains('phone')?rows('zones'):[];
-    if (!tanks.length && !phoneZones.length) return null;
+    const phone=document.body.classList.contains('phone'), tanks=rows('tanks'), phoneZones=phone?rows('zones'):[];
+    if (!tanks.length && !phone) return null;
     const b=book(), due=tanks.filter(t=>W.reminder(b,t.id));
     const cards=due.map(t=>{
       const task=W.reminder(b,t.id), items=approved(t), job=W.cycle(b,t.id);
@@ -263,7 +267,8 @@
     });
     return h('section.wf-block',{dataset:{hook:'wf-tasks'}},h('h3','Water and feed'),due.length ? cards : tanks.length?note('Nothing due'):null,
       tanks.map(t=>{const last=W.lastMix(b,t.id);return line(t.name, last?'Last refill '+when(last.chosen.at):'No refill recorded',!W.reminder(b,t.id) && approved(t) ? button('Refill',()=>mixDetails(t),'wf-refill') : null);}),
-      phoneZones.length?button('Record irrigation run',()=>pickRunZone(phoneZones),'wf-phone-run'):null);
+      phoneZones.length?button('Record irrigation run',()=>pickRunZone(phoneZones),'wf-phone-run'):null,
+      phone?button('Irrigation and soil readings',()=>{root.LRFSowView.leavePhone();lens='Irrigation';App.setView('water');},'wf-phone-soil'):null);
   }
   function pickRunZone(zones) {
     if (zones.length===1) {runForm(zones[0]);return;}
@@ -275,6 +280,142 @@
       runForm(zone);
     });
   }
+  const E = root.LRFEquipment;
+  const nativeLink = () => h('a.btn.small',{href:'https://app.hydrawise.com/',target:'_blank',rel:'noopener noreferrer'},'Open Hydrawise');
+  const stationText = z => z?.controller ? z.controller+' · station '+z.station : '';
+  const activeSoil = (table='soil') => rows(table).filter(r=>!book().voids?.[r.id]);
+  const stale = at => Date.now()-Date.parse(at)>15*60000;
+  const soilLabel = r => E.metrics[r.kind]+' '+num(r.value,r.kind==='ec'?3:1)+' '+r.unit;
+  function attachMeter(group) {
+    const r = group.chosen;
+    const clock=field('Controller on Hunter report',r.controller || book().zones?.[r.zoneId]?.controller);
+    const slot=field('Station on report',r.station || book().zones?.[r.zoneId]?.station,'number');
+    const volume=field('Measured run volume','','number'), unit=field('Volume unit','US gal',null,[['US gal','US gallons'],['L','Litres']]);
+    const confirm=h('input',{type:'checkbox'});
+    sheet('Attach Hunter meter reading',[h('strong',gardenName(r.gardenId)+' · '+r.label),note(when(r.at)+' · '+num(r.elapsed,2)+' minutes · '+r.status),
+      nativeLink(),line(clock.el,slot.el),line(volume.el,unit.el),
+      h('label.wf-choice',confirm,'I matched this zone and start time to a single run volume in Hydrawise.'),
+      note('A daily meter total can cover several runs. A flow rate in gal/min is a different measurement.')],'Attach reading',()=>{
+      const live=W.groups(book(),'run').find(g=>g.id===group.id);
+      if (!live || live.workConflict || live.chosen.id!==r.id || live.chosen.status==='Skipped') throw Error('This run changed. Reopen it and review its evidence first.');
+      const mapping=E.station(clock.get(),slot.get()), meter=E.measured(volume.get(),unit.get());
+      if (!mapping.controller || !confirm.checked) throw Error('Confirm the controller, station and matching run before attaching the reading.');
+      if (!r.controller && rows('zones').some(z=>z.id!==r.zoneId && z.controller?.toLowerCase()===mapping.controller.toLowerCase() && z.station===mapping.station)) throw Error('This station belongs to a different planner zone. Verify the recorded run and the station assignments.');
+      if (r.controller && (r.controller.toLowerCase()!==mapping.controller.toLowerCase() || r.station!==mapping.station)) throw Error('The report must match the controller and station recorded on this run.');
+      if (live.reports.some(x=>x.source==='Hunter flow report' && x.controller?.toLowerCase()===mapping.controller.toLowerCase() && x.station===mapping.station && Math.abs(x.meter-meter)<1e-8)) throw Error('This Hunter reading is already attached.');
+      return report({...r,...mapping,id:App.uid(),job:group.id,entered:now(),meter,source:'Hunter flow report',reference:volume.get()+' '+unit.get()},'Hunter reading attached');
+    });
+  }
+  const soilDayLine=(kind,v)=>E.metrics[kind]+' · '+num(v[0],3)+'–'+num(v[1],3)+' '+({soilmoisture:'%',ec:'mS/cm',temperature:'°F'})[kind]+' · '+v[4]+' readings · latest '+num(v[2],3)+' at '+when(v[3]*1000);
+  const probeName=r=>r.gateway+' · '+(r.channel.startsWith('soil_moisture_ec_')?'WH52':'Moisture probe')+' · channel '+r.channel.split('ch').at(-1);
+  function soilDays(id) {
+    const data=activeSoil('soilDays'), own=data.filter(r=>r.gardenId===id).sort((a,b)=>b.date.localeCompare(a.date));
+    if (!own.length) return null;
+    return h('details.wf-section',h('summary','Daily soil summaries · '+own.length),own.map(r=>h('details.wf-history',
+      h('summary',r.date+' UTC · '+probeName(r)),
+      data.some(other=>other.id!==r.id && other.channel===r.channel && other.date===r.date && other.gateway.toLowerCase()===r.gateway.toLowerCase())?note('Conflicting day summaries. Review the source archive and remove the incorrect entry.'):null,
+      Object.entries(r.summary).map(([kind,v])=>note(soilDayLine(kind,v))),
+      button('Remove summary',()=>sheet('Remove daily summary?',[note(probeName(r)+' · '+r.date+' UTC')],'Remove summary',()=>{
+        const b=book();return save({...b,voids:{...b.voids,[r.id]:true}},'Daily summary removed');
+      }),'wf-soil-day-remove'))));
+  }
+  function soilImport(id) {
+    const upload=h('input.field',{type:'file',accept:'.json,application/json','aria-label':'Ecowitt snapshot JSON'});
+    const gateway=field('Gateway name',''), choice=field('Probe channel','',null,[]);
+    const preview=h('div',{'aria-live':'polite'}), status=note('Choose an Ecowitt V3 real-time snapshot or a daily archive from the local reader.');
+    let probes=[], payload=null, sequence=0;
+    const submitLabel=()=>{const el=preview.closest('form')?.querySelector('button[type=submit]');if(el) el.textContent=payload?.format==='ecowitt-soil-day-v1'?'Save daily summary':'Save channel to garden';};
+    function draw() {
+      const p=probes.find(item=>item.key===choice.get());
+      preview.replaceChildren(...(!p?[]:[
+        ...(p.day?[note('Daily range · '+p.day.date+' UTC'),...Object.entries(p.day.summary).map(([k,v])=>note(soilDayLine(k,v))),
+        note(p.day.date>=new Date().toISOString().slice(0,10)?'Collection is still in progress. Review today and save the summary after the UTC day closes.':'Only this one daily summary is saved. The full samples stay in the archive.')]:[]),
+        ...(p.day?[]:p.readings).map(r=>note(soilLabel(r)+' · '+when(r.at)+(stale(r.at)?' · Over 15 minutes old':''))),
+        ...(p.missing.length?[note('Unavailable or invalid · '+p.missing.join(', '))]:[])]));
+    }
+    async function read(get) {
+      const seq=++sequence;
+      probes=[]; payload=null; choice.control.replaceChildren(); draw(); gateway.control.value='';
+      submitLabel(); status.textContent='Reading snapshot…';
+      try {
+        const imported=await get();
+        if (seq!==sequence || !preview.isConnected) return;
+        const parsed=E.readFile(imported);
+        probes=parsed; payload=imported; gateway.control.value=imported.gateway ? E.gatewayName(imported.gateway) : '';
+        choice.control.replaceChildren(h('option',{value:''},'Choose the installed channel'),...parsed.map(p=>h('option',{value:p.key},p.label)));
+        status.textContent='Match a channel to its installed location in '+gardenName(id)+'.'; submitLabel(); draw();
+      } catch (ex) { if (seq===sequence) {probes=[];payload=null;status.textContent=ex.message;} }
+    }
+    upload.onchange=()=>read(async()=>{
+      const f=upload.files[0];
+      if (!f || f.size>4*1024*1024) throw Error('Choose a real-time snapshot or daily soil archive under 4 MB.');
+      try { return JSON.parse(await f.text()); } catch { throw Error('The selected file is not readable JSON.'); }
+    });
+    const localReader=location.origin==='http://127.0.0.1:8741';
+    const refresh=()=>read(async()=>{
+      const res=await fetch('/equipment-api/soil',{method:'POST',headers:{'content-type':'application/json','x-lrf-reader':'1'},body:'{}',signal:AbortSignal.timeout(16000)});
+      const body=await res.json();
+      if (!res.ok) throw Error(body.error || 'The local reader could not reach Ecowitt.');
+      return body;
+    });
+    function download() {
+      if (!payload || !probes.length) throw Error('Read a snapshot first.');
+      const name=E.gatewayName(gateway.get()), data={};
+      if (payload.format==='ecowitt-soil-day-v1') throw Error('This daily archive is already a portable file.');
+      for (const p of probes) {
+        data[p.key]={};
+        for (const r of p.readings) data[p.key][r.kind]={value:r.value,unit:r.unit,time:Date.parse(r.at)/1000};
+      }
+      const url=URL.createObjectURL(new Blob([JSON.stringify({code:0,gateway:name,data})],{type:'application/json'}));
+      const link=h('a',{href:url,download:'Ecowitt-soil-'+local().replace(/:/g,'-')+'.json'}); link.click(); setTimeout(()=>URL.revokeObjectURL(url),30000);
+    }
+    choice.control.onchange=draw;
+    sheet('Ecowitt soil readings · '+gardenName(id),[localReader?button('Read gateway now',refresh,'wf-probe-read',true):null,
+      h('label.wf-field','Import soil snapshot',upload),status,gateway.el,choice.el,preview,
+      localReader?button('Download soil snapshot',()=>{try {download();} catch(ex) {status.textContent=ex.message;}},'wf-soil-export'):null],
+      'Save channel to garden',()=>{
+        const p=probes.find(item=>item.key===choice.get());
+        if (!p?.readings.length) throw Error('Choose a channel with at least one timestamped reading.');
+        const b=book();
+        if (p.day) {
+          if (p.day.date>=new Date().toISOString().slice(0,10)) throw Error('Save the daily summary after this UTC day closes.');
+          const row=E.dayRecord(activeSoil('soilDays'),gateway.get(),p,id);
+          if (b.voids?.[row.id]) throw Error('This summary was previously removed.');
+          const next=W.put(b,'soilDays',row);
+          return save(next,'Daily soil summary saved',{...next,voids:{...b.voids,[row.id]:true}});
+        }
+        const add=E.candidates(activeSoil(),gateway.get(),p,id).filter(row=>!b.voids?.[row.id]);
+        if (!add.length) throw Error('These readings were already saved or removed for this garden.');
+        const soil={...b.soil};
+        for (const row of add) soil[row.id]=row;
+        const undone={...b,soil,voids:{...b.voids,...Object.fromEntries(add.map(r=>[r.id,true]))}};
+        return save({...b,soil},'Soil readings saved',undone);
+      });
+  }
+  function soilHistory(id) {
+    const data=activeSoil(), all=data.filter(r=>r.gardenId===id).sort((a,b)=>b.at.localeCompare(a.at));
+    if (!all.length) return null;
+    const byKey=new Map(), latest=new Map();
+    for (const r of data) {
+      const key=E.identity(r.gateway,r.channel,r);
+      byKey.set(key,(byKey.get(key)||0)+1);
+    }
+    function observation(r) {
+      const key=E.identity(r.gateway,r.channel,r);
+      const conflict=byKey.get(key)>1;
+      return line(h('b',conflict?'Conflicting probe reports':soilLabel(r)), conflict?soilLabel(r):null,when(r.at),stale(r.at)?'Over 15 minutes old':null);
+    }
+    for (const r of all) {
+      const key=JSON.stringify([r.gateway.toLowerCase(),r.channel,r.kind]);
+      if (!latest.has(key)) latest.set(key,r);
+    }
+    return h('details.wf-section',h('summary','Soil readings · '+all.length),
+      [...latest.values()].map(r=>line(probeName(r),observation(r))),
+      button('Reading history',()=>sheet('Probe history · '+gardenName(id),all.map(r=>h('section.wf-task',
+        h('strong',probeName(r)),observation(r),button('Remove reading',()=>sheet('Remove this reading?',[note(probeName(r)+' · '+soilLabel(r)+' · '+when(r.at))],'Remove reading',()=>{
+          const b=book();return save({...b,voids:{...b.voids,[r.id]:true}},'Probe reading removed');
+        }),'wf-soil-remove'))),'Done'),'wf-soil-history'));
+  }
   function runForm(z) {
     const at=field('Run started at',local(),'datetime-local'), elapsed=field('Actual minutes','','number'), planned=field('Planned minutes (optional)','','number'), meter=field('Metered gallons (optional)','','number');
     const status=field('Run status','Completed',null,['Completed','Interrupted','Skipped'].map(x=>[x,x])), source=field('Evidence','Grower observation',null,['Grower observation','Controller record'].map(x=>[x,x]));
@@ -282,6 +423,7 @@
     sheet('Record run · '+gardenName(z.gardenId)+' · '+z.name,[at.el,line(elapsed.el,planned.el),line(status.el,source.el),meter.el,
       rate!=null?h('label.wf-choice',useRate,'Use '+num(rate,3)+' gal/min to estimate unmetered water for this run'):null], 'Record run',()=>{
       const row=W.run({...z,rate:useRate.checked?rate:null},{id:App.uid(),at:whenRecorded(at.get()),entered:now(),elapsed:elapsed.get(),planned:planned.get(),meter:meter.get(),status:status.get(),source:source.get()});
+      Object.assign(row,E.station(z.controller,z.station));
       row.job=W.nextJob(book(),row.job);
       if (rows('reports').some(r=>!book().voids?.[r.id] && r.kind==='run' && r.job===row.job && W.sameRunEvidence(r,row))) throw Error('This run and evidence are already recorded.');
       return report(row,'Run recorded · '+z.name);
@@ -289,9 +431,16 @@
   }
   function reconcile(group, kind) {
     const isRun=kind==='run', supply=kind==='count'||kind==='delivery';
+    if (group.overlap) {
+      const matches=W.groups(book(),'run').filter(g=>group.overlap.includes(g.id));
+      sheet('Check duplicate station runs',[note('The same Hunter station and start time occur on multiple runs. Their minutes and gallons are held until the extra entry is taken back.'),matches.map(g=>line(
+        h('b',gardenName(g.chosen.gardenId)+' · '+g.chosen.label),when(g.chosen.at),num(g.chosen.elapsed,2)+' min',quantity(g.chosen.meter,'gal'),
+        button('Take back this run',()=>sheet('Take back '+g.chosen.label+'?',[note(gardenName(g.chosen.gardenId)+' · '+when(g.chosen.at))],'Take back',()=>takeBack(g)),'wf-overlap-remove')))],'Done');
+      return;
+    }
     const describe=r=>supply ? amounts(r.items)+' · '+num(r.bags)+' bags × '+num(r.bagLb,3)+' lb + '+num(r.loose,3)+' lb loose'+(r.reference?' · '+r.reference:'') : isRun ? [r.status, quantity(r.elapsed,'min')+' elapsed', (r.planned==null?'Planned time unknown':quantity(r.planned,'min')+' planned'),
       (r.meter==null?'Meter reading unknown':quantity(r.meter,'gal')+' metered'),
-      r.rate==null?'No rated flow':num(r.rate,3)+' gal/min rated',r.beds?.length?'Beds '+bedNames(r.beds):'Served beds unknown',r.source].join(' · ') :
+      r.rate==null?'No rated flow':num(r.rate,3)+' gal/min rated',r.beds?.length?'Beds '+bedNames(r.beds):'Served beds unknown',r.source,stationText(r),r.reference].filter(Boolean).join(' · ') :
       kind==='spread' ? amounts(r.items)+' · '+(r.beds.length?r.beds.length+' treated beds':'whole garden') : amounts(r.items)+' · '+num(r.gallons,2)+' gal final · '+(r.remainder==null?'remainder unknown':num(r.remainder,2)+' gal carried');
     function decide(r,choice) {
       const live=W.groups(book(),kind).find(g=>g.id===group.id);
@@ -316,7 +465,8 @@
       note(run ? (group.planned==null?'Planned time unconfirmed':num(group.planned,2)+' min planned')+' · '+(w.gallons==null?(w.basis==='Unknown'?'Gallons unknown':w.basis):num(w.gallons,2)+' gal · '+w.basis)+' · '+[...new Set(group.reports.map(x=>x.source))].join(' + ') :
       kind==='spread' ? 'Applied to '+(r.beds.length?'beds '+bedNames(r.beds):'the whole garden') : r.recipe+' · '+(r.gallons==null?'Final stock volume unknown':num(r.gallons,2)+' gal final stock')+' · '+(r.remainder==null?'Remainder unknown':num(r.remainder,2)+' gal carried')+' · Delivery unknown'),
       run || kind==='refill' ? note(r.beds?.length?'Served beds '+bedNames(r.beds):'Served beds unknown') : null,
-      line(group.reports.length>1?button('Review reports',()=>reconcile(group,kind),'wf-review'):null,button('Take back entry',()=>sheet('Take back '+r.label+'?',[note('Remove this physical job from totals. Its reports stay in the plan.')],'Take back',()=>takeBack(group)),'wf-take-back')));
+      run && !group.workConflict && r.status!=='Skipped'?button('Attach Hunter meter reading',()=>attachMeter(group),'wf-hunter-meter'):null,
+      line(group.reports.length>1 || group.overlap?button('Review reports',()=>reconcile(group,kind),'wf-review'):null,button('Take back entry',()=>sheet('Take back '+r.label+'?',[note('Remove this physical job from totals. Its reports stay in the plan.')],'Take back',()=>takeBack(group)),'wf-take-back')));
   }
   function labForm(id) {
     const kind=field('Sample type','Soil',null,['Soil','Soil extract','Tissue','Water'].map(x=>[x,x])), sampled=field('Sample date',local().slice(0,10),'date'), lab=field('Lab and report ID',''), method=field('Extraction method or tissue stage',''), analyte=field('Analyte',''), reading=field('Reported value','','text'), unit=field('Original units','');
@@ -455,8 +605,9 @@
       zones.map(z=>{
         const latest=records.filter(group=>group.chosen.zoneId===z.id).at(-1), r=latest?.chosen;
         const last=r ? latest.workConflict?'Run details disputed':r.status+' · '+num(r.elapsed,2)+(latest.planned==null?'':' of '+num(latest.planned,2))+' min' : '';
-        return line(h('strong',z.name),r?last+' · '+when(r.at):'No run in this period',button('Record run',()=>runForm(z),'wf-run'));
-      }),line(button('Add zone',()=>setup(g.id,'zone'),'wf-add-zone')));
+        return line(h('strong',z.name),stationText(z)||null,r?last+' · '+when(r.at):'No run in this period',button('Record run',()=>runForm(z),'wf-run'));
+      }),soilHistory(g.id),soilDays(g.id),line(button('Add zone',()=>setup(g.id,'zone'),'wf-add-zone'),button('Read soil probes',()=>soilImport(g.id),'wf-soil-import')),
+      records.length ? h('details.wf-section',h('summary','Irrigation history · '+records.length),records.slice().reverse().map(x=>history(x,'run'))) : null);
   }
   function fertilityGarden(g, tanks, mixes, dueByTank, selected) {
     const latest=mixes.at(-1), f=selected?seasonFigures(g.id):null;
@@ -481,6 +632,7 @@
     const groups=W.groups(b,isWater?'run':'refill').filter(r=>!gardenId||r.chosen.gardenId===gardenId);
     const records=isWater?groups.filter(g=>insidePeriod(g.chosen)):groups, total=isWater?W.runSummary(records):null;
     const configured=new Set((isWater?zones:tanks).map(row=>row.gardenId));
+    if(isWater) for(const r of [...activeSoil(),...activeSoil('soilDays')]) configured.add(r.gardenId);
     for (const group of groups) configured.add(group.chosen.gardenId);
     if(!isWater) {
       for(const table of ['labs','targets']) for(const row of rows(table)) configured.add(row.gardenId);
@@ -495,6 +647,7 @@
       h('p.frame-figs',isWater ? [h('b',volumeLine(total)),records.length?' · '+runLine(total):''] :
         [h('b',dueByTank.size+' refills due'),' · '+tanks.length+(tanks.length===1?' tank':' tanks')]),
       line(toggle('Water dashboard',['Fertility','Irrigation'],lens,x=>{lens=x;}),filter.el,isWater?toggle('Period',['Last 7 days','Season'],period,x=>{period=x;}):[button('Products and recipes',library,'wf-products'),button('Fertilizer supplies',openSupplies,'wf-open-supplies')]),
+      isWater?line(nativeLink()):null,
       total?.reviews.length?button('Review run evidence ('+total.reviews.length+')',()=>evidenceList(total.reviews),'wf-review'):null,
       isWater && period==='Last 7 days' && records.length?weekChart(records):null,
       selected.length?null:note(all.length ? isWater?'Choose a garden to add its first irrigation zone.':'Choose a garden to record a field application, set targets or add a feed tank.' : 'Add a garden on the Map to get started.'),
