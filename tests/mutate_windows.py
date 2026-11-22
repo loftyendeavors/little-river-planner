@@ -49,7 +49,7 @@ PAGE = [
   ("the lock's answer is ignored: a second window takes changes like the first", 'js/store.js',
    "              if (!lock) { stop('window'); go(); return undefined; }\n", "              if (!lock) { go(); return undefined; }\n", 'a second window says why it takes no change'),
   ('a window that only shows the plan takes a change all the same', 'js/app.js',
-   "    if (!ops.length) return false;\n    if (elsewhere()) return refuse(elsewhere());\n", "    if (!ops.length) return false;\n", 'every change a window took is in the stored plan'),
+   "    if (elsewhere()) return refuse(elsewhere());\n    // A sowing day set by hand", "    // A sowing day set by hand", 'every change a window took is in the stored plan'),
   ('nothing is saved as the page is hidden', 'js/store.js',
    "const hidden = () => { if (backend !== 'memory' && dirty && !saving) { clearTimeout(timer); flush(); } };", "const hidden = () => {};", 'within 0.2 s of the page being hidden'),
 ]
