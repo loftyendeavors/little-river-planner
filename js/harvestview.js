@@ -295,6 +295,8 @@
   function planFromPeriod(row, col, close, weeklyAvailable) {
     if (!plannable(row)) return null;
     const eng = App.state.engine, crop = eng.crop(row.cropId);
+    // An old sale form stays in the records. A new succession must yield the very product and unit ordered.
+    if (row.thing && !eng.thingsOf(row.cropId).some(t => t.counts && t.id === row.thing && t.unit === row.unit)) return null;
     const stock = model('commercial').rows.find(r => r.key === row.key);
     const available = weeklyAvailable ?? F.sendShown(stock ? F.sum(stock.days, col.i0, col.i1) : 0, row.unit);
     const units = F.unitWord(2, row.unit, row.group) || 'each';

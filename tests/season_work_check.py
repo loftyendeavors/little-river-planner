@@ -213,6 +213,7 @@ with sync_playwright() as pw:
     page.get_by_label("Demand product").select_option("basil|lb|check-form")
     page.get_by_label("Demand week").select_option(sale["week"])
     assert "50 marketable picked · 0 culls" in comparison.inner_text() and "0 forecast available" in comparison.inner_text()
+    assert page.get_by_role("button",name="Save and plan the shortfall").count() == 0
     page.get_by_label("Demand product").select_option("basil|lb")
     page.get_by_label("Demand week").select_option(sale["firstWeek"])
     assert "Dec 28, 2026 – Jan 3, 2027" in page.get_by_label("Demand week").locator("option:checked").inner_text()
