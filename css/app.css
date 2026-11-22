@@ -2431,6 +2431,9 @@ table.as tr.as-thing td { background: var(--surface); }
 .sn-still { font-size: var(--type-13); color: var(--muted); flex: 1; }
 .sn-key { margin-left: auto; }
 .sn-farm { background: var(--line); }
+.yc-box.off input { background: var(--surface); border-style: dashed; color: var(--muted); cursor: not-allowed; }
+.sn-own .sn-f { grid-template-columns: max-content minmax(0, 1fr); }
+.sn-own .sn-lab { white-space: nowrap; }
 /* the list: a crop's name is never cut; its short line gives way, from its end */
 .sn .yc-item { grid-template-columns: 16px 20px max-content minmax(0, 1fr); }
 .sn .yc-item b { overflow: visible; }

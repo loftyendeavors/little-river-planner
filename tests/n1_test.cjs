@@ -89,7 +89,16 @@ function full(e, sl, n) {
   typed.lrfNext = { ...(typed.lrfNext || {}), supplies: { pockets: 15 } };
   const bare = clone(plan); delete bare.settings.germ; delete bare.settings.buffer;
   const zero = clone(plan); zero.settings.buffer = 0;
-  for (const [name, pl] of [['figures typed in their old homes', typed], ['no farm germination or spare set', bare], ['a farm spare of 0', zero]]) {
+  // the fifth: varieties with a bare gh only (which the engine does not read) or field days only, crops with plantingMaterial said
+  // outright, some plantings bought in for themselves, and the farm's figures stored as strings
+  const odd = clone(plan); let j = 0, q = 0;
+  for (const v of odd.varieties) { j++; if (j % 4 === 0) { v.gh = 7; delete v.environmentDefaults; } else if (j % 4 === 1) v.environmentDefaults = { v: 1, field: { gh: 3 } }; }
+  const ownO = (id, o) => { const r = (odd.crops = odd.crops || []).find(c => c.id === id); if (r) Object.assign(r, o); else odd.crops.push({ id, ...o }); };
+  if (libTP[0]) ownO(libTP[0], { plantingMaterial: 'seed', method: 'TP', prop: 'pot' });
+  if (libTP[1]) ownO(libTP[1], { plantingMaterial: 'plant' });
+  for (const p of odd.plantings) if (q++ % 7 === 0) p.startedFrom = 'plant';
+  odd.settings = { ...odd.settings, buffer: '12', germ: '90' };
+  for (const [name, pl] of [['figures typed in their old homes', typed], ['no farm germination or spare set', bare], ['a farm spare of 0', zero], ['bare and field-only nursery days, materials said outright, plantings bought in, the farm\'s figures as text', odd]]) {
     const a = full(E0.create(pl, Lib), SL0, N0), b = full(E.create(pl, Lib), SL, N);
     const bad = ['rows', 'bench', 'orders'].map(k => [k, differ(a[k], b[k])]).filter(x => x[1].length);
     if (a.supplies !== b.supplies) bad.push(['supplies', 1]);

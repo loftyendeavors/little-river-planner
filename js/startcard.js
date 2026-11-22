@@ -187,13 +187,29 @@
       for (const x of rows.values()) if (x.was !== x.now) out.supplies.push(x);
       if (Math.abs(s0.mix.need - s1.mix.need) > 0.005) out.supplies.push({ name: 'Potting mix', was: s0.mix.need, now: s1.mix.need, cuft: true });
     } catch (_) { /* a plan the nursery cannot read: the plantings' own figures above still stand */ }
+    // the card's own line of what the crop comes to, before and after: every figure of it that differs is said
+    out.card = [];
+    if (ids.size === 1) {
+      const id = [...ids][0], a = cardFigs(eng, id), b = cardFigs(next, id);
+      for (const k of Object.keys(a)) if (a[k] !== b[k]) out.card.push({ what: CARD_WORDS[k], was: a[k], now: b[k] });
+    }
     out.next = next;
     return out;
+  }
+  const CARD_WORDS = { sowings: 'its sowings', cells: 'its cells', trays: 'its trays', sheets: 'its rockwool sheets', seeds: 'its seed', pots: 'its pots', carriers: 'its carriers', mix: 'its mix', spaces: 'its bench room at the most', buy: 'its plants to buy' };
+  /** What the card says a crop comes to, as words: the figures `movesSaid` holds before and after. */
+  function cardFigs(eng, id) {
+    const c = eng.crop(id);
+    if (!c) return {};
+    const t = totals(eng, c), b = benchOf(eng, id), buy = (eng.plan.plantings || []).filter(p => p.cropId === id).reduce((n, p) => n + ((eng.calc(p) || {}).buy || 0), 0);
+    return { sowings: t.n ? plural(t.n, 'sowing') : 'none', cells: t.cells ? num(t.cells) : 'none', trays: t.trays.length ? traysSaid(t) : 'none', sheets: t.sheets ? plural(t.sheets, 'sheet') : 'none', seeds: t.seeds ? num(t.seeds) : 'none',
+      pots: t.pots ? `${num(t.pots)} of ${t.size} in` : 'none', carriers: t.carriers ? `${plural(t.carriers, 'carrier')} of ${t.per}` : 'none', mix: t.mix ? cuft(t.mix) : 'none', spaces: b.most ? `${num(b.most, 1)} tray spaces` : 'none', buy: buy ? num(buy) : 'none' };
   }
   const traysWord = n => Number.isInteger(Math.round(n * 100) / 100) ? num(n) : num(n, 1);
   /** The moves, in a line of words. Empty when nothing would move. */
   function movesSaid(m) {
     const parts = [];
+    if (m.card && m.card.length) parts.push(m.card.map(x => `${x.what} ${x.was} → ${x.now}`).join(', '));
     const first = m.batches[0];
     if (first) parts.push(`${UI.day(first.was.sow)}: ${num(first.was.cells)} → ${num(first.now.cells)} cells, ${traysWord(first.was.trays)} → ${traysWord(first.now.trays)} trays, ${num(first.was.seeds)} → ${num(first.now.seeds)} seeds`);
     if (m.batches.length > 1) parts.push(`in all ${plural(m.batches.length, 'sowing')}: ${num(m.cells[0])} → ${num(m.cells[1])} cells, ${num(m.seeds[0])} → ${num(m.seeds[1])} seeds`);
@@ -231,14 +247,15 @@
     const after = { ...v };
     if (key === 'days') {
       const cfg = v.environmentDefaults ? JSON.parse(JSON.stringify(v.environmentDefaults)) : null;
+      // the figure the engine reads is each place's (environmentDefaults.field and .greenhouse): that, and nothing else, is written
+      // or cleared. A bare gh, which the engine does not read, is left as it is.
       if (n == null) {
-        delete after.gh;
-        if (cfg) { for (const k of ['field', 'greenhouse']) if (cfg[k]) { delete cfg[k].gh; if (!Object.keys(cfg[k]).length) delete cfg[k]; } }
-        if (cfg && Object.keys(cfg).some(k => k !== 'v')) after.environmentDefaults = cfg; else delete after.environmentDefaults;
+        if (!cfg) return null;
+        for (const k of ['field', 'greenhouse']) if (cfg[k] && 'gh' in cfg[k]) { delete cfg[k].gh; if (!Object.keys(cfg[k]).length) delete cfg[k]; }
+        if (Object.keys(cfg).some(k => k !== 'v')) after.environmentDefaults = cfg; else delete after.environmentDefaults;
       } else {
         const gh = n / 7, base = cfg || {};
-        after.gh = gh;
-        after.environmentDefaults = { ...base, v: 1, field: { ...(base.field || {}), gh }, greenhouse: { ...(base.greenhouse || {}), gh } };
+        after.environmentDefaults = { ...base, v: base.v || 1, field: { ...(base.field || {}), gh }, greenhouse: { ...(base.greenhouse || {}), gh } };
       }
     } else if (n == null) delete after[key]; else after[key] = n;
     return JSON.stringify(after) === JSON.stringify(v) ? null : [{ kind: 'variety', before: v, after }];
@@ -269,13 +286,44 @@
     if (!ops) return false;
     ui.pending = null;
     const done = App.setStarting(label, ops);
-    if (done) ui.said = { key, text: `${label}.` };
+    // the line that says what was done belongs to this one step (render drops it once another step is taken, undone or redone)
+    if (done) ui.said = { key, text: `${label}.`, step: App.state.undo[App.state.undo.length - 1] };
     ui.redraw();
     return done;
   }
   // Undo where the step was taken: the line then says it is undone, and no message is shown (DESIGN.md rule 3, one answer)
-  const undoLink = () => ui.said && ui.said.done ? '' : h('button.link', { type: 'button', dataset: { hook: 'start-undo' }, title: 'Takes the last step back',
-    onclick: () => { ui.said = ui.said ? { key: ui.said.key, text: `Undone: ${ui.said.text.replace(/\.$/, '')}.`, done: true } : null; App.undo({ quiet: true }); } }, 'Undo');
+  const undoLink = () => ui.said && ui.said.done ? '' : h('button.link', { type: 'button', dataset: { hook: 'start-undo' }, title: 'Takes this step back',
+    onclick: () => {
+      const said = ui.said, top = App.state.undo[App.state.undo.length - 1];
+      // only ever the step the line names: if another has been taken since, the line goes and nothing is undone
+      if (!said || !said.step || top !== said.step) { ui.said = null; ui.redraw(); return; }
+      ui.said = { key: said.key, text: `Undone: ${said.step.label}.`, done: true, step: said.step };
+      App.undo({ quiet: true });
+    } }, 'Undo');
+  /** The line of the last step stands only while that step is the last one taken (or, undone here, the next one to redo). */
+  function sayingStill() {
+    const s = ui.said;
+    if (!s || !s.step) return;
+    const last = list => list[list.length - 1];
+    if (s.done ? last(App.state.redo) !== s.step : last(App.state.undo) !== s.step) ui.said = null;
+  }
+  // what the engine counts for one planting, figure by figure: the figure a typed box is held to (`uses`)
+  const USE = {
+    germ: (eng, r) => r.boughtIn || r.rack || r.bulbs ? null : r.sowing ? r.sowing.germination * 100 : +r.c.germ > 0 ? +r.c.germ : +eng.plan.settings.germ > 0 ? +eng.plan.settings.germ : 85,
+    spare: (eng, r) => r.sowing ? r.sowing.buffer : r.boughtIn ? (r.c.spare != null && r.c.spare !== '' && Number.isFinite(+r.c.spare) ? +r.c.spare : Number.isFinite(+eng.plan.settings.buffer) && eng.plan.settings.buffer !== '' && eng.plan.settings.buffer != null ? Math.max(0, +eng.plan.settings.buffer) : 0) : null,
+    spc: (eng, r) => r.sowing ? r.sowing.seedsPerCell : null,
+    days: (eng, r) => r.sowing && !r.tw ? Math.round((+r.c.gh || 0) * 7) : null,
+    potUpWk: (eng, r) => r.sowing && r.c.prop === 'potup' ? Math.round(Math.max(0, Number.isFinite(+r.c.potUpWk) && r.c.potUpWk !== '' && r.c.potUpWk != null ? +r.c.potUpWk : 2) * 7) : null,
+    rockwoolDays: (eng, r) => r.tw ? r.c.ghDays : null,
+    seedsFt: (eng, r) => !r.sowing && !r.boughtIn && !r.rack && r.c.method === 'DS' ? +r.c.seedsFt || 0 : null
+  };
+  const usesOf = (eng, list, k) => uniform(eng, list, r => USE[k](eng, r));
+  /** The one figure the engine uses today for every planting given, by `value(r)`; null where they differ or there are none. */
+  function uniform(eng, list, value) {
+    const seen = new Set();
+    for (const p of list) { const r = eng.calc(p); if (!r) continue; const v = value(r); if (v == null || !Number.isFinite(+v)) continue; seen.add(Math.round(+v * 1e6) / 1e6); }
+    return seen.size === 1 ? [...seen][0] : null;
+  }
 
   // ───────────────────────── a box ─────────────────────────
   /**
@@ -283,7 +331,7 @@
    * would set it (null clears it), `cropIds` whose plantings the line looks at. Typing says what it would move; Enter or Tab
    * takes it; Esc puts back what was there.
    */
-  function box({ key, label, fig, unit, grey, ops, cropIds, min = 0, max = 1000, whole, help, amber, name, wide, farm, off }) {
+  function box({ key, label, fig, unit, grey, ops, cropIds, min = 0, max = 1000, whole, help, amber, name, wide, farm, off, uses }) {
     const shown = fig.mine != null ? String(+(+fig.mine).toFixed(2)) : '';
     const line = h('p.sn-moves', { dataset: { hook: 'start-moves', key }, 'aria-live': 'polite' });
     const said = ui.said && ui.said.key === key ? ui.said : null;
@@ -294,29 +342,33 @@
       dataset: { hook: 'start-box', key, sk: key }, disabled: !!off });
     if (off) input.title = off;
     const read = () => { const raw = input.value.trim(); if (raw === '') return { n: null }; const n = whole ? Math.round(+raw) : +raw; return (input.validity && input.validity.badInput) || !Number.isFinite(n) || n < min || n > max ? { bad: true } : { n }; };
-    // A figure equal to the one it already follows is no figure of his: it is not stored, and typed over one of his it clears his.
-    // The farm's own boxes have nothing under them: what is typed there is his, whatever it is.
-    const eq = (a, b) => Math.abs(a - b) < 1e-9;
-    const target = n => n == null || farm || fig.fallback == null || !eq(n, fig.fallback) ? n : null;
-    const same = n => { const t = target(n); return (t == null && fig.mine == null) || (t != null && fig.mine != null && eq(t, fig.mine)); };
-    let sent = false;
+    // The taking rule. A box not edited since it took focus takes nothing. A number equal to his own figure: nothing. Where he
+    // has none, a number equal to the figure the engine uses today for every planting it speaks for (`uses`): not stored, and
+    // the box goes back to grey. Any other number is stored as his, the library's or the farm's value included. Only emptying
+    // the box puts a figure of his back to following.
+    const eq = (a, b) => Math.abs(a - b) < 1e-6;
+    let edited = false, sent = false;
+    const follows = n => n != null && fig.mine == null && !farm && uses != null && eq(n, uses);
+    const same = n => (n == null && fig.mine == null) || (n != null && fig.mine != null && eq(n, fig.mine)) || follows(n);
     const commit = () => {
-      if (sent) return false;
+      if (sent || !edited) return false;
       const x = read();
       if (x.bad) { input.value = shown; clear(line); return false; }
-      if (same(x.n)) { clear(line); return false; }
-      x.n = target(x.n);
+      if (same(x.n)) { if (follows(x.n)) { input.value = shown; edited = false; } clear(line); return false; }
       sent = true;
       if (!ui.focus) ui.focus = key;
       return take(key, `${name}: ${label.toLowerCase()} ${x.n == null ? `back to ${fig.fallback == null ? 'nothing' : num(fig.fallback, 2)}` : num(x.n, 2)}${unit && x.n != null ? ' ' + unit : ''}`, ops(x.n));
     };
+    input.addEventListener('focus', () => { edited = false; });
     input.addEventListener('input', () => {
+      edited = true;
       ui.said = null;
       const x = read();
-      clear(line); delete line.dataset.said;
+      clear(line); delete line.dataset.said; delete line.dataset.would;
       if (x.bad) { line.append(`Not a figure here: ${min} to ${max}.`); return; }
+      if (follows(x.n)) { line.append('Every planting already counts this: nothing to take.'); return; }
       if (same(x.n)) return;
-      const step = ops(target(x.n));
+      const step = ops(x.n);
       if (!step) return;
       const said = movesSaid(movesOf(App.state.engine, cropIds, step));
       line.dataset.would = 'true';
@@ -326,13 +378,22 @@
       if (e.key === 'Escape') { e.preventDefault(); input.value = shown; clear(line); input.blur(); }
       else if (e.key === 'Enter') { e.preventDefault(); ui.focus = key; commit(); }
       // Tab takes it and the pointer goes to the next box: the browser's own Tab is held, or it would go on past that box
-      else if (e.key === 'Tab' && !e.shiftKey) { const x = read(); if (!x.bad && !same(x.n)) { e.preventDefault(); ui.focus = { after: key }; commit(); } }
+      else if (e.key === 'Tab' && !e.shiftKey) { const x = read(); if (edited && !x.bad && !same(x.n)) { e.preventDefault(); ui.focus = { after: key }; commit(); } else if (edited) { input.value = shown; clear(line); } }
     });
-    // only Enter or Tab takes a figure: leaving the box any other way (a click elsewhere) leaves it as Esc does, and the click lands
-    input.addEventListener('blur', () => { if (sent || input.value === shown) return; input.value = shown; clear(line); delete line.dataset.would; });
-    return h('div.sn-f', { dataset: { field: key } },
-      h('span.sn-lab', label, help ? UI.help(help, null, null, { label: `What ${label.toLowerCase()} means` }) : null),
-      h('span.sn-ctl', h('span.yc-box' + (wide ? '.wide' : '') + (fig.mine != null ? '.mine' : amber ? '.amber' : ''), input), unit ? h('span.yc-unit', unit) : null, grey ? h('span.sn-grey', grey) : null),
+    // only Enter or Tab takes a figure: leaving the box any other way (a click elsewhere) leaves it as Esc does. The line keeps its
+    // room until the press is over, so that what was pressed does not move away under the pointer and the click lands.
+    input.addEventListener('blur', () => {
+      if (sent || !edited) return;
+      input.value = shown; edited = false; delete line.dataset.would;
+      line.style.visibility = 'hidden';
+      let gone = false;
+      const go = () => { if (gone) return; gone = true; clear(line); line.style.visibility = ''; };
+      document.addEventListener('pointerup', () => setTimeout(go, 0), { once: true, capture: true });
+      setTimeout(() => { if (!document.querySelector(':active')) go(); }, 400);
+    });
+    return h('div.sn-f', { dataset: { field: key, hook: 'start-field' } },
+      h('span.sn-lab', { dataset: { hook: 'start-label' } }, label, help ? UI.help(help, null, null, { label: `What ${label.toLowerCase()} means` }) : null),
+      h('span.sn-ctl', h('span.yc-box' + (wide ? '.wide' : '') + (off ? '.off' : fig.mine != null ? '.mine' : amber ? '.amber' : ''), input), unit ? h('span.yc-unit', unit) : null, grey ? h('span.sn-grey', grey) : null),
       line);
   }
   const term = (word, says) => h('p', h('b', word), ': ', says);
@@ -423,9 +484,9 @@
 
     const keep = key => pl.beds.filter(p => keptOwn(p, key)).length;
     const germ = cropFig(eng, c, 'germ', farmGerm(plan)), spare = cropFig(eng, c, 'spare', farmSpare(plan));
-    const germBox = () => box({ key: 'germ', name, label: 'Germination', unit: '%', fig: germ, grey: germ.mine == null ? 'the farm’s' : null, min: 0.1, max: 100, ops: n => cropOps(eng, c, { germ: n }), cropIds: ids,
+    const germBox = () => box({ key: 'germ', name, label: 'Germination', unit: '%', fig: germ, grey: germ.mine == null ? 'the farm’s' : null, min: 0.1, max: 100, ops: n => cropOps(eng, c, { germ: n }), uses: usesOf(eng, eng.plan.plantings.filter(p => p.cropId === c.id), 'germ'), cropIds: ids,
       help: h('div', term('Germination', 'the share of seeds that come up. Cells and seed are counted for it; a variety may have its own.')) });
-    const spareBox = (what, bought) => box({ key: 'spare', name, label: 'Spare', unit: '%', fig: bought ? cropFig(eng, c, 'spare', boughtSpare(plan)) : spare, grey: spare.mine == null ? (farmSpareSet(plan) ? 'the farm’s' : bought ? 'none: the farm has none set' : 'the farm has none set: sowing counts 10') : null, min: 0, max: 100, ops: n => cropOps(eng, c, { spare: n }), cropIds: ids,
+    const spareBox = (what, bought) => box({ key: 'spare', name, label: 'Spare', unit: '%', fig: bought ? cropFig(eng, c, 'spare', boughtSpare(plan)) : spare, grey: spare.mine == null ? (farmSpareSet(plan) ? 'the farm’s' : bought ? 'none: the farm has none set' : 'the farm has none set: sowing counts 10') : null, min: 0, max: 100, ops: n => cropOps(eng, c, { spare: n }), uses: usesOf(eng, eng.plan.plantings.filter(p => p.cropId === c.id), 'spare'), cropIds: ids,
       help: h('div', term('Spare', what)) });
 
     if (group === 'nursery') {
@@ -439,10 +500,10 @@
       else if (ui.said && ui.said.key === 'tray') trayLine.append(ui.said.text, ' ', undoLink());
       const sowing = h('div.sn-part', { dataset: { hook: 'start-sowing' } }, h('h4', 'Sowing'),
         h('div.sn-f', h('span.sn-lab', 'Tray'), h('span.sn-ctl', traySel, h('span.sn-grey', 'thrown out after use')), trayLine),
-        box({ key: 'spc', name, label: 'Seeds a cell', fig: spc, grey: spc.mine == null && lib ? 'the library’s' : null, min: 0.1, max: 50, ops: n => cropOps(eng, c, { spc: n }), cropIds: ids }),
+        box({ key: 'spc', name, label: 'Seeds a cell', fig: spc, grey: spc.mine == null && lib ? 'the library’s' : null, min: 0.1, max: 50, ops: n => cropOps(eng, c, { spc: n }), uses: usesOf(eng, eng.plan.plantings.filter(p => p.cropId === c.id), 'spc'), cropIds: ids }),
         germBox(), spareBox('seedlings raised over the plants the bed takes, as cells and seed.'),
         box({ key: 'days', name, label: 'Days from sowing to planting', unit: 'days', fig: { mine: gh.mine != null ? Math.round(gh.mine * 7) : null, fallback: gh.fallback != null ? Math.round(gh.fallback * 7) : null }, wide: true,
-          grey: [gh.value != null ? `${num(gh.value, 1)} weeks` : null, keep('gh') ? `${plural(keep('gh'), 'planting')} keep${keep('gh') === 1 ? 's' : ''} its own` : null].filter(Boolean).join(' · '), min: 0, max: 728, whole: true, ops: n => cropOps(eng, c, { gh: n == null ? null : n / 7 }), cropIds: ids }));
+          grey: [gh.value != null ? `${num(gh.value, 1)} weeks` : null, keep('gh') ? `${plural(keep('gh'), 'planting')} keep${keep('gh') === 1 ? 's' : ''} its own` : null].filter(Boolean).join(' · '), min: 0, max: 728, whole: true, ops: n => cropOps(eng, c, { gh: n == null ? null : n / 7 }), uses: usesOf(eng, eng.plan.plantings.filter(p => p.cropId === c.id), 'days'), cropIds: ids }));
       // the offers: a new rule, shown with what it would move, and used only with "Use it"
       if (+c.spc > 1 && c.station !== true) UI.add(sowing, offer('station', [`a cell of ${num(+c.spc, 1)} is one station, so it needs `, h('b', 'no extra cells for germination'), '.'], cropOps(eng, c, { station: true }), ids, `${name}: a cell of ${num(+c.spc, 1)} is one station, no extra cells for germination`));
       if (c.station === true) sowing.append(h('p.sn-also', { dataset: { hook: 'start-station' } }, `A cell of ${num(+c.spc, 1)} is one station: no extra cells for germination. `, h('button.btn.quiet.small', { type: 'button', dataset: { hook: 'start-station-off' }, onclick: () => stage('station', `${name}: extra cells for germination again`, cropOps(eng, c, { station: null }), ids) }, 'Count germination again'), stagedLine('station')));
@@ -460,7 +521,7 @@
         const wk = cropFig(eng, c, 'potUpWk');
         left.append(h('div.sn-part', { dataset: { hook: 'start-potup' } }, h('h4', 'Potting up'),
           c.prop === 'potup' ? tickRow(eng, c, true, name) : fixed('Sown', 'straight into pots'),
-          c.prop === 'potup' ? box({ key: 'potUpWk', name, label: 'Pot up after', unit: 'days from sowing', wide: true, fig: { mine: wk.mine != null ? Math.round(wk.mine * 7) : null, fallback: wk.fallback != null ? Math.round(wk.fallback * 7) : 14 }, grey: wk.mine == null ? 'the planner’s' : null, min: 0, max: 364, whole: true, ops: n => cropOps(eng, c, { potUpWk: n == null ? null : n / 7 }), cropIds: ids }) : null,
+          c.prop === 'potup' ? box({ key: 'potUpWk', name, label: 'Pot up after', unit: 'days from sowing', wide: true, fig: { mine: wk.mine != null ? Math.round(wk.mine * 7) : null, fallback: wk.fallback != null ? Math.round(wk.fallback * 7) : 14 }, grey: wk.mine == null ? 'the planner’s' : null, min: 0, max: 364, whole: true, ops: n => cropOps(eng, c, { potUpWk: n == null ? null : n / 7 }), uses: usesOf(eng, eng.plan.plantings.filter(p => p.cropId === c.id), 'potUpWk'), cropIds: ids }) : null,
           h('div.sn-f', h('span.sn-lab', 'Into'), h('span.sn-ctl', sizeSel, potEach != null ? h('span.sn-grey', `${num(potEach, 3)} cu ft a pot`) : null), stagedLine('potSize')),
           h('div.sn-f', { dataset: { field: 'carrier' } }, h('span.sn-lab', 'Pots a carrier', UI.help(h('div', term('Pots a carrier', 'how many pots one carrying tray holds on the bench: 10 or 15. Bench room counts carriers by it; Supplies counts carriers by the farm’s figure, on Every crop.')), null, null, { label: 'What pots a carrier means' })),
             h('span.sn-ctl', carrier.seg, h('span.sn-grey', (ownRec(plan, c.id) || {}).perCarrier ? 'yours · reused' : 'the planner’s · reused')), carrier.line)));
@@ -479,13 +540,13 @@
         left.append(h('div.sn-part', { dataset: { hook: 'start-towers' } }, h('h4', 'For the towers ', h('span.sn-grey', 'always rockwool')),
           fixed('Sheet', `${sheetOf().cells} cubes, on an open 10 × 20 tray`),
           fixed('Seeds a cube', `${num(spc.value || 1, 1)}, as a cell`),
-          box({ key: 'rockwoolDays', name, label: 'Days in rockwool', unit: 'days', fig: rw, grey: rw.mine == null ? 'the library’s' : null, min: 0, max: 366, whole: true, ops: n => cropOps(eng, c, { rockwoolDays: n }), cropIds: ids }),
+          box({ key: 'rockwoolDays', name, label: 'Days in rockwool', unit: 'days', fig: rw, grey: rw.mine == null ? 'the library’s' : null, min: 0, max: 366, whole: true, ops: n => cropOps(eng, c, { rockwoolDays: n }), uses: usesOf(eng, eng.plan.plantings.filter(p => p.cropId === c.id), 'rockwoolDays'), cropIds: ids }),
           fixed('Sheets', 'shared between sowings of one day, whole rows a variety')));
       }
     } else if (group === 'direct') {
       const ft = cropFig(eng, c, 'seedsFt');
       left.append(h('div.sn-part', { dataset: { hook: 'start-direct' } }, h('h4', 'Sown in place'),
-        box({ key: 'seedsFt', name, label: 'Seeds a foot of row', fig: ft, grey: ft.mine == null && ft.fallback ? 'the library’s' : 'none: one seed a plant', min: 0, max: 1000, ops: n => cropOps(eng, c, { seedsFt: n }), cropIds: ids }),
+        box({ key: 'seedsFt', name, label: 'Seeds a foot of row', fig: ft, grey: ft.mine == null && ft.fallback ? 'the library’s' : 'none: one seed a plant', min: 0, max: 1000, ops: n => cropOps(eng, c, { seedsFt: n }), uses: usesOf(eng, eng.plan.plantings.filter(p => p.cropId === c.id), 'seedsFt'), cropIds: ids }),
         germBox()));
     } else if (group === 'bought') {
       left.append(h('div.sn-part', { dataset: { hook: 'start-bought' } }, h('h4', 'Bought in'),
@@ -602,10 +663,10 @@
       const vd = varietyDays(v), own = { germ: +v.germ > 0 ? +v.germ : null, days: vd.split ? -1 : vd.one, spc: +v.spc > 0 ? +v.spc : null }, any = Object.values(own).some(x => x != null), open = any || ui.own.has(v.id), vn = v.name;
       const says = Object.entries(own).filter(([, x]) => x != null).map(([k]) => ({ germ: 'germination', days: 'days to planting', spc: 'seeds a cell' })[k]);
       const boxes = !open ? null : h('div.sn-own', { dataset: { hook: 'start-variety-figures', variety: v.id } },
-        box({ key: `v|${v.id}|germ`, name: vn, label: 'Germination', unit: '%', fig: { mine: own.germ, fallback: crop.germ }, grey: own.germ == null ? 'the crop’s' : null, min: 0.1, max: 100, ops: n => varietyOps(eng, v, 'germ', n), cropIds: [c.id] }),
+        box({ key: `v|${v.id}|germ`, name: vn, label: 'Germination', unit: '%', fig: { mine: own.germ, fallback: crop.germ }, grey: own.germ == null ? 'the crop’s' : null, min: 0.1, max: 100, ops: n => varietyOps(eng, v, 'germ', n), uses: usesOf(eng, eng.plan.plantings.filter(p => p.varietyId === v.id && p.cropId === c.id), 'germ'), cropIds: [c.id] }),
         group === 'nursery' && vd.split ? h('div.sn-f', { dataset: { hook: 'start-variety-days-split', variety: v.id } }, h('span.sn-lab', 'Days from sowing to planting'), h('span.sn-ctl', h('span.sn-fixed', `${vd.field == null ? 'the crop’s' : `${vd.field} days`} in the field, ${vd.greenhouse == null ? 'the crop’s' : `${vd.greenhouse} days`} under cover`), h('span.sn-grey', 'differs by place: not set here'))) : null,
-        group === 'nursery' && !vd.split ? box({ key: `v|${v.id}|days`, name: vn, label: 'Days from sowing to planting', unit: 'days', wide: true, fig: { mine: own.days, fallback: crop.days }, grey: own.days == null ? 'the crop’s' : null, min: 0, max: 728, whole: true, ops: n => varietyOps(eng, v, 'days', n), cropIds: [c.id] }) : null,
-        group === 'nursery' ? box({ key: `v|${v.id}|spc`, name: vn, label: 'Seeds a cell', fig: { mine: own.spc, fallback: crop.spc }, grey: own.spc == null ? 'the crop’s' : null, min: 0.1, max: 50, ops: n => varietyOps(eng, v, 'spc', n), cropIds: [c.id] }) : null);
+        group === 'nursery' && !vd.split ? box({ key: `v|${v.id}|days`, name: vn, label: 'Days from sowing to planting', unit: 'days', wide: true, fig: { mine: own.days, fallback: crop.days }, grey: own.days == null ? 'the crop’s' : null, min: 0, max: 728, whole: true, ops: n => varietyOps(eng, v, 'days', n), uses: usesOf(eng, eng.plan.plantings.filter(p => p.varietyId === v.id && p.cropId === c.id), 'days'), cropIds: [c.id] }) : null,
+        group === 'nursery' ? box({ key: `v|${v.id}|spc`, name: vn, label: 'Seeds a cell', fig: { mine: own.spc, fallback: crop.spc }, grey: own.spc == null ? 'the crop’s' : null, min: 0.1, max: 50, ops: n => varietyOps(eng, v, 'spc', n), uses: usesOf(eng, eng.plan.plantings.filter(p => p.varietyId === v.id && p.cropId === c.id), 'spc'), cropIds: [c.id] }) : null);
       return h('div.sn-vrow', { dataset: { hook: 'start-variety', variety: v.id, own: String(any) } },
         h('div.row', root.LRFThumbs.el({ varietyId: v.id, color: eng.cropColor(c), label: vn, size: 40 }),
           h('div', h('span.row-name', vn), h('span.row-detail', `${plural(sowings.get(v.id) || 0, 'sowing')}${says.length ? ` · its own ${says.join(', ')}` : ''}`)),
@@ -640,7 +701,8 @@
       says: n => { const a = now ? now.need : 0, b = (supply(n) || { need: 0 }).need; return a === b ? '' : `carrying trays Supplies counts at the most ${num(a)} → ${num(b)}; no bench room, date or seed moves.`; } });
     const card = h('section.yc-card.sn-card', { dataset: { hook: 'start-card', crop: FARM } },
       h('header.yc-head', h('span.thumb.key.sn-farm', { style: { '--thumb': '40px' } }), h('div', h('h3', { dataset: { hook: 'start-name' } }, 'Every crop'), h('p.yc-where', `The farm’s figures · ${plural(all.length - ownGerm.length, 'crop')} use them as they are`)), h('p.yc-state', 'The farm')),
-      h('p.sn-comes', { dataset: { hook: 'start-comes' } }, 'Every sowing is counted for ', h('b', `${num(farmGerm(plan), 1)}% germination`), ' and ', h('b', `${num(farmSpare(plan), 1)}% spare`), ', unless its crop or variety says otherwise.', farmSpareSet(plan) ? '' : ' No spare is set for the farm: sowing counts 10%, plants bought in none.'),
+      h('p.sn-comes', { dataset: { hook: 'start-comes' } }, ...(farmSpareSet(plan) ? ['Every sowing is counted for ', h('b', `${num(farmGerm(plan), 1)}% germination`), ' and ', h('b', `${num(farmSpare(plan), 1)}% spare`), ', unless its crop or variety says otherwise.']
+        : ['Every sowing is counted for ', h('b', `${num(farmGerm(plan), 1)}% germination`), ', unless its crop or variety says otherwise. The farm’s spare is not set: sowing counts ', h('b', '10%'), ', plants bought in ', h('b', 'none'), '.'])),
       h('div.sn-cols', h('div.sn-col', h('div.sn-part', h('h4', 'For every crop'),
         box({ key: 'farmGerm', name: 'Every crop', label: 'Germination', unit: '%', fig: { mine: plan.settings.germ > 0 ? +plan.settings.germ : null, fallback: 85 }, farm: true, grey: plan.settings.germ > 0 ? null : 'not set: 85 is counted', min: 0.1, max: 100, ops: n => settingsOps(plan, { germ: n }), cropIds: ids,
           help: h('div', term('Germination', 'the share of seeds that come up, for every crop that does not say its own.')) }),
@@ -662,7 +724,7 @@
   /** One short line for a crop: how it is started, in a few words. `warn`: amber; `mine`: a figure of his own. */
   function shortOf(eng, plan, c) {
     const g = groupOf(c), own = ownRec(plan, c.id), lib = libCrop(c.id), mine = !!own && (!lib || ['tray', 'spc', 'germ', 'gh', 'spare', 'prop', 'potUpWk', 'perCarrier', 'station', 'rockwoolDays', 'seedsFt'].some(k => own[k] != null && own[k] !== lib[k]));
-    if (g === 'live') { const how = eng.liveSow(c); return { text: how.set ? `live · ${how.how === 'cells' ? `${num(how.seeds, 1)} seeds a tray` : `${num(how.grams, 1)} g a tray`}` : 'live · not counted', warn: !how.set, mine }; }
+    if (g === 'live') { const how = eng.liveSow(c); return { text: how.set ? `live · ${how.how === 'cells' ? `${num(how.seeds, 1)} seeds a tray` : `${num(how.grams, 1)} g a tray`}` : 'not counted · live', warn: !how.set, mine }; }
     if (g === 'bought') return { text: materialOf(c) === 'plant' ? `plants · ${num(cropFig(eng, c, 'spare', boughtSpare(plan)).value, 1)}% spare` : MATERIAL[materialOf(c)] || 'bought in', mine };
     if (g === 'direct') return { text: `direct${+c.seedsFt > 0 ? ` · ${num(+c.seedsFt, 1)} a foot` : ''}`, mine };
     const towers = (eng.plan.plantings || []).some(p => p.cropId === c.id && eng.isTower(eng.bedOf(p.bedId)));
@@ -690,6 +752,7 @@
   function render(ctx) {
     const { eng, plan, q, list, scope } = ctx, host = $('snHost'), year = +plan.settings.year;
     ui.redraw = ctx.redraw;
+    sayingStill();
     const made = arrange(eng, plan, scope, list, q), order = made.groups.flatMap(g => g.crops.map(c => c.id));
     ui.order = order;
     if (ui.cur !== FARM && !order.includes(ui.cur)) { ui.cur = order.find(id => lookedOf(plan, id) !== year) || order[0] || FARM; ui.pending = null; ui.said = null; }
@@ -705,7 +768,7 @@
         h('div.yc-meter', { role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': order.length, 'aria-valuenow': looked, 'aria-label': `Crops looked at for ${year}` }, h('i', { style: { width: `${order.length ? Math.round(looked / order.length * 1000) / 10 : 0}%` } }))),
       h('ol.yc-list',
         h('li', h('button.yc-item.sn-every', { type: 'button', dataset: { hook: 'start-every' }, 'aria-current': ui.cur === FARM ? 'true' : null, onclick: () => { ui.pending = null; ui.said = null; ui.cur = FARM; ui.redraw(); } },
-          h('i.yc-tick', { 'aria-hidden': 'true' }), h('span.thumb.key.sn-farm', { style: { '--thumb': '20px' } }), h('b', 'Every crop'), h('small', `${num(farmGerm(plan), 1)}% · ${num(farmSpare(plan), 1)}% spare`))),
+          h('i.yc-tick', { 'aria-hidden': 'true' }), h('span.thumb.key.sn-farm', { style: { '--thumb': '20px' } }), h('b', 'Every crop'), h('small', `${num(farmGerm(plan), 1)}% · ${farmSpareSet(plan) ? `${num(farmSpare(plan), 1)}% spare` : 'spare not set'}`))),
         made.groups.filter(g => g.crops.length).map(g => [h('li.yc-sec', { dataset: { hook: 'start-group', group: g.id, n: String(g.crops.length) } }, g.words), g.crops.map(item)]),
         !order.length ? h('li.yc-sec', q ? 'No crop matches.' : 'No crops yet.') : null));
     const c = ui.cur === FARM ? null : eng.crop(ui.cur);
@@ -722,14 +785,15 @@
     ui.focus = null;
     if (want) {
       const boxes = [...main.querySelectorAll('input[data-sk]')], key = typeof want === 'object' ? want.after : want, at = boxes.findIndex(el => el.dataset.sk === key);
-      const to = typeof want === 'object' ? boxes[at + 1] : boxes[at];
+      // after the last box, Tab lands on the card's own button: the pointer stays in the card
+      const to = typeof want === 'object' ? boxes[at + 1] || main.querySelector('.sn-foot .btn.primary') : boxes[at];
       if (to) { to.focus({ preventScroll: true }); if (to.select) to.select(); }
     }
     // the page's line of figures
     const counts = Object.fromEntries(GROUPS.map(([id]) => [id, made.shown.filter(x => groupOf(x) === id).length]));
     const unsaid = made.shown.filter(x => groupOf(x) === 'live' && !eng.liveSow(x).set).length;
     return { mine: made.mine, all: made.all, figs: [['Sown in the nursery', plural(counts.nursery, 'crop')], ['Live trays', num(counts.live)], ['Direct', num(counts.direct)], ['Bought in', num(counts.bought)],
-      ['Germination', `${num(farmGerm(plan), 1)}%`, 'spare', `${num(farmSpare(plan), 1)}%`, 'unless a crop says'], unsaid ? ['Live trays with seed not counted', num(unsaid)] : null].filter(Boolean) };
+      farmSpareSet(plan) ? ['Germination', `${num(farmGerm(plan), 1)}%`, 'spare', `${num(farmSpare(plan), 1)}%`, 'unless a crop says'] : ['Germination', `${num(farmGerm(plan), 1)}%`, 'spare not set: sowing', '10%', 'plants bought in', '0%'], unsaid ? ['Live trays with seed not counted', num(unsaid)] : null].filter(Boolean) };
   }
   /** Open the card of one crop (from Seeds' "Edit crop", or a script). */
   function open(id) { if (!id) return; if (ui.cur !== id) { ui.pending = null; ui.said = null; } ui.cur = id; }
