@@ -1,0 +1,13 @@
+{
+ "build": "Guided Dosatron setup and watering records with explicit injector use and historical mix evidence.",
+ "changes": {
+   "did": "Set up a garden injector and record water and fertilizer together from Water.",
+   "steps": ["Choose Add Dosatron, then name the garden and enter the stock mix and dial setting.", "Choose Record watering and enter gallons or actual minutes. Choose an injector if fertilizer was used.", "Review the estimate before saving. Open the garden’s season plan for the nutrient breakdown."]
+ },
+ "words": [],
+ "code": ["waterview.js", "waterfeed.js"],
+ "added": [],
+ "removed": [],
+ "page": ["css/app.css"],
+ "screens": ["water", "tasks"]
+}

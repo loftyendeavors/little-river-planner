@@ -162,4 +162,52 @@ check('Whole-bag purchases use reserve before subtracting usable stock, with exa
   assert.equal(W.purchase(product,{balance:0},0.0001,0).bags,1);
   for(const input of [count,received]) assert.deepEqual(SH.check(JSON.parse(file(add({},input)))),{unknown:[],wrong:[]});
 });
+const injectedRow=(mode,treated,more={})=>({...sampleRun('fed','13:15',{elapsed:'',meter:200}),
+  feed:W.injectedFeed(base,tank,mode,100,treated),...more});
+check('Injected nutrients use the immutable stock concentration and treated gallons',()=>{
+  const partial=injectedRow('part',100), all=injectedRow('whole'), g=runs(partial)[0];
+  assert.ok(Math.abs(W.feedDelivery(g).totals.n-0.096)<1e-12);
+  assert.ok(Math.abs(W.feedDelivery(runs(all)[0]).totals.n-0.192)<1e-12);
+  const altered=W.put(add(base,partial),'products',{...product,n:88});
+  assert.ok(Math.abs(W.feedDelivery(W.groups(altered,'run')[0]).totals.n-0.096)<1e-12);
+  assert.equal(W.stock(altered,product.id).used,W.stock(base,product.id).used);
+  assert.deepEqual(SH.check(JSON.parse(file(altered))),{unknown:[],wrong:[]});
+});
+check('Legacy runs, water-only runs, and missing volume have separate delivery states',()=>{
+  const old=sampleRun('old','13:15',{meter:120});
+  assert.equal(W.feedDelivery(runs(old)[0]),null);
+  assert.equal(W.feedDelivery(runs({...old,feed:{mode:'plain'}})[0]).plain,true);
+  const unknown=injectedRow('whole',null,{meter:null,elapsed:10,rate:null});
+  assert.equal(W.feedDelivery(runs(unknown)[0]).gallons,null);
+  assert.ok(Math.abs(W.feedDelivery(runs({...unknown,feed:{...unknown.feed,mode:'part',treated:100}})[0]).totals.n-0.096)<1e-12);
+  assert.equal(W.feedDelivery(runs({...old,feed:W.injectedFeed(base,tank,'part',100,'')})[0]).gallons,null);
+  assert.throws(()=>W.injectedFeed(base,tank,'whole',0));
+});
+check('Complementary time and gallon reports yield the same metered delivery in either order',()=>{
+  const timed=injectedRow('whole',null,{id:'time',meter:null,elapsed:20,rate:2});
+  const metered={...timed,id:'meter',meter:120,elapsed:null,rate:null,source:'Hunter flow report'};
+  delete metered.feed;
+  for(const [first,second] of [[timed,metered],[metered,timed]]) {
+    const group=runs(first,{...second,entered:clock('14:00')})[0];
+    assert.equal(group.unsettled.length,0);assert.equal(group.elapsed,20);
+    assert.equal(W.water(group).gallons,120);assert.equal(W.feedDelivery(group).gallons,120);
+    assert.equal(W.runSummary([group]).minutes,20);
+  }
+});
+check('Two conflicting injector observations hold nutrients without losing measured water',()=>{
+  const fed=injectedRow('whole'), plain={...fed,id:'off',feed:{mode:'plain'}};
+  assert.equal(W.sameRunEvidence(fed,plain),false);
+  const group=runs(fed,plain)[0];
+  assert.equal(W.water(group).gallons,200);assert.equal(W.feedDelivery(group).held,true);
+  assert.equal(W.runSummary([group]).reviews.length,1);
+});
+check('A lower subsequent meter reading puts partial fertilized gallons under review',()=>{
+  const fed=injectedRow('part',100,{meter:null,elapsed:15,rate:10});
+  const lower={...fed,id:'meter',meter:40,source:'Hunter flow report'};
+  delete lower.feed;
+  const group=runs(fed,lower)[0];
+  assert.equal(W.water(group).gallons,40);assert.equal(W.feedDelivery(group).held,true);assert.equal(group.unsettled.length,1);
+  const only=runs(injectedRow('whole'))[0];
+  assert.equal(W.runSummary([only]).unknownMinutes,1);assert.equal(W.water(only).gallons,200);
+});
 console.log(JSON.stringify({passed,of:passed,failed:[]}));
