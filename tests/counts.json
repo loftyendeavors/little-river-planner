@@ -1,6 +1,10 @@
 {
  "node": {
 
+  "equipment adapters": 10,
+
+  "water and feed": 25,
+
   "assume": 12,
 
   "bought in kept, backup": 28,
@@ -120,6 +124,10 @@
 
  },
  "app1": {
+
+  "equipment": 1,
+
+  "water-feed": 20,
 
   "ahead": 49,
 
@@ -521,7 +529,7 @@
  },
  "screens": {
 
-  "screens": 26
+  "screens": 28
 
  }
 }

@@ -11,6 +11,8 @@ except Exception as e: print(sys.argv[1], 'NO RESULT', t[-400:])" "$1"; }
 for n in "$@"; do
   s=$(date +%s)
   case $n in
+    equipment) python3 -I $T/equipment_check.py $APP 2>&1 | tally equipment ;;
+    water-feed) python3 -I $T/water_feed_check.py $APP 2>&1 | tally water-feed ;;
     ahead) python3 -I $T/ahead_check.py $APP $S/ahead 2>&1 | tally ahead ;;
     core) python3 -I $T/browser_core.py $APP $S/core 2>&1 | tally core ;;
     sowing) python3 -I $T/sowing_view_check.py $APP $S/sow 2>&1 | tally sowing ;;

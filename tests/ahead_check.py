@@ -124,7 +124,7 @@ with sync_playwright() as pw:
 
     # ── successions have a page of their own (0.84, the owner's word of #102); an opening still opens in place ──
     views = page.eval_on_selector_all('[data-view-btn]', 'els => els.map(e => e.dataset.viewBtn)')
-    check('eight views: Successions between the Timeline and the Forecast, and no page of its own for planning ahead', views == ['map', 'timeline', 'succession', 'harvest', 'sow', 'trays', 'seeds', 'assume'] and page.query_selector('#aheadView') is None, views)
+    check('nine views: Successions between the Timeline and the Forecast, and no page of its own for planning ahead', views == ['map', 'timeline', 'succession', 'harvest', 'sow', 'trays', 'water', 'seeds', 'assume'] and page.query_selector('#aheadView') is None, views)
 
     # ── an opening, from the timeline ──
     page.click('[data-view-btn="timeline"]')

@@ -59,13 +59,13 @@ with sync_playwright() as pw:
     start = js("return { n: S.plan.plantings.length, undo: S.undo.length, today: A.today(), now };")
     check("the page believes it is May 5 of the plan's year, with a plan in it and nothing to undo", start["today"].endswith("-05-05") and start["now"].endswith("-05-03") and start["n"] > 300 and start["undo"] == 0, start)
 
-    # ── the top bar: eight views in three groups (Successions joined the first in 0.84) ──
+    # ── the top bar: nine views in three groups (Successions joined the first in 0.84) ──
     bar = js("""const nav = document.querySelector('nav.views'), kids = [...nav.children].map(e => e.matches('[data-hook="view-tab"]') ? e.textContent.trim() : e.className === 'views-sep' ? '|' : '?');
       const top = document.querySelector('header.top'), btns = [...nav.querySelectorAll('[data-hook="view-tab"]')];
       return { kids, ids: btns.map(b => b.dataset.viewBtn), titles: btns.every(b => (b.title || '').length > 10), clipped: btns.filter(b => b.scrollWidth > b.clientWidth + 1).map(b => b.textContent),
         seps: [...nav.querySelectorAll('.views-sep')].map(e => { const r = e.getBoundingClientRect(); return r.width >= 1 && r.height >= 8; }), side: top.scrollWidth > top.clientWidth + 1 || document.documentElement.scrollWidth > innerWidth + 1, high: top.getBoundingClientRect().height };""")
-    check("the top bar reads Map, Timeline, Successions, Forecast | Tasks, Nursery, Seeds | Assumptions: three groups with a rule between them", bar["kids"] == ["Map", "Timeline", "Successions", "Forecast", "|", "Tasks", "Nursery", "Seeds", "|", "Assumptions"] and all(bar["seps"]) and len(bar["seps"]) == 2, bar)
-    check("the views keep their ids (the Nursery is still the view 'trays', Tasks still 'sow'), and each says in a tooltip what it is for", bar["ids"] == ["map", "timeline", "succession", "harvest", "sow", "trays", "seeds", "assume"] and bar["titles"], bar)
+    check("the top bar reads Map, Timeline, Successions, Forecast | Tasks, Nursery, Water, Seeds | Assumptions: three groups with a rule between them", bar["kids"] == ["Map", "Timeline", "Successions", "Forecast", "|", "Tasks", "Nursery", "Water", "Seeds", "|", "Assumptions"] and all(bar["seps"]) and len(bar["seps"]) == 2, bar)
+    check("the views keep their ids (the Nursery is still the view 'trays', Tasks still 'sow'), and each says in a tooltip what it is for", bar["ids"] == ["map", "timeline", "succession", "harvest", "sow", "trays", "water", "seeds", "assume"] and bar["titles"], bar)
     wait(400)
     crowd = js("""const w = $('waitBadge'), wasHidden = w.hidden, wasHtml = w.innerHTML, s = $('saveState'), wasText = s.textContent;
       w.hidden = false; w.innerHTML = '<b>12</b> to place<span class="wb-more"> · not counted here</span>'; s.textContent = 'Saved · folder + cloud 12:44';

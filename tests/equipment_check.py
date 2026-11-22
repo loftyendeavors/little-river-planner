@@ -64,6 +64,6 @@ try:
         assert page.evaluate("LRFWaterFeed.groups(LRFApp.state.plan.lrfNext.waterFeed,'run').length") == 1
         assert not errors, errors
         browser.close()
-    print('Phone irrigation, snapshot replay, compact daily summary and Hunter run volume passed.')
+    print(json.dumps({'passed':1,'of':1,'failed':[]}))
 finally:
     server.shutdown()
