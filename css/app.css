@@ -3081,3 +3081,22 @@ body[data-view="water"] .work { grid-template-rows: minmax(0,1fr); }
 }
 
 .wf-refill-card .wf-tick { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 2px solid currentColor; border-radius: var(--corner-pill); margin-right: var(--space-8); vertical-align: middle; }
+
+.wf-work-actions { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.wf-work-actions .btn { min-height: var(--control); }
+.dialog.wf-work-sheet { width: min(520px,94vw); max-width: 94vw; }
+.wf-stack, .wf-group, .wf-choice-list { display: grid; gap: var(--space-8); min-width: 0; }
+.wf-group { margin: 0; border: 1px solid var(--line); border-radius: var(--corner-12); padding: var(--space-12) var(--space-16); }
+.wf-group legend { font: 700 var(--type-15)/1.4 var(--display); padding-inline: var(--space-4); }
+.wf-group .wf-line { margin: 0; }
+.wf-group > .btn { justify-self: start; }
+.wf-result { margin: 0; padding: var(--space-12); background: var(--surface); border-radius: var(--corner-8); font-variant-numeric: tabular-nums; }
+.wf-work-sheet .wf-section > summary { margin-bottom: var(--space-8); }
+@media (max-width: 700px) {
+  .wf-work-actions .btn, .wf-work-sheet :is(button,select,input:not([type="checkbox"])) { min-height: var(--control-phone); }
+  .wf-work-sheet { padding: var(--space-16); }
+}
+
+.wf-work-sheet .dialog-actions { position: sticky; bottom: 0; z-index: 1; background: var(--raised); border-top: 1px solid var(--line); padding-block: var(--space-8); }
+.wf-work-sheet { scroll-padding-block: var(--space-16) 64px; }
+.wf-work-sheet .dialog-actions > :nth-last-child(3) { margin-right: auto; }
