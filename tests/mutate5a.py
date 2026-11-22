@@ -62,11 +62,11 @@ NODE = [
  ("a day chosen for potting up stands though the plan moved under it", "js/week.js", "else if (put && !MOVES.includes(st.kind) && put.own === own) {", "else if (put && !MOVES.includes(st.kind)) {"),
  ("a skipped job that is recorded still says skipped", "js/week.js", "st.skipped = !st.done && !st.passed ? skipOf(p, st.kind) : null;", "st.skipped = skipOf(p, st.kind);"),
  ("recorded work can be put off", "js/week.js", "    if (st.done) throw new Error(`This ${SL.DONE_WORD[kind] || 'work'} is already recorded, on ${st.done}.`);\n    if (!isDay(date)) throw new Error('Choose a real calendar date.');\n    const was", "    if (!isDay(date)) throw new Error('Choose a real calendar date.');\n    const was"),
- ("a job can be put off out of the plan's year", "js/week.js", "if (to.slice(0, 4) !== String(p.date).slice(0, 4)) throw", "if (false) throw"),
+ ("a job can be put off out of the plan's year", "js/week.js", "if (!SL.staysIn(engine, p, to)) {", "if (false) {"),
  ("a put-off with half its days is read as one", "js/week.js", "return x && isDay(x.from) && isDay(x.to) ? x : null; };", "return x && isDay(x.from) ? x : null; };"),
  ("a note cleared is kept as an empty one", "js/week.js", "if (value == null || value === '') delete group[kind]; else group[kind] = value;", "if (value == null) delete group[kind]; else group[kind] = value;"),
  ("a skip with no real day is kept", "js/week.js", "    if (day != null && !isDay(day)) throw new Error('Choose a real calendar date.');\n    return withTask(p, 'skip', kind, day);", "    return withTask(p, 'skip', kind, day);"),
- ("a copy of a planting carries what was put off, skipped and noted", "js/rails.js", " delete next.standId; delete next.tasks; delete next.failed; }", " delete next.standId; delete next.failed; }"),
+ ("a copy of a planting carries what was put off, skipped and noted", "js/rails.js", " delete next.standId; delete next.tasks; delete next.failed; delete next.startedFrom; }", " delete next.standId; delete next.failed; delete next.startedFrom; }"),
  ("a skipped job is still listed as open", "js/week.js", "const open = line.members.filter(m => !m.st.done && !m.st.passed && !m.st.skipped), dated", "const open = line.members.filter(m => !m.st.done && !m.st.passed), dated"),
 ]
 PAGE = [
