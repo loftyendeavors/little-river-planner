@@ -79,7 +79,7 @@ NODE = [
  ("to buy goes below nothing", "js/nursery.js", "const h = Number(have[id]) > 0 ? Math.floor(Number(have[id])) : 0, buy = Math.max(0, need - h);", "const h = Number(have[id]) > 0 ? Math.floor(Number(have[id])) : 0, buy = need - h;"),
  ("mix is guessed for a tray with no figure", "js/nursery.js", "MIX_EACH[id] != null ? MIX_EACH[id] : null, each =", "MIX_EACH[id] != null ? MIX_EACH[id] : 3, each ="),
  ("a cubic foot is thirty quarts", "js/nursery.js", "const DRY_QT_PER_CUFT = 1728 / 67.200625;", "const DRY_QT_PER_CUFT = 1728 / 57.75;"),
- ("other years' plantings are counted in supplies", "js/nursery.js", "      if (String(it.p.date).slice(0, 4) !== text) continue;\n", ""),
+ ("other years' plantings are counted in supplies", "js/nursery.js", "      if (!listed(it.p, it.r)) continue;\n", ""),
  ("a cleared figure is kept as nothing", "js/nursery.js", "delete next[group][key]; if (!Object.keys(next[group]).length) delete next[group]; };", "delete next[group][key]; };"),
  ("part of a tray on the shelf is taken", "js/nursery.js", "(!bags && !Number.isInteger(n)))) throw", "false)) throw"),
  ("benches changed here are lost to an older backup", "js/planio.js", "if (prev.nursery && prev.nursery.lrfEdited === true) { plan.nursery = prev.nursery; notes.push('your benches'); }", ""),
