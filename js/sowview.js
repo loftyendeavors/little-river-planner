@@ -907,13 +907,15 @@
   // Narrower than a small tablet, the planner is this view and nothing else: no map, no library, no other views to stray into.
   // "Full planner" leaves that for the visit, for a narrow window on a computer.
   const narrow = root.matchMedia ? root.matchMedia('(max-width: 700px)') : null;
-  let fullHere = false;
+  let fullHere = false, phoneWater = false;
   function fitPhone() {
     const phone = !!(narrow && narrow.matches) && !fullHere, was = isPhone();
     document.body.classList.toggle('phone', phone);
-    if (phone && App.state.ready && App.state.view !== 'sow') { App.setView('sow'); return; }
+    if (!phone || App.state.view !== 'water') phoneWater = false;
+    if (phone && App.state.ready && !phoneWater && App.state.view !== 'sow') { App.setView('sow'); return; }
     if (phone !== was && App.state.ready) render();
   }
+  function openWater() { phoneWater = true; App.setView('water'); }
   function leavePhone() { fullHere = true; fitPhone(); }
 
   let lastView = null, swipe = null;
@@ -945,5 +947,5 @@
   }
   root.LRFSowView = { init, render, figures, jobs, tasks, weekCounts, setScope, open, scope: () => ui.scope, GROUPS: GROUPS.map(g => ({ id: g[0], name: g[1], sow: g[3], jobs: g[4] })),
     sheet: () => sheet(figures(), ui.week || T.monday(App.today())), show: k => viewDay(k), showWeek: a => show(null, T.monday(a)), where: () => ({ day: ui.day, week: ui.week, tab: ui.tab, open: ui.open, pop: ui.pop ? ui.pop.mode : null }),
-    fitPhone, leavePhone, get dirty() { return dirty; } };
+    fitPhone, leavePhone, openWater, get dirty() { return dirty; } };
 })(window);

@@ -3,7 +3,7 @@
   'use strict';
   const App = root.LRFApp, UI = root.LRFUI, W = root.LRFWaterFeed;
   const { h, num } = UI;
-  let lens = 'Fertility', period = 'Last 7 days', gardenId = '', activeDialog, refreshSheet;
+  let lens = 'Fertility', period = 'Today', fertilityView = 'Now', gardenId = '', activeDialog, refreshSheet;
   const book = () => App.state.plan?.lrfNext?.waterFeed || {};
   const gardens = () => App.state.plan.gardens || [];
   const rows = (table, id) => W.values(book()[table]).filter(r => !id || r.gardenId === id);
@@ -35,7 +35,7 @@
     return save(next, label, undo);
   }
   function close() { refreshSheet=null; if (activeDialog) { activeDialog.close(); activeDialog.remove(); activeDialog = null; } }
-  function sheet(title, fields, action, submit) {
+  function sheet(title, fields, action, submit, layout = '') {
     close();
     const error = h('p.wf-error', { role: 'alert', hidden: true });
     const form = h('form.wf-form', { onsubmit: e => {
@@ -44,7 +44,7 @@
       catch (ex) { error.textContent = ex.message; error.hidden = false; }
     } }, h('h2', title), fields, error, h('div.dialog-actions', submit ? button('Cancel', close, 'wf-cancel') : null,
       h('button.btn.primary', { type: 'submit', dataset: { hook: 'wf-submit' } }, action)));
-    activeDialog = h('dialog.dialog.wf-sheet', { 'aria-label': title, oncancel: e => { e.preventDefault(); close(); } }, form);
+    activeDialog = h('dialog.dialog.wf-sheet' + (layout ? '.' + layout : ''), { 'aria-label': title, oncancel: e => { e.preventDefault(); close(); } }, form);
     document.body.append(activeDialog); activeDialog.showModal();
   }
   function field(label, value, type, options) {
@@ -98,9 +98,19 @@
     });
   }
   function library() {
-    sheet('Products and recipes', [h('h3','Fertilizer products'), rows('products').map(p => line(h('strong',p.name), num(p.bag,2) + ' lb/bag', button('Edit product',()=>productForm(p),'wf-edit-product'))),
-      button('Add product',()=>productForm(),'wf-add-product'),h('h3','Stock recipes'),rows('recipes').map(r => line(h('strong',r.name), num(r.gallons,2)+' gal', button('Edit recipe',()=>recipeForm(r),'wf-edit-recipe'))),
-      rows('products').length ? button('Add recipe',()=>recipeForm(),'wf-add-recipe') : note('Add the products from your labels to make a recipe.')], 'Done');
+    const products = rows('products'), recipes = rows('recipes');
+    sheet('Products and recipes', [
+      board('Fertilizers', products.length, products.length ? h('div.wf-table-scroll',h('table.wf-grid-table',
+        h('thead',h('tr',['Product','Bag',...nutrients.map(([,name])=>name),''].map(label=>h('th',{scope:'col'},label)))),
+        h('tbody',products.map(p=>h('tr',h('th',{scope:'row'},p.name),h('td',num(p.bag,2)+' lb'),
+          nutrients.map(([k])=>h('td',p[k]==null?'—':num(p[k],2)+'%')),h('td',button('Edit product',()=>productForm(p),'wf-edit-product'))))))):note('No fertilizers recorded.'),
+        button('Add product',()=>productForm(),'wf-add-product')),
+      board('Stock recipes', recipes.length, recipes.map(r=>h('div.wf-entry',h('strong',r.name),
+        note(amounts(W.snapshot(book(),r.id,1))+' per gallon of stock'),note(num(r.gallons,2)+' gal batch · '+amounts(W.snapshot(book(),r.id,r.gallons))),
+        button('Edit recipe',()=>recipeForm(r),'wf-edit-recipe'))),products.length?button('Add recipe',()=>recipeForm(),'wf-add-recipe'):note('Add a fertilizer to make a stock recipe.')),
+      note('Tanks and zones belong to their garden.'),
+      button('Open garden setup',()=>{close();lens='Fertility';fertilityView='Now';App.setView('water');render();},'wf-open-water')
+    ], 'Done', null, 'wf-wide');
   }
   function stockForm(p,kind) {
     const delivery=kind==='delivery', bags=field('Full bags','','number'), loose=field('Loose pounds','','number');
@@ -255,20 +265,29 @@
     sheet('Record actual refill · '+tank.name,[time.el,gallons.el,carry.el,note('Enter the fresh pounds actually added. A blank recipe ingredient stays unknown. Enter zero if none went in.'),items.map(([,f])=>f.el)],'Record actual refill',()=>
       recordMix(tank,task,{job,itemsShown:shown,at:whenRecorded(time.get()),gallons:gallons.get(),remainder:carry.get(),actual:Object.fromEntries(items.filter(([,f,used])=>used||f.get()!=='').map(([id,f])=>[id,f.get()]))}));
   }
+  function openRefill(id) {
+    close(); App.setView('sow');
+    requestAnimationFrame(()=>{
+      const card=document.getElementById('wf-refill-'+id);
+      if(card) {card.focus({preventScroll:true});card.scrollIntoView({block:'center'});}
+    });
+  }
   function tasks() {
     const phone=document.body.classList.contains('phone'), tanks=rows('tanks'), phoneZones=phone?rows('zones'):[];
     if (!tanks.length && !phone) return null;
     const b=book(), due=tanks.filter(t=>W.reminder(b,t.id));
     const cards=due.map(t=>{
       const task=W.reminder(b,t.id), items=approved(t), job=W.cycle(b,t.id);
-      return h('article.wf-task',h('h4','Refill '+t.name+' · '+gardenName(t.gardenId)),note(task.reason),
-        items ? [h('strong',amounts(items)),note(b.recipes[t.recipeId].name+' · '+num(t.gallons,2)+' gal batch'),
-          line(button('Refilled as shown',()=>{try{recordMix(t,task,{job,itemsShown:items});}catch(ex){UI.toast(ex.message);}},'wf-complete',true),button('Actual amounts…',()=>mixDetails(t),'wf-actual'))] : note('Choose a stock recipe for this tank.'));
+      const finish=button('Refilled as shown',()=>{try{recordMix(t,task,{job,itemsShown:items});}catch(ex){UI.toast(ex.message);}},'wf-complete',true);
+      finish.prepend(h('span.wf-tick',{'aria-hidden':'true'},'✓'));
+      return h('article.wf-task.wf-refill-card',{id:'wf-refill-'+t.id,tabIndex:-1},h('h4','Refill '+t.name+' · '+gardenName(t.gardenId)),note(task.reason),
+        items ? [h('div.wf-weights',Object.values(items).map(item=>h('p',h('strong',num(item.lb,3)+' lb'),' '+item.name))),note(b.recipes[t.recipeId].name+' · '+num(t.gallons,2)+' gal batch'),
+          line(finish,button('Actual amounts…',()=>mixDetails(t),'wf-actual'))] : note('Choose a stock recipe for this tank.'));
     });
     return h('section.wf-block',{dataset:{hook:'wf-tasks'}},h('h3','Water and feed'),due.length ? cards : tanks.length?note('Nothing due'):null,
       tanks.map(t=>{const last=W.lastMix(b,t.id);return line(t.name, last?'Last refill '+when(last.chosen.at):'No refill recorded',!W.reminder(b,t.id) && approved(t) ? button('Refill',()=>mixDetails(t),'wf-refill') : null);}),
       phoneZones.length?button('Record irrigation run',()=>pickRunZone(phoneZones),'wf-phone-run'):null,
-      phone?button('Irrigation and soil readings',()=>{root.LRFSowView.leavePhone();lens='Irrigation';App.setView('water');},'wf-phone-soil'):null);
+      phone?button('Irrigation and soil readings',()=>{lens='Irrigation';root.LRFSowView.openWater();},'wf-phone-soil'):null);
   }
   function pickRunZone(zones) {
     if (zones.length===1) {runForm(zones[0]);return;}
@@ -468,15 +487,51 @@
       run && !group.workConflict && r.status!=='Skipped'?button('Attach Hunter meter reading',()=>attachMeter(group),'wf-hunter-meter'):null,
       line(group.reports.length>1 || group.overlap?button('Review reports',()=>reconcile(group,kind),'wf-review'):null,button('Take back entry',()=>sheet('Take back '+r.label+'?',[note('Remove this physical job from totals. Its reports stay in the plan.')],'Take back',()=>takeBack(group)),'wf-take-back')));
   }
-  function labForm(id) {
-    const kind=field('Sample type','Soil',null,['Soil','Soil extract','Tissue','Water'].map(x=>[x,x])), sampled=field('Sample date',local().slice(0,10),'date'), lab=field('Lab and report ID',''), method=field('Extraction method or tissue stage',''), analyte=field('Analyte',''), reading=field('Reported value','','text'), unit=field('Original units','');
-    const beds=App.state.plan.beds.filter(b=>b.gardenId===id && b.active!==false).map(b=>[b,h('input',{type:'checkbox'})]);
-    sheet('Review a lab result',[kind.el,sampled.el,lab.el,method.el,line(analyte.el,reading.el,unit.el),h('details',{open:true},h('summary','Sampled beds'),beds.map(([b,c])=>h('label.wf-choice',c,String(b.bed||b.id))))], 'Accept result',()=>{
+  function labKey(row) {
+    return JSON.stringify([row.kind,row.date,row.source,row.method,row.analyte,row.value,row.unit,[...(row.beds || [])].sort()]);
+  }
+  function labForm(id, drafts = [], previous = {}, excluded = new Set()) {
+    const kind=field('Sample type',previous.kind || 'Soil',null,['Soil','Soil extract','Tissue','Water'].map(x=>[x,x]));
+    const sampled=field('Sample date',previous.date || local().slice(0,10),'date'), lab=field('Lab and report ID',previous.source);
+    const method=field('Extraction method or tissue stage',previous.method), analyte=field('Analyte','');
+    const reading=field('Reported value',''), unit=field('Original units','');
+    const paste=h('textarea.field',{rows:4,'aria-label':'Readings from spreadsheet',placeholder:'Analyte   Value   Unit'});
+    const beds=App.state.plan.beds.filter(b=>b.gardenId===id && b.active!==false).map(b=>[b,h('input',{type:'checkbox',checked:previous.beds?.includes(b.id)})]);
+    sheet('Enter lab reading · '+gardenName(id),[line(kind.el,sampled.el),lab.el,method.el,line(analyte.el,reading.el,unit.el),
+      h('details.wf-section',h('summary','Paste readings from a spreadsheet'),note('Paste three tab-separated columns in this order: analyte, value, unit. Omit the heading.'),paste),
+      h('details.wf-section',{open:true},h('summary','Sampled beds'),beds.map(([b,c])=>h('label.wf-choice',c,String(b.bed||b.id)))),
+      drafts.length?button('Back to report',()=>reviewLab(id,drafts,excluded),'wf-lab-back'):null], 'Review reading',()=>{
       if(!sampled.get() || sampled.get()>local().slice(0,10)) throw Error('Enter the actual sample date.');
-      const record={id:App.uid(),gardenId:id,kind:kind.get(),date:sampled.get(),source:W.name(lab.get(),'the lab and report ID'),method:W.name(method.get(),'the method or crop stage'),analyte:W.name(analyte.get(),'the analyte'),value:W.name(reading.get(),'the original reading'),unit:W.name(unit.get(),'the original units'),beds:beds.filter(([,c])=>c.checked).map(([b])=>b.id)};
-      if(rows('labs',id).some(x=>['date','source','kind','analyte','method','unit','value'].every(k=>x[k]===record[k]) && JSON.stringify(x.beds)===JSON.stringify(record.beds))) throw Error('This lab result is already in history.');
-      return storeRow('labs',record,'Lab result accepted');
+      const meta={gardenId:id,kind:kind.get(),date:sampled.get(),source:W.name(lab.get(),'the lab and report ID'),method:W.name(method.get(),'the method or crop stage'),beds:beds.filter(([,c])=>c.checked).map(([b])=>b.id)};
+      const input=paste.value.trim()?paste.value.trim().split(/\r?\n/).map(line=>line.split('\t')):[];
+      if(analyte.get() || reading.get() || unit.get() || !input.length) input.unshift([analyte.get(),reading.get(),unit.get()]);
+      const seen=new Set([...drafts,...rows('labs',id)].map(labKey));
+      const records=input.map(cols=>{
+        if(cols.length!==3) throw Error('Each pasted row needs three columns.');
+        const record={...meta,id:App.uid(),analyte:W.name(cols[0],'the analyte'),value:W.name(cols[1],'the original reading'),unit:W.name(cols[2],'the original units')};
+        const key=labKey(record);
+        if(seen.has(key)) throw Error('This reading is already in the report or garden history.');
+        seen.add(key);
+        return record;
+      });
+      reviewLab(id,[...drafts,...records],excluded);
     });
+  }
+  function reviewLab(id,drafts,excluded=new Set()) {
+    const picks=drafts.map(row=>[row,h('input',{type:'checkbox',checked:!excluded.has(row.id),'aria-label':'Include '+row.analyte})]);
+    const omissions=()=>new Set(picks.filter(([,c])=>!c.checked).map(([r])=>r.id));
+    const table=h('div.wf-table-scroll',h('table.wf-grid-table',h('thead',h('tr',['Include','Analyte','As reported','Sample'].map(label=>h('th',{scope:'col'},label)))),
+      h('tbody',picks.map(([r,c])=>h('tr',h('td',c),h('th',{scope:'row'},r.analyte),h('td',r.value+' '+r.unit),
+        h('td',r.kind+' · '+r.date,note(r.source+' · '+r.method),note(r.beds.length?'Beds '+bedNames(r.beds):'Sampled beds unspecified')))))));
+    sheet('Review lab report · '+gardenName(id),[table,line(button('Add reading',()=>labForm(id,drafts,drafts.at(-1),omissions()),'wf-lab-another'),
+      button('Skip this report',close,'wf-lab-skip'))], 'Import selected readings',()=>{
+      const chosen=picks.filter(([,c])=>c.checked).map(([r])=>r);
+      if(!chosen.length) throw Error('Select at least one reading.');
+      const existing=new Set(rows('labs',id).map(labKey));
+      if(chosen.some(r=>existing.has(labKey(r)))) throw Error('A selected reading is already in this garden. Uncheck it before importing.');
+      let next=book(); for(const r of chosen) next=W.put(next,'labs',r);
+      return save(next,'Lab readings imported');
+    },'wf-wide');
   }
   const nutrients = [['n','N'],['p','P₂O₅'],['k','K₂O']];
   function seasonFigures(id) {
@@ -540,8 +595,17 @@
     const b=book(), tanks=rows('tanks',id), zones=rows('zones',id), mixes=W.groups(b,'refill').filter(x=>x.chosen.gardenId===id).reverse(), runs=W.groups(b,'run').filter(x=>x.chosen.gardenId===id).reverse(), labs=rows('labs',id);
     const measured=g.measuredSize, legacy=g.liquidFeedProfile;
     const details=(title,body,open=false)=>h('details.wf-section',{open},h('summary',title),body);
+    const f=seasonFigures(id), due=tanks.filter(t=>W.reminder(b,t.id));
+    const weeksRuns=runs.filter(group=>{const date=new Date(group.chosen.at);const first=new Date();first.setHours(0,0,0,0);first.setDate(first.getDate()-6);return date>=first && date<=new Date();});
     sheet(g.name,[measured?.widthFt && measured?.lengthFt ? note(num(measured.widthFt)+' × '+num(measured.lengthFt)+' ft · '+num(measured.widthFt*measured.lengthFt)+' sq ft floor') : null,
-      details('Equipment · '+tanks.length+' tanks, '+zones.length+' zones',[
+      nitrogen(f),seasonHistory(f),due.length?line(h('strong','Refill '+due[0].name),button('Open Tasks',()=>openRefill(due[0].id),'wf-open-tasks')):null,
+      details('This week · '+countOf(due.length,'refill')+' due',[
+        tanks.map(t=>line(t.name,W.reminder(b,t.id)?'Refill due':'No refill due')),note(runLine(W.runSummary(weeksRuns))),
+        runs.length?details('Irrigation history · '+runs.length,runs.map(x=>history(x,'run'))):null]),
+      details('Season plan · '+f.year,[line(button('View full season',()=>fullSeason(id),'wf-full-season'),button('Season targets',()=>seasonSheet(id),'wf-targets'),button('Record field application',()=>spreadForm(id),'wf-spread')),
+        W.groups(b,'spread').filter(x=>x.chosen.gardenId===id).reverse().map(x=>history(x,'spread')),mixes.map(x=>history(x,'refill'))]),
+      details('Soil and tissue tests · '+labs.length,[labHistory(id),button('Review lab result',()=>labForm(id),'wf-lab')]),
+      details('Setup · '+countOf(tanks.length,'tank')+', '+countOf(zones.length,'zone'),[
         legacy?.enabled ? note('Saved feed profile · '+legacy.productName+' · '+num(legacy.ppmN)+' ppm N') : null,
         tanks.map(t=>line(h('b',t.name),num(t.gallons,2)+' gal',b.recipes?.[t.recipeId]?.name||'Recipe missing',
           t.ratio && b.recipes?.[t.recipeId] ? '1:'+num(t.ratio,2)+' · recipe contributes '+num(W.recipeConcentration(b,t.recipeId,t.ratio).n,1)+' ppm N (estimated)' : null,
@@ -550,14 +614,7 @@
           const rate=W.zoneRate(z,App.state.plan.beds);
           return line(h('b',z.name),rate==null?'Flow unknown':num(rate,2)+' gal/min rated',button('Edit zone',()=>setup(id,'zone',z),'wf-edit-zone'),button('Record run',()=>runForm(z),'wf-run'));
         }),
-        line(button('Add tank',()=>setup(id,'tank'),'wf-add-tank'),button('Add zone',()=>setup(id,'zone'),'wf-add-zone'))],true),
-      details('Fertility history · '+mixes.length+' refills',[
-        line(button('Season targets',()=>seasonSheet(id),'wf-targets'),button('Record field application',()=>spreadForm(id),'wf-spread')),
-        ...W.groups(b,'spread').filter(x=>x.chosen.gardenId===id).reverse().map(x=>history(x,'spread')),
-        ...(mixes.length?mixes.map(x=>history(x,'refill')):[note('No refills recorded.')])]),
-      details('Irrigation history · '+runs.length,runs.length?runs.map(x=>history(x,'run')):note('No runs recorded.')),
-      details('Soil and tissue · '+labs.length,[labs.map(l=>line(h('b',l.analyte+' '+l.value+' '+l.unit),l.kind+' · '+l.date+' · '+l.method+' · '+l.source,
-        l.beds.length ? 'Sampled beds '+l.beds.map(bid=>App.state.plan.beds.find(b=>b.id===bid)?.bed||bid).join(', ') : 'Sampled beds unspecified')),button('Review lab result',()=>labForm(id),'wf-lab')])], 'Done');
+        line(button('Add tank',()=>setup(id,'tank'),'wf-add-tank'),button('Add zone',()=>setup(id,'zone'),'wf-add-zone'))])], 'Done',null,'wf-garden-sheet');
   }
   function insidePeriod(r) {
     const whenLocal=local(new Date(r.at)).slice(0,10);
@@ -600,7 +657,7 @@
   }
   function irrigationGarden(g, zones, records) {
     const total=W.runSummary(records);
-    return h('section.wf-garden',line(h('h3',g.name),button('Garden details',()=>gardenCard(g.id),'wf-garden')),
+    return h('section.wf-board.wf-garden',line(tile(g),h('h3',g.name),button('Garden details',()=>gardenCard(g.id),'wf-garden')),
       records.length?note(volumeLine(total)+' · '+runLine(total)):note(zones.length?'No runs recorded in this period.':'No irrigation zones set up.'),
       zones.map(z=>{
         const latest=records.filter(group=>group.chosen.zoneId===z.id).at(-1), r=latest?.chosen;
@@ -613,22 +670,179 @@
     const latest=mixes.at(-1), f=selected?seasonFigures(g.id):null;
     const area=f?.target?.basis==='floor'?f.floor:f?.areaBeds;
     const target=f?.target && area>0?W.targetPounds(area,f.target):null;
-    return h('section.wf-garden',line(h('h3',g.name),button('Garden details',()=>gardenCard(g.id),'wf-garden')),
+    return h('section.wf-board.wf-garden',line(tile(g),h('h3',g.name),button('Garden details',()=>gardenCard(g.id),'wf-garden')),
+      f?nitrogen(f):null,
       latest?note('Last refill '+when(latest.chosen.at)):null,
       tanks.map(t=>line(h('strong',t.name),book().recipes?.[t.recipeId]?.name||'Recipe missing',
-        dueByTank.has(t.id)?button('Refill due · Tasks',()=>App.setView('sow'),'wf-open-tasks'):button('Request refill',()=>request(t),'wf-request'))),
+        dueByTank.has(t.id)?button('Refill due · Tasks',()=>openRefill(t.id),'wf-open-tasks'):button('Request refill',()=>request(t),'wf-request'))),
       f && (target||f.applied||f.mixed)?nutrientTable(f,target):null,
       f?.mixed?note('Tank delivery to the garden is unknown.'):null,
       line(button('Record field application',()=>spreadForm(g.id),'wf-spread'),button('Season targets',()=>seasonSheet(g.id),'wf-targets'),
         (selected||!tanks.length)?button('Add tank',()=>setup(g.id,'tank'),'wf-add-tank'):null));
   }
+  const countOf = (n, word) => n+' '+word+(n===1?'':'s');
+  function board(title, meta, ...parts) {
+    return h('section.wf-board', h('header.wf-board-head',h('h3',title),meta != null ? h('span',String(meta)) : null),parts);
+  }
+  function switcher(label,items,value,change) {
+    return h('div.seg',{role:'group','aria-label':label},items.map(item=>h('button',{type:'button','aria-pressed':String(item===value),
+      onclick:()=>{change(item);render();}},item)));
+  }
+  function selectGarden(id) { gardenId=id; render(); }
+  function tile(g) {
+    const eng=App.state.engine;
+    const planting=App.state.plan.plantings.find(p=>!p.deleted && eng.bedOf(p.bedId)?.gardenId===g.id && eng.crop(p.cropId));
+    const crop=planting && eng.crop(planting.cropId);
+    return root.LRFThumbs.el({cropId:crop?.id,varietyId:planting?.varietyId,label:crop?.name || g.name,color:crop?eng.cropColor(crop):'var(--paper)',size:42,cls:'wf-tile'});
+  }
+  function gardenLink(g,detail) {
+    return h('button.wf-place',{type:'button',onclick:()=>gardenCard(g.id),'aria-label':'Garden details · '+g.name},
+      tile(g),h('span',h('strong',g.name),detail?h('small',detail):null));
+  }
+  function setupRows(list,isWater) {
+    if(!list.length) return null;
+    const item=g=>h('div.wf-quiet-row',gardenLink(g),note('Not set up'),button('Set up',()=>selectGarden(g.id),'wf-select-garden'));
+    return [note(isWater?'Choose a garden to add its first irrigation zone.':'Choose a garden to record a field application, set targets or add a feed tank.'),
+      list.slice(0,6).map(item),list.length>6?h('details.wf-more',h('summary','Show '+(list.length-6)+' more gardens'),list.slice(6).map(item)):null];
+  }
+  function nitrogenFigures(f) {
+    const area=f.target?.basis==='floor'?f.floor:f.target?.basis==='beds'?f.areaBeds:null;
+    const goal=f.target?.n, applied=f.applied?.totals.n;
+    const measured=!!f.applied && applied!=null && !f.applied.disputed;
+    const perAcre=measured && area>0?applied*43560/area:null;
+    return {goal,applied,measured,perAcre};
+  }
+  function nitrogen(f) {
+    const {goal,applied,measured,perAcre}=nitrogenFigures(f);
+    const show=perAcre!=null && goal!=null && goal>0;
+    const amount=perAcre==null?(measured?num(applied,2)+' lb':f.applied?'Unconfirmed':'No field applications'):num(perAcre,1)+' lb/acre';
+    return h('div.wf-nitrogen',h('small','Nitrogen applied'),h('strong',show?num(perAcre,1)+' of '+num(goal,1)+' lb N/acre':amount),
+      show?h('progress',{max:goal,value:Math.min(perAcre,goal),'aria-label':'Recorded nitrogen against season target'}):null,
+      goal!=null?h('small',(show?'':'Target '+num(goal,1)+' lb/acre · ')+(f.target.basis==='floor'?'Garden floor':'Bed tops')):null);
+  }
+  function seasonHistory(f) {
+    const groups=W.groups(book(),'spread').filter(g=>g.chosen.gardenId===f.garden.id && new Date(g.chosen.at).getFullYear()===f.year);
+    const first=new Date(f.year,0,1), monday=new Date(first);
+    monday.setDate(first.getDate()-(first.getDay()+6)%7);
+    const weeks=[];
+    for(let date=new Date(monday);date.getFullYear()<=f.year;date.setDate(date.getDate()+7)) weeks.push({date:new Date(date),lb:0,known:true,count:0});
+    for(const group of groups) {
+      const day=local(new Date(group.chosen.at)).slice(0,10);
+      const week=weeks.findLast(w=>local(w.date).slice(0,10)<=day);
+      if(!week) continue;
+      const n=W.nutrientTotals(group.chosen.items).n;
+      week.count++;
+      if(n==null || group.unsettled.length) week.known=false; else week.lb+=n;
+    }
+    const peak=Math.max(0,...weeks.filter(w=>w.known).map(w=>w.lb));
+    return h('figure.wf-season-chart',h('figcaption','Field nitrogen applied by week · '+f.year),
+      h('div.wf-columns',{'aria-hidden':'true'},weeks.map(w=>h('i',{className:w.count&&!w.known?'unknown':'',
+        style:{height:w.count&&!w.known?'4px':(peak>0?100*w.lb/peak:0)+'%'}}))),
+      h('div.wf-year-axis',h('span','Jan'),h('span','Apr'),h('span','Jul'),h('span','Oct'),h('span','Dec')),
+      weeks.some(w=>!w.known)?note('Hatched marker · amount unconfirmed'):null,
+      groups.length?h('details.wf-more',h('summary','Weekly amounts'),weeks.filter(w=>w.count).map(w=>note('Week of '+UI.day(w.date)+' · '+(w.known?num(w.lb,2)+' lb N':'Unconfirmed')))):note('No field applications recorded this season.'));
+  }
+  function labHistory(id) {
+    const readings=rows('labs',id).sort((a,b)=>b.date.localeCompare(a.date));
+    if(!readings.length) return note('No lab results recorded.');
+    const comparable=new Map();
+    for(const r of readings) {
+      const key=JSON.stringify([r.kind,r.analyte,r.method,r.unit,[...(r.beds||[])].sort()]);
+      if(!comparable.has(key)) comparable.set(key,[]);
+      comparable.get(key).push(r);
+    }
+    const detail=r=>note(r.date+' · '+r.source+' · '+r.method+' · '+(r.beds?.length?'Beds '+bedNames(r.beds):'Sampled beds unspecified'));
+    return h('div.wf-table-scroll',h('table.wf-grid-table',h('caption','Latest comparable readings'),
+      h('thead',h('tr',['Analyte','As reported','Sample and history'].map(label=>h('th',{scope:'col'},label)))),
+      h('tbody',[...comparable.values()].map(([r,...older])=>h('tr',h('th',{scope:'row'},r.analyte,note(r.kind)),
+        h('td',h('b',r.value+' '+r.unit)),h('td',detail(r),older.length?h('details.wf-more',h('summary','Earlier readings ('+older.length+')'),
+          older.map(v=>h('div',h('b',v.value+' '+v.unit),detail(v)))):null))))));
+  }
+  function gardenTests(g) {
+    return board(g.name, 'Soil and tissue tests',labHistory(g.id),button('Review lab result',()=>labForm(g.id),'wf-lab'));
+  }
+  function seasonBoard(g) {
+    const f=seasonFigures(g.id), area=f.target?.basis==='floor'?f.floor:f.areaBeds;
+    return board(g.name,f.year,nitrogen(f),seasonHistory(f),f.target || f.applied || f.mixed ? nutrientTable(f,f.target&&area>0?W.targetPounds(area,f.target):null):null,
+      f.mixed?[note('Tank delivery to the garden is unknown.'),h('details.wf-section',h('summary','Recent mixes'),
+        W.groups(book(),'refill').filter(x=>x.chosen.gardenId===g.id && new Date(x.chosen.at).getFullYear()===f.year).reverse().map(x=>history(x,'refill')))]:null,
+      line(button('Edit season targets',()=>seasonSheet(g.id),'wf-targets'),button('Record field application',()=>spreadForm(g.id),'wf-spread'),button('Fertilizer to buy',openSupplies,'wf-open-supplies')));
+  }
+  function fullSeason(id) {
+    sheet('Season plan · '+gardenName(id),[seasonBoard(gardens().find(g=>g.id===id)),button('Back to garden',()=>gardenCard(id),'wf-return-garden')],'Done',null,'wf-wide');
+  }
+  function fertilityOverview(list, due, configured) {
+    const ready=list.filter(g=>configured.has(g.id)), waiting=list.filter(g=>!configured.has(g.id));
+    const pending=g=>due.filter(t=>t.gardenId===g.id);
+    const b=book(), mixes=W.groups(b,'refill'), spreads=W.groups(b,'spread');
+    const reviews=[...mixes,...spreads].filter(x=>x.unsettled.length);
+    const reviewFor=g=>reviews.filter(x=>x.chosen.gardenId===g.id);
+    const figures=new Map(ready.map(g=>[g.id,seasonFigures(g.id)]));
+    const attention=ready.filter(g=>pending(g).length || reviewFor(g).length);
+    const quiet=ready.filter(g=>!attention.includes(g));
+    const work=g=>{
+      const tanks=pending(g), outstanding=reviewFor(g);
+      return h('article.wf-summary-row',gardenLink(g,tanks.length?W.reminder(b,tanks[0].id).reason:'Application records need review'),nitrogen(figures.get(g.id)),
+        h('div.wf-jobs',tanks.map(t=>h('button.wf-job',{type:'button',onclick:()=>openRefill(t.id)},h('span',h('strong','Refill '+t.name),
+          h('small',num(t.gallons,2)+' gal batch · Open refill card ›')))),outstanding.map(x=>button('Review '+x.chosen.label,()=>reconcile(x,x.chosen.kind),'wf-review'))));
+    };
+    function settled(g) {
+      const last=mixes.filter(r=>r.chosen.gardenId===g.id).at(-1);
+      return h('div.wf-quiet-row',gardenLink(g,last?'Last refill '+when(last.chosen.at):'No refill requested'),nitrogen(figures.get(g.id)),button('View garden',()=>selectGarden(g.id),'wf-select-garden'));
+    }
+    const cleared=quiet.filter(g=>[...mixes,...spreads].some(r=>r.chosen.gardenId===g.id));
+    const unrecorded=quiet.filter(g=>!cleared.includes(g));
+    const pendingCount=countOf(attention.length,'garden')+' · '+countOf(due.length,'refill')+' due';
+    return [board('Needs attention',pendingCount,attention.length?attention.map(work):
+      h('div.wf-clear',h('span',{'aria-hidden':'true'},'✓'),h('div',h('strong','No refills due'),note(ready.length?'No outstanding refill requests.':'Set up a garden below to track its feed tanks and applications.')))),
+      cleared.length?board('On track','No outstanding jobs',cleared.map(settled)):null,
+      unrecorded.length||waiting.length?board('Your gardens',unrecorded.length+' awaiting records · '+waiting.length+' not set up',
+        unrecorded.map(g=>h('div.wf-quiet-row',gardenLink(g),note('No applications or refills recorded'),button('View garden',()=>selectGarden(g.id),'wf-select-garden'))),setupRows(waiting,false)):null];
+  }
+  function timeLabel(date) { return date.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }
+  function todayRuns(all,groups,zones) {
+    const nowDate=new Date(), start=new Date(nowDate), end=new Date(nowDate);
+    start.setHours(0,0,0,0); end.setHours(24,0,0,0);
+    const from=new Date(start), to=new Date(start);from.setHours(5);to.setHours(19);
+    const events=groups.map(group=>{
+      const r=group.chosen, at=new Date(r.at), finish=new Date(+at+(group.workConflict?0:r.elapsed)*60000);
+      return {group,r,at,finish};
+    }).filter(e=>e.at<end && (e.finish>start || e.at>=start));
+    const lo=Math.min(+from,...events.map(e=>Math.max(+start,+e.at)));
+    const hi=Math.max(+to,...events.map(e=>Math.min(+end,+e.finish)));
+    const pos=t=>Math.max(0,Math.min(100,(t-lo)/(hi-lo)*100));
+    const printed=(e)=>e.r.label+' · '+(e.at<start?UI.day(e.at)+' ':'')+timeLabel(e.at)+' · '+(e.group.workConflict?'Under review':e.r.status+' · '+num(e.r.elapsed,2)+' min');
+    const axis=h('div.wf-time-axis',Array.from({length:5},(_,i)=>h('span',timeLabel(new Date(lo+(hi-lo)*i/4)))));
+    const list=all.filter(g=>zones.some(z=>z.gardenId===g.id)||events.some(e=>e.r.gardenId===g.id));
+    function lane(g) {
+      const own=events.filter(e=>e.r.gardenId===g.id).sort((a,b)=>a.at-b.at);
+      const tracks=[];
+      for(const event of own) {
+        let track=tracks.find(t=>+t.at(-1).finish+120000<+event.at);
+        if(!track) {track=[]; tracks.push(track);}
+        track.push(event);
+      }
+      if(!tracks.length) tracks.push([]);
+      return h('div.wf-lane',h('button.wf-lane-name',{type:'button',onclick:()=>selectGarden(g.id)},g.name),
+        h('div.wf-lane-plot',tracks.map(track=>h('div.wf-time-track',track.map(e=>h('button.wf-run-block',{type:'button',dataset:{status:e.group.workConflict?'review':e.r.status},
+          style:{left:'min(calc(100% - 8px), '+pos(+e.at)+'%)',width:(pos(+e.finish)-pos(+e.at))+'%'},title:printed(e),'aria-label':printed(e),
+          onclick:()=>sheet(g.name+' · '+e.r.label,[history(e.group,'run')],'Done')})))),
+          +nowDate>=lo&&+nowDate<=hi?h('i.wf-now',{title:'Now · '+timeLabel(nowDate),'aria-hidden':'true',style:{left:pos(+nowDate)+'%'}}):null));
+    }
+    const completed=events.filter(e=>!e.group.workConflict&&e.r.status==='Completed').length;
+    return board('Today',UI.dayLong(nowDate),h('div.wf-day-lead',h('strong',events.length?completed+' completed':'No runs recorded today'),
+      events.length?note(events.length+' recorded · select a run for its details'):note('Runs appear here when you record them.')),
+      h('div.wf-schedule',h('div.wf-axis-wrap',h('span','Garden'),axis),list.map(lane)),
+      events.length?h('div.wf-legend',Array.from(new Set(events.map(e=>e.group.workConflict?'Under review':e.r.status))).map(status=>h('span',h('i',{dataset:{status},'aria-hidden':'true'}),status))):null,
+      events.length?h('details.wf-more',h('summary','Run list · '+events.length),events.map(e=>button(gardenName(e.r.gardenId)+' · '+printed(e),()=>sheet(gardenName(e.r.gardenId)+' · '+e.r.label,[history(e.group,'run')],'Done'),'wf-open-run'))):null);
+  }
+
   function render() {
     if (!App.state.ready || App.state.view!=='water') return;
     const host=document.getElementById('wfWrap'), b=book(), all=gardens(), garden=all.find(g=>g.id===gardenId);
     if(!garden) gardenId='';
     const isWater=lens==='Irrigation', tanks=rows('tanks',gardenId), zones=rows('zones',gardenId);
     const dueByTank=new Set(tanks.filter(t=>W.reminder(b,t.id)).map(t=>t.id));
-    const dueGardens=new Set(tanks.filter(t=>dueByTank.has(t.id)).map(t=>t.gardenId));
     const groups=W.groups(b,isWater?'run':'refill').filter(r=>!gardenId||r.chosen.gardenId===gardenId);
     const records=isWater?groups.filter(g=>insidePeriod(g.chosen)):groups, total=isWater?W.runSummary(records):null;
     const configured=new Set((isWater?zones:tanks).map(row=>row.gardenId));
@@ -639,23 +853,63 @@
       for(const group of W.groups(b,'spread')) configured.add(group.chosen.gardenId);
     }
     const selected=garden?[garden]:all.filter(g=>configured.has(g.id));
-    if(!garden && !isWater) selected.sort((a,b)=>Number(dueGardens.has(b.id))-Number(dueGardens.has(a.id)));
     const filter=field('Garden',gardenId,null,[['','All gardens'],...opts(all)]);
-    filter.control.onchange=()=>{gardenId=filter.get();render();};
-    const toggle=(label,items,value,change)=>h('div.seg',{role:'group','aria-label':label},items.map(item=>h('button',{type:'button','aria-pressed':String(item===value),onclick:()=>{change(item);render();}},item)));
-    const content=[h('header.as-head.nu-head',h('h2',lens),UI.help(isWater?'Run time counts completed and interrupted work. Metered and estimated gallons are shown separately. Disputed time stays out of confirmed minutes.':'Record field applications and check season targets here. Tasks records a refill when the tank returns to service.',()=>host)),
-      h('p.frame-figs',isWater ? [h('b',volumeLine(total)),records.length?' · '+runLine(total):''] :
-        [h('b',dueByTank.size+' refills due'),' · '+tanks.length+(tanks.length===1?' tank':' tanks')]),
-      line(toggle('Water dashboard',['Fertility','Irrigation'],lens,x=>{lens=x;}),filter.el,isWater?toggle('Period',['Last 7 days','Season'],period,x=>{period=x;}):[button('Products and recipes',library,'wf-products'),button('Fertilizer supplies',openSupplies,'wf-open-supplies')]),
-      isWater?line(nativeLink()):null,
-      total?.reviews.length?button('Review run evidence ('+total.reviews.length+')',()=>evidenceList(total.reviews),'wf-review'):null,
-      isWater && period==='Last 7 days' && records.length?weekChart(records):null,
-      selected.length?null:note(all.length ? isWater?'Choose a garden to add its first irrigation zone.':'Choose a garden to record a field application, set targets or add a feed tank.' : 'Add a garden on the Map to get started.'),
-      ...selected.map(g=>{
-        const own=records.filter(group=>group.chosen.gardenId===g.id);
-        return isWater?irrigationGarden(g,zones.filter(z=>z.gardenId===g.id),own):
-          fertilityGarden(g,tanks.filter(t=>t.gardenId===g.id),own,dueByTank,!!garden);
-      })];
+    filter.control.onchange=()=>selectGarden(filter.get());
+    const navigation=switcher('Water dashboard',['Fertility','Irrigation'],lens,x=>{lens=x;});
+    const timeLens=isWater?switcher('Irrigation period',['Today','Last 7 days','Season'],period,x=>{period=x;}):
+      switcher('Fertility view',['Now','Season','Soil tests'],fertilityView,x=>{fertilityView=x;});
+    const title=h('header.wf-dashboard-head',h('div',h('div.wf-title',h('h2',lens),navigation),
+      note(UI.dayLong(new Date())+(isWater?' · Recorded irrigation':(' · '+countOf(dueByTank.size,'refill')+' due')))),timeLens);
+    const tools=line(document.body.classList.contains('phone')?button('Back to Tasks',()=>App.setView('sow'),'wf-return-tasks'):null,filter.el,isWater?nativeLink():[button('Products and recipes',library,'wf-products'),button('Fertilizer supplies',openSupplies,'wf-open-supplies')]);
+    tools.classList.add('wf-tools');
+    const content=[title,tools];
+    if(!all.length) content.push(board('Growing areas',null,note('Add a garden on the Map to get started.')));
+    else if(isWater) {
+      if(period==='Today') content.push(todayRuns(garden?[garden]:all,groups,zones));
+      const reviews=W.runSummary(groups).reviews;
+      if(reviews.length || !garden) content.push(board('Needs attention',reviews.length+' to review',reviews.length ?
+        [...new Set(reviews.map(r=>r.chosen.gardenId))].map(id=>{
+          const own=reviews.filter(r=>r.chosen.gardenId===id), g=all.find(item=>item.id===id);
+          return h('div.wf-quiet-row',g?gardenLink(g):gardenName(id),note(own.length+' run records need review'),button('Review run evidence ('+own.length+')',()=>evidenceList(own),'wf-review'));
+        }):note('No run evidence awaiting review.')));
+      const span=period==='Season'?'Season · '+App.planYear():'Last 7 days';
+      const summary=h('div.wf-stats',h('div',h('small','Water applied'),h('strong',volumeLine(total))),h('div',h('small','Recorded runs'),h('strong',runLine(total))));
+      const summaryBoard=board(span,null,summary,period==='Last 7 days' && records.length?weekChart(records):null,
+        period==='Today'?button('Season totals',()=>{period='Season';render();},'wf-season-totals'):null);
+      if(period!=='Today') content.push(summaryBoard);
+      if(garden) content.push(irrigationGarden(garden,zones,records));
+      else {
+        const quiet=selected.filter(g=>!reviews.some(r=>r.chosen.gardenId===g.id));
+        const waiting=all.filter(g=>!configured.has(g.id));
+        const samples=activeSoil().filter(r=>r.kind==='soilmoisture').sort((a,b)=>b.at.localeCompare(a.at));
+        const tracked=quiet.filter(g=>records.some(r=>r.chosen.gardenId===g.id));
+        const awaiting=quiet.filter(g=>!tracked.includes(g));
+        if(tracked.length) content.push(board('On track','No outstanding run reviews',tracked.map(g=>{
+          const own=records.filter(r=>r.chosen.gardenId===g.id), last=samples.find(r=>r.gardenId===g.id);
+          const conflicting=last && samples.some(r=>r!==last && E.identity(r.gateway,r.channel,r)===E.identity(last.gateway,last.channel,last));
+          const moisture=last?(conflicting?'Moisture reading disputed':soilLabel(last))+' · '+when(last.at):'No soil moisture reading';
+          return h('div.wf-quiet-row',gardenLink(g),h('div',h('strong',volumeLine(W.runSummary(own))),note(moisture)),button('View irrigation',()=>selectGarden(g.id),'wf-select-garden'));
+        })));
+        if(awaiting.length||waiting.length) content.push(board('Your gardens',awaiting.length+' awaiting runs · '+waiting.length+' not set up',
+          awaiting.map(g=>h('div.wf-quiet-row',gardenLink(g),note('No runs recorded in this period'),button('View irrigation',()=>selectGarden(g.id),'wf-select-garden'))),setupRows(waiting,true)));
+      }
+      if(period==='Today') content.push(summaryBoard);
+    } else if(fertilityView==='Now') {
+      if(garden) content.push(fertilityGarden(garden,tanks,records,dueByTank,true));
+      else content.push(...fertilityOverview(all,tanks.filter(t=>dueByTank.has(t.id)),configured));
+    } else if(fertilityView==='Season') {
+      content.push(...selected.map(seasonBoard));
+      if(!garden) {
+        const waiting=all.filter(g=>!configured.has(g.id));
+        if(waiting.length) content.push(board('Gardens to set up',waiting.length,setupRows(waiting,false)));
+      }
+    } else if(garden) content.push(gardenTests(garden));
+    else {
+      const labs=rows('labs'), withReports=all.filter(g=>labs.some(r=>r.gardenId===g.id));
+      content.push(board('Soil and tissue tests',labs.length+' readings',withReports.length?withReports.map(g=>
+        h('div.wf-summary-row',gardenLink(g),button('View readings',()=>selectGarden(g.id),'wf-select-garden'))):
+        note('Choose a garden to review its first lab report.')));
+    }
     host.replaceChildren(...content.filter(Boolean));
   }
   function init() { App.on('view',()=>{close();render();}); App.on('plan',()=>{render();if(activeDialog?.open && refreshSheet) refreshSheet();}); }

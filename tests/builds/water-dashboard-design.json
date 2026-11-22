@@ -1,0 +1,17 @@
+{
+  "build": "Garden dashboards, season views, refill cards and reviewed lab readings on Water.",
+  "changes": {
+    "did": "Water opens on garden refill jobs and nitrogen progress. Irrigation shows today's recorded runs by garden.",
+    "steps": [
+      "Open Water, then a garden card for this week's work, its season plan, soil tests and equipment.",
+      "Switch to Irrigation and select a run on today's timeline to inspect its evidence.",
+      "Under Soil tests, review the report's readings, units and sampled beds before importing."
+    ]
+  },
+  "words": [],
+  "code": ["sowview.js", "waterview.js"],
+  "added": [],
+  "removed": [],
+  "page": ["css/app.css"],
+  "screens": ["water"]
+}
