@@ -69,6 +69,7 @@ PAGE = [
  ("Codex on #66: any word at all is said on the card, and goes with it", CD, "    if (!acting && !refusedNow) return false;\n", ""),
  ("Codex on #66: the calendar says a sowing day set by hand stays", CD, "    if (q.sowOn && !q.liveTray && value !== p.date) delete q.sowOn;", "    void 0;"),
  ("Codex on #66: Grown for sale on a bed's card sets its garden", CD, "if (!App.setUse('bed', [bed.id], ev.target.checked ? 'commercial' : 'personal')) draw();", "if (!App.setUse('garden', [bed.gardenId], ev.target.checked ? 'commercial' : 'personal')) draw();"),
+ ("a bed's season sets its garden when Grown for sale is unticked", CD, "if (!App.setUse('bed', [bed.id], ev.target.checked ? 'commercial' : 'personal')) ev.target.checked", "if (!App.setUse('garden', [bed.gardenId], ev.target.checked ? 'commercial' : 'personal')) ev.target.checked"),
  ("Codex on #66: Edit layout opened from the card has no side panel", CD, "    if (root.LRFMapEdit && root.LRFMapEdit.on()) return false;", "    void 0;"),
  ("Edit layout closed, the side panel stays", CD, "    new MutationObserver(() => draw()).observe(document.body, { attributes: true, attributeFilter: ['data-layout'] });", "    void MutationObserver;"),
  ("Codex on #66: one that cannot go to To place loses its card to its bed's", CD, "    if (r && !e.isPool(r.b) && !root.LRFRails.fixed(e, { p })) App.select({ type: 'bed', id: r.b.id });", "    if (r) App.select({ type: 'bed', id: r.b.id });"),
