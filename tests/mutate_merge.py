@@ -136,8 +136,8 @@ NODE = [
   ('a joined plan that is the cloud\'s is not known as the cloud\'s', "    const alike = same(bare(r.plan), bare(theirs));", "    const alike = false;", 'three plans as files hold them'),
   ('who saved a file makes a joined plan differ from the cloud\'s', "    if (isObj(plan.lrfNextKeep)) out.lrfNextKeep = { keep: plan.lrfNextKeep.keep };\n", "", 'three plans as files hold them'),
   # a run of successions (E4): its record and its mark on each planting, both taken whole
-  ('a run\'s record is joined half from each side', "    'lrfNext.runs[]', 'plantings[].run',\n", "    'plantings[].run',\n", 'a run\'s record is taken whole'),
-  ('a planting\'s place in a run is joined half from each side', "    'lrfNext.runs[]', 'plantings[].run',\n", "    'lrfNext.runs[]',\n", 'a planting\'s place in a run is taken whole'),
+  ('a run\'s record is joined half from each side', "'lrfNext.runs[]', ", "", 'a run\'s record is taken whole'),
+  ('a planting\'s place in a run is joined half from each side', "'plantings[].run',", "", 'a planting\'s place in a run is taken whole'),
   ('a run this device added is dropped', "      if (!S.has(rec.id)) out.push(rec);                                         // this device added it\n      else if", "      if (!S.has(rec.id)) { /* dropped */ }\n      else if", 'two different runs made one on each device both stand'),
   ('a run removed here and changed there goes', "      else if (!same(S.get(rec.id), rec)) { out.push(rec); said(ctx, { kind: 'kept', path: here, id: rec.id, removedBy: 'mine' }); }", "", 'a run removed on one device while the other changed it stays'),
   ('a run removed there and changed here goes', "      else if (!same(S.get(rec.id), rec)) { out.push(rec); said(ctx, { kind: 'kept', path: here, id: rec.id, removedBy: 'theirs' }); }", "", 'a run removed on one device while the other changed it stays'),
