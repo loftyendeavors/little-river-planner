@@ -38,6 +38,7 @@
   /** Bench sowings are repeated from a manual planting. Nursery demand owns its automatic batches. */
   function plans(eng, crop, planting) {
     if (!crop || eng.isCoverCrop(crop) || eng.isPerennial(crop) || planting?.established || planting?.liveTray) return false;
+    if (planting && !eng.calc(planting)) return false;
     if (crop.micro) return !!planting && S.suits(eng, crop, eng.bedOf(planting.bedId));
     if (!(+crop.dtm > 0)) return false;
     return planting ? S.suits(eng, crop, eng.bedOf(planting.bedId)) : eng.plan.beds.some(b => S.suits(eng, crop, b) && (crop.material !== 'bulb' || eng.isCt(b)));
@@ -53,14 +54,13 @@
   const word = (n, crop, unit) => F.unitWord(n, unit, groupOf(crop, unit)) || unit || 'each';
   /** The unit an amount of a run is in: the thing it is of, where it is of another thing the crop sells, else the crop's (or the variety's) own. */
   const unitFor = (eng, crop, thingId, varietyId) => { const t = thingId ? thingsFor(eng, crop.id).find(x => x.id === thingId) : null; return t ? t.unit : eng.unitOf(crop, varietyId ? eng.variety(varietyId) : undefined); };
-  /** The gardens with beds in the ground this crop can go in, in the farm's order. */
+  /** The gardens and kinds of space this crop can go in, in the farm's order. */
   const bedGardens = (eng, crop) => S.runGardens(eng, crop).filter(g => crop.material !== 'bulb' || g.kind === 'containers');
   function selectGarden(eng, crop, selected, planting) {
     D.gardenId = selected?.garden.id || '';
     D.kind = selected?.kind || 'bed';
     const source = planting && D.kind !== 'bed' && eng.spaceKind(eng.bedOf(planting.bedId)) === D.kind ? planting : S.runSource(eng, crop.id, D.varietyId, D.kind);
     D.sourceId = source?.id || '';
-    if (source && !D.varietyId && source.varietyId) D.varietyId = source.varietyId;
     const allowed = new Set(bedGardens(eng, crop).filter(g => g.kind === D.kind).map(g => g.garden.id));
     D.then = D.then.filter(id => id !== D.gardenId && allowed.has(id));
     if (D.kind === 'bench') D.by = 'beds';
@@ -100,12 +100,16 @@
     const eng = App.state.engine, year = App.planYear();
     let source = focus.sourceId ? eng.planting(focus.sourceId) : null;
     const bed = focus.bedId ? eng.bedOf(focus.bedId) : source ? eng.bedOf(source.bedId) : null;
-    if (!source && bed && eng.isRack(bed)) source = eng.plantingsIn(bed.id).filter(p => plans(eng, eng.crop(p.cropId), p)).sort((a, b) => b.date.localeCompare(a.date))[0];
+    const here = bed ? eng.plantingsIn(bed.id).filter(p => eng.calc(p)).sort((a, b) => eng.calc(b).field - eng.calc(a).field) : [];
+    if (!source && bed && eng.isRack(bed)) source = here.find(p => plans(eng, eng.crop(p.cropId), p));
     const list = crops(eng, source), ok = c => !!c && list.includes(c) && (!bed || S.suits(eng, c, bed)) && (!bed || c.material !== 'bulb' || eng.isCt(bed));
     const used = new Set(App.state.plan.plantings.map(p => p.cropId));
     let crop = eng.crop(source ? source.cropId : focus.cropId);
-    if (!ok(crop) && bed) crop = eng.plantingsIn(bed.id).filter(p => ok(eng.crop(p.cropId))).sort((a, b) => b.date.localeCompare(a.date)).map(p => eng.crop(p.cropId))[0];
-    if (!ok(crop)) crop = [eng.crop(D.cropId), list.find(c => used.has(c.id) && ok(c)), list.find(ok)].find(ok);
+    if (!ok(crop) && bed) crop = here.map(p => eng.crop(p.cropId)).find(ok);
+    if (!ok(crop)) {
+      const inGarden = c => ok(c) && (!focus.gardenId || bedGardens(eng, c).some(g => g.garden.id === focus.gardenId));
+      crop = [eng.crop(D.cropId), list.find(c => used.has(c.id) && inGarden(c)), list.find(inGarden)].find(inGarden) || list.find(ok);
+    }
     Object.assign(D, { cropId: crop ? crop.id : '', varietyId: '', thing: '', by: focus.by === 'beds' ? 'beds' : 'amount', margin: 0, drop: [], then: [], fresh: false });
     if (!crop) return;
     if (source && source.varietyId) D.varietyId = source.varietyId;
@@ -114,6 +118,7 @@
     const gardens = bedGardens(eng, crop);
     const selected = (bed && gardens.find(g => g.garden.id === bed.gardenId && g.kind === eng.spaceKind(bed))) ||
       gardens.find(g => g.garden.id === focus.gardenId && g.kind === 'bed') ||
+      gardens.find(g => g.garden.id === focus.gardenId && g.planted) || gardens.find(g => g.garden.id === focus.gardenId) ||
       gardens.find(g => g.planted && g.garden.type === 'field' && g.kind === 'bed') ||
       gardens.find(g => g.planted) || gardens[0];
     selectGarden(eng, crop, selected, source);
@@ -122,12 +127,12 @@
     D.every = hw;
     // a planting or a bed: the run's days are planting days, from the day asked (or after the planting); a week on the Forecast:
     // picking days from that week; else picking days, from the first a bed could give
-    if (source && r && !focus.bedId) { D.by = 'beds'; D.datesFor = 'planting'; D.from = iso(E.addDays(r.field, hw)); D.to = iso(E.addDays(r.field, hw * 4)); }
-    else if (focus.from && focus.to && E.validDate(E.s2d(focus.from)) && E.validDate(E.s2d(focus.to))) {
+    if (focus.from && focus.to && E.validDate(E.s2d(focus.from)) && E.validDate(E.s2d(focus.to))) {
       // A Forecast period is the grower's selection, even when every candidate space is too late for it.
-      D.datesFor = 'picking'; D.from = focus.from; D.to = focus.to;
+      D.datesFor = D.kind === 'bench' ? 'planting' : 'picking'; D.from = focus.from; D.to = focus.to;
     }
-    else if (focus.bedId || focus.gardenId) { D.datesFor = 'planting'; D.by = focus.by === 'amount' ? 'amount' : 'beds'; const f = E.validDate(E.s2d(focus.from)) ? E.s2d(focus.from) : firstDay(eng, crop, garden); D.from = iso(f); D.to = iso(E.addDays(f, hw * 3)); }
+    else if (source && r && !focus.bedId) { D.by = 'beds'; D.datesFor = 'planting'; D.from = iso(E.addDays(r.field, hw)); D.to = iso(E.addDays(r.field, hw * 4)); }
+    else if (focus.bedId || focus.gardenId) { D.datesFor = 'planting'; D.by = focus.by === 'amount' && D.kind !== 'bench' ? 'amount' : 'beds'; const f = E.validDate(E.s2d(focus.from)) ? E.s2d(focus.from) : firstDay(eng, crop, garden); D.from = iso(f); D.to = iso(E.addDays(f, hw * 3)); }
     else {
       D.datesFor = 'picking';
       const start = firstDay(eng, crop, garden), probe = S.planRun(eng, { cropId: crop.id, kind: D.kind, sourceId: D.sourceId || undefined, varietyId: D.varietyId || undefined, by: 'beds', every: 7, datesFor: 'planting', from: iso(start), to: iso(start), gardenIds: garden ? [garden] : [] });
@@ -202,7 +207,7 @@
       h('optgroup', { label: 'Every other crop' }, list.filter(c => !mine.has(c.id)).map(c => h('option', { value: c.id, selected: c.id === crop.id }, c.name))));
     const varSel = h('select', { id: 'suVariety', dataset: { hook: 'succ-variety' }, onchange: e => {
       D.varietyId = e.target.value;
-      const source = S.runSource(eng, crop.id, D.varietyId, D.kind);
+      const source = (!D.varietyId && sourceOf(eng)) || S.runSource(eng, crop.id, D.varietyId, D.kind);
       D.sourceId = D.kind === 'bench' ? D.sourceId : source?.id || '';
       set({ drop: [] });
     }, disabled: D.kind === 'bench' }, h('option', { value: '' }, 'No variety chosen'), eng.varietiesOf(crop.id).map(x => h('option', { value: x.id, selected: x.id === D.varietyId }, x.name)));
@@ -394,6 +399,12 @@
     // a planting of the run sent to To place waits with its mark of the run: said here, and taken out with the run when asked (Codex on #103)
     const held = App.waiting().filter(w => w.run && w.run.id === run.id), all = list.length + held.length;
     if (held.length) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-waiting' } }, `${plural(held.length, 'planting')} of it ${held.length === 1 ? 'waits' : 'wait'} under To place, with no bed yet.`));
+    for (const w of held.sort((x, y) => x.run.n - y.run.n)) {
+      const variety = eng.variety(w.varietyId), date = E.s2d(w.date);
+      out.append(h('button.link', { type: 'button', dataset: { hook: 'succ-waiting-link', waiting: w.id }, onclick: () => {
+        App.setDate(date); App.setView('timeline'); App.select({ type: 'waiting', id: w.id });
+      } }, `${num(w.run.n)} · ${variety?.name || crop.name} · ${day(date)} · To place`));
+    }
     if (!all) out.append(h('p.su-note', { dataset: { hook: 'succ-kept-none' } }, 'None of its plantings is in the plan now.'));
     const removalText = () => UI_STATE.removeAll && all ? 'The run and its plantings go, as one step.' : 'Its plantings stay, as plain plantings. One Undo puts the run back.';
     const removalNote = h('span.su-foot-note', { dataset: { hook: 'succ-remove-effect' }, 'aria-live': 'polite' }, removalText());

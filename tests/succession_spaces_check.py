@@ -54,11 +54,22 @@ FIXTURE = """() => {
     containers: planting('test-source-containers', containers, '-03-10', example.cropId, {...grow, ft:3, perC:2}),
     bench: planting('test-source-bench', bench, '-03-10', micro.id, {trays:3, dtm:13, hw:1})
   };
+  const crop = eng.crop(example.cropId), baseUnit = eng.unitOf(crop);
+  const names = ['test-early-variety', 'test-late-variety'];
+  const sellV = {...base.assumptions?.sellV};
+  const varietySources = names.map((id, i) => {
+    ops.push({kind:'variety', before:null, after:{id, cropId:crop.id, name:'Test variety ' + (i + 1)}});
+    sellV[id] = {unit:baseUnit === 'lb' ? 'bunch' : 'lb'};
+    return planting('source-' + id, towers[0], i ? '-11-01' : '-09-01', crop.id,
+      {...grow, towerCycle:cycle, varietyId:id});
+  });
+  ops.push({kind:'assume', before:base.assumptions, after:{...base.assumptions, sellV}});
   for (const id of towers.slice(0, -1)) planting('occupied-' + id, id, '-06-01', example.cropId, {...grow, towerCycle:cycle});
   planting('occupied-containers', containers, '-06-01', example.cropId, {...grow, ft:9});
   planting('occupied-bench', bench, '-06-01', micro.id, {trays:9, dtm:13, hw:1});
   if (!A.commit('Prepare the made-up garden', ops, {unchecked:true})) throw Error('Fixture not loaded');
-  return {year, source, gardenId, reserve:reserve.id, reserveName:reserve.name, expected:{tower:towers.at(-1), containers, bench}};
+  return {year, source, gardenId, reserve:reserve.id, reserveName:reserve.name, expected:{tower:towers.at(-1), containers, bench},
+    baseUnit, namedSource:varietySources[0], namedVariety:names[0]};
 }"""
 
 READ_MEMBER = """id => {
@@ -66,7 +77,7 @@ READ_MEMBER = """id => {
   if (!p) return null;
   const r=e.calc(p), s=r.sowing;
   return {id:p.id, crop:p.cropId, variety:p.varietyId || '', date:p.date, bed:p.bedId,
-    kind:e.spaceKind(r.b), run:p.run, capacity:e.capOf(r.b), space:r.physicalLength,
+    kind:e.spaceKind(r.b), run:p.run, capacity:e.capOf(r.b), space:r.physicalLength, unit:e.yieldOf(p,r)?.unit,
     plants:r.plants, perC:p.perC, cycle:p.towerCycle, trays:p.trays,
     sow:LRFEngine.d2s(r.sow || r.field), medium:s && s.medium, cells:s && s.cells,
     batchIds:s && s.memberIds, sheetCells:s && s.tray && s.tray.cells,
@@ -139,7 +150,8 @@ def run_case(page, fixture, kind, check):
                        and initial['medium'] == 'rockwool' and initial['cells'] >= 42
                        and initial['sow'] == str(fixture['year']) + '-05-15'
                        and initial['sheetCells'] == 98 and member in initial['batchIds']
-                       and initial['batchPlants'] == 36 * 42 and initial['sheets'] == (initial['batchCells'] + 97) // 98)
+                       and initial['batchPlants'] == 36 * 42 and len(initial['batchIds']) == 36
+                       and initial['sheets'] == (initial['batchCells'] + 97) // 98 == 20)
     elif kind == 'containers':
         quantity_ok = initial['space'] == 3 and initial['capacity'] == 12 and initial['perC'] == 2 and initial['plants'] == 6
     else:
@@ -182,6 +194,26 @@ def run_case(page, fixture, kind, check):
         page.locator('#undoBtn').click()
     check('Undo restores the complete member and undoing the other steps restores the starting plan',
           recovered == initial and undo_depth() == depth and value('LRFApp.contentKey()') == before, recovered)
+    if kind == 'tower':
+        value("id => {LRFApp.setView('map'); LRFApp.select({type:'planting', id});}", fixture['namedSource'])
+        hook('panel-succession').click()
+        picker = hook('succ-variety')
+        opened_named = picker.input_value() == fixture['namedVariety']
+        picker.select_option('')
+        set_field('succ-from', start)
+        set_field('succ-to', start)
+        hook('succ-see').click()
+        ghost = value("""() => {const {p,r} = LRFSuccessions.ghosts().placed[0];
+          return {variety:p.varietyId || '', unit:LRFApp.state.engine.yieldOf(p,r).unit};}""")
+        page.locator('[data-hook="view-tab"][data-view-btn="succession"]').click()
+        hook('succ-add').click()
+        kept = value("""() => {const a=LRFApp, run=a.runs().at(-1), p=a.state.plan.plantings.find(x=>x.run?.id===run.id);
+          return {variety:run.varietyId || '', source:run.sourceId, member:p.id};}""")
+        new_member = value(READ_MEMBER, kept['member'])
+        check('clearing a tower variety uses the base crop and sale unit in the preview, run and planting',
+              opened_named and ghost == {'variety':'', 'unit':fixture['baseUnit']} and kept['variety'] == ''
+              and kept['source'] == fixture['namedSource'] and new_member['variety'] == ''
+              and new_member['unit'] == fixture['baseUnit'], [ghost, kept, new_member])
 
 
 def main():
@@ -208,12 +240,15 @@ def main():
                 page.goto(f'http://127.0.0.1:{server.server_address[1]}/index.html')
                 page.wait_for_function('window.LRFApp && LRFApp.state.ready')
                 if backup and page.evaluate('LRFApp.isSample()'):
-                    page.set_input_files('#importFile', backup)
-                    page.wait_for_function("!LRFApp.isSample() || !!document.querySelector('dialog[open] .btn.primary')", timeout=60000)
-                    confirm = page.locator('dialog[open] .btn.primary')
-                    if confirm.count():
-                        confirm.click()
-                    page.wait_for_function('LRFApp.state.plan.plantings.length > 600 && !LRFApp.isSample()', timeout=60000)
+                    # The import also restores photos after the plan appears. Let it finish before opening the Timeline.
+                    page.evaluate("""() => {const f=document.createElement('input'); f.type='file';
+                      f.id='successionFixtureFile'; f.hidden=true; document.body.append(f);}""")
+                    fixture_file = page.locator('#successionFixtureFile')
+                    fixture_file.set_input_files(backup)
+                    imported = fixture_file.evaluate('f => LRFApp.importBackup(f.files[0], {asked:true, quiet:true})')
+                    if not imported:
+                        raise RuntimeError('The made-up farm backup could not be imported. ' + page.locator('#toast').inner_text())
+                    fixture_file.evaluate('f => f.remove()')
                 fixture = page.evaluate(FIXTURE)
                 run_case(page, fixture, kind, check)
             except Exception as exc:

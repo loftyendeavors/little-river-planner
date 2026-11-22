@@ -100,11 +100,13 @@
   /** The latest planting of this crop and variety in this kind of space. Automatic live-tray batches follow demand. */
   function runSource(eng, cropId, varietyId, kind) {
     if (kind !== 'tower' && kind !== 'containers') return null;
-    let latest = null;
+    let latest = null, lastField = null;
     for (const p of eng.plan.plantings) {
       if (p.cropId !== cropId || (varietyId && p.varietyId !== varietyId) || p.liveTray || p.established || p.failed) continue;
       const bed = eng.bedOf(p.bedId);
-      if (bed && eng.spaceKind(bed) === kind && (!latest || p.date > latest.date)) latest = p;
+      if (!bed || eng.spaceKind(bed) !== kind) continue;
+      const r = eng.calc(p);
+      if (r && (!lastField || r.field > lastField)) { latest = p; lastField = r.field; }
     }
     return latest;
   }
@@ -113,6 +115,8 @@
     let source = o.source;
     if (source) {
       source = { ...source };
+      // The model supplies the growing settings. The variety and its sales unit belong to this run.
+      if (!o.variety) delete source.varietyId;
       delete source.sowOn;
       delete source.harvestEnd;
       delete source.out;       // an absolute date from the earlier sowing
@@ -196,10 +200,11 @@
     let variety = o0.varietyId ? eng.variety(o0.varietyId) : null;
     if (o0.varietyId && (!variety || variety.cropId !== crop.id)) return { error: 'That variety belongs to another crop.' };
     const source = kind === 'bed' ? null : o0.sourceId ? eng.planting(o0.sourceId) : runSource(eng, crop.id, o0.varietyId, kind);
-    if (o0.sourceId && kind !== 'bed' && (!source || source.cropId !== crop.id || (o0.varietyId && source.varietyId !== o0.varietyId) || source.liveTray || source.established || eng.isPool(eng.bedOf(source.bedId)) || eng.spaceKind(eng.bedOf(source.bedId)) !== kind)) return { error: 'Choose a planting of this crop and variety in this kind of space.' };
+    const model = source && eng.calc(source);
+    if (o0.sourceId && kind !== 'bed' && (!model || source.cropId !== crop.id || (o0.varietyId && source.varietyId !== o0.varietyId) || source.liveTray || source.established || eng.isPool(eng.bedOf(source.bedId)) || eng.spaceKind(eng.bedOf(source.bedId)) !== kind)) return { error: 'Choose a planting of this crop and variety in this kind of space.' };
     if (kind === 'bench' && (!source || !crop.micro)) return { error: 'Open a live-tray planting on a bench to repeat its trays.' };
-    if (!variety && source?.varietyId) variety = eng.variety(source.varietyId);
-    const size = source && (kind === 'bench' || kind === 'containers') ? eng.calc(source).physicalLength : null;
+    if (kind === 'bench' && !variety && source.varietyId) variety = eng.variety(source.varietyId);
+    const size = source && (kind === 'bench' || kind === 'containers') ? model.physicalLength : null;
     const by = o0.by || 'beds', datesFor = o0.datesFor || 'picking', reach = o0.reach || 'spacing';
     if (!RUN_BY.includes(by)) return { error: 'Plan by beds each sowing, or by an amount a week.' };
     if (!RUN_DATES.includes(datesFor)) return { error: 'The dates are for picking, or for planting.' };
@@ -230,7 +235,6 @@
     const thing = by === 'amount' && o0.thing ? String(o0.thing) : '';
     const record = { ...(kind !== 'bed' ? { kind } : {}), ...(source ? { sourceId: source.id } : {}), id: typeof o0.id === 'string' && o0.id ? o0.id : 'run-' + newId(), cropId: crop.id, ...(variety ? { varietyId: variety.id } : {}), ...(thing ? { thing } : {}), by,
       ...(by === 'amount' ? { want, margin } : {}), datesFor, from: E.d2s(from), to: E.d2s(to), reach: 'spacing', ...(every ? { every } : {}), wholeBeds: true, gardenIds, bedIds, then };
-    // a run's sowing is the crop from the library, never a copy of another planting: draftFor's own fields for that
     // the sowings the grower dropped from the proposal, by their number: left out of what is laid, never of the spacing found
     const drop = new Set((Array.isArray(o0.drop) ? o0.drop : []).map(Number).filter(n => Number.isInteger(n) && n >= 1));
     return { record, drop, crop, variety, thing, by, datesFor, from, to, every, want, margin, wanted: want == null ? null : want * (1 + margin / 100), spaces: list, named: first, source, kind, size };

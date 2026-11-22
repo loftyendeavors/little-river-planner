@@ -274,6 +274,19 @@ tryCase('60 runs at random, by beds and to an amount, picking and planting dates
     towers.sowings.length === 2 && towers.run.kind === 'tower' && towers.run.sourceId === model.id &&
     towers.sowings.every(s => s.r.plants === 42 && JSON.stringify(s.p.towerCycle) === JSON.stringify(model.towerCycle)) &&
     towers.sowings[0].bed.id === tower.id && towers.sowings[1].bed.id === second.id && towers.sowings[1].then);
+  tryCase('a generic tower run keeps its chosen growing settings and forecasts the base crop in its own unit', () => {
+    const firstV = { id: 'run-source-v', name: 'First', cropId: crop.id }, nextV = { id: 'run-newer-v', name: 'Second', cropId: crop.id };
+    const unit = env.unitOf(crop), otherUnit = unit === 'lb' ? 'each' : 'lb';
+    const original = { ...model, varietyId: firstV.id }, newer = { ...model, id: 'newer-tower', varietyId: nextV.id, date: String(year - 1) + '-02-01', done: { field: String(year - 1) + '-04-01' } };
+    const variantEnv = E.create({ ...plan, varieties: [firstV, nextV], plantings: [original, newer],
+      assumptions: { ...plan.assumptions, sellV: { [firstV.id]: { unit: otherUnit }, [nextV.id]: { unit: otherUnit } } } }, Lib);
+    const result = S.planRun(variantEnv, { ...towerInput, sourceId: original.id, varietyId: undefined });
+    const implicit = S.planRun(variantEnv, { ...towerInput, varietyId: undefined });
+    return variantEnv.unitOf(crop, firstV) !== unit && !result.run.varietyId && result.run.sourceId === original.id &&
+      result.totals.unit === unit && result.sowings.every(q => !q.p.varietyId && q.unit === unit &&
+        JSON.stringify(q.p.towerCycle) === JSON.stringify(original.towerCycle)) &&
+      !implicit.run.varietyId && implicit.run.sourceId === newer.id && implicit.totals.unit === unit;
+  });
   tryCase('a container run keeps the whole model block and its plants per container, reports the short opening and never splits it', () =>
     blocks.sowings.length === 1 && blocks.run.sourceId === block.id && blocks.sowings[0].r.physicalLength === 3 &&
     blocks.sowings[0].r.plants === 6 && blocks.unplaced.length === 1 && !blocks.unplaced[0].room.length);

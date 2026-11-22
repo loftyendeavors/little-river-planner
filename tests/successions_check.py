@@ -164,8 +164,11 @@ with sync_playwright() as pw:
     wt = js("""const run = A.runs()[0], p = S.runPlantings(St.plan, run.id)[0]; A.sendToWait(p.id); await new Promise(r => setTimeout(r, 600));
       document.querySelector('[data-hook="succ-run"][data-run="' + run.id + '"]').click(); await new Promise(r => setTimeout(r, 900));
       const out = { said: txt('succ-kept-waiting'), tick: (q('succ-remove-all') && q('succ-remove-all').closest('label') || {}).textContent || '', n: S.runPlantings(St.plan, run.id).length };
+      const link = qa('succ-waiting-link').find(b => b.dataset.waiting === p.id);
+      if (link) { link.click(); await new Promise(r => setTimeout(r, 600)); }
+      out.opened = !!link && St.view === 'timeline' && St.sel?.id === p.id && St.sel?.type === 'waiting'; A.setView('succession');
       A.undo(); await new Promise(r => setTimeout(r, 600)); document.querySelector('[data-hook="succ-run"][data-run="' + run.id + '"]').click(); await new Promise(r => setTimeout(r, 900)); return out;""") or {}
-    check("a planting of the run sent to To place is said on the run, and the tick to take its plantings out counts it", "1 planting of it waits under To place" in wt.get("said", "") and ("Take its %d plantings out too" % (wt.get("n", 0) + 1)) in wt.get("tick", ""), wt)
+    check("a planting of the run sent to To place is said on the run, and the tick to take its plantings out counts it", wt.get("opened") and "1 planting of it waits under To place" in wt.get("said", "") and ("Take its %d plantings out too" % (wt.get("n", 0) + 1)) in wt.get("tick", ""), wt)
     # EVERY planting of the run under To place: the run is still listed and counted, opens, says them, and Remove run with the tick
     # takes them all; one Undo puts them back
     every = js("""const run = A.runs()[0], ids = S.runPlantings(St.plan, run.id).map(p => p.id), u0 = St.undo.length; for (const id of ids) A.sendToWait(id);
