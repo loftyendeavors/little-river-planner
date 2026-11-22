@@ -40,7 +40,7 @@ NODE = [
   ('the check passes a field named nowhere', SHAPE, "      if (!e) { say(unknown, { path, place: at }); return; }", "      if (!e) return;", 'and a field named nowhere is found'),
   ('the check passes a record without an id', SHAPE, "if (!isObj(x) || !usable(x.id) || seen.has(x.id)) say(wrong,", "if (false) say(wrong,", 'a record without an id'),
   # a run of successions (E4)
-  ('the merge no longer takes a run\'s record whole, and the shape still marks it', 'js/merge.js', "    'lrfNext.runs[]', 'plantings[].run',\n", "    'plantings[].run',\n", 'whole: what js/merge.js takes whole'),
+  ('the merge no longer takes a run\'s record whole, and the shape still marks it', 'js/merge.js', "'lrfNext.runs[]', ", "", 'whole: what js/merge.js takes whole'),
   ('the shape no longer marks a planting\'s place in a run whole', SHAPE, "'plantings[].run': 'object whole',", "'plantings[].run': 'object',", 'whole: what js/merge.js takes whole'),
   ('the shape loses the spacing a planting of a run was made at', SHAPE, "    'plantings[].run.gap': 'number',\n", "", 'a run of successions, worked out by the planner'),
   ('the shape loses the spacing of a run', SHAPE, "    'lrfNext.runs[].every': 'number',\n", "", 'a run of successions, worked out by the planner'),
