@@ -207,7 +207,8 @@ byId('download').onclick = () => {
 byId('signout').onclick = run(async () => {
   check(await db.auth.signOut({ scope: 'local' }));
   sessionStorage.removeItem('grower-password-reset');
-  clearPrivate(); entry('login'); say('Signed out.');
+  if (owner) { clearPrivate(); entry('login'); }
+  say('Signed out.');
 });
 db.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT' || (owner && session?.user?.id && owner !== session.user.id)) {

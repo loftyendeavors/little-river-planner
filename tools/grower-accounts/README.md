@@ -13,3 +13,5 @@ The static beta uses Supabase Auth and one database row per grower. The browser 
 5. Run `test/hosted-isolation.sql` on the beta database to check two owners and two revisions in a transaction that rolls back. Test account switching, fresh-device sign-in and reopening a saved field before sharing.
 
 Database tests run the actual migration with PostgreSQL in PGlite under the anonymous, authenticated and service roles. The account tests exercise starter farms, backup format and username sign-in behavior.
+
+The optional browser check uses a local Supabase stack and a test SMTP server that writes the most recent RFC822 message to a file. Build the site with that stack’s URL and publishable key, serve it locally, and deploy the function and migration to the test stack first. With Python Playwright and Chromium installed, set `GROWER_TEST_URL` and `GROWER_TEST_MAIL_FILE` and run `python test/browser_flow.py`. The check creates a synthetic local account, adds four beds on a phone viewport, opens the saved farm in a separate desktop browser, downloads its backup and follows a recovery email. Both the app and email verification links must use loopback addresses.
