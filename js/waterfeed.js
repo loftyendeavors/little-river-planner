@@ -7,8 +7,13 @@
   const sortTime = (a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id);
   const scopeKey = report => JSON.stringify([...(report.beds || [])].sort());
   const stationKey = r => r.controller && r.station ? JSON.stringify([r.controller.trim().toLowerCase(),r.station]) : '';
+  function feedKey(feed) {
+    if (!feed) return '';
+    return JSON.stringify([feed.mode,feed.tankId,feed.ratio,feed.treated,
+      Object.entries(feed.stock || {}).sort(([a],[b])=>a.localeCompare(b)).map(([id,r])=>[id,r.lb,r.n,r.p,r.k])]);
+  }
   function sameRunEvidence(a, b) {
-    return ['elapsed','planned','meter','status','source','rate'].every(key=>(a[key] ?? null)===(b[key] ?? null)) && scopeKey(a)===scopeKey(b) && stationKey(a)===stationKey(b);
+    return ['elapsed','planned','meter','status','source','rate'].every(key=>(a[key] ?? null)===(b[key] ?? null)) && scopeKey(a)===scopeKey(b) && stationKey(a)===stationKey(b) && feedKey(a.feed)===feedKey(b.feed);
   }
   function number(raw, label, min = 0, max = Infinity) {
     if (raw == null || String(raw).trim() === '' || !Number.isFinite(Number(raw)) || Number(raw) < min || Number(raw) > max)
@@ -61,18 +66,23 @@
       const meterStations = new Set(pending.map(stationKey).filter(Boolean));
       const meterConflict = kind === 'run' && (differing('meter') || meterStations.size>1);
       const workConflict = kind === 'run' && (differing('status') || differing('elapsed'));
+      const elapsed=kind==='run' && !workConflict ? pending.find(r=>r.elapsed!=null)?.elapsed ?? null : null;
       // A missing rate can be an explicit choice to omit today's setting on a past run.
       const rateConflict = kind === 'run' && chosen.status!=='Skipped' && pending.every(r=>r.meter==null)
         && new Set(pending.map(r=>r.rate ?? null)).size>1;
       const scopeConflict = kind === 'run' && new Set(pending.map(scopeKey)).size>1;
+      const feedReports=pending.filter(r=>r.feed);
+      const reportedMeter=pending.find(r=>r.meter!=null)?.meter;
+      const feedConflict=kind==='run' && (new Set(feedReports.map(r=>feedKey(r.feed))).size>1 ||
+        (reportedMeter!=null && feedReports.some(r=>r.feed.mode==='part' && r.feed.treated>reportedMeter)));
       const planned = kind === 'run' && !differing('planned') ? pending.find(r => r.planned != null)?.planned ?? null : null;
       const unsettled = pending.filter(r => r.id !== chosen.id && (
         kind === 'refill' && (!r.reminder || !chosen.reminder || r.at.slice(0,16) !== chosen.at.slice(0,16) || JSON.stringify(r.items) !== JSON.stringify(chosen.items) || r.remainder !== chosen.remainder || r.gallons !== chosen.gallons) ||
-        kind === 'run' && (r.elapsed !== chosen.elapsed || r.status !== chosen.status || differing('planned') || meterConflict || rateConflict || scopeConflict) ||
+        kind === 'run' && (workConflict || differing('planned') || meterConflict || rateConflict || scopeConflict || feedConflict) ||
         kind === 'spread' && JSON.stringify(r.items) !== JSON.stringify(chosen.items) ||
         (kind === 'delivery' || kind === 'count') && (r.items[r.productId].lb !== chosen.items[chosen.productId].lb ||
           kind === 'delivery' && r.at.slice(0,16) !== chosen.at.slice(0,16))));
-      return { id, chosen, reports, unsettled, meterConflict, workConflict, rateConflict, planned, pending };
+      return { id, chosen, reports, unsettled, meterConflict, workConflict, rateConflict, scopeConflict, feedConflict, elapsed, planned, pending };
     }).sort((a, b) => sortTime(a.chosen, b.chosen));
     if (kind === 'run') {
       const byStationTime = new Map();
@@ -140,9 +150,10 @@
       reminder: !!opts.reminder, items };
   }
   function run(zone, opts) {
-    const elapsed = opts.status === 'Skipped' && (opts.elapsed == null || opts.elapsed === '') ? 0 : number(opts.elapsed, 'elapsed minutes');
+    const elapsed = opts.elapsed == null || opts.elapsed === '' ? (opts.status==='Skipped'?0:null) : number(opts.elapsed,'elapsed minutes');
     const planned = opts.planned === '' || opts.planned == null ? null : number(opts.planned, 'planned minutes');
     const meter = opts.meter === '' || opts.meter == null ? null : number(opts.meter, 'metered gallons');
+    if (elapsed==null && meter==null) throw Error('Enter the water in gallons or the actual minutes.');
     if (!['Completed','Interrupted','Skipped'].includes(opts.status)) throw Error('Choose a run status.');
     if (opts.status === 'Skipped' && (elapsed || meter)) throw Error('A skipped run has no elapsed time or metered water.');
     return { id: opts.id, job: JSON.stringify([zone.id, opts.at]), kind: 'run', gardenId: zone.gardenId, zoneId: zone.id, beds: [...(zone.beds || [])], label: zone.name,
@@ -154,13 +165,14 @@
     if (r.status === 'Skipped') return { gallons: 0, basis: 'Skipped' };
     if (group.meterConflict) return { gallons: null, basis: 'Conflicting meter readings' };
     if (group.rateConflict) return { gallons: null, basis: 'Conflicting rated flow' };
-    const metered = r.meter ?? (group.pending || group.reports).find(x => x.meter != null && x.elapsed === r.elapsed && x.status === r.status)?.meter;
+    const metered = r.meter ?? (group.pending || group.reports).find(x => x.meter != null && (x.elapsed==null || r.elapsed==null || x.elapsed===r.elapsed) && x.status === r.status)?.meter;
     if (metered != null) return { gallons: metered, basis: 'Metered' };
-    if (r.rate != null) return { gallons: r.rate * r.elapsed, basis: 'Estimated' };
+    const elapsed=group.elapsed ?? r.elapsed;
+    if (r.rate != null && elapsed != null) return { gallons: r.rate * elapsed, basis: 'Estimated' };
     return { gallons: null, basis: 'Unknown' };
   }
   function runSummary(groups) {
-    const total = { started: 0, skipped: 0, interrupted: 0, minutes: 0, disputed: 0,
+    const total = { started: 0, skipped: 0, interrupted: 0, minutes: 0, unknownMinutes: 0, disputed: 0,
       metered: null, estimated: null, unknown: 0, reviews: [] };
     for (const group of groups) {
       const r = group.chosen;
@@ -172,7 +184,8 @@
         continue;
       } else {
         total.started++;
-        total.minutes += r.elapsed;
+        const elapsed=group.elapsed ?? r.elapsed;
+        if(elapsed==null) total.unknownMinutes++; else total.minutes += elapsed;
         if (r.status === 'Interrupted') total.interrupted++;
       }
       const amount = water(group);
@@ -206,6 +219,27 @@
     const mgPerL = 453592.37 / 3.785411784;
     return Object.fromEntries(Object.entries(lbPerGallon).map(([key,lb]) =>
       [key, lb == null ? null : lb * mgPerL / dilution]));
+  }
+  function injectedFeed(book,tank,mode,ratio,treated) {
+    if(mode==='plain') return {mode};
+    if(!['whole','part'].includes(mode) || !tank || !book.recipes?.[tank.recipeId]) throw Error('Choose the injector and recipe used for this watering.');
+    return {mode,tankId:tank.id,tankName:tank.name,recipe:book.recipes[tank.recipeId].name,
+      ratio:number(ratio,'the injection ratio',1),treated:mode==='part' && treated!=null && String(treated).trim()!==''?number(treated,'the gallons watered with fertilizer',0.000001):null,
+      stock:snapshot(book,tank.recipeId,1)};
+  }
+  function feedDelivery(group) {
+    const reports=group.pending || group.reports;
+    const feed=reports.find(r=>r.feed)?.feed;
+    if(!feed) return null;
+    if(group.workConflict || group.scopeConflict || group.feedConflict) return {feed,held:true};
+    if(feed.mode==='plain' || group.chosen.status==='Skipped') return {feed,plain:true};
+    const volume=water(group);
+    if(group.meterConflict || group.rateConflict || (feed.mode==='part' && volume.gallons!=null && feed.treated>volume.gallons)) return {feed,held:true};
+    const gallons=feed.mode==='part'?feed.treated:volume.gallons;
+    if(gallons==null) return {feed,gallons:null};
+    const stockGallons=gallons/feed.ratio;
+    const items=values(feed.stock).map(item=>({...item,lb:item.lb*stockGallons}));
+    return {feed,gallons,stockGallons,totals:nutrientTotals(items)};
   }
   function tapeFlow(beds, lines, ratedPerHundredFt) {
     const count = number(lines, 'the number of tape lines per bed', 1);
@@ -291,6 +325,6 @@
     const nearest=Math.round(packs);
     return {gross,short,bags:nearest>0 && Math.abs(packs-nearest)<=Number.EPSILON*packs*4 ? nearest : Math.ceil(packs)};
   }
-  const api = { values, put, number, name, product, recipe, snapshot, groups, lastMix, cycle, reminder, refill, run, water, runSummary, sameRunEvidence, stock, occurrence, nextJob, targetPounds, nutrientTotals, recipeConcentration, tapeFlow, zoneRate, stockEntry, stockGroups, purchase };
+  const api = { values, put, number, name, product, recipe, snapshot, groups, lastMix, cycle, reminder, refill, run, water, runSummary, sameRunEvidence, stock, occurrence, nextJob, targetPounds, nutrientTotals, recipeConcentration, injectedFeed, feedDelivery, tapeFlow, zoneRate, stockEntry, stockGroups, purchase };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.LRFWaterFeed = api;
 })(typeof self !== 'undefined' ? self : this);
