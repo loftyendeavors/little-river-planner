@@ -58,4 +58,47 @@ check('Recipe concentration responds to dilution; missing actual batch volume st
   assert.ok(Math.abs(first.n-115.033)<0.02);assert.equal(next.n,first.n/2);
   assert.equal(mix(base,'x',clock('07:18'),anchor,{gallons:'',actual:{p:2}}).gallons,null);
 });
+const zone={id:'north',gardenId:'field',name:'North line'};
+const sampleRun=(id,at,params)=>W.run(zone,{id,at:clock(at),entered:clock(at),elapsed:10,status:'Completed',source:'Observation',...params});
+const skipped=sampleRun('skip','09:00',{status:'Skipped',elapsed:''});
+const flow=sampleRun('actual','09:00',{status:'Interrupted',elapsed:8,meter:15});
+const later=sampleRun('later','10:00',{meter:0});
+const runs=(...items)=>W.groups(items.reduce(add,{}),'run');
+check('Skipped runs contribute no starts; zero metered, estimated and unknown stay distinct',()=>{
+  const estimates={...sampleRun('rating','11:00',{}),rate:2};
+  const unknown=sampleRun('unknown','12:00',{elapsed:4,planned:10,status:'Interrupted'});
+  const r=W.runSummary(runs(skipped,later,estimates,unknown));
+  assert.deepEqual([r.started,r.skipped,r.interrupted,r.minutes,r.metered,r.estimated,r.unknown],[3,1,1,24,0,20,1]);
+  assert.throws(()=>sampleRun('bad','08:00',{status:'Skipped',elapsed:8}));
+});
+check('A disputed start withholds elapsed time and volume in both arrival orders',()=>{
+  for (const [first,second] of [[skipped,flow],[flow,skipped]]) {
+    const group=runs(first,{...second,entered:clock('11:00')})[0], r=W.runSummary([group]);
+    assert.equal(W.water(group).gallons,null);
+    assert.deepEqual([r.started,r.skipped,r.minutes,r.unknown,r.disputed,r.reviews.length],[0,0,0,1,1,1]);
+  }
+});
+check('Compatible evidence can supply planned time and a meter after an earlier decision',()=>{
+  const origin={...flow,meter:null};
+  let b={...add({},origin),accepted:{[flow.job]:origin.id},review:{[origin.id]:'same'}};
+  b=add(b,{...flow,id:'controller',planned:20,meter:15,entered:clock('10:00')});
+  let g=W.groups(b,'run')[0];assert.equal(g.planned,20);assert.equal(W.water(g).gallons,15);assert.equal(g.unsettled.length,0);
+  b=add(b,{...flow,id:'correction',meter:19,entered:clock('11:00')});
+  g=W.groups(b,'run')[0];assert.ok(g.unsettled.length);assert.equal(W.water(g).gallons,null);
+});
+check('Two rated flows with no meter hold the water volume for review, without losing elapsed minutes',()=>{
+  const original={...flow,meter:null,rate:1}, other={...original,id:'other',rate:3,entered:clock('11:00')};
+  const g=runs(original,other)[0];
+  assert.equal(W.water(g).gallons,null);assert.equal(W.runSummary([g]).minutes,8);assert.ok(g.unsettled.length);
+  const sameScope={...original,id:'scope',beds:['south']};
+  assert.ok(runs(original,sameScope)[0].unsettled.length);
+  assert.equal(W.sameRunEvidence(original,sameScope),false);assert.equal(W.sameRunEvidence(original,other),false);
+  assert.equal(W.sameRunEvidence({...original,beds:['a','b']},{...original,beds:['b','a']}),true);
+  const withheld={...other,rate:null};
+  for (const [first,second] of [[original,withheld],[withheld,original]]) {
+    const held=runs(first,{...second,entered:clock('12:00')})[0];
+    assert.equal(W.water(held).gallons,null);assert.ok(held.unsettled.length);
+  }
+  const metered=runs(original,{...other,meter:18})[0];assert.equal(W.water(metered).gallons,18);
+});
 console.log(JSON.stringify({passed,of:passed,failed:[]}));

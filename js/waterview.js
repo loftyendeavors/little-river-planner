@@ -10,6 +10,8 @@
   const button = (text, act, hook, primary) => h('button.btn' + (primary ? '.primary' : '.small'), { type: 'button', onclick: act, dataset: { hook } }, text);
   const line = (...children) => h('div.wf-line', children.flat(Infinity).map(c => typeof c === 'string' || typeof c === 'number' ? h('span',String(c)) : c));
   const note = text => h('p.wf-note', text);
+  const bedNames = ids => ids.map(id => App.state.plan.beds.find(b => b.id === id)?.bed ?? id).join(', ');
+  const quantity = (value, unit) => value == null ? 'Unknown' : num(value, 2) + ' ' + unit;
   const gardenName = id => gardens().find(g => g.id === id)?.name || 'Former garden';
   const opts = list => list.map(r => [r.id, r.name]);
   const now = () => new Date().toISOString();
@@ -136,8 +138,8 @@
       recordMix(tank,task,{job,itemsShown:shown,at:whenRecorded(time.get()),gallons:gallons.get(),remainder:carry.get(),actual:Object.fromEntries(items.filter(([,f,used])=>used||f.get()!=='').map(([id,f])=>[id,f.get()]))}));
   }
   function tasks() {
-    const tanks=rows('tanks');
-    if (!tanks.length) return null;
+    const tanks=rows('tanks'), phoneZones=document.body.classList.contains('phone')?rows('zones'):[];
+    if (!tanks.length && !phoneZones.length) return null;
     const b=book(), due=tanks.filter(t=>W.reminder(b,t.id));
     const cards=due.map(t=>{
       const task=W.reminder(b,t.id), items=approved(t), job=W.cycle(b,t.id);
@@ -145,22 +147,37 @@
         items ? [h('strong',amounts(items)),note(b.recipes[t.recipeId].name+' · '+num(t.gallons,2)+' gal batch'),
           line(button('Refilled as shown',()=>{try{recordMix(t,task,{job,itemsShown:items});}catch(ex){UI.toast(ex.message);}},'wf-complete',true),button('Actual amounts…',()=>mixDetails(t),'wf-actual'))] : note('Choose a stock recipe for this tank.'));
     });
-    return h('section.wf-block',{dataset:{hook:'wf-tasks'}},h('h3','Water and feed'),due.length ? cards : note('Nothing due'),
-      tanks.map(t=>{const last=W.lastMix(b,t.id);return line(t.name, last?'Last refill '+when(last.chosen.at):'No refill recorded',!W.reminder(b,t.id) && approved(t) ? button('Refill',()=>mixDetails(t),'wf-refill') : null);}));
+    return h('section.wf-block',{dataset:{hook:'wf-tasks'}},h('h3','Water and feed'),due.length ? cards : tanks.length?note('Nothing due'):null,
+      tanks.map(t=>{const last=W.lastMix(b,t.id);return line(t.name, last?'Last refill '+when(last.chosen.at):'No refill recorded',!W.reminder(b,t.id) && approved(t) ? button('Refill',()=>mixDetails(t),'wf-refill') : null);}),
+      phoneZones.length?button('Record irrigation run',()=>pickRunZone(phoneZones),'wf-phone-run'):null);
+  }
+  function pickRunZone(zones) {
+    if (zones.length===1) {runForm(zones[0]);return;}
+    const choices=zones.map(z=>[z.id,gardenName(z.gardenId)+' · '+z.name]).sort((a,b)=>a[1].localeCompare(b[1]));
+    const choice=field('Garden and zone','',null,[['','Choose a zone'],...choices]);
+    sheet('Record irrigation run',[choice.el],'Continue',()=>{
+      const zone=book().zones?.[choice.get()];
+      if(!zone) throw Error('Choose the zone that ran or was skipped.');
+      runForm(zone);
+    });
   }
   function runForm(z) {
     const at=field('Run started at',local(),'datetime-local'), elapsed=field('Actual minutes','','number'), planned=field('Planned minutes (optional)','','number'), meter=field('Metered gallons (optional)','','number');
     const status=field('Run status','Completed',null,['Completed','Interrupted','Skipped'].map(x=>[x,x])), source=field('Evidence','Grower observation',null,['Grower observation','Controller record'].map(x=>[x,x]));
-    sheet('Record run · '+z.name,[at.el,line(elapsed.el,planned.el),line(status.el,source.el),meter.el], 'Record run',()=>{
-      const row=W.run({...z,rate:W.zoneRate(z,App.state.plan.beds)},{id:App.uid(),at:whenRecorded(at.get()),entered:now(),elapsed:elapsed.get(),planned:planned.get(),meter:meter.get(),status:status.get(),source:source.get()});
+    const rate=W.zoneRate(z,App.state.plan.beds), useRate=h('input',{type:'checkbox',checked:rate!=null});
+    sheet('Record run · '+gardenName(z.gardenId)+' · '+z.name,[at.el,line(elapsed.el,planned.el),line(status.el,source.el),meter.el,
+      rate!=null?h('label.wf-choice',useRate,'Use '+num(rate,3)+' gal/min to estimate unmetered water for this run'):null], 'Record run',()=>{
+      const row=W.run({...z,rate:useRate.checked?rate:null},{id:App.uid(),at:whenRecorded(at.get()),entered:now(),elapsed:elapsed.get(),planned:planned.get(),meter:meter.get(),status:status.get(),source:source.get()});
       row.job=W.nextJob(book(),row.job);
-      if (rows('reports').some(r=>!book().voids?.[r.id] && r.kind==='run' && r.job===row.job && ['elapsed','planned','meter','status','source'].every(key=>r[key]===row[key]))) throw Error('This run and evidence are already recorded.');
+      if (rows('reports').some(r=>!book().voids?.[r.id] && r.kind==='run' && r.job===row.job && W.sameRunEvidence(r,row))) throw Error('This run and evidence are already recorded.');
       return report(row,'Run recorded · '+z.name);
     });
   }
   function reconcile(group, kind) {
     const isRun=kind==='run';
-    const describe=r=>isRun ? r.status+' · '+num(r.elapsed,2)+' min · '+(r.meter==null?'gallons unknown':num(r.meter,2)+' gal')+' · '+r.source :
+    const describe=r=>isRun ? [r.status, quantity(r.elapsed,'min')+' elapsed', (r.planned==null?'Planned time unknown':quantity(r.planned,'min')+' planned'),
+      (r.meter==null?'Meter reading unknown':quantity(r.meter,'gal')+' metered'),
+      r.rate==null?'No rated flow':num(r.rate,3)+' gal/min rated',r.beds?.length?'Beds '+bedNames(r.beds):'Served beds unknown',r.source].join(' · ') :
       kind==='spread' ? amounts(r.items)+' · '+(r.beds.length?r.beds.length+' treated beds':'whole garden') : amounts(r.items)+' · '+num(r.gallons,2)+' gal final · '+(r.remainder==null?'remainder unknown':num(r.remainder,2)+' gal carried');
     function decide(r,choice) {
       const live=W.groups(book(),kind).find(g=>g.id===group.id);
@@ -181,9 +198,10 @@
   }
   function history(group, kind) {
     const r=group.chosen, run=kind==='run', w=run && W.water(group);
-    return h('details.wf-history',h('summary',h('b',r.label),' · '+when(r.at)+' · '+(run ? r.status+' · '+num(r.elapsed,2)+' min' : amounts(r.items)),group.unsettled.length?' · Review reports':''),
-      note(run ? (r.planned==null?'Planned time unknown':num(r.planned,2)+' min planned')+' · '+(w.gallons==null?(w.basis==='Unknown'?'Gallons unknown':w.basis):num(w.gallons,2)+' gal · '+w.basis)+' · '+[...new Set(group.reports.map(x=>x.source))].join(' + ') :
-      kind==='spread' ? 'Applied to '+(r.beds.length?r.beds.length+' selected beds':'the whole garden') : r.recipe+' · '+num(r.gallons,2)+' gal final stock · '+(r.remainder==null?'Remainder unknown':num(r.remainder,2)+' gal carried')+' · Delivery unknown'),
+    return h('details.wf-history',h('summary',h('b',r.label),' · '+when(r.at)+' · '+(run ? group.workConflict?'Run details disputed':r.status+' · '+num(r.elapsed,2)+' min' : amounts(r.items)),group.unsettled.length?' · Review reports':''),
+      note(run ? (group.planned==null?'Planned time unconfirmed':num(group.planned,2)+' min planned')+' · '+(w.gallons==null?(w.basis==='Unknown'?'Gallons unknown':w.basis):num(w.gallons,2)+' gal · '+w.basis)+' · '+[...new Set(group.reports.map(x=>x.source))].join(' + ') :
+      kind==='spread' ? 'Applied to '+(r.beds.length?'beds '+bedNames(r.beds):'the whole garden') : r.recipe+' · '+(r.gallons==null?'Final stock volume unknown':num(r.gallons,2)+' gal final stock')+' · '+(r.remainder==null?'Remainder unknown':num(r.remainder,2)+' gal carried')+' · Delivery unknown'),
+      run || kind==='refill' ? note(r.beds?.length?'Served beds '+bedNames(r.beds):'Served beds unknown') : null,
       line(group.reports.length>1?button('Review reports',()=>reconcile(group,kind),'wf-review'):null,button('Take back entry',()=>sheet('Take back '+r.label+'?',[note('Remove this physical job from totals. Its reports stay in the plan.')],'Take back',()=>takeBack(group)),'wf-take-back')));
   }
   function labForm(id) {
@@ -196,10 +214,29 @@
       return storeRow('labs',record,'Lab result accepted');
     });
   }
+  const nutrients = [['n','N'],['p','P₂O₅'],['k','K₂O']];
+  function seasonFigures(id) {
+    const garden=gardens().find(g=>g.id===id), year=App.planYear(), key=JSON.stringify([id,year]);
+    const target=book().targets?.[key], beds=App.state.plan.beds.filter(b=>b.gardenId===id && b.active!==false && App.state.engine.isSoilBed(b));
+    const areaBeds=beds.reduce((sum,b)=>sum+b.w*b.l,0), floor=(garden.measuredSize?.widthFt||0)*(garden.measuredSize?.lengthFt||0);
+    function recorded(kind) {
+      const jobs=W.groups(book(),kind).filter(g=>g.chosen.gardenId===id && new Date(g.chosen.at).getFullYear()===year);
+      if (!jobs.length) return null;
+      const totals=W.nutrientTotals(jobs.flatMap(g=>Object.values(g.chosen.items)));
+      return {totals, disputed:jobs.some(g=>g.unsettled.length)};
+    }
+    return {garden, year, key, target, beds, areaBeds, floor, applied:recorded('spread'), mixed:recorded('refill')};
+  }
+  function nutrientTable(figures, targetLb) {
+    const cell=(tag,value)=>h(tag,value==null?'Unknown':num(value,3)+' lb');
+    const row=(label,amounts)=>h('tr', h('th',{scope:'row'},label), nutrients.map(([k])=>cell('td',amounts?.[k])));
+    return h('table.wf-nutrients', h('caption','Season fertility · '+figures.year),
+      h('thead',h('tr',h('th',{scope:'col'},'Nutrient amounts'),nutrients.map(([,label])=>h('th',{scope:'col'},label)))),
+      h('tbody',targetLb?row('Target · '+(figures.target.basis==='floor'?num(figures.floor,2)+' sq ft floor':num(figures.areaBeds,2)+' sq ft bed tops'),targetLb):null,figures.applied?row('Field applied'+(figures.applied.disputed?' (under review)':''),figures.applied.totals):null,
+        figures.mixed?row('Mixed into tanks'+(figures.mixed.disputed?' (under review)':''),figures.mixed.totals):null));
+  }
   function seasonSheet(id) {
-    const g=gardens().find(row=>row.id===id), beds=App.state.plan.beds.filter(b=>b.gardenId===id && b.active!==false && App.state.engine.isSoilBed(b));
-    const year=App.planYear(), key=JSON.stringify([id,year]), target=book().targets?.[key] || {};
-    const areaBeds=beds.reduce((sum,b)=>sum+b.w*b.l,0), floor=(g.measuredSize?.widthFt||0)*(g.measuredSize?.lengthFt||0);
+    const f=seasonFigures(id), {garden:g,year,key,beds,areaBeds,floor}=f, target=f.target || {};
     const options=[...(floor>0?[['floor','Measured garden floor · '+num(floor,2)+' sq ft']]:[]),...(areaBeds>0?[['beds','Active bed tops · '+num(areaBeds,2)+' sq ft']]:[])];
     const basis=field('Rate basis',options.some(x=>x[0]===target.basis)?target.basis:options[0]?.[0],null,options);
     const labels=['N','P₂O₅','K₂O'], keys=['n','p','k'];
@@ -216,18 +253,14 @@
       } catch(ex){totals.textContent=ex.message;}
     }
     for(const f of [...fs,basis]) f.control.addEventListener('input',refresh); refresh();
-    const subset=(kind)=>W.groups(book(),kind).filter(x=>x.chosen.gardenId===id && Number(local(new Date(x.chosen.at)).slice(0,4))===year);
-    function nutrientLine(kind) {
-      const jobs=subset(kind), sums={n:0,p:0,k:0};
-      for(const job of jobs){const nutrients=W.nutrientTotals(job.chosen.items);for(const k of keys) sums[k]=sums[k]==null||nutrients[k]==null?null:sums[k]+nutrients[k];}
-      return jobs.length?summary(sums):'No records';
-    }
-    sheet('Season fertility · '+g.name+' · '+year,[basis.el,line(fs.map(f=>f.el)),totals,h('details',h('summary','Per-bed targets'),byBed),
-      note('Recorded field applications · '+nutrientLine('spread')),note('Fresh product mixed into tanks · '+nutrientLine('refill')),note('Delivery from tanks is unknown until verified at the garden.')],
+    const perBed=h('details',h('summary','Per-bed targets'),byBed);
+    const showBasis=()=>{perBed.hidden=basis.get()!=='beds';}; basis.control.addEventListener('input',showBasis);showBasis();
+    sheet('Season fertility · '+g.name+' · '+year,[basis.el,line(fs.map(f=>f.el)),totals,perBed,
+      f.applied||f.mixed?nutrientTable(f):note('No applications recorded for '+year+'.'),f.mixed?note('Delivery from tanks is unknown until verified at the garden.'):null],
       'Save targets',()=>{if(!basis.get())throw Error('The garden needs a measured floor or bed area.');return storeRow('targets',{id:key,gardenId:id,year,basis:basis.get(),...read()},'Season targets saved');});
   }
   function spreadForm(id) {
-    const products=rows('products'); if(!products.length){library();return;}
+    const products=rows('products'); if(!products.length){productForm({},()=>spreadForm(id));return;}
     const pick=field('Product',products[0].id,null,opts(products)), weight=field('Fresh product applied (lb)','','number'), at=field('Applied at',local(),'datetime-local');
     const beds=App.state.plan.beds.filter(b=>b.gardenId===id && b.active!==false && App.state.engine.isSoilBed(b)).map(b=>[b,h('input',{type:'checkbox'})]);
     sheet('Record field application · '+gardenName(id),[pick.el,weight.el,at.el,h('details',h('summary','Treated beds'),note('Leave clear for the whole garden.'),beds.map(([b,c])=>h('label.wf-choice',c,String(b.bed||b.id))))],'Record application',()=>{
@@ -268,52 +301,95 @@
     const start=new Date(); start.setDate(start.getDate()-6);
     return whenLocal>=local(start).slice(0,10) && whenLocal<=local().slice(0,10);
   }
-  function irrigation(id) {
-    const data=W.groups(book(),'run').filter(g=>(!id || g.chosen.gardenId===id) && insidePeriod(g.chosen));
-    let metered=0,estimated=0,unknown=0,meterCount=0,estimateCount=0;
-    for(const g of data) {
-      const w=W.water(g);
-      if(w.basis==='Metered'){metered+=w.gallons;meterCount++;}
-      else if(w.basis==='Estimated'){estimated+=w.gallons;estimateCount++;}
-      else if(w.gallons==null)unknown++;
-    }
-    return {data,minutes:data.reduce((a,g)=>a+g.chosen.elapsed,0),water:[meterCount?num(metered,2)+' gal metered':null,estimateCount?num(estimated,2)+' gal estimated':null,unknown?unknown+' with gallons unknown':null].filter(Boolean).join(' · ') || (data.length?'0 gal':'No run records')};
+  function volumeLine(total) {
+    const parts=[];
+    if (total.metered != null) parts.push(num(total.metered,2)+' gal metered');
+    if (total.estimated != null) parts.push(num(total.estimated,2)+' gal estimated');
+    if (total.unknown) parts.push(total.unknown+' with gallons unknown');
+    if (parts.length) return parts.join(' · ');
+    return total.skipped ? '0 gal' : 'No run records';
+  }
+  function runLine(total) {
+    return [total.started+' started', total.interrupted ? total.interrupted+' interrupted' : null,
+      total.skipped ? total.skipped+' skipped' : null, total.disputed ? total.disputed+' disputed' : null,
+      num(total.minutes,2)+(total.disputed?' confirmed min':' min')].filter(Boolean).join(' · ');
   }
   function weekChart(runs) {
     const days = Array.from({length:7},(_,index)=>{
       const date = new Date();
       date.setDate(date.getDate()-6+index);
       const records = runs.filter(g=>local(new Date(g.chosen.at)).slice(0,10)===local(date).slice(0,10));
-      return {date, count:records.length, minutes:records.reduce((sum,g)=>sum+g.chosen.elapsed,0)};
+      return {date, count:records.length, total:W.runSummary(records)};
     });
-    const peak=Math.max(1,...days.map(day=>day.minutes));
-    return h('figure.wf-chart',{ 'aria-label':'Irrigation minutes by day' },h('figcaption','Recorded minutes · last 7 days'),
-      h('div.wf-bars',days.map(day=>h('div', {title:day.date.toLocaleDateString()+' · '+(day.count?num(day.minutes,1)+' min':'No run logged')},
-        h('b',day.count?num(day.minutes,1):'—'),h('div.wf-track',h('i',{style:{height:(day.minutes/peak*100)+'%'}})),
-        h('small',day.date.toLocaleDateString(undefined,{weekday:'short'}))))));
+    const peak=Math.max(1,...days.map(day=>day.total.minutes));
+    return h('figure.wf-chart',{ 'aria-label':'Irrigation minutes by day' },h('figcaption','Confirmed minutes · last 7 days'),
+      h('div.wf-bars',days.map(({date,count,total})=>h('div', {title:date.toLocaleDateString()+' · '+(count?runLine(total):'No run logged')},
+        h('b',total.started?num(total.minutes,1):total.skipped&&!total.disputed?'0':'—'),
+        h('div.wf-track',h('i',{style:{height:(total.minutes/peak*100)+'%'}})),
+        h('small',date.toLocaleDateString(undefined,{weekday:'short'})),
+        total.skipped?h('small',total.skipped+' skipped'):null,total.disputed?h('small',total.disputed+' disputed'):null))));
+  }
+  function evidenceList(groups) {
+    if (groups.length===1) { reconcile(groups[0],'run'); return; }
+    sheet('Run evidence to review',groups.slice().reverse().map(group=>line(h('b',group.chosen.label),
+      gardenName(group.chosen.gardenId),when(group.chosen.at),button('Review reports',()=>reconcile(group,'run'),'wf-review'))),'Done');
+  }
+  function irrigationGarden(g, zones, records) {
+    const total=W.runSummary(records);
+    return h('section.wf-garden',line(h('h3',g.name),button('Garden details',()=>gardenCard(g.id),'wf-garden')),
+      records.length?note(volumeLine(total)+' · '+runLine(total)):note(zones.length?'No runs recorded in this period.':'No irrigation zones set up.'),
+      zones.map(z=>{
+        const latest=records.filter(group=>group.chosen.zoneId===z.id).at(-1), r=latest?.chosen;
+        const last=r ? latest.workConflict?'Run details disputed':r.status+' · '+num(r.elapsed,2)+(latest.planned==null?'':' of '+num(latest.planned,2))+' min' : '';
+        return line(h('strong',z.name),r?last+' · '+when(r.at):'No run in this period',button('Record run',()=>runForm(z),'wf-run'));
+      }),line(button('Add zone',()=>setup(g.id,'zone'),'wf-add-zone')));
+  }
+  function fertilityGarden(g, tanks, mixes, dueByTank, selected) {
+    const latest=mixes.at(-1), f=selected?seasonFigures(g.id):null;
+    const area=f?.target?.basis==='floor'?f.floor:f?.areaBeds;
+    const target=f?.target && area>0?W.targetPounds(area,f.target):null;
+    return h('section.wf-garden',line(h('h3',g.name),button('Garden details',()=>gardenCard(g.id),'wf-garden')),
+      latest?note('Last refill '+when(latest.chosen.at)):null,
+      tanks.map(t=>line(h('strong',t.name),book().recipes?.[t.recipeId]?.name||'Recipe missing',
+        dueByTank.has(t.id)?button('Refill due · Tasks',()=>App.setView('sow'),'wf-open-tasks'):button('Request refill',()=>request(t),'wf-request'))),
+      f && (target||f.applied||f.mixed)?nutrientTable(f,target):null,
+      f?.mixed?note('Tank delivery to the garden is unknown.'):null,
+      line(button('Record field application',()=>spreadForm(g.id),'wf-spread'),button('Season targets',()=>seasonSheet(g.id),'wf-targets'),
+        (selected||!tanks.length)?button('Add tank',()=>setup(g.id,'tank'),'wf-add-tank'):null));
   }
   function render() {
     if (!App.state.ready || App.state.view!=='water') return;
     const host=document.getElementById('wfWrap'), b=book(), all=gardens(), garden=all.find(g=>g.id===gardenId);
     if(!garden) gardenId='';
-    const isWater=lens==='Irrigation', selected=garden ? [garden] : all, irr=irrigation(gardenId);
+    const isWater=lens==='Irrigation', tanks=rows('tanks',gardenId), zones=rows('zones',gardenId);
+    const dueByTank=new Set(tanks.filter(t=>W.reminder(b,t.id)).map(t=>t.id));
+    const dueGardens=new Set(tanks.filter(t=>dueByTank.has(t.id)).map(t=>t.gardenId));
+    const groups=W.groups(b,isWater?'run':'refill').filter(r=>!gardenId||r.chosen.gardenId===gardenId);
+    const records=isWater?groups.filter(g=>insidePeriod(g.chosen)):groups, total=isWater?W.runSummary(records):null;
+    const configured=new Set((isWater?zones:tanks).map(row=>row.gardenId));
+    for (const group of groups) configured.add(group.chosen.gardenId);
+    if(!isWater) {
+      for(const table of ['labs','targets']) for(const row of rows(table)) configured.add(row.gardenId);
+      for(const group of W.groups(b,'spread')) configured.add(group.chosen.gardenId);
+    }
+    const selected=garden?[garden]:all.filter(g=>configured.has(g.id));
+    if(!garden && !isWater) selected.sort((a,b)=>Number(dueGardens.has(b.id))-Number(dueGardens.has(a.id)));
     const filter=field('Garden',gardenId,null,[['','All gardens'],...opts(all)]);
     filter.control.onchange=()=>{gardenId=filter.get();render();};
     const toggle=(label,items,value,change)=>h('div.seg',{role:'group','aria-label':label},items.map(item=>h('button',{type:'button','aria-pressed':String(item===value),onclick:()=>{change(item);render();}},item)));
-    host.replaceChildren(h('header.as-head.nu-head',h('h2',lens),UI.help(isWater?'Run times and gallons for each garden. Rated flow gives an estimate.':'Fresh product is recorded when a tank returns to service. A refill alone cannot establish delivery to a crop.',()=>host)),
-      h('p.frame-figs',isWater ? [h('b',irr.water),' · '+irr.data.length+(irr.data.length===1?' run · ':' runs · ')+num(irr.minutes,2)+' minutes'] :
-        [h('b',rows('tanks',gardenId).filter(t=>W.reminder(b,t.id)).length+' refills due'),' · '+rows('tanks',gardenId).length+' tanks']),
+    const content=[h('header.as-head.nu-head',h('h2',lens),UI.help(isWater?'Run time counts completed and interrupted work. Metered and estimated gallons are shown separately. Disputed time stays out of confirmed minutes.':'Record field applications and check season targets here. Tasks records a refill when the tank returns to service.',()=>host)),
+      h('p.frame-figs',isWater ? [h('b',volumeLine(total)),records.length?' · '+runLine(total):''] :
+        [h('b',dueByTank.size+' refills due'),' · '+tanks.length+(tanks.length===1?' tank':' tanks')]),
       line(toggle('Water dashboard',['Fertility','Irrigation'],lens,x=>{lens=x;}),filter.el,isWater?toggle('Period',['Last 7 days','Season'],period,x=>{period=x;}):button('Products and recipes',library,'wf-products')),
-      ...(isWater && period==='Last 7 days' && irr.data.length?[weekChart(irr.data)]:[]),
+      total?.reviews.length?button('Review run evidence ('+total.reviews.length+')',()=>evidenceList(total.reviews),'wf-review'):null,
+      isWater && period==='Last 7 days' && records.length?weekChart(records):null,
+      selected.length?null:note(all.length ? isWater?'Choose a garden to add its first irrigation zone.':'Choose a garden to record a field application, set targets or add a feed tank.' : 'Add a garden on the Map to get started.'),
       ...selected.map(g=>{
-        const tanks=rows('tanks',g.id), zones=rows('zones',g.id), mix=W.groups(b,'refill').filter(x=>x.chosen.gardenId===g.id).at(-1), run=irrigation(g.id);
-        return h('section.wf-garden',line(h('h3',g.name),button('Garden details',()=>gardenCard(g.id),'wf-garden')),isWater ?
-          [note(run.water+' · '+num(run.minutes,2)+' min · '+zones.length+' zones'),zones.map(z=>{
-            const latest=run.data.filter(x=>x.chosen.zoneId===z.id).at(-1), r=latest?.chosen;
-            return line(h('strong',z.name),r?r.status+' · '+num(r.elapsed,2)+(r.planned==null?'':' of '+num(r.planned,2))+' min · '+when(r.at):'No run in this period', latest?.unsettled.length ? button('Review evidence',()=>reconcile(latest,'run'),'wf-review') : null,button('Record run',()=>runForm(z),'wf-run'));
-          }),!zones.length?button('Add zone',()=>setup(g.id,'zone'),'wf-add-zone'):null] :
-          [note(tanks.length+' tanks · '+(mix?'Last refill '+when(mix.chosen.at):'No refill recorded')),tanks.map(t=>line(h('strong',t.name),b.recipes?.[t.recipeId]?.name||'Recipe missing',W.reminder(b,t.id)?button('Refill due · Tasks',()=>App.setView('sow'),'wf-open-tasks'):button('Request refill',()=>request(t),'wf-request'))),!tanks.length?button('Add tank',()=>setup(g.id,'tank'),'wf-add-tank'):null]);
-      }));
+        const own=records.filter(group=>group.chosen.gardenId===g.id);
+        return isWater?irrigationGarden(g,zones.filter(z=>z.gardenId===g.id),own):
+          fertilityGarden(g,tanks.filter(t=>t.gardenId===g.id),own,dueByTank,!!garden);
+      })];
+    host.replaceChildren(...content.filter(Boolean));
   }
   function init() { App.on('view',()=>{close();render();}); App.on('plan',render); }
   root.LRFWaterView={init,render,tasks,supplies,library,gardenCard};

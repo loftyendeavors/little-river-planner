@@ -5,6 +5,10 @@
   const values = map => Object.values(map || {});
   const put = (book, table, row) => ({ ...book, [table]: { ...book[table], [row.id]: row } });
   const sortTime = (a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id);
+  const scopeKey = report => JSON.stringify([...(report.beds || [])].sort());
+  function sameRunEvidence(a, b) {
+    return ['elapsed','planned','meter','status','source','rate'].every(key=>(a[key] ?? null)===(b[key] ?? null)) && scopeKey(a)===scopeKey(b);
+  }
   function number(raw, label, min = 0, max = Infinity) {
     if (raw == null || String(raw).trim() === '' || !Number.isFinite(Number(raw)) || Number(raw) < min || Number(raw) > max)
       throw Error('Enter ' + label + (min > 0 ? ' greater than zero.' : ' within its range.'));
@@ -55,11 +59,17 @@
       const pending = reports.filter(r => r.id === chosen.id || !book.review?.[r.id]);
       const differing = key => new Set(pending.map(r=>r[key]).filter(v=>v!=null)).size > 1;
       const meterConflict = kind === 'run' && differing('meter');
+      const workConflict = kind === 'run' && (differing('status') || differing('elapsed'));
+      // A missing rate can be an explicit choice to omit today's setting on a past run.
+      const rateConflict = kind === 'run' && chosen.status!=='Skipped' && pending.every(r=>r.meter==null)
+        && new Set(pending.map(r=>r.rate ?? null)).size>1;
+      const scopeConflict = kind === 'run' && new Set(pending.map(scopeKey)).size>1;
+      const planned = kind === 'run' && !differing('planned') ? pending.find(r => r.planned != null)?.planned ?? null : null;
       const unsettled = pending.filter(r => r.id !== chosen.id && (
         kind === 'refill' && (!r.reminder || !chosen.reminder || r.at.slice(0,16) !== chosen.at.slice(0,16) || JSON.stringify(r.items) !== JSON.stringify(chosen.items) || r.remainder !== chosen.remainder || r.gallons !== chosen.gallons) ||
-        kind === 'run' && (r.elapsed !== chosen.elapsed || r.status !== chosen.status || differing('planned') || meterConflict) ||
+        kind === 'run' && (r.elapsed !== chosen.elapsed || r.status !== chosen.status || differing('planned') || meterConflict || rateConflict || scopeConflict) ||
         kind === 'spread' && JSON.stringify(r.items) !== JSON.stringify(chosen.items)));
-      return { id, chosen, reports, unsettled, meterConflict, reviewed: !!book.accepted?.[id] };
+      return { id, chosen, reports, unsettled, meterConflict, workConflict, rateConflict, planned, pending };
     }).sort((a, b) => sortTime(a.chosen, b.chosen));
   }
   const lastMix = (book, tankId) => groups(book, 'refill').filter(g => g.chosen.tankId === tankId).at(-1);
@@ -107,7 +117,8 @@
       reminder: !!opts.reminder, items };
   }
   function run(zone, opts) {
-    const elapsed = number(opts.elapsed, 'elapsed minutes'), planned = opts.planned === '' || opts.planned == null ? null : number(opts.planned, 'planned minutes');
+    const elapsed = opts.status === 'Skipped' && (opts.elapsed == null || opts.elapsed === '') ? 0 : number(opts.elapsed, 'elapsed minutes');
+    const planned = opts.planned === '' || opts.planned == null ? null : number(opts.planned, 'planned minutes');
     const meter = opts.meter === '' || opts.meter == null ? null : number(opts.meter, 'metered gallons');
     if (!['Completed','Interrupted','Skipped'].includes(opts.status)) throw Error('Choose a run status.');
     if (opts.status === 'Skipped' && (elapsed || meter)) throw Error('A skipped run has no elapsed time or metered water.');
@@ -116,12 +127,37 @@
   }
   function water(group) {
     const r = group.chosen;
+    if (group.workConflict) return { gallons: null, basis: 'Run details disputed' };
     if (r.status === 'Skipped') return { gallons: 0, basis: 'Skipped' };
     if (group.meterConflict) return { gallons: null, basis: 'Conflicting meter readings' };
-    const metered = r.meter ?? (!group.reviewed ? group.reports.find(x => x.meter != null && x.elapsed === r.elapsed && x.status === r.status)?.meter : null);
+    if (group.rateConflict) return { gallons: null, basis: 'Conflicting rated flow' };
+    const metered = r.meter ?? (group.pending || group.reports).find(x => x.meter != null && x.elapsed === r.elapsed && x.status === r.status)?.meter;
     if (metered != null) return { gallons: metered, basis: 'Metered' };
     if (r.rate != null) return { gallons: r.rate * r.elapsed, basis: 'Estimated' };
     return { gallons: null, basis: 'Unknown' };
+  }
+  function runSummary(groups) {
+    const total = { started: 0, skipped: 0, interrupted: 0, minutes: 0, disputed: 0,
+      metered: null, estimated: null, unknown: 0, reviews: [] };
+    for (const group of groups) {
+      const r = group.chosen;
+      if (group.unsettled.length) total.reviews.push(group);
+      if (group.workConflict) {
+        total.disputed++;
+      } else if (r.status === 'Skipped') {
+        total.skipped++;
+        continue;
+      } else {
+        total.started++;
+        total.minutes += r.elapsed;
+        if (r.status === 'Interrupted') total.interrupted++;
+      }
+      const amount = water(group);
+      if (amount.gallons == null) total.unknown++;
+      else if (amount.basis === 'Metered') total.metered = (total.metered || 0) + amount.gallons;
+      else if (amount.basis === 'Estimated') total.estimated = (total.estimated || 0) + amount.gallons;
+    }
+    return total;
   }
   // Convert a grower's chosen per-acre rate using the area to which it applies.
   function targetPounds(area, rates) {
@@ -178,6 +214,6 @@
     const received = receipts.reduce((sum, r) => sum + r.lb, 0);
     return { received, used, balance: receipts.length ? received - used : null, uncertain, review };
   }
-  const api = { values, put, number, name, product, recipe, snapshot, groups, lastMix, cycle, reminder, refill, run, water, stock, occurrence, nextJob, targetPounds, nutrientTotals, recipeConcentration, tapeFlow, zoneRate };
+  const api = { values, put, number, name, product, recipe, snapshot, groups, lastMix, cycle, reminder, refill, run, water, runSummary, sameRunEvidence, stock, occurrence, nextJob, targetPounds, nutrientTotals, recipeConcentration, tapeFlow, zoneRate };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.LRFWaterFeed = api;
 })(typeof self !== 'undefined' ? self : this);

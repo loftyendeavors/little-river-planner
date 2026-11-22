@@ -2902,3 +2902,7 @@ body.phone .wf-task button, body.phone .wf-block button, body.phone .wf-sheet bu
 .wf-bars b { font: 600 var(--type-13) var(--mono); }
 .wf-track { height: 32px; display: flex; align-items: flex-end; border-bottom: 1px solid var(--line); }
 .wf-track i { width: 100%; background: var(--ink-2); }
+.wf-nutrients { border-collapse: collapse; margin: var(--space-12) 0; width: 100%; max-width: 520px; font-size: var(--type-13); }
+.wf-nutrients caption { text-align: left; font-weight: 600; padding-bottom: var(--space-4); }
+.wf-nutrients th, .wf-nutrients td { padding: var(--space-4) var(--space-8); text-align: right; border-bottom: 1px solid var(--line-soft); font-variant-numeric: tabular-nums; }
+.wf-nutrients th:first-child { text-align: left; padding-left: 0; }

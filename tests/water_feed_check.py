@@ -16,7 +16,7 @@ passed, failed = [], []
 try:
     with sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path='/usr/bin/google-chrome', args=['--no-sandbox'])
-        page = browser.new_page(viewport={'width': 1480, 'height': 900})
+        page = browser.new_page(viewport={'width': 1480, 'height': 900}, timezone_id='UTC')
         errors = []
         page.on('pageerror', lambda err: errors.append(str(err)))
         page.goto(f'http://127.0.0.1:{server.server_port}/')
@@ -35,11 +35,24 @@ try:
             check(tab + ' uses current planner wording', all(term not in wording for term in ('v7', 'old planner', 'rebuild preview')))
         press('Water')
         check_current_words('Fertility')
-        press('Add tank')
+        gardens = page.get_by_label('Garden', exact=True)
+        check('First use asks for a garden without repeating an empty equipment row per garden',
+              gardens.is_visible() and page.get_by_role('button', name='Add tank', exact=True).count() == 0
+              and 'Choose a garden' in page.locator('#wfWrap').inner_text())
+        gardens.select_option(index=1)
+        press('Record field application')
         fill('Product name', 'Test feed')
         fill('Bag weight (lb)', '20')
         fill('N on label (%)', '10')
         press('Save product')
+        year = page.evaluate('LRFApp.planYear()')
+        page.clock.set_fixed_time(f'{year}-06-12T14:00:00Z')
+        fill('Applied at', f'{year}-06-12T08:00')
+        fill('Fresh product applied (lb)', '5')
+        press('Record application')
+        check('First product returns to the dry application and the garden shows the label-basis nutrients',
+              '0.5 lb' in page.get_by_role('row', name='Field applied', exact=False).inner_text())
+        press('Add tank')
         fill('Recipe name', 'Test stock')
         fill('Final stock volume (gal)', '5')
         fill('Test feed (lb per batch)', '4')
@@ -61,6 +74,9 @@ try:
               and page.evaluate("LRFWaterFeed.groups(LRFApp.state.plan.lrfNext.waterFeed,'refill').length") == 1)
         page.set_viewport_size({'width': 1480, 'height': 900})
         press('Water')
+        check('Applied nutrients and mixed nutrients occupy separate rows',
+              '0.4 lb' in page.get_by_role('row', name='Mixed into tanks', exact=False).inner_text()
+              and '0.5 lb' in page.get_by_role('row', name='Field applied', exact=False).inner_text())
         press('Irrigation')
         check_current_words('Irrigation')
         press('Add zone')
@@ -74,6 +90,32 @@ try:
         dashboard = page.locator('#wfWrap').inner_text()
         check('The dashboard names the interruption and leaves unmeasured gallons unknown',
               'Interrupted · 8 of 20 min' in dashboard and 'gallons unknown' in dashboard)
+        press('Record run')
+        fill('Run started at', f'{year}-06-12T07:15')
+        page.get_by_label('Run status', exact=True).select_option('Skipped')
+        page.get_by_role('dialog').get_by_role('button', name='Record run', exact=True).click()
+        dashboard = page.locator('#wfWrap').inner_text()
+        check('A skipped run can be recorded without typing zero, and adds no start or minutes',
+              '1 started · 1 interrupted · 1 skipped · 8 min' in dashboard)
+        press('Season')
+        check('The dashboard renders no null placeholders when the chart is hidden',
+              'null' not in page.locator('#wfWrap').inner_text().lower())
+        press('Add zone')
+        fill('Zone name', 'Second line')
+        fill('Rated flow (gal/min, optional)', '2')
+        press('Save equipment')
+        page.set_viewport_size({'width': 390, 'height': 844})
+        press('Record irrigation run')
+        picker = page.get_by_label('Garden and zone', exact=True)
+        check('The phone asks for a specific zone when more than one is configured', picker.input_value() == '')
+        picker.select_option(label=next(name for name in picker.locator('option').all_text_contents() if 'Second line' in name))
+        press('Continue')
+        fill('Actual minutes', '3')
+        page.get_by_label('Use 2 gal/min to estimate unmetered water for this run').uncheck()
+        page.get_by_role('dialog').get_by_role('button', name='Record run', exact=True).click()
+        check('A phone run preserves unknown volume when the configured rate did not apply',
+              page.evaluate("""() => { const r = LRFWaterFeed.groups(LRFApp.state.plan.lrfNext.waterFeed,'run')
+                .find(g => g.chosen.label === 'Second line'); return r.chosen.elapsed === 3 && LRFWaterFeed.water(r).gallons === null; }"""))
         check('The workflow raised no page errors', not errors)
         browser.close()
 except Exception as exc:

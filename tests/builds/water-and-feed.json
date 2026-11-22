@@ -3,9 +3,9 @@
  "changes": {
   "did": "Water shows fertility and irrigation by garden. Tasks records tank refills and Supplies tracks the fresh fertilizer used.",
   "steps": [
-   "In Assumptions, enter a product and stock recipe. On Water, choose a garden and add a tank.",
+   "On Water, choose a garden to log a field application, set nutrient targets or add a feed tank.",
    "Request a refill and open Tasks. Check the recipe and batch size, then record the actual refill.",
-   "Switch Water to Irrigation, set up a zone and record a run. Open garden details to see its evidence and history."
+   "Set up a zone on Irrigation. Record a run here or from Tasks on a phone. Review disputed evidence for the selected period."
   ]
  },
  "words": [],
