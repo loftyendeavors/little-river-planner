@@ -35,6 +35,39 @@
   }
 
   /** One kind of bench through the season. */
+  /** Show the sowings behind the selected pool's peak day. Shared trays are counted once per batch. */
+  function weekDetail(week, kind) {
+    const eng = App.state.engine, peak = week.pools?.[kind], date = peak?.date || d(week.week);
+    const row = eng.benchDay(date, true), pool = row.pools[kind], batches = new Map();
+    for (const item of row.items) {
+      const sowing = item.r.sowing, group = (item.kind === 'tray' || item.kind === 'rockwool') && sowing?.trayGroup;
+      const id = JSON.stringify([item.kind, group?.id || sowing?.batchId || item.p.id]);
+      let batch = batches.get(id);
+      if (!batch) {
+        batch = {kind:item.kind, n:0, here:0, members:[]};
+        batches.set(id,batch);
+      }
+      batch.n += item.n;
+      const spaces = item.space[kind];
+      if (spaces <= 0.000001) continue;
+      batch.here += spaces;
+      const variety = eng.variety(item.p.varietyId), crop = eng.crop(item.p.cropId);
+      batch.members.push({name:[crop?.name, variety?.name].filter(Boolean).join(' · '), from:item.r.sow || item.r.field, to:item.release,
+        bed:App.bedLabel(item.r.b), spaces});
+    }
+    const list = [...batches.values()].filter(b => b.here > 0).sort((a,b)=>b.here-a.here);
+    const units = {pot:['pot carrier','pot carriers'], rockwool:['rockwool tray','rockwool trays'], live:['live tray','live trays'], crate:['crate','crates'], tray:['plug tray','plug trays']};
+    const dialog = h('dialog.dialog.wide', {'aria-label':'Bench occupancy', dataset:{hook:'bench-week-details'}}, h('h2', N.kindName(kind) + ' · week of ' + day(d(week.week))),
+      h('p', dayName(date) + ' · ' + num(pool.used,1) + ' of ' + num(pool.cap,1) + ' tray spaces'),
+      list.length ? list.map(b => {
+        const whole = Math.ceil(b.n - 1e-9), names = [...new Set(b.members.map(x=>x.name))].join(', ');
+        return h('details', h('summary', names + ' · ' + num(b.here,1) + ' spaces here · ' + plural(whole,...units[b.kind]) + ' in batch'),
+          h('ul',b.members.map(m=>h('li',m.name + ' · ' + m.bed + ' · nursery start ' + day(m.from) + ' · leaves nursery ' + day(m.to) + ' · ' + num(m.spaces,1) + ' spaces here'))));
+      }) : h('p','No sowings occupy these benches this week.'),
+      h('div.dialog-actions',h('button.btn.primary',{type:'button',onclick:()=>dialog.close()},'Done')));
+    dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+    document.body.append(dialog); dialog.showModal();
+  }
   function chart(fig, kind, tip) {
     const pool = fig.pools[kind], main = kind === 'heated', weeks = fig.weeks, W = 980, H = main ? 240 : 150, M = { l: 40, r: 96, t: 16, b: 26 }, plotW = W - M.l - M.r, plotH = H - M.t - M.b;
     const at = w => (w.pools ? w.pools[kind] : null), filled = p => !!p && p.used > 1e-9;
@@ -49,7 +82,7 @@
     weeks.forEach((w, i) => {
       const p = at(w), on = filled(p), ofCap = on && p.cap ? ` of ${num(p.cap)}` : '';
       // One stop for the keyboard: the planning week's column takes focus and the arrow keys walk the rest.
-      const g = s('g.bn-col' + (w.week === now ? '.now' : ''), { tabindex: i === start ? 0 : -1, role: 'img', 'aria-label': on ? `Week of ${day(d(w.week))}: ${num(p.used, 1)}${ofCap} tray spaces in use${isOver(p) ? `, ${num(p.over, 1)} more than the benches hold` : ''}` : `Week of ${day(d(w.week))}: benches empty` });
+      const g = s('g.bn-col' + (w.week === now ? '.now' : ''), { tabindex: i === start ? 0 : -1, role: 'button', 'aria-haspopup':'dialog', dataset:{hook:'bench-week'}, 'data-week':w.week, 'aria-label': on ? `Week of ${day(d(w.week))}: ${num(p.used, 1)}${ofCap} tray spaces in use${isOver(p) ? `, ${num(p.over, 1)} more than the benches hold` : ''}` : `Week of ${day(d(w.week))}: benches empty` });
       let base = 0;
       const parts = on ? KINDS.filter(([k]) => p[k] > 1e-9) : [];
       parts.forEach(([k], n) => {
@@ -76,10 +109,11 @@
       };
       const hide = () => { tipTimer = setTimeout(() => { tip.hidden = true; }, 80); };
       g.addEventListener('pointerenter', show); g.addEventListener('pointerleave', hide); g.addEventListener('focus', show); g.addEventListener('blur', hide);
-      g.addEventListener('click', () => App.setDate(d(w.week)));
+      const openWeek = () => { App.setDate(d(w.week)); weekDetail(w, kind); };
+      g.addEventListener('click', openWeek);
       g.addEventListener('keydown', e => {
         const to = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? weeks.length - 1 : -1;
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); App.setDate(d(w.week)); return; }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openWeek(); return; }
         if (to < 0 || to >= weeks.length) return;
         e.preventDefault(); g.setAttribute('tabindex', -1); cols[to].setAttribute('tabindex', 0); cols[to].focus();
       });

@@ -302,10 +302,12 @@ with sync_playwright() as pw:
     hvw = js("""const head = document.querySelector('.hv-head-acts'), bar = document.querySelector('.hv-bar'), tops = [...bar.children].map(c => Math.round(c.getBoundingClientRect().top + c.getBoundingClientRect().height / 2));
       const rows = [...document.querySelectorAll('#hvTable tr.hv-row')], plans = [...document.querySelectorAll('#hvTable .hv-plan')];
       const can = id => { const c = eng.crop(id); return !!c && LRFSuccessions.plans(eng, c); };
-      return { acts: head ? [...head.children].map(b => [b.id, b.textContent]) : null, oneLine: Math.max(...tops) - Math.min(...tops) <= 14, inBar: !!bar.querySelector('#hvShareBtn, #hvPlanBar'), near: head ? Math.round(head.getBoundingClientRect().right - document.querySelector('.hv-bar').getBoundingClientRect().right) : null,
+      return { acts: head ? [...head.children].map(b => [b.dataset.hook || b.id, b.textContent]) : null, primary: head?.querySelector('.primary')?.id, oneLine: Math.max(...tops) - Math.min(...tops) <= 14, inBar: !!bar.querySelector('#hvShareBtn, #hvPlanBar'), near: head ? Math.round(head.getBoundingClientRect().right - document.querySelector('.hv-bar').getBoundingClientRect().right) : null,
         clipped: head ? [...head.children].filter(b => b.scrollWidth > b.clientWidth + 1 || b.getBoundingClientRect().right > innerWidth).length : -1, rows: rows.length, want: rows.filter(r => can(r.dataset.crop)).map(r => r.dataset.crop), got: plans.map(p => p.dataset.crop),
         micro: rows.filter(r => { const c = eng.crop(r.dataset.crop); return c && c.micro; }).filter(r => r.querySelector('.hv-plan')).length, hidden: plans.length ? getComputedStyle(plans[0]).opacity : null, side: document.documentElement.scrollWidth > innerWidth + 1 };""")
-    check("at the head of Forecast stands the thing done from it, a list to send (a run to an amount a week has its own page since 0.84); the bar under the figures keeps to one line", hvw["acts"] == [["hvShareBtn", "A list to send…"]] and hvw["oneLine"] and not hvw["inBar"] and hvw["clipped"] == 0 and not hvw["side"], hvw)
+    forecast_actions = [["fc-recorded", "Recorded harvest…"], ["fc-buyers", "Buyer demand…"], ["hvShareBtn", "A list to send…"]]
+    check("the Forecast header offers recorded harvest, buyer demand, and the list to send as its primary action, with the filters on one line",
+          hvw["acts"] == forecast_actions and hvw["primary"] == "hvShareBtn" and hvw["oneLine"] and not hvw["inBar"] and hvw["clipped"] == 0 and not hvw["side"], hvw)
     check("every crop that can be planned to an amount has “plan…” on its row, tray crops have none, and it shows only when the row is pointed at", hvw["got"] == hvw["want"] and len(hvw["want"]) > 5 and hvw["micro"] == 0 and hvw["hidden"] == "0", hvw)
     if hvw["want"]:
         cid = hvw["want"][min(3, len(hvw["want"]) - 1)]

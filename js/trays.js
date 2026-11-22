@@ -98,7 +98,7 @@
   /** Has work been recorded on this batch? Such a batch is history and is never regenerated or removed with its plan. */
   function locked(plan, p, records) {
     const harvests = (records && records.harvests) || plan.harvests, picks = ((records && records.fieldRecords) || plan.fieldRecords || {}).picks;
-    return !!(Object.values(p.done || {}).some(Boolean) || p.established || (p.workflow && Object.keys(p.workflow).length) || p.harvestComplete || p.outcome || p.failed
+    return !!(plan.lrfNext?.harvestEntries?.some(x => x.plantingId === p.id) || Object.values(p.done || {}).some(Boolean) || p.established || (p.workflow && Object.keys(p.workflow).length) || p.harvestComplete || p.outcome || p.failed
       || (harvests && harvests[p.id] && Object.keys(harvests[p.id]).length) || (Array.isArray(picks) && picks.some(h => h.plantingId === p.id)));
   }
   /**

@@ -125,6 +125,123 @@
   /** A crop the Successions page can plan to a weekly amount. Tray crops follow weekly demand instead. */
   function plannable(row) { const eng = App.state.engine, c = eng.crop(row.cropId); return row.group !== 'micro' && !!root.LRFSuccessions && root.LRFSuccessions.plans(eng, c); }
   /** A forecast cell has a supply and dates. Only the grower can say the sales target for that period. */
+  function recordedHarvest() {
+    const m = model(), weeks = F.periods(m,'week'), entries = App.harvestEntries(), last = entries.filter(x => x.date >= E.d2s(m.start) && x.date <= E.d2s(m.date(m.days-1))).map(x => x.date).sort().at(-1);
+    const week = h('select', {'aria-label':'Harvest comparison week'}, weeks.map(w => h('option',{value:w.key},'Week of ' + day(w.start))));
+    week.value = last ? E.d2s(F.monday(E.s2d(last))) : thisWeek(m).key;
+    const body = h('div'), dialog = h('dialog.dialog.wide', {'aria-label':'Recorded harvest'}, h('h2','Recorded harvest'), h('label.fld','Week',week),body,
+      h('div.dialog-actions',h('button.btn',{type:'button',onclick:()=>dialog.close()},'Done')));
+    function show() {
+      const c = weeks.find(w=>w.key===week.value), groups = new Map();
+      for (const x of entries.filter(x=>x.date >= E.d2s(c.start) && x.date <= E.d2s(c.end))) {
+        const key = JSON.stringify([x.plantingId,x.thing,x.unit]);
+        const a = groups.get(key) || {...x, marketable:0, culls:0};
+        a.marketable += x.marketable; a.culls += x.culls; groups.set(key,a);
+      }
+      clear(body);
+      if (!groups.size) { body.append(h('p','No harvest entries for this week.')); return; }
+      for (const x of groups.values()) {
+        const row = m.rows.find(r=>r.cropId===x.cropId && (r.thing || '')===x.thing && r.unit===x.unit);
+        const planting = row?.plantings.find(p=>p.p.id===x.plantingId);
+        const expected = planting ? num(F.share(planting,c.i0,c.i1,true),2) : 'unavailable';
+        body.append(h('p',h('b', x.name + ' · ' + x.space), h('br'), num(x.marketable,3) + ' marketable · ' + num(x.culls,3) + ' culls · forecast picking ' + expected + ' (' + x.unit + ')'));
+      }
+    }
+    week.onchange=show; dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+    document.body.append(dialog); show(); dialog.showModal();
+  }
+  function buyerDemand(row, week) {
+    return (App.state.plan.lrfNext?.buyerDemand || []).filter(x => x.product === row.key && x.week === week);
+  }
+  function openBuyerDemand(initial, initialWeek) {
+    const engine = App.state.engine, commercial = model('commercial'), weeks = F.periods(commercial, 'week');
+    const products = new Map(commercial.rows.map(r => [r.key, r]));
+    for (const crop of engine.crops()) {
+      const unit = engine.unitOf(crop);
+      const add = (unit, thing, name) => {
+        const key = crop.id + '|' + unit + (thing ? '|' + thing : '');
+        if (!products.has(key)) products.set(key, {cropId:crop.id, name, key, unit, thing, group:F.groupOf(crop,unit)});
+      };
+      add(unit, '', crop.name);
+      for (const v of engine.varietiesOf(crop.id)) add(engine.unitOf(crop,v),'',crop.name);
+      for (const t of engine.thingsOf(crop.id).filter(t => t.counts)) add(t.unit,t.id,crop.name + ' · ' + t.name);
+    }
+    // A saved commitment stays reachable when the crop changes unit or its last planting is removed.
+    for (const x of App.state.plan.lrfNext?.buyerDemand || []) if (!products.has(x.product)) products.set(x.product, {key:x.product, name:x.name, unit:x.unit, cropId:x.cropId, thing:x.thing});
+    if (initial) products.set(initial.key,initial);
+    const options = [...products.values()].sort((a,b) => a.name.localeCompare(b.name));
+    if (!options.length) return;
+    const select = h('select', { 'aria-label': 'Demand product' }, options.map(r => h('option', { value: r.key }, r.name + ' · ' + r.unit)));
+    select.value = initial?.key || options[0].key;
+    const week = h('select', { 'aria-label': 'Demand week' }, weeks.map(w => h('option', { value: w.key }, 'Week of ' + day(w.start))));
+    week.value = initialWeek || thisWeek(commercial).key;
+    const body = h('div'), dialog = h('dialog.dialog.wide', { 'aria-label': 'Weekly buyer demand' }, h('h2', 'Weekly buyer demand'),
+      h('div.su-pair', h('label.fld','Crop and selling unit',select), h('label.fld','Week',week)), body);
+    const close = () => dialog.close();
+    let dirtyDemand = false, displayedProduct, displayedWeek;
+    function show() {
+      displayedProduct = select.value; displayedWeek = week.value; dirtyDemand = false;
+      const row = products.get(select.value), col = weeks.find(w => w.key === week.value), rows = buyerDemand(row,col.key);
+      const customers = App.state.plan.customers || [], fields = [];
+      const lines = h('div',{oninput:() => { dirtyDemand = true; }}), summary = h('p', {role:'status'}), action = planFromPeriod(row, col, close);
+      const save = h('button.btn.primary', { type:'button' }, 'Save demand');
+      const total = () => fields.reduce((v, f) => v + (Number(f.amount.value) || 0), 0);
+      const available = F.sendShown(F.sum(commercial.rows.find(r => r.key === row.key)?.days || [], col.i0, col.i1),row.unit);
+      function update() {
+        const sum = total(), gap = Math.max(0,sum - available);
+        summary.textContent = num(sum,3) + ' ordered · ' + num(available,3) + ' available · ' + num(gap,3) + ' more needed (' + row.unit + ')';
+        if (action) {
+          action.target.value = String(sum); action.update();
+          action.button.disabled ||= !gap;
+        }
+      }
+      function line(entry) {
+        const buyer = h('input', {type:'text', value:entry?.buyer || '', placeholder:'Buyer name', 'aria-label':'Buyer', list:'seasonBuyerNames', maxLength:120});
+        const amount = h('input', {type:'number', min:0, max:1000000, step:F.counted(row.unit) ? '1' : 'any', value:entry?.amount ?? '', 'aria-label':'Ordered quantity', oninput:update});
+        const item = h('div.su-pair', h('label.fld','Buyer',buyer), h('label.fld','Quantity (' + row.unit + ')',amount));
+        fields.push({buyer,amount}); lines.append(item);
+      }
+      if (rows.length) rows.forEach(line); else line();
+      function storeDemand() {
+        const list = [], seen = new Set();
+        for (const f of fields) {
+          const buyer = f.buyer.value.trim(), amount = f.amount.valueAsNumber;
+          if (f.amount.validity.badInput || !f.amount.validity.valid) { summary.textContent = F.counted(row.unit) ? 'Enter a whole quantity from zero to 1,000,000.' : 'Enter a quantity from zero to 1,000,000.'; return false; }
+          if (f.amount.value === '' || amount === 0) continue;
+          if (!buyer || !f.amount.validity.valid || !Number.isFinite(amount)) { summary.textContent = 'Enter a buyer and a positive quantity for each order.'; return false; }
+          const normalized = buyer.toLowerCase(), customer = customers.find(c => c.name?.trim().toLowerCase() === normalized);
+          const buyerId = customer?.id || 'name/' + normalized, id = JSON.stringify([col.key,row.key,buyerId]);
+          if (seen.has(id)) { summary.textContent = 'Combine the two quantities for ' + buyer + '.'; return false; }
+          seen.add(id);
+          list.push({id, buyerId, buyer, week:col.key, product:row.key, cropId:row.cropId, name:row.name, unit:row.unit, ...(row.thing ? {thing:row.thing} : {}), amount});
+        }
+        if (App.state.engine !== engine) { summary.textContent = 'The plan changed. Reopen buyer demand to see the current week.'; return false; }
+        const before = App.state.plan.lrfNext?.buyerDemand || null;
+        if (JSON.stringify(rows) === JSON.stringify(list)) return true;
+        const after = [...(before || []).filter(x => !(x.product === row.key && x.week === col.key)), ...list];
+        return App.commit('Save weekly buyer demand', [{kind:'own',key:'buyerDemand',before,after:after.length ? after : null}]);
+      }
+      save.onclick = () => { if (storeDemand()) { close(); UI.toast('Weekly buyer demand saved.'); } };
+      if (action) {
+        action.button.textContent = 'Save and plan the shortfall…';
+        action.button.addEventListener('click', e => { if (!storeDemand()) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+      }
+      const commitChoice = h('button.btn', {type:'button', onclick:() => line()}, 'Add buyer');
+      UI.add(clear(body), lines, commitChoice, summary, action?.variety,
+        h('div.dialog-actions', h('button.btn',{type:'button',onclick:close},'Cancel'), action?.button,save));
+      update();
+    }
+    const names = [...new Set([...(App.state.plan.customers || []).map(c=>c.name), ...(App.state.plan.lrfNext?.buyerDemand || []).map(x=>x.buyer)])];
+    dialog.append(h('datalist',{id:'seasonBuyerNames'},names.map(name=>h('option',{value:name}))));
+    select.onchange = week.onchange = () => {
+      if (dirtyDemand && !root.confirm('Discard unsaved buyer quantities for this week?')) {
+        select.value = displayedProduct; week.value = displayedWeek; return;
+      }
+      show();
+    };
+    dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+    show(); document.body.append(dialog); dialog.showModal();
+  }
   function planFromPeriod(row, col, close) {
     if (!plannable(row)) return null;
     const eng = App.state.engine, crop = eng.crop(row.cropId);
@@ -156,9 +273,12 @@
         : gap > 0 ? `${have} available to sell. Plan the remaining ${num(target.valueAsNumber - available, 3)} ${units}.`
         : `${have} available to sell. The forecast covers this target.`;
     }
+    const demand = F.periods(model('commercial'), 'week').find(w => w.i0 === col.i0 && w.i1 === col.i1);
+    const commitments = demand ? buyerDemand(row, demand.key) : [];
+    if (commitments.length) target.value = String(commitments.reduce((n,x) => n + x.amount, 0));
     target.addEventListener('input', update);
     update();
-    return { fields: h('div', h('label.fld', h('span', `Sales target for this period (${units})`), target, note),
+    return { target, update, variety, fields: h('div', h('label.fld', h('span', `Sales target for this period (${units})`), target, note),
       variety ? h('label.fld', h('span', 'Variety for the succession'), variety) : null), button };
   }
   /** How a planting is picked, in the Assumptions list's own words, as a tag. */
@@ -201,6 +321,7 @@
         h('span.row-word', h('span', { dataset: { hook: 'fc-from-amount' } }, F.amount(x.here, row.unit, row.group)),
           h('button.link', { type: 'button', dataset: { hook: 'fc-from-map' }, onclick: () => go(x) }, 'Show on the map'))))),
       planning?.fields,
+      grain === 'week' ? h('button.btn.small', {type:'button',onclick:() => { close(); openBuyerDemand(row,col.key); }}, 'Weekly buyer demand…') : null,
       h('div.dialog-actions',
         planning?.button,
         h('span.grow'),
@@ -401,6 +522,8 @@
       // the title and "?", and beside them the two things done from the page: plan more of a crop, send what is there
       h('header.as-head.hv-head', h('div.hv-head-text', h('h2', { id: 'hvTitle', dataset: { hook: 'fc-title' } }, 'Forecast'), helpBtn, lead(m, marked)),
         h('div.hv-head-acts',
+          h('button.btn', {type:'button', dataset:{hook:'fc-recorded'},onclick:recordedHarvest},'Recorded harvest…'),
+          h('button.btn', { type:'button', dataset:{hook:'fc-buyers'}, onclick:()=>openBuyerDemand() }, 'Buyer demand…'),
           h('button.btn.primary', { type: 'button', id: 'hvShareBtn', onclick: share }, 'A list to send…'))),
       figures(m, noYield),
       h('div.hv-bar',

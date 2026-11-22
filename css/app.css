@@ -2964,3 +2964,13 @@ body.phone .wf-task button, body.phone .wf-block button, body.phone .wf-sheet bu
 .wf-nutrients caption { text-align: left; font-weight: 600; padding-bottom: var(--space-4); }
 .wf-nutrients th, .wf-nutrients td { padding: var(--space-4) var(--space-8); text-align: right; border-bottom: 1px solid var(--line-soft); font-variant-numeric: tabular-nums; }
 .wf-nutrients th:first-child { text-align: left; padding-left: 0; }
+
+dialog.run-edit { width: min(760px, 96vw); max-height: 88vh; overflow: auto; }
+.run-edit-table { width: 100%; margin-block: var(--space-16); border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.run-edit-table :is(th, td) { padding: var(--space-4) var(--space-8); text-align: start; }
+.pick-sheet .fld { display: grid; gap: var(--space-4); margin-block: var(--space-8); min-width: 0; }
+.pick-sheet :is(input,select) { min-width: 0; width: 100%; }
+@media (max-width: 680px) {
+  .pick-sheet { max-width: calc(100vw - 16px); max-height: 90dvh; overflow: auto; }
+  .pick-sheet :is(input,select,button), [data-view="sow"] .tk-top > .btn { min-height: var(--control-phone); }
+}
