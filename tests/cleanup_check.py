@@ -89,8 +89,12 @@ with sync_playwright() as pw:
     js("A.select(null); LRFMapEdit.open({}); return 1;"); wait(700)
     check("Edit layout's figures leave no grey block", js("return holes();") == [], js("return holes();"))
     look("Edit layout"); js("LRFMapEdit.close(); return 1;"); wait(300)
-    js("A.openAhead({ mode: 'series', cropId: S.plan.plantings.find(p => /lettuce/i.test(p.cropId)).cropId }); return 1;"); wait(700); look("the series tool")
-    js("A.select(null); return 1;")
+    # the Successions page (E4, 0.84), where the series tool was: read like any other screen, and its "?"
+    js("A.openAhead({ mode: 'succession', cropId: S.plan.plantings.find(p => /lettuce/i.test(p.cropId)).cropId }); return 1;"); wait(1800); look("the Successions page")
+    su = js("return { view: S.view, title: (document.querySelector('[data-hook=\"succ-page-title\"]') || {}).textContent || '', series: /\\bseries\\b/i.test(($('suWrap') || {}).textContent || '') };") or {}
+    check("the Successions page opens in its own view, says nothing of a series, and has a “?”", su.get("view") == "succession" and su.get("title") == "Successions" and su.get("series") is False and bool(js("return !!document.querySelector('[data-hook=\"succ-help\"]');")), su)
+    page.click('[data-hook="succ-help"]'); wait(300); look("the Successions page's “?”"); page.keyboard.press("Escape"); wait(200)
+    js("A.setView('map'); A.select(null); return 1;"); wait(400)
 
     # ── the season bar ──
     frost = js("return [...document.querySelectorAll('#seasonMarks .season-frost')].map(el => { const b = el.querySelector('b'), bg = b ? getComputedStyle(b).backgroundColor : ''; return { word: b ? b.textContent : null, bg, plain: [...el.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim()).length }; });") or []

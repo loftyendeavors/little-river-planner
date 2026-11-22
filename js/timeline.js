@@ -508,8 +508,8 @@
     }
     const n = list.length;
     body.append(h('div.tl-section.tl-waithead', { dataset: { section: 'waiting' }, title: 'Not in a bed yet, so not in the forecast, seed or sowing lists.' },
-      h('span', 'To place', h('small', n ? `${plural(n, 'planting')} with no bed yet · counted nowhere until placed` : 'what the series would leave to place'))));
-    body.append(rowEl('div.tl-row.tl-wait', { dataset: { wait: '' } }, h('div.tl-label', { title: 'Plantings a series made that have no bed yet. Drag one onto a row to place it.' }, h('b', 'No bed yet'), h('small', 'drag onto a row')), lane, true));
+      h('span', 'To place', h('small', n ? `${plural(n, 'planting')} with no bed yet · counted nowhere until placed` : 'what the succession would leave to place'))));
+    body.append(rowEl('div.tl-row.tl-wait', { dataset: { wait: '' } }, h('div.tl-label', { title: 'Plantings waiting for a space. Drag one onto a row to place it.' }, h('b', 'No bed yet'), h('small', 'drag onto a row')), lane, true));
   }
 
   function render() {
@@ -523,7 +523,7 @@
     // a bed with nothing planned all year has no opening drawn; one the carried crop fits is drawn lit, as any other it fits
     if (room) for (const { o } of room.fits.values()) if (!o.planted) open.set(o.bed.id, [...(open.get(o.bed.id) || []), o]);
     body.classList.toggle('room', !!room);
-    const ghosts = root.LRFSeries ? root.LRFSeries.ghosts() : null;
+    const ghosts = root.LRFSuccessions ? root.LRFSuccessions.ghosts() : null;
     ghostBy = new Map();
     for (const x of (ghosts && ghosts.placed) || []) { if (!ghostBy.has(x.bed.id)) ghostBy.set(x.bed.id, []); ghostBy.get(x.bed.id).push({ p: x.p, r: x.r, ghost: true }); }
     drawHead();
@@ -830,8 +830,6 @@
       if (!row.dataset.bed) { const fold = row.dataset.fold; if (fold && e.target.closest('.tl-label')) flip(prefs.open, fold)(); return; }
       const spot = targetAt(e.clientX, e.clientY);
       if (App.state.armed && spot) { App.place(App.state.armed, spot.bedId, spot.date); return; }
-      // while the series tool is asking for beds, a click on a row names that bed
-      if (root.LRFSeries && root.LRFSeries.picking() && root.LRFSeries.toggleBed(row.dataset.bed)) return;
       const openEl = e.target.closest('.tl-open');
       if (openEl) { App.select({ type: 'opening', id: openEl.dataset.opening, bedId: row.dataset.bed }); return; }
       App.select({ type: 'bed', id: row.dataset.bed });

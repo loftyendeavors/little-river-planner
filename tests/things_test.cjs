@@ -101,8 +101,10 @@ if (placed && bedded && packed) {
     const g = e.givenOf(there[0].p), plain = e.givenOf(away[0].p), panel = there[0].parts[0];
     check('read as one figure, a planting that feeds a thing gives the thing’s amount, unit and price, and one that does not gives what it always gave', near(g.units, panel.units) && g.unit === 'lb' && near(g.price, 6) && g.parts.length === 1 && plain.units === away[0].y.units && plain.unit === away[0].y.unit && !plain.parts, { g: [g.units, g.unit, g.price] });
     // the crop's own weekly amount where everything is sold as the thing
-    const bedThere = core.beds.find(b => b.id === there[0].p.bedId), asked = SU.pace(e, { cropId: id, place: 'beds', bedIds: [bedThere.id], from: `${base.year}-07-15` }), elsewhere = SU.pace(e, { cropId: id, place: 'beds', bedIds: [away[0].p.bedId], from: `${base.year}-07-15` });
-    check('“plan to a weekly amount” of the crop itself, in a place whose plantings are all sold as the thing, says so and names the thing; in another place it is worked out as before', typeof asked.error === 'string' && asked.error.includes('By weight') && /is sold as/.test(asked.error) && !elsewhere.error && elsewhere.unit === own, { asked: asked.error || asked.unit, elsewhere: elsewhere.error || elsewhere.unit });
+    // a run of successions to an amount a week (E4: the weekly amount of the old series tool is a run's, on the Successions page)
+    const runAsk = (bedId, extra = {}) => SU.planRun(e, { cropId: id, by: 'amount', want: 5, datesFor: 'picking', from: `${base.year}-07-15`, to: `${base.year}-08-15`, bedIds: [bedId], ...extra });
+    const bedThere = core.beds.find(b => b.id === there[0].p.bedId), asked = runAsk(bedThere.id), elsewhere = runAsk(away[0].p.bedId);
+    check('a run to an amount a week of the crop itself, in a place whose plantings are all sold as the thing, says so and names the thing; in another place it is worked out as before', typeof asked.error === 'string' && asked.error.includes('By weight') && /is sold as/.test(asked.error) && (!elsewhere.error || !/is sold as/.test(elsewhere.error)) && (elsewhere.error || elsewhere.totals.unit === own), { asked: asked.error || asked.totals.unit, elsewhere: elsewhere.error || elsewhere.totals.unit });
     const two = E.create(withThings(id, { 't-a': thing, 't-b': { ...thing, id: 't-b', n: 2, name: 'Again' } }), Lib).thingsOf(id);
     check('two things cannot be sold from one place: the one added first stands, the other does not count and says why', two[0].counts === true && two[1].counts === false && two[1].why === 'taken');
   }
@@ -176,8 +178,10 @@ if (placed && bedded && packed) {
     const byWeight = E.create(withThings(id, { 't-c': { ...thing, unit: 'lb', holds: undefined, weighs: 0.05 } }), Lib), bw = partsOf(byWeight, id).filter(x => x.parts);
     check('packed by weight from something counted, the figure is what one weighs: 40% of the harvest × that weight', byWeight.thingsOf(id)[0].way === 'weighs' && bw.length > 0 && bw.every(x => near(x.parts[1].units, x.y.units * 0.4 * 0.05)));
     // sized to a weekly amount of one thing
-    const bed = SU.spaces(e, e.crop(id), SU.gardensFor(e, e.crop(id)).map(g => g.garden.id))[0], pace = bed ? SU.pace(e, { cropId: id, gardenIds: [bed.gardenId], from: `${base.year}-07-15`, thing: 't-c' }) : { error: 'no space' }, paceOwn = bed ? SU.pace(e, { cropId: id, gardenIds: [bed.gardenId], from: `${base.year}-07-15` }) : { error: 'no space' };
-    check('“plan to a weekly amount” reads what a planting gives of the thing asked for, in that thing’s unit', !pace.error && !paceOwn.error && pace.unit === 'bouquet' && paceOwn.unit === own && pace.by === 'thing' && near(pace.per, paceOwn.per / 0.6 * 0.4 / 10, 1e-6), { pace: pace.error || [pace.unit, pace.per], own: paceOwn.error || [paceOwn.unit, paceOwn.per] });
+    const bed = SU.spaces(e, e.crop(id), SU.gardensFor(e, e.crop(id)).map(g => g.garden.id))[0];
+    const ask = extra => (bed ? SU.planRun(e, { cropId: id, by: 'amount', want: 5, datesFor: 'picking', from: `${base.year}-07-15`, to: `${base.year}-08-15`, bedIds: [bed.id], ...extra }) : { error: 'no space' });
+    const run = ask({ thing: 't-c' }), runOwn = ask({});
+    check('a run to an amount a week reads what a planting gives of the thing asked for, in that thing’s unit', !run.error && !runOwn.error && run.totals.unit === 'bouquet' && runOwn.totals.unit === own && run.rests.by === 'thing' && near(run.rests.units, runOwn.rests.units / 0.6 * 0.4 / 10, 1e-6), { run: run.error || [run.totals.unit, run.rests.units], own: runOwn.error || [runOwn.totals.unit, runOwn.rests.units] });
   }
   // ── the build before, given a plan that holds things ──
   {

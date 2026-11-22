@@ -1,0 +1,48 @@
+{
+ "build": "E4 part 1, Successions (#90 section 9, #102). A Successions page between the Timeline and the Forecast (js/successions.js): a run of one crop planned onto whole beds, by beds each sowing every so many days or to an amount a week (the spacing found, never the size), dates for picking or planting, a garden and the gardens to go on to; what it would plant as the run's own amount a week against what is wanted (average and short weeks said, what the plan already gives said beside it and not taken off), one row a bed with Sow, Plant and First pick in ruled columns, Drop, the overshoot and the frost said on the row, what has no bed said with the gardens that have room; Add N plantings as one step with one Undo, See them on the Timeline as ghosts, Cancel. A kept run (lrfNext.runs, plantings[].run, both taken whole by the merge) is listed and opens to its plantings, read-only; Remove run keeps its plantings as plain plantings unless asked to take them too. The series tool in the side panel, App.addSeries, App.addSuccessions, LRFSuccession.series and pace, and \"Repeat as successions\" are gone; every way in (a bed or an opening, a crop in the library, a planting's panel, card or menu, a week of a crop on the Forecast) opens the page filled in. The Forecast's head loses \"Plan to a weekly amount\" (the page has its own tab). To place, sharing a bed, openings and What fits are as they were. A sowing can also be a whole tower, a model planting’s block of containers (a whole group without a model), or a manual bench planting’s trays. Tower sowings follow a model’s cycle and use each tower’s sites. Fallback gardens contain the same kind of space; benches are repeated by spacing. No figure of an existing plan moves.",
+ "changes": {
+  "did": "Successions have a page of their own, between the Timeline and the Forecast: plan whole beds, whole towers, blocks of containers or trays on a bench, and keep the sowings as one run.",
+  "steps": [
+   "Open Successions, choose a crop, A weekly amount and how many a week: it says one whole bed every so many days, the amount each week against what is wanted, and Sow, Plant and First pick for each bed.",
+   "Press Add: the plantings are added as one step, the run is listed at the left, and Undo beside the answer takes them all back.",
+   "On a bed, a planting or a crop in the library, Plan a succession opens the page filled in from it."
+  ]
+ },
+ "words": [],
+ "code": [
+  "ahead.js",
+  "app.js",
+  "card.js",
+  "harvestview.js",
+  "main.js",
+  "map.js",
+  "merge.js",
+  "panels.js",
+  "rails.js",
+  "series.js",
+  "succession.js",
+  "timeline.js"
+ ],
+ "added": [
+  "successions.js"
+ ],
+ "removed": [],
+ "page": [
+  "css/app.css",
+  "index.html"
+ ],
+ "screens": [
+  "assumptions-days",
+  "assumptions-yield",
+  "forecast",
+  "map",
+  "nursery-bench-room",
+  "nursery-live-trays",
+  "nursery-set-up",
+  "nursery-supplies",
+  "seeds",
+  "successions",
+  "tasks",
+  "timeline"
+ ]
+}

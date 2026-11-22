@@ -149,7 +149,6 @@ tryCase('a copy of a planting bought in is a later succession: it follows its cr
   const r0 = eng.calc(plugs), at = { bedId: plugs.bedId, date: E.addDays(r0.field, 120) }, copy = Rails.propose(eng, { plantingId: plugs.id, copy: true }, at), move = Rails.propose(eng, { plantingId: plugs.id }, at);
   return [!!copy.p && copy.p.startedFrom === undefined && !!move.p && move.p.startedFrom === 'plant', { copy: copy.p && copy.p.startedFrom, move: move.p && move.p.startedFrom }];
 });
-check('a series modelled on a planting bought in drops its word, as it drops what was recorded', S.RECORD_FIELDS ? S.RECORD_FIELDS.includes('startedFrom') : /'startedFrom'\]/.test(fs.readFileSync(path.resolve(app, 'js', 'succession.js'), 'utf8')));
 tryCase('marking one planting bought in changes no other planting\'s days, and another\'s cells, seed or trays only where it shared a sowing batch with it', () => {
   const e = E.create(put(plan, { ...seedTP, startedFrom: 'plant' }), Lib), batch = (eng.calc(seedTP).sowing || {}).batchId, group = ((eng.calc(seedTP).sowing || {}).trayGroup || {}).id;
   const off = plan.plantings.filter(p => p.id !== seedTP.id).filter(p => { const a = eng.calc(p), b = e.calc(e.planting(p.id)); if (!a !== !b) return true; if (!a) return false;

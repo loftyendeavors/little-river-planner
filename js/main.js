@@ -15,6 +15,7 @@
   root.LRFHarvestView.init();
   root.LRFAhead.init();
   root.LRFSeries.init();
+  root.LRFSuccessions.init();
   root.LRFBackupUI.init();
   // The build's label is written by tools/shared.cjs into js/built.js, with what each build did (the checks read it there too,
   // tests/env.sh). The header's chip says it from the first moment; the line at the foot of the Backup menu says it with the
@@ -116,7 +117,7 @@
     // Escape with a sheet or dialog open closes that, and nothing behind it
     if (e.key === 'Escape' && document.querySelector('dialog[open]')) return;
     // (the series tool is a form: Escape leaves it from inside its fields too, and nothing is added)
-    if (e.key === 'Escape') { if (!menu.hidden) closeMenu(); else if (App.state.armed) App.arm(null); else if (App.state.sel && (!typing || (App.state.sel.type === 'series' && e.target.closest && e.target.closest('#srForm')))) App.select(null); return; }
+    if (e.key === 'Escape') { if (!menu.hidden) closeMenu(); else if (App.state.armed) App.arm(null); else if (App.state.sel && !typing) App.select(null); return; }
     if (typing || !App.state.ready) return;
     if ((e.key === 'Delete' || e.key === 'Backspace') && App.state.sel && App.state.sel.type === 'planting') { e.preventDefault(); App.removePlantings([App.state.sel.id]); return; }
     if ((e.key === 'Delete' || e.key === 'Backspace') && App.state.sel && App.state.sel.type === 'waiting') { e.preventDefault(); App.removeWaiting([App.state.sel.id]); return; }

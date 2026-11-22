@@ -34,6 +34,8 @@ node $T/step5a_test.cjs $APP $SHIP $OLD | named "step5a, compact"
 node $T/step5b_test.cjs $APP $PLAN $OLD | named "step5b, backup"
 node $T/step5b_test.cjs $APP $SHIP $OLD | named "step5b, compact"
 node $T/succession_test.cjs $APP $SHIP | named "succession"
+node $T/run_test.cjs $APP $PLAN | named "runs, backup"   # E4: a run of successions, by beds or to an amount a week, whole beds only; the spacing found, the overshoot said, the frost marked, field dates and room still stopping
+node $T/run_test.cjs $APP $SHIP | named "runs, compact"
 node $T/waiting_test.cjs $APP $PLAN | named "waiting, backup"
 node $T/waiting_test.cjs $APP $SHIP | named "waiting, compact"
 node $T/stepF_test.cjs $APP $PLAN $OLD | named "stepF, backup"

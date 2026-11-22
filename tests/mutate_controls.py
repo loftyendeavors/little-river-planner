@@ -33,14 +33,14 @@ AP, PN, CD, BN, SD, TL, HV, YC, IX, CSS = "js/app.js", "js/panels.js", "js/card.
 PAGE = [
  # a planting's panel
  ("the panel has no “⋯” at its head", PN, "        h('button.icon-btn.insp-more', { type: 'button', 'aria-label': 'More', 'aria-haspopup': 'menu', title: 'More', dataset: { hook: 'panel-more' }, onclick: e => root.LRFCard.menu(plantingMore(p, bed, r), e.currentTarget) }, '⋯'),\n", ""),
- ("Send to To place stands in the panel again", PN, "otherwise the next free one in ${eng.gardenOf(bed).name}.`),", "otherwise the next free one in ${eng.gardenOf(bed).name}.`), h('button.btn', { type: 'button', onclick: () => App.sendToWait(p.id) }, 'Send to To place'),"),
+ ("Send to To place stands in the panel again", PN, "        h('h3', 'Successions'),\n", "        h('h3', 'Successions'), h('button.btn', { type: 'button', onclick: () => App.sendToWait(p.id) }, 'Send to To place'),\n"),
  ("the panel's menu holds Remove planting only", PN, "        ['wait', 'Send to To place', () => App.sendToWait(p.id)],\n", ""),
  ("Send to To place in the panel's menu does nothing", PN, "['wait', 'Send to To place', () => App.sendToWait(p.id)]", "['wait', 'Send to To place', () => {}]"),
  ("Remove planting in the panel's menu does nothing", PN, "['remove', 'Remove planting', () => App.removePlantings([p.id]), null, 'bad']]", "['remove', 'Remove planting', () => {}, null, 'bad']]"),
  ("the bed's name at the panel's head is drawn as a button", PN, "h('button.link', { type: 'button', dataset: fromBedSeason ? { hook: 'bed-planting-back' } : { hook: 'panel-bed' },", "h('button.btn.small', { type: 'button', dataset: fromBedSeason ? { hook: 'bed-planting-back' } : { hook: 'panel-bed' },"),
  ("the bed's name at the panel's head goes nowhere", PN, "onclick: () => fromBedSeason ? root.LRFCard.backToBed(bed.id) : App.select({ type: 'bed', id: bed.id }) }, App.bedLabel(bed)),", "onclick: () => {} }, App.bedLabel(bed)),"),
  ("Several varieties… is underlined text again", PN, "h('button.btn.quiet.small', { type: 'button', id: 'fSeveral'", "h('button.link', { type: 'button', id: 'fSeveral'"),
- ("Plan a longer series… is a bounded button", PN, "h('button.btn.quiet.small', { type: 'button', id: 'fSeriesLink'", "h('button.btn.small', { type: 'button', id: 'fSeriesLink'"),
+ ("Plan a succession of this… is a bounded button", PN, "h('button.btn.quiet.small', { type: 'button', id: 'fSeriesLink'", "h('button.btn.small', { type: 'button', id: 'fSeriesLink'"),
  ("record is underlined text again", PN, "h('button.btn.small.job-tick', { type: 'button', dataset: { job: 'tick', hook: 'job-record' },", "h('button.link.job-tick', { type: 'button', dataset: { job: 'tick', hook: 'job-record' },"),
  ("the Saved line's Undo is underlined text again", PN, "last.canUndo ? h('button.btn.small', { type: 'button', dataset: { saved: 'undo', hook: 'panel-saved-undo' }", "last.canUndo ? h('button.link', { type: 'button', dataset: { saved: 'undo', hook: 'panel-saved-undo' }"),
  ("the Saved line's Undo makes the line taller", CSS, ".insp-saved .btn { margin: -6px 0 -6px var(--space-8); }", ".insp-saved .btn { margin: 0 0 0 var(--space-8); }"),

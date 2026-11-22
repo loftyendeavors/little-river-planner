@@ -30,7 +30,7 @@ def finish():
     sys.stdout.flush(); os._exit(1 if failed else 0)
 # The things a link names: they go somewhere and change nothing. Any other control drawn underlined is a button drawn as a link.
 LINKS = ["panel-bed", "bed-planting-back", "panel-live-trays", "panel-mate", "card-bed", "card-full", "card-nursery-full", "bed-planting-full", "opening-back", "fc-from-map",
-         "seeds-open-crop", "series-see", "series-find", "yield-to-list", "yield-to-days", "yield-differs", "yield-typed-crop", "thing-open",
+         "seeds-open-crop", "succ-see", "succ-kept-link", "succ-undrop", "yield-to-list", "yield-to-days", "yield-differs", "yield-typed-crop", "thing-open",
          "nursery-to-tasks", "nursery-week-tasks", "bench-line-go", "loose-link", "settle-bed"]
 # the title of a card of To settle is a link drawn as that card's title: underlined, no edge and no ground, at its title's size
 TITLES = ["settle-bed"]
@@ -79,14 +79,14 @@ def run(pw):
     key0 = js("return A.contentKey();")
 
     # ══ 1. a planting's panel ══
-    # the subject: a planting in a bed whose panel offers several varieties, a longer series and a job to record
+    # the subject: a planting in a bed whose panel offers several varieties, a succession of it and a job to record
     sub = js("""A.setView('timeline'); await sleep(700); let n = 0;
       for (const p of S.plan.plantings) { const r = eng().calc(p); if (!r || !eng().isSoilBed(r.b) || eng().isPool(r.b)) continue;
         A.select({ type: 'planting', id: p.id }); await sleep(30);
-        if (drawn(hook('panel-several')) && drawn(hook('panel-series')) && drawn(hook('job-record'))) return { id: p.id, bed: p.bedId, label: A.cropLabel(p), where: A.bedLabel(r.b) };
+        if (drawn(hook('panel-several')) && drawn(hook('panel-succession')) && drawn(hook('job-record'))) return { id: p.id, bed: p.bedId, label: A.cropLabel(p), where: A.bedLabel(r.b) };
         if (++n > 200) break; }
       return null;""")
-    check("the plan has a planting whose panel offers several varieties, a longer series and a job to record, for the check to work on", bool(sub), sub)
+    check("the plan has a planting whose panel offers several varieties, a succession of it and a job to record, for the check to work on", bool(sub), sub)
     if sub:
         js("A.setDate(new Date(fieldOf(arg))); A.select({ type: 'planting', id: arg }); await sleep(300); return 1;", sub["id"])
         head = js("""const more = hook('panel-more'), body = $('inspectorBody');
@@ -110,8 +110,8 @@ def run(pw):
           if (el) { el.click(); await sleep(250); } return { look: l, text: l && l.text, sel: S.sel, same: A.contentKey() === key && S.undo.length === n };""", sub)
         check("the bed's name at the head of the panel is a link: underlined, with no edge and no ground, at 13 and 600; it goes to the bed and changes nothing",
               asLinkOk(bed["look"]) and bed["text"] == sub["where"] and (bed["sel"] or {}).get("type") == "bed" and (bed["sel"] or {}).get("id") == sub["bed"] and bed["same"], bed)
-        quiet = js("""A.select({ type: 'planting', id: arg.id }); await sleep(250); return { several: look(hook('panel-several')), series: look(hook('panel-series')) };""", sub)
-        check("Several varieties… and Plan a longer series… are quiet buttons of 28 in the panel: no edge, not underlined",
+        quiet = js("""A.select({ type: 'planting', id: arg.id }); await sleep(250); return { several: look(hook('panel-several')), series: look(hook('panel-succession')) };""", sub)
+        check("Several varieties… and Plan a succession of this… are quiet buttons of 28 in the panel: no edge, not underlined",
               all(asButtonOk(quiet[k], 28) and not quiet[k]["edge"] and quiet[k]["text"].endswith("…") for k in ("several", "series")), quiet)
         rec = js("""const b = hook('job-record'), l = look(b); if (b) { b.click(); await sleep(250); } const box = document.querySelector('#jobList [data-job=date]');
           const out = { look: l, box: drawn(box) }; if (box) { box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await sleep(250); } return out;""")
@@ -286,7 +286,7 @@ def run(pw):
     sweep = js("""const seen = [];
       const take = where => { for (const b of document.querySelectorAll('button')) { if (!drawn(b) || b.closest('[hidden]')) continue; const l = look(b);
         if (l.under || LINKS.includes(b.dataset.hook)) seen.push({ where, hook: b.dataset.hook || '', text: l.text, ok: LINKS.includes(b.dataset.hook) && (TITLES.includes(b.dataset.hook) ? l.under && !l.edge && !l.ground : asLink(l)) }); } };
-      const views = [['map', () => { A.setView('map'); A.select(null); }], ['timeline', () => A.setView('timeline')], ['forecast', () => A.setView('harvest')], ['tasks', () => A.setView('sow')],
+      const views = [['map', () => { A.setView('map'); A.select(null); }], ['timeline', () => A.setView('timeline')], ['successions', () => LRFSuccessions.open({})], ['forecast', () => A.setView('harvest')], ['tasks', () => A.setView('sow')],
         ['bench room', () => { A.setView('trays'); LRFTraysView.setTab('room'); }], ['live trays', () => LRFTraysView.setTab('live')], ['supplies', () => LRFTraysView.setTab('supplies')], ['set-up', () => LRFTraysView.setTab('setup')],
         ['seeds', () => A.setView('seeds')], ['days to harvest', () => { A.setView('assume'); LRFAssume.setMode('days'); }], ['yield and price', () => LRFAssume.setMode('harvest', 'list')]];
       for (const [where, go] of views) { go(); await sleep(700); take(where); }

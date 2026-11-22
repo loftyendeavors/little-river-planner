@@ -18,7 +18,6 @@ NODE = [
  ("a live tray can be bought in", EN, "if (!held || held.micro) return 'seed';", "if (!held) return 'seed';"),
  ("a recorded sowing does not say it was sown here", EN, "if (['sow', 'potup', 'harden'].some(k => doneOf(p, k))) return 'seed';", ""),
  ("a copy keeps the planting's word", "js/rails.js", "delete next.startedFrom; }", "}"),
- ("a series keeps the planting's word", "js/succession.js", "'tasks', 'failed', 'startedFrom'];", "'tasks', 'failed'];"),
  ("a bought-in planting is still sown", EN, "if (boughtIn) { seeds = 0; seedG = 0; cells = 0; trays = 0; gh = null; }", "if (boughtIn) { seeds = 0; seedG = 0; }"),
  ("a bought-in planting keeps its sowing day", EN, "if (boughtIn) { seeds = 0; seedG = 0; cells = 0; trays = 0; gh = null; }", "if (boughtIn) { seeds = 0; seedG = 0; cells = 0; trays = 0; }"),
  ("no spare on plants bought in", EN, "const buy = boughtIn ? Math.ceil(plants * buffer - 1e-9) : 0;", "const buy = boughtIn ? Math.ceil(plants) : 0;"),

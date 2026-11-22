@@ -39,12 +39,20 @@ NODE = [
   ('an entry hangs from nothing', SHAPE, "    'plantings[].tasks': 'object',\n", "", 'every entry hangs from a place'),
   ('the check passes a field named nowhere', SHAPE, "      if (!e) { say(unknown, { path, place: at }); return; }", "      if (!e) return;", 'and a field named nowhere is found'),
   ('the check passes a record without an id', SHAPE, "if (!isObj(x) || !usable(x.id) || seen.has(x.id)) say(wrong,", "if (false) say(wrong,", 'a record without an id'),
+  # a run of successions (E4)
+  ('the merge no longer takes a run\'s record whole, and the shape still marks it', 'js/merge.js', "    'lrfNext.runs[]', 'plantings[].run',\n", "    'plantings[].run',\n", 'whole: what js/merge.js takes whole'),
+  ('the shape no longer marks a planting\'s place in a run whole', SHAPE, "'plantings[].run': 'object whole',", "'plantings[].run': 'object',", 'whole: what js/merge.js takes whole'),
+  ('the shape loses the spacing a planting of a run was made at', SHAPE, "    'plantings[].run.gap': 'number',\n", "", 'a run of successions, worked out by the planner'),
+  ('the shape loses the spacing of a run', SHAPE, "    'lrfNext.runs[].every': 'number',\n", "", 'a run of successions, worked out by the planner'),
+  ('a run worked out by the solver carries a field named nowhere', 'js/succession.js', "const run = { ...o.record, ...(every ? { every } : {}) };", "const run = { ...o.record, ...(every ? { every } : {}), madeOn: 'device' };", 'a run of successions, worked out by the planner'),
   ('the check passes over the attic in a plan as the planner holds it', SHAPE, "const unknown = [], wrong = [], limit = options.limit || 50, core = options.attic ?", "const unknown = [], wrong = [], limit = options.limit || 50, core = true ?", 'passed over in a file and nowhere else'),
 ]
 PAGE = [
   ('a planting edited by the page takes a field named nowhere', 'js/app.js', "  const changed = (record, change) => { const after = { ...record };", "  const changed = (record, change) => { const after = { ...record, touched: true };", 'every record each step of the tour wrote'),
   ('the page learns a kind of step the tour does not make', 'js/app.js', "      if (op.kind === 'settings') { next.settings = to; continue; }", "      if (op.kind === 'settings') { next.settings = to; continue; }\n      if (op.kind === 'notes') { next.notes = to; continue; }", 'every kind of step withOps applies'),
   ('a planting waiting to be placed is no longer read as a planting', SHAPE, "'lrfNext.waiting[]': 'plantings[]' };", "};", 'the plan as the page holds it fits'),
+  ('the shape loses the margin of a run to an amount', SHAPE, "    'lrfNext.runs[].margin': 'number',\n", "", 'every record each step of the tour wrote'),
+  ('the step that adds a run marks it with a field named nowhere', 'js/app.js', "runsOp([...runs(), result.run])]);\n  }", "runsOp([...runs(), { ...result.run, addedOn: 'device' }])]);\n  }", 'every record each step of the tour wrote'),
   ('the benches, when changed, carry a field named nowhere', 'js/app.js', "    const after = { ...changed, lrfEdited: true };", "    const after = { ...changed, lrfEdited: true, editedOn: 'device' };", 'the plan as the page holds it fits'),
 ]
 if mode == 'list': print(json.dumps({'node': len(NODE), 'page': len(PAGE)})); sys.exit(0)

@@ -1,4 +1,5 @@
-"""The Harvest view, and planning ahead in place (an opening and the series tool, both in the details panel), in a real browser.
+"""The Harvest view, and planning ahead in place (an opening in the details panel), in a real browser. (The series tool that
+stood beside it went with 0.84: successions have a page of their own, held by successions_check.py.)
 
 usage: python3 -I ahead_check.py <app-dir-or-offline.html> <shots-dir>
 
@@ -121,9 +122,9 @@ with sync_playwright() as pw:
     page.screenshot(path=os.path.join(shots, 'harvest-share.png'))
     page.click('#hvShare .dialog-actions .btn:not(.primary):not(#hvCsv):not(#hvPrint)')
 
-    # ── there is no Successions page: planning ahead opens in place ──
+    # ── successions have a page of their own (0.84, the owner's word of #102); an opening still opens in place ──
     views = page.eval_on_selector_all('[data-view-btn]', 'els => els.map(e => e.dataset.viewBtn)')
-    check('seven views, and none of them is a Successions page', views == ['map', 'timeline', 'harvest', 'sow', 'trays', 'seeds', 'assume'] and page.query_selector('#aheadView') is None, views)
+    check('eight views: Successions between the Timeline and the Forecast, and no page of its own for planning ahead', views == ['map', 'timeline', 'succession', 'harvest', 'sow', 'trays', 'seeds', 'assume'] and page.query_selector('#aheadView') is None, views)
 
     # ── an opening, from the timeline ──
     page.click('[data-view-btn="timeline"]')
@@ -266,49 +267,14 @@ with sync_playwright() as pw:
     if page.evaluate("JSON.stringify(LRFApp.state.plan.settings)") != set0: page.evaluate('LRFApp.undo()'); page.wait_for_timeout(250)
     page.evaluate("LRFAhead.state.O.mine = true")
     check('two undos take the planting and the last frost back', page.evaluate('LRFApp.state.plan.plantings.length') == n0 and page.evaluate("JSON.stringify(LRFApp.state.plan.settings)") == set0, page.evaluate("LRFApp.state.plan.settings.frostLast"))
-    # (c) a series a frost date used to hold back: placed, and its summary says how many cross a frost date
+    # (c) a run of successions into the fall is held by successions_check.py (0.84: the series tool these lines held went with it).
+    # A planting waiting to be placed that the frost touches: made to wait as the series tool made them, for a frost-tender crop
     csub = page.evaluate("""() => { const S = LRFSuccession, eng = LRFApp.state.engine, year = LRFApp.planYear(); for (const c of S.candidates(eng, true).filter(c => c.frostTender)) for (const g of S.gardensFor(eng, c).filter(g => g.kind === 'bed' && g.garden.type === 'field')) {
-        const r = S.series(eng, { cropId: c.id, gardenIds: [g.garden.id], place: 'gardens', basis: 'planting', from: year + '-07-20', every: 10, count: 6, unit: 'whole', amount: 1 }); if (!r.error && r.frost >= 2 && r.plantings.length >= 3) return { crop: c.id, garden: g.garden.id, frost: r.frost, n: r.plantings.length }; } return null; }""")
-    check('(c) a subject: a series of a frost-tender crop into the fall in which the frost touches some plantings', bool(csub), csub)
+        const r = S.planRun(eng, { cropId: c.id, gardenIds: [g.garden.id], by: 'beds', datesFor: 'planting', from: year + '-07-20', to: year + '-09-10', every: 10 }); if (!r.error && r.totals.frost >= 2 && r.sowings.length >= 3) return { crop: c.id, garden: g.garden.id, frost: r.totals.frost, n: r.sowings.length }; } return null; }""")
+    check('(c) a subject: a frost-tender crop that a frost date touches when sown from late July', bool(csub), csub)
     csub = csub or {}
-    page.evaluate("LRFApp.select(null)"); page.evaluate("s => LRFApp.openAhead({ mode: 'series', cropId: s.crop, gardenId: s.garden })", csub); soft('#srForm')
-    def setc(sel, value):
-        page.evaluate("""([sel, value]) => { const el = document.querySelector(sel); if (el) { el.value = value; el.dispatchEvent(new Event('change', { bubbles: true })); } }""", [sel, value]); page.wait_for_timeout(120)
-    for _ in range(40):
-        if not page.evaluate("""g => { const box = [...document.querySelectorAll('#srGardens input')].find(b => b.checked !== (b.value === g)); if (box) box.click(); return !!box; }""", csub.get('garden')): break
-        page.wait_for_timeout(60)
-    year_c = page.evaluate('LRFApp.planYear()')
-    setc('#srFrom', '%d-07-20' % year_c); setc('#srEvery', '10'); setc('#srCount', '6'); setc('#srAmount', '1')
-    soft('#srSum')
-    cr = page.evaluate("""s => { const el = document.querySelector('#srSum [data-hook="series-frost"]'), g = LRFSeries.ghosts(); return { said: el ? el.textContent.trim() : '', placed: g.placed.length, marked: g.placed.filter(x => x.frost).length }; }""", csub)
-    check('(c) the series places the plantings the frost touches and says how many in its summary', cr['said'] == '%s of %s cross a frost date.' % (csub.get('frost'), csub.get('n')) and cr['placed'] == csub.get('n'), [cr, csub])
-    page.screenshot(path=os.path.join(shots, 'frost-series.png'))
-    nc = page.evaluate('LRFApp.state.plan.plantings.length')
-    page.evaluate("(document.getElementById('srAdd') || { click() {} }).click()"); page.wait_for_timeout(400)
-    cput = page.evaluate("""n => { const eng = LRFApp.state.engine, fresh = LRFApp.state.plan.plantings.slice(n); return { n: fresh.length, frost: fresh.filter(p => eng.warnings(p).some(x => x.k === 'frost') || eng.fieldFrostOnly(p)).length }; }""", nc)
-    check('(c) added, they are in the plan, as many carrying a frost note as the summary said', cput['n'] == csub.get('n') and cput['frost'] == csub.get('frost'), [cput, csub])
-    if cput['n'] > 0: page.evaluate('LRFApp.undo()'); page.wait_for_timeout(200)
-    # a series whose only planting the frost leaves nothing to pick: no harvest is said, and that nothing is picked is
-    nsub = page.evaluate("""() => { const S = LRFSuccession, eng = LRFApp.state.engine, E = LRFEngine, year = LRFApp.planYear(); for (const c of S.candidates(eng, true).filter(c => c.frostTender)) for (const g of S.gardensFor(eng, c).filter(g => g.kind === 'bed' && g.garden.type === 'field'))
-        for (let d = new Date(year, 7, 15); d < new Date(year, 9, 1); d = E.addDays(d, 7)) { const r = S.series(eng, { cropId: c.id, gardenIds: [g.garden.id], place: 'gardens', basis: 'planting', from: E.d2s(d), every: 7, count: 1, unit: 'whole', amount: 1 }); if (!r.error && r.plantings.length === 1 && r.frost === 1 && !r.firstHarvest) return { crop: c.id, garden: g.garden.id, from: E.d2s(d) }; } return null; }""")
-    check('a subject: a one-planting series of a frost-tender crop that the frost leaves nothing to pick', bool(nsub), nsub)
-    nsub = nsub or {}
-    page.evaluate("LRFApp.select(null)"); page.evaluate("s => LRFApp.openAhead({ mode: 'series', cropId: s.crop, gardenId: s.garden })", nsub); soft('#srForm')
-    for _ in range(40):
-        if not page.evaluate("""g => { const box = [...document.querySelectorAll('#srGardens input')].find(b => b.checked !== (b.value === g)); if (box) box.click(); return !!box; }""", nsub.get('garden')): break
-        page.wait_for_timeout(60)
-    setc('#srFrom', nsub.get('from', '')); setc('#srEvery', '7'); setc('#srCount', '1'); setc('#srAmount', '1'); soft('#srSum')
-    nr = page.evaluate("() => ({ sum: (document.getElementById('srSum') || {}).textContent || '', when: [...document.querySelectorAll('#srWaves .sr-when')].map(e => e.textContent) })")
-    check('(c) its summary says no harvest span, says that nothing is picked, and its row says nothing picked', 'Harvest' not in nr['sum'] and 'Nothing is picked' in nr['sum'] and '1 of 1 cross a frost date.' in nr['sum'] and len(nr['when']) == 1 and 'nothing picked' in nr['when'][0] and 'pick ' not in nr['when'][0], nr)
-    page.evaluate("LRFApp.select(null)"); page.evaluate("s => LRFApp.openAhead({ mode: 'series', cropId: s.crop, gardenId: s.garden })", csub); soft('#srForm')
-    for _ in range(40):
-        if not page.evaluate("""g => { const box = [...document.querySelectorAll('#srGardens input')].find(b => b.checked !== (b.value === g)); if (box) box.click(); return !!box; }""", csub.get('garden')): break
-        page.wait_for_timeout(60)
-    setc('#srFrom', '%d-07-20' % year_c); setc('#srEvery', '10'); setc('#srAmount', '1')
-    # and a planting of that series waiting for a bed is offered the beds the frost touches, marked
-    setc('#srCount', '6')
-    page.evaluate("(document.querySelector('#srPlace [data-place=\"hold\"]') || { click() {} }).click()"); page.wait_for_timeout(200)
-    page.evaluate("(document.getElementById('srAdd') || { click() {} }).click()"); page.wait_for_timeout(400)
+    page.evaluate("""s => { const A = LRFApp, y = A.planYear(), list = [0, 1, 2, 3, 4, 5].map(k => ({ id: 'frost-wait-' + (k + 1), cropId: s.crop, date: LRFEngine.d2s(LRFEngine.addDays(new Date(y, 6, 20), k * 10)), wait: { s: 'frost-series', k: k + 1, of: 6, every: 10, gardens: [s.garden] } }));
+      A.commit('Series to place: 6 plantings', [{ kind: 'own', key: 'waiting', before: (A.state.plan.lrfNext || {}).waiting || null, after: list }]); }""", csub); page.wait_for_timeout(400)
     wsub = page.evaluate("""() => { const S = LRFSuccession, eng = LRFApp.state.engine, list = LRFApp.waiting().map(w => ({ w, h: S.homes(eng, w) })).filter(x => x.h.slice(0, 8).some(h => h.frost)); const x = list[list.length - 1]; return x ? { id: x.w.id, marked: x.h.slice(0, 8).filter(h => h.frost).length, notes: x.h.slice(0, 8).filter(h => h.frost).map(h => LRFUI.plainDays(h.frost)) } : null; }""")
     if wsub: page.evaluate("id => LRFApp.select({ type: 'waiting', id })", wsub['id']); page.wait_for_timeout(200)
     wr = page.evaluate("() => [...document.querySelectorAll('#wtHomes [data-hook=\"home-frost\"]')].map(e => e.title)")
@@ -316,71 +282,6 @@ with sync_playwright() as pw:
     if page.evaluate('LRFApp.waiting().length'): page.evaluate('LRFApp.undo()'); page.wait_for_timeout(200)
     check('and the plan is back as it was', page.evaluate('LRFApp.state.plan.plantings.length') == n0 and page.evaluate('LRFApp.waiting().length') == 0)
     page.evaluate("LRFApp.select(null)"); page.wait_for_timeout(100)
-
-    # ── a series: the tool in the details panel (step 2b; its ghost bars and what waits to be placed are in step2b_check.py) ──
-    page.evaluate("LRFApp.openAhead({ mode: 'series' })")
-    page.wait_for_selector('#inspectorBody #srForm')
-    check('a series opens in the details panel: not a page, and no sheet over the page', page.evaluate("LRFApp.state.view") == 'map' and page.evaluate("LRFApp.state.sel.type") == 'series' and page.query_selector('dialog[open]') is None and page.query_selector('#ahSheet') is None)
-    def setv(sel, value):
-        page.evaluate("""([sel, value]) => { const el = document.querySelector(sel); el.value = value; el.dispatchEvent(new Event('change', { bubbles: true })); }""", [sel, value])
-        page.wait_for_timeout(120)
-    radish = page.evaluate("""(() => { const eng = LRFApp.state.engine, c = eng.crops().find(x => /^Radish$/.test(x.name)) || eng.crops().find(x => /radish/i.test(x.name)); return c.id; })()""")
-    setv('#srCrop', radish)
-    year = page.evaluate('LRFApp.planYear()')
-    # a garden of the plan that takes the whole series, none left to place: the first of the tool's own choices that does
-    garden = page.evaluate("""cropId => { const eng = LRFApp.state.engine, ids = [...document.querySelectorAll('#srGardens input')].map(box => box.value);
-      return ids.find(id => { const r = LRFSuccession.series(eng, { cropId, gardenIds: [id], place: 'gardens', basis: 'planting', from: LRFApp.planYear() + '-08-01', every: 10, count: 5, unit: 'whole', amount: 1 }); return !r.error && r.plantings.length >= 3 && !r.held.length; }) || null; }""", radish)
-    for _ in range(40):   # one box at a time: each click draws the boxes again
-        if not page.evaluate("""garden => { const box = [...document.querySelectorAll('#srGardens input')].find(b => b.checked !== (b.value === garden)); if (box) box.click(); return !!box; }""", garden): break
-        page.wait_for_timeout(60)
-    check('the plan has a garden that takes a series of radishes from the first of August, and it alone is ticked', bool(garden) and page.evaluate("LRFSeries.state.P.gardenIds") == [garden], garden)
-    page.wait_for_timeout(150)
-    setv('#srFrom', '%d-08-01' % year); setv('#srEvery', '10'); setv('#srCount', '5'); setv('#srAmount', '1')
-    page.wait_for_selector('#srWaves')
-    waves = page.eval_on_selector_all('#srWaves li', 'els => els.length')
-    summary = page.inner_text('#srSum')
-    label = page.inner_text('#srAdd')
-    check('five plantings ten days apart are previewed, with a sentence that sums them up', waves == 5 and 'planting' in summary and 'Harvest' in summary and label.startswith('Add '), [waves, summary, label])
-    strip = page.evaluate("""() => { const rows = [...document.querySelectorAll('#srStrip .ah-strip-row')]; const now = rows[0].querySelectorAll('i.on').length, then = rows[1].querySelectorAll('i.on, i.new').length, added = rows[1].querySelectorAll('i.new').length; return { now, then, added, cells: rows[0].querySelectorAll('i').length }; }""")
-    check('the weeks of harvest are shown now and with the series, and the series adds some', strip['cells'] > 20 and strip['then'] >= strip['now'] and strip['added'] >= 1, strip)
-    page.screenshot(path=os.path.join(shots, 'series.png'), full_page=False)
-    inputs = page.evaluate("[...document.querySelectorAll('#srForm select, #srForm input[type=date], #srForm input[type=number]')].map(e => Math.round(e.getBoundingClientRect().height))")
-    check('the form’s fields are all one height', len(inputs) > 5 and min(inputs) == max(inputs) and min(inputs) in (28, 32), inputs)   # a control's height (DESIGN.md): 28 inside a card, 32 on a page
-    expected = page.evaluate("LRFSeries.ghosts().placed.length")
-    page.click('#srAdd')
-    page.wait_for_selector('#srDone')
-    after = page.evaluate("""() => { const eng = LRFApp.state.engine, P = LRFApp.state.plan.plantings, fresh = P.slice(-%d); return { n: P.length, clash: fresh.filter(p => eng.conflicts(p, eng.calc(p)).length).length, dates: fresh.map(p => p.date), undo: LRFApp.state.undo[LRFApp.state.undo.length - 1].label }; }""" % max(1, expected))
-    check('Add places them all as one step, none on held ground', after['n'] == n0 + expected and after['clash'] == 0 and 'series' in after['undo'] and expected >= 3, [after, expected])
-    page.click('#srSee')
-    page.wait_for_timeout(250)
-    check('“See them on the timeline” goes there', page.evaluate("LRFApp.state.view") == 'timeline')
-    page.evaluate('LRFApp.undo()')
-    check('one undo removes the whole series', page.evaluate('LRFApp.state.plan.plantings.length') == n0)
-    # counted back from harvest, in feet
-    page.evaluate("LRFApp.openAhead({ mode: 'series', cropId: '%s' })" % radish)
-    page.wait_for_selector('#srForm')
-    setv('#srFrom', '%d-08-20' % year)
-    page.click('#srMore'); page.wait_for_selector('#srBasisHarvest'); page.click('#srBasisHarvest'); page.wait_for_timeout(200)
-    setv('#srUnit', 'ft'); setv('#srAmount', '25')
-    page.wait_for_selector('#srWaves')
-    basis = page.evaluate("""() => { const g = LRFSeries.ghosts(), E = LRFEngine; return { n: g.placed.length, firsts: g.placed.map(x => E.d2s(x.r.first)), label: document.querySelector('#srFrom').closest('label').querySelector('span').textContent, ft: g.placed.every(x => x.r.physicalLength <= 25 + 1e-6), text: document.getElementById('srWaves').textContent }; }""")
-    check('dates can be for first harvest, and the amount in feet of bed', 'harvest' in basis['label'].lower() and basis['n'] >= 1 and ('%d-08-20' % year) in basis['firsts'] and basis['ft'] and ' ft' in basis['text'], basis)
-    setv('#srEvery', '0')
-    check('a request that makes no sense is refused in words', page.query_selector('#srError') is not None and len(page.inner_text('#srError')) > 10)
-    setv('#srEvery', '10')
-    page.click('#srBasisPlant'); page.wait_for_timeout(150)
-    page.click('#srClose'); page.wait_for_timeout(150)
-    check('the x closes the tool and adds nothing', page.evaluate("LRFApp.state.sel") is None and page.evaluate('LRFApp.state.plan.plantings.length') == n0)
-    # from a planting's panel
-    page.click('[data-view-btn="map"]')
-    page.evaluate("""() => { const eng = LRFApp.state.engine, p = LRFApp.state.plan.plantings.find(q => { const r = eng.calc(q); return r && r.tw; }); LRFApp.select({ type: 'planting', id: p.id }); }""")
-    page.wait_for_selector('#fSeriesLink')
-    page.click('#fSeriesLink')
-    page.wait_for_selector('#srForm')
-    from_panel = page.evaluate("""() => ({ view: LRFApp.state.view, model: LRFSeries.state.P.sourceId, gardens: [...document.querySelectorAll('#srGardens input:checked')].length, waves: document.querySelectorAll('#srWaves li').length, unit: (document.querySelector('#srUnitWord') || {}).value })""")
-    check('a planting’s panel starts a series copied from it, in its own garden', from_panel['view'] == 'map' and len(from_panel['model']) > 3 and from_panel['gardens'] == 1 and from_panel['waves'] >= 1 and from_panel['unit'] == 'whole towers', from_panel)
-    page.screenshot(path=os.path.join(shots, 'series-towers.png'))
-    page.click('#srClose')
 
     # narrower and dark
     for (w, hgt, scheme, name) in [(1280, 720, 'light', '1280'), (1480, 900, 'dark', 'dark')]:
@@ -393,10 +294,6 @@ with sync_playwright() as pw:
         page.screenshot(path=os.path.join(shots, 'opening-%s.png' % name))
         wide = page.evaluate("(() => { const p = document.getElementById('inspectorBody'); return p.scrollWidth > p.clientWidth + 1; })()")
         check('the opening’s panel fits at %s' % name, not wide)
-        page.evaluate("LRFApp.openAhead({ mode: 'series' })"); page.wait_for_selector('#srWaves, #srSum, #srError'); page.wait_for_timeout(200)
-        page.screenshot(path=os.path.join(shots, 'series-%s.png' % name))
-        tool = page.evaluate("(() => { const p = document.getElementById('inspectorBody'), box = document.querySelector('.inspector').getBoundingClientRect(); return { sideways: p.scrollWidth > p.clientWidth + 1, inside: [...p.querySelectorAll('select, input:not([type=checkbox]), button')].filter(e => e.getClientRects().length).every(e => e.getBoundingClientRect().right <= box.right + 0.5) }; })()")
-        check('the series tool fits the panel at %s' % name, tool['inside'] and not tool['sideways'], tool)
         page.evaluate("LRFApp.select(null)")
         overflow = page.evaluate("document.querySelector('.top').scrollWidth > document.querySelector('.top').clientWidth + 1")
         check('the header fits at %s' % name, not overflow)

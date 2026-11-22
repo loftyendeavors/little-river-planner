@@ -59,6 +59,7 @@ MODE = "(document.querySelector('.view-assume') || { dataset: {} }).dataset.mode
 SCREENS = [
     ("map", "A.setView('map'); A.select(null);", f"{VIEW} === 'map'"),
     ("timeline", "A.setView('timeline');", f"{VIEW} === 'timeline'"),
+    ("successions", "A.setView('succession');", f"{VIEW} === 'succession'"),   # E4 (0.84): new, so the build before shows an empty stage here
     ("forecast", "A.setView('harvest');", f"{VIEW} === 'harvest'"),
     ("tasks", "A.setView('sow');", f"{VIEW} === 'sow'"),
     ("nursery-bench-room", "A.setView('trays'); LRFTraysView.setTab('room');", f"{VIEW} === 'trays' && LRFTraysView.tab() === 'room'"),
