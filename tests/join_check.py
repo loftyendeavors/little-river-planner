@@ -415,6 +415,8 @@ with sync_playwright() as pw:
         settled(A, 'in-step')
         B.evaluate("(id) => LRFApp.updatePlanting(id, { note: 'phone, off' }, 'A note')", X2)
         off = settled(B, 'conflict')
+        # and at its next look at the cloud (its own timer), it asks again: nothing is taken in by a device that does not join
+        B.evaluate("void LRFApp.sync().run('poll')"); B.wait_for_timeout(2500); off = settled(B)
         if ra and rb:
             asked = { 'B': [B.evaluate(RUNS, ra['run']['id']), B.evaluate(RUNS, rb['run']['id'])], 'A': A.evaluate(RUNS, ra['run']['id']) }
             check('a run planned on each device, the phone set to "Ask me": the laptop\'s run goes to the cloud; the phone asks, sends nothing, and keeps its own run whole, with none of the other\'s', bool(added) and ra['run']['id'] != rb['run']['id'] and off['status'] == 'conflict' and asked['A']['runs'] == 1 and asked['A']['plantings'] == len(ra['sowings']) and asked['B'][0]['runs'] == 0 and asked['B'][0]['plantings'] == 0 and asked['B'][1]['runs'] == 1 and asked['B'][1]['plantings'] == len(rb['sowings']), asked)
