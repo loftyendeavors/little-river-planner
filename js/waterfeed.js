@@ -26,7 +26,7 @@
     return text;
   }
   function product(id, fields) {
-    const row = { id, name: name(fields.name, 'a product name'), bag: number(fields.bag, 'bag weight', 0.000001) };
+    const row = { id, name: name(fields.name, 'a product name'), bag: fields.bag==null || fields.bag==='' ? null : number(fields.bag, 'bag weight', 0.000001) };
     for (const key of ['n', 'p', 'k']) row[key] = fields[key] == null || fields[key] === '' ? null : number(fields[key], 'a label percentage from 0 to 100', 0, 100);
     return row;
   }
@@ -213,10 +213,24 @@
   }
   // A recipe's label-basis contribution at the entered dilution, using US liquid gallons.
   // This describes the recipe only. Measured source water and delivery are separate observations.
+  const mgPerL = 453592.37 / 3.785411784;
+  function stockWeight(ppm, n, gallons, ratio) {
+    const concentration=number(ppm,'the target ppm N',0.000001);
+    const nitrogen=number(n,'the fertilizer nitrogen percentage',0.000001,100)/100;
+    return concentration*number(gallons,'the final stock volume',0.000001)*number(ratio,'the injection ratio',1)/(mgPerL*nitrogen);
+  }
+  function usualInjector(book, gardenId, zone, at) {
+    const pref=book.constantFeed?.[gardenId], tank=book.tanks?.[pref?.tankId];
+    if(!tank || tank.gardenId!==gardenId || !tank.ratio || !book.recipes?.[tank.recipeId] ||
+        !(Date.parse(at)>=Date.parse(pref.since)) || !zone || zone.gardenId!==gardenId) return null;
+    if(tank.beds?.length && (!zone.beds?.length || !zone.beds.every(id=>tank.beds.includes(id)))) return null;
+    return tank;
+  }
   function recipeConcentration(book, recipeId, ratio) {
-    const dilution = number(ratio, 'the injector dilution denominator', 1);
-    const lbPerGallon = nutrientTotals(snapshot(book,recipeId,1));
-    const mgPerL = 453592.37 / 3.785411784;
+    return stockConcentration(snapshot(book,recipeId,1),ratio);
+  }
+  function stockConcentration(stock,ratio) {
+    const dilution=number(ratio,'the injector dilution denominator',1), lbPerGallon=nutrientTotals(stock);
     return Object.fromEntries(Object.entries(lbPerGallon).map(([key,lb]) =>
       [key, lb == null ? null : lb * mgPerL / dilution]));
   }
@@ -259,7 +273,8 @@
     if ([input.bags,input.loose].every(x=>x==null || x==='')) throw Error('Enter a bag count or loose pounds. Enter 0 for an empty shelf.');
     const bags=number(input.bags || 0,'the number of full bags'), loose=number(input.loose || 0,'the loose pounds');
     if (!Number.isSafeInteger(bags)) throw Error('Enter whole bags and put the rest under loose pounds.');
-    const lb=bags*product.bag+loose;
+    if(bags && !product.bag) throw Error('Add the bag weight in Products and recipes or enter the total pounds.');
+    const lb=(bags?bags*product.bag:0)+loose;
     if (!Number.isFinite(lb) || (kind==='delivery' && lb===0)) throw Error('Enter a positive delivery weight.');
     const reference=String(input.reference || '').trim();
     const key=kind==='delivery' && reference ? ['ref',reference.toLowerCase()] : ['time',input.at.slice(0,16)];
@@ -321,10 +336,11 @@
     }
     const short=Math.max(0,difference(gross,inventory.balance));
     // Make decimal pack boundaries insensitive to IEEE-754 arithmetic.
+    if(!product.bag) return {gross,short,bags:short===0?0:null};
     const packs=short/product.bag;
     const nearest=Math.round(packs);
     return {gross,short,bags:nearest>0 && Math.abs(packs-nearest)<=Number.EPSILON*packs*4 ? nearest : Math.ceil(packs)};
   }
-  const api = { values, put, number, name, product, recipe, snapshot, groups, lastMix, cycle, reminder, refill, run, water, runSummary, sameRunEvidence, stock, occurrence, nextJob, targetPounds, nutrientTotals, recipeConcentration, injectedFeed, feedDelivery, tapeFlow, zoneRate, stockEntry, stockGroups, purchase };
+  const api = { values, put, number, name, product, recipe, snapshot, groups, lastMix, cycle, reminder, refill, run, water, runSummary, sameRunEvidence, stockWeight, stockConcentration, usualInjector, stock, occurrence, nextJob, targetPounds, nutrientTotals, recipeConcentration, injectedFeed, feedDelivery, tapeFlow, zoneRate, stockEntry, stockGroups, purchase };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.LRFWaterFeed = api;
 })(typeof self !== 'undefined' ? self : this);

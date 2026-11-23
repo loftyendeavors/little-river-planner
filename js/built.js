@@ -6,8 +6,9 @@
 (function (root) {
   'use strict';
   root.LRFBuilt = {
-    label: "0.89",
+    label: "0.90",
     builds: [
+      {"label":"0.90","on":"2026-11-22","did":"Set a garden’s usual Dosatron once and record a watering by entering gallons.","steps":["In Water, add a Dosatron or choose Use constant feed beside an existing injector.","Enter the fertilizer, target ppm N, dial ratio and stock volume. The planner calculates the mixing weight.","Record watering uses the garden setting. Change feed for this watering handles plain water, partial feeding or a different dial."]},
       {"label":"0.89","on":"2026-11-22","did":"Set up a garden injector and record water and fertilizer together from Water.","steps":["Choose Add Dosatron, then name the garden and enter the stock mix and dial setting.","Choose Record watering and enter gallons or actual minutes. Choose an injector if fertilizer was used.","Review the estimate before saving. Open the garden’s season plan for the nutrient breakdown."]},
       {"label":"0.88","on":"2026-11-22","did":"Water opens on garden refill jobs and nitrogen progress. Irrigation shows today's recorded runs by garden.","steps":["Open Water, then a garden card for this week's work, its season plan, soil tests and equipment.","Switch to Irrigation and select a run on today's timeline to inspect its evidence.","Under Soil tests, review the report's readings, units and sampled beds before importing."]},
       {"label":"0.87","on":"2026-11-22","did":"Water shows fertility and irrigation by garden. Tasks records tank refills and Supplies tracks shelf counts, deliveries and fertilizer orders.","steps":["On Water, choose a garden to record a field application, set targets or set up a tank. Requested refills appear on Tasks.","In Fertilizer supplies, count the shelf or record a delivery. Plan a fertilizer order from remaining batches and field pounds.","On Irrigation, link zones to Hunter stations, attach measured run volumes and review Ecowitt soil readings by garden."]},
