@@ -27,6 +27,12 @@ faults = {
         ("a harvest adds culls to its marketable quantity", "app.js",
          "marketable:input.marketable, culls:input.culls", "marketable:input.marketable + input.culls, culls:input.culls",
          'assert "72 marketable, 8 culls"'),
+        ("a commercial crop week includes the household picking", "harvestview.js",
+         "return planting && !F.useOf(engine, planting).personal;", "return !!planting;",
+         'assert "5.75 marketable picked · 1.25 culls"'),
+        ("a crop week counts stored stock as a forecast picking", "harvestview.js",
+         "picking += F.sum(stock.picked", "picking += F.sum(stock.days",
+         'assert "Forecast picking 0 lb"'),
         ("the detailed bench week understates peak occupancy", "bench.js",
          "num(pool.used,1) + ' of '", "num(pool.used - 1,1) + ' of '",
          'assert peak["used"]+" of "+peak["cap"]'),
@@ -53,7 +59,7 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
         command = ["python3", "-I", str(check), str(copy)]
     lines = check.read_text().splitlines()
     baseline = subprocess.run(command, capture_output=True, text=True, timeout=180)
-    expected = 14 if mode == "node" else 6
+    expected = 14 if mode == "node" else 7
     if baseline.returncode or json.loads(baseline.stdout.strip().splitlines()[-1]) != {"passed": expected, "of": expected, "failed": []}:
         raise SystemExit("The unchanged check did not pass: " + baseline.stderr[-400:])
 
