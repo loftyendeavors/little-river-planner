@@ -1,0 +1,14 @@
+{
+  "build": "Compare a commercial product's orders, forecast stock and recorded marketable picking in the same week.",
+  "changes": {
+    "did": "Weekly buyer demand shows forecast stock against orders, alongside the expected picking and the marketable quantity actually picked.",
+    "steps": [
+      "In Forecast, open Buyer demand and select the crop, selling unit and week. Review how much forecast stock is above or below the orders.",
+      "Record a harvest in Tasks and return to the same week to compare the marketable picking with orders. The comparison uses plantings currently grown for sale and shows their culls separately.",
+      "A buyer week always runs Monday through Sunday, including when it crosses New Year."
+    ]
+  },
+  "code": ["harvestview.js"],
+  "page": [],
+  "screens": []
+}
