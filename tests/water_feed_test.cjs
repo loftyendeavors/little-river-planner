@@ -210,4 +210,35 @@ check('A lower subsequent meter reading puts partial fertilized gallons under re
   const only=runs(injectedRow('whole'))[0];
   assert.equal(W.runSummary([only]).unknownMinutes,1);assert.equal(W.water(only).gallons,200);
 });
+check('Target nitrogen ppm scales with ratio and volume and returns to the same ppm from the actual mix',()=>{
+  for(const ratio of [50,100,200]) for(const gallons of [5,20,50]) {
+    const lb=W.stockWeight(100,17,gallons,ratio);
+    const b=W.put(base,'recipes',W.recipe('target',{name:'Mix',gallons,items:{p:lb}},base));
+    assert.ok(Math.abs(W.recipeConcentration({...b,products:{p:{...product,n:17}}},'target',ratio).n-100)<1e-9);
+  }
+  assert.throws(()=>W.stockWeight(100,0,5,100)); assert.throws(()=>W.stockWeight('',17,5,100));
+});
+check('A garden default respects activation time, garden, and served beds',()=>{
+  const cfg={tankId:tank.id,since:clock('12:00')}, z={gardenId:tank.gardenId,beds:[]};
+  const injector={...tank,ratio:100,beds:[]}, b={...base,tanks:{[tank.id]:injector},constantFeed:{[tank.gardenId]:cfg}};
+  assert.equal(W.usualInjector(b,tank.gardenId,z,clock('12:00')).id,tank.id);
+  assert.equal(W.usualInjector(b,tank.gardenId,z,clock('11:59')),null);
+  assert.equal(W.usualInjector(b,'another',z,clock('12:00')),null);
+  injector.beds=['bed1'];assert.equal(W.usualInjector(b,tank.gardenId,z,clock('12:00')),null);
+  assert.equal(W.usualInjector(b,tank.gardenId,{...z,beds:['bed1']},clock('12:00')).id,tank.id);
+  assert.equal(W.usualInjector(b,tank.gardenId,{...z,beds:['bed1','bed2']},clock('12:00')),null);
+});
+check('Two devices keep each garden setting whole and preserve settings for independent gardens',()=>{
+  const initial={tankId:'first',since:clock('10:00')}, off={tankId:'',since:clock('12:00')}, other={tankId:'next',since:clock('11:00')};
+  const b={...base,constantFeed:{g:initial}}, m=joined(b,{...b,constantFeed:{g:off,a:initial}},{...b,constantFeed:{g:other,b:other}});
+  assert.ok([off,other].some(v=>JSON.stringify(v)===JSON.stringify(m.constantFeed.g)));
+  assert.deepEqual(m.constantFeed.a,initial);assert.deepEqual(m.constantFeed.b,other);
+  assert.deepEqual(SH.check({...pa,lrfNext:{waterFeed:m}}),{unknown:[],wrong:[]});
+});
+check('Mixing needs no bag size; loose stock still counts and missing pack sizes never round an order',()=>{
+  const p=W.product('p',{name:'Sample',n:10}), input={at:clock('10:00'),bags:0,loose:12};
+  assert.equal(p.bag,null);assert.equal(W.stockEntry(p,'count',input).items.p.lb,12);
+  assert.throws(()=>W.stockEntry(p,'count',{...input,bags:1}));assert.equal(W.purchase(p,{balance:10},30,0).bags,null);
+  assert.equal(W.purchase(p,{balance:30},30,0).bags,0);
+});
 console.log(JSON.stringify({passed,of:passed,failed:[]}));
