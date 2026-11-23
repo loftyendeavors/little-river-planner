@@ -1,0 +1,13 @@
+{
+  "build": "Garden constant feed, ppm-based stock mixes and weekly injector totals.",
+  "changes": {
+    "did": "Set a garden’s usual Dosatron once and record a watering by entering gallons.",
+    "steps": ["In Water, add a Dosatron or choose Use constant feed beside an existing injector.", "Enter the fertilizer, target ppm N, dial ratio and stock volume. The planner calculates the mixing weight.", "Record watering uses the garden setting. Change feed for this watering handles plain water, partial feeding or a different dial."]
+  },
+  "words": [],
+  "code": ["waterview.js", "waterfeed.js", "merge.js"],
+  "added": [],
+  "removed": [],
+  "page": [],
+  "screens": []
+}

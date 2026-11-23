@@ -51,6 +51,7 @@ try:
         page.get_by_label('Hunter station number').fill('2')
         btn('Save equipment').click()
         btn('Record run').first.click()
+        page.get_by_text('Use actual minutes',exact=True).click()
         page.get_by_label('Actual minutes').fill('8')
         dialog.get_by_role('button',name='Save watering',exact=True).click()
         page.get_by_text('Irrigation history · 1',exact=True).click()
