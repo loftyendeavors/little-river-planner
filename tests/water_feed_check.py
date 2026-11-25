@@ -314,10 +314,14 @@ try:
         page.clock.set_fixed_time(f'{year}-06-12T14:00:00Z')
         page.evaluate("localStorage.setItem('lrf.water', '1'); LRFApp.setView('map')")
         def tabs_fit(width):
-            page.set_viewport_size({'width': width, 'height': 840}); page.wait_for_timeout(200)
+            page.set_viewport_size({'width': width, 'height': 840})
+            # the tabs are measured in their own typeface: before it has loaded, a narrower one stands in and the row fits whatever the style sheet says
+            page.evaluate("async () => { await Promise.all([...document.fonts].map(f => f.load().catch(() => null))); await document.fonts.ready; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); }")
             return page.evaluate("""() => { const nav = document.querySelector('.views'), box = nav.getBoundingClientRect(), chip = document.getElementById('buildChip').getBoundingClientRect();
                 const tabs = [...nav.querySelectorAll('[data-view-btn]')].filter(b => !b.hidden), last = tabs.at(-1).getBoundingClientRect();
                 return tabs.length === 9 && nav.scrollWidth <= nav.clientWidth && last.right <= box.right + 1 && chip.right <= box.left; }""")
+        # the header at its fullest: Loose ends counted and the save line at its longest, as a grower's page stands a moment after it opens
+        page.wait_for_function("!document.getElementById('settleBadge').hidden && /^Saved/.test(document.getElementById('saveState').textContent.trim())")
         fits = {width: tabs_fit(width) for width in (1280, 1366, 1440, 1536, 1600, 1707, 1740)}
         page.set_viewport_size({'width': 1280, 'height': 840})
         check('With Water on the row of nine views fits from a small laptop up: its last tab in sight, the build’s number not covered', all(fits.values()), fits)
