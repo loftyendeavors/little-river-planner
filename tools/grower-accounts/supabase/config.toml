@@ -1,0 +1,4 @@
+project_id = "grower-accounts-beta"
+
+[functions.username-login]
+verify_jwt = false

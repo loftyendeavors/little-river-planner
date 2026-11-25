@@ -1,0 +1,217 @@
+@font-face {
+  font-family:Instrument;
+  src:url("./instrument.woff2") format("woff2");
+  font-weight:100 900;
+  font-display:swap
+}
+
+
+:root {
+  font: normal 16px/1.5 Instrument,system-ui,sans-serif;
+  color:#16291f;
+  background:#f6f5ef
+}
+
+
+* {
+  box-sizing:border-box
+}
+
+body {
+  margin:0
+}
+
+header {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:16px max(16px,calc((100vw - 840px)/2));
+  background:#182d22;
+  color:#fff
+}
+
+header strong {
+  font-size:20px
+}
+
+header span {
+  color:#d6e0d5
+}
+
+header button {
+  margin-left:auto
+}
+
+
+main {
+  max-width:580px;
+  margin:clamp(24px,7vh,72px) auto;
+  padding:0 20px 32px
+}
+
+h1 {
+  font-size:32px;
+  line-height:1.15;
+  letter-spacing:-.035em;
+  margin:0 0 24px
+}
+
+p {
+  color:#415648
+}
+
+form {
+  display:grid;
+  gap:16px
+}
+
+form p {
+  margin:-8px 0 0;
+  font-size:15px
+}
+
+label,legend {
+  font-weight:600
+}
+
+label {
+  display:grid;
+  gap:4px
+}
+
+input {
+  width:100%;
+  min-width:0;
+  font:inherit;
+  color:inherit;
+  padding:8px 12px;
+  border:1px solid #798a7e;
+  border-radius:8px;
+  background:white;
+  min-height:44px
+}
+
+button,summary {
+  cursor:pointer;
+  font:inherit;
+  font-weight:600;
+  min-height:44px;
+  padding:8px 16px;
+  border-radius:8px
+}
+
+button {
+  background:#fff;
+  border:1px solid #7b8c7e;
+  color:#203a2b
+}
+
+button:disabled {
+  cursor:wait;
+  opacity:.65
+}
+
+.primary {
+  color:white;
+  background:#193c29;
+  border-color:#193c29
+}
+
+.link {
+  border:0;
+  background:transparent;
+  text-decoration:underline
+}
+
+
+nav {
+  display:flex;
+  gap:8px;
+  margin-bottom:24px
+}
+
+nav [aria-pressed=true] {
+  background:#dce7db;
+  border-color:#3f684c
+}
+
+fieldset {
+  display:grid;
+  gap:8px;
+  border:1px solid #aeb9ac;
+  border-radius:8px;
+  padding:12px 16px
+}
+
+.choice {
+  display:flex;
+  align-items:center;
+  min-height:44px;
+  gap:12px
+}
+
+.choice input {
+  width:18px;
+  min-height:18px
+}
+
+details {
+  margin:24px 0;
+  background:#fff;
+  border:1px solid #b4bdb2;
+  border-radius:12px
+}
+
+details form {
+  padding:0 16px 16px
+}
+
+.dimensions {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px
+}
+
+#gardens {
+  list-style:none;
+  padding:0
+}
+
+#gardens li {
+  padding:8px 0;
+  border-bottom:1px solid #ced5cb
+}
+
+#message {
+  min-height:1.5em
+}
+
+#message[data-error=true] {
+  color:#8b311e
+}
+
+[hidden] {
+  display:none!important
+}
+
+:focus-visible {
+  outline:3px solid #97562a;
+  outline-offset:3px
+}
+
+header #identity { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+header #farm-menu { margin-left:auto }
+header #farm-menu:not([hidden]) + #signout { margin-left:0 }
+body.editing { height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden }
+body.editing > header { padding:4px 12px; flex:0 0 auto }
+body.editing > header strong, body.editing > header .product { display:none }
+body.editing > main { display:none }
+#editor { display:flex; flex-direction:column; flex:1; min-height:0; position:relative }
+#editor iframe { width:100%; flex:1; min-height:0; border:0; background:white }
+#editor-loading, #editor-issue { margin:0; padding:8px 16px; background:white }
+#editor-issue { border-bottom:1px solid #798a7e }
+#editor-issue button { margin:4px }
+@media (max-width:600px) {
+  body.editing header { gap:4px }
+  body.editing header button { padding:4px 8px; white-space:nowrap }
+}
