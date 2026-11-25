@@ -243,6 +243,10 @@ check('Each injector is counted by itself: one tankâ€™s mixes and another tankâ€
   const holes=W.gardenFeed([{n:null,p:null,k:null,tank:'a'},{n:0.1,p:0,k:0,tank:'b'}],[{n:0.3,p:0,k:0,tank:'a'},{n:null,p:null,k:null,tank:'a'}]);
   assert.ok(Math.abs(holes.counted.n-0.4)<1e-12);assert.equal(holes.unknownMixes,1);assert.equal(holes.unknownWaterings,1);
   assert.equal(W.gardenFeed([],[]).counted,null);
+  const label=W.gardenFeed([{n:0.4,p:0.1,k:0.2,tank:'a'},{n:0.3,p:null,k:null,tank:'b'}],[]);
+  assert.ok(Math.abs(label.counted.n-0.7)<1e-12);assert.equal(label.counted.p,null);assert.equal(label.counted.k,null);
+  const untagged=W.gardenFeed([{n:0.4,p:0.1,k:0.4,tank:'a'}],[{n:0.4,p:0.1,k:0.4}]);
+  assert.equal(untagged.counted.n,0.4);assert.equal(untagged.rows.length,1);
 });
 check('Target nitrogen ppm scales with ratio and volume and returns to the same ppm from the actual mix',()=>{
   for(const ratio of [50,100,200]) for(const gallons of [5,20,50]) {

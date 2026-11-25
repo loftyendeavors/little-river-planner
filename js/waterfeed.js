@@ -279,14 +279,20 @@
   // of the two is taken tank by tank and the tanks are added. Each row holds one job (its pounds of n, p and k, the tank it
   // belongs to, and anything else the caller wants back). rows: the jobs that are counted, as they were given.
   function gardenFeed(mixes, waterings) {
-    const tanks = new Map(), of = row => { const key = row.tank || ''; if (!tanks.has(key)) tanks.set(key, { mixes: [], waterings: [] }); return tanks.get(key); };
+    // A job that names no tank belongs to the garden's one tank where it has only one: on a tank of its own it would be added
+    // to that tank's mixes, the same fertilizer twice.
+    const named = new Set([...mixes, ...waterings].map(row => row.tank).filter(Boolean)), only = named.size === 1 ? [...named][0] : '';
+    const tanks = new Map(), of = row => { const key = row.tank || only; if (!tanks.has(key)) tanks.set(key, { mixes: [], waterings: [] }); return tanks.get(key); };
     for (const row of mixes) of(row).mixes.push(row);
     for (const row of waterings) of(row).waterings.push(row);
     const parts = [...tanks].map(([tank, jobs]) => ({ tank, ...injectorFeed(jobs.mixes, jobs.waterings), jobs }));
     const rows = parts.flatMap(part => (part.basis === 'tanks' ? part.jobs.mixes : part.jobs.waterings));
     const sum = key => rows.reduce((total, row) => (row[key] == null ? total : (total ?? 0) + row[key]), null);
     const by = basis => parts.filter(part => part.basis === basis).reduce((total, part) => total + part.counted.count, 0);
-    return { parts, rows, counted: rows.length ? { n: sum('n'), p: sum('p'), k: sum('k') } : null, mixes: by('tanks'), waterings: by('waterings'),
+    // Nitrogen is added up as far as it is known, and what is missing is said beside the figure (the counts below). P and K have
+    // no such line, so one job without them leaves the total unknown, as in the rows of the table above it.
+    const whole = key => (rows.some(row => row[key] == null) ? null : sum(key));
+    return { parts, rows, counted: rows.length ? { n: sum('n'), p: whole('p'), k: whole('k') } : null, mixes: by('tanks'), waterings: by('waterings'),
       // mixes of unknown weight are said wherever they stand, counted tank or not: a floor with a hole in it
       unknownMixes: mixes.filter(row => row.n == null).length, unknownWaterings: parts.filter(part => part.basis === 'waterings').reduce((total, part) => total + part.counted.unknown, 0) };
   }
