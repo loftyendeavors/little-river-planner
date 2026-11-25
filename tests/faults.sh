@@ -61,6 +61,7 @@ controls
 early
 e2d
 season-work
+water
 runs
 merge
 join
@@ -118,6 +119,7 @@ script() {
     early) SCRIPT=$T/mutate_early.py; ARGS="$APP $F $T $PLAN" ;;
     e2d) SCRIPT=$T/mutate_e2d.py; ARGS="$APP $F $T $PLAN" ;;
     season-work) SCRIPT=$T/mutate_season_work.py; ARGS="$APP $F $T" ;;
+    water) SCRIPT=$T/mutate_water.py; ARGS="$APP $F $T" ;;   # Water and feed: its arithmetic (node) and its page (page)
     runs) SCRIPT=$T/mutate_runs.py; ARGS="$APP $F $T $PLAN" ;;   # E4 stage 1: the solver of a run (node) and its two steps (page)
     tlpick) SCRIPT=$T/mutate_tlpick.py; ARGS="$APP $F $T" ;;
     messages) SCRIPT=$T/mutate_messages.py; ARGS="$APP $F $T" ;;

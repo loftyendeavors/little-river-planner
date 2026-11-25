@@ -123,8 +123,8 @@ with sync_playwright() as pw:
     page.click('#hvShare .dialog-actions .btn:not(.primary):not(#hvCsv):not(#hvPrint)')
 
     # ── successions have a page of their own (0.84, the owner's word of #102); an opening still opens in place ──
-    views = page.eval_on_selector_all('[data-view-btn]', 'els => els.map(e => e.dataset.viewBtn)')
-    check('nine views: Successions between the Timeline and the Forecast, and no page of its own for planning ahead', views == ['map', 'timeline', 'succession', 'harvest', 'sow', 'trays', 'water', 'seeds', 'assume'] and page.query_selector('#aheadView') is None, views)
+    views = page.eval_on_selector_all('[data-view-btn]', 'els => els.filter(e => !e.hidden).map(e => e.dataset.viewBtn)')
+    check('eight views (Water a ninth only where it is in use): Successions between the Timeline and the Forecast, and no page of its own for planning ahead', views == ['map', 'timeline', 'succession', 'harvest', 'sow', 'trays', 'seeds', 'assume'] and page.query_selector('#aheadView') is None, views)
 
     # ── an opening, from the timeline ──
     page.click('[data-view-btn="timeline"]')

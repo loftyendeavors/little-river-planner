@@ -60,7 +60,7 @@ SCREENS = [
     ("map", "A.setView('map'); A.select(null);", f"{VIEW} === 'map'"),
     ("timeline", "A.setView('timeline');", f"{VIEW} === 'timeline'"),
     ("successions", "A.setView('succession');", f"{VIEW} === 'succession'"),   # E4 (0.84): new, so the build before shows an empty stage here
-    ("water", "A.setView('water');", f"{VIEW} === 'water'"),
+    ("water", "localStorage.setItem('lrf.water', '1'); A.setView('water');", f"{VIEW} === 'water'"),   # behind its tick: said on for this picture only (take() says nothing again before each of the others)
     ("forecast", "A.setView('harvest');", f"{VIEW} === 'harvest'"),
     ("tasks", "A.setView('sow');", f"{VIEW} === 'sow'"),
     ("nursery-bench-room", "A.setView('trays'); LRFTraysView.setTab('room');", f"{VIEW} === 'trays' && LRFTraysView.tab() === 'room'"),
@@ -97,7 +97,7 @@ def take(pw_browser, url, width, height, wanted):
     for name, how, shown in SCREENS:
         if name not in wanted: continue
         try:   # one screen that fails to open does not take the others with it
-            page.evaluate("(() => { const A = LRFApp; " + how + " })()")
+            page.evaluate("(() => { try { localStorage.removeItem('lrf.water'); } catch (_) {} const A = LRFApp; " + how + " })()")
             page.wait_for_timeout(1200)
             if not page.evaluate("(() => " + shown + ")()"): errors.append(f"{name} at {width}: another screen is on show"); continue
             # pictures and typefaces in, toasts gone, nothing left to draw

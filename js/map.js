@@ -813,7 +813,8 @@
       ['Share a bed', 'Drop a crop from the library on a bed that is taken, then split it or replace what is there. Push a planting’s end into its neighbour to move the line.'],
       ['Zoom and pan', 'Wheel · drag · Space and drag · click a garden’s name.'],
       ['Colours', 'Pale: growing · Full: being picked · Hatched: turnover. Click a group in the bar under the map to show only that group.'],
-      ...(root.LRFCard ? [['Try the card', root.LRFCard.tick()]] : [])
+      ...(root.LRFCard ? [['Try the card', root.LRFCard.tick()]] : []),
+      ...(root.LRFWaterView ? [['Water and feed', root.LRFWaterView.tick()]] : [])
     ], { id: 'mapHelp', label: 'What can be done on the map', cols: true }));
     // A window that changes size (dragged to the other monitor, made full screen) is fitted again, unless the grower has moved the view since.
     // Untouched by hand, the map frames the farm again when its size changes. A docked card is work in hand: from its coming the

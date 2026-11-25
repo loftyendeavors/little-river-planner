@@ -28,7 +28,7 @@
     <i class="views-sep" aria-hidden="true"></i>
     <button type="button" data-view-btn="sow" data-hook="view-tab" aria-pressed="false" title="The week’s work, nursery and field, ticked as it is done">Tasks</button>
     <button type="button" data-view-btn="trays" data-hook="view-tab" aria-pressed="false" title="Bench room, live trays, supplies and the benches themselves">Nursery</button>
-    <button type="button" data-view-btn="water" data-hook="view-tab" aria-pressed="false" title="Fertility and irrigation records by garden">Water</button>
+    <button type="button" data-view-btn="water" data-hook="view-tab" aria-pressed="false" hidden title="Fertility and irrigation records by garden">Water</button>
     <button type="button" data-view-btn="seeds" data-hook="view-tab" aria-pressed="false" title="Varieties, seed stock and orders">Seeds</button>
     <i class="views-sep" aria-hidden="true"></i>
     <button type="button" data-view-btn="assume" data-hook="view-tab" aria-pressed="false" title="The figures the plan rests on, crop by crop">Assumptions</button>
@@ -169,7 +169,7 @@
         <div class="seg as-mode" role="group" aria-label="Which half of the list">
           <button type="button" data-as-mode="start" aria-pressed="false">Starting and nursery</button>
           <button type="button" data-as-mode="days" aria-pressed="true">Days to harvest</button>
-          <button type="button" id="wfAssumptions" data-hook="wf-assumptions">Products and recipes</button>
+          <button type="button" id="wfAssumptions" data-hook="wf-assumptions" hidden>Products and recipes</button>
           <button type="button" data-as-mode="harvest" aria-pressed="false">Yield and price</button>
         </div>
         <p class="frame-figs sn-figs" id="snFigs" data-hook="start-figs" hidden></p>

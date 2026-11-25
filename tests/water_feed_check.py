@@ -25,14 +25,37 @@ try:
             page.get_by_role('button', name=label, exact=True).first.click()
         def fill(label, value):
             page.get_by_label(label, exact=True).fill(value)
-        def check(label, result):
+        def check(label, result, detail=None):
             (passed if result else failed).append(label)
+            if not result and detail is not None:
+                print('   ', label, '::', str(detail)[:600], file=sys.stderr)
         def check_current_words(tab):
             wording = page.locator('#wfWrap').evaluate('''pane => [
                 pane.innerText, ...Array.from(pane.querySelectorAll('[aria-label], [title], [placeholder]'),
                     el => ['aria-label', 'title', 'placeholder'].map(key => el.getAttribute(key) || '').join(' '))
             ].join(' ').toLowerCase()''')
             check(tab + ' uses current planner wording', all(term not in wording for term in ('v7', 'old planner', 'rebuild preview')))
+        def shown(selector):
+            return page.locator(selector).is_visible()
+        def water_parts():
+            # the page's ways in, wherever they stand: its tab, Assumptions' button, its lists on Tasks and on Supplies
+            page.evaluate("LRFApp.setView('sow')")
+            tasks = page.locator('[data-hook=wf-tasks]').count()
+            page.evaluate("LRFApp.setView('trays'); LRFTraysView.setTab('supplies')")
+            supplies = page.locator('#wfSuppliesHeading').count()
+            page.evaluate("LRFApp.setView('assume')")
+            button = shown('[data-hook=wf-assumptions]')
+            page.evaluate("LRFApp.setView('map')")
+            return {'tab': shown('[data-view-btn=water]'), 'assumptions': button, 'tasks': tasks, 'supplies': supplies}
+        check('With nothing recorded and nothing said, Water and feed keeps out of the way: no tab, no button on Assumptions, nothing on Tasks or Supplies',
+              water_parts() == {'tab': False, 'assumptions': False, 'tasks': 0, 'supplies': 0}
+              and page.evaluate("[...document.querySelectorAll('.views [data-view-btn]')].filter(b => !b.hidden).length") == 8)
+        page.locator('#mapHelp').click()
+        page.locator('[data-hook=water-on]').check()
+        page.keyboard.press('Escape')
+        check('Its tick under the Map’s “?” brings the page in, for this browser',
+              shown('[data-view-btn=water]') and page.evaluate("localStorage.getItem('lrf.water')") == '1'
+              and page.evaluate("document.body.classList.contains('water-on')"))
         press('Water')
         check_current_words('Fertility')
         gardens = page.get_by_label('Garden', exact=True)
@@ -87,16 +110,43 @@ try:
         check('Applied nutrients and mixed nutrients occupy separate rows',
               '0.4 lb' in page.get_by_role('row', name='Mixed into tanks', exact=False).inner_text()
               and '0.5 lb' in page.get_by_role('row', name='Field applied', exact=False).inner_text())
+        floor = page.evaluate("(id) => { const s = LRFApp.state.plan.gardens.find(g => g.id === id).measuredSize; return s.widthFt * s.lengthFt; }", garden_id)
+        fed = page.locator('.wf-nitrogen').first.inner_text()
+        check('A ticked tank mix counts as fed with no watering logged: the nitrogen figure is the field application and the mix together, over the garden’s floor',
+              'Nitrogen applied · 1 tank mix' in fed and ('%.1f lb/acre' % (0.9 * 43560 / floor)) in fed, fed)
         press('Garden details')
         page.get_by_text('Season plan · '+str(year), exact=True).click()
         press('View full season')
         dialog=page.get_by_role('dialog')
         check('Full season gives the chart and budget room on desktop', dialog.bounding_box()['width'] >= 800
-              and dialog.get_by_text('Field nitrogen applied by week · '+str(year),exact=True).is_visible()
+              and dialog.get_by_text('Nitrogen applied by week · '+str(year),exact=True).is_visible()
               and dialog.get_by_role('row',name='Field applied',exact=False).is_visible())
+        dialog.get_by_text('Weekly amounts', exact=True).click()
+        check('The season’s picture counts the mix with the field application, in the week each went on',
+              'Week of Jun 7 · 0.9 lb N' in dialog.inner_text() and 'A tank mix counts as fed when it is recorded.' in dialog.inner_text(), dialog.inner_text()[-400:])
         press('Back to garden')
         check('Garden card brings the grower back to its four sections', all(word in dialog.inner_text()
               for word in ('This week', 'Season plan', 'Soil and tissue tests', 'Setup')))
+        dialog.get_by_text('Setup · 1 tank, 0 zones', exact=True).click()
+        size_was = page.evaluate("(id) => JSON.stringify(LRFApp.state.plan.gardens.find(g => g.id === id).measuredSize)", garden_id)
+        press('Edit floor size')
+        fill('Floor width (ft)', '')
+        fill('Floor length (ft)', '')
+        empty = page.get_by_role('status').last.inner_text()
+        fill('Floor width (ft)', '30')
+        fill('Floor length (ft)', '100')
+        said = page.get_by_role('status').last.inner_text()
+        key_before = page.evaluate('LRFApp.contentKey()')
+        press('Save floor')
+        size_now = page.evaluate("(id) => LRFApp.state.plan.gardens.find(g => g.id === id).measuredSize", garden_id)
+        check('A garden’s floor is typed on its card: what it comes to is said before it is saved, and the rates are worked out over it',
+              'rates use the bed tops' in empty and '3,000 sq ft floor' in said and size_now == {'v': 1, 'widthFt': 30, 'lengthFt': 100}
+              and '30 × 100 ft' in dialog.inner_text() and ('%.1f of' % (0.9 * 43560 / 3000) in dialog.inner_text() or '%.1f lb/acre' % (0.9 * 43560 / 3000) in dialog.inner_text())
+              and page.evaluate('LRFApp.contentKey()') != key_before, [empty, said, size_now, dialog.inner_text()[:300]])
+        page.evaluate('LRFApp.undo()')
+        check('Undo puts the floor back as it was',
+              page.evaluate("(id) => JSON.stringify(LRFApp.state.plan.gardens.find(g => g.id === id).measuredSize)", garden_id) == size_was
+              and page.evaluate('LRFApp.contentKey()') == key_before)
         press('Done')
         press('Products and recipes')
         check('Assumptions shows product analysis and the recipe per gallon',
@@ -147,13 +197,15 @@ try:
         check('A skipped run can be recorded without typing zero, and adds no start or minutes',
               '1 started · 1 interrupted · 1 skipped · 8 min' in dashboard)
         page.get_by_text('Run list · 2',exact=True).click()
-        page.get_by_role('button',name='Skipped · 0 min',exact=False).last.click()
+        page.locator('[data-hook=wf-open-run]').filter(has_text='Skipped · 0 min').click()
         check('The run list offers the same evidence as the short skipped timeline mark',
-              page.get_by_role('dialog').get_by_text('Test zone',exact=True).is_visible())
+              page.locator('[data-hook=wf-open-run]').count() == 2 and page.get_by_role('dialog').get_by_text('Test zone',exact=True).is_visible())
         press('Done')
         press('Season')
-        check('The dashboard renders no null placeholders when the chart is hidden',
-              'null' not in page.locator('#wfWrap').inner_text().lower())
+        season = page.locator('#wfWrap').inner_text()
+        check('The Season lens says the season’s water and runs, with no null placeholder where the chart is hidden',
+              ('Season · ' + str(year)) in season and '1 started · 1 interrupted · 1 skipped · 8 min' in season
+              and page.locator('#wfWrap .wf-chart').count() == 0 and 'null' not in season.lower(), season[:300])
         press('Add zone')
         fill('Zone name', 'Second line')
         fill('Rated flow (gal/min, optional)', '2')
@@ -217,6 +269,19 @@ try:
                       '1 bag × 20 lb · 60 lb planned · 66 lb with spare · 47 lb on hand')))
         press('Done')
         check('Preparing the order leaves the plan untouched',before_order==page.evaluate('LRFApp.contentKey()'))
+        key_on = page.evaluate('LRFApp.contentKey()')
+        page.evaluate("LRFApp.setView('map')")
+        page.locator('#mapHelp').click()
+        page.locator('[data-hook=water-on]').uncheck()
+        page.keyboard.press('Escape')
+        check('Unticked, the page and its lists go, and every record stays in the plan',
+              water_parts() == {'tab': False, 'assumptions': False, 'tasks': 0, 'supplies': 0} and page.evaluate('LRFApp.contentKey()') == key_on
+              and page.evaluate("Object.keys(LRFApp.state.plan.lrfNext.waterFeed.reports).length") >= 4)
+        page.evaluate("localStorage.removeItem('lrf.water')")
+        page.reload()
+        page.wait_for_function('window.LRFApp?.state.ready')
+        check('A browser that has said neither way shows Water once the plan holds a record of it',
+              page.evaluate('LRFApp.contentKey()') == key_on and water_parts() == {'tab': True, 'assumptions': True, 'tasks': 1, 'supplies': 1})
         check('The workflow raised no page errors', not errors)
         # A grower with no Water records can complete setup, then water without creating a zone.
         page=browser.new_page(viewport={'width':1280,'height':840},timezone_id='UTC')
@@ -224,6 +289,7 @@ try:
         page.goto(f'http://127.0.0.1:{server.server_port}/')
         page.wait_for_function('window.LRFApp?.state.ready')
         page.clock.set_fixed_time(f'{year}-06-12T14:00:00Z')
+        page.evaluate("localStorage.setItem('lrf.water', '1'); LRFApp.setView('map')")
         press('Water')
         before=page.evaluate('LRFApp.contentKey()')
         press('Add Dosatron')
@@ -266,8 +332,12 @@ try:
               and page.evaluate("Object.keys(LRFApp.state.plan.lrfNext.waterFeed.zones || {}).length===0"))
         press('Fertility')
         check('Season records the injector estimate separately from dry product and tank mixing',
-              '0.02 lb' in page.get_by_role('row',name='Via injector (estimated)').inner_text()
+              '0.02 lb' in page.get_by_role('row',name='Logged waterings (estimate)').inner_text()
               and page.get_by_role('row',name='Field applied').count()==0 and page.get_by_role('row',name='Mixed into tanks').count()==0)
+        fed = page.locator('.wf-nitrogen').first.inner_text()
+        floor = page.evaluate("(id) => { const s = LRFApp.state.plan.gardens.find(g => g.id === id).measuredSize; return s.widthFt * s.lengthFt; }", selected)
+        check('With no tank mix recorded, the logged watering stands as the feed and is marked an estimate',
+              'Nitrogen applied · 1 logged watering (estimate)' in fed and ('%.1f lb/acre' % (0.02 * 43560 / floor)) in fed, fed)
         page.set_viewport_size({'width':390,'height':844})
         page.get_by_role('button',name='Irrigation and soil readings').wait_for()
         page.locator('[data-hook=wf-phone-run]').click()
@@ -303,7 +373,7 @@ try:
         press('Water')
         press('Fertility')
         page.get_by_label('Garden',exact=True).select_option(selected)
-        page.get_by_text('Injector totals by week and season',exact=True).click()
+        page.get_by_text('Logged waterings by week and season',exact=True).click()
         check('Weekly and seasonal injector totals name their area basis and distinguish missing label nutrients',
               page.get_by_text('Estimated lb/acre over',exact=False).is_visible()
               and 'Unknown' in page.get_by_role('row',name='Week of',exact=False).inner_text())

@@ -302,7 +302,7 @@
     if (root.LRFCard.bedSeasonOn(bed)) { host.append(root.LRFCard.renderBedSeason(bed, all, status)); return; }
     if (root.LRFMapEdit && (soil || !eng.isPool(bed))) host.append(h('p.insp-aside', h('button.btn.small', { type: 'button', id: 'bedLayoutEdit', dataset: { hook: 'bed-layout-edit' },
       title: soil ? 'Sizes are changed in Edit layout: move, turn or resize this bed on the map itself' : 'Move or set out this space on the map itself', onclick: () => root.LRFMapEdit.open({ bedId: bed.id }) }, 'Edit the layout…')));
-    if (g.id && App.state.plan.lrfNext?.waterFeed) host.append(h('button.btn.small', { type: 'button', onclick: () => root.LRFWaterView.gardenCard(g.id) }, 'Water and feed history…'));
+    if (g.id && App.state.plan.lrfNext?.waterFeed && root.LRFWaterView.on()) host.append(h('button.btn.small', { type: 'button', onclick: () => root.LRFWaterView.gardenCard(g.id) }, 'Water and feed history…'));
     // whom this ground is grown for is a fact about the farm too: shown here, set in the layout (for a bed, or a whole garden)
     if (root.LRFMapEdit && (soil || !eng.isPool(bed))) {
       const use = root.LRFForecast.useOfBed(eng, bed);

@@ -1,6 +1,6 @@
 """Preview 0.53 (the small fixes of Nov 16) in a real browser.
 The build that is running is said in the header, always: a pill beside the year where there is room, the number alone under
-the year at 1400 wide and under, where it costs the header no width. A press opens "What changed": every build, latest first,
+the year at 1680 wide and under (1400 until the row of views grew to nine), where it costs the header no width. A press opens "What changed": every build, latest first,
 with one line on what it did and three things to try at most, and a mark on the builds this browser has not opened it for.
 On the Map, what can be done is a card of two columns behind "?" at the end of the map's tools, and no longer a list in the side
 panel. Under "Several varieties…" a tick leaves the list of varieties where it was scrolled to. In Edit layout a bed drawn too
@@ -84,14 +84,14 @@ with sync_playwright() as pw:
     note = js("return txt('buildNote')")
     check("the header says the build that is running, by the label the page's own script carries: a button in the brand, named for what it opens; the Backup menu's last line still says it with the plan's facts",
           bool(wide["chip"]) and wide["words"] == f"Preview {LABEL}" and wide["inBrand"] and wide["button"] and wide["said"] == f"Preview {LABEL}: what changed" and note.startswith(f"Preview {LABEL} · "), [wide, note])
-    check("above 1400 wide it is a bounded pill beside the year, on the header's one line", bool(wide["chip"]) and wide["edge"] >= 1 and wide["chip"]["left"] >= wide["year"]["right"] and wide["chip"]["top"] < wide["year"]["bottom"] and wide["chip"]["bottom"] > wide["year"]["top"]
+    check("above 1680 wide it is a bounded pill beside the year, on the header's one line", bool(wide["chip"]) and wide["edge"] >= 1 and wide["chip"]["left"] >= wide["year"]["right"] and wide["chip"]["top"] < wide["year"]["bottom"] and wide["chip"]["bottom"] > wide["year"]["top"]
           and wide["chip"]["right"] + 4 <= wide["tabs"]["left"] and wide["high"] <= 60 and not wide["side"], wide)
     shot("build-chip-wide")
     narrow = []
-    for w in (1400, 1280):
+    for w in (1680, 1400, 1280):
         size(w); narrow.append(js("return head()"))
     size(WIDTH)
-    check("at 1400 wide and under it is the number alone, under the year, and takes no width from the header: nothing in the brand reaches further right than before, the year keeps clear of the tabs, the header is one line",
+    check("at 1680 wide and under it is the number alone, under the year, and takes no width from the header: nothing in the brand reaches further right than before, the year keeps clear of the tabs, the header is one line",
           all(bool(n["chip"]) and n["words"] == LABEL and n["edge"] == 0 and n["chip"]["top"] >= n["year"]["bottom"] - 2 and n["chip"]["left"] == n["year"]["left"] and n["chip"]["w"] <= n["year"]["w"] + 4 and max(n["year"]["right"], n["chip"]["right"]) + 4 <= n["tabs"]["left"]
               and n["chip"]["bottom"] <= n["high"] and n["high"] <= 60 and not n["side"] for n in narrow), narrow)
 

@@ -242,8 +242,14 @@
       stock:snapshot(book,tank.recipeId,1)};
   }
   function feedDelivery(group) {
-    const reports=group.pending || group.reports;
-    const feed=reports.find(r=>r.feed)?.feed;
+    // The injector's evidence belongs to the watering, whichever report's figures were accepted for its water: a controller's
+    // report chosen in a review carries no feed of its own and must not take the grower's away (Codex on #113).
+    let feed=group.chosen.feed;
+    if(!feed) {
+      const others=group.reports.filter(r=>r.feed);
+      if(new Set(others.map(r=>feedKey(r.feed))).size>1) return {feed:others[0].feed,held:true};
+      feed=others[0]?.feed;
+    }
     if(!feed) return null;
     if(group.workConflict || group.scopeConflict || group.feedConflict) return {feed,held:true};
     if(feed.mode==='plain' || group.chosen.status==='Skipped') return {feed,plain:true};
@@ -254,6 +260,20 @@
     const stockGallons=gallons/feed.ratio;
     const items=values(feed.stock).map(item=>({...item,lb:item.lb*stockGallons}));
     return {feed,gallons,stockGallons,totals:nutrientTotals(items)};
+  }
+  // What reached a garden through its injectors. A tank mix and a logged watering count the same fertilizer: the mix when the
+  // product went into the tank, the watering when the stock went down the line. Neither record is ever whole (a clock waters
+  // unlogged, a bucket is refilled unticked), and product that was never mixed cannot have been injected. So each is a floor
+  // under what was fed, the larger of the two stands, and they are never added. Each row holds one job's pounds of n, p and k;
+  // a null is a job whose weight or label is not known, counted and left out of the sum.
+  function injectorFeed(mixes, waterings) {
+    const side = rows => {
+      const sum = key => rows.reduce((total, row) => (row[key] == null ? total : (total ?? 0) + row[key]), null);
+      return { n: sum('n'), p: sum('p'), k: sum('k'), count: rows.length, unknown: rows.filter(row => row.n == null).length };
+    };
+    const tanks = side(mixes), logged = side(waterings);
+    const basis = !tanks.count && !logged.count ? null : !logged.count || (tanks.count && (tanks.n ?? 0) >= (logged.n ?? 0)) ? 'tanks' : 'waterings';
+    return { basis, tanks, waterings: logged, counted: basis === 'tanks' ? tanks : basis ? logged : null };
   }
   function tapeFlow(beds, lines, ratedPerHundredFt) {
     const count = number(lines, 'the number of tape lines per bed', 1);
@@ -341,6 +361,6 @@
     const nearest=Math.round(packs);
     return {gross,short,bags:nearest>0 && Math.abs(packs-nearest)<=Number.EPSILON*packs*4 ? nearest : Math.ceil(packs)};
   }
-  const api = { values, put, number, name, product, recipe, snapshot, groups, lastMix, cycle, reminder, refill, run, water, runSummary, sameRunEvidence, stockWeight, stockConcentration, usualInjector, stock, occurrence, nextJob, targetPounds, nutrientTotals, recipeConcentration, injectedFeed, feedDelivery, tapeFlow, zoneRate, stockEntry, stockGroups, purchase };
+  const api = { values, put, number, name, product, recipe, snapshot, groups, lastMix, cycle, reminder, refill, run, water, runSummary, sameRunEvidence, stockWeight, stockConcentration, usualInjector, stock, occurrence, nextJob, targetPounds, nutrientTotals, recipeConcentration, injectedFeed, feedDelivery, injectorFeed, tapeFlow, zoneRate, stockEntry, stockGroups, purchase };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.LRFWaterFeed = api;
 })(typeof self !== 'undefined' ? self : this);
