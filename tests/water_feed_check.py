@@ -111,9 +111,18 @@ try:
               '0.4 lb' in page.get_by_role('row', name='Mixed into tanks', exact=False).inner_text()
               and '0.5 lb' in page.get_by_role('row', name='Field applied', exact=False).inner_text())
         floor = page.evaluate("(id) => { const s = LRFApp.state.plan.gardens.find(g => g.id === id).measuredSize; return s.widthFt * s.lengthFt; }", garden_id)
-        fed = page.locator('.wf-nitrogen').first.inner_text()
+        fed = page.locator('[data-hook=wf-nitrogen]').first.inner_text()
         check('A ticked tank mix counts as fed with no watering logged: the nitrogen figure is the field application and the mix together, over the garden’s floor',
               'Nitrogen applied · 1 tank mix' in fed and ('%.1f lb/acre' % (0.9 * 43560 / floor)) in fed, fed)
+        page.evaluate("""() => { const b = LRFApp.state.plan.lrfNext.waterFeed, first = Object.values(b.reports).find(r => r.kind === 'refill'), id = Object.keys(first.items)[0];
+            const other = { ...first, id: 'second-phone', entered: new Date().toISOString(), items: { [id]: { ...first.items[id], lb: 9 } } };
+            LRFApp.saveWaterFeed({ ...b, reports: { ...b.reports, [other.id]: other } }, 'A second report of the same refill'); }""")
+        held = page.locator('[data-hook=wf-nitrogen]').first.inner_text()
+        check('A mix whose two reports disagree is not counted until it is reviewed: the figure is the field application alone, and says one mix is under review',
+              'Nitrogen applied · 1 tank mix · 1 under review' in held and ('%.1f lb/acre' % (0.5 * 43560 / floor)) in held, held)
+        page.evaluate('LRFApp.undo()')
+        check('With the second report taken back the mix is counted again',
+              ('%.1f lb/acre' % (0.9 * 43560 / floor)) in page.locator('[data-hook=wf-nitrogen]').first.inner_text())
         press('Garden details')
         page.get_by_text('Season plan · '+str(year), exact=True).click()
         press('View full season')
@@ -269,11 +278,25 @@ try:
                       '1 bag × 20 lb · 60 lb planned · 66 lb with spare · 47 lb on hand')))
         press('Done')
         check('Preparing the order leaves the plan untouched',before_order==page.evaluate('LRFApp.contentKey()'))
+        page.evaluate("""() => { const W = LRFWaterFeed, b = LRFApp.state.plan.lrfNext.waterFeed, tank = Object.values(b.tanks)[0];
+            LRFApp.saveWaterFeed(W.put(b, 'requests', { id: 'asked', tankId: tank.id, cycle: W.cycle(b, tank.id), reason: 'Confirmed empty tank', at: new Date().toISOString() }), 'A refill asked for'); }""")
+        def ways_in():
+            # a tower's panel (a soil bed's shows its season instead), and the work to do that Tasks counts
+            page.evaluate("() => { const e = LRFApp.state.engine; LRFApp.setView('map'); LRFApp.select({ type: 'bed', id: LRFApp.state.plan.beds.find(b => e.isTower(b)).id }); }")
+            button = page.get_by_role('button', name='Water and feed history…', exact=True).count()
+            page.evaluate("LRFApp.select(null); LRFApp.setView('sow')")
+            todo = int(page.locator('#tkRange').inner_text().split(' to do')[0].split()[-1].replace(',', ''))
+            page.evaluate("LRFApp.setView('map')")
+            return button, todo
+        way_on, todo_on = ways_in()
         key_on = page.evaluate('LRFApp.contentKey()')
         page.evaluate("LRFApp.setView('map')")
         page.locator('#mapHelp').click()
         page.locator('[data-hook=water-on]').uncheck()
         page.keyboard.press('Escape')
+        way_off, todo_off = ways_in()
+        check('Unticked, a bed’s panel has no way in to the garden’s records, and the refill that is due is not counted in the work to do',
+              (way_on, way_off) == (1, 0) and todo_on - todo_off == 1, [way_on, way_off, todo_on, todo_off])
         check('Unticked, the page and its lists go, and every record stays in the plan',
               water_parts() == {'tab': False, 'assumptions': False, 'tasks': 0, 'supplies': 0} and page.evaluate('LRFApp.contentKey()') == key_on
               and page.evaluate("Object.keys(LRFApp.state.plan.lrfNext.waterFeed.reports).length") >= 4)
@@ -290,6 +313,14 @@ try:
         page.wait_for_function('window.LRFApp?.state.ready')
         page.clock.set_fixed_time(f'{year}-06-12T14:00:00Z')
         page.evaluate("localStorage.setItem('lrf.water', '1'); LRFApp.setView('map')")
+        def tabs_fit(width):
+            page.set_viewport_size({'width': width, 'height': 840}); page.wait_for_timeout(200)
+            return page.evaluate("""() => { const nav = document.querySelector('.views'), box = nav.getBoundingClientRect(), chip = document.getElementById('buildChip').getBoundingClientRect();
+                const tabs = [...nav.querySelectorAll('[data-view-btn]')].filter(b => !b.hidden), last = tabs.at(-1).getBoundingClientRect();
+                return tabs.length === 9 && nav.scrollWidth <= nav.clientWidth && last.right <= box.right + 1 && chip.right <= box.left; }""")
+        fits = {width: tabs_fit(width) for width in (1280, 1366, 1440, 1536, 1600, 1707, 1740)}
+        page.set_viewport_size({'width': 1280, 'height': 840})
+        check('With Water on the row of nine views fits from a small laptop up: its last tab in sight, the build’s number not covered', all(fits.values()), fits)
         press('Water')
         before=page.evaluate('LRFApp.contentKey()')
         press('Add Dosatron')
@@ -334,7 +365,7 @@ try:
         check('Season records the injector estimate separately from dry product and tank mixing',
               '0.02 lb' in page.get_by_role('row',name='Logged waterings (estimate)').inner_text()
               and page.get_by_role('row',name='Field applied').count()==0 and page.get_by_role('row',name='Mixed into tanks').count()==0)
-        fed = page.locator('.wf-nitrogen').first.inner_text()
+        fed = page.locator('[data-hook=wf-nitrogen]').first.inner_text()
         floor = page.evaluate("(id) => { const s = LRFApp.state.plan.gardens.find(g => g.id === id).measuredSize; return s.widthFt * s.lengthFt; }", selected)
         check('With no tank mix recorded, the logged watering stands as the feed and is marked an estimate',
               'Nitrogen applied · 1 logged watering (estimate)' in fed and ('%.1f lb/acre' % (0.02 * 43560 / floor)) in fed, fed)

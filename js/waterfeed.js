@@ -275,6 +275,21 @@
     const basis = !tanks.count && !logged.count ? null : !logged.count || (tanks.count && (tanks.n ?? 0) >= (logged.n ?? 0)) ? 'tanks' : 'waterings';
     return { basis, tanks, waterings: logged, counted: basis === 'tanks' ? tanks : basis ? logged : null };
   }
+  // A garden's injectors, each counted by itself: one tank's mixes say nothing of another tank's waterings, so the larger
+  // of the two is taken tank by tank and the tanks are added. Each row holds one job (its pounds of n, p and k, the tank it
+  // belongs to, and anything else the caller wants back). rows: the jobs that are counted, as they were given.
+  function gardenFeed(mixes, waterings) {
+    const tanks = new Map(), of = row => { const key = row.tank || ''; if (!tanks.has(key)) tanks.set(key, { mixes: [], waterings: [] }); return tanks.get(key); };
+    for (const row of mixes) of(row).mixes.push(row);
+    for (const row of waterings) of(row).waterings.push(row);
+    const parts = [...tanks].map(([tank, jobs]) => ({ tank, ...injectorFeed(jobs.mixes, jobs.waterings), jobs }));
+    const rows = parts.flatMap(part => (part.basis === 'tanks' ? part.jobs.mixes : part.jobs.waterings));
+    const sum = key => rows.reduce((total, row) => (row[key] == null ? total : (total ?? 0) + row[key]), null);
+    const by = basis => parts.filter(part => part.basis === basis).reduce((total, part) => total + part.counted.count, 0);
+    return { parts, rows, counted: rows.length ? { n: sum('n'), p: sum('p'), k: sum('k') } : null, mixes: by('tanks'), waterings: by('waterings'),
+      // mixes of unknown weight are said wherever they stand, counted tank or not: a floor with a hole in it
+      unknownMixes: mixes.filter(row => row.n == null).length, unknownWaterings: parts.filter(part => part.basis === 'waterings').reduce((total, part) => total + part.counted.unknown, 0) };
+  }
   function tapeFlow(beds, lines, ratedPerHundredFt) {
     const count = number(lines, 'the number of tape lines per bed', 1);
     if (!Number.isInteger(count)) throw Error('Enter a whole number of tape lines per bed.');
@@ -361,6 +376,6 @@
     const nearest=Math.round(packs);
     return {gross,short,bags:nearest>0 && Math.abs(packs-nearest)<=Number.EPSILON*packs*4 ? nearest : Math.ceil(packs)};
   }
-  const api = { values, put, number, name, product, recipe, snapshot, groups, lastMix, cycle, reminder, refill, run, water, runSummary, sameRunEvidence, stockWeight, stockConcentration, usualInjector, stock, occurrence, nextJob, targetPounds, nutrientTotals, recipeConcentration, injectedFeed, feedDelivery, injectorFeed, tapeFlow, zoneRate, stockEntry, stockGroups, purchase };
+  const api = { values, put, number, name, product, recipe, snapshot, groups, lastMix, cycle, reminder, refill, run, water, runSummary, sameRunEvidence, stockWeight, stockConcentration, usualInjector, stock, occurrence, nextJob, targetPounds, nutrientTotals, recipeConcentration, injectedFeed, feedDelivery, injectorFeed, gardenFeed, tapeFlow, zoneRate, stockEntry, stockGroups, purchase };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.LRFWaterFeed = api;
 })(typeof self !== 'undefined' ? self : this);

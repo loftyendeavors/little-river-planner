@@ -235,6 +235,15 @@ check('Tank mixes are the feed; logged waterings stand in only where they accoun
   assert.equal(partly.counted.n,0.5);assert.equal(partly.counted.unknown,1);
   assert.equal(W.injectorFeed([{n:null,p:null,k:null}],[]).counted.n,null);
 });
+check('Each injector is counted by itself: one tank’s mixes and another tank’s logged waterings are both fed',()=>{
+  const two=W.gardenFeed([{n:0.4,p:0.1,k:0.4,tank:'a'}],[{n:0.2,p:0.05,k:0.2,tank:'b'}]);
+  assert.ok(Math.abs(two.counted.n-0.6)<1e-12);assert.equal(two.mixes,1);assert.equal(two.waterings,1);assert.equal(two.rows.length,2);
+  const one=W.gardenFeed([{n:0.4,p:0.1,k:0.4,tank:'a'}],[{n:0.2,p:0.05,k:0.2,tank:'a'}]);
+  assert.equal(one.counted.n,0.4);assert.equal(one.mixes,1);assert.equal(one.waterings,0);
+  const holes=W.gardenFeed([{n:null,p:null,k:null,tank:'a'},{n:0.1,p:0,k:0,tank:'b'}],[{n:0.3,p:0,k:0,tank:'a'},{n:null,p:null,k:null,tank:'a'}]);
+  assert.ok(Math.abs(holes.counted.n-0.4)<1e-12);assert.equal(holes.unknownMixes,1);assert.equal(holes.unknownWaterings,1);
+  assert.equal(W.gardenFeed([],[]).counted,null);
+});
 check('Target nitrogen ppm scales with ratio and volume and returns to the same ppm from the actual mix',()=>{
   for(const ratio of [50,100,200]) for(const gallons of [5,20,50]) {
     const lb=W.stockWeight(100,17,gallons,ratio);

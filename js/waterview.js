@@ -863,11 +863,13 @@
     const partialN=knownN.length && knownN.length<deliveries.length?
       num(knownN.reduce((sum,d)=>sum+d.totals.n,0),4)+' lb N estimated from '+countOf(knownN.length,'watering')+' · '+(deliveries.length-knownN.length)+' awaiting a complete estimate':null;
     // The tank is the meter: a mix counts as fed when it is recorded. Logged waterings estimate the same fertilizer and stand
-    // in its place only where they account for more (W.injectorFeed).
+    // in a tank's mixes' place only where they account for more, tank by tank (W.gardenFeed).
+    // A mix whose reports disagree is not counted until the grower has said which stands: which report came first is no
+    // reason to show its pounds as the nitrogen applied (Codex on #115). It is counted among the mixes, and said.
     const mixes=W.groups(book(),'refill').filter(g=>g.chosen.gardenId===id && new Date(g.chosen.at).getFullYear()===year)
-      .map(g=>({...W.nutrientTotals(Object.values(g.chosen.items)),at:g.chosen.at,review:g.unsettled.length>0}));
-    const feed=W.injectorFeed(mixes,deliveries.map(d=>({n:d.totals?.n ?? null,p:d.totals?.p ?? null,k:d.totals?.k ?? null,at:d.at})));
-    feed.rows=feed.basis==='tanks'?mixes:feed.basis?deliveries.map(d=>({n:d.totals?.n ?? null,at:d.at})):[];
+      .map(g=>({...(g.unsettled.length?{n:null,p:null,k:null}:W.nutrientTotals(Object.values(g.chosen.items))),at:g.chosen.at,tank:g.chosen.tankId,review:g.unsettled.length>0}));
+    const feed=W.gardenFeed(mixes,deliveries.map(d=>({n:d.totals?.n ?? null,p:d.totals?.p ?? null,k:d.totals?.k ?? null,at:d.at,tank:d.feed.tankId})));
+    feed.review=mixes.filter(row=>row.review).length;
     return {garden, year, key, target, beds, areaBeds, floor, byWeek, injected, partialN, feed, applied:recorded('spread'), mixed:recorded('refill')};
   }
   function deliveredTotals(deliveries) {
@@ -895,14 +897,14 @@
     return h('table.wf-nutrients', h('caption','Season fertility · '+figures.year,figures.partialN?note(figures.partialN):null),
       h('thead',h('tr',h('th',{scope:'col'},'Nutrient amounts'),nutrients.map(([,label])=>h('th',{scope:'col'},label)))),
       h('tbody',targetLb?row('Target · '+(figures.target.basis==='floor'?num(figures.floor,2)+' sq ft floor':num(figures.areaBeds,2)+' sq ft bed tops'),targetLb):null,figures.applied?row('Field applied'+(figures.applied.disputed?' (under review)':''),figures.applied.totals):null,
-        figures.mixed?row('Mixed into tanks'+(figures.mixed.disputed?' (under review)':'')+(figures.feed.basis==='waterings'?' · not added':''),figures.mixed.totals):null,
-        figures.injected?row('Logged waterings (estimate)'+(figures.feed.basis==='tanks'?' · not added':''),figures.injected):null));
+        figures.mixed?row('Mixed into tanks'+(figures.mixed.disputed?' (under review)':''),figures.mixed.totals):null,
+        figures.injected?row('Logged waterings (estimate)',figures.injected):null,
+        figures.mixed && figures.injected?row('Counted through injectors',figures.feed.counted):null));
   }
   /** One line on which count of the injector's feed stands, where a garden has both. */
   function feedNote(f) {
     if(!f.mixed || !f.injected) return f.mixed?note('A tank mix counts as fed when it is recorded.'):null;
-    return note(f.feed.basis==='tanks'?'Tank mixes are counted as fed. Logged waterings estimate the same fertilizer and are not added.':
-      'Logged waterings account for more than the mixes recorded, so they are counted. A mix may be unrecorded.');
+    return note('For each injector the larger of its tank mixes and its logged waterings is counted. They are two counts of the same fertilizer and are never added.');
   }
   function seasonSheet(id) {
     const f=seasonFigures(id), {garden:g,year,key,beds,areaBeds,floor}=f, target=f.target || {};
@@ -1102,25 +1104,29 @@
     const counted=f.feed.counted;
     const area=f.target || counted?acreBasis(f).area:null;
     const goal=f.target?.n;
-    const hasRecords=!!(f.applied || counted);
-    const measured=hasRecords && (!f.applied || (f.applied.totals.n!=null && !f.applied.disputed)) && (!counted || counted.n!=null);
+    // What is known is added up; a mix under review or of unknown weight is left out and said beside the figure (feedSource).
+    // With nothing known at all there is no figure.
+    const sure=!f.applied || (f.applied.totals.n!=null && !f.applied.disputed);
+    const measured=sure && (f.applied?!!f.applied:counted?.n!=null);
     const applied=measured?(f.applied?.totals.n || 0)+(counted?.n || 0):null;
     const perAcre=measured && area>0?applied*43560/area:null;
     return {goal,applied,measured,perAcre};
   }
   /** What stands behind the nitrogen figure, said beside it: the mixes or the waterings it counts, and any it could not. */
   function feedSource(f) {
-    const {basis,counted}=f.feed;
-    if(!basis) return '';
-    const unknown=counted.unknown?' · '+counted.unknown+(basis==='tanks'?' with weight unknown':' without an estimate'):'';
-    return ' · '+(basis==='tanks'?counted.count+(counted.count===1?' tank mix':' tank mixes'):countOf(counted.count,'logged watering')+' (estimate)')+unknown;
+    const feed=f.feed, plural=(n,one,many)=>n+' '+(n===1?one:many);
+    if(!feed.counted) return '';
+    const review=feed.review;
+    return [''].concat(feed.mixes?plural(feed.mixes,'tank mix','tank mixes'):[],feed.waterings?plural(feed.waterings,'logged watering','logged waterings')+' (estimate)':[],
+      review?review+' under review':[],feed.unknownMixes-review>0?plural(feed.unknownMixes-review,'mix','mixes')+' with weight unknown':[],
+      feed.unknownWaterings?feed.unknownWaterings+' without an estimate':[]).join(' · ');
   }
   function nitrogen(f) {
     const {goal,applied,measured,perAcre}=nitrogenFigures(f);
     const show=perAcre!=null && goal!=null && goal>0, counted=f.feed.counted;
     const unsure=f.applied && (f.applied.disputed || f.applied.totals.n==null);
-    const amount=perAcre!=null?num(perAcre,1)+' lb/acre':measured?num(applied,3)+' lb':unsure?'Unconfirmed':counted?'Weight unknown':'Nothing recorded';
-    return h('div.wf-nitrogen',h('small','Nitrogen applied'+feedSource(f)),h('strong',show?num(perAcre,1)+' of '+num(goal,1)+' lb N/acre':amount),
+    const amount=perAcre!=null?num(perAcre,1)+' lb/acre':measured?num(applied,3)+' lb':unsure?'Unconfirmed':counted?(f.feed.review?'Under review':'Weight unknown'):'Nothing recorded';
+    return h('div.wf-nitrogen',{dataset:{hook:'wf-nitrogen'}},h('small','Nitrogen applied'+feedSource(f)),h('strong',show?num(perAcre,1)+' of '+num(goal,1)+' lb N/acre':amount),
       show?h('progress',{max:goal,value:Math.min(perAcre,goal),'aria-label':'Recorded nitrogen against season target'}):null,
       goal!=null?h('small',(show?'':'Target '+num(goal,1)+' lb/acre · ')+(f.target.basis==='floor'?'Garden floor':'Bed tops')):counted && perAcre!=null?h('small','Over '+acreBasis(f).label):null);
   }

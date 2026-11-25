@@ -9,5 +9,5 @@
   "added": [],
   "removed": [],
   "page": ["css/app.css", "index.html"],
-  "screens": ["map", "timeline", "successions", "water", "forecast", "tasks", "nursery-bench-room", "nursery-live-trays", "nursery-supplies", "nursery-set-up", "seeds", "assumptions-days", "assumptions-yield"]
+  "screens": ["map", "timeline", "successions", "forecast", "tasks", "nursery-bench-room", "nursery-live-trays", "nursery-supplies", "nursery-set-up", "seeds", "assumptions-days", "assumptions-yield"]
 }

@@ -33,6 +33,12 @@ faults = {
         ("the tanks stand as the feed when the waterings account for more", "waterfeed.js",
          "(tanks.count && (tanks.n ?? 0) >= (logged.n ?? 0)) ? 'tanks'", "tanks.count ? 'tanks'",
          "assert.equal(more.basis,'waterings');assert.equal(more.counted.n,0.8);"),
+        ("the larger of the two is taken over the whole garden, so a second injector's feed is dropped", "waterfeed.js",
+         "const key = row.tank || '';", "const key = '';",
+         "assert.ok(Math.abs(two.counted.n-0.6)<1e-12);"),
+        ("a mix of unknown weight on a tank counted by its waterings goes unsaid", "waterfeed.js",
+         "unknownMixes: mixes.filter(row => row.n == null).length,", "unknownMixes: 0,",
+         "assert.ok(Math.abs(holes.counted.n-0.4)<1e-12);assert.equal(holes.unknownMixes,1);"),
         ("a mix of unknown weight is counted as nothing, unsaid", "waterfeed.js",
          "unknown: rows.filter(row => row.n == null).length", "unknown: 0",
          "assert.equal(partly.counted.n,0.5);assert.equal(partly.counted.unknown,1);"),
@@ -45,8 +51,11 @@ faults = {
          "try { root.localStorage.setItem(KEY, yes ? '1' : '0'); }", "try { root.localStorage.removeItem(KEY); }",
          "Its tick under the Map"),
         ("a ticked mix is not counted as fed", "waterview.js",
-         "const counted=f.feed.counted;\n    const area=", "const counted=f.feed.basis==='waterings'?f.feed.counted:null;\n    const area=",
+         "const counted=f.feed.counted;\n    const area=", "const counted=f.feed.mixes?null:f.feed.counted;\n    const area=",
          "A ticked tank mix counts as fed with no watering logged"),
+        ("a mix whose reports disagree is counted by whichever came first", "waterview.js",
+         ".map(g=>({...(g.unsettled.length?{n:null,p:null,k:null}:W.nutrientTotals(Object.values(g.chosen.items))),at:", ".map(g=>({...W.nutrientTotals(Object.values(g.chosen.items)),at:",
+         "A mix whose two reports disagree is not counted until it is reviewed"),
         ("the season's picture leaves the mixes out", "waterview.js",
          "      ...f.feed.rows.map(row=>({at:row.at,n:row.n}))];", "      ];",
          "The season’s picture counts the mix"),
@@ -66,8 +75,20 @@ faults = {
          "return said === '1' || (said !== '0' && hasRecords());", "return said === '1';",
          "A browser that has said neither way shows Water"),
         ("with no mix recorded, a logged watering is not counted", "waterview.js",
-         "const counted=f.feed.counted;\n    const area=", "const counted=f.feed.basis==='tanks'?f.feed.counted:null;\n    const area=",
+         "const counted=f.feed.counted;\n    const area=", "const counted=f.feed.waterings?null:f.feed.counted;\n    const area=",
          "With no tank mix recorded, the logged watering stands as the feed"),
+        ("unticked, a bed's panel still leads into the garden's records", "panels.js",
+         "if (g.id && App.state.plan.lrfNext?.waterFeed && root.LRFWaterView.on()) host.append(", "if (g.id && App.state.plan.lrfNext?.waterFeed) host.append(",
+         "Unticked, a bed’s panel has no way in"),
+        ("unticked, a refill that is due is still counted in the work to do on Tasks", "sowview.js",
+         "const feedDue = isNow && root.LRFWaterView.on() ? ", "const feedDue = isNow ? ",
+         "Unticked, a bed’s panel has no way in"),
+        ("with Water on, the ninth tab is out of sight on a small laptop", "app.css",
+         "@media (min-width: 701px) and (max-width: 1400px) { body.water-on .views button { font-size: var(--type-13); } }", "",
+         "With Water on the row of nine views fits"),
+        ("the brand keeps its long form up to 1680 wide, and the row of views has no room", "app.css",
+         "@media (max-width: 1680px) { .top { gap: var(--space-12); } .brand-sub { font-size: 0; letter-spacing: 0; }", "@media (max-width: 1400px) { .top { gap: var(--space-12); } .brand-sub { font-size: 0; letter-spacing: 0; }",
+         "With Water on the row of nine views fits"),
         ("the run list opens nothing", "waterview.js",
          "events.map(e=>button(gardenName(e.r.gardenId)+' · '+printed(e),()=>openRun(e),'wf-open-run'))", "events.map(e=>button(gardenName(e.r.gardenId)+' · '+printed(e),()=>{},'wf-open-run'))",
          "The run list offers the same evidence"),
@@ -109,7 +130,7 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
         raise SystemExit("The unchanged check did not pass: " + (baseline.stderr or baseline.stdout)[-400:])
 
     for name, filename, before, after, line in selected:
-        path = copy / "js" / filename
+        path = copy / ("css" if filename.endswith(".css") else "js") / filename
         original = path.read_text()
         places = [i for i, text in enumerate(lines, 1) if line in text]
         if original.count(before) != 1 or len(places) != 1:
