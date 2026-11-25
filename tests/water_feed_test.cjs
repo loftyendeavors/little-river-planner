@@ -210,6 +210,44 @@ check('A lower subsequent meter reading puts partial fertilized gallons under re
   const only=runs(injectedRow('whole'))[0];
   assert.equal(W.runSummary([only]).unknownMinutes,1);assert.equal(W.water(only).gallons,200);
 });
+check('Accepting a controller report for a watering keeps the injector evidence the grower recorded',()=>{
+  const fed=injectedRow('whole'), controller={...fed,id:'controller',meter:180,source:'Controller record',entered:clock('14:00')};
+  delete controller.feed;
+  const both=add(add(base,fed),controller), open=W.groups(both,'run')[0];
+  assert.equal(W.feedDelivery(open).held,true);
+  const settled=W.groups({...both,accepted:{[open.id]:'controller'},review:{fed:'same',controller:'same'}},'run')[0];
+  assert.equal(settled.chosen.id,'controller');assert.equal(W.water(settled).gallons,180);
+  assert.ok(Math.abs((W.feedDelivery(settled)?.totals?.n ?? NaN)-0.1728)<1e-12);
+  const plain={...fed,id:'plain',feed:{mode:'plain'},entered:clock('14:05')};
+  const three=add(both,plain), unsure=W.groups({...three,accepted:{[open.id]:'controller'},review:{fed:'same',controller:'same',plain:'same'}},'run')[0];
+  assert.equal(W.feedDelivery(unsure).held,true);
+});
+check('Tank mixes are the feed; logged waterings stand in only where they account for more, and the two are never added',()=>{
+  const mixes=[{n:0.5,p:0.1,k:0.5},{n:0.5,p:0.1,k:0.5}], logged=[{n:0.3,p:0.06,k:0.3}];
+  const both=W.injectorFeed(mixes,logged);
+  assert.equal(both.basis,'tanks');assert.equal(both.counted.n,1);assert.equal(both.counted.count,2);
+  assert.equal(W.injectorFeed(mixes,[]).counted.n,1);
+  const more=W.injectorFeed([mixes[0]],[{n:0.4,p:0.08,k:0.4},{n:0.4,p:0.08,k:0.4}]);
+  assert.equal(more.basis,'waterings');assert.equal(more.counted.n,0.8);
+  assert.equal(W.injectorFeed([],logged).basis,'waterings');
+  assert.equal(W.injectorFeed([],[]).basis,null);assert.equal(W.injectorFeed([],[]).counted,null);
+  const partly=W.injectorFeed([mixes[0],{n:null,p:null,k:null}],[]);
+  assert.equal(partly.counted.n,0.5);assert.equal(partly.counted.unknown,1);
+  assert.equal(W.injectorFeed([{n:null,p:null,k:null}],[]).counted.n,null);
+});
+check('Each injector is counted by itself: one tank’s mixes and another tank’s logged waterings are both fed',()=>{
+  const two=W.gardenFeed([{n:0.4,p:0.1,k:0.4,tank:'a'}],[{n:0.2,p:0.05,k:0.2,tank:'b'}]);
+  assert.ok(Math.abs(two.counted.n-0.6)<1e-12);assert.equal(two.mixes,1);assert.equal(two.waterings,1);assert.equal(two.rows.length,2);
+  const one=W.gardenFeed([{n:0.4,p:0.1,k:0.4,tank:'a'}],[{n:0.2,p:0.05,k:0.2,tank:'a'}]);
+  assert.equal(one.counted.n,0.4);assert.equal(one.mixes,1);assert.equal(one.waterings,0);
+  const holes=W.gardenFeed([{n:null,p:null,k:null,tank:'a'},{n:0.1,p:0,k:0,tank:'b'}],[{n:0.3,p:0,k:0,tank:'a'},{n:null,p:null,k:null,tank:'a'}]);
+  assert.ok(Math.abs(holes.counted.n-0.4)<1e-12);assert.equal(holes.unknownMixes,1);assert.equal(holes.unknownWaterings,1);
+  assert.equal(W.gardenFeed([],[]).counted,null);
+  const label=W.gardenFeed([{n:0.4,p:0.1,k:0.2,tank:'a'},{n:0.3,p:null,k:null,tank:'b'}],[]);
+  assert.ok(Math.abs(label.counted.n-0.7)<1e-12);assert.equal(label.counted.p,null);assert.equal(label.counted.k,null);
+  const untagged=W.gardenFeed([{n:0.4,p:0.1,k:0.4,tank:'a'}],[{n:0.4,p:0.1,k:0.4}]);
+  assert.equal(untagged.counted.n,0.4);assert.equal(untagged.rows.length,1);
+});
 check('Target nitrogen ppm scales with ratio and volume and returns to the same ppm from the actual mix',()=>{
   for(const ratio of [50,100,200]) for(const gallons of [5,20,50]) {
     const lb=W.stockWeight(100,17,gallons,ratio);
