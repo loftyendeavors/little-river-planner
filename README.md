@@ -24,7 +24,7 @@ The top bar has nine views in three groups.
 | | **Forecast** | What the plan gives and earns week by week and over the season, a list to send, and planning a crop to a weekly amount |
 | Running the season | **Tasks** | The week's work, nursery and field, ticked as it is done |
 | | **Nursery** | Bench room, live trays, supplies, and the benches themselves |
-| | **Water** | Fertility and irrigation by garden, tank refills, and irrigation run history |
+| | **Water** | Fertility and irrigation by garden, tank refills, and irrigation run history. Shown where it is in use (below) |
 | | **Seeds** | Varieties, seed stock and orders |
 | The figures underneath | **Assumptions** | Days to harvest, yield and price, crop by crop |
 
@@ -37,9 +37,11 @@ The top bar has nine views in three groups.
 
 ## Fertility and irrigation
 
+Water and feed is behind a tick: **Water and feed**, under the Map's **?**, kept by the browser. A browser that has said neither way shows it once the plan holds a record of it. Unticked, the Water tab, the refills on Tasks and the fertilizer on Supplies go, and everything recorded stays in the plan.
+
 Enter label analyses and stock recipes in **Assumptions → Products and recipes**, or start with **Add tank** on Water. Select the garden, tank name and batch size. On **Tasks**, a confirmed empty tank or an approved formula change can have a refill reminder. Use **Refilled as shown** after the tank returns to service. Use **Actual amounts** for a partial or different mix. Record an unscheduled refill with the quiet **Refill** action. Unknown amounts stay unknown.
 
-**Water → Fertility → Garden details** shows the garden’s equipment, refill and field-application history, manual seasonal targets and lab results. Enter rates in lb/acre, then check the pounds for the measured floor or individual bed tops. **Nursery → Supplies** shows fresh product used, product received and the bags needed for open refill reminders. A tank refill records product mixed. The garden's applied total counts recorded field applications.
+**Water → Fertility → Garden details** shows the garden’s equipment, refill and field-application history, manual seasonal targets and lab results. Enter rates in lb/acre, then check the pounds for the measured floor or individual bed tops. **Nursery → Supplies** shows fresh product used, product received and the bags needed for open refill reminders. **The tank is the meter**: a refill counts as fed when it is recorded, so the garden's applied total is its field applications and its tank mixes, with no watering to log. Logged waterings estimate the same fertilizer; they stand in the mixes' place only where they account for more, and the two are never added. A garden's floor is typed under **Garden details → Setup → Set floor size**; without one, lb/acre is worked out over the bed tops.
 
 **Water → Irrigation** shows the last seven days or the plan year. Enter actual elapsed minutes, the status and any metered gallons. Rated flow gives an estimate. Additional evidence for the same zone and start time stays with the original run. Review conflicting observations in garden history. Refills and runs survive plan backup, restore and offline sync.
 

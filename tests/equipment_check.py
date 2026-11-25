@@ -20,6 +20,7 @@ try:
         page = browser.new_page(viewport={'width':390,'height':844}, timezone_id='America/New_York')
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
+        page.add_init_script("localStorage.setItem('lrf.water', '1')")   # Water and feed is off until a browser says it is in use, or the plan holds a record of it
         page.goto(f'http://127.0.0.1:{server.server_port}/')
         page.wait_for_function('window.LRFApp?.state.ready')
         btn = lambda text: page.get_by_role('button', name=text, exact=True)

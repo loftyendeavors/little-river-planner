@@ -851,6 +851,21 @@
     return assume(`${before.name} is ${{ field: 'open field', tunnel: 'an unheated tunnel', greenhouse: 'a heated greenhouse' }[type] || type}`, [{ kind: 'garden', before, after }]);
   }
 
+  /**
+   * The floor a garden's water and feed rates are worked out over: its width and length in feet, or none (both null), when the
+   * rates fall back to its bed tops. No date, room or forecast figure reads it.
+   */
+  function setGardenFloor(gardenId, widthFt, lengthFt) {
+    const before = state.plan.gardens.find(g => g.id === gardenId);
+    if (!before) return false;
+    const after = { ...before };
+    if (widthFt == null && lengthFt == null) delete after.measuredSize;
+    else if (!(widthFt > 0) || !(lengthFt > 0) || !Number.isFinite(widthFt * lengthFt)) return refuse('Enter the floor’s width and length in feet, or leave both empty.');
+    else after.measuredSize = { v: 1, widthFt, lengthFt };
+    if (JSON.stringify(before.measuredSize || null) === JSON.stringify(after.measuredSize || null)) return false;
+    return commit(after.measuredSize ? `${before.name}: floor ${UI.num(widthFt)} × ${UI.num(lengthFt)} ft` : `${before.name}: floor size removed`, [{ kind: 'garden', before, after }], { unchecked: true });
+  }
+
   // ───────────────────────── seed library ─────────────────────────
   // A variety or crop record is, like the list above, a statement about the world: saving one is never
   // refused, and what it does to the plan is shown first. The long record of what a supplier's page said
@@ -2810,7 +2825,7 @@
     revise: assume, impact, varietyRecord, keepVarietyRecord, keepThumb, addPhotos, openFiles, rebuildThumbs, photoGaps, photoSource, loadInventory, inventoryNow, stockNow, editStock, packsFor, coverFor, sowingOf, recordSowing, takeBackSowing, recordSowings, takeBackSowings, planSowings, recordWork, previewWork, takeBackWork, delayWork, skipWork, noteWork, failedRange, previewFailed, markFailed, seasonRecords, takeBackSeason, today: todayText, uid, storage: () => (store ? store.backend : 'memory'),
     yieldOps, engineAfter: ops => E.create(withOps(state.plan, ops, 'do'), Lib),
     saveTrays, removeTrays, trayRecords, useBundled, keepMine, exportBackup, importBackup, retrySave: () => { if (elsewhere()) { refuse(elsewhere()); return null; } if (state.unreadable) { toast('The plan stored in this browser could not be opened. The choices are at the top of the page.'); return null; } const f = folderInfo(); if (f.needsPermission) return reconnectFolder(); if (f.error && f.connected) return saveToFolder(); return store && store.retry(); },
-    saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, saveWaterFeed, editNursery, setSupply, setLiveSow, traysToMonday: () => applyTrayStart(),
+    saveNow, chooseFolder, reconnectFolder, openFolderPlan, openMyFolder, downloadStored, useShown, overwriteFolder, leaveFolder, folder: folderInfo, saveToFolder, isSample, setOwn, saveWaterFeed, setGardenFloor, editNursery, setSupply, setLiveSow, traysToMonday: () => applyTrayStart(),
     snapshot, snapshots, restoreSnapshot, deleteSnapshot, downloadSnapshot, contentKey, joined: () => state.joined || null, useMine, doneJoined: () => { state.joined = null; emit('joined'); }, windowState: () => (store ? store.readOnly : ''), useThisWindow, sync: () => sync, syncInfo, linkService: () => (sync && sync.linkService ? sync.linkService() : null), snapshotsKept: () => !!Snaps
   };
 })(window);

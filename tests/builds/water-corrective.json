@@ -1,0 +1,13 @@
+{
+  "build": "Water and feed behind a tick, off until it is in use; a tank mix counts as fed; a garden's floor typed on its card; the header's row of views fits again.",
+  "changes": {
+    "did": "Water and feed is behind a tick under the Map’s “?”, and shows by itself once the plan holds a record of it. A tank mix now counts as fed when it is recorded, with no watering to log.",
+    "steps": ["Open the Map’s “?” and tick Water and feed: the Water tab, the refills on Tasks and the fertilizer on Supplies come in. Untick it and they go; what was recorded stays in the plan.", "Record a refill on Tasks, then open Water: Nitrogen applied counts the mix, and says how many mixes stand behind the figure. Logged waterings are an estimate of the same fertilizer and are not added.", "On Water open Garden details, then Setup, then Set floor size: type the floor’s width and length, and lb/acre is worked out over it."]
+  },
+  "words": [],
+  "code": ["waterview.js", "waterfeed.js", "app.js", "map.js", "panels.js", "sowview.js"],
+  "added": [],
+  "removed": [],
+  "page": ["css/app.css", "index.html"],
+  "screens": ["map", "timeline", "successions", "forecast", "tasks", "nursery-bench-room", "nursery-live-trays", "nursery-supplies", "nursery-set-up", "seeds", "assumptions-days", "assumptions-yield"]
+}
